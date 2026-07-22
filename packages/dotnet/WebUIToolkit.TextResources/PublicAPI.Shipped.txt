@@ -266,6 +266,7 @@ type sealed class WebUIToolkit.TextResources.TextResourcePackMessageContract
   ctor WebUIToolkit.TextResources.TextResourcePackMessageContract(WebUIToolkit.TextResources.TextResourceKey key, System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.TextResourcePackArgumentContract> arguments = null)
   property System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.TextResourcePackArgumentContract> Arguments { get; }
   property WebUIToolkit.TextResources.TextResourceKey Key { get; }
+
 type readonly struct WebUIToolkit.TextResources.TextResourcePlaceholderDescriptor : System.IEquatable<WebUIToolkit.TextResources.TextResourcePlaceholderDescriptor>
   ctor WebUIToolkit.TextResources.TextResourcePlaceholderDescriptor(System.String Name, WebUIToolkit.TextResources.TextArgumentType Type, WebUIToolkit.TextResources.TextArgumentFormat Format)
   method System.Boolean Equals(System.Object obj)

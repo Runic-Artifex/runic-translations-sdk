@@ -114,13 +114,21 @@ internal static class Program
             return;
         }
 
-        string expectedText = Encoding.UTF8.GetString(expected);
-        string actualText = Encoding.UTF8.GetString(actual);
+        string expectedText = NormalizeLineEndings(Encoding.UTF8.GetString(expected));
+        string actualText = NormalizeLineEndings(Encoding.UTF8.GetString(actual));
+        if (string.Equals(expectedText, actualText, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         int firstDifference = FirstDifferentLine(expectedText, actualText);
         throw new InvalidOperationException(
             $"API baseline differs at line {firstDifference}: {path}{Environment.NewLine}" +
             "Review the exported API and run with --write-baselines to approve intentional changes.");
     }
+
+    private static string NormalizeLineEndings(string text) =>
+        text.Replace("\r\n", "\n", StringComparison.Ordinal);
 
     private static int FirstDifferentLine(string left, string right)
     {
@@ -193,7 +201,7 @@ internal sealed class ApiManifest
             lines.Add(string.Empty);
         }
 
-        return new ApiManifest(string.Join("\n", lines) + "\n", types.Length, memberCount);
+        return new ApiManifest(string.Join("\n", lines), types.Length, memberCount);
     }
 
     private static IEnumerable<string> DeclaredMembers(Type type)

@@ -132,6 +132,7 @@ type sealed class WebUIToolkit.TextResources.Compiler.TextResourceSource
   ctor WebUIToolkit.TextResources.Compiler.TextResourceSource(System.String path, System.Byte[] utf8Bytes)
   method System.Byte[] GetUtf8Bytes()
   property System.String Path { get; }
+
 type enum WebUIToolkit.TextResources.Compiler.TextResourceUnsupportedLocalePolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   field System.Int32 value__
   field const WebUIToolkit.TextResources.Compiler.TextResourceUnsupportedLocalePolicy Default = 2
