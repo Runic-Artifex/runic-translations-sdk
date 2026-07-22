@@ -10,6 +10,7 @@ internal sealed class ManifestModel
     internal string Id { get; set; } = string.Empty;
     internal string CodeNamespace { get; set; } = string.Empty;
     internal string ClassName { get; set; } = string.Empty;
+    internal ByteSpan ClassNameSpan { get; set; }
     internal TextResourceVisibility Visibility { get; set; } = TextResourceVisibility.Public;
     internal string DefaultLocale { get; set; } = string.Empty;
     internal List<LocaleModel> Locales { get; } = new List<LocaleModel>();

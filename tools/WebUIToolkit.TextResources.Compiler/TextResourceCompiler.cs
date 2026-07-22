@@ -53,6 +53,8 @@ public static class TextResourceCompiler
         var diagnostics = new DiagnosticBag();
         TextResourceSource[] manifestSources = Materialize(manifests);
         TextResourceSource[] documentSources = Materialize(documents);
+        if (RejectDuplicateSourcePaths(manifestSources, documentSources, diagnostics))
+            return new TextResourceCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
         var manifestModels = new List<ManifestModel>();
         var documentModels = new List<DocumentModel>();
 
@@ -87,6 +89,7 @@ public static class TextResourceCompiler
                     "Catalog '" + manifest.Id + "' has more than one manifest.", manifest.Source, manifest.IdSpan);
             else manifestsById.Add(manifest.Id, manifest);
         }
+        ValidateGeneratedRootIdentities(manifestModels, diagnostics);
 
         var docsByCatalog = new Dictionary<string, List<DocumentModel>>(StringComparer.Ordinal);
         for (int i = 0; i < documentModels.Count; i++)
@@ -132,6 +135,50 @@ public static class TextResourceCompiler
         return result.ToArray();
     }
 
+    private static bool RejectDuplicateSourcePaths(
+        TextResourceSource[] manifests,
+        TextResourceSource[] documents,
+        DiagnosticBag diagnostics)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        Count(manifests);
+        Count(documents);
+
+        var duplicates = new List<string>();
+        foreach (KeyValuePair<string, int> pair in counts)
+            if (pair.Value > 1) duplicates.Add(pair.Key);
+        duplicates.Sort(StringComparer.Ordinal);
+
+        for (int i = 0; i < duplicates.Count; i++)
+        {
+            TextResourceSource representative = Find(manifests, duplicates[i]) ?? Find(documents, duplicates[i])!;
+            diagnostics.Add(
+                "WUTTEXT0002",
+                TextResourceDiagnosticSeverity.Error,
+                "Normalized source path '" + duplicates[i] + "' is supplied more than once.",
+                representative,
+                new ByteSpan(0, 0));
+        }
+
+        return duplicates.Count != 0;
+
+        void Count(TextResourceSource[] sources)
+        {
+            for (int i = 0; i < sources.Length; i++)
+            {
+                if (counts.TryGetValue(sources[i].Path, out int count)) counts[sources[i].Path] = count + 1;
+                else counts.Add(sources[i].Path, 1);
+            }
+        }
+
+        static TextResourceSource? Find(TextResourceSource[] sources, string path)
+        {
+            for (int i = 0; i < sources.Length; i++)
+                if (string.Equals(sources[i].Path, path, StringComparison.Ordinal)) return sources[i];
+            return null;
+        }
+    }
+
     private static ManifestModel? ReadManifest(ParsedJson parsed, DiagnosticBag diagnostics, TextResourceCompilerOptions options)
     {
         JsonValue root = parsed.Root!;
@@ -151,7 +198,10 @@ public static class TextResourceCompiler
         if (catalog is not null)
         {
             model.Id = catalog.Value.Text!; model.IdSpan = catalog.Value.Span;
-            if (!IsCatalogId(model.Id)) diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Invalid catalog ID '" + model.Id + "'.", parsed.Source, catalog.Value.Span);
+            if (IsWindowsDeviceStem(model.Id))
+                diagnostics.Add("WUTTEXT0018", TextResourceDiagnosticSeverity.Error, "Catalog ID '" + model.Id + "' produces a Windows-reserved generated filename stem.", parsed.Source, catalog.Value.Span);
+            else if (!IsCatalogId(model.Id))
+                diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Invalid catalog ID '" + model.Id + "'.", parsed.Source, catalog.Value.Span);
         }
         if (code is not null) ReadCode(code.Value, model, parsed.Source, diagnostics);
         if (defaultLocale is not null)
@@ -211,7 +261,11 @@ public static class TextResourceCompiler
         if (className is not null)
         {
             model.ClassName = className.Value.Text!;
-            if (!IsIdentifier(model.ClassName)) diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Invalid generated class name '" + model.ClassName + "'.", source, className.Value.Span);
+            model.ClassNameSpan = className.Value.Span;
+            if (IsWindowsDeviceStem(model.ClassName))
+                diagnostics.Add("WUTTEXT0018", TextResourceDiagnosticSeverity.Error, "Generated class name '" + model.ClassName + "' produces a Windows-reserved filename stem.", source, className.Value.Span);
+            else if (!IsIdentifier(model.ClassName))
+                diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Invalid generated class name '" + model.ClassName + "'.", source, className.Value.Span);
         }
         if (visibility is not null)
         {
@@ -408,7 +462,11 @@ public static class TextResourceCompiler
             LayerSpan = layer.Value.Span,
             LocaleSpan = locale.Value.Span,
         };
-        if (!IsCatalogId(model.Catalog)) diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Invalid catalog ID '" + model.Catalog + "'.", parsed.Source, catalog.Value.Span);
+        // The matching manifest owns generated-name validation. Preserve an
+        // uppercase device spelling here so it associates with that manifest
+        // and produces one focused WUTTEXT0018 instead of a document cascade.
+        if (!IsCatalogId(model.Catalog) && !IsWindowsDeviceStem(model.Catalog))
+            diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Invalid catalog ID '" + model.Catalog + "'.", parsed.Source, catalog.Value.Span);
         if (!TryCanonicalizeLocale(locale.Value.Text!, out string canonicalLocale))
             diagnostics.Add("WUTTEXT0004", TextResourceDiagnosticSeverity.Error, "Invalid locale tag '" + locale.Value.Text + "'.", parsed.Source, locale.Value.Span);
         else model.Locale = canonicalLocale;
@@ -586,6 +644,7 @@ public static class TextResourceCompiler
         }
         if (allPathKinds.Count > options.MaximumKeysPerCatalog)
             diagnostics.Add("WUTTEXT0022", TextResourceDiagnosticSeverity.Error, "Catalog key count exceeds the configured limit.", manifest.Source, manifest.IdSpan);
+        ValidateGeneratedTreeCollisions(manifest, allPathKinds, diagnostics);
 
         var directByLocale = new Dictionary<string, Dictionary<string, ResourceModel>>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < manifest.Locales.Count; i++)
@@ -632,6 +691,8 @@ public static class TextResourceCompiler
             foreach (KeyValuePair<string, ResourceModel> pair in SortedPairs(direct))
                 if (pair.Value.Pattern.Length == 0) AddPolicyDiagnostic("WUTTEXT0021", manifest.EmptyValues, "Resource '" + pair.Key + "' has an empty value.", pair.Value.Source, pair.Value.ValueSpan, diagnostics);
         }
+
+        ValidateExtraKeyContracts(manifest, canonical, directByLocale, diagnostics);
 
         var compiledLocales = new List<CompiledTextLocale>();
         var localeByTag = new Dictionary<string, LocaleModel>(StringComparer.OrdinalIgnoreCase);
@@ -737,6 +798,143 @@ public static class TextResourceCompiler
             { diagnostics.Add("WUTTEXT0018", TextResourceDiagnosticSeverity.Error, "Generated identifier '" + segments[i] + "' collides with its enclosing type.", resource.Source, resource.KeySpan); break; }
     }
 
+    private static void ValidateGeneratedRootIdentities(
+        List<ManifestModel> manifests,
+        DiagnosticBag diagnostics)
+    {
+        var ordered = new List<ManifestModel>(manifests);
+        ordered.Sort((left, right) =>
+        {
+            int comparison = StringComparer.Ordinal.Compare(left.Source.Path, right.Source.Path);
+            return comparison != 0 ? comparison : StringComparer.Ordinal.Compare(left.Id, right.Id);
+        });
+        var identities = new Dictionary<string, ManifestModel>(StringComparer.Ordinal);
+        var hintStems = new Dictionary<string, ManifestModel>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            ManifestModel manifest = ordered[i];
+            if (manifest.Id.Length == 0 || manifest.CodeNamespace.Length == 0 || manifest.ClassName.Length == 0 ||
+                !IsNamespace(manifest.CodeNamespace) || !IsIdentifier(manifest.ClassName))
+                continue;
+            string identity = manifest.CodeNamespace + "\0" + manifest.ClassName;
+            bool exactTypeCollision = false;
+            if (!identities.TryGetValue(identity, out ManifestModel? first))
+            {
+                identities.Add(identity, manifest);
+            }
+            else if (!string.Equals(first.Id, manifest.Id, StringComparison.Ordinal))
+            {
+                diagnostics.Add(
+                    "WUTTEXT0018",
+                    TextResourceDiagnosticSeverity.Error,
+                    "Generated type '" + manifest.CodeNamespace + "." + manifest.ClassName +
+                    "' for catalog '" + manifest.Id + "' collides with catalog '" + first.Id +
+                    "' declared in '" + first.Source.Path + "'.",
+                    manifest.Source,
+                    manifest.ClassNameSpan);
+                exactTypeCollision = true;
+            }
+
+            if (!hintStems.TryGetValue(manifest.ClassName, out ManifestModel? firstHint))
+            {
+                hintStems.Add(manifest.ClassName, manifest);
+            }
+            else if (!exactTypeCollision && !string.Equals(firstHint.Id, manifest.Id, StringComparison.Ordinal))
+            {
+                diagnostics.Add(
+                    "WUTTEXT0018",
+                    TextResourceDiagnosticSeverity.Error,
+                    "Generated hint stem '" + manifest.ClassName + "' for catalog '" + manifest.Id +
+                    "' collides case-insensitively with stem '" + firstHint.ClassName + "' for catalog '" +
+                    firstHint.Id + "' declared in '" + firstHint.Source.Path + "'.",
+                    manifest.Source,
+                    manifest.ClassNameSpan);
+            }
+        }
+    }
+
+    private static void ValidateGeneratedTreeCollisions(
+        ManifestModel manifest,
+        Dictionary<string, ResourceModel> resources,
+        DiagnosticBag diagnostics)
+    {
+        var groupPaths = new HashSet<string>(StringComparer.Ordinal);
+        var representatives = new Dictionary<string, ResourceModel>(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, ResourceModel> pair in SortedPairs(resources))
+        {
+            string[] segments = pair.Key.Split('.');
+            string parent = string.Empty;
+            for (int index = 0; index < segments.Length; index++)
+            {
+                string childPath = parent.Length == 0 ? segments[index] : parent + "." + segments[index];
+                if (!representatives.ContainsKey(childPath)) representatives.Add(childPath, pair.Value);
+                if (index < segments.Length - 1) groupPaths.Add(childPath);
+                parent = childPath;
+            }
+        }
+
+        var reported = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string groupPath in Sorted(groupPaths))
+        {
+            int separator = groupPath.LastIndexOf('.');
+            string parent = separator < 0 ? string.Empty : groupPath.Substring(0, separator);
+            string groupName = separator < 0 ? groupPath : groupPath.Substring(separator + 1);
+            string synthesizedName = groupName + "Group";
+            string siblingPath = parent.Length == 0 ? synthesizedName : parent + "." + synthesizedName;
+            ReportCollision(siblingPath, synthesizedName, "a generated accessor group type");
+
+            string nestedPath = groupPath + "." + synthesizedName;
+            ReportCollision(nestedPath, synthesizedName, "its enclosing generated accessor group type");
+        }
+
+        string keysTypeName = manifest.ClassName + "Keys";
+        ReportCollision(keysTypeName, keysTypeName, "the enclosing generated keys class");
+
+        void ReportCollision(string path, string identifier, string target)
+        {
+            if (!reported.Add(path) || !representatives.TryGetValue(path, out ResourceModel? offender)) return;
+            diagnostics.Add(
+                "WUTTEXT0018",
+                TextResourceDiagnosticSeverity.Error,
+                "Generated identifier '" + identifier + "' collides with " + target + ".",
+                offender.Source,
+                offender.KeySpan);
+        }
+    }
+
+    private static void ValidateExtraKeyContracts(
+        ManifestModel manifest,
+        Dictionary<string, ResourceModel> canonical,
+        Dictionary<string, Dictionary<string, ResourceModel>> directByLocale,
+        DiagnosticBag diagnostics)
+    {
+        var contracts = new Dictionary<string, ResourceModel>(StringComparer.Ordinal);
+        var orderedLocales = new List<LocaleModel>(manifest.Locales);
+        orderedLocales.Sort((left, right) => StringComparer.Ordinal.Compare(left.Tag, right.Tag));
+        for (int localeIndex = 0; localeIndex < orderedLocales.Count; localeIndex++)
+        {
+            LocaleModel locale = orderedLocales[localeIndex];
+            if (string.Equals(locale.Tag, manifest.DefaultLocale, StringComparison.OrdinalIgnoreCase)) continue;
+            foreach (KeyValuePair<string, ResourceModel> pair in SortedPairs(directByLocale[locale.Tag]))
+            {
+                if (canonical.ContainsKey(pair.Key)) continue;
+                if (!contracts.TryGetValue(pair.Key, out ResourceModel? existing))
+                {
+                    contracts.Add(pair.Key, pair.Value);
+                }
+                else if (!SameContract(existing, pair.Value, out ByteSpan mismatchSpan))
+                {
+                    diagnostics.Add(
+                        "WUTTEXT0016",
+                        TextResourceDiagnosticSeverity.Error,
+                        "Placeholder contract for allowed extra key '" + pair.Key + "' differs between locales.",
+                        pair.Value.Source,
+                        mismatchSpan);
+                }
+            }
+        }
+    }
+
     private static void AddPolicyDiagnostic(string id, TextResourcePolicy policy, string message, TextResourceSource source, ByteSpan span, DiagnosticBag diagnostics)
     {
         if (policy == TextResourcePolicy.Allow) return;
@@ -808,6 +1006,16 @@ public static class TextResourceCompiler
         for (int i = 1; i < value.Length; i++)
         { char ch = value[i]; if (!((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '-')) return false; }
         return true;
+    }
+
+    private static bool IsWindowsDeviceStem(string value)
+    {
+        int separator = value.IndexOf('.');
+        string stem = (separator < 0 ? value : value.Substring(0, separator)).ToUpperInvariant();
+        if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL") return true;
+        return stem.Length == 4 && stem[3] >= '1' && stem[3] <= '9' &&
+            ((stem[0] == 'C' && stem[1] == 'O' && stem[2] == 'M') ||
+             (stem[0] == 'L' && stem[1] == 'P' && stem[2] == 'T'));
     }
 
     private static bool IsIdentifier(string value)

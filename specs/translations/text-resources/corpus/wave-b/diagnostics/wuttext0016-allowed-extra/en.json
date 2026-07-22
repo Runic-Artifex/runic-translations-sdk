@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "catalog": "allowed-extra",
+  "locale": "en",
+  "layer": "base",
+  "resources": {
+    "Base": "Base"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net8.0": {
+      "WebUIToolkit.TextResources": {
+        "type": "Direct",
+        "requested": "[1.0.0, )",
+        "resolved": "1.0.0",
+        "contentHash": "SpI7PWO6Hssxzs5kgI88UCOE7s5XwHZDsdB7dq3WAxDCzgSqGEmhOpTTFzANzkOptgCUFucT2FpgXrePLfuXnA=="
+      }
+    }
+  }
+}
