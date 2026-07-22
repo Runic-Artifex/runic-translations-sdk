@@ -1,0 +1,368 @@
+{
+  "formatVersion": 1,
+  "identity": "WebUIToolkit.TextResources.Conformance",
+  "sourceContracts": {
+    "catalogSchemaVersion": 1,
+    "resourceSchemaVersion": 1,
+    "messageGrammarVersion": 1
+  },
+  "locationConvention": {
+    "lineBase": 1,
+    "columnBase": 1,
+    "startInclusive": true,
+    "endExclusive": true,
+    "columnUnits": "UTF-16"
+  },
+  "excludedDiagnostics": [
+    {
+      "id": "WUTTEXT0020",
+      "reason": "Output path containment and collision validation belongs to the build/CLI surface, not the Wave A pure compiler kernel."
+    }
+  ],
+  "cases": [
+    {
+      "id": "valid-minimal-source-contracts",
+      "valid": true,
+      "manifest": "valid/minimal/manifest.json",
+      "documents": ["valid/minimal/en.json"],
+      "expected": {
+        "diagnostics": [],
+        "catalog": "minimal",
+        "locales": ["en"],
+        "orderedKeys": ["Hello"],
+        "effectiveValues": { "en/Hello": "Hello" }
+      }
+    },
+    {
+      "id": "valid-layer-merge-fallback-and-policies",
+      "valid": true,
+      "manifest": "valid/merge/manifest.json",
+      "documents": [
+        "valid/merge/en-application.json",
+        "valid/merge/en-base-b.json",
+        "valid/merge/en-gb.json",
+        "valid/merge/en-base-a.json"
+      ],
+      "expected": {
+        "diagnostics": [],
+        "catalog": "merge",
+        "locales": ["en", "en-GB", "fr-CA"],
+        "layers": ["base", "application"],
+        "orderedKeys": ["Alpha", "Common.Cancel", "Common.Save", "Zulu"],
+        "effectiveValues": {
+          "en/Common.Save": "Save now",
+          "en-GB/Common.Cancel": "Cancel"
+        },
+        "fallbackValues": {
+          "en-GB/Common.Save": "Save now",
+          "fr-CA/Common.Save": "Save now"
+        }
+      }
+    },
+    {
+      "id": "valid-pattern-grammar-and-descriptors",
+      "valid": true,
+      "manifest": "valid/patterns/manifest.json",
+      "documents": ["valid/patterns/en.json"],
+      "expected": {
+        "diagnostics": [],
+        "orderedKeys": ["All", "Escapes"],
+        "placeholderOrder": ["amount", "clock", "count", "day", "enabled", "id", "instant", "text"],
+        "patternTokens": {
+          "Escapes": ["text"],
+          "All": ["placeholder", "text", "placeholder", "text", "placeholder", "text", "placeholder", "text", "placeholder", "text", "placeholder", "text", "placeholder", "text", "placeholder", "text", "placeholder"]
+        }
+      }
+    },
+    {
+      "id": "valid-locale-canonicalization",
+      "valid": true,
+      "manifest": "valid/locale-canonicalization/manifest.json",
+      "documents": ["valid/locale-canonicalization/en.json"],
+      "expected": {
+        "diagnostics": [],
+        "defaultLocale": "en-US",
+        "locales": ["en-US", "zh-Hant-TW"],
+        "fallbacks": { "zh-Hant-TW": "en-US" }
+      }
+    },
+    {
+      "id": "valid-determinism-partition-a",
+      "valid": true,
+      "manifest": "valid/determinism-a/manifest.json",
+      "documents": ["valid/determinism-a/all.json"],
+      "fingerprintGroup": "stable-v1",
+      "expected": {
+        "diagnostics": [],
+        "orderedKeys": ["Alpha", "Middle.First", "Middle.Second", "Zulu"],
+        "fingerprintAlgorithm": "SHA-256",
+        "fingerprintHexLength": 64
+      }
+    },
+    {
+      "id": "valid-determinism-partition-b",
+      "valid": true,
+      "manifest": "valid/determinism-b/manifest.json",
+      "documents": ["valid/determinism-b/z.json", "valid/determinism-b/a.json"],
+      "fingerprintGroup": "stable-v1",
+      "expected": {
+        "diagnostics": [],
+        "orderedKeys": ["Alpha", "Middle.First", "Middle.Second", "Zulu"],
+        "fingerprintAlgorithm": "SHA-256",
+        "fingerprintHexLength": 64
+      }
+    },
+    {
+      "id": "invalid-strict-json-duplicate-property",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0001-duplicate-property/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0001", "severity": "error", "path": "invalid/wuttext0001-duplicate-property/document.json", "line": 6, "column": 3, "endLine": 6, "endColumn": 12 }
+      ] }
+    },
+    {
+      "id": "invalid-strict-json-trailing-comma",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0001-trailing-comma/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0001", "severity": "error", "path": "invalid/wuttext0001-trailing-comma/document.json", "line": 6, "column": 34, "endLine": 6, "endColumn": 35 }
+      ] }
+    },
+    {
+      "id": "invalid-orphan-resource-document",
+      "valid": false,
+      "manifest": null,
+      "documents": ["invalid/wuttext0002-orphan-document/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0002", "severity": "error", "path": "invalid/wuttext0002-orphan-document/document.json", "line": 3, "column": 14, "endLine": 3, "endColumn": 22 }
+      ] }
+    },
+    {
+      "id": "invalid-unsupported-schema-version",
+      "valid": false,
+      "manifest": "invalid/wuttext0003-version/manifest.json",
+      "documents": ["shared/en.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0003", "severity": "error", "path": "invalid/wuttext0003-version/manifest.json", "line": 2, "column": 20, "endLine": 2, "endColumn": 21 }
+      ] }
+    },
+    {
+      "id": "invalid-unregistered-schema-uri",
+      "valid": false,
+      "manifest": "invalid/wuttext0003-schema-uri/manifest.json",
+      "documents": ["shared/en.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0003", "severity": "error", "path": "invalid/wuttext0003-schema-uri/manifest.json", "line": 2, "column": 14, "endLine": 2, "endColumn": 77 }
+      ] }
+    },
+    {
+      "id": "invalid-undeclared-locale",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0004-locale/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0004", "severity": "error", "path": "invalid/wuttext0004-locale/document.json", "line": 4, "column": 13, "endLine": 4, "endColumn": 17 }
+      ] }
+    },
+    {
+      "id": "invalid-undeclared-layer",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0005-layer/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0005", "severity": "error", "path": "invalid/wuttext0005-layer/document.json", "line": 5, "column": 12, "endLine": 5, "endColumn": 21 }
+      ] }
+    },
+    {
+      "id": "invalid-key-segment",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0006-key/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0006", "severity": "error", "path": "invalid/wuttext0006-key/document.json", "line": 7, "column": 5, "endLine": 7, "endColumn": 14 }
+      ] }
+    },
+    {
+      "id": "invalid-same-layer-duplicate-key",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0007-duplicate-key/first.json", "invalid/wuttext0007-duplicate-key/second.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0007", "severity": "error", "path": "invalid/wuttext0007-duplicate-key/second.json", "line": 6, "column": 18, "endLine": 6, "endColumn": 25 }
+      ] }
+    },
+    {
+      "id": "invalid-resource-value-kind",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0008-value-kind/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0008", "severity": "error", "path": "invalid/wuttext0008-value-kind/document.json", "line": 7, "column": 14, "endLine": 7, "endColumn": 16 }
+      ] }
+    },
+    {
+      "id": "invalid-leaf-group-path-conflict",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0008-path-conflict/first.json", "invalid/wuttext0008-path-conflict/second.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0008", "severity": "error", "path": "invalid/wuttext0008-path-conflict/second.json", "line": 6, "column": 18, "endLine": 6, "endColumn": 28 }
+      ] }
+    },
+    {
+      "id": "invalid-default-locale-has-no-canonical-key",
+      "valid": false,
+      "manifest": "invalid/wuttext0009-no-default/manifest.json",
+      "documents": ["invalid/wuttext0009-no-default/de.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0009", "severity": "error", "path": "invalid/wuttext0009-no-default/manifest.json", "line": 5, "column": 20, "endLine": 5, "endColumn": 24 }
+      ] }
+    },
+    {
+      "id": "invalid-translation-completeness-error",
+      "valid": false,
+      "manifest": "invalid/wuttext0010-completeness/manifest.json",
+      "documents": ["invalid/wuttext0010-completeness/en.json", "invalid/wuttext0010-completeness/de.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0010", "severity": "error", "path": "invalid/wuttext0010-completeness/manifest.json", "line": 6, "column": 41, "endLine": 6, "endColumn": 45 }
+      ] }
+    },
+    {
+      "id": "invalid-extra-locale-key-error",
+      "valid": false,
+      "manifest": "shared/manifest.json",
+      "documents": ["shared/en.json", "invalid/wuttext0011-extra-key/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0011", "severity": "error", "path": "invalid/wuttext0011-extra-key/document.json", "line": 8, "column": 5, "endLine": 8, "endColumn": 12 }
+      ] }
+    },
+    {
+      "id": "invalid-unknown-fallback-locale",
+      "valid": false,
+      "manifest": "invalid/wuttext0012-fallback/manifest.json",
+      "documents": ["invalid/wuttext0012-fallback/en.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0012", "severity": "error", "path": "invalid/wuttext0012-fallback/manifest.json", "line": 6, "column": 59, "endLine": 6, "endColumn": 63 }
+      ] }
+    },
+    {
+      "id": "invalid-fallback-cycle",
+      "valid": false,
+      "manifest": "invalid/wuttext0013-cycle/manifest.json",
+      "documents": ["invalid/wuttext0013-cycle/en.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0013", "severity": "error", "path": "invalid/wuttext0013-cycle/manifest.json", "line": 9, "column": 32, "endLine": 9, "endColumn": 36 }
+      ] }
+    },
+    {
+      "id": "invalid-malformed-pattern",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0014-pattern/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0014", "severity": "error", "path": "invalid/wuttext0014-pattern/document.json", "line": 7, "column": 27, "endLine": 7, "endColumn": 44 }
+      ] }
+    },
+    {
+      "id": "invalid-missing-placeholder-descriptor",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0015-missing-descriptor/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0015", "severity": "error", "path": "invalid/wuttext0015-missing-descriptor/document.json", "line": 7, "column": 29, "endLine": 7, "endColumn": 43 }
+      ] }
+    },
+    {
+      "id": "invalid-unused-placeholder-descriptor",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0015-unused-descriptor/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0015", "severity": "error", "path": "invalid/wuttext0015-unused-descriptor/document.json", "line": 9, "column": 26, "endLine": 9, "endColumn": 32 }
+      ] }
+    },
+    {
+      "id": "invalid-translated-placeholder-parity",
+      "valid": false,
+      "manifest": "invalid/wuttext0016-translation-descriptor/manifest.json",
+      "documents": ["invalid/wuttext0016-translation-descriptor/en.json", "invalid/wuttext0016-translation-descriptor/de.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0016", "severity": "error", "path": "invalid/wuttext0016-translation-descriptor/de.json", "line": 9, "column": 45, "endLine": 9, "endColumn": 53 }
+      ] }
+    },
+    {
+      "id": "invalid-unknown-placeholder-type",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0017-type/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0017", "severity": "error", "path": "invalid/wuttext0017-type/document.json", "line": 9, "column": 45, "endLine": 9, "endColumn": 55 }
+      ] }
+    },
+    {
+      "id": "invalid-placeholder-type-format-combination",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0017-format/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0017", "severity": "error", "path": "invalid/wuttext0017-format/document.json", "line": 9, "column": 63, "endLine": 9, "endColumn": 72 }
+      ] }
+    },
+    {
+      "id": "invalid-generated-identifier-collision",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0018-identifier/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0018", "severity": "error", "path": "invalid/wuttext0018-identifier/document.json", "line": 7, "column": 5, "endLine": 7, "endColumn": 14 }
+      ] }
+    },
+    {
+      "id": "invalid-unknown-manifest-member",
+      "valid": false,
+      "manifest": "invalid/wuttext0019-root-member/manifest.json",
+      "documents": ["shared/en.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0019", "severity": "error", "path": "invalid/wuttext0019-root-member/manifest.json", "line": 8, "column": 3, "endLine": 8, "endColumn": 12 }
+      ] }
+    },
+    {
+      "id": "invalid-unknown-leaf-metadata",
+      "valid": false,
+      "manifest": "shared/manifest-relaxed.json",
+      "documents": ["shared/en.json", "shared/de.json", "invalid/wuttext0019-metadata/document.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0019", "severity": "error", "path": "invalid/wuttext0019-metadata/document.json", "line": 7, "column": 39, "endLine": 7, "endColumn": 49 }
+      ] }
+    },
+    {
+      "id": "invalid-empty-value-error-policy",
+      "valid": false,
+      "manifest": "invalid/wuttext0021-empty/manifest.json",
+      "documents": ["invalid/wuttext0021-empty/en.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0021", "severity": "error", "path": "invalid/wuttext0021-empty/en.json", "line": 6, "column": 27, "endLine": 6, "endColumn": 29 }
+      ] }
+    },
+    {
+      "id": "valid-empty-value-warning-policy",
+      "valid": true,
+      "manifest": "invalid/wuttext0021-warning/manifest.json",
+      "documents": ["invalid/wuttext0021-warning/en.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0021", "severity": "warning", "path": "invalid/wuttext0021-warning/en.json", "line": 6, "column": 27, "endLine": 6, "endColumn": 29 }
+      ] }
+    },
+    {
+      "id": "invalid-resource-depth-limit",
+      "valid": false,
+      "manifest": "invalid/wuttext0022-depth/manifest.json",
+      "documents": ["invalid/wuttext0022-depth/en.json"],
+      "expected": { "diagnostics": [
+        { "id": "WUTTEXT0022", "severity": "error", "path": "invalid/wuttext0022-depth/en.json", "line": 71, "column": 133, "endLine": 71, "endColumn": 138 }
+      ] }
+    }
+  ]
+}

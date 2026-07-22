@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "catalog": "cycle",
+  "code": { "namespace": "WebUIToolkit.Examples.Localization", "className": "CycleText" },
+  "defaultLocale": "en",
+  "locales": [
+    { "tag": "en" },
+    { "tag": "de", "fallback": "fr" },
+    { "tag": "fr", "fallback": "de" }
+  ],
+  "layers": [{ "name": "base", "priority": 0 }],
+  "validation": { "translationCompleteness": "allow", "extraLocaleKeys": "allow", "emptyValues": "allow" }
+}

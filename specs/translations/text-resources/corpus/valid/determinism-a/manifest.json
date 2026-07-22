@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "catalog": "stable",
+  "code": { "namespace": "WebUIToolkit.Examples.Localization", "className": "StableText" },
+  "defaultLocale": "en",
+  "locales": [{ "tag": "en" }],
+  "layers": [{ "name": "base", "priority": 0 }]
+}

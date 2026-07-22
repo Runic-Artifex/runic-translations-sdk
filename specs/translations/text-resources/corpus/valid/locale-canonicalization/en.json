@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "catalog": "canonical-locale",
+  "locale": "en-us",
+  "layer": "base",
+  "resources": { "Hello": "Hello" }
+}

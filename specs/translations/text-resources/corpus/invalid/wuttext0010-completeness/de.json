@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "catalog": "complete",
+  "locale": "de",
+  "layer": "base",
+  "resources": { "One": "Eins" }
+}

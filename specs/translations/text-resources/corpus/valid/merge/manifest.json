@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "catalog": "merge",
+  "code": {
+    "namespace": "WebUIToolkit.Examples.Localization",
+    "className": "MergeText",
+    "visibility": "internal"
+  },
+  "defaultLocale": "en",
+  "locales": [
+    { "tag": "en" },
+    { "tag": "en-GB", "fallback": "en" },
+    { "tag": "fr-CA", "fallback": "en" }
+  ],
+  "layers": [
+    { "name": "base", "priority": -10 },
+    { "name": "application", "priority": 100 }
+  ],
+  "validation": {
+    "translationCompleteness": "allow",
+    "extraLocaleKeys": "allow",
+    "emptyValues": "allow"
+  },
+  "runtime": {
+    "unsupportedLocale": "parentsThenDefault",
+    "missingKey": "returnMarker"
+  }
+}

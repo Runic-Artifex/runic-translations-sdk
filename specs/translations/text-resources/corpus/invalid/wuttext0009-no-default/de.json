@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "catalog": "nodefault",
+  "locale": "de",
+  "layer": "base",
+  "resources": { "OnlyGerman": "Nur Deutsch" }
+}

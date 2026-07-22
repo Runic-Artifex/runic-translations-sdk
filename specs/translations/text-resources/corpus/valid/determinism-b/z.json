@@ -1,0 +1,7 @@
+{
+  "resources": { "Middle": { "First": "1" }, "Alpha": "A" },
+  "layer": "base",
+  "locale": "en",
+  "catalog": "stable",
+  "schemaVersion": 1
+}
