@@ -1,0 +1,203 @@
+<Project>
+  <PropertyGroup>
+    <_TextResourcesBuildTargetsPath>$(MSBuildThisFileFullPath)</_TextResourcesBuildTargetsPath>
+
+    <_TextResourcesEmitAny>false</_TextResourcesEmitAny>
+    <_TextResourcesEmitAny Condition="'$(TextResourcesEmitJson)' == 'true' or '$(TextResourcesEmitTypeScript)' == 'true' or '$(TextResourcesEmitTemplateManifest)' == 'true'">true</_TextResourcesEmitAny>
+    <_TextResourcesGenerationEnabled>false</_TextResourcesGenerationEnabled>
+    <_TextResourcesGenerationEnabled Condition="'$(TextResourcesGenerateOnBuild)' == 'true' or '$(_TextResourcesEmitAny)' == 'true'">true</_TextResourcesGenerationEnabled>
+    <_TextResourcesEmitArguments Condition="'$(TextResourcesEmitJson)' == 'true'">$(_TextResourcesEmitArguments) --emit-json</_TextResourcesEmitArguments>
+    <_TextResourcesEmitArguments Condition="'$(TextResourcesEmitTypeScript)' == 'true'">$(_TextResourcesEmitArguments) --emit-typescript</_TextResourcesEmitArguments>
+    <_TextResourcesEmitArguments Condition="'$(TextResourcesEmitTemplateManifest)' == 'true'">$(_TextResourcesEmitArguments) --emit-template-manifest</_TextResourcesEmitArguments>
+    <_TextResourcesEmitArguments Condition="'$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true'"> --emit-json --emit-typescript --emit-template-manifest</_TextResourcesEmitArguments>
+
+    <WebUIToolkitTextResourcesBuildTargetsImported>true</WebUIToolkitTextResourcesBuildTargetsImported>
+  </PropertyGroup>
+
+  <!-- The generator consumes only explicitly declared inputs and their versioned metadata. -->
+  <ItemGroup>
+    <AdditionalFiles Include="@(TextResourceCatalog)" WebUIToolkitTextResourceKind="Catalog" />
+    <AdditionalFiles Include="@(TextResourceDocument)" WebUIToolkitTextResourceKind="Document" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="WebUIToolkitTextResourceKind" />
+  </ItemGroup>
+
+  <Target Name="_WebUIToolkitValidateTextResourcesOutputPath">
+    <!-- Defer defaults until target execution: some SDKs finalize IntermediateOutputPath late. -->
+    <PropertyGroup>
+      <TextResourcesOutputPath Condition="'$(TextResourcesOutputPath)' == '' and '$(TextResourcesWebOutputPath)' != ''">$(TextResourcesWebOutputPath)</TextResourcesOutputPath>
+      <TextResourcesOutputPath Condition="'$(TextResourcesOutputPath)' == ''">$(IntermediateOutputPath)text-resources</TextResourcesOutputPath>
+      <TextResourcesWebOutputPath Condition="'$(TextResourcesWebOutputPath)' == ''">$(TextResourcesOutputPath)</TextResourcesWebOutputPath>
+      <TextResourcesOutputStamp Condition="'$(TextResourcesOutputStamp)' == ''">$(TextResourcesOutputPath)\.generate.stamp</TextResourcesOutputStamp>
+    </PropertyGroup>
+    <Error Condition="'$(IntermediateOutputPath)' == ''"
+           Text="WUTTEXT0020: IntermediateOutputPath must be set before text-resource artifacts can be generated." />
+    <Error Condition="'$(TextResourcesOutputPath)' == ''"
+           Text="WUTTEXT0020: TextResourcesOutputPath must be set before text-resource artifacts can be generated." />
+
+    <PropertyGroup>
+      <_TextResourcesProjectDirectory>$([MSBuild]::EnsureTrailingSlash('$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)'))'))</_TextResourcesProjectDirectory>
+      <_TextResourcesIntermediateRoot>$([MSBuild]::EnsureTrailingSlash('$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)', '$(_TextResourcesProjectDirectory)'))'))</_TextResourcesIntermediateRoot>
+      <_TextResourcesOutputDirectory>$([System.IO.Path]::TrimEndingDirectorySeparator('$([System.IO.Path]::GetFullPath('$(TextResourcesOutputPath)', '$(_TextResourcesProjectDirectory)'))'))</_TextResourcesOutputDirectory>
+      <_TextResourcesOutputRoot>$([MSBuild]::EnsureTrailingSlash('$(_TextResourcesOutputDirectory)'))</_TextResourcesOutputRoot>
+      <_TextResourcesRelativeOutput>$([System.IO.Path]::GetRelativePath('$(_TextResourcesIntermediateRoot)', '$(_TextResourcesOutputRoot)'))</_TextResourcesRelativeOutput>
+      <_TextResourcesParentPrefix>..$([System.IO.Path]::DirectorySeparatorChar)</_TextResourcesParentPrefix>
+      <_TextResourcesOutputStampPath>$([System.IO.Path]::GetFullPath('$(TextResourcesOutputStamp)', '$(_TextResourcesProjectDirectory)'))</_TextResourcesOutputStampPath>
+      <_TextResourcesRelativeStamp>$([System.IO.Path]::GetRelativePath('$(_TextResourcesOutputRoot)', '$(_TextResourcesOutputStampPath)'))</_TextResourcesRelativeStamp>
+      <_TextResourcesGenerationStatePath>$(_TextResourcesOutputRoot).generate.inputs</_TextResourcesGenerationStatePath>
+      <_TextResourcesGenerationInventoryPath>$(_TextResourcesOutputRoot).generate.outputs</_TextResourcesGenerationInventoryPath>
+      <_TextResourcesResponseFilePath>$(_TextResourcesOutputRoot).generate.rsp</_TextResourcesResponseFilePath>
+      <_TextResourcesStagingDirectory>$(_TextResourcesOutputRoot).generate.staging</_TextResourcesStagingDirectory>
+      <_TextResourcesStagingRoot>$([MSBuild]::EnsureTrailingSlash('$(_TextResourcesStagingDirectory)'))</_TextResourcesStagingRoot>
+    </PropertyGroup>
+
+    <Error Condition="$([System.IO.Path]::IsPathRooted('$(_TextResourcesRelativeOutput)')) or '$(_TextResourcesRelativeOutput)' == '.' or '$(_TextResourcesRelativeOutput)' == '..' or $([System.String]::Copy('$(_TextResourcesRelativeOutput)').StartsWith('$(_TextResourcesParentPrefix)'))"
+           Text="WUTTEXT0020: TextResourcesOutputPath '$(_TextResourcesOutputRoot)' must resolve beneath IntermediateOutputPath '$(_TextResourcesIntermediateRoot)'." />
+    <Error Condition="$([System.IO.Path]::IsPathRooted('$(_TextResourcesRelativeStamp)')) or '$(_TextResourcesRelativeStamp)' == '.' or '$(_TextResourcesRelativeStamp)' == '..' or $([System.String]::Copy('$(_TextResourcesRelativeStamp)').StartsWith('$(_TextResourcesParentPrefix)'))"
+           Text="WUTTEXT0020: TextResourcesOutputStamp '$(_TextResourcesOutputStampPath)' must resolve beneath TextResourcesOutputPath '$(_TextResourcesOutputRoot)'." />
+    <Error Condition="Exists('$(_TextResourcesOutputDirectory)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('$(_TextResourcesOutputDirectory)')))), 1024)) != 0"
+           Text="WUTTEXT0020: TextResourcesOutputPath '$(_TextResourcesOutputDirectory)' must not be a symbolic link, junction, or other reparse point." />
+    <Error Condition="Exists('$(_TextResourcesStagingDirectory)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('$(_TextResourcesStagingDirectory)')))), 1024)) != 0"
+           Text="WUTTEXT0020: The private text-resource staging directory must not be a symbolic link, junction, or other reparse point." />
+  </Target>
+
+  <Target Name="_WebUIToolkitReadAndValidateTextResourcesInventory"
+          DependsOnTargets="_WebUIToolkitValidateTextResourcesOutputPath">
+    <ReadLinesFromFile File="$(_TextResourcesGenerationInventoryPath)"
+                       Condition="Exists('$(_TextResourcesGenerationInventoryPath)')">
+      <Output TaskParameter="Lines" ItemName="_TextResourcesOwnedInventoryEntry" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <_TextResourcesOwnedInventoryEntry Update="@(_TextResourcesOwnedInventoryEntry)">
+        <_OwnedFullPath>$([System.IO.Path]::GetFullPath('%(Identity)', '$(_TextResourcesOutputRoot)'))</_OwnedFullPath>
+        <_OwnedRelativePath>$([System.IO.Path]::GetRelativePath('$(_TextResourcesOutputRoot)', '$([System.IO.Path]::GetFullPath('%(Identity)', '$(_TextResourcesOutputRoot)'))'))</_OwnedRelativePath>
+      </_TextResourcesOwnedInventoryEntry>
+      <!-- Wave B artifacts are flat. Reject traversal and nested paths before any deletion. -->
+      <_TextResourcesUnsafeInventoryEntry Include="@(_TextResourcesOwnedInventoryEntry)"
+                                          Condition="'%(_OwnedRelativePath)' == '.' or $([System.IO.Path]::IsPathRooted('%(_OwnedRelativePath)')) or $([System.String]::Copy('%(_OwnedRelativePath)').Contains('\')) or $([System.String]::Copy('%(_OwnedRelativePath)').Contains('/'))" />
+    </ItemGroup>
+    <Error Condition="'@(_TextResourcesUnsafeInventoryEntry)' != ''"
+           Text="WUTTEXT0020: The text-resource output inventory contains a path that is not a direct child of TextResourcesOutputPath; the operation stopped before deleting files." />
+  </Target>
+
+  <Target Name="_WebUIToolkitPrepareTextResourcesGeneration"
+          DependsOnTargets="_WebUIToolkitReadAndValidateTextResourcesInventory">
+    <MakeDir Directories="$(_TextResourcesOutputDirectory)" />
+    <RemoveDir Directories="$(_TextResourcesStagingDirectory)"
+               Condition="Exists('$(_TextResourcesStagingDirectory)')" />
+    <ReadLinesFromFile File="$(_TextResourcesGenerationStatePath)"
+                       Condition="Exists('$(_TextResourcesGenerationStatePath)')">
+      <Output TaskParameter="Lines" ItemName="_TextResourcesExistingStateLine" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <_TextResourcesDesiredStateLine Include="tool-command=$(TextResourcesToolCommand)" />
+      <_TextResourcesDesiredStateLine Include="emit-arguments=$(_TextResourcesEmitArguments)" />
+      <_TextResourcesDesiredStateLine Include="additional-arguments=$(TextResourcesToolAdditionalArguments)" />
+      <_TextResourcesDesiredStateLine Include="output=$(_TextResourcesOutputDirectory)" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(_TextResourcesGenerationStatePath)"
+                      Lines="@(_TextResourcesDesiredStateLine)"
+                      Overwrite="true"
+                      Encoding="UTF-8"
+                      Condition="'@(_TextResourcesExistingStateLine, '|')' != '@(_TextResourcesDesiredStateLine, '|')'" />
+    <ReadLinesFromFile File="$(_TextResourcesResponseFilePath)"
+                       Condition="Exists('$(_TextResourcesResponseFilePath)')">
+      <Output TaskParameter="Lines" ItemName="_TextResourcesExistingResponseLine" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <_TextResourcesDesiredResponseLine Include="generate" />
+      <_TextResourcesDesiredResponseLine Include="--catalog" />
+      <_TextResourcesDesiredResponseLine Include="@(TextResourceCatalog->'&quot;%(FullPath)&quot;')" />
+      <_TextResourcesDesiredResponseLine Include="--documents" />
+      <_TextResourcesDesiredResponseLine Include="@(TextResourceDocument->'&quot;%(FullPath)&quot;')" />
+      <_TextResourcesDesiredResponseLine Include="--output" />
+      <_TextResourcesDesiredResponseLine Include="&quot;$(_TextResourcesStagingDirectory)&quot;" />
+      <_TextResourcesDesiredResponseLine Include="--emit-json" Condition="'$(TextResourcesEmitJson)' == 'true' or ('$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true')" />
+      <_TextResourcesDesiredResponseLine Include="--emit-typescript" Condition="'$(TextResourcesEmitTypeScript)' == 'true' or ('$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true')" />
+      <_TextResourcesDesiredResponseLine Include="--emit-template-manifest" Condition="'$(TextResourcesEmitTemplateManifest)' == 'true' or ('$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true')" />
+      <_TextResourcesDesiredResponseLine Include="$(TextResourcesToolAdditionalArguments)" Condition="'$(TextResourcesToolAdditionalArguments)' != ''" />
+      <_TextResourcesMissingArtifact Include="@(_TextResourcesOwnedInventoryEntry)"
+                                     Condition="!Exists('%(_OwnedFullPath)')" />
+      <_TextResourcesExistingArtifact Include="@(_TextResourcesOwnedInventoryEntry)"
+                                      Condition="Exists('%(_OwnedFullPath)')" />
+      <FileWrites Include="$(_TextResourcesGenerationStatePath);$(_TextResourcesGenerationInventoryPath);$(_TextResourcesResponseFilePath)" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(_TextResourcesResponseFilePath)"
+                      Lines="@(_TextResourcesDesiredResponseLine)"
+                      Overwrite="true"
+                      Encoding="UTF-8"
+                      Condition="'@(_TextResourcesExistingResponseLine, '|')' != '@(_TextResourcesDesiredResponseLine, '|')'" />
+    <Delete Files="$(_TextResourcesOutputStampPath)"
+            Condition="'@(_TextResourcesMissingArtifact)' != '' or !Exists('$(_TextResourcesGenerationInventoryPath)')" />
+  </Target>
+
+  <Target Name="WebUIToolkitGenerateTextResourceArtifacts"
+          BeforeTargets="BeforeCompile"
+          DependsOnTargets="_WebUIToolkitPrepareTextResourcesGeneration;_WebUIToolkitGenerateTextResourceArtifactsCore"
+          Condition="'$(_TextResourcesGenerationEnabled)' == 'true' and ('@(TextResourceCatalog)' != '' or '@(TextResourceDocument)' != '')" />
+
+  <!-- This target is reached only after deferred path defaults and generation state exist. -->
+  <Target Name="_WebUIToolkitGenerateTextResourceArtifactsCore"
+          Inputs="@(TextResourceCatalog);@(TextResourceDocument);@(TextResourcesToolInput);@(_TextResourcesExistingArtifact);$(MSBuildProjectFullPath);$(_TextResourcesBuildTargetsPath);$(_TextResourcesGenerationStatePath);$(_TextResourcesResponseFilePath)"
+          Outputs="$(TextResourcesOutputStamp)">
+    <Error Condition="'@(TextResourceCatalog->Count())' != '1'"
+           Text="WUTTEXT0002: Exactly one TextResourceCatalog item is required for artifact generation by this build-package version." />
+    <Error Condition="'@(TextResourceDocument)' == ''"
+           Text="WUTTEXT0002: At least one TextResourceDocument item is required for artifact generation." />
+
+    <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
+          Command="$(TextResourcesToolCommand) &quot;@$(_TextResourcesResponseFilePath)&quot;" />
+    <ItemGroup>
+      <_TextResourcesStagedArtifact Include="$(_TextResourcesStagingRoot)**\*" />
+      <_TextResourcesUnsafeStagedArtifact Include="@(_TextResourcesStagedArtifact)"
+                                          Condition="'%(RecursiveDir)' != ''" />
+    </ItemGroup>
+    <Error Condition="'@(_TextResourcesUnsafeStagedArtifact)' != ''"
+           Text="WUTTEXT0020: The text-resource tool emitted a nested path; Wave B build artifacts must be direct children of the output root." />
+    <ItemGroup>
+      <_TextResourcesGeneratedArtifact Include="@(_TextResourcesStagedArtifact->'$(_TextResourcesOutputRoot)%(Filename)%(Extension)')" />
+      <_TextResourcesStaleArtifact Include="@(_TextResourcesOwnedInventoryEntry->'%(_OwnedFullPath)')" />
+      <_TextResourcesStaleArtifact Remove="@(_TextResourcesGeneratedArtifact)" />
+    </ItemGroup>
+    <!-- Same-volume per-file moves replace current names before stale owned names are deleted. -->
+    <Move SourceFiles="@(_TextResourcesStagedArtifact)"
+          DestinationFiles="@(_TextResourcesGeneratedArtifact)"
+          OverwriteReadOnlyFiles="false" />
+    <Delete Files="@(_TextResourcesStaleArtifact)" />
+    <WriteLinesToFile File="$(_TextResourcesGenerationInventoryPath)"
+                      Lines="@(_TextResourcesGeneratedArtifact->'%(FullPath)')"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true"
+                      Encoding="UTF-8" />
+    <RemoveDir Directories="$(_TextResourcesStagingDirectory)" />
+    <Touch Files="$(_TextResourcesOutputStampPath)" AlwaysCreate="true" />
+    <ItemGroup>
+      <FileWrites Include="$(_TextResourcesOutputStampPath);$(_TextResourcesGenerationInventoryPath);$(_TextResourcesResponseFilePath);@(_TextResourcesGeneratedArtifact)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="WebUIToolkitCollectTextResourceArtifacts"
+          AfterTargets="WebUIToolkitGenerateTextResourceArtifacts"
+          Condition="'$(_TextResourcesGenerationEnabled)' == 'true'">
+    <ItemGroup>
+      <_TextResourcesCurrentArtifact Include="@(_TextResourcesExistingArtifact)"
+                                     Condition="'@(_TextResourcesGeneratedArtifact)' == '' and Exists('%(_TextResourcesExistingArtifact.Identity)')" />
+      <_TextResourcesCurrentArtifact Include="@(_TextResourcesGeneratedArtifact)"
+                                     Condition="Exists('%(_TextResourcesGeneratedArtifact.Identity)')" />
+      <TextResourcesGeneratedFile Include="@(_TextResourcesCurrentArtifact)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="WebUIToolkitCleanTextResourceArtifacts"
+          BeforeTargets="CoreClean"
+          DependsOnTargets="_WebUIToolkitReadAndValidateTextResourcesInventory">
+    <Delete Files="@(_TextResourcesOwnedInventoryEntry->'%(_OwnedFullPath)')" />
+    <Delete Files="$(_TextResourcesOutputStampPath);$(_TextResourcesGenerationStatePath);$(_TextResourcesGenerationInventoryPath);$(_TextResourcesResponseFilePath)" />
+    <RemoveDir Directories="$(_TextResourcesStagingDirectory)"
+               Condition="Exists('$(_TextResourcesStagingDirectory)')" />
+    <ItemGroup>
+      <_TextResourcesRemainingOutput Include="$(_TextResourcesOutputRoot)**\*" />
+    </ItemGroup>
+    <RemoveDir Directories="$(_TextResourcesOutputDirectory)"
+               Condition="'@(_TextResourcesRemainingOutput)' == ''" />
+  </Target>
+</Project>

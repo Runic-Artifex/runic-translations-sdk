@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>WebUIToolkit.DotNet.TextResources</AssemblyName>
+    <RootNamespace>WebUIToolkit.TextResources.Tool</RootNamespace>
+    <PackageId>WebUIToolkit.DotNet.TextResources</PackageId>
+    <Description>Deterministic validation and generation tool for WebUIToolkit text resources.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dotnet-textresources</ToolCommandName>
+    <WebUIToolkitShippingProject>true</WebUIToolkitShippingProject>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WebUIToolkit.TextResources.Compiler\WebUIToolkit.TextResources.Compiler.csproj" />
+    <EmbeddedResource Include="..\..\spec\text-resources\schemas\catalog-v1.schema.json" LogicalName="WebUIToolkit.TextResources.Tool.Schemas.catalog-v1.schema.json" />
+    <EmbeddedResource Include="..\..\spec\text-resources\schemas\resources-v1.schema.json" LogicalName="WebUIToolkit.TextResources.Tool.Schemas.resources-v1.schema.json" />
+    <EmbeddedResource Include="..\..\spec\text-resources\schemas\locale-artifact-v1.schema.json" LogicalName="WebUIToolkit.TextResources.Tool.Schemas.locale-artifact-v1.schema.json" />
+    <EmbeddedResource Include="..\..\spec\text-resources\schemas\external-pack-v1.schema.json" LogicalName="WebUIToolkit.TextResources.Tool.Schemas.external-pack-v1.schema.json" />
+    <EmbeddedResource Include="..\..\spec\text-resources\schemas\template-manifest-v1.schema.json" LogicalName="WebUIToolkit.TextResources.Tool.Schemas.template-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\spec\text-resources\schemas\asset-manifest-v1.schema.json" LogicalName="WebUIToolkit.TextResources.Tool.Schemas.asset-manifest-v1.schema.json" />
+    <None Update="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

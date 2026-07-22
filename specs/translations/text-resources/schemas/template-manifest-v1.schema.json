@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WebUIToolkit Text Resources Template Manifest v1",
+  "description": "Versioned, value-free edge contract for template compilers and editor tooling. It does not authorize template syntax or runtime behavior.",
+  "type": "object",
+  "required": [
+    "manifestVersion",
+    "messageGrammarVersion",
+    "catalog",
+    "contractFingerprint",
+    "messages"
+  ],
+  "properties": {
+    "manifestVersion": {
+      "const": 1
+    },
+    "messageGrammarVersion": {
+      "const": 1
+    },
+    "catalog": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*$"
+    },
+    "contractFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "messages": {
+      "type": "object",
+      "maxProperties": 50000,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/message"
+      },
+      "unevaluatedProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "$defs": {
+    "message": {
+      "type": "object",
+      "required": [
+        "description",
+        "since",
+        "deprecated",
+        "tags",
+        "arguments"
+      ],
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "since": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deprecated": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "arguments": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "locale-artifact-v1.schema.json#/$defs/argument"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    }
+  }
+}

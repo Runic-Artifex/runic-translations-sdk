@@ -16,8 +16,14 @@ internal static class CompilerTests
         runner.Add("compiler preserves version 1 pattern contracts", PatternContracts);
         runner.Add("compiler normalizes source paths and retains exact locations", SourcePathsAndLocations);
         runner.Add("compiler IR and fingerprints are deterministic across order and cultures", Determinism);
+        runner.Add("compiler rejects duplicate normalized source paths deterministically", DuplicateNormalizedSourcePaths);
+        runner.Add("compiler rejects duplicate generated root identities deterministically", DuplicateGeneratedRootIdentities);
+        runner.Add("compiler rejects portable case-insensitive hint stem collisions", CaseInsensitiveHintStemCollisions);
+        runner.Add("compiler rejects Windows device generated filename stems", WindowsDeviceGeneratedFilenameStems);
         runner.Add("compiler enforces configured hostile-input limits", ConfiguredLimits);
         runner.Add("compiler observes cancellation without diagnostics", Cancellation);
+        runner.Add("compiler rejects synthesized generated identifier collisions", GeneratedIdentifierCollisions);
+        runner.Add("compiler rejects divergent contracts for allowed extra keys", AllowedExtraContractParity);
     }
 
     private static void MergeAndFallback()
@@ -145,6 +151,227 @@ internal static class CompilerTests
         Assert.True(diagnostic.Id != "WUTTEXT0099", "Malformed or oversized consumer input must never become WUTTEXT0099.");
     }
 
+    private static void DuplicateNormalizedSourcePaths()
+    {
+        const string manifest = """
+            {
+              "schemaVersion": 1,
+              "catalog": "duplicates",
+              "code": { "namespace": "Tests", "className": "DuplicateText" },
+              "defaultLocale": "en",
+              "locales": [{ "tag": "en" }],
+              "layers": [{ "name": "base", "priority": 0 }]
+            }
+            """;
+        CompilerModel.TextResourceSource[] forward =
+        [
+            Source(@".\same\b.json", "not JSON"),
+            Source("same/a.json", "{}"),
+            Source(@".\same\a.json", "[1, 2, 3]"),
+            Source("same/b.json", "{\"schemaVersion\":1}"),
+        ];
+        CompilerModel.TextResourceSource[] reversed =
+        [
+            forward[3],
+            forward[2],
+            forward[1],
+            forward[0],
+        ];
+
+        CompilerModel.TextResourceCompilation first = CompilerModel.TextResourceCompiler.Compile(
+            [Source("manifest.json", manifest)], forward);
+        CompilerModel.TextResourceCompilation second = CompilerModel.TextResourceCompiler.Compile(
+            [Source("manifest.json", manifest)], reversed);
+
+        Assert.Equal(DiagnosticSnapshot(first.Diagnostics), DiagnosticSnapshot(second.Diagnostics));
+        Assert.Equal(2, first.Diagnostics.Count, DiagnosticsText(first.Diagnostics));
+        Assert.Equal("same/a.json", first.Diagnostics[0].Location.Path);
+        Assert.Equal("same/b.json", first.Diagnostics[1].Location.Path);
+        foreach (CompilerModel.TextResourceDiagnostic diagnostic in first.Diagnostics)
+        {
+            Assert.Equal("WUTTEXT0002", diagnostic.Id);
+            Assert.Equal(0, diagnostic.Location.StartByte);
+            Assert.Equal(0, diagnostic.Location.LengthBytes);
+            Assert.Equal(1, diagnostic.Location.Line);
+            Assert.Equal(1, diagnostic.Location.Column);
+        }
+    }
+
+    private static string DiagnosticSnapshot(IReadOnlyList<CompilerModel.TextResourceDiagnostic> diagnostics)
+    {
+        StringBuilder builder = new();
+        foreach (CompilerModel.TextResourceDiagnostic diagnostic in diagnostics)
+        {
+            builder.Append(diagnostic.Id).Append('|').Append(diagnostic.Severity).Append('|')
+                .Append(diagnostic.Message).Append('|').Append(diagnostic.Location.Path).Append('|')
+                .Append(diagnostic.Location.StartByte).Append('|').Append(diagnostic.Location.LengthBytes).Append('|')
+                .Append(diagnostic.Location.Line).Append('|').Append(diagnostic.Location.Column).Append('|')
+                .Append(diagnostic.Location.EndLine).Append('|').Append(diagnostic.Location.EndColumn).Append('\n');
+        }
+
+        return builder.ToString();
+    }
+
+    private static void DuplicateGeneratedRootIdentities()
+    {
+        const string firstManifest = """
+            {
+              "schemaVersion": 1,
+              "catalog": "alpha",
+              "code": { "namespace": "Tests.Shared", "className": "SharedText" },
+              "defaultLocale": "en",
+              "locales": [{ "tag": "en" }],
+              "layers": [{ "name": "base", "priority": 0 }]
+            }
+            """;
+        const string secondManifest = """
+            {
+              "schemaVersion": 1,
+              "catalog": "beta",
+              "code": { "namespace": "Tests.Shared", "className": "SharedText" },
+              "defaultLocale": "en",
+              "locales": [{ "tag": "en" }],
+              "layers": [{ "name": "base", "priority": 0 }]
+            }
+            """;
+        const string firstDocument = """
+            { "schemaVersion": 1, "catalog": "alpha", "locale": "en", "layer": "base", "resources": { "Value": "Alpha" } }
+            """;
+        const string secondDocument = """
+            { "schemaVersion": 1, "catalog": "beta", "locale": "en", "layer": "base", "resources": { "Value": "Beta" } }
+            """;
+
+        CompilerModel.TextResourceCompilation first = CompilerModel.TextResourceCompiler.Compile(
+            [Source("catalogs/a.manifest.json", firstManifest), Source("catalogs/z.manifest.json", secondManifest)],
+            [Source("catalogs/a.texts.json", firstDocument), Source("catalogs/z.texts.json", secondDocument)]);
+        CompilerModel.TextResourceCompilation reversed = CompilerModel.TextResourceCompiler.Compile(
+            [Source("catalogs/z.manifest.json", secondManifest), Source("catalogs/a.manifest.json", firstManifest)],
+            [Source("catalogs/z.texts.json", secondDocument), Source("catalogs/a.texts.json", firstDocument)]);
+
+        Assert.Equal(DiagnosticSnapshot(first.Diagnostics), DiagnosticSnapshot(reversed.Diagnostics));
+        CompilerModel.TextResourceDiagnostic diagnostic = Assert.Single(first.Diagnostics);
+        Assert.Equal("WUTTEXT0018", diagnostic.Id);
+        Assert.Equal("catalogs/z.manifest.json", diagnostic.Location.Path);
+        int expectedStart = secondManifest.IndexOf("\"SharedText\"", StringComparison.Ordinal);
+        Assert.Equal(expectedStart, diagnostic.Location.StartByte);
+        Assert.Equal("\"SharedText\"".Length, diagnostic.Location.LengthBytes);
+        Assert.True(diagnostic.Message.Contains("catalogs/a.manifest.json", StringComparison.Ordinal),
+            "The collision diagnostic must identify the first manifest deterministically.");
+        Assert.Equal(
+            "Generated type 'Tests.Shared.SharedText' for catalog 'beta' collides with catalog 'alpha' declared in 'catalogs/a.manifest.json'.",
+            diagnostic.Message);
+    }
+
+    private static void CaseInsensitiveHintStemCollisions()
+    {
+        const string firstManifest = """
+            {
+              "schemaVersion": 1,
+              "catalog": "alpha-hint",
+              "code": { "namespace": "Tests.One", "className": "Foo" },
+              "defaultLocale": "en",
+              "locales": [{ "tag": "en" }],
+              "layers": [{ "name": "base", "priority": 0 }]
+            }
+            """;
+        const string secondManifest = """
+            {
+              "schemaVersion": 1,
+              "catalog": "beta-hint",
+              "code": { "namespace": "Tests.Two", "className": "foo" },
+              "defaultLocale": "en",
+              "locales": [{ "tag": "en" }],
+              "layers": [{ "name": "base", "priority": 0 }]
+            }
+            """;
+        const string firstDocument = """
+            { "schemaVersion": 1, "catalog": "alpha-hint", "locale": "en", "layer": "base", "resources": { "Value": "Alpha" } }
+            """;
+        const string secondDocument = """
+            { "schemaVersion": 1, "catalog": "beta-hint", "locale": "en", "layer": "base", "resources": { "Value": "Beta" } }
+            """;
+
+        CompilerModel.TextResourceCompilation first = CompilerModel.TextResourceCompiler.Compile(
+            [Source("hints/a.manifest.json", firstManifest), Source("hints/z.manifest.json", secondManifest)],
+            [Source("hints/a.texts.json", firstDocument), Source("hints/z.texts.json", secondDocument)]);
+        CompilerModel.TextResourceCompilation reversed = CompilerModel.TextResourceCompiler.Compile(
+            [Source("hints/z.manifest.json", secondManifest), Source("hints/a.manifest.json", firstManifest)],
+            [Source("hints/z.texts.json", secondDocument), Source("hints/a.texts.json", firstDocument)]);
+
+        Assert.Equal(DiagnosticSnapshot(first.Diagnostics), DiagnosticSnapshot(reversed.Diagnostics));
+        CompilerModel.TextResourceDiagnostic diagnostic = Assert.Single(first.Diagnostics);
+        Assert.Equal("WUTTEXT0018", diagnostic.Id);
+        Assert.Equal("hints/z.manifest.json", diagnostic.Location.Path);
+        Assert.Equal(secondManifest.IndexOf("\"foo\"", StringComparison.Ordinal), diagnostic.Location.StartByte);
+        Assert.Equal("\"foo\"".Length, diagnostic.Location.LengthBytes);
+        Assert.Equal(
+            "Generated hint stem 'foo' for catalog 'beta-hint' collides case-insensitively with stem 'Foo' for catalog 'alpha-hint' declared in 'hints/a.manifest.json'.",
+            diagnostic.Message);
+    }
+
+    private static void WindowsDeviceGeneratedFilenameStems()
+    {
+        const string catalogManifest = """
+            {
+              "schemaVersion": 1,
+              "catalog": "con",
+              "code": { "namespace": "Tests", "className": "AppText" },
+              "defaultLocale": "en",
+              "locales": [{ "tag": "en" }],
+              "layers": [{ "name": "base", "priority": 0 }]
+            }
+            """;
+        const string catalogDocument = """
+            { "schemaVersion": 1, "catalog": "con", "locale": "en", "layer": "base", "resources": { "Value": "Text" } }
+            """;
+        const string classManifest = """
+            {
+              "schemaVersion": 1,
+              "catalog": "app",
+              "code": { "namespace": "Tests", "className": "CON" },
+              "defaultLocale": "en",
+              "locales": [{ "tag": "en" }],
+              "layers": [{ "name": "base", "priority": 0 }]
+            }
+            """;
+        const string classDocument = """
+            { "schemaVersion": 1, "catalog": "app", "locale": "en", "layer": "base", "resources": { "Value": "Text" } }
+            """;
+
+        AssertDeviceStem(
+            "device-catalog.manifest.json",
+            catalogManifest,
+            catalogDocument,
+            "\"con\"");
+        AssertDeviceStem(
+            "device-catalog-uppercase.manifest.json",
+            catalogManifest.Replace("\"con\"", "\"CON\"", StringComparison.Ordinal),
+            catalogDocument.Replace("\"con\"", "\"CON\"", StringComparison.Ordinal),
+            "\"CON\"");
+        AssertDeviceStem(
+            "device-class.manifest.json",
+            classManifest,
+            classDocument,
+            "\"CON\"");
+        AssertDeviceStem(
+            "device-class-lowercase.manifest.json",
+            classManifest.Replace("\"CON\"", "\"con\"", StringComparison.Ordinal),
+            classDocument,
+            "\"con\"");
+
+        static void AssertDeviceStem(string path, string manifest, string document, string expectedToken)
+        {
+            CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
+                [Source(path, manifest)],
+                [Source(path.Replace("manifest", "texts", StringComparison.Ordinal), document)]);
+            CompilerModel.TextResourceDiagnostic diagnostic = Assert.Single(compilation.Diagnostics);
+            Assert.Equal("WUTTEXT0018", diagnostic.Id);
+            Assert.Equal(path, diagnostic.Location.Path);
+            Assert.Equal(manifest.IndexOf(expectedToken, StringComparison.Ordinal), diagnostic.Location.StartByte);
+            Assert.Equal(expectedToken.Length, diagnostic.Location.LengthBytes);
+        }
+    }
+
     private static void Cancellation()
     {
         using CancellationTokenSource source = new();
@@ -163,6 +390,83 @@ internal static class CompilerTests
         }
 
         Assert.True(canceled, "A canceled compilation must throw OperationCanceledException with the caller's token.");
+    }
+
+    private static void GeneratedIdentifierCollisions()
+    {
+        const string manifest = """
+            {
+              "schemaVersion": 1,
+              "catalog": "collision",
+              "code": { "namespace": "Tests", "className": "AppText" },
+              "defaultLocale": "en",
+              "locales": [{ "tag": "en" }],
+              "layers": [{ "name": "base", "priority": 0 }]
+            }
+            """;
+        const string document = """
+            {
+              "schemaVersion": 1,
+              "catalog": "collision",
+              "locale": "en",
+              "layer": "base",
+              "resources": {
+                "Foo": { "Bar": "nested" },
+                "FooGroup": "sibling",
+                "AppTextKeys": { "Value": "keys" }
+              }
+            }
+            """;
+
+        CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
+            [Source("collision.manifest.json", manifest)],
+            [Source("collision.en.json", document)]);
+        Assert.Equal(2, CountDiagnostics(compilation, "WUTTEXT0018"), DiagnosticsText(compilation.Diagnostics));
+    }
+
+    private static void AllowedExtraContractParity()
+    {
+        const string manifest = """
+            {
+              "schemaVersion": 1,
+              "catalog": "extras",
+              "code": { "namespace": "Tests", "className": "ExtraText" },
+              "defaultLocale": "en",
+              "locales": [
+                { "tag": "en" },
+                { "tag": "de", "fallback": "en" },
+                { "tag": "fr", "fallback": "en" }
+              ],
+              "layers": [{ "name": "base", "priority": 0 }],
+              "validation": { "translationCompleteness": "allow", "extraLocaleKeys": "allow" }
+            }
+            """;
+        const string english = """
+            { "schemaVersion": 1, "catalog": "extras", "locale": "en", "layer": "base", "resources": { "Base": "Base" } }
+            """;
+        const string german = """
+            { "schemaVersion": 1, "catalog": "extras", "locale": "de", "layer": "base", "resources": { "Extra": { "$value": "{value}", "$placeholders": { "value": { "type": "int" } } } } }
+            """;
+        const string french = """
+            { "schemaVersion": 1, "catalog": "extras", "locale": "fr", "layer": "base", "resources": { "Extra": { "$value": "{value}", "$placeholders": { "value": { "type": "string" } } } } }
+            """;
+
+        CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
+            [Source("extras.manifest.json", manifest)],
+            [Source("extras.en.json", english), Source("extras.de.json", german), Source("extras.fr.json", french)]);
+        Assert.Equal(1, CountDiagnostics(compilation, "WUTTEXT0016"), DiagnosticsText(compilation.Diagnostics));
+        Assert.True(!compilation.Success, "Divergent allowed-extra contracts must fail before generation.");
+    }
+
+    private static int CountDiagnostics(CompilerModel.TextResourceCompilation compilation, string id)
+    {
+        int count = 0;
+        foreach (CompilerModel.TextResourceDiagnostic diagnostic in compilation.Diagnostics)
+        {
+            if (string.Equals(diagnostic.Id, id, StringComparison.Ordinal)) count++;
+        }
+
+        return count;
     }
 
     internal static CompilerModel.TextResourceCompilation CompileCase(

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>WebUIToolkit.TextResources.Build.Tests</AssemblyName>
+    <RootNamespace>WebUIToolkit.TextResources.Build.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\tools\dotnet-textresources\WebUIToolkit.DotNet.TextResources.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

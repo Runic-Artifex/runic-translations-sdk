@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "catalog": "allowed-extra",
+  "locale": "fr",
+  "layer": "base",
+  "resources": {
+    "Extra": {
+      "$value": "{value}",
+      "$placeholders": {
+        "value": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

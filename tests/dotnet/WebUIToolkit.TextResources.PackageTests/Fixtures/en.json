@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "catalog": "packageconsumer",
+  "locale": "en",
+  "layer": "base",
+  "resources": {
+    "Greeting": {
+      "$value": "Hello {name}",
+      "$placeholders": {
+        "name": { "type": "string" }
+      }
+    }
+  }
+}

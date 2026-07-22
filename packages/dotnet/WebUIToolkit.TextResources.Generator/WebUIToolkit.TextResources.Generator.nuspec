@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>WebUIToolkit.TextResources.Generator</id>
+    <version>$packageVersion$</version>
+    <authors>WebUIToolkit</authors>
+    <description>Incremental C# source generator for WebUIToolkit text resources.</description>
+    <readme>README.md</readme>
+    <developmentDependency>true</developmentDependency>
+    <dependencies>
+      <dependency id="WebUIToolkit.TextResources" version="[$packageVersion$]" exclude="Build,Analyzers" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="bin\$configuration$\netstandard2.0\WebUIToolkit.TextResources.Generator.dll" target="analyzers/dotnet/cs" />
+    <file src="bin\$configuration$\netstandard2.0\WebUIToolkit.TextResources.Compiler.dll" target="analyzers/dotnet/cs" />
+    <file src="README.md" target="" />
+  </files>
+</package>

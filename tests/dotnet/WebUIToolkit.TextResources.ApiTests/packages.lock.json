@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net8.0": {
+      "webuitoolkit.textresources": {
+        "type": "Project"
+      },
+      "webuitoolkit.textresources.compiler": {
+        "type": "Project"
+      },
+      "webuitoolkit.textresources.generator": {
+        "type": "Project"
+      }
+    }
+  }
+}

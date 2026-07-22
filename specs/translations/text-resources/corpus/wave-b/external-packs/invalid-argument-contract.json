@@ -1,0 +1,24 @@
+{
+  "artifactVersion": 1,
+  "messageGrammarVersion": 1,
+  "catalog": "app",
+  "locale": "de",
+  "contractFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "messages": {
+    "Files.Deleted": {
+      "pattern": "{count} Dateien aus {folder} gelöscht.",
+      "arguments": [
+        {
+          "name": "count",
+          "type": "number",
+          "format": "grouped"
+        },
+        {
+          "name": "folder",
+          "type": "string",
+          "format": "none"
+        }
+      ]
+    }
+  }
+}

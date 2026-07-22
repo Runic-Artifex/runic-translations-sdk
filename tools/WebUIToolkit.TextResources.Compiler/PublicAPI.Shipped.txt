@@ -1,0 +1,155 @@
+# Public API approval baseline
+# Assembly: WebUIToolkit.TextResources.Compiler
+# Generated deterministically; intentional changes require baseline review.
+# Nullability metadata is intentionally normalized away; readonly/init/ref/constraints and contract attributes are retained.
+
+type sealed class WebUIToolkit.TextResources.Compiler.CompiledTextCatalog
+  property System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.Compiler.CompiledTextLayer> Layers { get; }
+  property System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.Compiler.CompiledTextLocale> Locales { get; }
+  property System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.Compiler.CompiledTextResource> CanonicalResources { get; }
+  property System.Int32 MessageGrammarVersion { get; }
+  property System.Int32 SchemaVersion { get; }
+  property System.String ClassName { get; }
+  property System.String CodeNamespace { get; }
+  property System.String DefaultLocale { get; }
+  property System.String Fingerprint { get; }
+  property System.String Id { get; }
+  property WebUIToolkit.TextResources.Compiler.TextResourceMissingKeyPolicy MissingKey { get; }
+  property WebUIToolkit.TextResources.Compiler.TextResourceUnsupportedLocalePolicy UnsupportedLocale { get; }
+  property WebUIToolkit.TextResources.Compiler.TextResourceVisibility Visibility { get; }
+
+type sealed class WebUIToolkit.TextResources.Compiler.CompiledTextLayer
+  property System.Int32 Priority { get; }
+  property System.String Name { get; }
+
+type sealed class WebUIToolkit.TextResources.Compiler.CompiledTextLocale
+  property System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.Compiler.CompiledTextResource> DirectResources { get; }
+  property System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.Compiler.CompiledTextResource> ResolvedResources { get; }
+  property System.String FallbackTag { get; }
+  property System.String Tag { get; }
+
+type sealed class WebUIToolkit.TextResources.Compiler.CompiledTextPlaceholder
+  property System.String Format { get; }
+  property System.String Name { get; }
+  property WebUIToolkit.TextResources.Compiler.TextResourceArgumentType Type { get; }
+
+type sealed class WebUIToolkit.TextResources.Compiler.CompiledTextResource
+  property System.Collections.Generic.IReadOnlyList<System.String> Tags { get; }
+  property System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.Compiler.CompiledTextPlaceholder> Placeholders { get; }
+  property System.Int32 Id { get; }
+  property System.String DeprecatedReason { get; }
+  property System.String Description { get; }
+  property System.String Key { get; }
+  property System.String Pattern { get; }
+  property System.String Since { get; }
+  property WebUIToolkit.TextResources.Compiler.TextSourceLocation SourceLocation { get; }
+
+type sealed class WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput
+  method System.Byte[] GetUtf8Bytes()
+  property System.String MediaType { get; }
+  property System.String RelativePath { get; }
+  property System.String Sha256 { get; }
+  property System.String Text { get; }
+  property WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind Kind { get; }
+
+type enum WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpAccessors = 1
+  field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpCatalogData = 2
+  field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpKeys = 0
+  field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpRegistration = 3
+  field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind LocaleJson = 4
+  field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind TemplateManifestJson = 5
+  field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind TypeScriptContract = 6
+
+type static class WebUIToolkit.TextResources.Compiler.Generation.TextResourceOutputRenderer
+  field const System.Int32 LocaleArtifactVersion = 1
+  field const System.Int32 TemplateManifestVersion = 1
+  field const System.Int32 TypeScriptContractVersion = 1
+  method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderCSharpAccessors(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog)
+  method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderCSharpCatalogData(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog)
+  method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderCSharpKeys(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog)
+  method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderCSharpRegistration(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog)
+  method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderLocaleJson(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog, System.String locale)
+  method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderTemplateManifestJson(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog)
+  method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderTypeScriptContract(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog)
+
+type enum WebUIToolkit.TextResources.Compiler.TextResourceArgumentType : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const WebUIToolkit.TextResources.Compiler.TextResourceArgumentType Boolean = 3
+  field const WebUIToolkit.TextResources.Compiler.TextResourceArgumentType Date = 4
+  field const WebUIToolkit.TextResources.Compiler.TextResourceArgumentType DateTime = 6
+  field const WebUIToolkit.TextResources.Compiler.TextResourceArgumentType Guid = 7
+  field const WebUIToolkit.TextResources.Compiler.TextResourceArgumentType Int = 1
+  field const WebUIToolkit.TextResources.Compiler.TextResourceArgumentType Number = 2
+  field const WebUIToolkit.TextResources.Compiler.TextResourceArgumentType String = 0
+  field const WebUIToolkit.TextResources.Compiler.TextResourceArgumentType Time = 5
+
+type sealed class WebUIToolkit.TextResources.Compiler.TextResourceCompilation
+  property System.Boolean Success { get; }
+  property System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.Compiler.CompiledTextCatalog> Catalogs { get; }
+  property System.Collections.Generic.IReadOnlyList<WebUIToolkit.TextResources.Compiler.TextResourceDiagnostic> Diagnostics { get; }
+
+type static class WebUIToolkit.TextResources.Compiler.TextResourceCompiler
+  method static WebUIToolkit.TextResources.Compiler.TextResourceCompilation Compile(System.Collections.Generic.IEnumerable<WebUIToolkit.TextResources.Compiler.TextResourceSource> manifests, System.Collections.Generic.IEnumerable<WebUIToolkit.TextResources.Compiler.TextResourceSource> documents, System.Threading.CancellationToken cancellationToken)
+  method static WebUIToolkit.TextResources.Compiler.TextResourceCompilation Compile(System.Collections.Generic.IEnumerable<WebUIToolkit.TextResources.Compiler.TextResourceSource> manifests, System.Collections.Generic.IEnumerable<WebUIToolkit.TextResources.Compiler.TextResourceSource> documents, WebUIToolkit.TextResources.Compiler.TextResourceCompilerOptions options = null)
+  method static WebUIToolkit.TextResources.Compiler.TextResourceCompilation Compile(System.Collections.Generic.IEnumerable<WebUIToolkit.TextResources.Compiler.TextResourceSource> manifests, System.Collections.Generic.IEnumerable<WebUIToolkit.TextResources.Compiler.TextResourceSource> documents, WebUIToolkit.TextResources.Compiler.TextResourceCompilerOptions options, System.Threading.CancellationToken cancellationToken)
+
+type sealed class WebUIToolkit.TextResources.Compiler.TextResourceCompilerOptions
+  ctor WebUIToolkit.TextResources.Compiler.TextResourceCompilerOptions(System.Int32 maximumDocumentBytes = 8388608, System.Int32 maximumDepth = 64, System.Int32 maximumKeysPerCatalog = 50000, System.Int32 maximumValueBytes = 65536, System.Int32 maximumPlaceholdersPerValue = 32, System.Int32 maximumLocalesPerCatalog = 256)
+  property System.Int32 MaximumDepth { get; }
+  property System.Int32 MaximumDocumentBytes { get; }
+  property System.Int32 MaximumKeysPerCatalog { get; }
+  property System.Int32 MaximumLocalesPerCatalog { get; }
+  property System.Int32 MaximumPlaceholdersPerValue { get; }
+  property System.Int32 MaximumValueBytes { get; }
+
+type sealed class WebUIToolkit.TextResources.Compiler.TextResourceDiagnostic
+  ctor WebUIToolkit.TextResources.Compiler.TextResourceDiagnostic(System.String id, WebUIToolkit.TextResources.Compiler.TextResourceDiagnosticSeverity severity, System.String message, WebUIToolkit.TextResources.Compiler.TextSourceLocation location)
+  property System.String Id { get; }
+  property System.String Message { get; }
+  property WebUIToolkit.TextResources.Compiler.TextResourceDiagnosticSeverity Severity { get; }
+  property WebUIToolkit.TextResources.Compiler.TextSourceLocation Location { get; }
+
+type enum WebUIToolkit.TextResources.Compiler.TextResourceDiagnosticSeverity : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const WebUIToolkit.TextResources.Compiler.TextResourceDiagnosticSeverity Error = 1
+  field const WebUIToolkit.TextResources.Compiler.TextResourceDiagnosticSeverity Warning = 0
+
+type enum WebUIToolkit.TextResources.Compiler.TextResourceMissingKeyPolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const WebUIToolkit.TextResources.Compiler.TextResourceMissingKeyPolicy ReturnKey = 1
+  field const WebUIToolkit.TextResources.Compiler.TextResourceMissingKeyPolicy ReturnMarker = 2
+  field const WebUIToolkit.TextResources.Compiler.TextResourceMissingKeyPolicy Throw = 0
+
+type enum WebUIToolkit.TextResources.Compiler.TextResourcePolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const WebUIToolkit.TextResources.Compiler.TextResourcePolicy Allow = 0
+  field const WebUIToolkit.TextResources.Compiler.TextResourcePolicy Error = 2
+  field const WebUIToolkit.TextResources.Compiler.TextResourcePolicy Warning = 1
+
+type sealed class WebUIToolkit.TextResources.Compiler.TextResourceSource
+  ctor WebUIToolkit.TextResources.Compiler.TextResourceSource(System.String path, System.Byte[] utf8Bytes)
+  method System.Byte[] GetUtf8Bytes()
+  property System.String Path { get; }
+type enum WebUIToolkit.TextResources.Compiler.TextResourceUnsupportedLocalePolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const WebUIToolkit.TextResources.Compiler.TextResourceUnsupportedLocalePolicy Default = 2
+  field const WebUIToolkit.TextResources.Compiler.TextResourceUnsupportedLocalePolicy Exact = 0
+  field const WebUIToolkit.TextResources.Compiler.TextResourceUnsupportedLocalePolicy ParentsThenDefault = 1
+
+type enum WebUIToolkit.TextResources.Compiler.TextResourceVisibility : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const WebUIToolkit.TextResources.Compiler.TextResourceVisibility Internal = 1
+  field const WebUIToolkit.TextResources.Compiler.TextResourceVisibility Public = 0
+
+type sealed class WebUIToolkit.TextResources.Compiler.TextSourceLocation
+  ctor WebUIToolkit.TextResources.Compiler.TextSourceLocation(System.String path, System.Int32 startByte, System.Int32 lengthBytes, System.Int32 line, System.Int32 column, System.Int32 endLine, System.Int32 endColumn)
+  method System.String ToString()
+  property System.Int32 Column { get; }
+  property System.Int32 EndColumn { get; }
+  property System.Int32 EndLine { get; }
+  property System.Int32 LengthBytes { get; }
+  property System.Int32 Line { get; }
+  property System.Int32 StartByte { get; }
+  property System.String Path { get; }

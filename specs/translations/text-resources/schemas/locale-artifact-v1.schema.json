@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WebUIToolkit Text Resources Locale Artifact v1",
+  "description": "Normative wire schema for a resolved locale artifact with artifactVersion 1. It is also the structural payload accepted by the version 1 external-pack reader.",
+  "type": "object",
+  "required": [
+    "artifactVersion",
+    "messageGrammarVersion",
+    "catalog",
+    "locale",
+    "contractFingerprint",
+    "messages"
+  ],
+  "properties": {
+    "artifactVersion": {
+      "const": 1
+    },
+    "messageGrammarVersion": {
+      "const": 1
+    },
+    "catalog": {
+      "$ref": "#/$defs/catalogId"
+    },
+    "locale": {
+      "$ref": "#/$defs/localeTag"
+    },
+    "contractFingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "messages": {
+      "type": "object",
+      "maxProperties": 50000,
+      "propertyNames": {
+        "$ref": "#/$defs/resourceKey"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/message"
+      },
+      "unevaluatedProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "$defs": {
+    "catalogId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*$"
+    },
+    "localeTag": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "resourceKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+    },
+    "message": {
+      "type": "object",
+      "required": [
+        "pattern",
+        "arguments"
+      ],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "arguments": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/argument"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "argument": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/stringArgument"
+        },
+        {
+          "$ref": "#/$defs/intArgument"
+        },
+        {
+          "$ref": "#/$defs/numberArgument"
+        },
+        {
+          "$ref": "#/$defs/boolArgument"
+        },
+        {
+          "$ref": "#/$defs/dateArgument"
+        },
+        {
+          "$ref": "#/$defs/timeArgument"
+        },
+        {
+          "$ref": "#/$defs/datetimeArgument"
+        },
+        {
+          "$ref": "#/$defs/guidArgument"
+        }
+      ]
+    },
+    "argumentBase": {
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "format"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        }
+      }
+    },
+    "stringArgument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/argumentBase"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "string"
+            },
+            "format": {
+              "const": "none"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "intArgument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/argumentBase"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "int"
+            },
+            "format": {
+              "enum": [
+                "plain",
+                "grouped"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "numberArgument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/argumentBase"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "number"
+            },
+            "format": {
+              "enum": [
+                "plain",
+                "grouped",
+                "fixed0",
+                "fixed1",
+                "fixed2",
+                "fixed3",
+                "fixed4",
+                "fixed5",
+                "fixed6",
+                "percent0",
+                "percent1",
+                "percent2",
+                "percent3",
+                "percent4"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "boolArgument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/argumentBase"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "bool"
+            },
+            "format": {
+              "const": "lower"
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "dateArgument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/argumentBase"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "date"
+            },
+            "format": {
+              "enum": [
+                "iso",
+                "short",
+                "medium",
+                "long"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "timeArgument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/argumentBase"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "time"
+            },
+            "format": {
+              "enum": [
+                "iso",
+                "short",
+                "medium"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "datetimeArgument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/argumentBase"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "datetime"
+            },
+            "format": {
+              "enum": [
+                "iso",
+                "short",
+                "medium",
+                "long"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "guidArgument": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/argumentBase"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "guid"
+            },
+            "format": {
+              "enum": [
+                "d",
+                "n"
+              ]
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

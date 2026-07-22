@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "catalog": "group-collision",
+  "locale": "en",
+  "layer": "base",
+  "resources": {
+    "Foo": {
+      "Bar": "nested"
+    },
+    "FooGroup": "sibling"
+  }
+}
