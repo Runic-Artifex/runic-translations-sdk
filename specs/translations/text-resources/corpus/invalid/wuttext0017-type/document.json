@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "catalog": "app",
+  "locale": "en",
+  "layer": "application",
+  "resources": {
+    "Typed": {
+      "$value": "Value: {value}",
+      "$placeholders": { "value": { "type": "currency" } }
+    }
+  }
+}

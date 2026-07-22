@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "catalog": "app",
+  "code": { "namespace": "WebUIToolkit.Examples.Localization", "className": "AppText" },
+  "defaultLocale": "en",
+  "locales": [{ "tag": "en" }],
+  "layers": [{ "name": "base", "priority": 0 }]
+}

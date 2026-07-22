@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "catalog": "app",
+  "locale": "en",
+  "layer": "base",
+  "resources": { "Other": "Other", }
+}

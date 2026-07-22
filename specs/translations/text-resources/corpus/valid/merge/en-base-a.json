@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "catalog": "merge",
+  "locale": "en",
+  "layer": "base",
+  "resources": {
+    "Zulu": "last ordinally",
+    "Common": { "Cancel": "Cancel" }
+  }
+}

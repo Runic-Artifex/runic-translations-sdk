@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "catalog": "parity",
+  "locale": "de",
+  "layer": "base",
+  "resources": {
+    "Count": {
+      "$value": "Anzahl: {value}",
+      "$placeholders": { "value": { "type": "number", "format": "plain" } }
+    }
+  }
+}

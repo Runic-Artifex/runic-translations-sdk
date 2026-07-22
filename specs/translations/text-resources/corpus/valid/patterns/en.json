@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "catalog": "patterns",
+  "locale": "en",
+  "layer": "base",
+  "resources": {
+    "Escapes": "Literal {{open}} and repeated text",
+    "All": {
+      "$value": "{text}|{count}|{amount}|{enabled}|{day}|{clock}|{instant}|{id}|{text}",
+      "$placeholders": {
+        "text": { "type": "string" },
+        "count": { "type": "int", "format": "grouped" },
+        "amount": { "type": "number", "format": "percent4" },
+        "enabled": { "type": "bool", "format": "lower" },
+        "day": { "type": "date", "format": "iso" },
+        "clock": { "type": "time", "format": "medium" },
+        "instant": { "type": "datetime", "format": "long" },
+        "id": { "type": "guid", "format": "n" }
+      },
+      "$since": "1.0",
+      "$deprecated": "Use a product-specific message.",
+      "$tags": ["conformance", "all-types"]
+    }
+  }
+}

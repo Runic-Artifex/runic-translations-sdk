@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "catalog": "orphan",
+  "locale": "en",
+  "layer": "base",
+  "resources": { "Hello": "Hello" }
+}

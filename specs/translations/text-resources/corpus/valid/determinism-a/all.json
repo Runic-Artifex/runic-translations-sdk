@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "catalog": "stable",
+  "locale": "en",
+  "layer": "base",
+  "resources": {
+    "Zulu": "Z",
+    "Alpha": "A",
+    "Middle": { "Second": "2", "First": "1" }
+  }
+}

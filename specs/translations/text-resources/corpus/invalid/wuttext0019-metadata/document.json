@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "catalog": "app",
+  "locale": "en",
+  "layer": "application",
+  "resources": {
+    "Unknown": { "$value": "Unknown", "$comment": "not a v1 member" }
+  }
+}

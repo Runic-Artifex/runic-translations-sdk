@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "catalog": "merge",
+  "locale": "en",
+  "layer": "base",
+  "resources": {
+    "Alpha": "first ordinally",
+    "Common": { "Save": "Save" }
+  }
+}

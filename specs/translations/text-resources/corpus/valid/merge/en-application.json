@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "catalog": "merge",
+  "locale": "en",
+  "layer": "application",
+  "resources": {
+    "Common": { "Save": { "$value": "Save now", "$description": "Overlay replaces the whole leaf." } }
+  }
+}
