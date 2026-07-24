@@ -39,9 +39,11 @@ must verify their bytes and must not synthesize a different Text Resources
 fingerprint. Host URL routing and deployment policy remain host-owned.
 
 The TypeScript filename and type projection are reserved edge artifacts. A full
-browser formatter, framework adapters, TypeScript packaging, template compiler
-integration, and host static-asset changes are Wave C work. Until that tranche
-lands, .NET-resolved text is the authoritative cross-runtime formatting path.
+browser formatter, TypeScript packaging, template compiler integration, and host
+static-asset changes are Wave C/D work. React, Vue, and Svelte projections follow
+in Wave E; Angular- and ReactiveUI-specific projections follow in Wave F. Until the
+relevant tranche lands, .NET-resolved text is the authoritative cross-runtime
+formatting path.
 
 Also deferred to Wave C are plural/select/gender grammar, rich or trusted markup,
 automatic filesystem/network pack discovery, translation services, dynamic
