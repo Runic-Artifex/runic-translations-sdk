@@ -7,5 +7,6 @@
 
   <ItemGroup>
     <!-- Package versions are added here only after their owning ADR/evaluation gate. -->
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
 </Project>
