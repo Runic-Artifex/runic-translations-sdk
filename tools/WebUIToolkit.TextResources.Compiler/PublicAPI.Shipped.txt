@@ -54,6 +54,7 @@ type sealed class WebUIToolkit.TextResources.Compiler.Generation.TextResourceGen
 
 type enum WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   field System.Int32 value__
+  field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind AssetManifestJson = 7
   field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpAccessors = 1
   field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpCatalogData = 2
   field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpKeys = 0
@@ -63,9 +64,11 @@ type enum WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOu
   field const WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutputKind TypeScriptContract = 6
 
 type static class WebUIToolkit.TextResources.Compiler.Generation.TextResourceOutputRenderer
+  field const System.Int32 AssetManifestVersion = 1
   field const System.Int32 LocaleArtifactVersion = 1
   field const System.Int32 TemplateManifestVersion = 1
   field const System.Int32 TypeScriptContractVersion = 1
+  method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderAssetManifestJson(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog, System.Collections.Generic.IEnumerable<WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput> selectedOutputs)
   method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderCSharpAccessors(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog)
   method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderCSharpCatalogData(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog)
   method static WebUIToolkit.TextResources.Compiler.Generation.TextResourceGeneratedOutput RenderCSharpKeys(WebUIToolkit.TextResources.Compiler.CompiledTextCatalog catalog)

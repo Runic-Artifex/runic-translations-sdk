@@ -201,7 +201,7 @@ public static class TextResourceCompiler
             if (IsWindowsDeviceStem(model.Id))
                 diagnostics.Add("WUTTEXT0018", TextResourceDiagnosticSeverity.Error, "Catalog ID '" + model.Id + "' produces a Windows-reserved generated filename stem.", parsed.Source, catalog.Value.Span);
             else if (!IsCatalogId(model.Id))
-                diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Invalid catalog ID '" + model.Id + "'.", parsed.Source, catalog.Value.Span);
+                diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Catalog ID must use lowercase ASCII letters, digits, dots, or hyphens.", parsed.Source, catalog.Value.Span);
         }
         if (code is not null) ReadCode(code.Value, model, parsed.Source, diagnostics);
         if (defaultLocale is not null)
@@ -466,7 +466,7 @@ public static class TextResourceCompiler
         // uppercase device spelling here so it associates with that manifest
         // and produces one focused WUTTEXT0018 instead of a document cascade.
         if (!IsCatalogId(model.Catalog) && !IsWindowsDeviceStem(model.Catalog))
-            diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Invalid catalog ID '" + model.Catalog + "'.", parsed.Source, catalog.Value.Span);
+            diagnostics.Add("WUTTEXT0006", TextResourceDiagnosticSeverity.Error, "Catalog ID must use lowercase ASCII letters, digits, dots, or hyphens.", parsed.Source, catalog.Value.Span);
         if (!TryCanonicalizeLocale(locale.Value.Text!, out string canonicalLocale))
             diagnostics.Add("WUTTEXT0004", TextResourceDiagnosticSeverity.Error, "Invalid locale tag '" + locale.Value.Text + "'.", parsed.Source, locale.Value.Span);
         else model.Locale = canonicalLocale;

@@ -9,6 +9,7 @@ internal static class Program
         BuildIntegrationTests.Register(runner);
         GeneratedConsumerTests.Register(runner);
         WaveBCorpusTests.Register(runner);
+        WaveCAssetManifestTests.Register(runner);
         return runner.Run();
     }
 }

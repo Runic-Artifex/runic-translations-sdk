@@ -23,12 +23,13 @@ internal static class CompilerOutputAdapter
         for (int index = 0; index < orderedCatalogs.Count; index++)
         {
             CompiledTextCatalog catalog = orderedCatalogs[index];
+            var catalogOutputs = new List<TextResourceGeneratedOutput>();
             if ((emission & ToolEmission.CSharp) != 0)
             {
-                outputs.Add(TextResourceOutputRenderer.RenderCSharpKeys(catalog));
-                outputs.Add(TextResourceOutputRenderer.RenderCSharpAccessors(catalog));
-                outputs.Add(TextResourceOutputRenderer.RenderCSharpCatalogData(catalog));
-                outputs.Add(TextResourceOutputRenderer.RenderCSharpRegistration(catalog));
+                catalogOutputs.Add(TextResourceOutputRenderer.RenderCSharpKeys(catalog));
+                catalogOutputs.Add(TextResourceOutputRenderer.RenderCSharpAccessors(catalog));
+                catalogOutputs.Add(TextResourceOutputRenderer.RenderCSharpCatalogData(catalog));
+                catalogOutputs.Add(TextResourceOutputRenderer.RenderCSharpRegistration(catalog));
             }
 
             if ((emission & ToolEmission.Json) != 0)
@@ -42,19 +43,24 @@ internal static class CompilerOutputAdapter
                 locales.Sort(StringComparer.Ordinal);
                 for (int localeIndex = 0; localeIndex < locales.Count; localeIndex++)
                 {
-                    outputs.Add(TextResourceOutputRenderer.RenderLocaleJson(catalog, locales[localeIndex]));
+                    catalogOutputs.Add(TextResourceOutputRenderer.RenderLocaleJson(catalog, locales[localeIndex]));
                 }
             }
 
             if ((emission & ToolEmission.TemplateManifest) != 0)
             {
-                outputs.Add(TextResourceOutputRenderer.RenderTemplateManifestJson(catalog));
+                catalogOutputs.Add(TextResourceOutputRenderer.RenderTemplateManifestJson(catalog));
             }
 
             if ((emission & ToolEmission.TypeScript) != 0)
             {
-                outputs.Add(TextResourceOutputRenderer.RenderTypeScriptContract(catalog));
+                catalogOutputs.Add(TextResourceOutputRenderer.RenderTypeScriptContract(catalog));
             }
+
+            if ((emission & (ToolEmission.Json | ToolEmission.TemplateManifest | ToolEmission.TypeScript)) != 0)
+                catalogOutputs.Add(TextResourceOutputRenderer.RenderAssetManifestJson(catalog, catalogOutputs));
+
+            outputs.AddRange(catalogOutputs);
         }
 
         var artifacts = new List<ToolArtifact>(outputs.Count);

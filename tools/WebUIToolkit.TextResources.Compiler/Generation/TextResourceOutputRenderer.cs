@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace WebUIToolkit.TextResources.Compiler.Generation;
 
@@ -13,6 +14,9 @@ public static class TextResourceOutputRenderer
 
     /// <summary>The writer version of the TypeScript key/argument edge contract.</summary>
     public const int TypeScriptContractVersion = 1;
+
+    /// <summary>The writer version of the host asset inventory edge contract.</summary>
+    public const int AssetManifestVersion = 1;
 
     /// <summary>Renders the strongly typed key hierarchy.</summary>
     public static TextResourceGeneratedOutput RenderCSharpKeys(CompiledTextCatalog catalog) =>
@@ -44,6 +48,12 @@ public static class TextResourceOutputRenderer
     /// <summary>Renders the versioned TypeScript key and argument contract without a runtime implementation.</summary>
     public static TextResourceGeneratedOutput RenderTypeScriptContract(CompiledTextCatalog catalog) =>
         EdgeOutputRenderer.RenderTypeScriptContract(RequireCatalog(catalog));
+
+    /// <summary>Renders the versioned host inventory for selected non-C# outputs of one catalog.</summary>
+    public static TextResourceGeneratedOutput RenderAssetManifestJson(
+        CompiledTextCatalog catalog,
+        IEnumerable<TextResourceGeneratedOutput> selectedOutputs) =>
+        EdgeOutputRenderer.RenderAssetManifest(RequireCatalog(catalog), selectedOutputs);
 
     private static CompiledTextCatalog RequireCatalog(CompiledTextCatalog catalog) =>
         catalog ?? throw new ArgumentNullException(nameof(catalog));

@@ -24,11 +24,13 @@ Non-C# artifact names are relative safe names:
 
 - `{catalog}.{locale}.locale-v1.json` for a resolved locale artifact;
 - `{catalog}.template-manifest-v1.json` for the versioned value-free edge;
-- `{catalog}.text-resources-v1.d.ts` for the versioned TypeScript declaration edge.
+- `{catalog}.text-resources-v1.d.ts` for the versioned TypeScript declaration edge;
+- `{catalog}.asset-manifest-v1.json` for the selected non-C# asset inventory.
 
-The asset-manifest schema is a versioned host edge, but Wave B does not freeze a
-renderer filename for it. A future emitting surface must choose a version-explicit
-name and add it to the corpus before publication.
+The Asset Manifest v1 is emitted whenever at least one locale, template manifest,
+or TypeScript declaration is selected. It inventories every selected non-C# asset
+except itself. Hosts may verify and copy the listed bytes, but cannot use their own
+frontend manifest as a substitute for this contract.
 
 Paths never come from resource source JSON. The configured output root and every
 resolved child MUST remain under the allowed intermediate/output directory.

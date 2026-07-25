@@ -21,6 +21,8 @@ public enum TextResourceGeneratedOutputKind
     TemplateManifestJson,
     /// <summary>The versioned TypeScript key and argument edge contract.</summary>
     TypeScriptContract,
+    /// <summary>The versioned host asset inventory for selected non-C# outputs.</summary>
+    AssetManifestJson,
 }
 
 /// <summary>A deterministic, UTF-8 compiler output for exactly one concern.</summary>

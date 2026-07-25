@@ -7,9 +7,6 @@
       },
       "webuitoolkit.textresources.compiler": {
         "type": "Project"
-      },
-      "webuitoolkit.textresources.generator": {
-        "type": "Project"
       }
     }
   }

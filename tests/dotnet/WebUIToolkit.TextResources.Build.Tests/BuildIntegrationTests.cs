@@ -76,7 +76,7 @@ internal static class BuildIntegrationTests
         string intermediate = Path.GetFullPath(temporary.Resolve("artifacts", "obj")) + Path.DirectorySeparatorChar;
         Assert.True(Path.GetFullPath(output).StartsWith(intermediate, PathComparison), $"Generated output escaped the isolated intermediate root: {output}");
         Assert.Equal(
-            "minimal.en.locale-v1.json|minimal.template-manifest-v1.json|minimal.text-resources-v1.d.ts",
+            "minimal.asset-manifest-v1.json|minimal.en.locale-v1.json|minimal.template-manifest-v1.json|minimal.text-resources-v1.d.ts",
             string.Join('|', GeneratedArtifacts(output)));
         Assert.True(catalogBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("Resources", "manifest.json"))), "Build changed the catalog source.");
         Assert.True(documentBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("Resources", "en.json"))), "Build changed the document source.");
@@ -137,7 +137,7 @@ internal static class BuildIntegrationTests
         ProcessResult result = Build(temporary);
         Assert.Equal(0, result.ExitCode, result.Combined);
         string output = FindGeneratedDirectory(temporary, "minimal.text-resources-v1.d.ts");
-        Assert.Equal("minimal.text-resources-v1.d.ts", string.Join('|', GeneratedArtifacts(output)));
+        Assert.Equal("minimal.asset-manifest-v1.json|minimal.text-resources-v1.d.ts", string.Join('|', GeneratedArtifacts(output)));
     }
 
     private static void MissingToolFailsFast()
@@ -184,6 +184,7 @@ internal static class BuildIntegrationTests
         Assert.Equal(0, first.ExitCode, first.Combined);
         string output = FindGeneratedDirectory(temporary);
         Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v1.json")), "All emission omitted JSON.");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.asset-manifest-v1.json")), "All emission omitted the asset manifest.");
         Assert.True(File.Exists(Path.Combine(output, "minimal.template-manifest-v1.json")), "All emission omitted template manifest.");
         Assert.True(File.Exists(Path.Combine(output, "minimal.text-resources-v1.d.ts")), "All emission omitted TypeScript.");
         string sentinel = Path.Combine(output, "consumer-sentinel.txt");
@@ -198,16 +199,18 @@ internal static class BuildIntegrationTests
         ProcessResult second = Build(temporary, noRestore: true);
         Assert.Equal(0, second.ExitCode, second.Combined);
         Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v1.json")), "JSON-only reconciliation removed JSON.");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.asset-manifest-v1.json")), "JSON-only reconciliation removed the asset manifest.");
         Assert.False(File.Exists(Path.Combine(output, "minimal.template-manifest-v1.json")), "JSON-only reconciliation retained the prior template manifest.");
         Assert.False(File.Exists(Path.Combine(output, "minimal.text-resources-v1.d.ts")), "JSON-only reconciliation retained the prior TypeScript contract.");
         Assert.True(File.Exists(sentinel), "Reconciliation deleted an uninventoried consumer file.");
 
         string exposure = File.ReadAllText(temporary.Resolve("artifacts", "generated-items.txt"), Encoding.UTF8).Trim();
-        Assert.Equal("minimal.en.locale-v1.json", exposure, "Generated item exposure included private state or an unrelated file");
+        Assert.Equal("minimal.asset-manifest-v1.json|minimal.en.locale-v1.json", exposure, "Generated item exposure included private state or an unrelated file");
 
         ProcessResult clean = Clean(temporary);
         Assert.Equal(0, clean.ExitCode, clean.Combined);
         Assert.False(File.Exists(Path.Combine(output, "minimal.en.locale-v1.json")), "Clean retained an inventoried generated artifact.");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.asset-manifest-v1.json")), "Clean retained the inventoried asset manifest.");
         Assert.True(File.Exists(sentinel), "Clean deleted an uninventoried consumer file.");
     }
 
@@ -258,7 +261,7 @@ internal static class BuildIntegrationTests
               <Target Name="CaptureTextResourceGeneratedFiles" AfterTargets="WebUIToolkitCollectTextResourceArtifacts">
                 <WriteLinesToFile File="artifacts/generated-items.txt"
                                   Overwrite="true"
-                                  Lines="@(TextResourcesGeneratedFile->'%(Filename)%(Extension)')" />
+                                  Lines="@(TextResourcesGeneratedFile->'%(Filename)%(Extension)', '|')" />
               </Target>
             </Project>
             """;

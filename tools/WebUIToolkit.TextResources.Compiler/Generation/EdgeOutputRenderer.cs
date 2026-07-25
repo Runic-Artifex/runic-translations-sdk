@@ -136,6 +136,77 @@ internal static class EdgeOutputRenderer
             writer.ToString());
     }
 
+    internal static TextResourceGeneratedOutput RenderAssetManifest(
+        CompiledTextCatalog catalog,
+        IEnumerable<TextResourceGeneratedOutput> selectedOutputs)
+    {
+        if (selectedOutputs is null) throw new ArgumentNullException(nameof(selectedOutputs));
+
+        var assets = new List<TextResourceGeneratedOutput>();
+        foreach (TextResourceGeneratedOutput output in selectedOutputs)
+        {
+            if (output is null)
+                throw new ArgumentException("Selected outputs must not contain null.", nameof(selectedOutputs));
+            if (output.Kind is TextResourceGeneratedOutputKind.LocaleJson or
+                TextResourceGeneratedOutputKind.TemplateManifestJson or
+                TextResourceGeneratedOutputKind.TypeScriptContract)
+            {
+                assets.Add(output);
+            }
+        }
+
+        assets.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        var json = new StringBuilder();
+        json.Append("{\"assetManifestVersion\":").Append(TextResourceOutputRenderer.AssetManifestVersion)
+            .Append(",\"catalog\":").Append(GenerationSupport.JsonString(catalog.Id))
+            .Append(",\"assets\":[");
+        for (int index = 0; index < assets.Count; index++)
+        {
+            TextResourceGeneratedOutput asset = assets[index];
+            if (!paths.Add(asset.RelativePath))
+                throw new ArgumentException("Selected outputs contain duplicate relative paths.", nameof(selectedOutputs));
+            if (index > 0) json.Append(',');
+            json.Append("{\"path\":").Append(GenerationSupport.JsonString(asset.RelativePath))
+                .Append(",\"sha256\":").Append(GenerationSupport.JsonString(BareSha256(asset)))
+                .Append(",\"byteLength\":").Append(asset.GetUtf8Bytes().Length)
+                .Append(",\"mediaType\":").Append(GenerationSupport.JsonString(asset.MediaType))
+                .Append(",\"locale\":");
+            if (asset.Kind == TextResourceGeneratedOutputKind.LocaleJson)
+                json.Append(GenerationSupport.JsonString(LocaleFor(catalog, asset.RelativePath)));
+            else
+                json.Append("null");
+            json.Append('}');
+        }
+
+        json.Append("]}");
+        return new TextResourceGeneratedOutput(
+            TextResourceGeneratedOutputKind.AssetManifestJson,
+            catalog.Id + ".asset-manifest-v1.json",
+            "application/json",
+            json.ToString());
+    }
+
+    private static string BareSha256(TextResourceGeneratedOutput output)
+    {
+        const string Prefix = "sha256:";
+        if (!output.Sha256.StartsWith(Prefix, StringComparison.Ordinal) || output.Sha256.Length != Prefix.Length + 64)
+            throw new ArgumentException("Selected output has an invalid SHA-256 value.", nameof(output));
+        return output.Sha256.Substring(Prefix.Length);
+    }
+
+    private static string LocaleFor(CompiledTextCatalog catalog, string relativePath)
+    {
+        for (int index = 0; index < catalog.Locales.Count; index++)
+        {
+            string locale = catalog.Locales[index].Tag;
+            if (string.Equals(relativePath, catalog.Id + "." + locale + ".locale-v1.json", StringComparison.Ordinal))
+                return locale;
+        }
+
+        throw new ArgumentException("Locale output path is not canonical for the supplied catalog.", nameof(relativePath));
+    }
+
     private static void WriteJsonArguments(StringBuilder json, IReadOnlyList<CompiledTextPlaceholder> placeholders)
     {
         IReadOnlyList<CompiledTextPlaceholder> ordered = GenerationSupport.OrderedPlaceholders(placeholders);

@@ -16,6 +16,7 @@ internal static class CliIntegrationTests
         "MinimalText.CatalogData.g.cs",
         "MinimalText.Keys.g.cs",
         "MinimalText.Registration.g.cs",
+        "minimal.asset-manifest-v1.json",
         "minimal.en.locale-v1.json",
         "minimal.template-manifest-v1.json",
         "minimal.text-resources-v1.d.ts",
@@ -137,7 +138,7 @@ internal static class CliIntegrationTests
         using TemporaryDirectory temporary = GeneratedFixture();
         ProcessResult result = Verify(temporary);
         Assert.Equal(0, result.ExitCode, result.Combined);
-        Assert.Contains("verified 7 artifact(s)", result.StandardOutput);
+        Assert.Contains("verified 8 artifact(s)", result.StandardOutput);
     }
 
     private static void VerifyReportsMissing()
