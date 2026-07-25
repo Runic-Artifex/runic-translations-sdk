@@ -4,6 +4,7 @@
 **/TestResults/
 **/coverage/
 node_modules/
+**/dist/
 .packages/
 /.codex-workflow/
 .vs/
