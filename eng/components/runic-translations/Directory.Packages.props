@@ -8,6 +8,9 @@
   <ItemGroup>
     <!-- Package versions are added here only after their owning ADR/evaluation gate. -->
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageVersion Include="CsWebUi" Version="2.5.0-beta.4.3" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
     <PackageVersion Include="ReactiveUI" Version="23.2.28" />
     <PackageVersion Include="ReactiveUI.SourceGenerators" Version="3.1.0" />
   </ItemGroup>
