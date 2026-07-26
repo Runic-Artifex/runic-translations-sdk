@@ -70,7 +70,7 @@ internal static class RuntimeContractTests
         TargetFrameworkAttribute compiler =
             typeof(CompilerModel.TextResourceCompiler).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()
             ?? throw new InvalidOperationException("The compiler target framework attribute is missing.");
-        Assert.Equal(".NETCoreApp,Version=v8.0", runtime.FrameworkName);
-        Assert.Equal(".NETStandard,Version=v2.0", compiler.FrameworkName);
+        Assert.Equal(".NETCoreApp,Version=v10.0", runtime.FrameworkName);
+        Assert.Equal(".NETCoreApp,Version=v10.0", compiler.FrameworkName);
     }
 }

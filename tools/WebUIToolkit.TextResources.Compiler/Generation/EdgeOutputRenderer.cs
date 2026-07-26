@@ -140,7 +140,7 @@ internal static class EdgeOutputRenderer
         CompiledTextCatalog catalog,
         IEnumerable<TextResourceGeneratedOutput> selectedOutputs)
     {
-        if (selectedOutputs is null) throw new ArgumentNullException(nameof(selectedOutputs));
+        ArgumentNullException.ThrowIfNull(selectedOutputs);
 
         var assets = new List<TextResourceGeneratedOutput>();
         foreach (TextResourceGeneratedOutput output in selectedOutputs)

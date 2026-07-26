@@ -163,8 +163,8 @@ name         := [A-Za-z_][A-Za-z0-9_]*</code></pre><p>A single unmatched brace, 
     <section id="generator"><div class="wrap">
       <div class="section-head"><div><div class="kicker">04 · Compiler architecture</div><h2>One pure kernel, three build surfaces</h2></div><p>The Roslyn generator emits C# only. A deterministic build task and CLI emit files outside the compilation, because source generators must not write arbitrary files. All surfaces call the same parser, validator and model builder.</p></div>
       <div class="table-wrap"><table><thead><tr><th>Component</th><th>Responsibility</th><th>Constraints</th></tr></thead><tbody>
-        <tr><td><code>CsWebUi.TextResources.Compiler</code></td><td>Internal parser, source-span model, schema validation, locale/layer merge, pattern compiler, diagnostics, canonical intermediate representation (IR), C#/web renderers.</td><td>Pure inputs/outputs; no environment, current directory, clock, network or reflection. Target <code>netstandard2.0</code>.</td></tr>
-        <tr><td><code>CsWebUi.TextResources.Generator</code></td><td><code>IIncrementalGenerator</code>; maps AdditionalFiles and analyzer options to compiler inputs, reports Roslyn diagnostics and adds generated C# sources.</td><td>Target <code>netstandard2.0</code>; packaged under <code>analyzers/dotnet/cs</code>; no runtime dependency copied to apps.</td></tr>
+        <tr><td><code>CsWebUi.TextResources.Compiler</code></td><td>Internal parser, source-span model, schema validation, locale/layer merge, pattern compiler, diagnostics, canonical intermediate representation (IR), C#/web renderers.</td><td>Pure inputs/outputs; no environment, current directory, clock, network or reflection. Target <code>net10.0</code>.</td></tr>
+        <tr><td><code>CsWebUi.TextResources.Generator</code></td><td><code>IIncrementalGenerator</code>; maps AdditionalFiles and analyzer options to compiler inputs, reports Roslyn diagnostics and adds generated C# sources.</td><td>Target <code>net10.0</code>; packaged under <code>analyzers/dotnet/cs</code>; no runtime dependency copied to apps.</td></tr>
         <tr><td><code>CsWebUi.TextResources.Build</code></td><td>MSBuild targets/task for TypeScript, JSON and template artifacts under <code>obj</code>; declares Inputs/Outputs and exposes generated assets as items.</td><td>Never edits source files. Output root must resolve beneath an explicit intermediate/output directory.</td></tr>
         <tr><td><code>dotnet-textresources</code></td><td>CLI commands <code>validate</code>, <code>generate</code>, <code>verify</code> and <code>schema</code>.</td><td>Same diagnostics and bytes as build task; response-file support; deterministic exit codes.</td></tr>
       </tbody></table></div>
@@ -409,12 +409,12 @@ export function formatText&lt;K extends AppTextKey&gt;(
     web-artifact-v1.schema.json
     template-manifest-v1.schema.json
   src/
-    CsWebUi.TextResources/                 # runtime, net8.0+
+    CsWebUi.TextResources/                 # runtime, net10.0+
     CsWebUi.TextResources.DependencyInjection/ # optional Microsoft DI adapter
-    CsWebUi.TextResources.Compiler/        # internal shared compiler, netstandard2.0
-    CsWebUi.TextResources.Generator/       # Roslyn analyzer, netstandard2.0
+    CsWebUi.TextResources.Compiler/        # internal shared compiler, net10.0
+    CsWebUi.TextResources.Generator/       # Roslyn analyzer, net10.0
     CsWebUi.TextResources.Build/           # task + props/targets
-    dotnet-textresources/                  # tool, net8.0+
+    dotnet-textresources/                  # tool, net10.0+
   test/
     CsWebUi.TextResources.Compiler.Tests/
     CsWebUi.TextResources.Generator.Tests/
@@ -428,7 +428,7 @@ export function formatText&lt;K extends AppTextKey&gt;(
     HostedCatalog/
     BrowserCatalog/</code></pre>
       <div class="table-wrap" style="margin-top:1rem"><table><thead><tr><th>Published package/tool</th><th>Contents and dependency policy</th></tr></thead><tbody>
-        <tr><td><code>CsWebUi.TextResources</code></td><td>Runtime contracts and generated-provider helpers. No Roslyn, JSON serializer or Microsoft DI dependency. Target initial minimum <code>net8.0</code>.</td></tr>
+        <tr><td><code>CsWebUi.TextResources</code></td><td>Runtime contracts and generated-provider helpers. No Roslyn, JSON serializer or Microsoft DI dependency. Target initial minimum <code>net10.0</code>.</td></tr>
         <tr><td><code>CsWebUi.TextResources.DependencyInjection</code></td><td>Optional adapter for Microsoft.Extensions.DependencyInjection. Depends on runtime abstractions only.</td></tr>
         <tr><td><code>CsWebUi.TextResources.Generator</code></td><td>Analyzer package containing generator and private compiler dependencies. Marked <code>PrivateAssets=all</code> in examples.</td></tr>
         <tr><td><code>CsWebUi.TextResources.Build</code></td><td>Props, targets and task for non-C# artifacts. May be combined with the generator package before 1.0 if consumer ergonomics are demonstrably better.</td></tr>

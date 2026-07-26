@@ -37,7 +37,7 @@ public static class TextResourceOutputRenderer
     /// <summary>Renders one declared locale as canonical compact JSON using resolved fallback values.</summary>
     public static TextResourceGeneratedOutput RenderLocaleJson(CompiledTextCatalog catalog, string locale)
     {
-        if (locale is null) throw new ArgumentNullException(nameof(locale));
+        ArgumentNullException.ThrowIfNull(locale);
         return EdgeOutputRenderer.RenderLocale(RequireCatalog(catalog), locale);
     }
 

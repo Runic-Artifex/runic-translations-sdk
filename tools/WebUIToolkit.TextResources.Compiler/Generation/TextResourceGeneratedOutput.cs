@@ -35,7 +35,7 @@ public sealed class TextResourceGeneratedOutput
         Kind = kind;
         RelativePath = relativePath ?? throw new ArgumentNullException(nameof(relativePath));
         MediaType = mediaType ?? throw new ArgumentNullException(nameof(mediaType));
-        if (text is null) throw new ArgumentNullException(nameof(text));
+        ArgumentNullException.ThrowIfNull(text);
 
         Text = NormalizeLineEndings(text);
         _utf8Bytes = new UTF8Encoding(false, true).GetBytes(Text);
@@ -67,13 +67,10 @@ public sealed class TextResourceGeneratedOutput
 
     private static string ComputeSha256(byte[] bytes)
     {
-        using (SHA256 algorithm = SHA256.Create())
-        {
-            byte[] hash = algorithm.ComputeHash(bytes);
-            var result = new StringBuilder("sha256:".Length + (hash.Length * 2));
-            result.Append("sha256:");
-            for (int i = 0; i < hash.Length; i++) result.Append(hash[i].ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
-            return result.ToString();
-        }
+        byte[] hash = SHA256.HashData(bytes);
+        var result = new StringBuilder("sha256:".Length + (hash.Length * 2));
+        result.Append("sha256:");
+        for (int i = 0; i < hash.Length; i++) result.Append(hash[i].ToString("x2", System.Globalization.CultureInfo.InvariantCulture));
+        return result.ToString();
     }
 }

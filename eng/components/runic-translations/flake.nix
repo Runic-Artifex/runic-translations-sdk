@@ -21,6 +21,7 @@
         let
           pkgs = import nixpkgs { inherit system; };
           inherit (pkgs) lib;
+          dotnet = pkgs.dotnetCorePackages.sdk_10_0;
           csWebUiNative = cs-webui.packages.${system}.webui-native;
           nativeLibraryName =
             if pkgs.stdenv.hostPlatform.isDarwin then
@@ -37,7 +38,7 @@
         {
           default = pkgs.mkShell {
             packages = with pkgs; [
-              dotnet-sdk_10
+              dotnet
               nodejs_24
               powershell
 

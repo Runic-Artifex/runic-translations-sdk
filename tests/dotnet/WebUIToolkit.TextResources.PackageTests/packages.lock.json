@@ -1,24 +1,24 @@
 {
   "version": 1,
   "dependencies": {
-    "net8.0": {
+    "net10.0": {
       "WebUIToolkit.TextResources": {
         "type": "Direct",
         "requested": "[1.0.0, )",
         "resolved": "1.0.0",
-        "contentHash": "SpI7PWO6Hssxzs5kgI88UCOE7s5XwHZDsdB7dq3WAxDCzgSqGEmhOpTTFzANzkOptgCUFucT2FpgXrePLfuXnA=="
+        "contentHash": "XtP6YsonKTQvZgvwNmZa6KDsj1L41F6cVhLEqemZ4y8f7Ul4rErTIlOcIVW34AzWkodPj6akhrOWKGwmv6UN+w=="
       },
       "WebUIToolkit.TextResources.Build": {
         "type": "Direct",
         "requested": "[1.0.0, )",
         "resolved": "1.0.0",
-        "contentHash": "UHctvPoGaj0rwaGnlpDEJ1D1/Fx+yo3R4Pl7N/4+YITWFnobIvd6fGZsxE54SWekPtpIcDjs49MO4pT/HOoLXA=="
+        "contentHash": "gyvoW4G8/v4HPlTW6X+ufNnid1aY+3XQYw2Aoe3qTvz/X+1rAMQ9u6nJJvzKYG4Ce1CL0gqUogW5/hf5GDhiXA=="
       },
       "WebUIToolkit.TextResources.Generator": {
         "type": "Direct",
         "requested": "[1.0.0, )",
         "resolved": "1.0.0",
-        "contentHash": "LHj4Cg4fUDeZ8yQuFcyCTslb/3jrudqujr8b03W10ofZZq1CEhOyPceuYcHVn5OVbzD1QGH+oCiOS+C/Hw1xjA==",
+        "contentHash": "Sjzf9psMERykgZjdepV/6VjNbVNTDzCGFfna2vmzY5bN2y+fXW3DPl8FcT98mIYWcClVSAQ4Zfq7s18RfO8E7g==",
         "dependencies": {
           "WebUIToolkit.TextResources": "[1.0.0]"
         }

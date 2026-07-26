@@ -158,7 +158,7 @@ internal static class BuildIntegrationTests
             generationEnabled: true,
             outputPath: "$(IntermediateOutputPath)$(TargetFramework)/linked-output/");
         string target = temporary.Resolve("link-target");
-        string link = temporary.Resolve("artifacts", "obj", "Debug", "net8.0", "linked-output");
+        string link = temporary.Resolve("artifacts", "obj", "Debug", "net10.0", "linked-output");
         Directory.CreateDirectory(target);
         Directory.CreateDirectory(Path.GetDirectoryName(link)!);
         try
@@ -239,7 +239,7 @@ internal static class BuildIntegrationTests
               <Import Project="{{props}}" />
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <IntermediateOutputPath>artifacts/obj/$(Configuration)/</IntermediateOutputPath>
                 <BaseOutputPath>artifacts/bin/</BaseOutputPath>
                 <RestorePackagesPath>{{XmlPath(RepositoryPaths.Resolve(".packages"))}}</RestorePackagesPath>

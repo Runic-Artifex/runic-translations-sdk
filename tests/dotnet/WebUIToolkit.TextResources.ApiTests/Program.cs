@@ -87,7 +87,7 @@ internal static class Program
     private static Assembly LoadGeneratorAssembly(string root)
     {
         string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Release";
-        string generatorPath = Path.Combine(root, "src", "WebUIToolkit.TextResources.Generator", "bin", configuration, "netstandard2.0", "WebUIToolkit.TextResources.Generator.dll");
+        string generatorPath = Path.Combine(root, "src", "WebUIToolkit.TextResources.Generator", "bin", configuration, "net10.0", "WebUIToolkit.TextResources.Generator.dll");
         string codeAnalysisPath = Path.Combine(root, ".packages", "nuget", "microsoft.codeanalysis.common", "4.14.0", "lib", "netstandard2.0", "Microsoft.CodeAnalysis.dll");
         if (!File.Exists(generatorPath) || !File.Exists(codeAnalysisPath))
         {

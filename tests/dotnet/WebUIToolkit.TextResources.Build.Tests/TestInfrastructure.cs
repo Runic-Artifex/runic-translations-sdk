@@ -30,7 +30,7 @@ internal static class RepositoryPaths
         get
         {
             string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
-            return Resolve("tools", "dotnet-textresources", "bin", configuration, "net8.0", "WebUIToolkit.DotNet.TextResources.dll");
+            return Resolve("tools", "dotnet-textresources", "bin", configuration, "net10.0", "WebUIToolkit.DotNet.TextResources.dll");
         }
     }
 

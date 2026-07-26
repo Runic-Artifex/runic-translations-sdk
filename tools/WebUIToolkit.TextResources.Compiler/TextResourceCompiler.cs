@@ -46,8 +46,8 @@ public static class TextResourceCompiler
         TextResourceCompilerOptions? options,
         CancellationToken cancellationToken)
     {
-        if (manifests is null) throw new ArgumentNullException(nameof(manifests));
-        if (documents is null) throw new ArgumentNullException(nameof(documents));
+        ArgumentNullException.ThrowIfNull(manifests);
+        ArgumentNullException.ThrowIfNull(documents);
         cancellationToken.ThrowIfCancellationRequested();
         options ??= new TextResourceCompilerOptions();
         var diagnostics = new DiagnosticBag();
@@ -84,10 +84,9 @@ public static class TextResourceCompiler
         {
             ManifestModel manifest = manifestModels[i];
             if (manifest.Id.Length == 0) continue;
-            if (manifestsById.ContainsKey(manifest.Id))
+            if (!manifestsById.TryAdd(manifest.Id, manifest))
                 diagnostics.Add("WUTTEXT0002", TextResourceDiagnosticSeverity.Error,
                     "Catalog '" + manifest.Id + "' has more than one manifest.", manifest.Source, manifest.IdSpan);
-            else manifestsById.Add(manifest.Id, manifest);
         }
         ValidateGeneratedRootIdentities(manifestModels, diagnostics);
 
@@ -616,9 +615,9 @@ public static class TextResourceCompiler
     {
         cancellationToken.ThrowIfCancellationRequested();
         var localeMap = new Dictionary<string, LocaleModel>(StringComparer.OrdinalIgnoreCase);
-        for (int i = 0; i < manifest.Locales.Count; i++) if (!localeMap.ContainsKey(manifest.Locales[i].Tag)) localeMap.Add(manifest.Locales[i].Tag, manifest.Locales[i]);
+        for (int i = 0; i < manifest.Locales.Count; i++) localeMap.TryAdd(manifest.Locales[i].Tag, manifest.Locales[i]);
         var layerMap = new Dictionary<string, LayerModel>(StringComparer.Ordinal);
-        for (int i = 0; i < manifest.Layers.Count; i++) if (!layerMap.ContainsKey(manifest.Layers[i].Name)) layerMap.Add(manifest.Layers[i].Name, manifest.Layers[i]);
+        for (int i = 0; i < manifest.Layers.Count; i++) layerMap.TryAdd(manifest.Layers[i].Name, manifest.Layers[i]);
         var buckets = new Dictionary<string, Dictionary<string, Dictionary<string, ResourceModel>>>(StringComparer.OrdinalIgnoreCase);
         var allPathKinds = new Dictionary<string, ResourceModel>(StringComparer.Ordinal);
         documents.Sort((left, right) => StringComparer.Ordinal.Compare(left.Source.Path, right.Source.Path));
@@ -633,12 +632,11 @@ public static class TextResourceCompiler
             for (int r = 0; r < document.Resources.Count; r++)
             {
                 ResourceModel resource = document.Resources[r];
-                if (resources.ContainsKey(resource.Key)) diagnostics.Add("WUTTEXT0007", TextResourceDiagnosticSeverity.Error, "Duplicate key '" + resource.Key + "' in locale '" + document.Locale + "' and layer '" + document.Layer + "'.", resource.Source, resource.KeySpan);
-                else resources.Add(resource.Key, resource);
+                if (!resources.TryAdd(resource.Key, resource)) diagnostics.Add("WUTTEXT0007", TextResourceDiagnosticSeverity.Error, "Duplicate key '" + resource.Key + "' in locale '" + document.Locale + "' and layer '" + document.Layer + "'.", resource.Source, resource.KeySpan);
                 foreach (KeyValuePair<string, ResourceModel> existing in allPathKinds)
                     if (IsPathPrefix(existing.Key, resource.Key) || IsPathPrefix(resource.Key, existing.Key))
                     { diagnostics.Add("WUTTEXT0008", TextResourceDiagnosticSeverity.Error, "Resource path '" + resource.Key + "' conflicts with leaf '" + existing.Key + "'.", resource.Source, resource.PathSpan); break; }
-                if (!allPathKinds.ContainsKey(resource.Key)) allPathKinds.Add(resource.Key, resource);
+                allPathKinds.TryAdd(resource.Key, resource);
                 ValidateIdentifierCollision(manifest, resource, diagnostics);
             }
         }
@@ -755,13 +753,10 @@ public static class TextResourceCompiler
         }
         builder.Append("]}");
         byte[] bytes = StrictJsonParser.StrictUtf8.GetBytes(builder.ToString());
-        using (SHA256 sha = SHA256.Create())
-        {
-            byte[] hash = sha.ComputeHash(bytes);
-            var hex = new StringBuilder(hash.Length * 2 + 7).Append("sha256:");
-            for (int i = 0; i < hash.Length; i++) hex.Append(hash[i].ToString("x2", CultureInfo.InvariantCulture));
-            return hex.ToString();
-        }
+        byte[] hash = SHA256.HashData(bytes);
+        var hex = new StringBuilder(hash.Length * 2 + 7).Append("sha256:");
+        for (int i = 0; i < hash.Length; i++) hex.Append(hash[i].ToString("x2", CultureInfo.InvariantCulture));
+        return hex.ToString();
     }
 
     private static string JsonQuote(string value)

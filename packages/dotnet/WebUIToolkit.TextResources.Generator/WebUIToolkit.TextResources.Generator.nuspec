@@ -12,8 +12,8 @@
     </dependencies>
   </metadata>
   <files>
-    <file src="bin\$configuration$\netstandard2.0\WebUIToolkit.TextResources.Generator.dll" target="analyzers/dotnet/cs" />
-    <file src="bin\$configuration$\netstandard2.0\WebUIToolkit.TextResources.Compiler.dll" target="analyzers/dotnet/cs" />
+    <file src="bin\$configuration$\net10.0\WebUIToolkit.TextResources.Generator.dll" target="analyzers/dotnet/cs" />
+    <file src="bin\$configuration$\net10.0\WebUIToolkit.TextResources.Compiler.dll" target="analyzers/dotnet/cs" />
     <file src="README.md" target="" />
   </files>
 </package>

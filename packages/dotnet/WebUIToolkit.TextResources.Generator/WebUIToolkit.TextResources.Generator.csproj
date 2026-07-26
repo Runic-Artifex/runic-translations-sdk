@@ -11,6 +11,8 @@
     <NuspecFile>WebUIToolkit.TextResources.Generator.nuspec</NuspecFile>
     <CentralPackageVersionOverrideEnabled>true</CentralPackageVersionOverrideEnabled>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- The repository deliberately requires a .NET 10 compiler host for every artifact. -->
+    <NoWarn>$(NoWarn);RS1041</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

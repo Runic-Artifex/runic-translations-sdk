@@ -1,12 +1,12 @@
 {
   "version": 1,
   "dependencies": {
-    "net8.0": {
+    "net10.0": {
       "WebUIToolkit.TextResources": {
         "type": "Direct",
         "requested": "[1.0.0, )",
         "resolved": "1.0.0",
-        "contentHash": "FGOeExVtQvczNNb1RGddIUqREEYbyI0J2II26xVkctC9Oe9rnt9tqB5xmHN/XJyMf2De4K8Jv2bDV1ZpvOwLhQ=="
+        "contentHash": "XtP6YsonKTQvZgvwNmZa6KDsj1L41F6cVhLEqemZ4y8f7Ul4rErTIlOcIVW34AzWkodPj6akhrOWKGwmv6UN+w=="
       }
     }
   }

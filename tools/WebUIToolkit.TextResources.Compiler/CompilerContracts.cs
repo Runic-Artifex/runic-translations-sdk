@@ -54,8 +54,8 @@ public sealed class TextResourceSource
 
     public TextResourceSource(string path, byte[] utf8Bytes)
     {
-        if (path is null) throw new ArgumentNullException(nameof(path));
-        if (utf8Bytes is null) throw new ArgumentNullException(nameof(utf8Bytes));
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(utf8Bytes);
         Path = NormalizePath(path);
         _utf8Bytes = (byte[])utf8Bytes.Clone();
     }
@@ -84,12 +84,12 @@ public sealed class TextResourceCompilerOptions
         int maximumPlaceholdersPerValue = 32,
         int maximumLocalesPerCatalog = 256)
     {
-        if (maximumDocumentBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maximumDocumentBytes));
-        if (maximumDepth <= 0) throw new ArgumentOutOfRangeException(nameof(maximumDepth));
-        if (maximumKeysPerCatalog <= 0) throw new ArgumentOutOfRangeException(nameof(maximumKeysPerCatalog));
-        if (maximumValueBytes <= 0) throw new ArgumentOutOfRangeException(nameof(maximumValueBytes));
-        if (maximumPlaceholdersPerValue <= 0) throw new ArgumentOutOfRangeException(nameof(maximumPlaceholdersPerValue));
-        if (maximumLocalesPerCatalog <= 0) throw new ArgumentOutOfRangeException(nameof(maximumLocalesPerCatalog));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumDocumentBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumDepth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumKeysPerCatalog);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumValueBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumPlaceholdersPerValue);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumLocalesPerCatalog);
         MaximumDocumentBytes = maximumDocumentBytes;
         MaximumDepth = maximumDepth;
         MaximumKeysPerCatalog = maximumKeysPerCatalog;

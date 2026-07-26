@@ -64,11 +64,11 @@ internal static class Program
 
         AssertPackageShape(runtime,
             "WebUIToolkit.TextResources.nuspec",
-            "lib/net8.0/WebUIToolkit.TextResources.dll",
-            "lib/net8.0/WebUIToolkit.TextResources.xml");
+            "lib/net10.0/WebUIToolkit.TextResources.dll",
+            "lib/net10.0/WebUIToolkit.TextResources.xml");
         AssertPackageShape(compiler,
             "WebUIToolkit.TextResources.Compiler.nuspec",
-            "lib/netstandard2.0/WebUIToolkit.TextResources.Compiler.dll");
+            "lib/net10.0/WebUIToolkit.TextResources.Compiler.dll");
         AssertPackageShape(build,
             "WebUIToolkit.TextResources.Build.nuspec",
             "README.md",
@@ -82,11 +82,11 @@ internal static class Program
         AssertPackageShape(tool,
             "WebUIToolkit.DotNet.TextResources.nuspec",
             "README.md",
-            "tools/net8.0/any/DotnetToolSettings.xml",
-            "tools/net8.0/any/WebUIToolkit.DotNet.TextResources.deps.json",
-            "tools/net8.0/any/WebUIToolkit.DotNet.TextResources.dll",
-            "tools/net8.0/any/WebUIToolkit.DotNet.TextResources.runtimeconfig.json",
-            "tools/net8.0/any/WebUIToolkit.TextResources.Compiler.dll");
+            "tools/net10.0/any/DotnetToolSettings.xml",
+            "tools/net10.0/any/WebUIToolkit.DotNet.TextResources.deps.json",
+            "tools/net10.0/any/WebUIToolkit.DotNet.TextResources.dll",
+            "tools/net10.0/any/WebUIToolkit.DotNet.TextResources.runtimeconfig.json",
+            "tools/net10.0/any/WebUIToolkit.TextResources.Compiler.dll");
 
         AssertDependencies(runtime, Array.Empty<string>());
         AssertDependencies(compiler, Array.Empty<string>());
