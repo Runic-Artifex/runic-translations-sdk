@@ -49,6 +49,7 @@
 
             DOTNET_CLI_TELEMETRY_OPTOUT = "1";
             DOTNET_NOLOGO = "1";
+            DOTNET_ROOT = "${dotnet}/share/dotnet";
             DisableImplicitLibraryPacksFolder = "true";
 
             shellHook = ''
