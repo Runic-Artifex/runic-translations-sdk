@@ -1,0 +1,42 @@
+{
+  "formatVersion": 1,
+  "identity": "RunicTextResources.WaveC.AssetManifest",
+  "assetManifestVersion": 1,
+  "schema": "../../schemas/asset-manifest-v1.schema.json",
+  "cases": [
+    {
+      "id": "csharp-only",
+      "emit": ["--emit-csharp"],
+      "assetManifest": false,
+      "assets": []
+    },
+    {
+      "id": "locale-only",
+      "emit": ["--emit-json"],
+      "assetManifest": true,
+      "assets": ["minimal.en.locale-v1.json"]
+    },
+    {
+      "id": "template-only",
+      "emit": ["--emit-template-manifest"],
+      "assetManifest": true,
+      "assets": ["minimal.template-manifest-v1.json"]
+    },
+    {
+      "id": "typescript-only",
+      "emit": ["--emit-typescript"],
+      "assetManifest": true,
+      "assets": ["minimal.text-resources-v1.d.ts"]
+    },
+    {
+      "id": "combined-non-csharp",
+      "emit": ["--emit-json", "--emit-template-manifest", "--emit-typescript"],
+      "assetManifest": true,
+      "assets": [
+        "minimal.en.locale-v1.json",
+        "minimal.template-manifest-v1.json",
+        "minimal.text-resources-v1.d.ts"
+      ]
+    }
+  ]
+}

@@ -4,15 +4,15 @@
       Development is the approachable inner loop. Verification is selected by CI
       and eng/verify.ps1 for locked restores and release-grade analysis.
     -->
-    <WebUIToolkitBuildMode Condition="'$(WebUIToolkitBuildMode)' == '' and '$(CI)' == 'true'">Verification</WebUIToolkitBuildMode>
-    <WebUIToolkitBuildMode Condition="'$(WebUIToolkitBuildMode)' == ''">Development</WebUIToolkitBuildMode>
-    <WebUIToolkitVerificationBuild Condition="'$(WebUIToolkitBuildMode)' == 'Verification'">true</WebUIToolkitVerificationBuild>
-    <WebUIToolkitVerificationBuild Condition="'$(WebUIToolkitVerificationBuild)' == ''">false</WebUIToolkitVerificationBuild>
+    <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == '' and '$(CI)' == 'true'">Verification</RunicTextResourcesBuildMode>
+    <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == ''">Development</RunicTextResourcesBuildMode>
+    <RunicTextResourcesVerificationBuild Condition="'$(RunicTextResourcesBuildMode)' == 'Verification'">true</RunicTextResourcesVerificationBuild>
+    <RunicTextResourcesVerificationBuild Condition="'$(RunicTextResourcesVerificationBuild)' == ''">false</RunicTextResourcesVerificationBuild>
 
     <LangVersion>14.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <TreatWarningsAsErrors Condition="'$(WebUIToolkitVerificationBuild)' == 'true'">true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</TreatWarningsAsErrors>
     <TreatWarningsAsErrors Condition="'$(TreatWarningsAsErrors)' == ''">false</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
@@ -22,16 +22,22 @@
     <DebugType>embedded</DebugType>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/ViktorJannicke/WebUIToolkit</RepositoryUrl>
+    <Authors>RunicArtifex</Authors>
+    <Company>RunicArtifex</Company>
+    <Copyright>Copyright (c) 2026 Viktor Jannicke</Copyright>
+    <RepositoryUrl>https://github.com/Runic-Artifex/runic-text-resources</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Runic-Artifex/runic-text-resources</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <!-- Repository projects keep updateable lock files; only Verification locks them. -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreLockedMode Condition="'$(WebUIToolkitVerificationBuild)' == 'true'">true</RestoreLockedMode>
+    <RestoreLockedMode Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</RestoreLockedMode>
     <RestoreLockedMode Condition="'$(RestoreLockedMode)' == ''">false</RestoreLockedMode>
-    <NuGetAudit Condition="'$(WebUIToolkitVerificationBuild)' == 'true'">true</NuGetAudit>
+    <NuGetAudit Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</NuGetAudit>
     <NuGetAudit Condition="'$(NuGetAudit)' == ''">false</NuGetAudit>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <WebUIToolkitDefaultTargetFramework>net10.0</WebUIToolkitDefaultTargetFramework>
-    <WebUIToolkitCompatibilityTargetFramework>net10.0</WebUIToolkitCompatibilityTargetFramework>
-    <WebUIToolkitGeneratorTargetFramework>net10.0</WebUIToolkitGeneratorTargetFramework>
+    <VersionPrefix Condition="'$(VersionPrefix)' == ''">0.1.0</VersionPrefix>
+    <RunicTextResourcesDefaultTargetFramework>net10.0</RunicTextResourcesDefaultTargetFramework>
+    <RunicTextResourcesCompatibilityTargetFramework>net10.0</RunicTextResourcesCompatibilityTargetFramework>
+    <RunicTextResourcesGeneratorTargetFramework>net10.0</RunicTextResourcesGeneratorTargetFramework>
   </PropertyGroup>
 </Project>

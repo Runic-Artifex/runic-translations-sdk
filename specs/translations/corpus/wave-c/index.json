@@ -1,0 +1,11 @@
+{
+  "formatVersion": 1,
+  "identity": "RunicTextResources.WaveC.Conformance",
+  "suites": [
+    {
+      "id": "asset-manifest",
+      "fixture": "asset-manifest.json",
+      "caseCount": 5
+    }
+  ]
+}

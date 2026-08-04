@@ -1,0 +1,304 @@
+# Public API approval baseline
+# Assembly: RunicTextResources
+# Generated deterministically; intentional changes require baseline review.
+# Nullability metadata is intentionally normalized away; readonly/init/ref/constraints and contract attributes are retained.
+
+type sealed class RunicTextResources.CompiledTextResourceCatalog
+  ctor RunicTextResources.CompiledTextResourceCatalog(System.String catalog, System.String defaultLocale, System.Collections.Generic.IReadOnlyList<RunicTextResources.CompiledTextResourceDefinition> definitions, System.Collections.Generic.IReadOnlyList<RunicTextResources.CompiledTextResourceLocale> locales, RunicTextResources.UnsupportedLocalePolicy unsupportedLocale = ParentsThenDefault, RunicTextResources.MissingTextResourcePolicy missingKey = Throw)
+  field const System.Int32 DynamicKeyId = -1
+  method RunicTextResources.CompiledTextResourceCatalog WithOptions(RunicTextResources.TextResourceOptions options)
+  property RunicTextResources.MissingTextResourcePolicy MissingKey { get; }
+  property RunicTextResources.UnsupportedLocalePolicy UnsupportedLocale { get; }
+  property System.ReadOnlyMemory<RunicTextResources.CompiledTextResourceDefinition> Definitions { get; }
+  property System.ReadOnlyMemory<RunicTextResources.CompiledTextResourceLocale> Locales { get; }
+  property System.String Catalog { get; }
+  property System.String DefaultLocale { get; }
+
+type sealed class RunicTextResources.CompiledTextResourceDefinition
+  ctor RunicTextResources.CompiledTextResourceDefinition(System.String name, System.Collections.Generic.IReadOnlyList<RunicTextResources.TextResourcePlaceholderDescriptor> placeholders, System.Boolean isCanonical = true)
+  property System.Boolean IsCanonical { get; }
+  property System.ReadOnlyMemory<RunicTextResources.TextResourcePlaceholderDescriptor> Placeholders { get; }
+  property System.String Name { get; }
+
+type sealed class RunicTextResources.CompiledTextResourceLocale
+  ctor RunicTextResources.CompiledTextResourceLocale(System.String locale, System.String fallbackLocale, System.Collections.Generic.IReadOnlyList<RunicTextResources.CompiledTextResourceValue> values)
+  property System.ReadOnlyMemory<RunicTextResources.CompiledTextResourceValue> Values { get; }
+  property System.String FallbackLocale { get; }
+  property System.String Locale { get; }
+
+type sealed class RunicTextResources.CompiledTextResourceProvider : RunicTextResources.ITextResourceProvider
+  ctor RunicTextResources.CompiledTextResourceProvider(RunicTextResources.CompiledTextResourceCatalog catalog, RunicTextResources.ITextValueFormatter valueFormatter = null, RunicTextResources.ITextResourceSnapshotFactory snapshotFactory = null)
+  method System.Threading.Tasks.ValueTask<RunicTextResources.ITextResourceSnapshot> GetSnapshotAsync(System.String requestedLocale, System.Threading.CancellationToken cancellationToken = default)
+
+type sealed class RunicTextResources.CompiledTextResourceSnapshot : RunicTextResources.ITextResourceSnapshot
+  ctor RunicTextResources.CompiledTextResourceSnapshot(RunicTextResources.CompiledTextResourceCatalog catalog, System.String canonicalLocale, RunicTextResources.ITextValueFormatter valueFormatter = null)
+  ctor RunicTextResources.CompiledTextResourceSnapshot(RunicTextResources.CompiledTextResourceCatalog catalog, System.String canonicalLocale, System.Collections.Generic.IReadOnlyList<RunicTextResources.CompiledTextResourceValue> replacementValues, RunicTextResources.ITextValueFormatter valueFormatter = null)
+  method System.Boolean TryGet(RunicTextResources.TextResourceKey key, out System.String pattern)
+  method System.String Format(RunicTextResources.TextResourceKey key, System.ReadOnlySpan<RunicTextResources.TextArgument> arguments)
+  method System.String Get(RunicTextResources.TextResourceKey key)
+  property System.String Catalog { get; }
+  property System.String Locale { get; }
+
+type readonly struct RunicTextResources.CompiledTextResourceValue : System.IEquatable<RunicTextResources.CompiledTextResourceValue>
+  ctor RunicTextResources.CompiledTextResourceValue(System.Int32 Id, System.String Pattern)
+  method System.Boolean Equals(RunicTextResources.CompiledTextResourceValue other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.Int32 Id, out System.String Pattern)
+  method static System.Boolean op_Equality(RunicTextResources.CompiledTextResourceValue left, RunicTextResources.CompiledTextResourceValue right)
+  method static System.Boolean op_Inequality(RunicTextResources.CompiledTextResourceValue left, RunicTextResources.CompiledTextResourceValue right)
+  property System.Int32 Id { get; init; }
+  property System.String Pattern { get; init; }
+
+type sealed class RunicTextResources.DefaultTextValueFormatter : RunicTextResources.ITextValueFormatter
+  ctor RunicTextResources.DefaultTextValueFormatter()
+  method System.String Format(in RunicTextResources.TextArgument value, System.String resourceLocale)
+  property static RunicTextResources.DefaultTextValueFormatter Shared { get; }
+
+type sealed class RunicTextResources.ExternalTextResourcePack
+  ctor RunicTextResources.ExternalTextResourcePack(System.ReadOnlyMemory<System.Byte> content)
+  property System.ReadOnlyMemory<System.Byte> Content { get; }
+
+type sealed class RunicTextResources.ExternalTextResourceSnapshotFactory : RunicTextResources.ITextResourceSnapshotFactory
+  ctor RunicTextResources.ExternalTextResourceSnapshotFactory(RunicTextResources.IExternalTextResourceSource source, System.String catalog, System.String contractFingerprint, System.Func<System.String,RunicTextResources.TextResourcePackContract> contractFactory, RunicTextResources.TextResourcePackLimits limits = null, RunicTextResources.TextResourcePackIntegrityVerifier integrityVerifier = null)
+  method System.Threading.Tasks.ValueTask<RunicTextResources.ITextResourceSnapshot> CreateSnapshotAsync(RunicTextResources.CompiledTextResourceCatalog catalog, System.String canonicalLocale, RunicTextResources.ITextValueFormatter valueFormatter, System.Threading.CancellationToken cancellationToken)
+
+type interface RunicTextResources.IExternalTextResourceSource
+  method System.Threading.Tasks.ValueTask<RunicTextResources.ExternalTextResourcePack> LoadAsync(System.String catalog, System.String locale, System.Threading.CancellationToken cancellationToken)
+
+type interface RunicTextResources.ITextResourceManager
+  event System.EventHandler<RunicTextResources.TextResourceLocaleChangedEventArgs> LocaleChanged
+  method System.Threading.Tasks.ValueTask SetLocaleAsync(System.String locale, System.Threading.CancellationToken cancellationToken = default)
+  property RunicTextResources.ITextResourceSnapshot Current { get; }
+  property System.String CurrentLocale { get; }
+
+type interface RunicTextResources.ITextResourceProvider
+  method System.Threading.Tasks.ValueTask<RunicTextResources.ITextResourceSnapshot> GetSnapshotAsync(System.String requestedLocale, System.Threading.CancellationToken cancellationToken = default)
+
+type interface RunicTextResources.ITextResourceSnapshot
+  method System.Boolean TryGet(RunicTextResources.TextResourceKey key, out System.String pattern)
+  method System.String Format(RunicTextResources.TextResourceKey key, System.ReadOnlySpan<RunicTextResources.TextArgument> arguments)
+  method System.String Get(RunicTextResources.TextResourceKey key)
+  property System.String Catalog { get; }
+  property System.String Locale { get; }
+
+type interface RunicTextResources.ITextResourceSnapshotFactory
+  method System.Threading.Tasks.ValueTask<RunicTextResources.ITextResourceSnapshot> CreateSnapshotAsync(RunicTextResources.CompiledTextResourceCatalog catalog, System.String canonicalLocale, RunicTextResources.ITextValueFormatter valueFormatter, System.Threading.CancellationToken cancellationToken)
+
+type interface RunicTextResources.ITextValueFormatter
+  method System.String Format(in RunicTextResources.TextArgument value, System.String resourceLocale)
+
+type enum RunicTextResources.MissingTextResourcePolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTextResources.MissingTextResourcePolicy ReturnKey = 1
+  field const RunicTextResources.MissingTextResourcePolicy ReturnMarker = 2
+  field const RunicTextResources.MissingTextResourcePolicy Throw = 0
+
+type readonly struct RunicTextResources.TextArgument
+  ctor RunicTextResources.TextArgument(System.String name, System.Boolean value, RunicTextResources.TextArgumentFormat format = Lower)
+  ctor RunicTextResources.TextArgument(System.String name, System.DateOnly value, RunicTextResources.TextArgumentFormat format = Medium)
+  ctor RunicTextResources.TextArgument(System.String name, System.DateTimeOffset value, RunicTextResources.TextArgumentFormat format = Medium)
+  ctor RunicTextResources.TextArgument(System.String name, System.Decimal value, RunicTextResources.TextArgumentFormat format = Plain)
+  ctor RunicTextResources.TextArgument(System.String name, System.Guid value, RunicTextResources.TextArgumentFormat format = D)
+  ctor RunicTextResources.TextArgument(System.String name, System.Int64 value, RunicTextResources.TextArgumentFormat format = Plain)
+  ctor RunicTextResources.TextArgument(System.String name, System.String value)
+  ctor RunicTextResources.TextArgument(System.String name, System.TimeOnly value, RunicTextResources.TextArgumentFormat format = Short)
+  method System.Boolean TryGetValue<T>(out !!0 value)
+  property RunicTextResources.TextArgumentFormat Format { get; }
+  property RunicTextResources.TextArgumentType Type { get; }
+  property System.String Name { get; }
+
+type enum RunicTextResources.TextArgumentFormat : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTextResources.TextArgumentFormat D = 20
+  field const RunicTextResources.TextArgumentFormat Fixed0 = 3
+  field const RunicTextResources.TextArgumentFormat Fixed1 = 4
+  field const RunicTextResources.TextArgumentFormat Fixed2 = 5
+  field const RunicTextResources.TextArgumentFormat Fixed3 = 6
+  field const RunicTextResources.TextArgumentFormat Fixed4 = 7
+  field const RunicTextResources.TextArgumentFormat Fixed5 = 8
+  field const RunicTextResources.TextArgumentFormat Fixed6 = 9
+  field const RunicTextResources.TextArgumentFormat Grouped = 2
+  field const RunicTextResources.TextArgumentFormat Iso = 16
+  field const RunicTextResources.TextArgumentFormat Long = 19
+  field const RunicTextResources.TextArgumentFormat Lower = 15
+  field const RunicTextResources.TextArgumentFormat Medium = 18
+  field const RunicTextResources.TextArgumentFormat N = 21
+  field const RunicTextResources.TextArgumentFormat None = 0
+  field const RunicTextResources.TextArgumentFormat Percent0 = 10
+  field const RunicTextResources.TextArgumentFormat Percent1 = 11
+  field const RunicTextResources.TextArgumentFormat Percent2 = 12
+  field const RunicTextResources.TextArgumentFormat Percent3 = 13
+  field const RunicTextResources.TextArgumentFormat Percent4 = 14
+  field const RunicTextResources.TextArgumentFormat Plain = 1
+  field const RunicTextResources.TextArgumentFormat Short = 17
+
+type enum RunicTextResources.TextArgumentType : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTextResources.TextArgumentType Bool = 3
+  field const RunicTextResources.TextArgumentType Date = 4
+  field const RunicTextResources.TextArgumentType DateTime = 6
+  field const RunicTextResources.TextArgumentType Guid = 7
+  field const RunicTextResources.TextArgumentType Int = 1
+  field const RunicTextResources.TextArgumentType Number = 2
+  field const RunicTextResources.TextArgumentType String = 0
+  field const RunicTextResources.TextArgumentType Time = 5
+
+type static class RunicTextResources.TextPatternFormatter
+  field const System.Int32 DefaultMaximumOutputLength = 1048576
+  field const System.Int32 MaximumArguments = 32
+  method static System.String Format(System.String pattern, System.ReadOnlySpan<RunicTextResources.TextArgument> arguments, System.String resourceLocale, RunicTextResources.ITextValueFormatter valueFormatter = null, System.Int32 maximumOutputLength = 1048576)
+
+type sealed class RunicTextResources.TextResourceFormatException : System.FormatException, System.Runtime.Serialization.ISerializable
+  ctor RunicTextResources.TextResourceFormatException(System.String message)
+  ctor RunicTextResources.TextResourceFormatException(System.String message, System.Exception innerException)
+
+type readonly struct RunicTextResources.TextResourceKey : System.IEquatable<RunicTextResources.TextResourceKey>
+  ctor RunicTextResources.TextResourceKey(System.String Catalog, System.Int32 Id, System.String Name)
+  method System.Boolean Equals(RunicTextResources.TextResourceKey other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Catalog, out System.Int32 Id, out System.String Name)
+  method static System.Boolean op_Equality(RunicTextResources.TextResourceKey left, RunicTextResources.TextResourceKey right)
+  method static System.Boolean op_Inequality(RunicTextResources.TextResourceKey left, RunicTextResources.TextResourceKey right)
+  property System.Int32 Id { get; init; }
+  property System.String Catalog { get; init; }
+  property System.String Name { get; init; }
+
+type sealed class RunicTextResources.TextResourceLocaleChangedEventArgs : System.EventArgs
+  ctor RunicTextResources.TextResourceLocaleChangedEventArgs(RunicTextResources.ITextResourceSnapshot oldSnapshot, RunicTextResources.ITextResourceSnapshot newSnapshot)
+  property RunicTextResources.ITextResourceSnapshot NewSnapshot { get; }
+  property RunicTextResources.ITextResourceSnapshot OldSnapshot { get; }
+  property System.String NewLocale { get; }
+  property System.String OldLocale { get; }
+
+type sealed class RunicTextResources.TextResourceManager : RunicTextResources.ITextResourceManager
+  ctor RunicTextResources.TextResourceManager(RunicTextResources.ITextResourceProvider provider, RunicTextResources.ITextResourceSnapshot initialSnapshot)
+  event System.EventHandler<RunicTextResources.TextResourceLocaleChangedEventArgs> LocaleChanged
+  method System.Threading.Tasks.ValueTask SetLocaleAsync(System.String locale, System.Threading.CancellationToken cancellationToken = default)
+  property RunicTextResources.ITextResourceSnapshot Current { get; }
+  property System.String CurrentLocale { get; }
+
+type sealed class RunicTextResources.TextResourceNotFoundException : System.Exception, System.Runtime.Serialization.ISerializable
+  ctor RunicTextResources.TextResourceNotFoundException(System.String message)
+  ctor RunicTextResources.TextResourceNotFoundException(System.String message, System.Exception innerException)
+
+type sealed class RunicTextResources.TextResourceOptions
+  ctor RunicTextResources.TextResourceOptions()
+  property RunicTextResources.MissingTextResourcePolicy MissingKey { get; set; }
+  property RunicTextResources.UnsupportedLocalePolicy UnsupportedLocale { get; set; }
+
+type readonly struct RunicTextResources.TextResourcePackArgumentContract : System.IEquatable<RunicTextResources.TextResourcePackArgumentContract>
+  ctor RunicTextResources.TextResourcePackArgumentContract(System.String Name, RunicTextResources.TextArgumentType Type, RunicTextResources.TextArgumentFormat Format)
+  method System.Boolean Equals(RunicTextResources.TextResourcePackArgumentContract other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Name, out RunicTextResources.TextArgumentType Type, out RunicTextResources.TextArgumentFormat Format)
+  method static System.Boolean op_Equality(RunicTextResources.TextResourcePackArgumentContract left, RunicTextResources.TextResourcePackArgumentContract right)
+  method static System.Boolean op_Inequality(RunicTextResources.TextResourcePackArgumentContract left, RunicTextResources.TextResourcePackArgumentContract right)
+  property RunicTextResources.TextArgumentFormat Format { get; init; }
+  property RunicTextResources.TextArgumentType Type { get; init; }
+  property System.String Name { get; init; }
+
+type sealed class RunicTextResources.TextResourcePackContract
+  ctor RunicTextResources.TextResourcePackContract(System.String catalog, System.String locale, System.String contractFingerprint, System.Collections.Generic.IReadOnlyList<RunicTextResources.TextResourcePackMessageContract> messages)
+  property System.Collections.Generic.IReadOnlyList<RunicTextResources.TextResourcePackMessageContract> Messages { get; }
+  property System.String Catalog { get; }
+  property System.String ContractFingerprint { get; }
+  property System.String Locale { get; }
+
+type sealed class RunicTextResources.TextResourcePackException : System.Exception, System.Runtime.Serialization.ISerializable
+  ctor RunicTextResources.TextResourcePackException(System.String message)
+  ctor RunicTextResources.TextResourcePackException(System.String message, System.Exception innerException)
+
+type static class RunicTextResources.TextResourcePackFailure
+  field const System.String DiagnosticId = "RTR0023"
+  method static RunicTextResources.TextResourcePackFailureReason GetReason(RunicTextResources.TextResourcePackException exception)
+  method static RunicTextResources.TextResourcePackFailureReason GetReason(System.Exception exception)
+  method static System.String GetDiagnosticId(RunicTextResources.TextResourcePackException exception)
+
+type enum RunicTextResources.TextResourcePackFailureReason : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTextResources.TextResourcePackFailureReason ArgumentContractMismatch = 8
+  field const RunicTextResources.TextResourcePackFailureReason ArtifactVersionMismatch = 1
+  field const RunicTextResources.TextResourcePackFailureReason Cancelled = 13
+  field const RunicTextResources.TextResourcePackFailureReason CatalogMismatch = 3
+  field const RunicTextResources.TextResourcePackFailureReason ContractFingerprintMismatch = 5
+  field const RunicTextResources.TextResourcePackFailureReason IntegrityRejected = 11
+  field const RunicTextResources.TextResourcePackFailureReason LimitExceeded = 6
+  field const RunicTextResources.TextResourcePackFailureReason LocaleMismatch = 4
+  field const RunicTextResources.TextResourcePackFailureReason Malformed = 14
+  field const RunicTextResources.TextResourcePackFailureReason MalformedPattern = 9
+  field const RunicTextResources.TextResourcePackFailureReason MessageGrammarVersionMismatch = 2
+  field const RunicTextResources.TextResourcePackFailureReason SourceFailure = 12
+  field const RunicTextResources.TextResourcePackFailureReason Unknown = 0
+  field const RunicTextResources.TextResourcePackFailureReason UnknownKey = 7
+  field const RunicTextResources.TextResourcePackFailureReason UnknownMember = 10
+
+type delegate RunicTextResources.TextResourcePackIntegrityVerifier : System.ICloneable, System.Runtime.Serialization.ISerializable
+  ctor RunicTextResources.TextResourcePackIntegrityVerifier(System.Object object, System.IntPtr method)
+  method System.IAsyncResult BeginInvoke(System.ReadOnlyMemory<System.Byte> content, System.Threading.CancellationToken cancellationToken, System.AsyncCallback callback, System.Object object)
+  method System.Threading.Tasks.ValueTask<System.Boolean> EndInvoke(System.IAsyncResult result)
+  method System.Threading.Tasks.ValueTask<System.Boolean> Invoke(System.ReadOnlyMemory<System.Byte> content, System.Threading.CancellationToken cancellationToken)
+
+type sealed class RunicTextResources.TextResourcePackLimits
+  ctor RunicTextResources.TextResourcePackLimits()
+  ctor RunicTextResources.TextResourcePackLimits(System.Int32 maximumDocumentBytes, System.Int32 maximumDepth, System.Int32 maximumMessages, System.Int32 maximumPatternBytes, System.Int32 maximumArgumentsPerMessage)
+  field const System.Int32 DefaultMaximumArgumentsPerMessage = 32
+  field const System.Int32 DefaultMaximumDepth = 64
+  field const System.Int32 DefaultMaximumDocumentBytes = 8388608
+  field const System.Int32 DefaultMaximumMessages = 50000
+  field const System.Int32 DefaultMaximumPatternBytes = 65536
+  property System.Int32 MaximumArgumentsPerMessage { get; }
+  property System.Int32 MaximumDepth { get; }
+  property System.Int32 MaximumDocumentBytes { get; }
+  property System.Int32 MaximumMessages { get; }
+  property System.Int32 MaximumPatternBytes { get; }
+
+type static class RunicTextResources.TextResourcePackLoader
+  method static System.Threading.Tasks.ValueTask<RunicTextResources.VerifiedExternalTextResourcePack> LoadAsync(RunicTextResources.IExternalTextResourceSource source, RunicTextResources.TextResourcePackContract contract, RunicTextResources.TextResourcePackLimits limits = null, RunicTextResources.TextResourcePackIntegrityVerifier integrityVerifier = null, System.Threading.CancellationToken cancellationToken = default)
+  method static System.Threading.Tasks.ValueTask<RunicTextResources.VerifiedExternalTextResourcePack> VerifyAsync(RunicTextResources.ExternalTextResourcePack pack, RunicTextResources.TextResourcePackContract contract, RunicTextResources.TextResourcePackLimits limits = null, RunicTextResources.TextResourcePackIntegrityVerifier integrityVerifier = null, System.Threading.CancellationToken cancellationToken = default)
+
+type sealed class RunicTextResources.TextResourcePackMessageContract
+  ctor RunicTextResources.TextResourcePackMessageContract(RunicTextResources.TextResourceKey key, System.Collections.Generic.IReadOnlyList<RunicTextResources.TextResourcePackArgumentContract> arguments = null)
+  property RunicTextResources.TextResourceKey Key { get; }
+  property System.Collections.Generic.IReadOnlyList<RunicTextResources.TextResourcePackArgumentContract> Arguments { get; }
+
+type readonly struct RunicTextResources.TextResourcePlaceholderDescriptor : System.IEquatable<RunicTextResources.TextResourcePlaceholderDescriptor>
+  ctor RunicTextResources.TextResourcePlaceholderDescriptor(System.String Name, RunicTextResources.TextArgumentType Type, RunicTextResources.TextArgumentFormat Format)
+  method System.Boolean Equals(RunicTextResources.TextResourcePlaceholderDescriptor other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Name, out RunicTextResources.TextArgumentType Type, out RunicTextResources.TextArgumentFormat Format)
+  method static System.Boolean op_Equality(RunicTextResources.TextResourcePlaceholderDescriptor left, RunicTextResources.TextResourcePlaceholderDescriptor right)
+  method static System.Boolean op_Inequality(RunicTextResources.TextResourcePlaceholderDescriptor left, RunicTextResources.TextResourcePlaceholderDescriptor right)
+  property RunicTextResources.TextArgumentFormat Format { get; init; }
+  property RunicTextResources.TextArgumentType Type { get; init; }
+  property System.String Name { get; init; }
+
+type static class RunicTextResources.TextResourcesCompatibility
+  field const System.Int32 CatalogSchemaVersion = 1
+  field const System.Int32 MessageGrammarVersion = 1
+  field const System.Int32 ResourceSchemaVersion = 1
+  field const System.Int32 RuntimeAbiVersion = 1
+
+type enum RunicTextResources.UnsupportedLocalePolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTextResources.UnsupportedLocalePolicy Default = 2
+  field const RunicTextResources.UnsupportedLocalePolicy Exact = 0
+  field const RunicTextResources.UnsupportedLocalePolicy ParentsThenDefault = 1
+
+type sealed class RunicTextResources.VerifiedExternalTextResourcePack
+  method System.Boolean TryGetPattern(RunicTextResources.TextResourceKey key, out System.String pattern)
+  property System.Collections.Generic.IReadOnlyList<RunicTextResources.VerifiedTextResourcePackMessage> Messages { get; }
+  property System.String Catalog { get; }
+  property System.String ContractFingerprint { get; }
+  property System.String Locale { get; }
+
+type sealed class RunicTextResources.VerifiedTextResourcePackMessage
+  property RunicTextResources.TextResourceKey Key { get; }
+  property System.String Pattern { get; }

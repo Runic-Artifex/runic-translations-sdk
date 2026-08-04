@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "catalog": "minimal",
+  "code": {
+    "namespace": "RunicTextResources.Examples.Localization",
+    "className": "MinimalText"
+  },
+  "defaultLocale": "en",
+  "locales": [{ "tag": "en" }],
+  "layers": [{ "name": "base", "priority": 0 }]
+}

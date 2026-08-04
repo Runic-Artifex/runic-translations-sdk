@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "catalog": "patterns",
+  "code": {
+    "namespace": "RunicTextResources.Examples.Localization",
+    "className": "PatternText"
+  },
+  "defaultLocale": "en",
+  "locales": [{ "tag": "en" }],
+  "layers": [{ "name": "base", "priority": 0 }]
+}

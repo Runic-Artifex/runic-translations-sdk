@@ -1,8 +1,0 @@
-{
-  "schemaVersion": 1,
-  "catalog": "fallback",
-  "code": { "namespace": "WebUIToolkit.Examples.Localization", "className": "FallbackText" },
-  "defaultLocale": "en",
-  "locales": [{ "tag": "en" }, { "tag": "de", "fallback": "fr" }],
-  "layers": [{ "name": "base", "priority": 0 }]
-}

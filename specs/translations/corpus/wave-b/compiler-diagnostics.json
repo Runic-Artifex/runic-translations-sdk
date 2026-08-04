@@ -1,0 +1,61 @@
+{
+  "formatVersion": 1,
+  "identity": "RunicTextResources.CompilerDiagnostics.Conformance",
+  "locationConvention": {
+    "lineBase": 1,
+    "columnBase": 1,
+    "startInclusive": true,
+    "endExclusive": true,
+    "columnUnits": "UTF-16"
+  },
+  "cases": [
+    {
+      "id": "invalid-synthesized-accessor-group-collision",
+      "valid": false,
+      "manifest": "diagnostics/rtr0018-synthesized-group/manifest.json",
+      "documents": [
+        "diagnostics/rtr0018-synthesized-group/en.json"
+      ],
+      "expected": {
+        "diagnostics": [
+          {
+            "id": "RTR0018",
+            "severity": "error",
+            "message": "Generated identifier 'FooGroup' collides with a generated accessor group type.",
+            "path": "diagnostics/rtr0018-synthesized-group/en.json",
+            "line": 10,
+            "column": 5,
+            "endLine": 10,
+            "endColumn": 15,
+            "token": "\"FooGroup\""
+          }
+        ]
+      }
+    },
+    {
+      "id": "invalid-allowed-extra-placeholder-contract-parity",
+      "valid": false,
+      "manifest": "diagnostics/rtr0016-allowed-extra/manifest.json",
+      "documents": [
+        "diagnostics/rtr0016-allowed-extra/en.json",
+        "diagnostics/rtr0016-allowed-extra/de.json",
+        "diagnostics/rtr0016-allowed-extra/fr.json"
+      ],
+      "expected": {
+        "diagnostics": [
+          {
+            "id": "RTR0016",
+            "severity": "error",
+            "message": "Placeholder contract for allowed extra key 'Extra' differs between locales.",
+            "path": "diagnostics/rtr0016-allowed-extra/fr.json",
+            "line": 11,
+            "column": 19,
+            "endLine": 11,
+            "endColumn": 27,
+            "token": "\"string\""
+          }
+        ]
+      }
+    }
+  ]
+}

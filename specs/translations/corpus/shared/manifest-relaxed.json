@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "catalog": "app",
+  "code": {
+    "namespace": "RunicTextResources.Examples.Localization",
+    "className": "AppText",
+    "visibility": "public"
+  },
+  "defaultLocale": "en",
+  "locales": [
+    { "tag": "en" },
+    { "tag": "de", "fallback": "en" }
+  ],
+  "layers": [
+    { "name": "base", "priority": 0 },
+    { "name": "application", "priority": 100 }
+  ],
+  "validation": {
+    "translationCompleteness": "allow",
+    "extraLocaleKeys": "allow",
+    "emptyValues": "allow"
+  }
+}

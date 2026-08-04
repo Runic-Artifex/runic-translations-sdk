@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>RunicTextResources.Tool</AssemblyName>
+    <RootNamespace>RunicTextResources.Tool</RootNamespace>
+    <PackageId>RunicTextResources.Tool</PackageId>
+    <Description>Deterministic validation and generation tool for Runic Text Resources.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>runic-textresources</ToolCommandName>
+    <RunicTextResourcesShippingProject>true</RunicTextResourcesShippingProject>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RunicTextResources.Compiler\RunicTextResources.Compiler.csproj" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\catalog-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.catalog-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\resources-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.resources-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\locale-artifact-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.locale-artifact-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\external-pack-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.external-pack-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\template-manifest-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.template-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\asset-manifest-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.asset-manifest-v1.schema.json" />
+    <None Update="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

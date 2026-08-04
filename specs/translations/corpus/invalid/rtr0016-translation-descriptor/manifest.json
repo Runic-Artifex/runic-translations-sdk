@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "catalog": "parity",
+  "code": { "namespace": "RunicTextResources.Examples.Localization", "className": "ParityText" },
+  "defaultLocale": "en",
+  "locales": [{ "tag": "en" }, { "tag": "de", "fallback": "en" }],
+  "layers": [{ "name": "base", "priority": 0 }]
+}

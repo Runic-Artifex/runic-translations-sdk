@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "catalog": "nodefault",
+  "code": { "namespace": "RunicTextResources.Examples.Localization", "className": "NoDefaultText" },
+  "defaultLocale": "en",
+  "locales": [{ "tag": "en" }, { "tag": "de", "fallback": "en" }],
+  "layers": [{ "name": "base", "priority": 0 }],
+  "validation": { "translationCompleteness": "allow", "extraLocaleKeys": "allow", "emptyValues": "allow" }
+}

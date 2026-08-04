@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "catalog": "canonical-locale",
+  "code": { "namespace": "RunicTextResources.Examples.Localization", "className": "CanonicalLocaleText" },
+  "defaultLocale": "EN-us",
+  "locales": [
+    { "tag": "en-US" },
+    { "tag": "zh-hant-tw", "fallback": "en-us" }
+  ],
+  "layers": [{ "name": "base", "priority": 0 }],
+  "validation": { "translationCompleteness": "allow", "extraLocaleKeys": "error", "emptyValues": "allow" }
+}

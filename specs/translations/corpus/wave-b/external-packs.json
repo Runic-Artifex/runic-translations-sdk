@@ -1,0 +1,225 @@
+{
+  "formatVersion": 1,
+  "identity": "RunicTextResources.ExternalPacks.Conformance",
+  "compiledContract": {
+    "artifactVersion": 1,
+    "messageGrammarVersion": 1,
+    "catalog": "app",
+    "locales": [
+      "en",
+      "de"
+    ],
+    "contractFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "messages": {
+      "Common.Save": [],
+      "Files.Deleted": [
+        {
+          "name": "count",
+          "type": "int",
+          "format": "grouped"
+        },
+        {
+          "name": "folder",
+          "type": "string",
+          "format": "none"
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "valid-full-pack",
+      "document": "external-packs/valid-full.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": true,
+        "overlayKeys": [
+          "Common.Save",
+          "Files.Deleted"
+        ]
+      }
+    },
+    {
+      "id": "valid-subset-pack",
+      "document": "external-packs/valid-subset.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": true,
+        "overlayKeys": [
+          "Common.Save"
+        ],
+        "missingPackKeysUseCompiledFallback": true
+      }
+    },
+    {
+      "id": "integrity-runs-before-parse",
+      "document": "external-packs/valid-full.json",
+      "integrity": "reject",
+      "expected": {
+        "accepted": false,
+        "reason": "integrityRejected",
+        "parseAttempted": false,
+        "activeSnapshotUnchanged": true
+      }
+    },
+    {
+      "id": "invalid-artifact-version",
+      "document": "external-packs/invalid-artifact-version.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": false,
+        "reason": "artifactVersionMismatch",
+        "diagnostic": "RTR0023"
+      }
+    },
+    {
+      "id": "invalid-contract-fingerprint",
+      "document": "external-packs/invalid-fingerprint.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": false,
+        "reason": "contractFingerprintMismatch",
+        "diagnostic": "RTR0023"
+      }
+    },
+    {
+      "id": "invalid-message-grammar-version",
+      "document": "external-packs/invalid-grammar-version.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": false,
+        "reason": "messageGrammarVersionMismatch",
+        "diagnostic": "RTR0023"
+      }
+    },
+    {
+      "id": "invalid-catalog",
+      "document": "external-packs/invalid-catalog.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": false,
+        "reason": "catalogMismatch",
+        "diagnostic": "RTR0023"
+      }
+    },
+    {
+      "id": "invalid-locale",
+      "document": "external-packs/invalid-locale.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": false,
+        "reason": "localeMismatch"
+      }
+    },
+    {
+      "id": "invalid-unknown-key",
+      "document": "external-packs/invalid-unknown-key.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": false,
+        "reason": "unknownKey",
+        "key": "Unknown.Key"
+      }
+    },
+    {
+      "id": "invalid-argument-contract",
+      "document": "external-packs/invalid-argument-contract.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": false,
+        "reason": "argumentContractMismatch",
+        "key": "Files.Deleted"
+      }
+    },
+    {
+      "id": "invalid-message-pattern",
+      "document": "external-packs/invalid-pattern.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": false,
+        "reason": "malformedPattern",
+        "key": "Files.Deleted"
+      }
+    },
+    {
+      "id": "invalid-unknown-member",
+      "document": "external-packs/invalid-unknown-member.json",
+      "integrity": "accept",
+      "expected": {
+        "accepted": false,
+        "reason": "unknownMember",
+        "member": "sourceUri"
+      }
+    },
+    {
+      "id": "limit-raw-bytes",
+      "generatedInput": {
+        "baseDocument": "external-packs/valid-subset.json",
+        "padRawBytesTo": 8388609
+      },
+      "expected": {
+        "accepted": false,
+        "reason": "limitExceeded",
+        "limit": "rawBytes",
+        "parseAttempted": false
+      }
+    },
+    {
+      "id": "limit-json-depth",
+      "generatedInput": {
+        "validJsonDepth": 65
+      },
+      "expected": {
+        "accepted": false,
+        "reason": "limitExceeded",
+        "limit": "jsonDepth"
+      }
+    },
+    {
+      "id": "limit-message-count",
+      "generatedInput": {
+        "knownMessages": 50001
+      },
+      "expected": {
+        "accepted": false,
+        "reason": "limitExceeded",
+        "limit": "messages"
+      }
+    },
+    {
+      "id": "limit-pattern-utf8-bytes",
+      "generatedInput": {
+        "patternScalar": "é",
+        "repeat": 32769,
+        "decodedUtf8Bytes": 65538
+      },
+      "expected": {
+        "accepted": false,
+        "reason": "limitExceeded",
+        "limit": "patternUtf8Bytes"
+      }
+    },
+    {
+      "id": "limit-argument-count",
+      "generatedInput": {
+        "arguments": 33
+      },
+      "expected": {
+        "accepted": false,
+        "reason": "limitExceeded",
+        "limit": "argumentsPerMessage"
+      }
+    },
+    {
+      "id": "cancelled-pack-is-not-cached",
+      "document": "external-packs/valid-full.json",
+      "cancellation": "duringParse",
+      "expected": {
+        "accepted": false,
+        "reason": "cancelled",
+        "successfulCacheEntry": false,
+        "activeSnapshotUnchanged": true
+      }
+    }
+  ]
+}

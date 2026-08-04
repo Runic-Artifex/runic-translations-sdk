@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "catalog": "group-collision",
+  "code": {
+    "namespace": "RunicTextResources.Corpus",
+    "className": "CollisionText"
+  },
+  "defaultLocale": "en",
+  "locales": [
+    {
+      "tag": "en"
+    }
+  ],
+  "layers": [
+    {
+      "name": "base",
+      "priority": 0
+    }
+  ]
+}

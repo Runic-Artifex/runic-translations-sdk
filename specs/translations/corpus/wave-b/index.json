@@ -1,0 +1,130 @@
+{
+  "formatVersion": 1,
+  "identity": "RunicTextResources.WaveB.Conformance",
+  "contractVersions": {
+    "catalogSchemaVersion": 1,
+    "resourceSchemaVersion": 1,
+    "messageGrammarVersion": 1,
+    "runtimeAbiVersion": 1,
+    "localeArtifactVersion": 1,
+    "externalPackVersion": 1,
+    "templateManifestVersion": 1,
+    "assetManifestVersion": 1
+  },
+  "suites": [
+    {
+      "id": "formatting",
+      "fixture": "formatting.json",
+      "caseCount": 19,
+      "dimensions": [
+        "all descriptor types",
+        "portable exact output",
+        "locale-sensitive semantics",
+        "escaped and repeated placeholders",
+        "argument validation"
+      ]
+    },
+    {
+      "id": "external-packs",
+      "fixture": "external-packs.json",
+      "caseCount": 18,
+      "schema": "../../schemas/external-pack-v1.schema.json",
+      "dimensions": [
+        "full and subset overlay",
+        "integrity-before-parse",
+        "version and fingerprint compatibility",
+        "known key and exact descriptor contract",
+        "limits",
+        "cancellation and atomic rejection"
+      ]
+    },
+    {
+      "id": "generation",
+      "fixture": "generation.json",
+      "caseCount": 10,
+      "dimensions": [
+        "canonical bytes and escaping",
+        "C# hint and parameter ordering",
+        "artifact naming",
+        "template value isolation",
+        "path containment",
+        "verify differences",
+        "environment independence"
+      ]
+    },
+    {
+      "id": "runtime",
+      "fixture": "runtime.json",
+      "caseCount": 8,
+      "dimensions": [
+        "per-key fallback",
+        "unsupported locale resolution",
+        "atomic hot swap",
+        "failure and cancellation",
+        "coalescing",
+        "concurrent accessor visibility"
+      ]
+    },
+    {
+      "id": "compiler-diagnostics",
+      "fixture": "compiler-diagnostics.json",
+      "caseCount": 2,
+      "dimensions": [
+        "synthesized accessor group collisions",
+        "allowed-extra cross-locale placeholder parity",
+        "exact diagnostic messages",
+        "exact UTF-16 token spans"
+      ]
+    }
+  ],
+  "schemaFixtures": [
+    {
+      "path": "external-packs/valid-full.json",
+      "schema": "../../schemas/locale-artifact-v1.schema.json",
+      "valid": true
+    },
+    {
+      "path": "external-packs/valid-full.json",
+      "schema": "../../schemas/external-pack-v1.schema.json",
+      "valid": true
+    },
+    {
+      "path": "external-packs/valid-subset.json",
+      "schema": "../../schemas/external-pack-v1.schema.json",
+      "valid": true
+    },
+    {
+      "path": "external-packs/invalid-artifact-version.json",
+      "schema": "../../schemas/external-pack-v1.schema.json",
+      "valid": false
+    },
+    {
+      "path": "external-packs/invalid-grammar-version.json",
+      "schema": "../../schemas/external-pack-v1.schema.json",
+      "valid": false
+    },
+    {
+      "path": "external-packs/invalid-unknown-member.json",
+      "schema": "../../schemas/external-pack-v1.schema.json",
+      "valid": false
+    },
+    {
+      "path": "artifacts/template-manifest.json",
+      "schema": "../../schemas/template-manifest-v1.schema.json",
+      "valid": true
+    },
+    {
+      "path": "artifacts/asset-manifest.json",
+      "schema": "../../schemas/asset-manifest-v1.schema.json",
+      "valid": true
+    }
+  ],
+  "deferred": [
+    "TypeScript runtime execution",
+    "template compiler integration",
+    "host asset publication",
+    "plural/select/gender grammar",
+    "rich or trusted markup",
+    "canonical schema URIs"
+  ]
+}

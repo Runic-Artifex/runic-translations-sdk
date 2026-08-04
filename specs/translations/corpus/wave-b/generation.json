@@ -1,0 +1,133 @@
+{
+  "formatVersion": 1,
+  "identity": "RunicTextResources.Generation.Conformance",
+  "cases": [
+    {
+      "id": "canonical-locale-artifact-bytes",
+      "input": "external-packs/valid-full.json",
+      "expectedCanonicalUtf8": "{\"artifactVersion\":1,\"messageGrammarVersion\":1,\"catalog\":\"app\",\"locale\":\"de\",\"contractFingerprint\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"messages\":{\"Common.Save\":{\"pattern\":\"Speichern\",\"arguments\":[]},\"Files.Deleted\":{\"pattern\":\"{count} Dateien aus {folder} gelöscht.\",\"arguments\":[{\"name\":\"count\",\"type\":\"int\",\"format\":\"grouped\"},{\"name\":\"folder\",\"type\":\"string\",\"format\":\"none\"}]}}}",
+      "expected": {
+        "encoding": "UTF-8",
+        "bom": false,
+        "terminalNewline": false,
+        "byteLength": 422,
+        "sha256": "24915a5904dc533257232b9f4b45122d8a9dc5123cbc781fb8678bb0925c6800"
+      }
+    },
+    {
+      "id": "generated-csharp-hint-order",
+      "className": "AppText",
+      "expectedHintNames": [
+        "AppText.Accessors.g.cs",
+        "AppText.CatalogData.g.cs",
+        "AppText.Keys.g.cs",
+        "AppText.Registration.g.cs"
+      ]
+    },
+    {
+      "id": "typed-accessor-parameter-order",
+      "key": "Files.Deleted",
+      "sourceDescriptorOrder": [
+        "folder",
+        "count"
+      ],
+      "expectedParameterOrder": [
+        "count",
+        "folder"
+      ],
+      "expectedParameterTypes": [
+        "long",
+        "string"
+      ]
+    },
+    {
+      "id": "locale-artifact-file-order",
+      "catalog": "app",
+      "locales": [
+        "zh-Hant-TW",
+        "de",
+        "en"
+      ],
+      "expectedRelativePaths": [
+        "app.de.locale-v1.json",
+        "app.en.locale-v1.json",
+        "app.zh-Hant-TW.locale-v1.json"
+      ],
+      "expectedTemplateManifestPath": "app.template-manifest-v1.json",
+      "expectedTypeScriptDeclarationPath": "app.text-resources-v1.d.ts"
+    },
+    {
+      "id": "template-manifest-is-value-free",
+      "schema": "../../schemas/template-manifest-v1.schema.json",
+      "forbiddenMembers": [
+        "pattern",
+        "value",
+        "resolvedText"
+      ],
+      "expectedManifestVersion": 1
+    },
+    {
+      "id": "output-path-contained",
+      "outputRoot": "obj/textresources",
+      "relativePath": "app/app.de.locale-v1.json",
+      "expected": {
+        "accepted": true
+      }
+    },
+    {
+      "id": "output-path-parent-escape",
+      "outputRoot": "obj/textresources",
+      "relativePath": "../tracked.json",
+      "expected": {
+        "accepted": false,
+        "diagnostic": "RTR0020"
+      }
+    },
+    {
+      "id": "verify-difference-order",
+      "expectedFiles": [
+        "app.de.locale-v1.json",
+        "app.en.locale-v1.json"
+      ],
+      "actualFiles": [
+        "app.en.locale-v1.json",
+        "app.template-manifest-v1.json"
+      ],
+      "changedFiles": [
+        "app.en.locale-v1.json"
+      ],
+      "expected": {
+        "missing": [
+          "app.de.locale-v1.json"
+        ],
+        "changed": [
+          "app.en.locale-v1.json"
+        ],
+        "extra": [
+          "app.template-manifest-v1.json"
+        ],
+        "exitCode": 1
+      }
+    },
+    {
+      "id": "json-string-escaping",
+      "scalars": "quote=\" slash=/ reverse=\\ control=\n unicode=é separator= ",
+      "expectedJsonString": "\"quote=\\\" slash=/ reverse=\\\\ control=\\n unicode=é separator= \""
+    },
+    {
+      "id": "canonical-output-independent-of-environment",
+      "vary": [
+        "inputEnumeration",
+        "sourcePartitioning",
+        "absolutePath",
+        "currentDirectory",
+        "operatingSystem",
+        "currentCulture",
+        "clock"
+      ],
+      "expected": {
+        "allBytesEqual": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(RunicTextResourcesCompatibilityTargetFramework)</TargetFramework>
+    <AssemblyName>RunicTextResources</AssemblyName>
+    <RootNamespace>RunicTextResources</RootNamespace>
+    <RunicTextResourcesShippingProject>true</RunicTextResourcesShippingProject>
+    <Description>Runtime contracts for compiled Runic Text Resources.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- These identifiers are fixed by the portable v1 source/runtime contract. -->
+    <NoWarn>$(NoWarn);CA1716;CA1720</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

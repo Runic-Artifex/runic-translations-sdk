@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RunicTextResources Text Resources Catalog Manifest v1",
+  "description": "Normative schema for a RunicTextResources Text Resources catalog manifest with schemaVersion 1.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "catalog",
+    "code",
+    "defaultLocale",
+    "locales",
+    "layers"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional editor hint. Supported canonical values are validated by the compiler."
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "catalog": {
+      "$ref": "#/$defs/catalogId"
+    },
+    "code": {
+      "$ref": "#/$defs/code"
+    },
+    "defaultLocale": {
+      "$ref": "#/$defs/localeTag"
+    },
+    "locales": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/locale"
+      }
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/layer"
+      }
+    },
+    "validation": {
+      "$ref": "#/$defs/validation"
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "outputs": {
+      "$ref": "#/$defs/outputs"
+    }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "$defs": {
+    "catalogId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*$"
+    },
+    "csharpIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "description": "C# identifier validity, including keyword handling and Unicode categories, is validated by the compiler."
+    },
+    "csharpNamespace": {
+      "type": "string",
+      "minLength": 1,
+      "description": "C# namespace validity, including keyword handling and Unicode categories, is validated by the compiler."
+    },
+    "localeTag": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+    },
+    "code": {
+      "type": "object",
+      "required": [
+        "namespace",
+        "className"
+      ],
+      "properties": {
+        "namespace": {
+          "$ref": "#/$defs/csharpNamespace"
+        },
+        "className": {
+          "$ref": "#/$defs/csharpIdentifier"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "public",
+            "internal"
+          ],
+          "default": "public"
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "locale": {
+      "type": "object",
+      "required": [
+        "tag"
+      ],
+      "properties": {
+        "tag": {
+          "$ref": "#/$defs/localeTag"
+        },
+        "fallback": {
+          "$ref": "#/$defs/localeTag"
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "layer": {
+      "type": "object",
+      "required": [
+        "name",
+        "priority"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/catalogId"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "validationSeverity": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning",
+        "allow"
+      ]
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "translationCompleteness": {
+          "$ref": "#/$defs/validationSeverity"
+        },
+        "extraLocaleKeys": {
+          "$ref": "#/$defs/validationSeverity"
+        },
+        "emptyValues": {
+          "$ref": "#/$defs/validationSeverity"
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "unsupportedLocale": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "parentsThenDefault",
+            "default"
+          ],
+          "default": "parentsThenDefault"
+        },
+        "missingKey": {
+          "type": "string",
+          "enum": [
+            "throw",
+            "returnKey",
+            "returnMarker"
+          ],
+          "default": "throw"
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "outputModuleName": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "typescriptOutput": {
+      "type": "object",
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "moduleName": {
+          "$ref": "#/$defs/outputModuleName"
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "templateManifestOutput": {
+      "type": "object",
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "outputs": {
+      "type": "object",
+      "properties": {
+        "typescript": {
+          "$ref": "#/$defs/typescriptOutput"
+        },
+        "templateManifest": {
+          "$ref": "#/$defs/templateManifestOutput"
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    }
+  }
+}

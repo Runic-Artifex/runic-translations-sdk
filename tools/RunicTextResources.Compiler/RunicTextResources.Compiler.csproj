@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(RunicTextResourcesGeneratorTargetFramework)</TargetFramework>
+    <AssemblyName>RunicTextResources.Compiler</AssemblyName>
+    <RootNamespace>RunicTextResources.Compiler</RootNamespace>
+    <Description>Pure deterministic compiler kernel for Runic Text Resources.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- These names deliberately mirror the normative serialized descriptor vocabulary. -->
+    <NoWarn>$(NoWarn);CA1720</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

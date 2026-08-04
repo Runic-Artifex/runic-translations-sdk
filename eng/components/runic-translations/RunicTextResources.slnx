@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="dotnet/src/RunicTextResources/RunicTextResources.csproj" />
+    <Project Path="dotnet/src/RunicTextResources.Compiler/RunicTextResources.Compiler.csproj" />
+    <Project Path="dotnet/src/RunicTextResources.Generator/RunicTextResources.Generator.csproj" />
+    <Project Path="dotnet/src/RunicTextResources.Build/RunicTextResources.Build.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="dotnet/tools/RunicTextResources.Tool/RunicTextResources.Tool.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="dotnet/tests/RunicTextResources.ApiTests/RunicTextResources.ApiTests.csproj" />
+    <Project Path="dotnet/tests/RunicTextResources.Build.Tests/RunicTextResources.Build.Tests.csproj" />
+    <Project Path="dotnet/tests/RunicTextResources.Compiler.Tests/RunicTextResources.Compiler.Tests.csproj" />
+    <Project Path="dotnet/tests/RunicTextResources.Generator.Tests/RunicTextResources.Generator.Tests.csproj" />
+    <Project Path="dotnet/tests/RunicTextResources.Runtime.Tests/RunicTextResources.Runtime.Tests.csproj" />
+  </Folder>
+</Solution>
