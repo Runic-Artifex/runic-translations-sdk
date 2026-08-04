@@ -93,7 +93,7 @@ internal static class Program
         string codeAnalysisPath = Path.Combine(packageRoot, "microsoft.codeanalysis.common", "4.14.0", "lib", "netstandard2.0", "Microsoft.CodeAnalysis.dll");
         if (!File.Exists(generatorPath) || !File.Exists(codeAnalysisPath))
         {
-            throw new InvalidOperationException("Generator build output or its locked Roslyn dependency is missing.");
+            throw new InvalidOperationException("Generator build output or its Roslyn dependency is missing.");
         }
 
         AssemblyLoadContext.Default.Resolving += (_, name) =>

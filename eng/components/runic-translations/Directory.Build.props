@@ -2,7 +2,7 @@
   <PropertyGroup>
     <!--
       Development is the approachable inner loop. Verification is selected by CI
-      and eng/verify.ps1 for locked restores and release-grade analysis.
+      and eng/verify.ps1 for release-grade analysis.
     -->
     <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == '' and '$(CI)' == 'true'">Verification</RunicTextResourcesBuildMode>
     <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == ''">Development</RunicTextResourcesBuildMode>
@@ -30,10 +30,7 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <PackageProjectUrl>https://github.com/Runic-Artifex/runic-text-resources</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <!-- Repository projects keep updateable lock files; only Verification locks them. -->
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreLockedMode Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</RestoreLockedMode>
-    <RestoreLockedMode Condition="'$(RestoreLockedMode)' == ''">false</RestoreLockedMode>
+    <!-- Libraries leave dependency resolution to their consuming applications. -->
     <NuGetAudit Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</NuGetAudit>
     <NuGetAudit Condition="'$(NuGetAudit)' == ''">false</NuGetAudit>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
