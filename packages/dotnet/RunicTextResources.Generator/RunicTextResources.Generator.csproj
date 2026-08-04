@@ -22,7 +22,7 @@
 
   <Target Name="SetTextResourcesGeneratorNuspecProperties" BeforeTargets="GenerateNuspec">
     <PropertyGroup>
-      <NuspecProperties>configuration=$(Configuration);packageVersion=$(PackageVersion)</NuspecProperties>
+      <NuspecProperties>configuration=$(Configuration);packageVersion=$(PackageVersion);repositoryCommit=$(SourceRevisionId)</NuspecProperties>
     </PropertyGroup>
   </Target>
 </Project>

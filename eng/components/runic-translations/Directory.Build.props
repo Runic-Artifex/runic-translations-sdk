@@ -26,6 +26,8 @@
     <Company>RunicArtifex</Company>
     <Copyright>Copyright (c) 2026 Viktor Jannicke</Copyright>
     <RepositoryUrl>https://github.com/Runic-Artifex/runic-text-resources</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <PackageProjectUrl>https://github.com/Runic-Artifex/runic-text-resources</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <!-- Repository projects keep updateable lock files; only Verification locks them. -->

@@ -36,6 +36,15 @@ test executable, packs all five packages into an isolated local feed, installs a
 executes the packed tool, consumes only those packages from a fixture project, and
 publishes the runtime consumer with NativeAOT.
 
+Pull requests and changes to `main` run the same pipeline in GitHub Actions. A
+manual prerelease workflow can also produce a uniquely versioned package artifact.
+Publishing that artifact to the organization-scoped GitHub Packages feed is a
+separate, explicit workflow choice; manual runs default to artifact creation only.
+
+All compiled packages embed Source Link information and identify the exact source
+commit in their NuGet metadata. Because the repository is currently private,
+debuggers need GitHub access to retrieve source files.
+
 ## Project status
 
 This repository is being extracted from Runic Toolkit and has not made its first

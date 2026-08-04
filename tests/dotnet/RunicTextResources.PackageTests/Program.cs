@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -14,6 +17,8 @@ namespace RunicTextResources.PackageTests;
 internal static class Program
 {
     private const string Fingerprint = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string RepositoryUrl = "https://github.com/Runic-Artifex/runic-text-resources";
+    private static readonly Guid SourceLinkKind = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
     private static int _passed;
 
     public static async Task<int> Main(string[] args)
@@ -101,6 +106,17 @@ internal static class Program
         AssertLicense(build);
         AssertLicense(generator);
         AssertLicense(tool);
+
+        AssertRepositoryMetadata(runtime);
+        AssertRepositoryMetadata(compiler);
+        AssertRepositoryMetadata(build);
+        AssertRepositoryMetadata(generator);
+        AssertRepositoryMetadata(tool);
+
+        AssertEmbeddedSourceLink(runtime, "lib/net10.0/RunicTextResources.dll");
+        AssertEmbeddedSourceLink(compiler, "lib/net10.0/RunicTextResources.Compiler.dll");
+        AssertEmbeddedSourceLink(generator, "analyzers/dotnet/cs/RunicTextResources.Generator.dll");
+        AssertEmbeddedSourceLink(tool, "tools/net10.0/any/RunicTextResources.Tool.dll");
     }
 
     private static async Task ExerciseRuntimePackageAsync()
@@ -248,6 +264,52 @@ internal static class Program
             string.Equals((string?)license.Attribute("type"), "expression", StringComparison.Ordinal) &&
             string.Equals(license.Value, "MIT", StringComparison.Ordinal),
             $"{Path.GetFileName(package)} declares the MIT SPDX license expression");
+    }
+
+    private static void AssertRepositoryMetadata(string package)
+    {
+        using ZipArchive archive = ZipFile.OpenRead(package);
+        ZipArchiveEntry nuspec = archive.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+        XDocument document;
+        using (Stream stream = nuspec.Open())
+        {
+            document = XDocument.Load(stream, LoadOptions.None);
+        }
+
+        XElement repository = document.Descendants()
+            .Single(element => string.Equals(element.Name.LocalName, "repository", StringComparison.Ordinal));
+        string commit = (string?)repository.Attribute("commit") ?? string.Empty;
+        Assert(
+            string.Equals((string?)repository.Attribute("type"), "git", StringComparison.Ordinal) &&
+            string.Equals((string?)repository.Attribute("url"), RepositoryUrl, StringComparison.Ordinal) &&
+            commit.Length == 40 && commit.All(Uri.IsHexDigit),
+            $"{Path.GetFileName(package)} identifies its Git repository and source commit");
+    }
+
+    private static void AssertEmbeddedSourceLink(string package, string assemblyPath)
+    {
+        using ZipArchive archive = ZipFile.OpenRead(package);
+        ZipArchiveEntry assembly = archive.GetEntry(assemblyPath)
+            ?? throw new InvalidOperationException($"FAIL: {Path.GetFileName(package)} contains {assemblyPath}");
+        using var assemblyBytes = new MemoryStream();
+        using (Stream stream = assembly.Open())
+        {
+            stream.CopyTo(assemblyBytes);
+        }
+
+        assemblyBytes.Position = 0;
+        using var peReader = new PEReader(assemblyBytes);
+        DebugDirectoryEntry embeddedPdb = peReader.ReadDebugDirectory()
+            .Single(entry => entry.Type == DebugDirectoryEntryType.EmbeddedPortablePdb);
+        using MetadataReaderProvider provider = peReader.ReadEmbeddedPortablePdbDebugDirectoryData(embeddedPdb);
+        MetadataReader reader = provider.GetMetadataReader();
+        CustomDebugInformation sourceLink = reader.GetCustomDebugInformation(MetadataTokens.EntityHandle(0x00000001))
+            .Select(reader.GetCustomDebugInformation)
+            .Single(information => reader.GetGuid(information.Kind) == SourceLinkKind);
+        string documentMap = Encoding.UTF8.GetString(reader.GetBlobBytes(sourceLink.Value));
+        Assert(
+            documentMap.Contains("raw.githubusercontent.com/Runic-Artifex/runic-text-resources/", StringComparison.Ordinal),
+            $"{Path.GetFileName(package)} embeds Source Link metadata for the organization repository");
     }
 
     private static void Assert(bool condition, string description)

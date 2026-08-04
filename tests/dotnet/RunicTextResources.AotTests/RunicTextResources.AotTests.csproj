@@ -9,6 +9,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestoreAdditionalProjectSources Condition="'$(TextResourcesPackageFeed)' != ''">$(TextResourcesPackageFeed)</RestoreAdditionalProjectSources>
+    <!-- Packages under test change on every source commit; verification supplies fresh per-run locks. -->
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
     <InvariantGlobalization>false</InvariantGlobalization>
     <IsPackable>false</IsPackable>
   </PropertyGroup>

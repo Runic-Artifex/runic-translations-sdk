@@ -1,0 +1,77 @@
+name: Prerelease packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified packages to GitHub Packages
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  PACKAGE_VERSION: 0.1.0-preview.${{ github.run_number }}.${{ github.run_attempt }}
+
+jobs:
+  package:
+    name: Verify and package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Run verification pipeline
+        run: ./eng/verify.sh
+
+      - name: Create prerelease packages
+        run: ./eng/pack.sh "$PACKAGE_VERSION" "$RUNNER_TEMP/packages"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: runic-text-resources-${{ env.PACKAGE_VERSION }}
+          path: ${{ runner.temp }}/packages/*.nupkg
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish to GitHub Packages
+    if: ${{ inputs.publish }}
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.302
+
+      - name: Download package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: runic-text-resources-${{ env.PACKAGE_VERSION }}
+          path: ${{ runner.temp }}/packages
+
+      - name: Publish packages
+        run: >-
+          dotnet nuget push "$RUNNER_TEMP/packages/*.nupkg"
+          --source "https://nuget.pkg.github.com/Runic-Artifex/index.json"
+          --api-key "$GITHUB_TOKEN"
+          --skip-duplicate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

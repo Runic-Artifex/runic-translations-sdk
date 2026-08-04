@@ -7,6 +7,7 @@
     <description>Incremental C# source generator for Runic Text Resources.</description>
     <license type="expression">MIT</license>
     <readme>README.md</readme>
+    <repository type="git" url="https://github.com/Runic-Artifex/runic-text-resources" commit="$repositoryCommit$" />
     <developmentDependency>true</developmentDependency>
     <dependencies>
       <dependency id="RunicTextResources" version="[$packageVersion$]" exclude="Build,Analyzers" />

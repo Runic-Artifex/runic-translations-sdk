@@ -1,6 +1,8 @@
 **/bin/
 **/obj/
 **/artifacts/
+!spec/corpus/wave-b/artifacts/
+!spec/corpus/wave-b/artifacts/*.json
 **/TestResults/
 **/coverage/
 node_modules/
