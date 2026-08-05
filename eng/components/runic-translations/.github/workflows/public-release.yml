@@ -1,0 +1,143 @@
+name: Public release
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/public-release.yml
+      - Directory.Build.props
+      - eng/pack.sh
+      - dotnet/**/*.csproj
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact SemVer package version
+        required: true
+        default: 0.1.0-preview.2.1
+        type: string
+      publish_public:
+        description: Publish the verified artifacts to nuget.org
+        required: true
+        default: false
+        type: boolean
+      confirmation:
+        description: Type PUBLISH PUBLIC when publication is enabled
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: public-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  PACKAGE_VERSION: ${{ inputs.version || format('0.1.0-preview.{0}.{1}', github.run_number, github.run_attempt) }}
+
+jobs:
+  package:
+    name: Verify public artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Validate request
+        shell: bash
+        env:
+          PUBLISH_PUBLIC: ${{ inputs.publish_public }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Version must be SemVer-compatible." >&2
+            exit 1
+          fi
+          if [[ "$PUBLISH_PUBLIC" == "true" && "$CONFIRMATION" != "PUBLISH PUBLIC" ]]; then
+            echo "Public publication requires the exact confirmation PUBLISH PUBLIC." >&2
+            exit 1
+          fi
+
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Run verification pipeline
+        run: ./eng/verify.sh
+
+      - name: Ensure verification is reproducible
+        run: git diff --exit-code
+
+      - name: Create packages
+        run: ./eng/pack.sh "$PACKAGE_VERSION" "$RUNNER_TEMP/packages"
+
+      - name: Validate public package contract
+        uses: Runic-Artifex/.github/.github/actions/validate-release-artifacts@main
+        with:
+          version: ${{ env.PACKAGE_VERSION }}
+          artifact-directory: ${{ runner.temp }}/packages
+          repository-url: https://github.com/Runic-Artifex/runic-text-resources
+          repository-commit: ${{ github.sha }}
+          expected-nuget-count: "5"
+
+      - name: Record package digests
+        working-directory: ${{ runner.temp }}/packages
+        run: sha256sum ./*.nupkg > SHA256SUMS
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: runic-text-resources-${{ env.PACKAGE_VERSION }}
+          path: ${{ runner.temp }}/packages/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish to nuget.org
+    if: ${{ inputs.publish_public && inputs.confirmation == 'PUBLISH PUBLIC' && github.ref == 'refs/heads/main' }}
+    needs: package
+    runs-on: ubuntu-24.04
+    environment: public-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Download release candidate
+        uses: actions/download-artifact@v8
+        with:
+          name: runic-text-resources-${{ env.PACKAGE_VERSION }}
+          path: ${{ runner.temp }}/packages
+
+      - name: Verify package digests
+        working-directory: ${{ runner.temp }}/packages
+        run: sha256sum --check SHA256SUMS
+
+      - name: Sign in to nuget.org with trusted publishing
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Publish packages
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          for package in "$RUNNER_TEMP"/packages/*.nupkg; do
+            dotnet nuget push "$package" \
+              --source https://api.nuget.org/v3/index.json \
+              --api-key "$NUGET_API_KEY"
+          done

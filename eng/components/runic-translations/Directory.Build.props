@@ -30,6 +30,7 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <PackageProjectUrl>https://github.com/Runic-Artifex/runic-text-resources</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags Condition="'$(PackageTags)' == ''">runic-artifex;i18n;localization;resources;dotnet;nativeaot</PackageTags>
     <!-- Libraries leave dependency resolution to their consuming applications. -->
     <NuGetAudit Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</NuGetAudit>
     <NuGetAudit Condition="'$(NuGetAudit)' == ''">false</NuGetAudit>
