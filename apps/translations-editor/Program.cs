@@ -41,6 +41,17 @@ internal static class Program
             window.BindAsync("runicEditorPickWorkspace", async (_, cancellationToken) =>
                 WebUiResult.FromString(Serialize(await EditorWorkspacePicker.PickAsync(cancellationToken).ConfigureAwait(false))));
 
+            window.Bind("runicEditorPreviewMutation", webUiEvent =>
+                WebUiResult.FromString(Serialize(session.PreviewMutation(DeserializeMutationRequest(webUiEvent.GetString())))));
+
+            window.BindAsync("runicEditorApplyMutation", async (webUiEvent, cancellationToken) =>
+                WebUiResult.FromString(Serialize(await session.ApplyMutationAsync(
+                    DeserializeMutationRequest(webUiEvent.GetString()), cancellationToken).ConfigureAwait(false))));
+
+            window.BindAsync("runicEditorRecoverTransaction", async (webUiEvent, cancellationToken) =>
+                WebUiResult.FromString(Serialize(await session.RecoverTransactionAsync(
+                    DeserializeRecoveryRequest(webUiEvent.GetString()), cancellationToken).ConfigureAwait(false))));
+
             window.BindAsync("runicEditorValidate", async (webUiEvent, cancellationToken) =>
             {
                 ValidationResult result = await session.ValidateAsync(
@@ -111,6 +122,9 @@ internal static class Program
     private static string Serialize(EditorWorkspacePickerResult value) =>
         JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorWorkspacePickerResult);
 
+    private static string Serialize(EditorMutationPreview value) =>
+        JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorMutationPreview);
+
     private static EditorProjectCreationRequest DeserializeProjectRequest(string value) =>
         JsonSerializer.Deserialize(value, EditorJsonContext.Default.EditorProjectCreationRequest)
         ?? throw new ArgumentException("The project creation request is required.", nameof(value));
@@ -118,6 +132,14 @@ internal static class Program
     private static EditorOpenWorkspaceRequest DeserializeOpenRequest(string value) =>
         JsonSerializer.Deserialize(value, EditorJsonContext.Default.EditorOpenWorkspaceRequest)
         ?? throw new ArgumentException("The open-workspace request is required.", nameof(value));
+
+    private static EditorMutationRequest DeserializeMutationRequest(string value) =>
+        JsonSerializer.Deserialize(value, EditorJsonContext.Default.EditorMutationRequest)
+        ?? throw new ArgumentException("The mutation request is required.", nameof(value));
+
+    private static EditorRecoveryRequest DeserializeRecoveryRequest(string value) =>
+        JsonSerializer.Deserialize(value, EditorJsonContext.Default.EditorRecoveryRequest)
+        ?? throw new ArgumentException("The recovery request is required.", nameof(value));
 
     private static string? ArgumentValue(string[] args, string name)
     {

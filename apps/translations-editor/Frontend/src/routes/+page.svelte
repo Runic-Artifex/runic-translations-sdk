@@ -27,6 +27,8 @@
     EditorDiagnostic,
     EditorDocument,
     EditorExternalFileChange,
+    EditorMutationPreview,
+    EditorMutationRequest,
     EditorProjectCreationRequest,
     EditorProjectPlan,
     ValidationResult,
@@ -48,6 +50,7 @@
   type ProjectLocaleDraft = { id: number; tag: string; fallback: string };
   type StoredDraft = { content: string; baseRevision: string };
   type RecentProject = { root: string; catalogId: string; openedAt: string };
+  type MutationKind = EditorMutationRequest["kind"];
 
   const bridge = createEditorBridge();
   let snapshot = $state.raw<WorkspaceSnapshot>();
@@ -98,6 +101,20 @@
   let mergedExternalText = $state("");
   let recoveredDrafts = $state<Record<string, StoredDraft>>({});
   let recentProjects = $state<RecentProject[]>([]);
+  let mutationDialogOpen = $state(false);
+  let mutationKind = $state<MutationKind>("add-locale");
+  let mutationLocale = $state("");
+  let mutationFallback = $state("");
+  let mutationReplacementFallback = $state("");
+  let mutationLayer = $state("base");
+  let mutationCopyFrom = $state("");
+  let mutationSourceKey = $state("");
+  let mutationTargetKey = $state("");
+  let mutationInitialValue = $state("");
+  let mutationPreview = $state.raw<EditorMutationPreview>();
+  let mutationError = $state<string>();
+  let mutationBusy = $state(false);
+  let recoveryBusy = $state(false);
 
   let labels = $derived(labelsFor(uiLocale));
   let rows = $derived(buildRows(snapshot, drafts));
@@ -542,6 +559,122 @@
     openDialogOpen = true;
   }
 
+  function prepareMutation(kind: MutationKind): boolean {
+    const current = snapshot;
+    if (current?.catalog === undefined) return false;
+    if (Object.keys(drafts).length > 0 && !confirm("Structural changes require a clean workspace. Discard unsaved drafts?")) return false;
+    drafts = {};
+    clearStoredDrafts(current);
+    mutationKind = kind;
+    const firstNonDefault = current.catalog.locales.find((locale) => locale.tag !== current.catalog?.defaultLocale)?.tag ?? "";
+    mutationLocale = kind === "remove-locale" || kind === "set-fallback"
+      ? (selectedLocale === current.catalog.defaultLocale ? firstNonDefault : selectedLocale)
+      : "";
+    mutationFallback = current.catalog.defaultLocale;
+    mutationReplacementFallback = current.catalog.defaultLocale;
+    mutationLayer = current.catalog.layers[0]?.name ?? "base";
+    mutationCopyFrom = current.catalog.defaultLocale;
+    mutationSourceKey = selectedKey;
+    mutationTargetKey = kind === "duplicate-key" ? `${selectedKey}Copy` : selectedKey;
+    mutationInitialValue = "";
+    mutationPreview = undefined;
+    mutationError = undefined;
+    mutationBusy = false;
+    mutationDialogOpen = true;
+    return true;
+  }
+
+  function mutationRequest(): EditorMutationRequest {
+    return {
+      kind: mutationKind,
+      locale: mutationLocale.trim() || undefined,
+      fallback: mutationFallback.trim() || undefined,
+      replacementFallback: mutationReplacementFallback.trim() || undefined,
+      layer: mutationLayer,
+      copyFromLocale: mutationCopyFrom,
+      sourceKey: mutationSourceKey.trim() || undefined,
+      targetKey: mutationTargetKey.trim() || undefined,
+      initialValue: mutationInitialValue,
+    };
+  }
+
+  function invalidateMutationPreview(): void {
+    mutationPreview = undefined;
+    mutationError = undefined;
+  }
+
+  function changeMutationKind(event: Event): void {
+    const next = (event.currentTarget as HTMLSelectElement).value as MutationKind;
+    mutationKind = next;
+    const locales = snapshot?.catalog?.locales ?? [];
+    const firstTarget = locales.find((locale) => locale.tag !== snapshot?.catalog?.defaultLocale)?.tag ?? "";
+    mutationLocale = next === "add-locale" ? "" : firstTarget;
+    mutationFallback = snapshot?.catalog?.defaultLocale ?? "";
+    mutationReplacementFallback = snapshot?.catalog?.defaultLocale ?? "";
+    invalidateMutationPreview();
+  }
+
+  async function previewMutation(): Promise<void> {
+    if (mutationBusy) return;
+    mutationBusy = true;
+    mutationError = undefined;
+    try {
+      const result = await bridge.previewMutation(mutationRequest());
+      mutationPreview = result;
+      if (!result.ok) mutationError = result.message ?? "The change is not valid.";
+    } catch (error) {
+      mutationError = errorMessage(error);
+    } finally {
+      mutationBusy = false;
+    }
+  }
+
+  async function applyMutation(): Promise<void> {
+    if (mutationBusy || mutationPreview?.ok !== true) return;
+    mutationBusy = true;
+    mutationError = undefined;
+    try {
+      const result = await bridge.applyMutation(mutationRequest());
+      if (!result.ok || result.snapshot === undefined) {
+        mutationError = result.message ?? "The workspace change could not be committed.";
+        mutationPreview = undefined;
+        return;
+      }
+      const preferredKey = mutationKind === "rename-key" || mutationKind === "duplicate-key"
+        ? mutationTargetKey
+        : selectedKey;
+      installSnapshot(result.snapshot, true);
+      if (buildRows(result.snapshot, {}).some((row) => row.key === preferredKey)) selectedKey = preferredKey;
+      mutationDialogOpen = false;
+      operationMessage = "Workspace updated";
+      configureEditor();
+    } catch (error) {
+      mutationError = errorMessage(error);
+      mutationPreview = undefined;
+    } finally {
+      mutationBusy = false;
+    }
+  }
+
+  async function recoverTransaction(mode: "complete" | "rollback"): Promise<void> {
+    if (recoveryBusy) return;
+    recoveryBusy = true;
+    clientError = undefined;
+    try {
+      const result = await bridge.recoverTransaction(mode);
+      if (!result.ok || result.snapshot === undefined) {
+        clientError = result.message ?? "Workspace recovery failed.";
+        return;
+      }
+      installSnapshot(result.snapshot, true);
+      operationMessage = mode === "complete" ? "Interrupted change completed" : "Interrupted change rolled back";
+    } catch (error) {
+      clientError = errorMessage(error);
+    } finally {
+      recoveryBusy = false;
+    }
+  }
+
   function recoverSavedDrafts(): void {
     drafts = Object.fromEntries(Object.entries(recoveredDrafts).map(([path, draft]) => [path, draft.content]));
     recoveredDrafts = {};
@@ -683,6 +816,18 @@
     }
   }
 
+  function mutationTitle(kind: MutationKind): string {
+    return {
+      "add-locale": "Add a language",
+      "remove-locale": "Remove a language",
+      "set-fallback": "Change fallback relationships",
+      "create-key": "Add a message",
+      "rename-key": "Rename or move a message",
+      "duplicate-key": "Duplicate a message",
+      "delete-key": "Delete a message",
+    }[kind];
+  }
+
   function labelsFor(locale: string) {
     const options = { locale };
     return {
@@ -764,6 +909,22 @@
     <h1>Could not open this translation workspace</h1>
     <p>{clientError ?? "No Runic Text Resources catalog was found."}</p>
     <button class="primary" onclick={() => void loadWorkspace(false)}>{labels.reload}</button>
+  </main>
+{:else if snapshot.pendingTransaction !== undefined}
+  <main class="recovery-shell">
+    <div class="mark" aria-hidden="true"><span></span></div>
+    <p class="eyebrow">Workspace recovery</p>
+    <h1>An interrupted change needs your decision</h1>
+    <p>The recovery journal for <strong>{snapshot.pendingTransaction.catalogId}</strong> lists {snapshot.pendingTransaction.paths.length} affected {snapshot.pendingTransaction.paths.length === 1 ? "file" : "files"}. No further editing is allowed until it is resolved.</p>
+    <div class="recovery-paths">
+      {#each snapshot.pendingTransaction.paths as path (path)}<code>{path}</code>{/each}
+    </div>
+    {#if clientError}<p class="project-error" aria-live="polite">{clientError}</p>{/if}
+    <div class="recovery-actions">
+      <button class="secondary" disabled={recoveryBusy} onclick={() => void recoverTransaction("rollback")}>Restore files from before the change</button>
+      <button class="primary" disabled={recoveryBusy} onclick={() => void recoverTransaction("complete")}>{recoveryBusy ? "Recovering…" : "Complete the planned change"}</button>
+    </div>
+    <small>Both choices use the bounded local journal. The journal is removed only after recovery succeeds.</small>
   </main>
 {:else if snapshot.catalog === undefined}
   <main class="welcome-shell">
@@ -867,6 +1028,7 @@
             {/each}
           </div>
         {/if}
+        <button class="new-project-button" onclick={() => prepareMutation("add-locale")}>◎ Manage languages</button>
         <button class="new-project-button" onclick={showOpenWorkspaceDialog}>⌁ Open workspace</button>
         <button class="new-project-button" onclick={openProjectWizard}>＋ New project</button>
       </section>
@@ -883,7 +1045,7 @@
             <span class="locale-code">{locale.tag}</span>
             <span class="locale-copy">
               <strong>{localeName(locale.tag)}</strong>
-              <span>{state.translated}/{state.total} translated</span>
+              <span>{state.translated}/{state.total} translated{locale.fallback ? ` · fallback ${locale.fallback}` : " · source"}</span>
             </span>
             <span class="locale-percent">{percent}%</span>
             <span class="progress"><span style:width={`${percent}%`}></span></span>
@@ -910,6 +1072,8 @@
           >{option.label}<span>{option.count}</span></button>
         {/each}
       </div>
+
+      <button class="add-message-button" onclick={() => prepareMutation("create-key")}>＋ Add message</button>
 
       <nav class="message-list" aria-label="Translation messages">
         {#each visibleRows as row (row.key)}
@@ -991,6 +1155,11 @@
               <span>{selectedLocale}</span>
               <span>{currentDocument?.layer ?? "no document"}</span>
               {#if currentCell?.inheritedFrom}<span class="fallback">falls back to {currentCell.inheritedFrom}</span>{/if}
+              <div class="key-actions">
+                <button title="Rename or move this message" onclick={() => prepareMutation("rename-key")}>Rename</button>
+                <button title="Duplicate this message" onclick={() => prepareMutation("duplicate-key")}>Duplicate</button>
+                <button class="danger" title="Delete this message" onclick={() => prepareMutation("delete-key")}>Delete</button>
+              </div>
             </div>
           </header>
 
@@ -1089,6 +1258,109 @@
       {#if clientError}<p class="project-error" aria-live="polite">{clientError}</p>{/if}
       <footer><button class="secondary" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>Cancel</button>
         <div><button class="primary" disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{openingWorkspace ? "Opening…" : "Open workspace"}</button></div></footer>
+    </div>
+  </div>
+{/if}
+
+{#if mutationDialogOpen && snapshot?.catalog !== undefined}
+  <div class="dialog-backdrop" role="presentation">
+    <div class="project-dialog mutation-dialog" role="dialog" aria-modal="true" aria-labelledby="mutation-dialog-title">
+      <header><div><p class="eyebrow">Compiler-backed workspace change</p><h2 id="mutation-dialog-title">{mutationTitle(mutationKind)}</h2></div>
+        <button class="icon-button" aria-label="Close workspace change" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>×</button></header>
+      <div class="project-body mutation-body">
+        {#if mutationKind === "add-locale" || mutationKind === "remove-locale" || mutationKind === "set-fallback"}
+          <label>Language operation
+            <select value={mutationKind} onchange={changeMutationKind}>
+              <option value="add-locale">Add a language</option>
+              <option value="remove-locale">Remove a language</option>
+              <option value="set-fallback">Change a fallback</option>
+            </select>
+          </label>
+        {/if}
+
+        {#if mutationKind === "add-locale"}
+          <div class="form-grid">
+            <label>New locale tag<input bind:value={mutationLocale} oninput={invalidateMutationPreview} placeholder="fr-FR" autocomplete="off" /></label>
+            <label>Fallback
+              <select bind:value={mutationFallback} onchange={invalidateMutationPreview}>
+                {#each snapshot.catalog.locales as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
+              </select>
+            </label>
+            <label>Copy starter values from
+              <select bind:value={mutationCopyFrom} onchange={invalidateMutationPreview}>
+                {#each snapshot.catalog.locales as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
+              </select>
+              <small>Copied text keeps the new catalog compiler-valid and can then be translated.</small>
+            </label>
+            <label>Layer
+              <select bind:value={mutationLayer} onchange={invalidateMutationPreview}>
+                {#each snapshot.catalog.layers as layer (layer.name)}<option value={layer.name}>{layer.name}</option>{/each}
+              </select>
+            </label>
+          </div>
+        {:else if mutationKind === "remove-locale"}
+          <div class="form-grid">
+            <label>Language to remove
+              <select bind:value={mutationLocale} onchange={invalidateMutationPreview}>
+                {#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
+              </select>
+            </label>
+            <label>Redirect dependent fallbacks to
+              <select bind:value={mutationReplacementFallback} onchange={invalidateMutationPreview}>
+                {#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<option value={locale.tag}>{locale.tag}</option>{/each}
+              </select>
+            </label>
+          </div>
+          <p class="mutation-warning">All resource documents for this locale will be deleted after the preview is confirmed.</p>
+        {:else if mutationKind === "set-fallback"}
+          <div class="form-grid">
+            <label>Language
+              <select bind:value={mutationLocale} onchange={invalidateMutationPreview}>
+                {#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
+              </select>
+            </label>
+            <label>Fallback
+              <select bind:value={mutationFallback} onchange={invalidateMutationPreview}>
+                {#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
+              </select>
+            </label>
+          </div>
+          <div class="fallback-graph">
+            {#each snapshot.catalog.locales as locale (locale.tag)}
+              <span><strong>{locale.tag}</strong>{locale.tag === mutationLocale ? ` → ${mutationFallback}` : locale.fallback ? ` → ${locale.fallback}` : " · source"}</span>
+            {/each}
+          </div>
+        {:else if mutationKind === "create-key"}
+          <div class="form-grid">
+            <label class="wide">Message key<input bind:value={mutationTargetKey} oninput={invalidateMutationPreview} placeholder="Checkout.Actions.Pay" autocomplete="off" /><small>Use dots to organize messages into groups.</small></label>
+            <label class="wide">Initial text<textarea bind:value={mutationInitialValue} oninput={invalidateMutationPreview} placeholder="Pay now"></textarea><small>The initial value is added to every language so strict projects stay valid.</small></label>
+            <label>Layer<select bind:value={mutationLayer} onchange={invalidateMutationPreview}>{#each snapshot.catalog.layers as layer (layer.name)}<option value={layer.name}>{layer.name}</option>{/each}</select></label>
+          </div>
+        {:else if mutationKind === "rename-key" || mutationKind === "duplicate-key"}
+          <div class="form-grid">
+            <label class="wide">Existing key<input value={mutationSourceKey} readonly /></label>
+            <label class="wide">{mutationKind === "rename-key" ? "New key or group path" : "Duplicate key"}<input bind:value={mutationTargetKey} oninput={invalidateMutationPreview} autocomplete="off" /></label>
+          </div>
+          <p class="mutation-guidance">The change is applied across every locale and layer where the source message exists.</p>
+        {:else}
+          <p class="mutation-warning">Delete <strong>{mutationSourceKey}</strong> from every locale and layer? The preview below lists every file that will change.</p>
+        {/if}
+
+        {#if mutationError}<p class="project-error" aria-live="polite">{mutationError}</p>{/if}
+        {#if mutationPreview?.ok}
+          <section class="mutation-preview">
+            <header><strong>Operation preview</strong><span>{mutationPreview.files.length} affected {mutationPreview.files.length === 1 ? "file" : "files"}</span></header>
+            {#each mutationPreview.files as file (file.path)}
+              <div><span class={`change-kind ${file.kind}`}>{file.kind}</span><code>{file.path}</code><small>{file.beforeBytes.toLocaleString()} → {file.afterBytes.toLocaleString()} bytes</small></div>
+            {/each}
+          </section>
+        {/if}
+      </div>
+      <footer><button class="secondary" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>Cancel</button>
+        <div>
+          {#if mutationPreview?.ok}<button class={mutationKind === "remove-locale" || mutationKind === "delete-key" ? "danger-button" : "primary"} disabled={mutationBusy} onclick={() => void applyMutation()}>{mutationBusy ? "Committing…" : "Commit change"}</button>
+          {:else}<button class="primary" disabled={mutationBusy} onclick={() => void previewMutation()}>{mutationBusy ? "Checking…" : "Preview change"}</button>{/if}
+        </div></footer>
     </div>
   </div>
 {/if}
@@ -1338,6 +1610,10 @@
   .message-facts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; padding-top: .4rem; }
   .message-facts span { border: 1px solid #333b36; border-radius: .3rem; padding: .25rem .45rem; color: #879188; background: #151a17; font: .56rem ui-monospace, monospace; }
   .message-facts span.fallback { border-color: #5b4d35; color: #bd9d61; }
+  .key-actions { display: flex; gap: .3rem; flex-basis: 100%; justify-content: flex-end; margin-top: .2rem; }
+  .key-actions button { border: 1px solid #37403a; border-radius: .3rem; padding: .3rem .45rem; color: #8f9991; background: #141916; font-size: .55rem; cursor: pointer; }
+  .key-actions button:hover { border-color: #685c3d; color: #d8c58f; }
+  .key-actions button.danger:hover { border-color: #79453e; color: #e4978b; }
   .mode-tabs { display: flex; gap: .2rem; max-width: 1000px; margin: 0 auto; border-bottom: 1px solid #303732; }
   .mode-tabs button { position: relative; border: 0; padding: .65rem .8rem; color: #747f77; background: transparent; font-size: .68rem; cursor: pointer; }
   .mode-tabs button::after { position: absolute; right: .7rem; bottom: -1px; left: .7rem; height: 2px; background: transparent; content: ""; }
@@ -1376,7 +1652,7 @@
   .diagnostics button > span:nth-child(2) { color: #9ca69f; font-size: .63rem; line-height: 1.45; }
   .diagnostics button strong { margin-right: .45rem; color: #d0d7d2; font-family: ui-monospace, monospace; }
   .diagnostics code { color: #606a63; font: .55rem ui-monospace, monospace; white-space: nowrap; }
-  .no-selection, .loading-shell, .fatal-shell { display: grid; place-content: center; place-items: center; height: 100vh; padding: 2rem; color: #8d978f; text-align: center; background: radial-gradient(circle at center, #1d2822, #0b0e0d 65%); }
+  .no-selection, .loading-shell, .fatal-shell, .recovery-shell { display: grid; place-content: center; place-items: center; height: 100vh; padding: 2rem; color: #8d978f; text-align: center; background: radial-gradient(circle at center, #1d2822, #0b0e0d 65%); }
   .no-selection { height: auto; flex: 1; background: transparent; }
   .no-selection > span { color: #837347; font-size: 3rem; }
   .no-selection h2 { font-family: Georgia, serif; font-weight: 500; }
@@ -1387,6 +1663,13 @@
   .fatal-shell .mark { margin-bottom: 2rem; }
   .fatal-shell h1 { max-width: 36rem; margin: .8rem 0; color: #eee9da; font-family: Georgia, serif; font-size: 2.6rem; font-weight: 500; }
   .fatal-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0 0 1.5rem; }
+  .recovery-shell { gap: .9rem; }
+  .recovery-shell h1 { max-width: 42rem; margin: .4rem 0; color: #eee7d5; font-family: Georgia, serif; font-size: 2.3rem; font-weight: 500; }
+  .recovery-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0; line-height: 1.6; }
+  .recovery-paths { display: grid; gap: .3rem; width: min(36rem, 100%); max-height: 12rem; margin: .5rem 0; overflow-y: auto; }
+  .recovery-paths code { border: 1px solid #3b403a; border-radius: .3rem; padding: .45rem .6rem; color: #c0b68f; text-align: left; background: #111512; font: .6rem ui-monospace, monospace; }
+  .recovery-actions { display: flex; gap: .7rem; }
+  .recovery-shell > small { color: #657068; font-size: .58rem; }
   .welcome-shell { width: 100vw; min-height: 100vh; overflow-y: auto; background: radial-gradient(circle at 70% -10%, #29372f, transparent 42%), #0b0e0d; }
   .welcome-brand { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .8rem; border-bottom: 1px solid #2c332e; padding: 1rem 1.5rem; background: #101412dd; }
   .welcome-brand h1 { margin: .1rem 0 0; color: #ece8dc; font-family: Georgia, serif; font-size: 1.35rem; font-weight: 500; }
@@ -1411,6 +1694,8 @@
   .open-workspace-card input:focus { border-color: #8f7945; }
   .open-workspace-card small { color: #626d66; font-size: .58rem; }
   .welcome-actions { display: flex; gap: .65rem; margin-top: .8rem; }
+  .add-message-button { width: calc(100% - 2rem); margin: 0 1rem .55rem; border: 1px dashed #4d513d; border-radius: .4rem; padding: .55rem; color: #b9a564; background: #171914; font-size: .63rem; cursor: pointer; }
+  .add-message-button:hover { border-color: #8d7c49; color: #e0cb89; }
   .repair-list { margin-top: 1.5rem; border: 1px solid #553b36; border-radius: .65rem; background: #17110f; overflow: hidden; }
   .repair-list > header { padding: .8rem 1rem; background: #251815; }
   .repair-list > header > div { display: flex; justify-content: space-between; }
@@ -1442,6 +1727,27 @@
   .recent-projects code { overflow: hidden; color: #68736b; font: .57rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
   .recent-projects small { color: #69746c; font-size: .55rem; }
   .external-compare-dialog { width: min(70rem, calc(100vw - 3rem)); }
+  .mutation-dialog { width: min(760px, calc(100vw - 3rem)); }
+  .mutation-body { display: grid; gap: 1rem; }
+  .mutation-body > label { display: grid; gap: .4rem; color: #b8c0ba; font-size: .66rem; font-weight: 650; }
+  .mutation-body select, .form-grid select { width: 100%; border: 1px solid #3a433d; border-radius: .45rem; outline: 0; padding: .68rem .75rem; color: #edf0ed; background: #0c100e; font-size: .75rem; }
+  .mutation-body .form-grid textarea { min-height: 7rem; padding: .75rem; font-size: .78rem; line-height: 1.5; }
+  .mutation-guidance, .mutation-warning { margin: 0; border-radius: .45rem; padding: .75rem .85rem; color: #849087; background: #171c19; font-size: .65rem; line-height: 1.55; }
+  .mutation-warning { border: 1px solid #603b35; color: #d99a90; background: #281b18; }
+  .fallback-graph { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .fallback-graph span { border: 1px solid #37413a; border-radius: 1rem; padding: .3rem .55rem; color: #879289; background: #101512; font: .58rem ui-monospace, monospace; }
+  .fallback-graph strong { color: #d3c283; }
+  .mutation-preview { border: 1px solid #3a433d; border-radius: .55rem; overflow: hidden; }
+  .mutation-preview > header { display: flex; justify-content: space-between; padding: .7rem .8rem; background: #181e1a; }
+  .mutation-preview header strong { color: #cad2cc; font-size: .67rem; }
+  .mutation-preview header span { color: #6d786f; font-size: .58rem; }
+  .mutation-preview > div { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; border-top: 1px solid #2c332e; padding: .6rem .8rem; background: #0e1210; }
+  .mutation-preview code { overflow: hidden; color: #aeb8b1; font: .61rem ui-monospace, monospace; text-overflow: ellipsis; }
+  .mutation-preview small { color: #626d65; font-size: .55rem; }
+  .change-kind { min-width: 3.7rem; border-radius: .25rem; padding: .2rem .35rem; color: #c4a963; background: #302919; font: .52rem ui-monospace, monospace; text-align: center; text-transform: uppercase; }
+  .change-kind.create { color: #85bf94; background: #1d3424; }
+  .change-kind.delete { color: #df9388; background: #39221f; }
+  .danger-button { border: 1px solid #7b463e; border-radius: .45rem; padding: .58rem .85rem; color: #f0a297; background: #3a211d; cursor: pointer; }
   .open-dialog { width: min(42rem, calc(100vw - 3rem)); }
   .dialog-card { margin-top: 0; }
   .dialog-card > div { grid-template-columns: 1fr auto; }

@@ -40,6 +40,7 @@ internal sealed class EditorWorkspace : IDisposable
     }
 
     public string Root => _root;
+    public string? CatalogId => _catalogId;
 
     public async Task<EditorExternalChanges> CheckExternalChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -94,6 +95,18 @@ internal sealed class EditorWorkspace : IDisposable
         try
         {
             ThrowIfDisposed();
+            TextResourcePendingTransaction? pending = TextResourceWorkspaceTransaction.GetPending(_root);
+            if (pending is not null)
+            {
+                return new WorkspaceSnapshot(
+                    _root,
+                    null,
+                    [],
+                    [],
+                    [new EditorDiagnostic("RECOVERY", "error", "An interrupted workspace transaction requires recovery.", string.Empty, 1, 1, 1, 1)],
+                    false,
+                    new EditorPendingTransaction(pending.CatalogId, pending.Paths));
+            }
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
             return CreateSnapshot(state);
         }
@@ -290,7 +303,7 @@ internal sealed class EditorWorkspace : IDisposable
                 file.Locale,
                 file.Layer));
         }
-        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state.Compilation), state.Compilation.Success);
+        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state.Compilation), state.Compilation.Success, null);
     }
 
     private static EditorDiagnostic[] Diagnostics(TextResourceCompilation compilation)

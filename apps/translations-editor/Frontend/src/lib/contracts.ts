@@ -55,6 +55,12 @@ export interface WorkspaceSnapshot {
   documents: EditorDocument[];
   diagnostics: EditorDiagnostic[];
   success: boolean;
+  pendingTransaction?: EditorPendingTransaction;
+}
+
+export interface EditorPendingTransaction {
+  catalogId: string;
+  paths: string[];
 }
 
 export interface ValidationResult {
@@ -119,4 +125,29 @@ export interface EditorWorkspacePickerResult {
   cancelled: boolean;
   directory?: string;
   message?: string;
+}
+
+export interface EditorMutationRequest {
+  kind: "add-locale" | "remove-locale" | "set-fallback" | "create-key" | "rename-key" | "duplicate-key" | "delete-key";
+  locale?: string;
+  fallback?: string;
+  replacementFallback?: string;
+  layer?: string;
+  copyFromLocale?: string;
+  sourceKey?: string;
+  targetKey?: string;
+  initialValue?: string;
+}
+
+export interface EditorMutationFile {
+  path: string;
+  kind: string;
+  beforeBytes: number;
+  afterBytes: number;
+}
+
+export interface EditorMutationPreview {
+  ok: boolean;
+  message?: string;
+  files: EditorMutationFile[];
 }
