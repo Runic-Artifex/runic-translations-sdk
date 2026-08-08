@@ -68,6 +68,13 @@ export interface ValidationResult {
   diagnostics: EditorDiagnostic[];
 }
 
+export interface EditorMessagePreview {
+  success: boolean;
+  locale?: string;
+  astJson?: string;
+  diagnostics: EditorDiagnostic[];
+}
+
 export interface EditorOperationResult {
   ok: boolean;
   kind: string;

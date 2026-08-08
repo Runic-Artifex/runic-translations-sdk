@@ -3,8 +3,8 @@
 Status: active
 Last updated: 8 August 2026
 
-Implementation progress: E0 through E3 are complete on the editor/tooling branch.
-The next implementation milestone is E4 (schema-v2 composer and preview).
+Implementation progress: E0 through E4 are complete on the editor/tooling branch.
+The next implementation milestone is E5 (review, quality, and scale).
 
 ## Outcome
 
@@ -63,9 +63,13 @@ The first vertical already provides:
 The current vertical now opens bounded one- and multi-catalog workspaces,
 preserves malformed JSON for repair, watches external changes, and restores
 local drafts explicitly. Locale/key lifecycle operations use compiler-validated,
-previewable, journaled transactions with complete-or-rollback recovery. The full
-visual schema-v2 composer and later review/distribution milestones remain before
-it is a complete customer product.
+previewable, journaled transactions with complete-or-rollback recovery. Its
+visual schema-v2 composer covers typed inputs, declarations, selectors,
+multi-selector variants, nested semantic markup, and raw source escape hatches.
+Preview is compiled to the normalized locale AST before the browser executes the
+same portable formatting semantics, and semantic markup remains inert data. The
+review/scale and distribution milestones remain before it is a complete customer
+product.
 
 ## Architecture decision
 
@@ -461,6 +465,8 @@ Acceptance:
 - multi-layer precedence and fallback remain visible and correct.
 
 ### E4 — Schema-v2 composer and preview
+
+Status: complete.
 
 Deliverables:
 

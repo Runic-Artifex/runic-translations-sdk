@@ -100,6 +100,16 @@ internal sealed class EditorSession : IDisposable
             (workspace, token) => workspace.ValidateAsync(relativePath, content, token),
             cancellationToken);
 
+    public Task<EditorMessagePreview> PreviewMessageAsync(
+        string relativePath,
+        string content,
+        string locale,
+        string key,
+        CancellationToken cancellationToken = default) =>
+        WithWorkspaceAsync(
+            (workspace, token) => workspace.PreviewMessageAsync(relativePath, content, locale, key, token),
+            cancellationToken);
+
     public Task<EditorOperationResult> SaveAsync(
         string relativePath,
         string content,

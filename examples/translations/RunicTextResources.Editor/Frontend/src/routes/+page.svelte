@@ -35,6 +35,9 @@
     WorkspaceSnapshot,
   } from "$lib/contracts";
   import { createEditorBridge } from "$lib/editor-bridge";
+  import MessageComposer from "$lib/MessageComposer.svelte";
+  import type { MessageArtifact, StructuredMessage } from "$lib/message-composer";
+  import { executeMessagePreview } from "$lib/message-preview.js";
   import {
     buildRows,
     coverage,
@@ -51,6 +54,8 @@
   type StoredDraft = { content: string; baseRevision: string };
   type RecentProject = { root: string; catalogId: string; openedAt: string };
   type MutationKind = EditorMutationRequest["kind"];
+  type MessagePreviewResult = ReturnType<typeof executeMessagePreview>;
+  type PreviewNode = Extract<MessagePreviewResult, { kind: "content" }>["nodes"][number];
 
   const bridge = createEditorBridge();
   let snapshot = $state.raw<WorkspaceSnapshot>();
@@ -115,6 +120,13 @@
   let mutationError = $state<string>();
   let mutationBusy = $state(false);
   let recoveryBusy = $state(false);
+  let previewBusy = $state(false);
+  let previewError = $state<string>();
+  let previewAst = $state.raw<MessageArtifact>();
+  let previewSamples = $state<Record<string, string>>({});
+  let previewResult = $state.raw<MessagePreviewResult>();
+  let previewTimer: number | undefined;
+  let previewEpoch = 0;
 
   let labels = $derived(labelsFor(uiLocale));
   let rows = $derived(buildRows(snapshot, drafts));
@@ -250,6 +262,12 @@
     } else {
       editorText = typeof cell?.entry?.value === "string" ? cell.entry.value : "";
     }
+    previewAst = undefined;
+    previewResult = undefined;
+    previewError = undefined;
+    if (nextMode === "advanced" && document !== undefined) {
+      schedulePreview(document.path, drafts[document.path] ?? document.content);
+    }
   }
 
   function edit(value: string): void {
@@ -280,10 +298,71 @@
       drafts[document.path] = content;
       persistDrafts();
       scheduleValidation(document.path, content);
+      if (mode === "advanced") schedulePreview(document.path, content);
     } catch (error) {
       clientError = errorMessage(error);
       validation = { success: false, diagnostics: [] };
     }
+  }
+
+  function editStructured(value: StructuredMessage): void {
+    edit(JSON.stringify(value, null, 2));
+  }
+
+  function schedulePreview(path: string, content: string): void {
+    if (previewTimer !== undefined) window.clearTimeout(previewTimer);
+    const epoch = ++previewEpoch;
+    previewBusy = true;
+    previewTimer = window.setTimeout(() => {
+      void bridge.previewMessage(path, content, selectedLocale, selectedKey).then((result) => {
+        if (epoch !== previewEpoch) return;
+        if (!result.success || result.astJson === undefined || result.locale === undefined) {
+          previewAst = undefined;
+          previewResult = undefined;
+          previewError = result.diagnostics[0]?.message ?? "The compiler could not build a preview.";
+          return;
+        }
+        const ast = JSON.parse(result.astJson) as MessageArtifact;
+        previewAst = ast;
+        const samples: Record<string, string> = {};
+        for (const [name, descriptor] of Object.entries(ast.inputs)) {
+          samples[name] = previewSamples[name] ?? defaultSample(descriptor.type);
+        }
+        previewSamples = samples;
+        previewError = undefined;
+        renderPreview(result.locale);
+      }).catch((error) => {
+        if (epoch === previewEpoch) previewError = errorMessage(error);
+      }).finally(() => {
+        if (epoch === previewEpoch) previewBusy = false;
+      });
+    }, 450);
+  }
+
+  function updatePreviewSample(name: string, value: string): void {
+    previewSamples = { ...previewSamples, [name]: value };
+    renderPreview(selectedLocale);
+  }
+
+  function renderPreview(locale: string): void {
+    if (previewAst === undefined) return;
+    try {
+      previewResult = executeMessagePreview(previewAst, locale, previewSamples);
+      previewError = undefined;
+    } catch (error) {
+      previewResult = undefined;
+      previewError = errorMessage(error);
+    }
+  }
+
+  function defaultSample(type: string): string {
+    if (type === "int" || type === "number") return "1";
+    if (type === "bool") return "true";
+    if (type === "date") return "2026-08-08";
+    if (type === "time") return "12:30:00";
+    if (type === "datetime") return "2026-08-08T12:30:00Z";
+    if (type === "guid") return "12345678-1234-1234-1234-123456789abc";
+    return "Sample";
   }
 
   function formatRaw(): void {
@@ -862,6 +941,22 @@
 </svelte:head>
 <svelte:window onkeydown={handleKeyboard} onbeforeunload={protectDraft} />
 
+{#snippet previewNodes(nodes: PreviewNode[])}
+  {#each nodes as node, index (index)}
+    {#if node.kind === "text"}
+      <span class="preview-text">{node.value}</span>
+    {:else}
+      <span class="preview-element">
+        <span class="preview-element-label">{node.name}</span>
+        {#if Object.keys(node.attributes).length > 0}
+          <span class="preview-attributes">{Object.entries(node.attributes).map(([name, value]) => name + "=" + value).join(" · ")}</span>
+        {/if}
+        <span class="preview-children">{@render previewNodes(node.children)}</span>
+      </span>
+    {/if}
+  {/each}
+{/snippet}
+
 {#if externalChanges.length > 0}
   <aside class="external-change-banner" aria-live="polite">
     <div><strong>Files changed outside the editor</strong><span>{externalChanges.join(", ")}</span></div>
@@ -1174,14 +1269,21 @@
               <label for="translation-value">{mode === "simple" ? localeName(selectedLocale) : mode === "advanced" ? labels.advanced : currentDocument?.path}</label>
               <span>{editorText.length.toLocaleString()} characters</span>
             </div>
-            <textarea
-              id="translation-value"
-              class={{ code: mode !== "simple", invalid: clientError !== undefined || validation?.success === false }}
-              value={editorText}
-              placeholder={currentCell?.entry === undefined ? "Add this translation…" : undefined}
-              spellcheck={mode === "simple"}
-              oninput={(event) => edit(event.currentTarget.value)}
-            ></textarea>
+            {#if mode === "advanced"}
+              <MessageComposer
+                value={currentCell?.entry?.value ?? selectedRow.cells[snapshot.catalog.defaultLocale]?.entry?.value}
+                onchange={editStructured}
+              />
+            {:else}
+              <textarea
+                id="translation-value"
+                class={{ code: mode !== "simple", invalid: clientError !== undefined || validation?.success === false }}
+                value={editorText}
+                placeholder={currentCell?.entry === undefined ? "Add this translation…" : undefined}
+                spellcheck={mode === "simple"}
+                oninput={(event) => edit(event.currentTarget.value)}
+              ></textarea>
+            {/if}
             <div class="editor-hints">
               <div>
                 {#if mode === "simple"}
@@ -1195,6 +1297,36 @@
               {#if mode === "raw"}<button onclick={formatRaw}>Format JSON</button>{/if}
             </div>
           </section>
+
+          {#if mode === "advanced"}
+            <section class="message-preview" aria-live="polite">
+              <header>
+                <div><strong>Compiler-backed preview</strong><span>Normalized locale AST · generated ESM semantics</span></div>
+                <span class="preview-state">{previewBusy ? "Compiling…" : previewAst === undefined ? "Unavailable" : selectedLocale}</span>
+              </header>
+              {#if previewAst !== undefined && Object.keys(previewAst.inputs).length > 0}
+                <div class="sample-inputs">
+                  {#each Object.entries(previewAst.inputs) as [name, descriptor] (name)}
+                    <label><span>{name}<small>{descriptor.type}</small></span><input value={previewSamples[name] ?? ""} oninput={(event) => updatePreviewSample(name, event.currentTarget.value)} /></label>
+                  {/each}
+                </div>
+              {/if}
+              <div class="preview-canvas">
+                {#if previewBusy}
+                  <span class="preview-placeholder">Compiling the current draft…</span>
+                {:else if previewError}
+                  <span class="preview-error">{previewError}</span>
+                {:else if previewResult?.kind === "text"}
+                  <p>{previewResult.value}</p>
+                {:else if previewResult?.kind === "content"}
+                  <div class="safe-content">{@render previewNodes(previewResult.nodes)}</div>
+                {:else}
+                  <span class="preview-placeholder">Edit the message to build a preview.</span>
+                {/if}
+              </div>
+              <p class="safe-note">Semantic markup is displayed as a data tree. Names and attributes are never interpreted as trusted HTML.</p>
+            </section>
+          {/if}
 
           <section class="validation-panel" aria-live="polite">
             <header>
@@ -1630,6 +1762,26 @@
   .editor-hints { display: flex; justify-content: space-between; gap: 1rem; padding: .65rem .2rem; color: #66716a; font-size: .62rem; }
   .editor-hints code { border-radius: .2rem; padding: .08rem .25rem; color: #a99d7a; background: #1b211d; font: .58rem ui-monospace, monospace; }
   .editor-hints button { border: 0; padding: 0; color: #b69d61; background: transparent; font-size: .62rem; cursor: pointer; }
+  .message-preview { max-width: 1000px; margin: 1.2rem auto 0; border: 1px solid #3b443e; border-radius: .65rem; background: #0e1310; overflow: hidden; }
+  .message-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; background: #171d19; }
+  .message-preview > header > div { display: grid; gap: .15rem; }
+  .message-preview header strong { color: #d9dfda; font-size: .68rem; }
+  .message-preview header span { color: #6f7a72; font-size: .56rem; }
+  .preview-state { border: 1px solid #4b543e; border-radius: 1rem; padding: .23rem .5rem; color: #c1ab6b !important; background: #26251b; font: .53rem ui-monospace, monospace !important; }
+  .sample-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .55rem; border-top: 1px solid #2c332e; padding: .7rem .9rem; }
+  .sample-inputs label { display: grid; gap: .3rem; color: #929d95; font-size: .58rem; }
+  .sample-inputs label > span { display: flex; justify-content: space-between; }
+  .sample-inputs small { color: #647068; font: .52rem ui-monospace, monospace; }
+  .sample-inputs input { min-width: 0; border: 1px solid #39423c; border-radius: .35rem; padding: .46rem .5rem; color: #e5e9e6; background: #090d0b; font: .62rem ui-monospace, monospace; }
+  .preview-canvas { min-height: 5rem; border-top: 1px solid #2c332e; padding: 1rem; color: #e7ebe8; background: radial-gradient(circle at 90% 0, #26302866, transparent 45%), #101512; font-size: .9rem; line-height: 1.7; }
+  .preview-canvas p { margin: 0; white-space: pre-wrap; }
+  .preview-placeholder { color: #67726a; font-size: .65rem; }
+  .preview-error { color: #e29b91; font-size: .65rem; }
+  .safe-content, .preview-children { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .2rem; }
+  .preview-element { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .25rem; border: 1px solid #5b5135; border-radius: .35rem; padding: .24rem .35rem; background: #27251a; }
+  .preview-element-label { color: #d4b968; font: .52rem ui-monospace, monospace; }
+  .preview-attributes { color: #827750; font: .48rem ui-monospace, monospace; }
+  .safe-note { margin: 0; border-top: 1px solid #2c332e; padding: .55rem .9rem; color: #647068; font-size: .55rem; }
   .validation-panel { max-width: 1000px; margin: 1.7rem auto 0; border: 1px solid #303833; border-radius: .65rem; background: #111613; overflow: hidden; }
   .validation-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 1rem; }
   .validation-panel > header > div { display: flex; align-items: center; gap: .7rem; }

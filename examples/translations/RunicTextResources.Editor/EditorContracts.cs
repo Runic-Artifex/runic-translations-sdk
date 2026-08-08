@@ -57,6 +57,12 @@ internal sealed record ValidationResult(
     bool Success,
     IReadOnlyList<EditorDiagnostic> Diagnostics);
 
+internal sealed record EditorMessagePreview(
+    bool Success,
+    string? Locale,
+    string? AstJson,
+    IReadOnlyList<EditorDiagnostic> Diagnostics);
+
 internal sealed record EditorOperationResult(
     bool Ok,
     string Kind,
@@ -125,6 +131,7 @@ internal sealed record EditorRecoveryRequest(string Mode);
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(WorkspaceSnapshot))]
 [JsonSerializable(typeof(ValidationResult))]
+[JsonSerializable(typeof(EditorMessagePreview))]
 [JsonSerializable(typeof(EditorOperationResult))]
 [JsonSerializable(typeof(EditorProjectCreationRequest))]
 [JsonSerializable(typeof(EditorProjectPlan))]
