@@ -10,7 +10,7 @@
     <TextResourcesEmitEsm>true</TextResourcesEmitEsm>
     <TextResourcesRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TextResourcesRuntimePath>
     <TextResourcesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TextResourcesRuntimePath)text-resources</TextResourcesOutputPath>
-    <TextResourcesToolCommand>dotnet &quot;$(MSBuildProjectDirectory)/../../dotnet/tools/RunicTextResources.Tool/bin/$(Configuration)/net10.0/RunicTextResources.Tool.dll&quot;</TextResourcesToolCommand>
+    <TextResourcesToolCommand>dotnet &quot;$(MSBuildProjectDirectory)/../../dotnet/tools/RunicTextResources.Tool/bin/$(Configuration)/net10.0/$(TextResourcesRuntimePath)RunicTextResources.Tool.dll&quot;</TextResourcesToolCommand>
     <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
   </PropertyGroup>
 
@@ -46,7 +46,7 @@
           Inputs="@(EditorFrontendInput);$(TextResourcesOutputPath)/editor.esm/web-module-manifest-v1.json"
           Outputs="Frontend/build/index.html">
     <Exec WorkingDirectory="Frontend"
-          Command="npm install --ignore-scripts --no-audit --no-fund" />
+          Command="npm ci --ignore-scripts --no-audit --no-fund" />
     <Exec WorkingDirectory="Frontend"
           Command="npm run build"
           EnvironmentVariables="RUNIC_TEXT_MANIFEST=$(MSBuildProjectDirectory)/$(TextResourcesOutputPath)/editor.esm/web-module-manifest-v1.json" />
