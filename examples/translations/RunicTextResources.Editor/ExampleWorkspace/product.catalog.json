@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 2,
+  "catalog": "customer-product",
+  "code": {
+    "namespace": "Customer.Product",
+    "className": "ProductText",
+    "visibility": "public"
+  },
+  "defaultLocale": "de",
+  "locales": [
+    { "tag": "de" },
+    { "tag": "en", "fallback": "de" },
+    { "tag": "fr", "fallback": "de" }
+  ],
+  "layers": [
+    { "name": "base", "priority": 0 }
+  ],
+  "validation": {
+    "translationCompleteness": "warning",
+    "extraLocaleKeys": "error",
+    "emptyValues": "error"
+  },
+  "runtime": {
+    "unsupportedLocale": "parentsThenDefault",
+    "missingKey": "returnMarker"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "catalog": "editor",
+  "locale": "de",
+  "layer": "base",
+  "resources": {
+    "App": {
+      "Title": "Übersetzungen",
+      "Eyebrow": "Runic Text Resources",
+      "Search": "Schlüssel und Übersetzungen suchen",
+      "All": "Alle",
+      "Missing": "Fehlend",
+      "Structured": "Strukturiert",
+      "Save": "Dokument speichern",
+      "Saving": "Speichern…",
+      "Reload": "Neu laden",
+      "Simple": "Übersetzung",
+      "Advanced": "Strukturierter Wert",
+      "Raw": "JSON-Quelldatei",
+      "NoSelection": "Wähle eine Nachricht aus, um sie zu übersetzen",
+      "NoResults": "Keine Nachrichten passen zu dieser Ansicht",
+      "Valid": "Bereit zum Speichern",
+      "Invalid": "Behebe die Validierungsfehler vor dem Speichern",
+      "Unsaved": "Ungespeicherte Änderungen",
+      "Saved": "Gespeichert",
+      "DefaultLocale": "Ausgangssprache",
+      "Workspace": "Arbeitsbereich",
+      "Diagnostics": "Diagnosen"
+    }
+  }
+}

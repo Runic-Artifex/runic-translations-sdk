@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>RunicTextResources.Editor</AssemblyName>
+    <RootNamespace>RunicTextResources.Editor</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TextResourcesEmitEsm>true</TextResourcesEmitEsm>
+    <TextResourcesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/text-resources</TextResourcesOutputPath>
+    <TextResourcesToolCommand>dotnet &quot;$(MSBuildProjectDirectory)/../../dotnet/tools/RunicTextResources.Tool/bin/$(Configuration)/net10.0/RunicTextResources.Tool.dll&quot;</TextResourcesToolCommand>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CsWebUi" />
+    <ProjectReference Include="../../dotnet/src/RunicTextResources.Compiler/RunicTextResources.Compiler.csproj" />
+    <ProjectReference Include="../../dotnet/tools/RunicTextResources.Tool/RunicTextResources.Tool.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TextResourceCatalog Include="EditorResources/editor.catalog.json" />
+    <TextResourceDocument Include="EditorResources/editor.en.json" />
+    <TextResourceDocument Include="EditorResources/editor.de.json" />
+    <EditorFrontendInput Include="Frontend/package.json;Frontend/package-lock.json;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/*.json" />
+    <None Update="ExampleWorkspace/**/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="BuildTextResourcesEditorFrontend"
+          BeforeTargets="BeforeCompile"
+          DependsOnTargets="RunicTextResourcesGenerateTextResourceArtifacts"
+          Inputs="@(EditorFrontendInput);$(TextResourcesOutputPath)/editor.esm/web-module-manifest-v1.json"
+          Outputs="Frontend/build/index.html">
+    <Exec WorkingDirectory="Frontend"
+          Command="npm install --ignore-scripts --no-audit --no-fund" />
+    <Exec WorkingDirectory="Frontend"
+          Command="npm run build"
+          EnvironmentVariables="RUNIC_TEXT_MANIFEST=$(MSBuildProjectDirectory)/$(TextResourcesOutputPath)/editor.esm/web-module-manifest-v1.json" />
+  </Target>
+
+  <Target Name="CopyTextResourcesEditorFrontend"
+          AfterTargets="Build"
+          DependsOnTargets="BuildTextResourcesEditorFrontend">
+    <ItemGroup>
+      <_EditorFrontendOutput Include="Frontend/build/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_EditorFrontendOutput)"
+          DestinationFiles="@(_EditorFrontendOutput->'$(OutputPath)www/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Import Project="../../dotnet/src/RunicTextResources.Build/build/RunicTextResources.Build.targets" />
+</Project>
