@@ -1,5 +1,7 @@
 using System;
 using System.Text;
+using System.Text.Json;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using RunicTextResources;
@@ -31,6 +33,10 @@ internal static class Program
             var manager = new TextResourceManager(provider, initial);
 
             Require(manager.Current.Format(greeting, [new TextArgument("name", "Ada")]) == "Hello Ada", "format");
+            var reference = new TextResourceReference("app", Fingerprint, "greeting",
+                new Dictionary<string, TextResourceReferenceArgument> { ["name"] = new(TextArgumentType.String, "Ada") });
+            string referenceJson = JsonSerializer.Serialize(reference, TextResourceReferenceJsonContext.Default.TextResourceReference);
+            Require(referenceJson.Contains("\"arguments\":{\"name\":\"Ada\"}", StringComparison.Ordinal), "text-reference JSON");
 
             Task[] swaps = new Task[16];
             for (int index = 0; index < swaps.Length; index++)
@@ -43,7 +49,7 @@ internal static class Program
             Require(manager.Current.Format(greeting, [new TextArgument("name", "Ada")]) == "Extern Ada",
                 "external pack composition");
 
-            Console.WriteLine("PASS: Native-AOT compiled snapshot/format/fallback/swap/external-pack smoke");
+            Console.WriteLine("PASS: Native-AOT compiled snapshot/format/fallback/swap/external-pack/transport smoke");
             return 0;
         }
         catch (Exception exception)

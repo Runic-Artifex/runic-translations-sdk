@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text.Json.Serialization;
 
 namespace RunicTextResources;
 
@@ -27,6 +30,7 @@ public readonly record struct TextResourceReferenceArgument
         ArgumentNullException.ThrowIfNull(value);
         if (value.Length > TextResourceTransport.MaximumArgumentLength)
             throw new ArgumentOutOfRangeException(nameof(value), "The canonical argument value is too long.");
+        ValidateCanonical(type, value);
         Type = type;
         Value = value;
     }
@@ -35,12 +39,34 @@ public readonly record struct TextResourceReferenceArgument
     public TextArgumentType Type { get; }
     /// <summary>The canonical invariant wire value.</summary>
     public string Value { get; }
+
+    private static void ValidateCanonical(TextArgumentType type, string value)
+    {
+        bool valid = type switch
+        {
+            TextArgumentType.String => true,
+            TextArgumentType.Bool => value is "true" or "false",
+            TextArgumentType.Int => long.TryParse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long integer) &&
+                value == integer.ToString(CultureInfo.InvariantCulture),
+            TextArgumentType.Number => decimal.TryParse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
+                CultureInfo.InvariantCulture, out decimal number) && value == number.ToString(CultureInfo.InvariantCulture),
+            TextArgumentType.Date => DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _),
+            TextArgumentType.Time => TimeOnly.TryParseExact(value, ["HH:mm:ss", "HH:mm:ss.FFFFFFF"], CultureInfo.InvariantCulture, DateTimeStyles.None, out _),
+            TextArgumentType.DateTime => DateTimeOffset.TryParseExact(value, ["yyyy-MM-dd'T'HH:mm:ssK", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK"], CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out _),
+            TextArgumentType.Guid => Guid.TryParseExact(value, "D", out Guid guid) && value == guid.ToString("D", CultureInfo.InvariantCulture),
+            _ => false,
+        };
+        if (!valid) throw new ArgumentException("The value is not canonical for the declared portable type.", nameof(value));
+    }
 }
 
 /// <summary>A stable key-and-arguments envelope for localization by another process.</summary>
+[JsonConverter(typeof(TextResourceReferenceJsonConverter))]
 public sealed class TextResourceReference
 {
     private readonly Dictionary<string, TextResourceReferenceArgument> _arguments;
+    private readonly ReadOnlyDictionary<string, TextResourceReferenceArgument> _readOnlyArguments;
 
     /// <summary>Creates an immutable version 1 text reference.</summary>
     public TextResourceReference(
@@ -55,7 +81,7 @@ public sealed class TextResourceReference
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         if (key.Length > TextResourceTransport.MaximumKeyLength) throw new ArgumentOutOfRangeException(nameof(key));
         if (fallbackText?.Length > TextResourceTransport.MaximumFallbackLength) throw new ArgumentOutOfRangeException(nameof(fallbackText));
-        if (!contractFingerprint.StartsWith("sha256:", StringComparison.Ordinal) || contractFingerprint.Length != 71)
+        if (!IsSha256Fingerprint(contractFingerprint))
             throw new ArgumentException("A lowercase sha256: contract fingerprint is required.", nameof(contractFingerprint));
 
         Catalog = catalog;
@@ -64,6 +90,7 @@ public sealed class TextResourceReference
         Key = key;
         FallbackText = fallbackText;
         _arguments = new Dictionary<string, TextResourceReferenceArgument>(StringComparer.Ordinal);
+        _readOnlyArguments = new ReadOnlyDictionary<string, TextResourceReferenceArgument>(_arguments);
         if (arguments is null) return;
         if (arguments.Count > TextResourceTransport.MaximumArguments) throw new ArgumentOutOfRangeException(nameof(arguments));
         foreach (KeyValuePair<string, TextResourceReferenceArgument> pair in arguments)
@@ -82,7 +109,7 @@ public sealed class TextResourceReference
     /// <summary>The stable dotted key, never a process-local integer ID.</summary>
     public string Key { get; }
     /// <summary>The canonical typed arguments.</summary>
-    public IReadOnlyDictionary<string, TextResourceReferenceArgument> Arguments => _arguments;
+    public IReadOnlyDictionary<string, TextResourceReferenceArgument> Arguments => _readOnlyArguments;
     /// <summary>Optional already-resolved plain text for version skew and inaccessible clients.</summary>
     public string? FallbackText { get; }
 
@@ -93,5 +120,16 @@ public sealed class TextResourceReference
             throw new TextResourceContractException($"Text reference catalog '{Catalog}' does not match '{expectedCatalog}'.");
         if (!string.Equals(ContractFingerprint, expectedContractFingerprint, StringComparison.Ordinal))
             throw new TextResourceContractException("Text reference contract fingerprint does not match the receiver.");
+    }
+
+    private static bool IsSha256Fingerprint(string value)
+    {
+        if (!value.StartsWith("sha256:", StringComparison.Ordinal) || value.Length != 71) return false;
+        for (int index = 7; index < value.Length; index++)
+        {
+            char character = value[index];
+            if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f'))) return false;
+        }
+        return true;
     }
 }

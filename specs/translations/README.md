@@ -14,15 +14,16 @@ diagnostic identities.
 | Resource document schema | 1 and 2 |
 | Message grammar | 1 and 2 |
 | Normalized message AST | 2 |
+| Resolved locale artifact | 1 (grammar 1) and 2 (grammar 2) |
 | Runtime/generated-code ABI | 1 |
 | ESM ABI | 1 |
 | Transport contract | 1 |
 
-Package versions are independent from these integers. The schemas deliberately
-have no custom `$id`: the contract registry requires an owned and deployed
-schema domain before a canonical URI can be reserved. An instance `$schema`
-member is therefore a semantic compiler concern and is not a behavior selector;
-`schemaVersion` selects behavior.
+Package versions are independent from these integers. New cross-runtime schemas
+use canonical `https://runic-artifex.dev/schemas/text-resources/` identifiers;
+legacy wave schemas retain their frozen identity behavior. An instance `$schema`
+member is a semantic compiler concern and is not a behavior selector;
+`schemaVersion` selects compiler behavior.
 
 ## Canonical compiler IR
 

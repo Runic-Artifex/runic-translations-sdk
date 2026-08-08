@@ -26,9 +26,11 @@ The implemented .NET and TypeScript/ESM architecture and delivery record are in
 [`docs/cross-runtime-plan.md`](docs/cross-runtime-plan.md).
 
 The compiler accepts the frozen version 1 source model and schema version 2.
-Version 2 adds portable inputs, literal/cardinal/ordinal selectors, ordered
-variants, and mandatory catch-all coverage. It emits typed, independently
-tree-shakable ESM message modules with no runtime pattern parser. Use
+Version 2 adds portable inputs, local format declarations,
+literal/cardinal/ordinal selectors, ordered multi-selector variants, relative
+time, structured scalar formats, safe semantic markup, and mandatory catch-all
+coverage. It emits typed, independently tree-shakable ESM message modules with no
+runtime pattern parser, plus explicit validated dynamic locale artifacts. Use
 `--emit-esm`, or `<TextResourcesEmitEsm>true</TextResourcesEmitEsm>` from MSBuild.
 An opt-in `--emit-cpp` / `TextResourcesEmitCpp` C++20 backend is available as a
 feasibility surface and is intentionally excluded from default output selection.
@@ -45,7 +47,9 @@ nix develop
 The pipeline restores and builds the standalone solution, runs every project-level
 test executable, packs all five packages into an isolated local feed, installs and
 executes the packed tool, consumes only those packages from a fixture project, and
-publishes the runtime consumer with NativeAOT.
+publishes the runtime consumer with NativeAOT. It also installs and tests the Vite
+package, type-checks generated declarations, and performs a real production
+tree-shaking build.
 
 Pull requests and changes to `main` run the same pipeline in GitHub Actions. A
 manual prerelease workflow can also produce a uniquely versioned package artifact.

@@ -17,6 +17,9 @@ public interface ITextResourceSnapshot
     string Get(TextResourceKey key);
     /// <summary>Formats a resolved resource using closed typed arguments.</summary>
     string Format(TextResourceKey key, ReadOnlySpan<TextArgument> arguments);
+    /// <summary>Formats safe structured localized content without interpreting it as HTML.</summary>
+    LocalizedTextContent FormatContent(TextResourceKey key, ReadOnlySpan<TextArgument> arguments) =>
+        throw new NotSupportedException("This snapshot does not support structured localized content.");
 }
 
 /// <summary>Creates immutable snapshots for requested locales.</summary>

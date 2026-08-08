@@ -89,7 +89,9 @@ public static class TextResourcePackLoader
             if (!accepted) throw PackError("The external pack was rejected by the integrity policy.", TextResourcePackFailureReason.IntegrityRejected);
         }
 
-        return Parse(ownedContent, contract, limits, cancellationToken);
+        return contract.MessageGrammarVersion == 2 && IsVersion2(ownedContent, cancellationToken)
+            ? TextResourcePackV2Loader.Parse(ownedContent, contract, limits, cancellationToken)
+            : Parse(ownedContent, contract, limits, cancellationToken);
     }
 
     private static VerifiedExternalTextResourcePack Parse(
@@ -170,7 +172,7 @@ public static class TextResourcePackLoader
             if (artifactVersion is null || grammarVersion is null || catalog is null || locale is null || fingerprint is null || messages is null)
                 throw PackError("The external pack is missing one or more required properties.");
             if (artifactVersion.Value != 1) throw PackError("The external pack artifact version is unsupported.", TextResourcePackFailureReason.ArtifactVersionMismatch);
-            if (grammarVersion.Value != TextResourcesCompatibility.MessageGrammarVersion)
+            if (grammarVersion.Value != contract.MessageGrammarVersion || grammarVersion.Value != 1)
                 throw PackError("The external pack message grammar version is unsupported.", TextResourcePackFailureReason.MessageGrammarVersionMismatch);
             if (!string.Equals(catalog, contract.Catalog, StringComparison.Ordinal))
                 throw PackError("The external pack catalog does not match the generated contract.", TextResourcePackFailureReason.CatalogMismatch);
@@ -195,6 +197,23 @@ public static class TextResourcePackLoader
         {
             throw PackError("The external pack contains invalid UTF-8 text.");
         }
+    }
+
+    private static bool IsVersion2(ReadOnlySpan<byte> content, CancellationToken cancellationToken)
+    {
+        var reader = new Utf8JsonReader(content, new JsonReaderOptions { AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow });
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return false;
+        while (reader.Read())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (reader.TokenType == JsonTokenType.EndObject) return false;
+            if (reader.TokenType != JsonTokenType.PropertyName) return false;
+            bool artifact = reader.ValueTextEquals("artifactVersion");
+            if (!reader.Read()) return false;
+            if (artifact) return reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out int version) && version == 2;
+            reader.Skip();
+        }
+        return false;
     }
 
     private static List<VerifiedTextResourcePackMessage> ReadMessages(

@@ -16,9 +16,9 @@ internal static class RuntimeContractTests
 
     private static void CompatibilityAndValueCarriers()
     {
-        Assert.Equal(1, TextResourcesCompatibility.CatalogSchemaVersion);
-        Assert.Equal(1, TextResourcesCompatibility.ResourceSchemaVersion);
-        Assert.Equal(1, TextResourcesCompatibility.MessageGrammarVersion);
+        Assert.Equal(2, TextResourcesCompatibility.CatalogSchemaVersion);
+        Assert.Equal(2, TextResourcesCompatibility.ResourceSchemaVersion);
+        Assert.Equal(2, TextResourcesCompatibility.MessageGrammarVersion);
         Assert.Equal(1, TextResourcesCompatibility.RuntimeAbiVersion);
 
         TextResourceKey key = new("app", 7, "Files.Deleted");
@@ -50,7 +50,7 @@ internal static class RuntimeContractTests
             invalidFormatRejected = true;
         }
 
-        Assert.True(invalidFormatRejected, "Argument carriers must reject type/format combinations outside grammar v1.");
+        Assert.True(invalidFormatRejected, "Argument carriers must reject type/format combinations outside the portable registry.");
 
         TextResourceOptions options = new();
         Assert.Equal(UnsupportedLocalePolicy.ParentsThenDefault, options.UnsupportedLocale);

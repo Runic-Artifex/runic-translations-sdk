@@ -10,6 +10,8 @@ configuration="Release"
 rm -rf "$artifacts_root"
 mkdir -p "$package_feed"
 
+npm --prefix "$repository_root/web" ci
+
 dotnet restore "$repository_root/RunicTextResources.slnx"
 dotnet build "$repository_root/RunicTextResources.slnx" -c "$configuration" --no-restore \
   -p:RunicTextResourcesBuildMode=Verification
@@ -28,6 +30,11 @@ for project in "${test_projects[@]}"; do
 done
 
 "$repository_root/eng/pack.sh" "$package_version" "$package_feed"
+
+# The fixed verification version is intentionally reused. Isolate package
+# consumption from developer/global caches so it always exercises this run's
+# freshly packed binaries rather than a stale package with the same version.
+export NUGET_PACKAGES="$artifacts_root/nuget"
 
 package_consumer="$repository_root/dotnet/tests/RunicTextResources.PackageTests/RunicTextResources.PackageTests.csproj"
 dotnet restore "$package_consumer" \
@@ -56,5 +63,7 @@ dotnet publish "$aot_consumer" -c "$configuration" -r "$runtime_identifier" --se
   -p:IlcTreatWarningsAsErrors=true \
   -p:PublishDir="$artifacts_root/aot/"
 "$artifacts_root/aot/RunicTextResources.AotTests"
+
+npm --prefix "$repository_root/web" test
 
 echo "Runic Text Resources verification passed."

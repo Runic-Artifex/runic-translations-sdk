@@ -13,6 +13,7 @@ internal static class ExternalPackTests
     public static void Register(TestRunner runner)
     {
         runner.Add("external pack verifies valid contract", VerifiesValid);
+        runner.Add("external pack verifies and executes normalized grammar v2 AST", VerifiesVersion2);
         runner.Add("external pack accepts subset and sorts messages", AcceptsSubsetAndSorts);
         runner.Add("external pack accepts arbitrary member order", AcceptsMemberOrder);
         runner.Add("external pack rejects fingerprint tamper", () => RejectMutation(Fingerprint, "sha256:1111111111111111111111111111111111111111111111111111111111111111", "fingerprint"));
@@ -48,6 +49,41 @@ internal static class ExternalPackTests
         runner.Add("external source honors cancellation", SourceCancellation);
         runner.Add("external pack owns one immutable verification image", IntegrityToctouIsolation);
         runner.Add("external pack exposes stable failure reasons", FailureReasons);
+    }
+
+    private static async Task VerifiesVersion2()
+    {
+        TextResourcePackContract contract = new(
+            "app", "en-US", Fingerprint,
+            [new TextResourcePackMessageContract(new TextResourceKey("app", 0, "Summary"),
+                [
+                    new TextResourcePackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Plain),
+                    new TextResourcePackArgumentContract("owner", TextArgumentType.String, TextArgumentFormat.None),
+                ])],
+            messageGrammarVersion: 2);
+        const string message = """
+            {"astVersion":2,"inputs":{"count":{"type":"int","format":"plain"},"owner":{"type":"string","format":"none"}},
+             "selectors":[{"name":"quantity","input":"count","function":"plural"},{"name":"ownerKind","input":"owner","function":"literal"}],
+             "variants":[
+               {"matches":{"quantity":"one","ownerKind":"admin"},"nodes":[{"kind":"text","value":"one admin"}]},
+               {"matches":{"quantity":"*","ownerKind":"*"},"nodes":[{"kind":"input","input":"count"},{"kind":"text","value":" items for "},{"kind":"input","input":"owner"}]}
+             ]}
+            """;
+        string json = "{\"artifactVersion\":2,\"messageGrammarVersion\":2,\"catalog\":\"app\",\"locale\":\"en-US\",\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"Summary\":" + message + "}}";
+        VerifiedExternalTextResourcePack verified = await Verify(json, contract);
+        Assert.True(verified.Messages[0].Message is not null, "The v2 AST was not retained after verification.");
+        var catalog = new CompiledTextResourceCatalog("app", "en-US",
+            [new CompiledTextResourceDefinition("Summary", [
+                new TextResourcePlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain),
+                new TextResourcePlaceholderDescriptor("owner", TextArgumentType.String, TextArgumentFormat.None),
+            ])], [new CompiledTextResourceLocale("en-US", null, [new CompiledTextResourceValue(0, "fallback {count} {owner}")])]);
+        var snapshot = new CompiledTextResourceSnapshot(catalog, "en-US",
+            [new CompiledTextResourceValue(0, verified.Messages[0].Pattern, verified.Messages[0].Message!)]);
+        Assert.Equal("one admin", snapshot.Format(new TextResourceKey("app", 0, "Summary"),
+            [new TextArgument("count", 1), new TextArgument("owner", "admin")]));
+        Assert.Equal("2 items for guest", snapshot.Format(new TextResourceKey("app", 0, "Summary"),
+            [new TextArgument("count", 2), new TextArgument("owner", "guest")]));
+        await Assert.ThrowsAsync<TextResourcePackException>(() => Verify(json.Replace("\"kind\":\"input\"", "\"kind\":\"script\"", StringComparison.Ordinal), contract));
     }
 
     private static async Task VerifiesValid()

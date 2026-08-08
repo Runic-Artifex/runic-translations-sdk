@@ -1,25 +1,39 @@
 # Runic Text Resources cross-runtime plan
 
-Status: implemented core; production hardening and expanded formatter/markup registries remain  
-Last updated: 7 August 2026
+Status: implemented
+Last updated: 8 August 2026
 
 ## Implementation record
 
-The repository now contains the shared compiler/AST boundary, deterministic v1
-lowering, typed per-message ESM generation, a strict hashed web-module manifest,
-CLI/MSBuild selection, an optional Vite adapter, schema v2 structured selectors
-and variants, .NET/ESM v2 emission, a bounded transport contract and generated
-decoder, and an opt-in C++20 feasibility backend. Cross-runtime execution tests run
-generated ESM under Node and generated C++ under Clang; the original .NET, package,
-and Native AOT verification remains in place.
+The repository contains the shared compiler/AST boundary, deterministic v1
+lowering, direct .NET AST execution, typed per-message ESM generation, hashed web
+module manifests, CLI/MSBuild selection, a packaged Vite adapter, and source/AST
+schema v2. Version 2 implements typed inputs, local format declarations, literal
+and plural selectors, ordered multi-selector variants, relative time, scalar
+formats, and semantic markup with distinct structured result types in .NET and
+ESM. Compiled and runtime-loaded ESM modes consume the same lowered AST.
 
-The normalized AST v2 schema already reserves formatter-expression, local,
-source-metadata, directionality, and structured-markup nodes. Authoring and runtime
-execution currently cover strings, typed inputs, literal/cardinal/ordinal
-selectors, ordered variants, and existing structured scalar formats. Relative-time
-execution and structured markup results stay deliberately unimplemented until
-their exact cross-runtime semantics and safe host rendering API are frozen; they
-must not silently degrade to strings or trusted HTML.
+The transport contract has a Native-AOT-safe .NET JSON writer plus generated ESM
+validation. Shared plural fixtures run through .NET and generated ESM. Tests also
+cover generated C# compilation, TypeScript checking, explicit-locale SSR
+isolation, a real Vite production tree-shaking build, HMR invalidation, package
+inventory, hostile dynamic artifacts, and Native AOT. The C++20 feasibility
+backend consumes v2 selectors and rejects formatter/markup capabilities requiring
+the ICU4C provider selected by ADR 0002. Representative scale measurements are
+recorded in `cross-runtime-measurements.md`.
+
+## Completion record
+
+| Phase | Result |
+|---|---|
+| X0 | ADR, ESM spike, production bundle fixture, SSR fixture, and measurements complete |
+| X1 | v1 lowering and direct AST execution complete; pattern parsing remains only at explicit v1 compatibility boundaries |
+| X2 | per-message ESM, declarations, manifests, CLI/MSBuild emission, and package type checks complete |
+| X3 | Vite virtual modules, watch/HMR, production tree-shaking, clean/package fixtures complete |
+| X4 | source and normalized message AST v2, closed registries, declarations, selectors, variants, formats, and markup complete |
+| X5 | .NET/ESM execution, shared plural corpus, multi-selector and safe-markup fixtures complete |
+| X6 | bounded transport, source-generated .NET JSON metadata, ESM decoder, skew/hostile/AOT tests complete |
+| X7 | C++20 feasibility, native fixture, measurements, and ICU4C provider ADR complete |
 
 ## Decision
 
@@ -309,7 +323,7 @@ Each generated message function:
 - contains or imports only that message's bundled locale implementations;
 - consumes compiler-resolved fallback values;
 - calls small generated/shared formatting helpers;
-- returns plain text or, for future structured markup, a distinct structured
+- returns plain text or, for structured markup, a distinct structured
   result type;
 - performs no authoring-pattern parsing.
 
@@ -652,7 +666,7 @@ Every release containing cross-runtime work must cover:
 
 ## Definition of done for the cross-runtime milestone
 
-The first cross-runtime milestone is complete when:
+The cross-runtime milestone is complete because:
 
 - existing schema/message grammar version 1 catalogs generate both C# and ESM;
 - the two backends pass the shared version 1 corpus;
@@ -663,8 +677,8 @@ The first cross-runtime milestone is complete when:
 - build outputs are deterministic, inventoried, contained, and safely cleaned;
 - SSR locale isolation is demonstrated;
 - no Paraglide or inlang compatibility dependency exists;
-- the version 2 source and AST work can proceed without replacing the ESM backend
-  boundary.
+- version 2 source/AST execution extends the same ESM backend boundary in compiled
+  and explicit dynamic modes.
 
 ## Research influences
 

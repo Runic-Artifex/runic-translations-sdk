@@ -7,12 +7,35 @@ internal static class CppOutputRenderer
 {
     internal static IReadOnlyList<TextResourceGeneratedOutput> Render(CompiledTextCatalog catalog)
     {
+        ValidateExperimentalCapabilities(catalog);
         string stem = catalog.Id + ".text-resources-v1";
         return new[]
         {
             new TextResourceGeneratedOutput(TextResourceGeneratedOutputKind.CppHeader, stem + ".hpp", "text/x-c++hdr", Header(catalog)),
             new TextResourceGeneratedOutput(TextResourceGeneratedOutputKind.CppSource, stem + ".cpp", "text/x-c++src", Source(catalog, stem + ".hpp")),
         };
+    }
+
+    private static void ValidateExperimentalCapabilities(CompiledTextCatalog catalog)
+    {
+        for (int localeIndex = 0; localeIndex < catalog.Locales.Count; localeIndex++)
+            for (int resourceIndex = 0; resourceIndex < catalog.Locales[localeIndex].ResolvedResources.Count; resourceIndex++)
+            {
+                CompiledMessagePattern message = catalog.Locales[localeIndex].ResolvedResources[resourceIndex].Message;
+                if (Unsupported(message.Nodes)) throw UnsupportedFeature();
+                for (int variantIndex = 0; variantIndex < message.Variants.Count; variantIndex++)
+                    if (Unsupported(message.Variants[variantIndex].Pattern.Nodes)) throw UnsupportedFeature();
+            }
+
+        static bool Unsupported(IReadOnlyList<CompiledMessageNode> nodes)
+        {
+            for (int index = 0; index < nodes.Count; index++)
+                if (nodes[index] is CompiledMessageFormat or CompiledMessageMarkup) return true;
+            return false;
+        }
+
+        static NotSupportedException UnsupportedFeature() => new(
+            "The experimental dependency-free C++ backend supports text, inputs, and selectors only; structured formats and markup require the planned ICU4C provider backend.");
     }
 
     private static string Header(CompiledTextCatalog catalog)

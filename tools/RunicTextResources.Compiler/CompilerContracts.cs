@@ -244,6 +244,7 @@ public sealed class CompiledTextResource
         Placeholders = placeholders;
         SourceLocation = sourceLocation;
         Message = message;
+        ProducesStructuredContent = message.HasMarkup;
     }
 
     public int Id { get; }
@@ -255,6 +256,7 @@ public sealed class CompiledTextResource
     public IReadOnlyList<string> Tags { get; }
     public IReadOnlyList<CompiledTextPlaceholder> Placeholders { get; }
     public TextSourceLocation SourceLocation { get; }
+    public bool ProducesStructuredContent { get; }
     internal CompiledMessagePattern Message { get; }
 }
 

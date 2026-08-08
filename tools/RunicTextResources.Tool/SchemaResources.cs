@@ -12,6 +12,7 @@ internal static class SchemaResources
         ("catalog-v1.schema.json", "RunicTextResources.Tool.Schemas.catalog-v1.schema.json"),
         ("resources-v1.schema.json", "RunicTextResources.Tool.Schemas.resources-v1.schema.json"),
         ("locale-artifact-v1.schema.json", "RunicTextResources.Tool.Schemas.locale-artifact-v1.schema.json"),
+        ("locale-artifact-v2.schema.json", "RunicTextResources.Tool.Schemas.locale-artifact-v2.schema.json"),
         ("external-pack-v1.schema.json", "RunicTextResources.Tool.Schemas.external-pack-v1.schema.json"),
         ("template-manifest-v1.schema.json", "RunicTextResources.Tool.Schemas.template-manifest-v1.schema.json"),
         ("asset-manifest-v1.schema.json", "RunicTextResources.Tool.Schemas.asset-manifest-v1.schema.json"),

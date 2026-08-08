@@ -20,8 +20,11 @@ internal static class EdgeOutputRenderer
         if (locale is null)
             throw new ArgumentException("Locale '" + localeTag + "' is not a declared canonical locale of catalog '" + catalog.Id + "'.", nameof(localeTag));
 
+        int artifactVersion = catalog.MessageGrammarVersion == 1
+            ? TextResourceOutputRenderer.LocaleArtifactVersion
+            : TextResourceOutputRenderer.LocaleArtifactV2Version;
         var json = new StringBuilder();
-        json.Append("{\"artifactVersion\":").Append(TextResourceOutputRenderer.LocaleArtifactVersion)
+        json.Append("{\"artifactVersion\":").Append(artifactVersion)
             .Append(",\"messageGrammarVersion\":").Append(catalog.MessageGrammarVersion)
             .Append(",\"catalog\":").Append(GenerationSupport.JsonString(catalog.Id))
             .Append(",\"locale\":").Append(GenerationSupport.JsonString(locale.Tag))
@@ -32,17 +35,109 @@ internal static class EdgeOutputRenderer
         {
             if (i > 0) json.Append(',');
             CompiledTextResource resource = resources[i];
-            json.Append(GenerationSupport.JsonString(resource.Key)).Append(":{\"pattern\":")
-                .Append(GenerationSupport.JsonString(resource.Pattern)).Append(",\"arguments\":");
-            WriteJsonArguments(json, resource.Placeholders);
+            json.Append(GenerationSupport.JsonString(resource.Key)).Append(':');
+            if (artifactVersion == TextResourceOutputRenderer.LocaleArtifactVersion)
+            {
+                json.Append("{\"pattern\":").Append(GenerationSupport.JsonString(resource.Pattern)).Append(",\"arguments\":");
+                WriteJsonArguments(json, resource.Placeholders);
+            }
+            else
+            {
+                WriteMessageAst(json, resource);
+            }
             json.Append('}');
         }
         json.Append("}}");
         return new TextResourceGeneratedOutput(
             TextResourceGeneratedOutputKind.LocaleJson,
-            catalog.Id + "." + locale.Tag + ".locale-v1.json",
+            catalog.Id + "." + locale.Tag + ".locale-v" + artifactVersion + ".json",
             "application/json",
             json.ToString());
+    }
+
+    private static void WriteMessageAst(StringBuilder json, CompiledTextResource resource)
+    {
+        json.Append("{\"astVersion\":2,\"inputs\":{");
+        IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(resource.Placeholders);
+        for (int index = 0; index < placeholders.Count; index++)
+        {
+            if (index != 0) json.Append(',');
+            json.Append(GenerationSupport.JsonString(placeholders[index].Name)).Append(":{\"type\":")
+                .Append(GenerationSupport.JsonString(GenerationSupport.JsonArgumentType(placeholders[index].Type)))
+                .Append(",\"format\":").Append(GenerationSupport.JsonString(placeholders[index].Format)).Append('}');
+        }
+        json.Append("},\"selectors\":[");
+        for (int index = 0; index < resource.Message.Selectors.Count; index++)
+        {
+            if (index != 0) json.Append(',');
+            CompiledMessageSelector selector = resource.Message.Selectors[index];
+            json.Append("{\"name\":").Append(GenerationSupport.JsonString(selector.Name))
+                .Append(",\"input\":").Append(GenerationSupport.JsonString(selector.Input))
+                .Append(",\"function\":").Append(GenerationSupport.JsonString(selector.Function)).Append('}');
+        }
+        json.Append("],\"variants\":[");
+        if (resource.Message.IsVariant)
+        {
+            for (int index = 0; index < resource.Message.Variants.Count; index++)
+            {
+                if (index != 0) json.Append(',');
+                CompiledMessageVariant variant = resource.Message.Variants[index];
+                json.Append("{\"matches\":{");
+                for (int selectorIndex = 0; selectorIndex < resource.Message.Selectors.Count; selectorIndex++)
+                {
+                    if (selectorIndex != 0) json.Append(',');
+                    string name = resource.Message.Selectors[selectorIndex].Name;
+                    json.Append(GenerationSupport.JsonString(name)).Append(':').Append(GenerationSupport.JsonString(variant.Matches[name]));
+                }
+                json.Append("},\"nodes\":");
+                WriteNodes(json, variant.Pattern.Nodes);
+                json.Append('}');
+            }
+        }
+        else
+        {
+            json.Append("{\"matches\":{},\"nodes\":");
+            WriteNodes(json, resource.Message.Nodes);
+            json.Append('}');
+        }
+        json.Append(']');
+    }
+
+    private static void WriteNodes(StringBuilder json, IReadOnlyList<CompiledMessageNode> nodes)
+    {
+        json.Append('[');
+        for (int index = 0; index < nodes.Count; index++)
+        {
+            if (index != 0) json.Append(',');
+            CompiledMessageNode node = nodes[index];
+            if (node is CompiledMessageText text)
+                json.Append("{\"kind\":\"text\",\"value\":").Append(GenerationSupport.JsonString(text.Value)).Append('}');
+            else if (node is CompiledMessageInput input)
+                json.Append("{\"kind\":\"input\",\"input\":").Append(GenerationSupport.JsonString(input.Name)).Append('}');
+            else if (node is CompiledMessageFormat format)
+            {
+                json.Append("{\"kind\":\"format\",\"input\":").Append(GenerationSupport.JsonString(format.Input))
+                    .Append(",\"function\":").Append(GenerationSupport.JsonString(format.Function))
+                    .Append(",\"format\":").Append(GenerationSupport.JsonString(format.Format));
+                if (format.Unit is not null) json.Append(",\"unit\":").Append(GenerationSupport.JsonString(format.Unit));
+                if (format.Numeric is not null) json.Append(",\"numeric\":").Append(GenerationSupport.JsonString(format.Numeric));
+                json.Append('}');
+            }
+            else if (node is CompiledMessageMarkup markup)
+            {
+                json.Append("{\"kind\":\"markup\",\"name\":").Append(GenerationSupport.JsonString(markup.Name)).Append(",\"attributes\":{");
+                int attributeIndex = 0;
+                foreach (KeyValuePair<string, string> attribute in markup.Attributes)
+                {
+                    if (attributeIndex++ != 0) json.Append(',');
+                    json.Append(GenerationSupport.JsonString(attribute.Key)).Append(':').Append(GenerationSupport.JsonString(attribute.Value));
+                }
+                json.Append("},\"children\":");
+                WriteNodes(json, markup.Children);
+                json.Append('}');
+            }
+        }
+        json.Append(']');
     }
 
     internal static TextResourceGeneratedOutput RenderTemplateManifest(CompiledTextCatalog catalog)

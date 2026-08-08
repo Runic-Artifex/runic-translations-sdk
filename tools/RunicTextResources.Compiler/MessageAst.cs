@@ -25,6 +25,26 @@ internal sealed class CompiledMessageInput : CompiledMessageNode
     internal string Name { get; }
 }
 
+internal sealed class CompiledMessageFormat : CompiledMessageNode
+{
+    internal CompiledMessageFormat(string input, string function, string format, string? unit, string? numeric)
+    { Input = input; Function = function; Format = format; Unit = unit; Numeric = numeric; }
+    internal string Input { get; }
+    internal string Function { get; }
+    internal string Format { get; }
+    internal string? Unit { get; }
+    internal string? Numeric { get; }
+}
+
+internal sealed class CompiledMessageMarkup : CompiledMessageNode
+{
+    internal CompiledMessageMarkup(string name, IReadOnlyDictionary<string, string> attributes, IReadOnlyList<CompiledMessageNode> children)
+    { Name = name; Attributes = attributes; Children = children; }
+    internal string Name { get; }
+    internal IReadOnlyDictionary<string, string> Attributes { get; }
+    internal IReadOnlyList<CompiledMessageNode> Children { get; }
+}
+
 internal sealed class CompiledMessagePattern
 {
     internal CompiledMessagePattern(IReadOnlyList<CompiledMessageNode> nodes)
@@ -46,6 +66,22 @@ internal sealed class CompiledMessagePattern
     internal IReadOnlyList<CompiledMessageSelector> Selectors { get; }
     internal IReadOnlyList<CompiledMessageVariant> Variants { get; }
     internal bool IsVariant => Variants.Count != 0;
+    internal bool HasMarkup
+    {
+        get
+        {
+            if (ContainsMarkup(Nodes)) return true;
+            for (int index = 0; index < Variants.Count; index++) if (ContainsMarkup(Variants[index].Pattern.Nodes)) return true;
+            return false;
+        }
+    }
+
+    private static bool ContainsMarkup(IReadOnlyList<CompiledMessageNode> nodes)
+    {
+        for (int index = 0; index < nodes.Count; index++)
+            if (nodes[index] is CompiledMessageMarkup) return true;
+        return false;
+    }
 }
 
 internal sealed class CompiledMessageSelector

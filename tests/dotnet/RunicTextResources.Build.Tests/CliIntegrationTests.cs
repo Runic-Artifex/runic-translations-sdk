@@ -18,6 +18,8 @@ internal static class CliIntegrationTests
         "MinimalText.Registration.g.cs",
         "minimal.asset-manifest-v1.json",
         "minimal.en.locale-v1.json",
+        "minimal.esm/dynamic.d.ts",
+        "minimal.esm/dynamic.js",
         "minimal.esm/messages.d.ts",
         "minimal.esm/messages.js",
         "minimal.esm/messages/m$Hello.js",
@@ -146,7 +148,7 @@ internal static class CliIntegrationTests
         using TemporaryDirectory temporary = GeneratedFixture();
         ProcessResult result = Verify(temporary);
         Assert.Equal(0, result.ExitCode, result.Combined);
-        Assert.Contains("verified 16 artifact(s)", result.StandardOutput);
+        Assert.Contains("verified 18 artifact(s)", result.StandardOutput);
     }
 
     private static void VerifyReportsMissing()

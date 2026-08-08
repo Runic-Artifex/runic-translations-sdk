@@ -243,7 +243,9 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
                 throw PackError("A verified external pack message has an invalid compiled key identity.");
             }
 
-            replacements[i] = new CompiledTextResourceValue(id, message.Pattern);
+            replacements[i] = message.Message is null
+                ? new CompiledTextResourceValue(id, message.Pattern)
+                : new CompiledTextResourceValue(id, message.Pattern, message.Message);
         }
 
         Array.Sort(replacements, static (left, right) => left.Id.CompareTo(right.Id));

@@ -49,7 +49,7 @@ internal static class CSharpOutputRenderer
         }
         writer.Unindent();
         writer.Line("}");
-        WriteAccessorMembers(writer, root, catalog.ClassName + "Keys", rootManagerField, catalog);
+        WriteAccessorMembers(writer, root, catalog.ClassName + "Keys", rootManagerField);
         writer.Unindent();
         writer.Line("}");
         return Output(TextResourceGeneratedOutputKind.CSharpAccessors, catalog.ClassName + ".Accessors.g.cs", writer);
@@ -243,7 +243,7 @@ internal static class CSharpOutputRenderer
         }
     }
 
-    private static void WriteAccessorMembers(GenerationWriter writer, ResourceTreeNode node, string keyPath, string managerField, CompiledTextCatalog catalog)
+    private static void WriteAccessorMembers(GenerationWriter writer, ResourceTreeNode node, string keyPath, string managerField)
     {
         if (node.Children.Count > 0) writer.Blank();
         foreach (KeyValuePair<string, ResourceTreeNode> child in node.Children)
@@ -251,7 +251,7 @@ internal static class CSharpOutputRenderer
             string identifier = GenerationSupport.CSharpIdentifier(child.Key);
             string childKeyPath = keyPath + "." + identifier;
             if (child.Value.Resource is not null)
-                WriteAccessor(writer, child.Value.Resource, identifier, childKeyPath, managerField, catalog);
+                WriteAccessor(writer, child.Value.Resource, identifier, childKeyPath, managerField);
             else
             {
                 writer.Line("/// <summary>Accessors below <c>" + GenerationSupport.XmlDocumentation(child.Key) + "</c>.</summary>");
@@ -288,20 +288,21 @@ internal static class CSharpOutputRenderer
             }
             writer.Unindent();
             writer.Line("}");
-            WriteAccessorMembers(writer, child.Value, keyPath + "." + identifier, childManagerField, catalog);
+            WriteAccessorMembers(writer, child.Value, keyPath + "." + identifier, childManagerField);
             writer.Unindent();
             writer.Line("}");
         }
     }
 
-    private static void WriteAccessor(GenerationWriter writer, CompiledTextResource resource, string identifier, string keyPath, string managerField, CompiledTextCatalog catalog)
+    private static void WriteAccessor(GenerationWriter writer, CompiledTextResource resource, string identifier, string keyPath, string managerField)
     {
         WriteResourceDocumentation(writer, resource, true);
         WriteObsolete(writer, resource);
         IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(resource.Placeholders);
         if (placeholders.Count == 0)
         {
-            writer.Line("public string " + identifier + " => this." + managerField + ".Current.Format(" + keyPath + ", global::System.ReadOnlySpan<global::RunicTextResources.TextArgument>.Empty);");
+            writer.Line("public " + (resource.ProducesStructuredContent ? "global::RunicTextResources.LocalizedTextContent" : "string") + " " + identifier + " => this." + managerField + ".Current." +
+                (resource.ProducesStructuredContent ? "FormatContent" : "Format") + "(" + keyPath + ", global::System.ReadOnlySpan<global::RunicTextResources.TextArgument>.Empty);");
             return;
         }
 
@@ -311,17 +312,10 @@ internal static class CSharpOutputRenderer
             CompiledTextPlaceholder placeholder = placeholders[i];
             parameters.Add(CSharpParameterType(placeholder.Type) + " " + GenerationSupport.CSharpIdentifier(placeholder.Name));
         }
-        writer.Line("public string " + identifier + "(" + string.Join(", ", parameters) + ")");
+        writer.Line("public " + (resource.ProducesStructuredContent ? "global::RunicTextResources.LocalizedTextContent" : "string") + " " + identifier + "(" + string.Join(", ", parameters) + ")");
         writer.Line("{");
         writer.Indent();
-        if (resource.Message.IsVariant)
-        {
-            WriteVariantAccessor(writer, resource, placeholders, managerField, catalog);
-            writer.Unindent();
-            writer.Line("}");
-            return;
-        }
-        writer.Line("return this." + managerField + ".Current.Format(" + keyPath + ", new global::RunicTextResources.TextArgument[]");
+        writer.Line("return this." + managerField + ".Current." + (resource.ProducesStructuredContent ? "FormatContent" : "Format") + "(" + keyPath + ", new global::RunicTextResources.TextArgument[]");
         writer.Line("{");
         writer.Indent();
         for (int i = 0; i < placeholders.Count; i++)
@@ -336,82 +330,6 @@ internal static class CSharpOutputRenderer
         writer.Line("});");
         writer.Unindent();
         writer.Line("}");
-    }
-
-    private static void WriteVariantAccessor(GenerationWriter writer, CompiledTextResource canonical,
-        IReadOnlyList<CompiledTextPlaceholder> placeholders, string managerField, CompiledTextCatalog catalog)
-    {
-        writer.Line("global::RunicTextResources.ITextResourceSnapshot snapshot = this." + managerField + ".Current;");
-        writer.Line("string pattern = snapshot.Locale switch");
-        writer.Line("{");
-        writer.Indent();
-        IReadOnlyList<CompiledTextLocale> locales = GenerationSupport.OrderedLocales(catalog.Locales);
-        for (int index = 0; index < locales.Count; index++)
-        {
-            CompiledTextResource resource = FindResource(locales[index].ResolvedResources, canonical.Key);
-            writer.Line(GenerationSupport.CSharpString(locales[index].Tag) + " => " + CSharpVariantExpression(resource.Message) + ",");
-        }
-        writer.Line("_ => throw new global::System.InvalidOperationException(\"Unsupported compiled locale.\"),");
-        writer.Unindent();
-        writer.Line("};");
-        writer.Line("return global::RunicTextResources.TextPatternFormatter.Format(pattern, new global::RunicTextResources.TextArgument[]");
-        writer.Line("{");
-        writer.Indent();
-        for (int index = 0; index < placeholders.Count; index++)
-        {
-            CompiledTextPlaceholder placeholder = placeholders[index];
-            string argument = "new global::RunicTextResources.TextArgument(" + GenerationSupport.CSharpString(placeholder.Name) + ", " + GenerationSupport.CSharpIdentifier(placeholder.Name);
-            if (placeholder.Type != TextResourceArgumentType.String)
-                argument += ", global::RunicTextResources.TextArgumentFormat." + GenerationSupport.ArgumentFormatName(placeholder.Format);
-            writer.Line(argument + "),");
-        }
-        writer.Unindent();
-        writer.Line("}, snapshot.Locale);");
-    }
-
-    private static string CSharpVariantExpression(CompiledMessagePattern message)
-    {
-        var selectors = new Dictionary<string, string>(StringComparer.Ordinal);
-        for (int index = 0; index < message.Selectors.Count; index++)
-        {
-            CompiledMessageSelector selector = message.Selectors[index];
-            string input = GenerationSupport.CSharpIdentifier(selector.Input);
-            selectors[selector.Name] = selector.Function switch
-            {
-                "plural" => "global::RunicTextResources.TextMessageSelector.SelectPlural(global::System.Convert.ToDecimal(" + input + ", global::System.Globalization.CultureInfo.InvariantCulture), snapshot.Locale, false)",
-                "ordinal" => "global::RunicTextResources.TextMessageSelector.SelectPlural(global::System.Convert.ToDecimal(" + input + ", global::System.Globalization.CultureInfo.InvariantCulture), snapshot.Locale, true)",
-                _ => "global::System.Convert.ToString(" + input + ", global::System.Globalization.CultureInfo.InvariantCulture)!",
-            };
-        }
-        string fallback = GenerationSupport.CSharpString(string.Empty);
-        for (int index = message.Variants.Count - 1; index >= 0; index--)
-        {
-            CompiledMessageVariant variant = message.Variants[index];
-            var conditions = new List<string>();
-            foreach (KeyValuePair<string, string> match in variant.Matches)
-                if (match.Value != "*") conditions.Add(selectors[match.Key] + " == " + GenerationSupport.CSharpString(match.Value));
-            string value = GenerationSupport.CSharpString(MessagePatternText(variant.Pattern));
-            fallback = conditions.Count == 0 ? value : "(" + string.Join(" && ", conditions) + " ? " + value + " : " + fallback + ")";
-        }
-        return fallback;
-    }
-
-    private static string MessagePatternText(CompiledMessagePattern pattern)
-    {
-        var value = new System.Text.StringBuilder();
-        for (int index = 0; index < pattern.Nodes.Count; index++)
-        {
-            if (pattern.Nodes[index] is CompiledMessageText text)
-                value.Append(text.Value.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal));
-            else if (pattern.Nodes[index] is CompiledMessageInput input) value.Append('{').Append(input.Name).Append('}');
-        }
-        return value.ToString();
-    }
-
-    private static CompiledTextResource FindResource(IReadOnlyList<CompiledTextResource> resources, string key)
-    {
-        for (int index = 0; index < resources.Count; index++) if (resources[index].Key == key) return resources[index];
-        throw new InvalidOperationException("Resolved locale does not contain key '" + key + "'.");
     }
 
     private static void WriteDefinitions(GenerationWriter writer, IReadOnlyList<GeneratedCatalogDefinition> definitions, string suffix)
@@ -456,7 +374,11 @@ internal static class CSharpOutputRenderer
             for (int resourceIndex = 0; resourceIndex < resources.Count; resourceIndex++)
             {
                 CompiledTextResource resource = resources[resourceIndex];
-                writer.Line("new global::RunicTextResources.CompiledTextResourceValue(" + table.GetId(resource.Key) + ", " + GenerationSupport.CSharpString(resource.Pattern) + "),");
+                writer.Line("new global::RunicTextResources.CompiledTextResourceValue(" + table.GetId(resource.Key) + ", " + GenerationSupport.CSharpString(resource.Pattern) + ",");
+                writer.Indent();
+                WriteCompiledMessage(writer, resource.Message);
+                writer.Unindent();
+                writer.Line("),");
             }
             writer.Unindent();
             writer.Line("}),");
@@ -464,6 +386,114 @@ internal static class CSharpOutputRenderer
         writer.Unindent();
         writer.Line("}" + suffix);
     }
+
+    private static void WriteCompiledMessage(GenerationWriter writer, CompiledMessagePattern message)
+    {
+        if (!message.IsVariant)
+        {
+            writer.Line("new global::RunicTextResources.CompiledTextMessage(");
+            writer.Indent();
+            WriteMessageNodes(writer, message.Nodes, ")");
+            writer.Unindent();
+            return;
+        }
+
+        writer.Line("new global::RunicTextResources.CompiledTextMessage(");
+        writer.Indent();
+        writer.Line("global::System.Array.Empty<global::RunicTextResources.CompiledTextMessageNode>(),");
+        writer.Line("new global::RunicTextResources.CompiledTextMessageSelector[]");
+        writer.Line("{");
+        writer.Indent();
+        for (int index = 0; index < message.Selectors.Count; index++)
+        {
+            CompiledMessageSelector selector = message.Selectors[index];
+            string kind = selector.Function switch
+            {
+                "plural" => "CardinalPlural",
+                "ordinal" => "OrdinalPlural",
+                _ => "Literal",
+            };
+            writer.Line("new global::RunicTextResources.CompiledTextMessageSelector(" +
+                GenerationSupport.CSharpString(selector.Name) + ", " + GenerationSupport.CSharpString(selector.Input) +
+                ", global::RunicTextResources.CompiledTextMessageSelectorKind." + kind + "),");
+        }
+        writer.Unindent();
+        writer.Line("},");
+        writer.Line("new global::RunicTextResources.CompiledTextMessageVariant[]");
+        writer.Line("{");
+        writer.Indent();
+        for (int variantIndex = 0; variantIndex < message.Variants.Count; variantIndex++)
+        {
+            CompiledMessageVariant variant = message.Variants[variantIndex];
+            writer.Line("new global::RunicTextResources.CompiledTextMessageVariant(new string[]");
+            writer.Line("{");
+            writer.Indent();
+            for (int selectorIndex = 0; selectorIndex < message.Selectors.Count; selectorIndex++)
+                writer.Line(GenerationSupport.CSharpString(variant.Matches[message.Selectors[selectorIndex].Name]) + ",");
+            writer.Unindent();
+            writer.Line("},");
+            writer.Indent();
+            WriteMessageNodes(writer, variant.Pattern.Nodes, "),");
+            writer.Unindent();
+        }
+        writer.Unindent();
+        writer.Line("})");
+        writer.Unindent();
+    }
+
+    private static void WriteMessageNodes(GenerationWriter writer, IReadOnlyList<CompiledMessageNode> nodes, string suffix)
+    {
+        writer.Line("new global::RunicTextResources.CompiledTextMessageNode[]");
+        writer.Line("{");
+        writer.Indent();
+        for (int index = 0; index < nodes.Count; index++)
+            WriteMessageNode(writer, nodes[index]);
+        writer.Unindent();
+        writer.Line("}" + suffix);
+    }
+
+    private static void WriteMessageNode(GenerationWriter writer, CompiledMessageNode node)
+    {
+        if (node is CompiledMessageText text)
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind.Text, " + GenerationSupport.CSharpString(text.Value) + "),");
+        else if (node is CompiledMessageInput input)
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind.Input, " + GenerationSupport.CSharpString(input.Name) + "),");
+        else if (node is CompiledMessageFormat format)
+        {
+            string kind = format.Function == "relativeTime" ? "RelativeTime" : "Format";
+            string argumentFormat = format.Function == "relativeTime" ? "Plain" : FormatName(format.Format);
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind." + kind + ", " +
+                GenerationSupport.CSharpString(format.Input) + ", global::RunicTextResources.TextArgumentFormat." + argumentFormat + ", " +
+                (format.Unit is null ? "null" : GenerationSupport.CSharpString(format.Unit)) + ", " +
+                (format.Numeric is null ? "null" : GenerationSupport.CSharpString(format.Numeric)) + "),");
+        }
+        else if (node is CompiledMessageMarkup markup)
+        {
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind.MarkupStart, " +
+                GenerationSupport.CSharpString(markup.Name) + ", attributes: new global::RunicTextResources.CompiledTextMarkupProperty[]");
+            writer.Line("{");
+            writer.Indent();
+            foreach (KeyValuePair<string, string> attribute in markup.Attributes)
+            {
+                writer.Line("new global::RunicTextResources.CompiledTextMarkupProperty(" + GenerationSupport.CSharpString(attribute.Key) + ", " + GenerationSupport.CSharpString(attribute.Value) + "),");
+            }
+            writer.Unindent();
+            writer.Line("}),");
+            for (int index = 0; index < markup.Children.Count; index++) WriteMessageNode(writer, markup.Children[index]);
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind.MarkupEnd, " + GenerationSupport.CSharpString(markup.Name) + "),");
+        }
+    }
+
+    private static string FormatName(string format) => format switch
+    {
+        "none" => "None", "plain" => "Plain", "grouped" => "Grouped",
+        "fixed0" => "Fixed0", "fixed1" => "Fixed1", "fixed2" => "Fixed2", "fixed3" => "Fixed3",
+        "fixed4" => "Fixed4", "fixed5" => "Fixed5", "fixed6" => "Fixed6",
+        "percent0" => "Percent0", "percent1" => "Percent1", "percent2" => "Percent2",
+        "percent3" => "Percent3", "percent4" => "Percent4", "lower" => "Lower", "iso" => "Iso",
+        "short" => "Short", "medium" => "Medium", "long" => "Long", "d" => "D", "n" => "N",
+        _ => throw new InvalidOperationException("Unknown compiled format '" + format + "'."),
+    };
 
     private static void WritePackContractFactory(
         GenerationWriter writer,
@@ -534,7 +564,8 @@ internal static class CSharpOutputRenderer
             writer.Unindent();
         }
         writer.Unindent();
-        writer.Line("});");
+        writer.Line("},");
+        writer.Line(catalog.MessageGrammarVersion + ");");
         writer.Unindent();
     }
 

@@ -28,6 +28,7 @@ export function runicTextResources(options) {
       messages: contained(root, document.entrypoints.messages),
       runtime: contained(root, document.entrypoints.runtime),
       transport: contained(root, "transport.js"),
+      dynamic: contained(root, document.entrypoints.dynamic ?? "dynamic.js"),
     });
     return document;
   }
@@ -55,6 +56,8 @@ export function runicTextResources(options) {
         return virtualId("runtime");
       if (id === `virtual:runic-text-resources/${catalog}/transport`)
         return virtualId("transport");
+      if (id === `virtual:runic-text-resources/${catalog}/dynamic`)
+        return virtualId("dynamic");
       return null;
     },
 
@@ -63,13 +66,14 @@ export function runicTextResources(options) {
       if (id === virtualId("messages")) return `export * from ${JSON.stringify(toVitePath(entries.messages))};\n`;
       if (id === virtualId("runtime")) return `export * from ${JSON.stringify(toVitePath(entries.runtime))};\n`;
       if (id === virtualId("transport")) return `export * from ${JSON.stringify(toVitePath(entries.transport))};\n`;
+      if (id === virtualId("dynamic")) return `export * from ${JSON.stringify(toVitePath(entries.dynamic))};\n`;
       return null;
     },
 
     async handleHotUpdate(context) {
       if (context.file !== manifestPath && !sourceFiles.includes(context.file) && !isGenerated(context.file, manifestPath)) return;
       await refresh();
-      const modules = [virtualId("messages"), virtualId("runtime"), virtualId("transport")]
+      const modules = [virtualId("messages"), virtualId("runtime"), virtualId("transport"), virtualId("dynamic")]
         .map(id => context.server.moduleGraph.getModuleById(id))
         .filter(Boolean);
       for (const module of modules) context.server.moduleGraph.invalidateModule(module);

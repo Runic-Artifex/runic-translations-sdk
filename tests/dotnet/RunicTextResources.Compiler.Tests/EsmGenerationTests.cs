@@ -24,7 +24,7 @@ internal static class EsmGenerationTests
         IReadOnlyList<TextResourceGeneratedOutput> first = TextResourceOutputRenderer.RenderEsmModules(catalog);
         IReadOnlyList<TextResourceGeneratedOutput> second = TextResourceOutputRenderer.RenderEsmModules(catalog);
 
-        Assert.Equal(10, first.Count);
+        Assert.Equal(12, first.Count);
         Assert.Equal(string.Join('|', first.Select(output => output.RelativePath)), string.Join('|', second.Select(output => output.RelativePath)));
         for (int index = 0; index < first.Count; index++)
         {
@@ -68,6 +68,9 @@ internal static class EsmGenerationTests
                 equal(m$Common$Hello({ name: "Ada" }), "Literal {open} Ada");
                 equal(m$Common$Hello({ name: "Ada" }, { locale: "de-DE" }), "Wörtlich {offen} Ada");
                 equal(resolveLocale("de-AT"), "de");
+                const isolated = await Promise.all(Array.from({ length: 100 }, (_, index) => Promise.resolve().then(() =>
+                  m$Plain({ locale: index % 2 === 0 ? "en" : "de" }))));
+                if (isolated.some((value, index) => value !== (index % 2 === 0 ? "Plain" : "Einfach"))) throw new Error("explicit SSR locales leaked across calls");
                 const restore = configureLocaleResolver(() => "de");
                 equal(m$Plain(), "Einfach");
                 restore();
@@ -92,6 +95,33 @@ internal static class EsmGenerationTests
             string standardError = process.StandardError.ReadToEnd();
             process.WaitForExit();
             Assert.Equal(0, process.ExitCode, standardOutput + standardError);
+
+            string types = Path.Combine(directory, "usage.ts");
+            File.WriteAllText(types, """
+                import { m$Common$Hello, m$Formats$All } from "./portable.esm/messages.js";
+                import type { LocalizedString } from "./portable.esm/runtime.js";
+                import { decodeLocaleArtifact } from "./portable.esm/dynamic.js";
+                const value: LocalizedString = m$Common$Hello({ name: "Ada" }, { locale: "de" });
+                m$Formats$All({ count: 1n, amount: 1.5, day: "2024-01-01", clock: "12:00:00", instant: "2024-01-01T12:00:00Z", id: "00112233-4455-6677-8899-aabbccddeeff", enabled: true });
+                decodeLocaleArtifact({});
+                // @ts-expect-error Generated inputs are exact and typed.
+                m$Common$Hello({ name: 42 });
+                void value;
+                """, new UTF8Encoding(false));
+            string typeScript = Path.Combine(RepositoryPaths.RepositoryRoot, "web", "node_modules", ".bin", "tsc");
+            var typeCheck = new ProcessStartInfo(typeScript)
+            {
+                WorkingDirectory = directory,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            };
+            foreach (string argument in new[] { "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", types })
+                typeCheck.ArgumentList.Add(argument);
+            using Process checker = Process.Start(typeCheck) ?? throw new InvalidOperationException("Could not start TypeScript.");
+            string checkOutput = checker.StandardOutput.ReadToEnd() + checker.StandardError.ReadToEnd();
+            checker.WaitForExit();
+            Assert.Equal(0, checker.ExitCode, checkOutput);
         }
         finally
         {

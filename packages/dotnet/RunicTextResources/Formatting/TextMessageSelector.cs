@@ -27,7 +27,7 @@ public static class TextMessageSelector
 
         return language switch
         {
-            "fr" or "pt" when absolute is 0 or 1 => "one",
+            "fr" when decimal.Truncate(absolute) is 0 or 1 => "one",
             "en" or "de" or "es" or "it" or "nl" or "sv" or "no" or "da" when absolute == 1 => "one",
             _ => "other",
         };

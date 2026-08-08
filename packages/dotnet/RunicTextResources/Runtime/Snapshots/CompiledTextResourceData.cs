@@ -85,8 +85,19 @@ public sealed class CompiledTextResourceDefinition
     internal TextResourcePlaceholderDescriptor[] PlaceholderArray => _placeholders;
 }
 
-/// <summary>Associates one canonical key identifier with a compiled pattern.</summary>
-public readonly record struct CompiledTextResourceValue(int Id, string Pattern);
+/// <summary>Associates one canonical key identifier with a compatibility pattern and optional precompiled AST.</summary>
+public readonly record struct CompiledTextResourceValue(int Id, string Pattern)
+{
+    /// <summary>Creates generated data that bypasses runtime pattern parsing.</summary>
+    public CompiledTextResourceValue(int id, string pattern, CompiledTextMessage message)
+        : this(id, pattern)
+    {
+        Message = message ?? throw new ArgumentNullException(nameof(message));
+    }
+
+    /// <summary>The compiler-produced message, or null for compatibility/runtime pack inputs.</summary>
+    public CompiledTextMessage? Message { get; init; }
+}
 
 /// <summary>Contains the direct compiled values and fallback edge for one declared locale.</summary>
 public sealed class CompiledTextResourceLocale

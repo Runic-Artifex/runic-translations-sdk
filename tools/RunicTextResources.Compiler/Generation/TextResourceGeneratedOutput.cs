@@ -43,6 +43,10 @@ public enum TextResourceGeneratedOutputKind
     CppHeader,
     /// <summary>Experimental generated C++ implementation over the portable AST.</summary>
     CppSource,
+    /// <summary>Validated interpreter for explicit runtime-loaded v2 locale artifacts.</summary>
+    EsmDynamic,
+    /// <summary>TypeScript declarations for explicit runtime-loaded v2 locale artifacts.</summary>
+    EsmDynamicTypes,
 }
 
 /// <summary>A deterministic, UTF-8 compiler output for exactly one concern.</summary>

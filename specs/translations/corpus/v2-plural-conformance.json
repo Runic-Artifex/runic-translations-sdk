@@ -1,0 +1,25 @@
+{
+  "corpusVersion": 1,
+  "cases": [
+    { "locale": "en", "ordinal": false, "value": "0", "expected": "other" },
+    { "locale": "en", "ordinal": false, "value": "1", "expected": "one" },
+    { "locale": "en", "ordinal": false, "value": "2", "expected": "other" },
+    { "locale": "de", "ordinal": false, "value": "1", "expected": "one" },
+    { "locale": "de", "ordinal": false, "value": "1.5", "expected": "other" },
+    { "locale": "es", "ordinal": false, "value": "1", "expected": "one" },
+    { "locale": "it", "ordinal": false, "value": "2", "expected": "other" },
+    { "locale": "nl", "ordinal": false, "value": "1", "expected": "one" },
+    { "locale": "sv", "ordinal": false, "value": "0", "expected": "other" },
+    { "locale": "no", "ordinal": false, "value": "1", "expected": "one" },
+    { "locale": "da", "ordinal": false, "value": "2", "expected": "other" },
+    { "locale": "fr", "ordinal": false, "value": "0", "expected": "one" },
+    { "locale": "fr", "ordinal": false, "value": "1.5", "expected": "one" },
+    { "locale": "fr", "ordinal": false, "value": "2", "expected": "other" },
+    { "locale": "en", "ordinal": true, "value": "1", "expected": "one" },
+    { "locale": "en", "ordinal": true, "value": "2", "expected": "two" },
+    { "locale": "en", "ordinal": true, "value": "3", "expected": "few" },
+    { "locale": "en", "ordinal": true, "value": "4", "expected": "other" },
+    { "locale": "en", "ordinal": true, "value": "11", "expected": "other" },
+    { "locale": "en", "ordinal": true, "value": "21", "expected": "one" }
+  ]
+}
