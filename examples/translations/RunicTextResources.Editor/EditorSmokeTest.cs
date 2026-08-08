@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text.Json.Nodes;
 using RunicTextResources.Authoring;
 
@@ -47,6 +48,28 @@ internal static class EditorSmokeTest
             WorkspaceSnapshot reviewedSnapshot = await workspace.LoadAsync().ConfigureAwait(false);
             Require(reviewedSnapshot.Review?.Entries.Count == 1 && reviewedSnapshot.Success,
                 "Review state did not round-trip independently of compiler inputs.");
+            EditorAbout about = EditorDiagnostics.About();
+            Require(about.Product == "Runic Translations Editor" && about.UpdateChannel.Length > 0,
+                "The editor did not expose version and update-channel information.");
+            EditorDiagnosticBundleResult diagnosticBundle = EditorDiagnostics.CreateBundle(reviewedSnapshot);
+            Require(diagnosticBundle.Ok && File.Exists(diagnosticBundle.Path),
+                diagnosticBundle.Message ?? "The sanitized diagnostic bundle was not created.");
+            string diagnosticPath = diagnosticBundle.Path
+                ?? throw new InvalidOperationException("The diagnostic bundle returned no path.");
+            using (ZipArchive archive = ZipFile.OpenRead(diagnosticPath))
+            {
+                Require(archive.GetEntry("LICENSE.txt") is not null && archive.GetEntry("THIRD-PARTY-NOTICES.md") is not null,
+                    "The diagnostic bundle omitted legal notices.");
+                using StreamReader reader = new(archive.GetEntry("diagnostics.json")!.Open());
+                string diagnosticJson = await reader.ReadToEndAsync().ConfigureAwait(false);
+                Require(diagnosticJson.Contains("runic.textresources.editor-diagnostics/1", StringComparison.Ordinal),
+                    "The diagnostic bundle schema was not versioned.");
+                Require(!diagnosticJson.Contains(temporaryRoot, StringComparison.Ordinal) &&
+                    !diagnosticJson.Contains("product.de.json", StringComparison.Ordinal) &&
+                    !diagnosticJson.Contains("Speichern", StringComparison.Ordinal),
+                    "The sanitized diagnostic bundle leaked a workspace path, file name, or translation.");
+            }
+            File.Delete(diagnosticPath);
 
             ValidationResult invalid = await workspace.ValidateAsync(document.Path, document.Content + ",").ConfigureAwait(false);
             Require(!invalid.Success, "Invalid JSON unexpectedly validated.");
@@ -156,7 +179,7 @@ internal static class EditorSmokeTest
             Require(activeCreated.Root == Path.GetFullPath(createdPath), "The editor did not switch to the newly created project.");
             Require(activeCreated.Success, Diagnostics(activeCreated));
 
-            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales, selected one of multiple catalogs, repaired malformed JSON, previewed and committed structural key transactions, round-tripped isolated review metadata, handled a single-locale catalog, created a compiler-valid project, validated drafts, saved atomically, and rejected stale writes.");
+            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales, selected one of multiple catalogs, repaired malformed JSON, previewed and committed structural key transactions, round-tripped isolated review metadata, produced privacy-bounded diagnostics, handled a single-locale catalog, created a compiler-valid project, validated drafts, saved atomically, and rejected stale writes.");
             return 0;
         }
         catch (Exception exception)

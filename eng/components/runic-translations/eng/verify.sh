@@ -115,4 +115,11 @@ dotnet run --project "$editor_root/RunicTextResources.Editor.csproj" \
   --smoke-test \
   --workspace "$editor_root/ExampleWorkspace"
 
+editor_commit="${GITHUB_SHA:-local-verification}"
+pwsh -NoProfile -File "$repository_root/eng/package-editor.ps1" \
+  -RuntimeIdentifier linux-x64 \
+  -OutputDirectory "$artifacts_root/editor" \
+  -Version 0.1.0-preview.verify \
+  -RepositoryCommit "$editor_commit"
+
 echo "Runic Text Resources verification passed."

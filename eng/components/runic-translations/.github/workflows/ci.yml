@@ -69,3 +69,57 @@ jobs:
       - name: Run cross-platform editor smoke
         shell: pwsh
         run: ./eng/editor-smoke.ps1
+
+  editor-preview-artifacts:
+    name: Editor preview (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            rid: linux-x64
+          - os: windows-2025
+            rid: win-x64
+          - os: macos-15
+            rid: osx-arm64
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: samples/RunicTextResources.Editor/Frontend/package-lock.json
+
+      - name: Publish and smoke-test self-contained editor
+        shell: pwsh
+        env:
+          EDITOR_RID: ${{ matrix.rid }}
+          EDITOR_OUTPUT: ${{ runner.temp }}/editor-package
+          EDITOR_VERSION: 0.1.0-preview.${{ github.run_number }}.${{ github.run_attempt }}
+          EDITOR_COMMIT: ${{ github.sha }}
+        run: >-
+          ./eng/package-editor.ps1
+          -RuntimeIdentifier $env:EDITOR_RID
+          -OutputDirectory $env:EDITOR_OUTPUT
+          -Version $env:EDITOR_VERSION
+          -RepositoryCommit $env:EDITOR_COMMIT
+
+      - name: Upload self-contained editor preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: RunicTextResources.Editor-${{ matrix.rid }}-${{ github.sha }}
+          path: ${{ runner.temp }}/editor-package/*
+          if-no-files-found: error
+          retention-days: 14

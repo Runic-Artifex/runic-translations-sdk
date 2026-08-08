@@ -24,6 +24,7 @@
     m$App$Workspace,
   } from "virtual:runic-text-resources/editor";
   import type {
+    EditorAbout,
     EditorDiagnostic,
     EditorDocument,
     EditorExternalFileChange,
@@ -153,6 +154,11 @@
   let termLocale = $state("");
   let termNote = $state("");
   let reportDialogOpen = $state(false);
+  let aboutDialogOpen = $state(false);
+  let aboutInfo = $state.raw<EditorAbout>();
+  let aboutBusy = $state(false);
+  let diagnosticBusy = $state(false);
+  let diagnosticMessage = $state<string>();
 
   let labels = $derived(labelsFor(uiLocale));
   let rows = $derived(buildRows(snapshot, drafts));
@@ -519,6 +525,36 @@
   function removeTerm(index: number): void {
     terminology = terminology.filter((_, candidate) => candidate !== index);
     reviewDirty = true;
+  }
+
+  async function showAbout(): Promise<void> {
+    aboutDialogOpen = true;
+    diagnosticMessage = undefined;
+    if (aboutInfo !== undefined || aboutBusy) return;
+    aboutBusy = true;
+    try {
+      aboutInfo = await bridge.about();
+    } catch (error) {
+      diagnosticMessage = errorMessage(error);
+    } finally {
+      aboutBusy = false;
+    }
+  }
+
+  async function createDiagnosticBundle(): Promise<void> {
+    if (diagnosticBusy) return;
+    diagnosticBusy = true;
+    diagnosticMessage = undefined;
+    try {
+      const result = await bridge.createDiagnosticBundle();
+      diagnosticMessage = result.ok
+        ? `Sanitized diagnostics saved to ${result.path ?? "the temporary diagnostics directory"}.`
+        : result.message ?? "The diagnostic bundle could not be created.";
+    } catch (error) {
+      diagnosticMessage = errorMessage(error);
+    } finally {
+      diagnosticBusy = false;
+    }
   }
 
   function applySuggestion(value: string): void {
@@ -1308,6 +1344,7 @@
         <button class="new-project-button" onclick={() => prepareMutation("add-locale")}>◎ Manage languages</button>
         <button class="new-project-button" onclick={showOpenWorkspaceDialog}>⌁ Open workspace</button>
         <button class="new-project-button" onclick={openProjectWizard}>＋ New project</button>
+        <button class="about-button" onclick={() => void showAbout()}>ⓘ About &amp; diagnostics</button>
         {#if snapshot.review?.error}
           <p class="sidecar-error">Review sidecar disabled: {snapshot.review.error}</p>
         {/if}
@@ -1612,6 +1649,35 @@
       {/if}
     </section>
   </main>
+{/if}
+
+{#if aboutDialogOpen}
+  <div class="dialog-backdrop">
+    <div class="project-dialog about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
+      <header><div><p class="eyebrow">Application information</p><h2 id="about-title">{aboutInfo?.product ?? "Runic Translations Editor"}</h2></div><button class="icon-button" aria-label="Close about" onclick={() => aboutDialogOpen = false}>×</button></header>
+      <div class="project-body about-body">
+        {#if aboutBusy}
+          <p>Reading application information…</p>
+        {:else if aboutInfo !== undefined}
+          <dl>
+            <div><dt>Version</dt><dd>{aboutInfo.version}</dd></div>
+            <div><dt>Update channel</dt><dd>{aboutInfo.updateChannel}</dd></div>
+            <div><dt>Source revision</dt><dd>{aboutInfo.commit ?? "development build"}</dd></div>
+            <div><dt>Runtime</dt><dd>{aboutInfo.runtime}</dd></div>
+            <div><dt>Runtime identifier</dt><dd>{aboutInfo.runtimeIdentifier}</dd></div>
+            <div><dt>System</dt><dd>{aboutInfo.operatingSystem} · {aboutInfo.architecture}</dd></div>
+          </dl>
+        {/if}
+        <section class="diagnostic-explanation">
+          <strong>Sanitized diagnostic bundle</strong>
+          <p>The zip contains this version/runtime information, catalog counts, and grouped diagnostic IDs. It excludes workspace paths, file names, messages, source JSON, and translations.</p>
+          {#if diagnosticMessage}<p class="diagnostic-result" aria-live="polite">{diagnosticMessage}</p>{/if}
+        </section>
+        <p class="notice-copy">Runic Text Resources is MIT licensed. The packaged application includes <code>LICENSE.txt</code> and <code>THIRD-PARTY-NOTICES.md</code>.</p>
+      </div>
+      <footer><button class="secondary" onclick={() => aboutDialogOpen = false}>Close</button><div><button class="primary" disabled={diagnosticBusy || aboutBusy} onclick={() => void createDiagnosticBundle()}>{diagnosticBusy ? "Creating bundle…" : "Create diagnostic bundle"}</button></div></footer>
+    </div>
+  </div>
 {/if}
 
 {#if terminologyDialogOpen}
@@ -1962,6 +2028,8 @@
   .workspace-repairs button:hover { color: #efb1a7; }
   .new-project-button { width: 100%; margin-top: .7rem; border: 1px dashed #535744; border-radius: .4rem; padding: .45rem; color: #c3ad70; background: #24261d; font-size: .65rem; cursor: pointer; }
   .new-project-button:hover { border-color: #8d7948; color: #eee1b9; background: #2c2c20; }
+  .about-button { width: 100%; margin-top: .45rem; border: 0; padding: .35rem; color: #727e75; text-align: left; background: transparent; font-size: .58rem; cursor: pointer; }
+  .about-button:hover { color: #c5b274; }
   .status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: #65b886; box-shadow: 0 0 .6rem #65b88688; }
   .status-dot.warning { background: #d4a95a; box-shadow: 0 0 .6rem #d4a95a88; }
   .icon-button { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border: 0; border-radius: .35rem; color: #9da69f; background: transparent; cursor: pointer; }
@@ -2211,6 +2279,19 @@
   .external-compare-dialog { width: min(70rem, calc(100vw - 3rem)); }
   .mutation-dialog { width: min(760px, calc(100vw - 3rem)); }
   .terminology-dialog, .report-dialog { width: min(880px, calc(100vw - 3rem)); }
+  .about-dialog { width: min(680px, calc(100vw - 3rem)); }
+  .about-body { display: grid; gap: 1rem; }
+  .about-body > p { margin: 0; color: #849088; font-size: .68rem; }
+  .about-body dl { display: grid; margin: 0; border: 1px solid #333c36; border-radius: .5rem; overflow: hidden; }
+  .about-body dl > div { display: grid; grid-template-columns: 9rem 1fr; gap: .7rem; border-top: 1px solid #2c342f; padding: .55rem .7rem; }
+  .about-body dl > div:first-child { border-top: 0; }
+  .about-body dt { color: #6e7971; font-size: .57rem; }
+  .about-body dd { overflow-wrap: anywhere; margin: 0; color: #c6cec8; font: .59rem ui-monospace, monospace; }
+  .diagnostic-explanation { border: 1px solid #39443d; border-radius: .5rem; padding: .75rem; background: #101713; }
+  .diagnostic-explanation strong { color: #c2ccc5; font-size: .66rem; }
+  .diagnostic-explanation p { margin: .35rem 0 0; color: #78847c; font-size: .61rem; line-height: 1.55; }
+  .diagnostic-explanation .diagnostic-result { color: #bca96d; overflow-wrap: anywhere; }
+  .notice-copy code { color: #bda968; font-size: .58rem; }
   .terminology-body > p, .report-summary { margin: 0 0 .8rem; color: #78837b; font-size: .65rem; }
   .term-form { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; border: 1px solid #343d37; border-radius: .5rem; padding: .75rem; background: #0d110f; }
   .term-form label { display: grid; gap: .3rem; color: #89948c; font-size: .56rem; }

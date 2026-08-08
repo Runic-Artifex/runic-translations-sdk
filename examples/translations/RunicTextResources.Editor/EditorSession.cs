@@ -126,6 +126,13 @@ internal sealed class EditorSession : IDisposable
             (workspace, token) => workspace.SaveReviewAsync(request, token),
             cancellationToken);
 
+    public Task<EditorDiagnosticBundleResult> CreateDiagnosticBundleAsync(
+        CancellationToken cancellationToken = default) =>
+        WithWorkspaceAsync(
+            async (workspace, token) => EditorDiagnostics.CreateBundle(
+                await workspace.LoadAsync(token).ConfigureAwait(false)),
+            cancellationToken);
+
     public static EditorProjectPlan PreviewProject(EditorProjectCreationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

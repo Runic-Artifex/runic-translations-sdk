@@ -1,5 +1,7 @@
 import type {
   EditorExternalChanges,
+  EditorAbout,
+  EditorDiagnosticBundleResult,
   EditorMessagePreview,
   EditorMutationPreview,
   EditorMutationRequest,
@@ -27,6 +29,8 @@ declare global {
     | ((path: string, content: string, locale: string, key: string) => Promise<string>)
     | undefined;
   var runicEditorSaveReview: ((request: string) => Promise<string>) | undefined;
+  var runicEditorAbout: (() => Promise<string>) | undefined;
+  var runicEditorCreateDiagnosticBundle: (() => Promise<string>) | undefined;
   var runicEditorSave:
     | ((path: string, content: string, revision: string) => Promise<string>)
     | undefined;
@@ -45,6 +49,8 @@ export interface EditorBridge {
   validate(path: string, content: string): Promise<ValidationResult>;
   previewMessage(path: string, content: string, locale: string, key: string): Promise<EditorMessagePreview>;
   saveReview(request: EditorReviewSaveRequest): Promise<EditorReviewOperationResult>;
+  about(): Promise<EditorAbout>;
+  createDiagnosticBundle(): Promise<EditorDiagnosticBundleResult>;
   save(path: string, content: string, revision: string): Promise<EditorOperationResult>;
   previewProject(request: EditorProjectCreationRequest): Promise<EditorProjectPlan>;
   createProject(request: EditorProjectCreationRequest): Promise<EditorOperationResult>;
@@ -101,6 +107,15 @@ export function createEditorBridge(): EditorBridge {
         "runicEditorSaveReview",
         globalThis.runicEditorSaveReview,
       )(JSON.stringify(request)));
+    },
+    async about() {
+      return parse(await binding("runicEditorAbout", globalThis.runicEditorAbout)());
+    },
+    async createDiagnosticBundle() {
+      return parse(await binding(
+        "runicEditorCreateDiagnosticBundle",
+        globalThis.runicEditorCreateDiagnosticBundle,
+      )());
     },
     async save(path, content, revision) {
       return parse(await binding("runicEditorSave", globalThis.runicEditorSave)(path, content, revision));

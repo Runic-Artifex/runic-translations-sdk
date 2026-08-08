@@ -1,10 +1,11 @@
 # Runic Translations Editor product plan
 
-Status: active
+Status: complete
 Last updated: 8 August 2026
 
-Implementation progress: E0 through E5 are complete on the editor/tooling branch.
-The next implementation milestone is E6 (distribution and customer release).
+Implementation progress: E0 through E6 are complete on the editor/tooling branch.
+The customer-preview editor is implemented; stable signing/notarization remains
+credential-gated as specified by E6.
 
 ## Outcome
 
@@ -67,9 +68,10 @@ previewable, journaled transactions with complete-or-rollback recovery. Its
 visual schema-v2 composer covers typed inputs, declarations, selectors,
 multi-selector variants, nested semantic markup, and raw source escape hatches.
 Preview is compiled to the normalized locale AST before the browser executes the
-same portable formatting semantics, and semantic markup remains inert data. The
-review/scale and distribution milestones remain before it is a complete customer
-product.
+same portable formatting semantics, and semantic markup remains inert data.
+Optional workflow metadata, local quality and memory, bounded large-catalog
+processing, privacy-safe diagnostics, and self-contained three-OS preview
+packaging now complete the planned customer-preview product.
 
 ## Architecture decision
 
@@ -514,6 +516,8 @@ selection continue to operate on the complete in-memory catalog.
 
 ### E6 — Distribution and customer release
 
+Status: complete.
+
 Deliverables:
 
 - self-contained preview artifacts for supported runtime identifiers;
@@ -530,6 +534,16 @@ Acceptance:
 - Linux receives automated and local interactive testing;
 - Windows and macOS receive automated CI testing only;
 - every release artifact is produced from the same commit and carries provenance.
+
+The preview pipeline publishes `linux-x64`, `win-x64`, and `osx-arm64`
+self-contained archives. Each matching hosted runner launches the packaged
+executable and exercises create/open/edit/validate/save behavior, while Linux
+also receives local browser walkthroughs. The executable, per-file package
+manifest, and archive checksum carry one version/channel/source revision. About
+and sanitized diagnostic-bundle UI, update-channel rules, privacy boundaries,
+and notices are documented in `docs/editor-distribution.md`. Preview archives
+remain deliberately unsigned; the stable channel fails closed until protected
+Windows signing and Apple notarization credentials are available.
 
 ## Test strategy
 

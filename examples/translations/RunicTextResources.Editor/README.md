@@ -7,6 +7,9 @@ available to developers and localization specialists.
 
 The implementation roadmap is in
 [`docs/translations-editor-plan.md`](../../docs/translations-editor-plan.md).
+The self-contained preview, update-channel, diagnostics, signing, and provenance
+contract is in
+[`docs/editor-distribution.md`](../../docs/editor-distribution.md).
 
 ## What the vertical proves
 
@@ -74,6 +77,21 @@ rejection. The frontend verification also enforces a 50,000-message quality and
 search pass across 100 review locales, a 10-second processing budget, a 256 MiB
 heap-growth budget, and a 300-row rendering batch. It does not open a browser
 window.
+
+## Self-contained preview
+
+The matching-OS packaging script publishes and launches a complete application
+that needs neither Node.js nor a separately installed .NET runtime:
+
+```bash
+nix develop -c pwsh -NoProfile -File ./eng/package-editor.ps1 \
+  -RuntimeIdentifier linux-x64 \
+  -OutputDirectory ./artifacts/editor
+```
+
+The About dialog shows the embedded version/channel/commit and creates a
+privacy-bounded diagnostic zip. Preview archives also include a per-file hash
+manifest, archive checksum, license, and third-party notices.
 
 ## Deliberate current scope
 
