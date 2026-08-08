@@ -61,6 +61,19 @@ export const mockBridge: EditorBridge = {
   async pickWorkspace() {
     return { ok: true, cancelled: false, directory: "/mock/multi-catalog" };
   },
+  async previewMutation(request) {
+    const path = request.kind.includes("locale") || request.kind === "set-fallback"
+      ? "product.catalog.json"
+      : "product.de.json";
+    return { ok: true, files: [{ path, kind: "replace", beforeBytes: 512, afterBytes: 548 }] };
+  },
+  async applyMutation() {
+    return { ok: true, kind: "mutated", snapshot: structuredClone(snapshot) };
+  },
+  async recoverTransaction() {
+    snapshot.pendingTransaction = undefined;
+    return { ok: true, kind: "recovered", snapshot: structuredClone(snapshot) };
+  },
   async validate(path, content) {
     try {
       JSON.parse(content);

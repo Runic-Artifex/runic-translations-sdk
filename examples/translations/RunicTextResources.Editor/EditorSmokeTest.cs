@@ -82,6 +82,22 @@ internal static class EditorSmokeTest
                 WorkspaceSnapshot repairedSnapshot = repaired.Snapshot
                     ?? throw new InvalidOperationException("Repair returned no workspace snapshot.");
                 Require(repairedSnapshot.Documents.All(static candidate => !candidate.IsMalformed), "The repaired document remained malformed.");
+
+                var createMessage = new EditorMutationRequest(
+                    "create-key", null, null, null, "base", null, null, "Integration.Added", "Added by smoke test");
+                EditorMutationPreview mutationPreview = multiCatalogSession.PreviewMutation(createMessage);
+                Require(mutationPreview.Ok && mutationPreview.Files.Count == 3, mutationPreview.Message ?? "The key creation preview was incomplete.");
+                EditorOperationResult mutated = await multiCatalogSession.ApplyMutationAsync(createMessage).ConfigureAwait(false);
+                Require(mutated.Ok && mutated.Snapshot?.Success == true, mutated.Message ?? "The key creation transaction failed.");
+                WorkspaceSnapshot mutatedSnapshot = mutated.Snapshot
+                    ?? throw new InvalidOperationException("Key creation returned no workspace snapshot.");
+                Require(mutatedSnapshot.Documents.Count(document => document.Content.Contains("\"Added\"", StringComparison.Ordinal)) == 3,
+                    "The new key was not committed across all locale documents.");
+
+                var deleteMessage = new EditorMutationRequest(
+                    "delete-key", null, null, null, null, null, "Integration.Added", null, null);
+                EditorOperationResult deletedMessage = await multiCatalogSession.ApplyMutationAsync(deleteMessage).ConfigureAwait(false);
+                Require(deletedMessage.Ok && deletedMessage.Snapshot?.Success == true, deletedMessage.Message ?? "The key deletion transaction failed.");
             }
 
             File.Delete(Path.Combine(temporaryRoot, "product.en.json"));
@@ -114,7 +130,7 @@ internal static class EditorSmokeTest
             Require(activeCreated.Root == Path.GetFullPath(createdPath), "The editor did not switch to the newly created project.");
             Require(activeCreated.Success, Diagnostics(activeCreated));
 
-            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales, selected one of multiple catalogs, repaired malformed JSON, handled a single-locale catalog, created a compiler-valid project, validated drafts, saved atomically, and rejected a stale write.");
+            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales, selected one of multiple catalogs, repaired malformed JSON, previewed and committed structural key transactions, handled a single-locale catalog, created a compiler-valid project, validated drafts, saved atomically, and rejected a stale write.");
             return 0;
         }
         catch (Exception exception)

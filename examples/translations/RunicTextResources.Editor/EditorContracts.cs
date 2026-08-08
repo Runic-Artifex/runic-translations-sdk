@@ -48,7 +48,10 @@ internal sealed record WorkspaceSnapshot(
     IReadOnlyList<EditorCatalogSummary> Catalogs,
     IReadOnlyList<EditorDocument> Documents,
     IReadOnlyList<EditorDiagnostic> Diagnostics,
-    bool Success);
+    bool Success,
+    EditorPendingTransaction? PendingTransaction);
+
+internal sealed record EditorPendingTransaction(string CatalogId, IReadOnlyList<string> Paths);
 
 internal sealed record ValidationResult(
     bool Success,
@@ -97,6 +100,26 @@ internal sealed record EditorExternalChanges(
 
 internal sealed record EditorWorkspacePickerResult(bool Ok, bool Cancelled, string? Directory, string? Message);
 
+internal sealed record EditorMutationRequest(
+    string Kind,
+    string? Locale,
+    string? Fallback,
+    string? ReplacementFallback,
+    string? Layer,
+    string? CopyFromLocale,
+    string? SourceKey,
+    string? TargetKey,
+    string? InitialValue);
+
+internal sealed record EditorMutationFile(string Path, string Kind, long BeforeBytes, long AfterBytes);
+
+internal sealed record EditorMutationPreview(
+    bool Ok,
+    string? Message,
+    IReadOnlyList<EditorMutationFile> Files);
+
+internal sealed record EditorRecoveryRequest(string Mode);
+
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
@@ -109,4 +132,7 @@ internal sealed record EditorWorkspacePickerResult(bool Ok, bool Cancelled, stri
 [JsonSerializable(typeof(EditorExternalChanges))]
 [JsonSerializable(typeof(EditorExternalFileChange))]
 [JsonSerializable(typeof(EditorWorkspacePickerResult))]
+[JsonSerializable(typeof(EditorMutationRequest))]
+[JsonSerializable(typeof(EditorMutationPreview))]
+[JsonSerializable(typeof(EditorRecoveryRequest))]
 internal sealed partial class EditorJsonContext : JsonSerializerContext;

@@ -267,7 +267,7 @@ public static class TextResourceProjectScaffolder
         return value.Trim();
     }
 
-    private static string CanonicalizeLocale(string value)
+    internal static string CanonicalizeLocale(string value)
     {
         if (value.Length == 0 || value[0] == '-' || value[^1] == '-')
         {

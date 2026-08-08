@@ -1,5 +1,7 @@
 import type {
   EditorExternalChanges,
+  EditorMutationPreview,
+  EditorMutationRequest,
   EditorOperationResult,
   EditorOpenWorkspaceRequest,
   EditorProjectCreationRequest,
@@ -14,6 +16,9 @@ declare global {
   var runicEditorLoad: (() => Promise<string>) | undefined;
   var runicEditorCheckExternalChanges: (() => Promise<string>) | undefined;
   var runicEditorPickWorkspace: (() => Promise<string>) | undefined;
+  var runicEditorPreviewMutation: ((request: string) => Promise<string>) | undefined;
+  var runicEditorApplyMutation: ((request: string) => Promise<string>) | undefined;
+  var runicEditorRecoverTransaction: ((request: string) => Promise<string>) | undefined;
   var runicEditorValidate: ((path: string, content: string) => Promise<string>) | undefined;
   var runicEditorSave:
     | ((path: string, content: string, revision: string) => Promise<string>)
@@ -27,6 +32,9 @@ export interface EditorBridge {
   load(): Promise<WorkspaceSnapshot>;
   checkExternalChanges(): Promise<EditorExternalChanges>;
   pickWorkspace(): Promise<EditorWorkspacePickerResult>;
+  previewMutation(request: EditorMutationRequest): Promise<EditorMutationPreview>;
+  applyMutation(request: EditorMutationRequest): Promise<EditorOperationResult>;
+  recoverTransaction(mode: "complete" | "rollback"): Promise<EditorOperationResult>;
   validate(path: string, content: string): Promise<ValidationResult>;
   save(path: string, content: string, revision: string): Promise<EditorOperationResult>;
   previewProject(request: EditorProjectCreationRequest): Promise<EditorProjectPlan>;
@@ -51,6 +59,24 @@ export function createEditorBridge(): EditorBridge {
         "runicEditorPickWorkspace",
         globalThis.runicEditorPickWorkspace,
       )());
+    },
+    async previewMutation(request) {
+      return parse(await binding(
+        "runicEditorPreviewMutation",
+        globalThis.runicEditorPreviewMutation,
+      )(JSON.stringify(request)));
+    },
+    async applyMutation(request) {
+      return parse(await binding(
+        "runicEditorApplyMutation",
+        globalThis.runicEditorApplyMutation,
+      )(JSON.stringify(request)));
+    },
+    async recoverTransaction(mode) {
+      return parse(await binding(
+        "runicEditorRecoverTransaction",
+        globalThis.runicEditorRecoverTransaction,
+      )(JSON.stringify({ mode })));
     },
     async validate(path, content) {
       return parse(await binding("runicEditorValidate", globalThis.runicEditorValidate)(path, content));

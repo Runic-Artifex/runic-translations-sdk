@@ -3,8 +3,8 @@
 Status: active
 Last updated: 8 August 2026
 
-Implementation progress: E0, E1, and E2 are complete on the editor/tooling branch.
-The next implementation milestone is E3 (complete locale and key management).
+Implementation progress: E0 through E3 are complete on the editor/tooling branch.
+The next implementation milestone is E4 (schema-v2 composer and preview).
 
 ## Outcome
 
@@ -62,8 +62,10 @@ The first vertical already provides:
 
 The current vertical now opens bounded one- and multi-catalog workspaces,
 preserves malformed JSON for repair, watches external changes, and restores
-local drafts explicitly. Locale/key lifecycle operations and the full visual
-schema-v2 composer remain before it is a complete customer product.
+local drafts explicitly. Locale/key lifecycle operations use compiler-validated,
+previewable, journaled transactions with complete-or-rollback recovery. The full
+visual schema-v2 composer and later review/distribution milestones remain before
+it is a complete customer product.
 
 ## Architecture decision
 
@@ -440,6 +442,8 @@ Acceptance:
 - path escape and hostile-workspace tests pass on every supported OS pipeline.
 
 ### E3 — Complete locale and key management
+
+Status: complete.
 
 Deliverables:
 
