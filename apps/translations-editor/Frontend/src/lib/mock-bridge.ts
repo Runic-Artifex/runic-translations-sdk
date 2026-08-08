@@ -4,6 +4,7 @@ import type {
   EditorProjectCreationRequest,
   WorkspaceSnapshot,
 } from "./contracts";
+import { sourceMessageToArtifact, toStructuredMessage } from "./message-composer";
 
 const manifest = document("product.catalog.json", undefined, undefined, {
   schemaVersion: 2,
@@ -90,6 +91,27 @@ export const mockBridge: EditorBridge = {
           column: 1,
           endLine: 1,
           endColumn: 1,
+        }],
+      };
+    }
+  },
+  async previewMessage(path, content, locale, key) {
+    try {
+      const root = JSON.parse(content) as Record<string, unknown>;
+      let value: unknown = root.resources;
+      for (const segment of key.split(".")) value = (value as Record<string, unknown>)[segment];
+      if (typeof value === "object" && value !== null && "$value" in value) {
+        value = (value as Record<string, unknown>).$value;
+      }
+      const artifact = sourceMessageToArtifact(toStructuredMessage(value as string | Record<string, unknown>));
+      return { success: true, locale, astJson: JSON.stringify(artifact), diagnostics: [] };
+    } catch (error) {
+      return {
+        success: false,
+        diagnostics: [{
+          id: "PREVIEW", severity: "error",
+          message: error instanceof Error ? error.message : String(error),
+          path, line: 1, column: 1, endLine: 1, endColumn: 1,
         }],
       };
     }

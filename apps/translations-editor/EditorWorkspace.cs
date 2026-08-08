@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using RunicTextResources.Authoring;
 using RunicTextResources.Compiler;
+using RunicTextResources.Compiler.Generation;
 
 namespace RunicTextResources.Editor;
 
@@ -130,6 +131,43 @@ internal sealed class EditorWorkspace : IDisposable
             if (state.Files.Exists(file => string.Equals(file.Path, path, StringComparison.Ordinal) && file.Kind == DocumentKind.Malformed))
                 return MalformedValidation(path);
             return new ValidationResult(state.Compilation.Success, Diagnostics(state.Compilation));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<EditorMessagePreview> PreviewMessageAsync(
+        string relativePath,
+        string content,
+        string locale,
+        string key,
+        CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            string path = NormalizeKnownPath(relativePath);
+            WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
+            EditorDiagnostic[] diagnostics = Diagnostics(state.Compilation);
+            if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
+                return new EditorMessagePreview(false, null, null, diagnostics);
+
+            TextResourceGeneratedOutput artifact = TextResourceOutputRenderer.RenderLocaleJson(
+                state.Compilation.Catalogs[0], locale);
+            using JsonDocument document = JsonDocument.Parse(artifact.Text);
+            JsonElement messages = document.RootElement.GetProperty("messages");
+            if (!messages.TryGetProperty(key, out JsonElement message))
+                return new EditorMessagePreview(false, locale, null,
+                    [new EditorDiagnostic("PREVIEW", "error", $"The compiled locale has no message '{key}'.", path, 1, 1, 1, 1)]);
+            return new EditorMessagePreview(true, locale, message.GetRawText(), diagnostics);
+        }
+        catch (Exception exception) when (exception is ArgumentException or JsonException)
+        {
+            return new EditorMessagePreview(false, null, null,
+                [new EditorDiagnostic("PREVIEW", "error", exception.Message, relativePath, 1, 1, 1, 1)]);
         }
         finally
         {

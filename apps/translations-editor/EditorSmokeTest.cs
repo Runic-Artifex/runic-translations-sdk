@@ -18,9 +18,22 @@ internal static class EditorSmokeTest
                 ?? throw new InvalidOperationException("The editor did not discover the catalog.");
             Require(catalog.Locales.Count >= 1, "The editor did not discover any locales.");
 
-            EditorDocument document = snapshot.Documents.First(static candidate => !candidate.IsManifest);
+            EditorDocument document = snapshot.Documents.Single(static candidate => candidate.Path == "product.de.json");
             ValidationResult unchanged = await workspace.ValidateAsync(document.Path, document.Content).ConfigureAwait(false);
             Require(unchanged.Success, "An unchanged resource document did not validate.");
+
+            EditorMessagePreview messagePreview = await workspace.PreviewMessageAsync(
+                document.Path, document.Content, "de", "Files.Selected").ConfigureAwait(false);
+            Require(messagePreview.Success && messagePreview.AstJson is not null,
+                "The compiler-backed schema-v2 message preview was not produced.");
+            string previewJson = messagePreview.AstJson
+                ?? throw new InvalidOperationException("The compiler-backed preview returned no AST.");
+            JsonNode previewAst = JsonNode.Parse(previewJson)
+                ?? throw new InvalidOperationException("The preview AST was not valid JSON.");
+            Require(previewAst["astVersion"]?.GetValue<int>() == 2,
+                "The editor preview did not use normalized message AST v2.");
+            Require(previewAst["selectors"]?.AsArray().Count == 1 && previewAst["variants"]?.AsArray().Count == 2,
+                "The editor preview lost selectors or variants.");
 
             ValidationResult invalid = await workspace.ValidateAsync(document.Path, document.Content + ",").ConfigureAwait(false);
             Require(!invalid.Success, "Invalid JSON unexpectedly validated.");

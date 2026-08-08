@@ -61,6 +61,17 @@ internal static class Program
                 return WebUiResult.FromString(Serialize(result));
             });
 
+            window.BindAsync("runicEditorPreviewMessage", async (webUiEvent, cancellationToken) =>
+            {
+                EditorMessagePreview result = await session.PreviewMessageAsync(
+                    webUiEvent.GetString(),
+                    webUiEvent.GetString(1),
+                    webUiEvent.GetString(2),
+                    webUiEvent.GetString(3),
+                    cancellationToken).ConfigureAwait(false);
+                return WebUiResult.FromString(Serialize(result));
+            });
+
             window.BindAsync("runicEditorSave", async (webUiEvent, cancellationToken) =>
             {
                 EditorOperationResult result = await session.SaveAsync(
@@ -109,6 +120,9 @@ internal static class Program
 
     private static string Serialize(ValidationResult value) =>
         JsonSerializer.Serialize(value, EditorJsonContext.Default.ValidationResult);
+
+    private static string Serialize(EditorMessagePreview value) =>
+        JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorMessagePreview);
 
     private static string Serialize(EditorOperationResult value) =>
         JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorOperationResult);
