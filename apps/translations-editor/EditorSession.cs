@@ -119,6 +119,13 @@ internal sealed class EditorSession : IDisposable
             (workspace, token) => workspace.SaveAsync(relativePath, content, expectedRevision, token),
             cancellationToken);
 
+    public Task<EditorReviewOperationResult> SaveReviewAsync(
+        EditorReviewSaveRequest request,
+        CancellationToken cancellationToken = default) =>
+        WithWorkspaceAsync(
+            (workspace, token) => workspace.SaveReviewAsync(request, token),
+            cancellationToken);
+
     public static EditorProjectPlan PreviewProject(EditorProjectCreationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);

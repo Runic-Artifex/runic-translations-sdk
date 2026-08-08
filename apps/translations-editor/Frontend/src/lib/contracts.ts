@@ -56,11 +56,50 @@ export interface WorkspaceSnapshot {
   diagnostics: EditorDiagnostic[];
   success: boolean;
   pendingTransaction?: EditorPendingTransaction;
+  review?: EditorReviewSnapshot;
 }
 
 export interface EditorPendingTransaction {
   catalogId: string;
   paths: string[];
+}
+
+export type EditorReviewState = "draft" | "translated" | "needs-review" | "approved";
+
+export interface EditorReviewEntry {
+  key: string;
+  locale: string;
+  state: EditorReviewState;
+  note?: string;
+  sourceFingerprint?: string;
+  samples: Record<string, string>;
+}
+
+export interface EditorTerminologyEntry {
+  source: string;
+  preferred: string;
+  locale?: string;
+  note?: string;
+}
+
+export interface EditorReviewSnapshot {
+  path: string;
+  revision?: string;
+  error?: string;
+  entries: EditorReviewEntry[];
+  terminology: EditorTerminologyEntry[];
+}
+
+export interface EditorReviewSaveRequest {
+  expectedRevision?: string;
+  entries: EditorReviewEntry[];
+  terminology: EditorTerminologyEntry[];
+}
+
+export interface EditorReviewOperationResult {
+  ok: boolean;
+  message?: string;
+  review?: EditorReviewSnapshot;
 }
 
 export interface ValidationResult {

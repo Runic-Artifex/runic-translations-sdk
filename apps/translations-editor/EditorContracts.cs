@@ -49,9 +49,34 @@ internal sealed record WorkspaceSnapshot(
     IReadOnlyList<EditorDocument> Documents,
     IReadOnlyList<EditorDiagnostic> Diagnostics,
     bool Success,
-    EditorPendingTransaction? PendingTransaction);
+    EditorPendingTransaction? PendingTransaction,
+    EditorReviewSnapshot? Review);
 
 internal sealed record EditorPendingTransaction(string CatalogId, IReadOnlyList<string> Paths);
+
+internal sealed record EditorReviewEntry(
+    string Key,
+    string Locale,
+    string State,
+    string? Note,
+    string? SourceFingerprint,
+    IReadOnlyDictionary<string, string> Samples);
+
+internal sealed record EditorTerminologyEntry(string Source, string Preferred, string? Locale, string? Note);
+
+internal sealed record EditorReviewSnapshot(
+    string Path,
+    string? Revision,
+    string? Error,
+    IReadOnlyList<EditorReviewEntry> Entries,
+    IReadOnlyList<EditorTerminologyEntry> Terminology);
+
+internal sealed record EditorReviewSaveRequest(
+    string? ExpectedRevision,
+    IReadOnlyList<EditorReviewEntry> Entries,
+    IReadOnlyList<EditorTerminologyEntry> Terminology);
+
+internal sealed record EditorReviewOperationResult(bool Ok, string? Message, EditorReviewSnapshot? Review);
 
 internal sealed record ValidationResult(
     bool Success,
@@ -132,6 +157,9 @@ internal sealed record EditorRecoveryRequest(string Mode);
 [JsonSerializable(typeof(WorkspaceSnapshot))]
 [JsonSerializable(typeof(ValidationResult))]
 [JsonSerializable(typeof(EditorMessagePreview))]
+[JsonSerializable(typeof(EditorReviewSnapshot))]
+[JsonSerializable(typeof(EditorReviewSaveRequest))]
+[JsonSerializable(typeof(EditorReviewOperationResult))]
 [JsonSerializable(typeof(EditorOperationResult))]
 [JsonSerializable(typeof(EditorProjectCreationRequest))]
 [JsonSerializable(typeof(EditorProjectPlan))]

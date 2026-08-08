@@ -106,7 +106,8 @@ internal sealed class EditorWorkspace : IDisposable
                     [],
                     [new EditorDiagnostic("RECOVERY", "error", "An interrupted workspace transaction requires recovery.", string.Empty, 1, 1, 1, 1)],
                     false,
-                    new EditorPendingTransaction(pending.CatalogId, pending.Paths));
+                    new EditorPendingTransaction(pending.CatalogId, pending.Paths),
+                    null);
             }
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
             return CreateSnapshot(state);
@@ -255,6 +256,35 @@ internal sealed class EditorWorkspace : IDisposable
         }
     }
 
+    public async Task<EditorReviewOperationResult> SaveReviewAsync(
+        EditorReviewSaveRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            if (_catalogId is null) return new EditorReviewOperationResult(false, "Select a catalog before saving review data.", null);
+            var state = new TextResourceEditorState(
+                _catalogId,
+                request.Entries.Select(static entry => new TextResourceEditorStateEntry(
+                    entry.Key, entry.Locale, entry.State, entry.Note, entry.SourceFingerprint, entry.Samples)).ToArray(),
+                request.Terminology.Select(static term => new TextResourceTerminologyEntry(
+                    term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
+            TextResourceEditorStateLoadResult saved = TextResourceEditorStateStore.Save(_root, state, request.ExpectedRevision);
+            return new EditorReviewOperationResult(true, null, Review(saved));
+        }
+        catch (Exception exception) when (exception is TextResourceEditorStateException or IOException or UnauthorizedAccessException)
+        {
+            return new EditorReviewOperationResult(false, exception.Message, null);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -341,8 +371,20 @@ internal sealed class EditorWorkspace : IDisposable
                 file.Locale,
                 file.Layer));
         }
-        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state.Compilation), state.Compilation.Success, null);
+        EditorReviewSnapshot? review = _catalogId is null
+            ? null
+            : Review(TextResourceEditorStateStore.Load(_root, _catalogId));
+        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state.Compilation), state.Compilation.Success, null, review);
     }
+
+    private static EditorReviewSnapshot Review(TextResourceEditorStateLoadResult result) => new(
+        result.Path,
+        result.Revision,
+        result.Error,
+        result.State.Entries.Select(static entry => new EditorReviewEntry(
+            entry.Key, entry.Locale, entry.State, entry.Note, entry.SourceFingerprint, entry.Samples)).ToArray(),
+        result.State.Terminology.Select(static term => new EditorTerminologyEntry(
+            term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
 
     private static EditorDiagnostic[] Diagnostics(TextResourceCompilation compilation)
     {
@@ -526,6 +568,7 @@ internal sealed class EditorWorkspace : IDisposable
         if (!fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return;
         string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
         if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)) return;
+        if (relativePath.StartsWith(".runic-textresources/", StringComparison.Ordinal)) return;
         _pendingChanges.TryAdd(relativePath, 0);
     }
 

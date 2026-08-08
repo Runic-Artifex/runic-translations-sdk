@@ -22,6 +22,13 @@ The implementation roadmap is in
   operation bridge.
 - a guided New Project flow previews and creates one- or multi-locale projects
   through the same compiler-validated authoring layer as the CLI.
+- locale/key lifecycle changes are previewed and committed through recoverable
+  workspace transactions;
+- the optional versioned editor-state sidecar carries review states, notes,
+  preview samples, and terminology without becoming a compiler input;
+- stale-source and local quality checks, translation-memory suggestions,
+  deterministic CSV reports, bulk workflow changes, and bounded message-list
+  rendering support large catalogs without requiring a network service.
 
 The included `ExampleWorkspace` deliberately uses German as its source locale,
 adds English and French, includes a structured plural message, and leaves some
@@ -62,11 +69,15 @@ nix develop -c ./samples/RunicTextResources.Editor/verify.sh
 The smoke path opens a copy of the example as both a multi-locale and
 single-locale workspace, creates and switches to a new three-locale project,
 asks the real compiler to validate valid and invalid drafts, performs an atomic
-save, and verifies stale-write rejection. It does not open a browser window.
+save, round-trips the optional review sidecar, and verifies stale-write
+rejection. The frontend verification also enforces a 50,000-message quality and
+search pass across 100 review locales, a 10-second processing budget, a 256 MiB
+heap-growth budget, and a 300-row rendering batch. It does not open a browser
+window.
 
 ## Deliberate current scope
 
-This vertical creates a new schema-v2 catalog or edits one existing catalog and
-its locale documents. Adding or removing locales after creation, translation
-memory, review/approval workflows, machine translation providers, and project
-discovery across multiple catalogs remain explicit product follow-ups.
+This vertical creates a new schema-v2 catalog, discovers and selects catalogs,
+repairs malformed documents, and edits locale documents, locale graphs, keys,
+structured messages, and review metadata. Machine-translation providers and
+signed customer distribution remain explicit product follow-ups.

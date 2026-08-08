@@ -82,6 +82,13 @@ internal static class Program
                 return WebUiResult.FromString(Serialize(result));
             });
 
+            window.BindAsync("runicEditorSaveReview", async (webUiEvent, cancellationToken) =>
+            {
+                EditorReviewSaveRequest request = DeserializeReviewRequest(webUiEvent.GetString());
+                return WebUiResult.FromString(Serialize(
+                    await session.SaveReviewAsync(request, cancellationToken).ConfigureAwait(false)));
+            });
+
             window.Bind("runicEditorPreviewProject", webUiEvent =>
             {
                 EditorProjectCreationRequest request = DeserializeProjectRequest(webUiEvent.GetString());
@@ -124,6 +131,9 @@ internal static class Program
     private static string Serialize(EditorMessagePreview value) =>
         JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorMessagePreview);
 
+    private static string Serialize(EditorReviewOperationResult value) =>
+        JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorReviewOperationResult);
+
     private static string Serialize(EditorOperationResult value) =>
         JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorOperationResult);
 
@@ -154,6 +164,10 @@ internal static class Program
     private static EditorRecoveryRequest DeserializeRecoveryRequest(string value) =>
         JsonSerializer.Deserialize(value, EditorJsonContext.Default.EditorRecoveryRequest)
         ?? throw new ArgumentException("The recovery request is required.", nameof(value));
+
+    private static EditorReviewSaveRequest DeserializeReviewRequest(string value) =>
+        JsonSerializer.Deserialize(value, EditorJsonContext.Default.EditorReviewSaveRequest)
+        ?? throw new ArgumentException("The review save request is required.", nameof(value));
 
     private static string? ArgumentValue(string[] args, string name)
     {

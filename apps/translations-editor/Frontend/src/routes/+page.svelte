@@ -31,6 +31,9 @@
     EditorMutationRequest,
     EditorProjectCreationRequest,
     EditorProjectPlan,
+    EditorReviewEntry,
+    EditorReviewState,
+    EditorTerminologyEntry,
     ValidationResult,
     WorkspaceSnapshot,
   } from "$lib/contracts";
@@ -47,8 +50,18 @@
     type ResourceValue,
     type TranslationRow,
   } from "$lib/resource-model";
+  import {
+    effectiveReviewState,
+    isStale,
+    qualityIssues,
+    qualityReportCsv,
+    reviewIdentity,
+    reviewMap,
+    sourceFingerprint,
+    translationSuggestions,
+  } from "$lib/review-model";
 
-  type Filter = "all" | "missing" | "structured";
+  type Filter = "all" | "missing" | "structured" | "needs-review" | "stale" | "quality";
   type EditorMode = "simple" | "advanced" | "raw";
   type ProjectLocaleDraft = { id: number; tag: string; fallback: string };
   type StoredDraft = { content: string; baseRevision: string };
@@ -127,15 +140,41 @@
   let previewResult = $state.raw<MessagePreviewResult>();
   let previewTimer: number | undefined;
   let previewEpoch = 0;
+  let reviewEntries = $state<EditorReviewEntry[]>([]);
+  let terminology = $state<EditorTerminologyEntry[]>([]);
+  let reviewRevision = $state<string>();
+  let reviewDirty = $state(false);
+  let reviewSaving = $state(false);
+  let reviewMessage = $state<string>();
+  let rowLimit = $state(300);
+  let terminologyDialogOpen = $state(false);
+  let termSource = $state("");
+  let termPreferred = $state("");
+  let termLocale = $state("");
+  let termNote = $state("");
+  let reportDialogOpen = $state(false);
 
   let labels = $derived(labelsFor(uiLocale));
   let rows = $derived(buildRows(snapshot, drafts));
+  let reviewIndex = $derived(reviewMap(reviewEntries));
+  let localeQuality = $derived(qualityIssues(
+    rows,
+    snapshot?.catalog?.defaultLocale ?? "",
+    selectedLocale,
+    reviewEntries,
+    terminology,
+  ));
+  let qualityKeySet = $derived(new Set(localeQuality.map((issue) => issue.key)));
   let visibleRows = $derived.by(() => {
     const normalized = query.trim().toLocaleLowerCase();
     return rows.filter((row) => {
       const cell = row.cells[selectedLocale];
       if (filter === "missing" && cell?.entry !== undefined) return false;
       if (filter === "structured" && !row.structured) return false;
+      const review = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
+      if (filter === "needs-review" && effectiveReviewState(review, cell?.entry !== undefined) !== "needs-review") return false;
+      if (filter === "stale" && !isStale(review, row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value)) return false;
+      if (filter === "quality" && !qualityKeySet.has(row.key)) return false;
       if (normalized.length === 0) return true;
       const searchable = [
         row.key,
@@ -146,9 +185,23 @@
       return searchable.includes(normalized);
     });
   });
-  let selectedRow = $derived(rows.find((row) => row.key === selectedKey));
+  let renderedRows = $derived(visibleRows.slice(0, rowLimit));
+  let selectedRow = $derived.by(() => rows.find((row) => row.key === selectedKey));
   let currentCell = $derived(selectedRow?.cells[selectedLocale]);
-  let currentDocument = $derived(
+  let currentSourceValue = $derived(
+    selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value,
+  );
+  let currentReview = $derived(reviewIndex.get(reviewIdentity(selectedKey, selectedLocale)));
+  let currentReviewState = $derived(effectiveReviewState(currentReview, currentCell?.entry !== undefined));
+  let currentIsStale = $derived(isStale(currentReview, currentSourceValue));
+  let currentQuality = $derived(localeQuality.filter((issue) => issue.key === selectedKey));
+  let memorySuggestions = $derived(translationSuggestions(
+    rows,
+    snapshot?.catalog?.defaultLocale ?? "",
+    selectedLocale,
+    selectedKey,
+  ));
+  let currentDocument = $derived.by(() =>
     snapshot?.documents.find((document) => document.path === selectedDocumentPath),
   );
   let currentContent = $derived(
@@ -213,6 +266,7 @@
       drafts = {};
       recoveredDrafts = readStoredDrafts(next);
     }
+    if (resetSelection || !reviewDirty) installReview(next);
     validation = undefined;
     const nextRows = buildRows(next, {});
     if (resetSelection || !nextRows.some((row) => row.key === selectedKey)) {
@@ -225,20 +279,29 @@
     rememberProject(next);
   }
 
+  function installReview(next: WorkspaceSnapshot): void {
+    reviewEntries = structuredClone(next.review?.entries ?? []);
+    terminology = structuredClone(next.review?.terminology ?? []);
+    reviewRevision = next.review?.revision;
+    reviewDirty = false;
+    reviewMessage = next.review?.error;
+  }
+
   function selectRow(row: TranslationRow): void {
-    selectedKey = row.key;
+    const nextKey = row.key;
     validation = undefined;
     clientError = undefined;
     operationMessage = undefined;
-    configureEditor();
+    configureEditor(undefined, nextKey, selectedLocale);
+    selectedKey = nextKey;
   }
 
   function selectLocale(locale: string): void {
-    selectedLocale = locale;
     validation = undefined;
     clientError = undefined;
     operationMessage = undefined;
-    configureEditor();
+    configureEditor(undefined, selectedKey, locale);
+    selectedLocale = locale;
   }
 
   function chooseMode(nextMode: EditorMode): void {
@@ -247,12 +310,15 @@
     configureEditor(nextMode);
   }
 
-  function configureEditor(preferredMode?: EditorMode): void {
-    const row = buildRows(snapshot, drafts).find((candidate) => candidate.key === selectedKey);
-    const cell = row?.cells[selectedLocale];
+  function configureEditor(preferredMode?: EditorMode, key = selectedKey, locale = selectedLocale): void {
+    const row = buildRows(snapshot, drafts).find((candidate) => candidate.key === key);
+    const cell = row?.cells[locale];
     const document = cell?.document;
     selectedDocumentPath = document?.path ?? "";
     const sourceEntry = row?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry;
+    previewSamples = {
+      ...(reviewIndex.get(reviewIdentity(key, locale))?.samples ?? {}),
+    };
     const nextMode = preferredMode ?? (cell?.entry?.structured || row?.structured ? "advanced" : "simple");
     mode = nextMode;
     if (nextMode === "raw") {
@@ -342,6 +408,122 @@
   function updatePreviewSample(name: string, value: string): void {
     previewSamples = { ...previewSamples, [name]: value };
     renderPreview(selectedLocale);
+  }
+
+  function updateReview(
+    key: string,
+    locale: string,
+    patch: Partial<EditorReviewEntry>,
+  ): void {
+    const identity = reviewIdentity(key, locale);
+    const index = reviewEntries.findIndex((entry) => reviewIdentity(entry.key, entry.locale) === identity);
+    const row = rows.find((candidate) => candidate.key === key);
+    const existing = index < 0 ? undefined : reviewEntries[index];
+    const next: EditorReviewEntry = {
+      key,
+      locale,
+      state: patch.state ?? existing?.state ?? effectiveReviewState(undefined, row?.cells[locale]?.entry !== undefined),
+      note: patch.note ?? existing?.note,
+      sourceFingerprint: patch.sourceFingerprint ?? existing?.sourceFingerprint,
+      samples: patch.samples ?? existing?.samples ?? {},
+    };
+    reviewEntries = index < 0
+      ? [...reviewEntries, next]
+      : reviewEntries.map((entry, candidate) => candidate === index ? next : entry);
+    reviewDirty = true;
+    reviewMessage = undefined;
+  }
+
+  function setCurrentReviewState(state: EditorReviewState): void {
+    updateReview(selectedKey, selectedLocale, {
+      state,
+      sourceFingerprint: sourceFingerprint(currentSourceValue),
+      samples: { ...previewSamples },
+    });
+  }
+
+  function setCurrentReviewNote(note: string): void {
+    updateReview(selectedKey, selectedLocale, { note });
+  }
+
+  function markVisible(state: EditorReviewState): void {
+    let next = [...reviewEntries];
+    const byIdentity = reviewMap(next);
+    for (const row of visibleRows) {
+      const identity = reviewIdentity(row.key, selectedLocale);
+      const existing = byIdentity.get(identity);
+      const entry: EditorReviewEntry = {
+        key: row.key,
+        locale: selectedLocale,
+        state,
+        note: existing?.note,
+        sourceFingerprint: sourceFingerprint(row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value),
+        samples: { ...(existing?.samples ?? {}) },
+      };
+      const index = next.findIndex((candidate) => reviewIdentity(candidate.key, candidate.locale) === identity);
+      if (index < 0) next.push(entry);
+      else next[index] = entry;
+      byIdentity.set(identity, entry);
+    }
+    reviewEntries = next;
+    reviewDirty = true;
+    reviewMessage = visibleRows.length + " visible messages marked " + state + ". Save workflow changes to commit.";
+  }
+
+  async function saveReview(): Promise<void> {
+    if (!reviewDirty || reviewSaving || snapshot?.review?.error !== undefined) return;
+    reviewSaving = true;
+    reviewMessage = undefined;
+    try {
+      const result = await bridge.saveReview({
+        expectedRevision: reviewRevision,
+        entries: reviewEntries.map((entry) => ({ ...entry, samples: { ...entry.samples } })),
+        terminology: terminology.map((term) => ({ ...term })),
+      });
+      if (!result.ok || result.review === undefined) {
+        reviewMessage = result.message ?? "Review data could not be saved.";
+        return;
+      }
+      reviewEntries = structuredClone(result.review.entries);
+      terminology = structuredClone(result.review.terminology);
+      reviewRevision = result.review.revision;
+      reviewDirty = false;
+      reviewMessage = "Workflow sidecar saved";
+      if (snapshot !== undefined) snapshot.review = result.review;
+    } catch (error) {
+      reviewMessage = errorMessage(error);
+    } finally {
+      reviewSaving = false;
+    }
+  }
+
+  function discardReview(): void {
+    if (snapshot !== undefined) installReview(snapshot);
+  }
+
+  function addTerm(): void {
+    if (termSource.trim() === "" || termPreferred.trim() === "") return;
+    terminology = [...terminology, {
+      source: termSource.trim(),
+      preferred: termPreferred.trim(),
+      locale: termLocale.trim() || undefined,
+      note: termNote.trim() || undefined,
+    }];
+    reviewDirty = true;
+    termSource = "";
+    termPreferred = "";
+    termLocale = "";
+    termNote = "";
+  }
+
+  function removeTerm(index: number): void {
+    terminology = terminology.filter((_, candidate) => candidate !== index);
+    reviewDirty = true;
+  }
+
+  function applySuggestion(value: string): void {
+    mode = "simple";
+    edit(value);
   }
 
   function renderPreview(locale: string): void {
@@ -1126,6 +1308,9 @@
         <button class="new-project-button" onclick={() => prepareMutation("add-locale")}>◎ Manage languages</button>
         <button class="new-project-button" onclick={showOpenWorkspaceDialog}>⌁ Open workspace</button>
         <button class="new-project-button" onclick={openProjectWizard}>＋ New project</button>
+        {#if snapshot.review?.error}
+          <p class="sidecar-error">Review sidecar disabled: {snapshot.review.error}</p>
+        {/if}
       </section>
 
       <section class="locale-overview" aria-label="Locale coverage">
@@ -1159,6 +1344,9 @@
           { value: "all" as const, label: labels.all, count: rows.length },
           { value: "missing" as const, label: labels.missing, count: rows.filter((row) => row.cells[selectedLocale]?.entry === undefined).length },
           { value: "structured" as const, label: labels.structured, count: rows.filter((row) => row.structured).length },
+          { value: "needs-review" as const, label: "Review", count: rows.filter((row) => effectiveReviewState(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[selectedLocale]?.entry !== undefined) === "needs-review").length },
+          { value: "stale" as const, label: "Stale", count: rows.filter((row) => isStale(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value)).length },
+          { value: "quality" as const, label: "Quality", count: qualityKeySet.size },
         ] as option (option.value)}
           <button
             class={filter === option.value ? "active" : ""}
@@ -1170,9 +1358,16 @@
 
       <button class="add-message-button" onclick={() => prepareMutation("create-key")}>＋ Add message</button>
 
+      <div class="bulk-bar">
+        <span>{visibleRows.length} visible</span>
+        <button onclick={() => markVisible("needs-review")}>Mark for review</button>
+        <button onclick={() => markVisible("approved")}>Approve visible</button>
+      </div>
+
       <nav class="message-list" aria-label="Translation messages">
-        {#each visibleRows as row (row.key)}
+        {#each renderedRows as row (row.key)}
           {@const cell = row.cells[selectedLocale]}
+          {@const rowReview = reviewIndex.get(reviewIdentity(row.key, selectedLocale))}
           <button
             class={selectedKey === row.key ? "message active" : "message"}
             aria-current={selectedKey === row.key ? "true" : undefined}
@@ -1183,7 +1378,11 @@
               <strong>{row.key}</strong>
               <span>{preview(cell?.entry)}</span>
             </span>
-            {#if row.structured}<span class="structure-badge">AST</span>{/if}
+            <span class="message-badges">
+              {#if isStale(rowReview, row.cells[snapshot.catalog.defaultLocale]?.entry?.value)}<span class="review-badge stale">stale</span>{/if}
+              {#if effectiveReviewState(rowReview, cell?.entry !== undefined) === "needs-review"}<span class="review-badge">review</span>{/if}
+              {#if row.structured}<span class="structure-badge">AST</span>{/if}
+            </span>
           </button>
         {:else}
           <div class="empty-list">
@@ -1191,6 +1390,9 @@
             <p>{labels.noResults}</p>
           </div>
         {/each}
+        {#if renderedRows.length < visibleRows.length}
+          <button class="load-more" onclick={() => rowLimit += 300}>Show 300 more · {visibleRows.length - renderedRows.length} remaining</button>
+        {/if}
       </nav>
     </aside>
 
@@ -1211,6 +1413,10 @@
           {/each}
         </div>
         <div class="toolbar-actions">
+          {#if reviewDirty}
+            <button class="workflow-discard" disabled={reviewSaving} onclick={discardReview}>Discard workflow</button>
+            <button class="workflow-save" disabled={reviewSaving || snapshot.review?.error !== undefined} onclick={() => void saveReview()}>{reviewSaving ? "Saving workflow…" : "Save workflow"}</button>
+          {/if}
           <span class={isDirty ? "save-state dirty" : "save-state"}>
             <span></span>{isDirty ? labels.unsaved : operationMessage ?? labels.saved}
           </span>
@@ -1257,6 +1463,54 @@
               </div>
             </div>
           </header>
+
+          <section class="review-panel">
+            <header>
+              <div>
+                <span class={"review-state-dot " + currentReviewState}></span>
+                <div><strong>Workflow</strong><small>{reviewDirty ? "Unsaved sidecar changes" : reviewMessage ?? "Optional project sidecar"}</small></div>
+              </div>
+              <div class="review-actions">
+                {#if currentIsStale}<span class="stale-source">Source changed</span>{/if}
+                <label>Status
+                  <select value={currentReviewState} disabled={snapshot.review?.error !== undefined} onchange={(event) => setCurrentReviewState(event.currentTarget.value as EditorReviewState)}>
+                    <option value="draft">Draft</option>
+                    <option value="translated">Translated</option>
+                    <option value="needs-review">Needs review</option>
+                    <option value="approved">Approved</option>
+                  </select>
+                </label>
+                <button onclick={() => terminologyDialogOpen = true}>Terminology · {terminology.length}</button>
+                <button onclick={() => reportDialogOpen = true}>Quality report · {localeQuality.length}</button>
+              </div>
+            </header>
+            <div class="review-grid">
+              <label class="review-note">Translator / reviewer note
+                <textarea value={currentReview?.note ?? ""} placeholder="Optional context for the next reviewer…" oninput={(event) => setCurrentReviewNote(event.currentTarget.value)}></textarea>
+              </label>
+              <div class="quality-summary">
+                <strong>Quality checks</strong>
+                {#if currentQuality.length === 0}
+                  <span class="quality-ok">✓ No local quality findings</span>
+                {:else}
+                  {#each currentQuality as issue (issue)}
+                    <button onclick={() => filter = "quality"}><span>{issue.kind}</span>{issue.message}</button>
+                  {/each}
+                {/if}
+              </div>
+              {#if memorySuggestions.length > 0}
+                <div class="memory-suggestions">
+                  <strong>Local translation memory</strong>
+                  {#each memorySuggestions as suggestion (suggestion.key)}
+                    <button title={suggestion.source} onclick={() => applySuggestion(suggestion.translation)}>
+                      <span>{Math.round(suggestion.score * 100)}%</span>
+                      <span><code>{suggestion.key}</code>{suggestion.translation}</span>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </section>
 
           <div class="mode-tabs" role="tablist" aria-label="Editing mode">
             <button role="tab" aria-selected={mode === "simple"} class={mode === "simple" ? "active" : ""} onclick={() => chooseMode("simple")}>{labels.simple}</button>
@@ -1358,6 +1612,45 @@
       {/if}
     </section>
   </main>
+{/if}
+
+{#if terminologyDialogOpen}
+  <div class="dialog-backdrop">
+    <div class="project-dialog terminology-dialog" role="dialog" aria-modal="true" aria-labelledby="terminology-title">
+      <header><div><p class="eyebrow">Local quality</p><h2 id="terminology-title">Project terminology</h2></div><button class="icon-button" aria-label="Close terminology" onclick={() => terminologyDialogOpen = false}>×</button></header>
+      <div class="project-body terminology-body">
+        <p>Terms stay in the optional versioned sidecar and are checked locally. Nothing is sent to a service.</p>
+        <div class="term-form">
+          <label>Source term<input bind:value={termSource} placeholder="Save" /></label>
+          <label>Preferred translation<input bind:value={termPreferred} placeholder="Speichern" /></label>
+          <label>Locale<input bind:value={termLocale} placeholder="Optional, e.g. de" /></label>
+          <label>Note<input bind:value={termNote} placeholder="Optional usage guidance" /></label>
+          <button class="secondary" disabled={termSource.trim() === "" || termPreferred.trim() === ""} onclick={addTerm}>＋ Add term</button>
+        </div>
+        <div class="term-list">
+          {#each terminology as term, index (term)}
+            <div><span><strong>{term.source}</strong><span>→</span><strong>{term.preferred}</strong>{#if term.locale}<code>{term.locale}</code>{/if}</span><small>{term.note ?? "No note"}</small><button aria-label={"Remove term " + term.source} onclick={() => removeTerm(index)}>×</button></div>
+          {:else}
+            <p>No terminology entries yet.</p>
+          {/each}
+        </div>
+      </div>
+      <footer><button class="secondary" onclick={() => terminologyDialogOpen = false}>Done</button><div><button class="primary" disabled={!reviewDirty || reviewSaving} onclick={() => void saveReview()}>Save workflow</button></div></footer>
+    </div>
+  </div>
+{/if}
+
+{#if reportDialogOpen}
+  <div class="dialog-backdrop">
+    <div class="project-dialog report-dialog" role="dialog" aria-modal="true" aria-labelledby="quality-report-title">
+      <header><div><p class="eyebrow">Deterministic report</p><h2 id="quality-report-title">{selectedLocale} quality report</h2></div><button class="icon-button" aria-label="Close quality report" onclick={() => reportDialogOpen = false}>×</button></header>
+      <div class="project-body">
+        <p class="report-summary">{localeQuality.length} findings across {qualityKeySet.size} messages. CSV is ordered by key and finding kind.</p>
+        <textarea class="code report-output" readonly value={qualityReportCsv(localeQuality)}></textarea>
+      </div>
+      <footer><button class="secondary" onclick={() => reportDialogOpen = false}>Close</button><div></div></footer>
+    </div>
+  </div>
 {/if}
 
 {#if repairDocument !== undefined}
@@ -1662,6 +1955,7 @@
   .workspace-title strong { overflow: hidden; color: #f4f1e8; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
   .workspace-title span, .workspace-card > p { color: #818b84; font-size: .68rem; }
   .workspace-card > p { overflow: hidden; margin: .6rem 0 0 1.15rem; text-overflow: ellipsis; white-space: nowrap; }
+  .sidecar-error { border: 1px solid #623b35; border-radius: .35rem; padding: .5rem !important; color: #df998f !important; background: #271a18; white-space: normal !important; }
   .workspace-repairs { display: grid; gap: .35rem; margin: .7rem 0 0 1.15rem; border-left: 2px solid #9e554b; padding-left: .6rem; }
   .workspace-repairs strong { color: #e1a49b; font-size: .6rem; }
   .workspace-repairs button { overflow: hidden; border: 0; padding: 0; color: #c48379; text-align: left; text-overflow: ellipsis; white-space: nowrap; background: transparent; font: .56rem ui-monospace, monospace; cursor: pointer; }
@@ -1694,6 +1988,10 @@
   .filters button { display: flex; align-items: center; gap: .35rem; border: 0; border-radius: .4rem; padding: .38rem .5rem; color: #79837c; background: transparent; font-size: .66rem; cursor: pointer; }
   .filters button:hover, .filters button.active { color: #e3d8b9; background: #292b22; }
   .filters button span { min-width: 1.1rem; border-radius: .5rem; padding: .05rem .25rem; color: #8d968f; background: #222824; font-size: .54rem; text-align: center; }
+  .filters { flex-wrap: wrap; }
+  .bulk-bar { display: flex; align-items: center; gap: .3rem; padding: 0 1rem .55rem; }
+  .bulk-bar span { margin-right: auto; color: #606b63; font-size: .55rem; }
+  .bulk-bar button { border: 1px solid #353e38; border-radius: .3rem; padding: .3rem .4rem; color: #8d988f; background: #131815; font-size: .52rem; cursor: pointer; }
   .message-list { flex: 1; min-height: 0; padding: .4rem .55rem 1rem; overflow-y: auto; scrollbar-color: #3a433d transparent; }
   .message { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; width: 100%; border: 1px solid transparent; border-radius: .5rem; padding: .62rem .7rem; text-align: left; background: transparent; cursor: pointer; }
   .message:hover { background: #171d19; }
@@ -1706,6 +2004,10 @@
   .message-copy span { overflow: hidden; color: #68726c; font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
   .message.active .message-copy strong { color: #f0e6ca; }
   .structure-badge { border: 1px solid #5d5436; border-radius: .25rem; padding: .12rem .22rem; color: #bfa867; font: .48rem ui-monospace, monospace; }
+  .message-badges { display: flex; align-items: center; gap: .25rem; }
+  .review-badge { border-radius: .25rem; padding: .12rem .22rem; color: #d3a566; background: #342819; font: .47rem ui-monospace, monospace; }
+  .review-badge.stale { color: #df8f84; background: #38211e; }
+  .load-more { width: calc(100% - 1rem); margin: .5rem; border: 1px dashed #3e463f; border-radius: .4rem; padding: .55rem; color: #9a8c62; background: #111613; font-size: .58rem; cursor: pointer; }
   .empty-list { display: grid; place-items: center; gap: .4rem; padding: 3rem 1rem; color: #5f6862; text-align: center; }
   .empty-list span { font-size: 2rem; color: #766a46; }
   .empty-list p { margin: 0; font-size: .72rem; }
@@ -1720,6 +2022,8 @@
   .locale-tabs button > span { display: grid; place-items: center; width: 1.75rem; height: 1.3rem; border-radius: .25rem; color: #c6b577; background: #2e3026; font-size: .54rem; font-weight: 800; }
   .locale-tabs i { border-radius: .25rem; padding: .12rem .25rem; color: #789782; background: #1d2a21; font-size: .48rem; font-style: normal; text-transform: uppercase; }
   .toolbar-actions { display: flex; align-items: center; gap: 1rem; }
+  .workflow-save, .workflow-discard { border: 1px solid #574d32; border-radius: .35rem; padding: .42rem .55rem; color: #c8b472; background: #252319; font-size: .58rem; cursor: pointer; }
+  .workflow-discard { border-color: #3a433d; color: #7e8981; background: #151a17; }
   .save-state { display: flex; align-items: center; gap: .42rem; color: #6f7972; font-size: .65rem; white-space: nowrap; }
   .save-state > span { width: .42rem; height: .42rem; border-radius: 50%; background: #5b7e66; }
   .save-state.dirty { color: #b8a66f; }
@@ -1746,6 +2050,32 @@
   .key-actions button { border: 1px solid #37403a; border-radius: .3rem; padding: .3rem .45rem; color: #8f9991; background: #141916; font-size: .55rem; cursor: pointer; }
   .key-actions button:hover { border-color: #685c3d; color: #d8c58f; }
   .key-actions button.danger:hover { border-color: #79453e; color: #e4978b; }
+  .review-panel { max-width: 1000px; margin: 0 auto 1rem; border: 1px solid #343d37; border-radius: .6rem; background: #0e1310; overflow: hidden; }
+  .review-panel > header { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: .65rem .8rem; background: #151b17; }
+  .review-panel > header > div:first-child { display: flex; align-items: center; gap: .5rem; }
+  .review-panel > header > div:first-child > div { display: grid; gap: .12rem; }
+  .review-panel strong { color: #cbd3cd; font-size: .64rem; }
+  .review-panel small { color: #66716a; font-size: .53rem; }
+  .review-state-dot { width: .48rem; height: .48rem; border-radius: 50%; background: #777; }
+  .review-state-dot.translated { background: #719d7c; }
+  .review-state-dot.needs-review { background: #ca984b; }
+  .review-state-dot.approved { background: #65b886; box-shadow: 0 0 .45rem #65b88666; }
+  .review-actions { display: flex; align-items: end; gap: .4rem; }
+  .review-actions label { display: grid; gap: .18rem; color: #69746c; font-size: .5rem; }
+  .review-actions select, .review-actions button { border: 1px solid #3b443e; border-radius: .3rem; padding: .35rem .45rem; color: #aab4ac; background: #101512; font-size: .56rem; cursor: pointer; }
+  .stale-source { border-radius: 1rem; padding: .25rem .45rem; color: #df9186; background: #38211e; font-size: .52rem; }
+  .review-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: .7rem; padding: .75rem; }
+  .review-note { display: grid; gap: .35rem; color: #87928a; font-size: .56rem; }
+  .review-note textarea { min-height: 5.2rem; border-radius: .4rem; padding: .6rem; font-size: .68rem; line-height: 1.5; }
+  .quality-summary, .memory-suggestions { display: grid; align-content: start; gap: .35rem; }
+  .quality-summary > button, .memory-suggestions > button { display: grid; grid-template-columns: auto 1fr; gap: .45rem; border: 1px solid #3c3327; border-radius: .35rem; padding: .42rem .5rem; color: #bcae8e; text-align: left; background: #1b1711; font-size: .55rem; cursor: pointer; }
+  .quality-summary button span { color: #d3a35c; font: .48rem ui-monospace, monospace; text-transform: uppercase; }
+  .quality-ok { color: #79a887; font-size: .57rem; }
+  .memory-suggestions { grid-column: 1 / -1; }
+  .memory-suggestions > button { border-color: #2f4136; background: #101a14; }
+  .memory-suggestions button > span:first-child { color: #73a780; font: .52rem ui-monospace, monospace; }
+  .memory-suggestions button > span:last-child { display: grid; gap: .12rem; color: #aeb9b1; }
+  .memory-suggestions code { color: #637069; font: .5rem ui-monospace, monospace; }
   .mode-tabs { display: flex; gap: .2rem; max-width: 1000px; margin: 0 auto; border-bottom: 1px solid #303732; }
   .mode-tabs button { position: relative; border: 0; padding: .65rem .8rem; color: #747f77; background: transparent; font-size: .68rem; cursor: pointer; }
   .mode-tabs button::after { position: absolute; right: .7rem; bottom: -1px; left: .7rem; height: 2px; background: transparent; content: ""; }
@@ -1880,6 +2210,22 @@
   .recent-projects small { color: #69746c; font-size: .55rem; }
   .external-compare-dialog { width: min(70rem, calc(100vw - 3rem)); }
   .mutation-dialog { width: min(760px, calc(100vw - 3rem)); }
+  .terminology-dialog, .report-dialog { width: min(880px, calc(100vw - 3rem)); }
+  .terminology-body > p, .report-summary { margin: 0 0 .8rem; color: #78837b; font-size: .65rem; }
+  .term-form { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; border: 1px solid #343d37; border-radius: .5rem; padding: .75rem; background: #0d110f; }
+  .term-form label { display: grid; gap: .3rem; color: #89948c; font-size: .56rem; }
+  .term-form input { border: 1px solid #3a433d; border-radius: .35rem; padding: .5rem; color: #e4e9e5; background: #090d0b; }
+  .term-form button { justify-self: start; }
+  .term-list { margin-top: .7rem; border: 1px solid #303833; border-radius: .45rem; overflow: hidden; }
+  .term-list > div { display: grid; grid-template-columns: 1fr 1fr auto; align-items: center; gap: .6rem; border-top: 1px solid #29302c; padding: .55rem .65rem; }
+  .term-list > div:first-child { border-top: 0; }
+  .term-list > div > span { display: flex; gap: .4rem; align-items: center; }
+  .term-list strong { color: #c8d0ca; font-size: .62rem; }
+  .term-list span span, .term-list small { color: #657068; font-size: .55rem; }
+  .term-list code { border-radius: .2rem; padding: .12rem .25rem; color: #c1ab69; background: #29261a; font: .5rem ui-monospace, monospace; }
+  .term-list button { border: 0; color: #d28d82; background: transparent; cursor: pointer; }
+  .term-list > p { margin: 0; padding: 1rem; color: #68736b; font-size: .62rem; }
+  textarea.report-output { min-height: 420px; font-size: .68rem; }
   .mutation-body { display: grid; gap: 1rem; }
   .mutation-body > label { display: grid; gap: .4rem; color: #b8c0ba; font-size: .66rem; font-weight: 650; }
   .mutation-body select, .form-grid select { width: 100%; border: 1px solid #3a433d; border-radius: .45rem; outline: 0; padding: .68rem .75rem; color: #edf0ed; background: #0c100e; font-size: .75rem; }

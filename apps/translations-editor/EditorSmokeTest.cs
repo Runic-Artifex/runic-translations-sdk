@@ -35,6 +35,19 @@ internal static class EditorSmokeTest
             Require(previewAst["selectors"]?.AsArray().Count == 1 && previewAst["variants"]?.AsArray().Count == 2,
                 "The editor preview lost selectors or variants.");
 
+            var reviewRequest = new EditorReviewSaveRequest(
+                null,
+                [new EditorReviewEntry("Files.Selected", "de", "approved", "Checked in smoke test", "source:smoke", new Dictionary<string, string> { ["count"] = "2" })],
+                [new EditorTerminologyEntry("Datei", "Datei", "de", "Product term")]);
+            EditorReviewOperationResult reviewSaved = await workspace.SaveReviewAsync(reviewRequest).ConfigureAwait(false);
+            Require(reviewSaved.Ok && reviewSaved.Review?.Revision is not null,
+                reviewSaved.Message ?? "The editor-state sidecar was not saved.");
+            EditorReviewOperationResult reviewConflict = await workspace.SaveReviewAsync(reviewRequest).ConfigureAwait(false);
+            Require(!reviewConflict.Ok, "A stale editor-state revision overwrote review data.");
+            WorkspaceSnapshot reviewedSnapshot = await workspace.LoadAsync().ConfigureAwait(false);
+            Require(reviewedSnapshot.Review?.Entries.Count == 1 && reviewedSnapshot.Success,
+                "Review state did not round-trip independently of compiler inputs.");
+
             ValidationResult invalid = await workspace.ValidateAsync(document.Path, document.Content + ",").ConfigureAwait(false);
             Require(!invalid.Success, "Invalid JSON unexpectedly validated.");
 
@@ -143,7 +156,7 @@ internal static class EditorSmokeTest
             Require(activeCreated.Root == Path.GetFullPath(createdPath), "The editor did not switch to the newly created project.");
             Require(activeCreated.Success, Diagnostics(activeCreated));
 
-            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales, selected one of multiple catalogs, repaired malformed JSON, previewed and committed structural key transactions, handled a single-locale catalog, created a compiler-valid project, validated drafts, saved atomically, and rejected a stale write.");
+            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales, selected one of multiple catalogs, repaired malformed JSON, previewed and committed structural key transactions, round-tripped isolated review metadata, handled a single-locale catalog, created a compiler-valid project, validated drafts, saved atomically, and rejected stale writes.");
             return 0;
         }
         catch (Exception exception)
