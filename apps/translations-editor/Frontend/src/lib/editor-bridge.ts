@@ -1,7 +1,10 @@
 import type {
+  EditorExternalChanges,
   EditorOperationResult,
+  EditorOpenWorkspaceRequest,
   EditorProjectCreationRequest,
   EditorProjectPlan,
+  EditorWorkspacePickerResult,
   ValidationResult,
   WorkspaceSnapshot,
 } from "./contracts";
@@ -9,20 +12,26 @@ import { mockBridge } from "./mock-bridge";
 
 declare global {
   var runicEditorLoad: (() => Promise<string>) | undefined;
+  var runicEditorCheckExternalChanges: (() => Promise<string>) | undefined;
+  var runicEditorPickWorkspace: (() => Promise<string>) | undefined;
   var runicEditorValidate: ((path: string, content: string) => Promise<string>) | undefined;
   var runicEditorSave:
     | ((path: string, content: string, revision: string) => Promise<string>)
     | undefined;
   var runicEditorPreviewProject: ((request: string) => Promise<string>) | undefined;
   var runicEditorCreateProject: ((request: string) => Promise<string>) | undefined;
+  var runicEditorOpenWorkspace: ((request: string) => Promise<string>) | undefined;
 }
 
 export interface EditorBridge {
   load(): Promise<WorkspaceSnapshot>;
+  checkExternalChanges(): Promise<EditorExternalChanges>;
+  pickWorkspace(): Promise<EditorWorkspacePickerResult>;
   validate(path: string, content: string): Promise<ValidationResult>;
   save(path: string, content: string, revision: string): Promise<EditorOperationResult>;
   previewProject(request: EditorProjectCreationRequest): Promise<EditorProjectPlan>;
   createProject(request: EditorProjectCreationRequest): Promise<EditorOperationResult>;
+  openWorkspace(request: EditorOpenWorkspaceRequest): Promise<EditorOperationResult>;
 }
 
 export function createEditorBridge(): EditorBridge {
@@ -30,6 +39,18 @@ export function createEditorBridge(): EditorBridge {
   return {
     async load() {
       return parse(await binding("runicEditorLoad", globalThis.runicEditorLoad)());
+    },
+    async checkExternalChanges() {
+      return parse(await binding(
+        "runicEditorCheckExternalChanges",
+        globalThis.runicEditorCheckExternalChanges,
+      )());
+    },
+    async pickWorkspace() {
+      return parse(await binding(
+        "runicEditorPickWorkspace",
+        globalThis.runicEditorPickWorkspace,
+      )());
     },
     async validate(path, content) {
       return parse(await binding("runicEditorValidate", globalThis.runicEditorValidate)(path, content));
@@ -47,6 +68,12 @@ export function createEditorBridge(): EditorBridge {
       return parse(await binding(
         "runicEditorCreateProject",
         globalThis.runicEditorCreateProject,
+      )(JSON.stringify(request)));
+    },
+    async openWorkspace(request) {
+      return parse(await binding(
+        "runicEditorOpenWorkspace",
+        globalThis.runicEditorOpenWorkspace,
       )(JSON.stringify(request)));
     },
   };

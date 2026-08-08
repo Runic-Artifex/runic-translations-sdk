@@ -13,11 +13,22 @@ internal sealed record EditorLocale(string Tag, string? Fallback);
 
 internal sealed record EditorLayer(string Name, int Priority);
 
+internal sealed record EditorCatalogSummary(
+    string Id,
+    IReadOnlyList<string> ManifestPaths,
+    int DocumentCount,
+    int LocaleCount,
+    int MessageCount,
+    int ErrorCount,
+    int WarningCount,
+    bool Success);
+
 internal sealed record EditorDocument(
     string Path,
     string Content,
     string Revision,
     bool IsManifest,
+    bool IsMalformed,
     string? Locale,
     string? Layer);
 
@@ -34,6 +45,7 @@ internal sealed record EditorDiagnostic(
 internal sealed record WorkspaceSnapshot(
     string Root,
     EditorCatalog? Catalog,
+    IReadOnlyList<EditorCatalogSummary> Catalogs,
     IReadOnlyList<EditorDocument> Documents,
     IReadOnlyList<EditorDiagnostic> Diagnostics,
     bool Success);
@@ -70,6 +82,21 @@ internal sealed record EditorProjectPlan(
     IReadOnlyList<EditorLocale> Locales,
     IReadOnlyList<string> Files);
 
+internal sealed record EditorOpenWorkspaceRequest(string Directory, string? CatalogId);
+
+internal sealed record EditorExternalFileChange(
+    string Path,
+    bool Exists,
+    string? Content,
+    string? Revision);
+
+internal sealed record EditorExternalChanges(
+    bool Overflowed,
+    IReadOnlyList<string> Paths,
+    IReadOnlyList<EditorExternalFileChange> Changes);
+
+internal sealed record EditorWorkspacePickerResult(bool Ok, bool Cancelled, string? Directory, string? Message);
+
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
@@ -78,4 +105,8 @@ internal sealed record EditorProjectPlan(
 [JsonSerializable(typeof(EditorOperationResult))]
 [JsonSerializable(typeof(EditorProjectCreationRequest))]
 [JsonSerializable(typeof(EditorProjectPlan))]
+[JsonSerializable(typeof(EditorOpenWorkspaceRequest))]
+[JsonSerializable(typeof(EditorExternalChanges))]
+[JsonSerializable(typeof(EditorExternalFileChange))]
+[JsonSerializable(typeof(EditorWorkspacePickerResult))]
 internal sealed partial class EditorJsonContext : JsonSerializerContext;
