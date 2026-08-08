@@ -78,6 +78,38 @@ internal sealed record EditorReviewSaveRequest(
 
 internal sealed record EditorReviewOperationResult(bool Ok, string? Message, EditorReviewSnapshot? Review);
 
+internal sealed record EditorAbout(
+    string Product,
+    string Version,
+    string UpdateChannel,
+    string? Commit,
+    string Runtime,
+    string RuntimeIdentifier,
+    string OperatingSystem,
+    string Architecture);
+
+internal sealed record EditorDiagnosticBundleResult(bool Ok, string? Path, string? Message);
+
+internal sealed record EditorDiagnosticGroup(string Id, string Severity, int Count);
+
+internal sealed record EditorDiagnosticWorkspace(
+    string? CatalogId,
+    int? SchemaVersion,
+    int LocaleCount,
+    int DocumentCount,
+    int MessageCount,
+    bool CompilerSuccess,
+    bool ReviewStateAvailable,
+    bool PendingTransaction,
+    int PendingTransactionPathCount,
+    IReadOnlyList<EditorDiagnosticGroup> Diagnostics);
+
+internal sealed record EditorDiagnosticBundle(
+    string Schema,
+    DateTimeOffset GeneratedAt,
+    EditorAbout Application,
+    EditorDiagnosticWorkspace Workspace);
+
 internal sealed record ValidationResult(
     bool Success,
     IReadOnlyList<EditorDiagnostic> Diagnostics);
@@ -160,6 +192,9 @@ internal sealed record EditorRecoveryRequest(string Mode);
 [JsonSerializable(typeof(EditorReviewSnapshot))]
 [JsonSerializable(typeof(EditorReviewSaveRequest))]
 [JsonSerializable(typeof(EditorReviewOperationResult))]
+[JsonSerializable(typeof(EditorAbout))]
+[JsonSerializable(typeof(EditorDiagnosticBundleResult))]
+[JsonSerializable(typeof(EditorDiagnosticBundle))]
 [JsonSerializable(typeof(EditorOperationResult))]
 [JsonSerializable(typeof(EditorProjectCreationRequest))]
 [JsonSerializable(typeof(EditorProjectPlan))]

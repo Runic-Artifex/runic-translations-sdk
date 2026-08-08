@@ -7,6 +7,16 @@ internal static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        if (Array.Exists(args, static argument => argument == "--version"))
+        {
+            EditorAbout about = EditorDiagnostics.About();
+            Console.WriteLine($"{about.Product} {about.Version}");
+            Console.WriteLine($"Channel: {about.UpdateChannel}");
+            Console.WriteLine($"Commit: {about.Commit ?? "development"}");
+            Console.WriteLine($"Runtime: {about.RuntimeIdentifier}");
+            return 0;
+        }
+
         string workspacePath = ArgumentValue(args, "--workspace")
             ?? Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace");
 
@@ -89,6 +99,13 @@ internal static class Program
                     await session.SaveReviewAsync(request, cancellationToken).ConfigureAwait(false)));
             });
 
+            window.Bind("runicEditorAbout", _ =>
+                WebUiResult.FromString(Serialize(EditorDiagnostics.About())));
+
+            window.BindAsync("runicEditorCreateDiagnosticBundle", async (_, cancellationToken) =>
+                WebUiResult.FromString(Serialize(
+                    await session.CreateDiagnosticBundleAsync(cancellationToken).ConfigureAwait(false))));
+
             window.Bind("runicEditorPreviewProject", webUiEvent =>
             {
                 EditorProjectCreationRequest request = DeserializeProjectRequest(webUiEvent.GetString());
@@ -133,6 +150,12 @@ internal static class Program
 
     private static string Serialize(EditorReviewOperationResult value) =>
         JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorReviewOperationResult);
+
+    private static string Serialize(EditorAbout value) =>
+        JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorAbout);
+
+    private static string Serialize(EditorDiagnosticBundleResult value) =>
+        JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorDiagnosticBundleResult);
 
     private static string Serialize(EditorOperationResult value) =>
         JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorOperationResult);

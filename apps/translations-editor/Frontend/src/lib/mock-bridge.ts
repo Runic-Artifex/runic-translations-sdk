@@ -134,6 +134,21 @@ export const mockBridge: EditorBridge = {
     };
     return { ok: true, review: structuredClone(snapshot.review) };
   },
+  async about() {
+    return {
+      product: "Runic Translations Editor",
+      version: "0.1.0+mock",
+      updateChannel: "preview",
+      commit: "mock",
+      runtime: ".NET 10 (mock bridge)",
+      runtimeIdentifier: "browser-mock",
+      operatingSystem: navigator.platform || "Browser",
+      architecture: "unknown",
+    };
+  },
+  async createDiagnosticBundle() {
+    return { ok: true, path: "/tmp/runic-text-resources-diagnostics-mock.zip" };
+  },
   async save(path, content, revision) {
     const current = snapshot.documents.find((candidate) => candidate.path === path);
     if (current === undefined) return { ok: false, kind: "not-found", message: "Document not found." };

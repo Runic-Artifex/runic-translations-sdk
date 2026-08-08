@@ -102,6 +102,23 @@ export interface EditorReviewOperationResult {
   review?: EditorReviewSnapshot;
 }
 
+export interface EditorAbout {
+  product: string;
+  version: string;
+  updateChannel: string;
+  commit?: string;
+  runtime: string;
+  runtimeIdentifier: string;
+  operatingSystem: string;
+  architecture: string;
+}
+
+export interface EditorDiagnosticBundleResult {
+  ok: boolean;
+  path?: string;
+  message?: string;
+}
+
 export interface ValidationResult {
   success: boolean;
   diagnostics: EditorDiagnostic[];
