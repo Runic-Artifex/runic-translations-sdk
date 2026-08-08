@@ -12,9 +12,14 @@ internal static class SchemaResources
         ("catalog-v1.schema.json", "RunicTextResources.Tool.Schemas.catalog-v1.schema.json"),
         ("resources-v1.schema.json", "RunicTextResources.Tool.Schemas.resources-v1.schema.json"),
         ("locale-artifact-v1.schema.json", "RunicTextResources.Tool.Schemas.locale-artifact-v1.schema.json"),
+        ("locale-artifact-v2.schema.json", "RunicTextResources.Tool.Schemas.locale-artifact-v2.schema.json"),
         ("external-pack-v1.schema.json", "RunicTextResources.Tool.Schemas.external-pack-v1.schema.json"),
         ("template-manifest-v1.schema.json", "RunicTextResources.Tool.Schemas.template-manifest-v1.schema.json"),
         ("asset-manifest-v1.schema.json", "RunicTextResources.Tool.Schemas.asset-manifest-v1.schema.json"),
+        ("web-module-manifest-v1.schema.json", "RunicTextResources.Tool.Schemas.web-module-manifest-v1.schema.json"),
+        ("catalog-v2.schema.json", "RunicTextResources.Tool.Schemas.catalog-v2.schema.json"),
+        ("resources-v2.schema.json", "RunicTextResources.Tool.Schemas.resources-v2.schema.json"),
+        ("message-ast-v2.schema.json", "RunicTextResources.Tool.Schemas.message-ast-v2.schema.json"),
     ];
 
     internal static IReadOnlyList<ToolArtifact> Read()

@@ -172,7 +172,7 @@ public sealed class CompiledTextCatalog
     internal CompiledTextCatalog(string id, string codeNamespace, string className, TextResourceVisibility visibility,
         string defaultLocale, IReadOnlyList<CompiledTextLayer> layers, IReadOnlyList<CompiledTextLocale> locales,
         IReadOnlyList<CompiledTextResource> canonicalResources, TextResourceUnsupportedLocalePolicy unsupportedLocale,
-        TextResourceMissingKeyPolicy missingKey, string fingerprint)
+        TextResourceMissingKeyPolicy missingKey, string fingerprint, int schemaVersion = 1, int messageGrammarVersion = 1)
     {
         Id = id;
         CodeNamespace = codeNamespace;
@@ -185,8 +185,8 @@ public sealed class CompiledTextCatalog
         UnsupportedLocale = unsupportedLocale;
         MissingKey = missingKey;
         Fingerprint = fingerprint;
-        SchemaVersion = 1;
-        MessageGrammarVersion = 1;
+        SchemaVersion = schemaVersion;
+        MessageGrammarVersion = messageGrammarVersion;
     }
 
     public int SchemaVersion { get; }
@@ -232,7 +232,7 @@ public sealed class CompiledTextResource
 {
     internal CompiledTextResource(int id, string key, string pattern, string? description, string? since,
         string? deprecatedReason, IReadOnlyList<string> tags, IReadOnlyList<CompiledTextPlaceholder> placeholders,
-        TextSourceLocation sourceLocation)
+        TextSourceLocation sourceLocation, CompiledMessagePattern message)
     {
         Id = id;
         Key = key;
@@ -243,6 +243,8 @@ public sealed class CompiledTextResource
         Tags = tags;
         Placeholders = placeholders;
         SourceLocation = sourceLocation;
+        Message = message;
+        ProducesStructuredContent = message.HasMarkup;
     }
 
     public int Id { get; }
@@ -254,6 +256,8 @@ public sealed class CompiledTextResource
     public IReadOnlyList<string> Tags { get; }
     public IReadOnlyList<CompiledTextPlaceholder> Placeholders { get; }
     public TextSourceLocation SourceLocation { get; }
+    public bool ProducesStructuredContent { get; }
+    internal CompiledMessagePattern Message { get; }
 }
 
 public sealed class CompiledTextPlaceholder

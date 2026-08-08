@@ -77,7 +77,7 @@ internal static class BuildIntegrationTests
         string intermediate = Path.GetFullPath(temporary.Resolve("artifacts", "obj")) + Path.DirectorySeparatorChar;
         Assert.True(Path.GetFullPath(output).StartsWith(intermediate, PathComparison), $"Generated output escaped the isolated intermediate root: {output}");
         Assert.Equal(
-            "minimal.asset-manifest-v1.json|minimal.en.locale-v1.json|minimal.template-manifest-v1.json|minimal.text-resources-v1.d.ts",
+            "minimal.asset-manifest-v1.json|minimal.en.locale-v1.json|minimal.esm/dynamic.d.ts|minimal.esm/dynamic.js|minimal.esm/messages.d.ts|minimal.esm/messages.js|minimal.esm/messages/m$Hello.js|minimal.esm/runtime.d.ts|minimal.esm/runtime.js|minimal.esm/transport.d.ts|minimal.esm/transport.js|minimal.esm/web-module-manifest-v1.json|minimal.template-manifest-v1.json|minimal.text-resources-v1.d.ts",
             string.Join('|', GeneratedArtifacts(output)));
         Assert.True(catalogBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("Resources", "manifest.json"))), "Build changed the catalog source.");
         Assert.True(documentBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("Resources", "en.json"))), "Build changed the document source.");

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RunicTextResources Web Module Manifest v1",
+  "description": "Inventory and entrypoints for one deterministic generated ESM catalog.",
+  "type": "object",
+  "required": [
+    "webModuleManifestVersion",
+    "esmAbiVersion",
+    "catalog",
+    "contractFingerprint",
+    "entrypoints",
+    "assets"
+  ],
+  "properties": {
+    "webModuleManifestVersion": { "const": 1 },
+    "esmAbiVersion": { "const": 1 },
+    "catalog": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
+    "contractFingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "entrypoints": {
+      "type": "object",
+      "required": ["messages", "types", "runtime"],
+      "properties": {
+        "messages": { "const": "messages.js" },
+        "types": { "const": "messages.d.ts" },
+        "runtime": { "const": "runtime.js" }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "byteLength", "mediaType"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9_$.-]+(?:/[A-Za-z0-9_$.-]+)*$"
+          },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "byteLength": { "type": "integer", "minimum": 0 },
+          "mediaType": { "enum": ["text/javascript", "text/typescript"] }
+        },
+        "additionalProperties": false,
+        "unevaluatedProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false
+}

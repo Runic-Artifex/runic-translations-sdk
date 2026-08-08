@@ -7,6 +7,7 @@ internal sealed class ManifestModel
 {
     internal ManifestModel(TextResourceSource source) { Source = source; }
     internal TextResourceSource Source { get; }
+    internal int SchemaVersion { get; set; } = 1;
     internal string Id { get; set; } = string.Empty;
     internal string CodeNamespace { get; set; } = string.Empty;
     internal string ClassName { get; set; } = string.Empty;
@@ -48,6 +49,7 @@ internal sealed class DocumentModel
 {
     internal DocumentModel(TextResourceSource source) { Source = source; }
     internal TextResourceSource Source { get; }
+    internal int SchemaVersion { get; set; } = 1;
     internal string Catalog { get; set; } = string.Empty;
     internal string Locale { get; set; } = string.Empty;
     internal string Layer { get; set; } = string.Empty;
@@ -60,14 +62,15 @@ internal sealed class DocumentModel
 
 internal sealed class ResourceModel
 {
-    internal ResourceModel(string key, string pattern, string? description, string? since, string? deprecatedReason,
+    internal ResourceModel(string key, string pattern, CompiledMessagePattern message, string? description, string? since, string? deprecatedReason,
         string[] tags, PlaceholderModel[] placeholders, TextResourceSource source, ByteSpan keySpan, ByteSpan pathSpan, ByteSpan valueSpan)
     {
-        Key = key; Pattern = pattern; Description = description; Since = since; DeprecatedReason = deprecatedReason;
+        Key = key; Pattern = pattern; Message = message; Description = description; Since = since; DeprecatedReason = deprecatedReason;
         Tags = tags; Placeholders = placeholders; Source = source; KeySpan = keySpan; PathSpan = pathSpan; ValueSpan = valueSpan;
     }
     internal string Key { get; }
     internal string Pattern { get; }
+    internal CompiledMessagePattern Message { get; }
     internal string? Description { get; }
     internal string? Since { get; }
     internal string? DeprecatedReason { get; }

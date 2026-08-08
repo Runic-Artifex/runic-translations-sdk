@@ -301,7 +301,8 @@ internal static class CSharpOutputRenderer
         IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(resource.Placeholders);
         if (placeholders.Count == 0)
         {
-            writer.Line("public string " + identifier + " => this." + managerField + ".Current.Format(" + keyPath + ", global::System.ReadOnlySpan<global::RunicTextResources.TextArgument>.Empty);");
+            writer.Line("public " + (resource.ProducesStructuredContent ? "global::RunicTextResources.LocalizedTextContent" : "string") + " " + identifier + " => this." + managerField + ".Current." +
+                (resource.ProducesStructuredContent ? "FormatContent" : "Format") + "(" + keyPath + ", global::System.ReadOnlySpan<global::RunicTextResources.TextArgument>.Empty);");
             return;
         }
 
@@ -311,10 +312,10 @@ internal static class CSharpOutputRenderer
             CompiledTextPlaceholder placeholder = placeholders[i];
             parameters.Add(CSharpParameterType(placeholder.Type) + " " + GenerationSupport.CSharpIdentifier(placeholder.Name));
         }
-        writer.Line("public string " + identifier + "(" + string.Join(", ", parameters) + ")");
+        writer.Line("public " + (resource.ProducesStructuredContent ? "global::RunicTextResources.LocalizedTextContent" : "string") + " " + identifier + "(" + string.Join(", ", parameters) + ")");
         writer.Line("{");
         writer.Indent();
-        writer.Line("return this." + managerField + ".Current.Format(" + keyPath + ", new global::RunicTextResources.TextArgument[]");
+        writer.Line("return this." + managerField + ".Current." + (resource.ProducesStructuredContent ? "FormatContent" : "Format") + "(" + keyPath + ", new global::RunicTextResources.TextArgument[]");
         writer.Line("{");
         writer.Indent();
         for (int i = 0; i < placeholders.Count; i++)
@@ -373,7 +374,11 @@ internal static class CSharpOutputRenderer
             for (int resourceIndex = 0; resourceIndex < resources.Count; resourceIndex++)
             {
                 CompiledTextResource resource = resources[resourceIndex];
-                writer.Line("new global::RunicTextResources.CompiledTextResourceValue(" + table.GetId(resource.Key) + ", " + GenerationSupport.CSharpString(resource.Pattern) + "),");
+                writer.Line("new global::RunicTextResources.CompiledTextResourceValue(" + table.GetId(resource.Key) + ", " + GenerationSupport.CSharpString(resource.Pattern) + ",");
+                writer.Indent();
+                WriteCompiledMessage(writer, resource.Message);
+                writer.Unindent();
+                writer.Line("),");
             }
             writer.Unindent();
             writer.Line("}),");
@@ -381,6 +386,114 @@ internal static class CSharpOutputRenderer
         writer.Unindent();
         writer.Line("}" + suffix);
     }
+
+    private static void WriteCompiledMessage(GenerationWriter writer, CompiledMessagePattern message)
+    {
+        if (!message.IsVariant)
+        {
+            writer.Line("new global::RunicTextResources.CompiledTextMessage(");
+            writer.Indent();
+            WriteMessageNodes(writer, message.Nodes, ")");
+            writer.Unindent();
+            return;
+        }
+
+        writer.Line("new global::RunicTextResources.CompiledTextMessage(");
+        writer.Indent();
+        writer.Line("global::System.Array.Empty<global::RunicTextResources.CompiledTextMessageNode>(),");
+        writer.Line("new global::RunicTextResources.CompiledTextMessageSelector[]");
+        writer.Line("{");
+        writer.Indent();
+        for (int index = 0; index < message.Selectors.Count; index++)
+        {
+            CompiledMessageSelector selector = message.Selectors[index];
+            string kind = selector.Function switch
+            {
+                "plural" => "CardinalPlural",
+                "ordinal" => "OrdinalPlural",
+                _ => "Literal",
+            };
+            writer.Line("new global::RunicTextResources.CompiledTextMessageSelector(" +
+                GenerationSupport.CSharpString(selector.Name) + ", " + GenerationSupport.CSharpString(selector.Input) +
+                ", global::RunicTextResources.CompiledTextMessageSelectorKind." + kind + "),");
+        }
+        writer.Unindent();
+        writer.Line("},");
+        writer.Line("new global::RunicTextResources.CompiledTextMessageVariant[]");
+        writer.Line("{");
+        writer.Indent();
+        for (int variantIndex = 0; variantIndex < message.Variants.Count; variantIndex++)
+        {
+            CompiledMessageVariant variant = message.Variants[variantIndex];
+            writer.Line("new global::RunicTextResources.CompiledTextMessageVariant(new string[]");
+            writer.Line("{");
+            writer.Indent();
+            for (int selectorIndex = 0; selectorIndex < message.Selectors.Count; selectorIndex++)
+                writer.Line(GenerationSupport.CSharpString(variant.Matches[message.Selectors[selectorIndex].Name]) + ",");
+            writer.Unindent();
+            writer.Line("},");
+            writer.Indent();
+            WriteMessageNodes(writer, variant.Pattern.Nodes, "),");
+            writer.Unindent();
+        }
+        writer.Unindent();
+        writer.Line("})");
+        writer.Unindent();
+    }
+
+    private static void WriteMessageNodes(GenerationWriter writer, IReadOnlyList<CompiledMessageNode> nodes, string suffix)
+    {
+        writer.Line("new global::RunicTextResources.CompiledTextMessageNode[]");
+        writer.Line("{");
+        writer.Indent();
+        for (int index = 0; index < nodes.Count; index++)
+            WriteMessageNode(writer, nodes[index]);
+        writer.Unindent();
+        writer.Line("}" + suffix);
+    }
+
+    private static void WriteMessageNode(GenerationWriter writer, CompiledMessageNode node)
+    {
+        if (node is CompiledMessageText text)
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind.Text, " + GenerationSupport.CSharpString(text.Value) + "),");
+        else if (node is CompiledMessageInput input)
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind.Input, " + GenerationSupport.CSharpString(input.Name) + "),");
+        else if (node is CompiledMessageFormat format)
+        {
+            string kind = format.Function == "relativeTime" ? "RelativeTime" : "Format";
+            string argumentFormat = format.Function == "relativeTime" ? "Plain" : FormatName(format.Format);
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind." + kind + ", " +
+                GenerationSupport.CSharpString(format.Input) + ", global::RunicTextResources.TextArgumentFormat." + argumentFormat + ", " +
+                (format.Unit is null ? "null" : GenerationSupport.CSharpString(format.Unit)) + ", " +
+                (format.Numeric is null ? "null" : GenerationSupport.CSharpString(format.Numeric)) + "),");
+        }
+        else if (node is CompiledMessageMarkup markup)
+        {
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind.MarkupStart, " +
+                GenerationSupport.CSharpString(markup.Name) + ", attributes: new global::RunicTextResources.CompiledTextMarkupProperty[]");
+            writer.Line("{");
+            writer.Indent();
+            foreach (KeyValuePair<string, string> attribute in markup.Attributes)
+            {
+                writer.Line("new global::RunicTextResources.CompiledTextMarkupProperty(" + GenerationSupport.CSharpString(attribute.Key) + ", " + GenerationSupport.CSharpString(attribute.Value) + "),");
+            }
+            writer.Unindent();
+            writer.Line("}),");
+            for (int index = 0; index < markup.Children.Count; index++) WriteMessageNode(writer, markup.Children[index]);
+            writer.Line("new global::RunicTextResources.CompiledTextMessageNode(global::RunicTextResources.CompiledTextMessageNodeKind.MarkupEnd, " + GenerationSupport.CSharpString(markup.Name) + "),");
+        }
+    }
+
+    private static string FormatName(string format) => format switch
+    {
+        "none" => "None", "plain" => "Plain", "grouped" => "Grouped",
+        "fixed0" => "Fixed0", "fixed1" => "Fixed1", "fixed2" => "Fixed2", "fixed3" => "Fixed3",
+        "fixed4" => "Fixed4", "fixed5" => "Fixed5", "fixed6" => "Fixed6",
+        "percent0" => "Percent0", "percent1" => "Percent1", "percent2" => "Percent2",
+        "percent3" => "Percent3", "percent4" => "Percent4", "lower" => "Lower", "iso" => "Iso",
+        "short" => "Short", "medium" => "Medium", "long" => "Long", "d" => "D", "n" => "N",
+        _ => throw new InvalidOperationException("Unknown compiled format '" + format + "'."),
+    };
 
     private static void WritePackContractFactory(
         GenerationWriter writer,
@@ -451,7 +564,8 @@ internal static class CSharpOutputRenderer
             writer.Unindent();
         }
         writer.Unindent();
-        writer.Line("});");
+        writer.Line("},");
+        writer.Line(catalog.MessageGrammarVersion + ");");
         writer.Unindent();
     }
 

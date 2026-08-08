@@ -18,9 +18,14 @@
     <EmbeddedResource Include="..\..\..\spec\schemas\catalog-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.catalog-v1.schema.json" />
     <EmbeddedResource Include="..\..\..\spec\schemas\resources-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.resources-v1.schema.json" />
     <EmbeddedResource Include="..\..\..\spec\schemas\locale-artifact-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.locale-artifact-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\locale-artifact-v2.schema.json" LogicalName="RunicTextResources.Tool.Schemas.locale-artifact-v2.schema.json" />
     <EmbeddedResource Include="..\..\..\spec\schemas\external-pack-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.external-pack-v1.schema.json" />
     <EmbeddedResource Include="..\..\..\spec\schemas\template-manifest-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.template-manifest-v1.schema.json" />
     <EmbeddedResource Include="..\..\..\spec\schemas\asset-manifest-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.asset-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\web-module-manifest-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.web-module-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\catalog-v2.schema.json" LogicalName="RunicTextResources.Tool.Schemas.catalog-v2.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\resources-v2.schema.json" LogicalName="RunicTextResources.Tool.Schemas.resources-v2.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\message-ast-v2.schema.json" LogicalName="RunicTextResources.Tool.Schemas.message-ast-v2.schema.json" />
     <None Update="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>

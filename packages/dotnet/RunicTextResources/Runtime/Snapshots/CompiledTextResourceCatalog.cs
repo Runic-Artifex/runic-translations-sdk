@@ -77,7 +77,7 @@ public sealed class CompiledTextResourceCatalog
         }
 
         ValidateFallbackGraph(defaultLocale, _localeByTag, nameof(locales));
-        ResolvePatterns(defaultLocale, _localeByTag, _definitions.Length);
+        ResolveValues(defaultLocale, _localeByTag, _definitions.Length);
 
         for (int i = 0; i < defaultState.DirectPatterns.Length; i++)
         {
@@ -207,6 +207,9 @@ public sealed class CompiledTextResourceCatalog
 
     internal string?[] GetResolvedPatterns(string canonicalLocale) =>
         _localeByTag[canonicalLocale].ResolvedPatterns;
+
+    internal CompiledTextMessage?[] GetResolvedMessages(string canonicalLocale) =>
+        _localeByTag[canonicalLocale].ResolvedMessages;
 
     internal bool TryResolveKey(TextResourceKey key, out int id)
     {
@@ -355,6 +358,7 @@ public sealed class CompiledTextResourceCatalog
         {
             CompiledTextResourceLocale locale = locales[i];
             var directPatterns = new string?[definitions.Length];
+            var directMessages = new CompiledTextMessage?[definitions.Length];
             CompiledTextResourceValue[] values = locale.ValueArray;
             for (int valueIndex = 0; valueIndex < values.Length; valueIndex++)
             {
@@ -366,9 +370,18 @@ public sealed class CompiledTextResourceCatalog
                         nameof(locales));
                 }
 
-                if (!TextResourceDataValidation.PatternMatches(
-                    value.Pattern,
-                    definitions[value.Id].PlaceholderArray))
+                CompiledTextMessage message;
+                try
+                {
+                    message = value.Message ?? CompiledTextMessageRuntime.ParseVersion1(value.Pattern);
+                }
+                catch (TextResourceFormatException)
+                {
+                    throw new ArgumentException(
+                        $"Locale '{locale.Locale}' pattern for key '{definitions[value.Id].Name}' is malformed.",
+                        nameof(locales));
+                }
+                if (!CompiledTextMessageRuntime.MatchesContract(message, definitions[value.Id].PlaceholderArray))
                 {
                     throw new ArgumentException(
                         $"Locale '{locale.Locale}' pattern for key '{definitions[value.Id].Name}' does not match its placeholder contract.",
@@ -376,9 +389,10 @@ public sealed class CompiledTextResourceCatalog
                 }
 
                 directPatterns[value.Id] = value.Pattern;
+                directMessages[value.Id] = message;
             }
 
-            result.Add(locale.Locale, new LocaleState(locale.FallbackLocale, directPatterns));
+            result.Add(locale.Locale, new LocaleState(locale.FallbackLocale, directPatterns, directMessages));
         }
 
         return result;
@@ -425,7 +439,7 @@ public sealed class CompiledTextResourceCatalog
         }
     }
 
-    private static void ResolvePatterns(
+    private static void ResolveValues(
         string defaultLocale,
         Dictionary<string, LocaleState> localeByTag,
         int keyCount)
@@ -433,38 +447,49 @@ public sealed class CompiledTextResourceCatalog
         foreach (KeyValuePair<string, LocaleState> pair in localeByTag)
         {
             var resolved = new string?[keyCount];
+            var resolvedMessages = new CompiledTextMessage?[keyCount];
             Array.Copy(pair.Value.DirectPatterns, resolved, keyCount);
+            Array.Copy(pair.Value.DirectMessages, resolvedMessages, keyCount);
 
             string current = pair.Key;
             while (!string.Equals(current, defaultLocale, StringComparison.Ordinal))
             {
                 string fallback = localeByTag[current].FallbackLocale!;
                 string?[] fallbackPatterns = localeByTag[fallback].DirectPatterns;
+                CompiledTextMessage?[] fallbackMessages = localeByTag[fallback].DirectMessages;
                 for (int i = 0; i < resolved.Length; i++)
                 {
                     resolved[i] ??= fallbackPatterns[i];
+                    resolvedMessages[i] ??= fallbackMessages[i];
                 }
 
                 current = fallback;
             }
 
             pair.Value.ResolvedPatterns = resolved;
+            pair.Value.ResolvedMessages = resolvedMessages;
         }
     }
 
     private sealed class LocaleState
     {
-        internal LocaleState(string? fallbackLocale, string?[] directPatterns)
+        internal LocaleState(string? fallbackLocale, string?[] directPatterns, CompiledTextMessage?[] directMessages)
         {
             FallbackLocale = fallbackLocale;
             DirectPatterns = directPatterns;
+            DirectMessages = directMessages;
             ResolvedPatterns = Array.Empty<string?>();
+            ResolvedMessages = Array.Empty<CompiledTextMessage?>();
         }
 
         internal string? FallbackLocale { get; }
 
         internal string?[] DirectPatterns { get; }
 
+        internal CompiledTextMessage?[] DirectMessages { get; }
+
         internal string?[] ResolvedPatterns { get; set; }
+
+        internal CompiledTextMessage?[] ResolvedMessages { get; set; }
     }
 }

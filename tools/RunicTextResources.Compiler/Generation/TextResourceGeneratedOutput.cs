@@ -23,6 +23,30 @@ public enum TextResourceGeneratedOutputKind
     TypeScriptContract,
     /// <summary>The versioned host asset inventory for selected non-C# outputs.</summary>
     AssetManifestJson,
+    /// <summary>The generated ESM locale and formatting runtime.</summary>
+    EsmRuntime,
+    /// <summary>TypeScript declarations for the ESM runtime.</summary>
+    EsmRuntimeTypes,
+    /// <summary>One independently tree-shakable ESM message module.</summary>
+    EsmMessage,
+    /// <summary>The aggregate ESM named-export entrypoint.</summary>
+    EsmMessagesIndex,
+    /// <summary>TypeScript declarations for generated message functions.</summary>
+    EsmMessagesTypes,
+    /// <summary>Decoder for versioned cross-process text references.</summary>
+    EsmTransport,
+    /// <summary>TypeScript declarations for cross-process text references.</summary>
+    EsmTransportTypes,
+    /// <summary>The versioned inventory for one generated ESM catalog.</summary>
+    WebModuleManifestJson,
+    /// <summary>Experimental generated C++ declarations over the portable AST.</summary>
+    CppHeader,
+    /// <summary>Experimental generated C++ implementation over the portable AST.</summary>
+    CppSource,
+    /// <summary>Validated interpreter for explicit runtime-loaded v2 locale artifacts.</summary>
+    EsmDynamic,
+    /// <summary>TypeScript declarations for explicit runtime-loaded v2 locale artifacts.</summary>
+    EsmDynamicTypes,
 }
 
 /// <summary>A deterministic, UTF-8 compiler output for exactly one concern.</summary>

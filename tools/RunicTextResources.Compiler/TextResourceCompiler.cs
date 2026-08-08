@@ -21,6 +21,16 @@ public static class TextResourceCompiler
     private static readonly string[] TypeScriptOutputMembers = { "enabled", "moduleName" };
     private static readonly string[] TemplateOutputMembers = { "enabled" };
     private static readonly string[] PlaceholderMembers = { "type", "format" };
+    private static readonly string[] StructuredMessageMembers = { "inputs", "declarations", "selectors", "variants" };
+    private static readonly string[] DeclarationMembers = { "name", "input", "function", "format", "unit", "numeric" };
+    private static readonly string[] SelectorMembers = { "name", "input", "function" };
+    private static readonly string[] VariantMembers = { "match", "value" };
+    private static readonly string[] PatternInputMembers = { "input" };
+    private static readonly string[] PatternFormatMembers = { "format" };
+    private static readonly string[] PatternMarkupMembers = { "markup" };
+    private static readonly string[] PatternLocalMembers = { "local" };
+    private static readonly string[] FormatExpressionMembers = { "input", "function", "format", "unit", "numeric" };
+    private static readonly string[] MarkupExpressionMembers = { "name", "attributes", "children" };
 
     /// <summary>Compiles manifest and resource document sources using default limits.</summary>
     /// <remarks>Inputs and outputs are deterministic and no environment state is consulted.</remarks>
@@ -187,8 +197,9 @@ public static class TextResourceCompiler
             return null;
         }
         ValidateKnownMembers(root, ManifestMembers, parsed.Source, diagnostics);
-        ValidateSchema(root, parsed.Source, diagnostics);
+        int schemaVersion = ValidateSchema(root, parsed.Source, diagnostics);
         var model = new ManifestModel(parsed.Source);
+        model.SchemaVersion = schemaVersion;
         JsonProperty? catalog = Required(root, "catalog", JsonKind.String, parsed.Source, diagnostics);
         JsonProperty? code = Required(root, "code", JsonKind.Object, parsed.Source, diagnostics);
         JsonProperty? defaultLocale = Required(root, "defaultLocale", JsonKind.String, parsed.Source, diagnostics);
@@ -222,28 +233,27 @@ public static class TextResourceCompiler
         return model;
     }
 
-    private static bool ValidateSchema(JsonValue root, TextResourceSource source, DiagnosticBag diagnostics)
+    private static int ValidateSchema(JsonValue root, TextResourceSource source, DiagnosticBag diagnostics)
     {
-        bool valid = true;
         JsonProperty? schemaHint = root.Property("$schema");
         if (schemaHint is not null)
         {
             diagnostics.Add("RTR0003", TextResourceDiagnosticSeverity.Error,
                 "No canonical $schema URI is registered; omit $schema for schema version 1.", source, schemaHint.Value.Span);
-            valid = false;
         }
         JsonProperty? version = root.Property("schemaVersion");
         if (version is null)
         {
             diagnostics.Add("RTR0003", TextResourceDiagnosticSeverity.Error, "Missing required schemaVersion 1.", source, root.Span);
-            return false;
+            return 1;
         }
-        if (version.Value.Kind != JsonKind.Number || !string.Equals(version.Value.Text, "1", StringComparison.Ordinal))
+        if (version.Value.Kind != JsonKind.Number ||
+            (!string.Equals(version.Value.Text, "1", StringComparison.Ordinal) && !string.Equals(version.Value.Text, "2", StringComparison.Ordinal)))
         {
-            diagnostics.Add("RTR0003", TextResourceDiagnosticSeverity.Error, "Unsupported schemaVersion; expected integer 1.", source, version.Value.Span);
-            valid = false;
+            diagnostics.Add("RTR0003", TextResourceDiagnosticSeverity.Error, "Unsupported schemaVersion; expected integer 1 or 2.", source, version.Value.Span);
+            return 1;
         }
-        return valid;
+        return string.Equals(version.Value.Text, "2", StringComparison.Ordinal) ? 2 : 1;
     }
 
     private static void ReadCode(JsonValue value, ManifestModel model, TextResourceSource source, DiagnosticBag diagnostics)
@@ -447,7 +457,7 @@ public static class TextResourceCompiler
         JsonValue root = parsed.Root!;
         if (root.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Resource document root must be an object.", parsed.Source, root.Span); return null; }
         ValidateKnownMembers(root, DocumentMembers, parsed.Source, diagnostics);
-        ValidateSchema(root, parsed.Source, diagnostics);
+        int schemaVersion = ValidateSchema(root, parsed.Source, diagnostics);
         JsonProperty? catalog = Required(root, "catalog", JsonKind.String, parsed.Source, diagnostics);
         JsonProperty? locale = Required(root, "locale", JsonKind.String, parsed.Source, diagnostics);
         JsonProperty? layer = Required(root, "layer", JsonKind.String, parsed.Source, diagnostics);
@@ -455,6 +465,7 @@ public static class TextResourceCompiler
         if (catalog is null || locale is null || layer is null || resources is null) return null;
         var model = new DocumentModel(parsed.Source)
         {
+            SchemaVersion = schemaVersion,
             Catalog = catalog.Value.Text!,
             CatalogSpan = catalog.Value.Span,
             Layer = layer.Value.Text!,
@@ -519,14 +530,360 @@ public static class TextResourceCompiler
         for (int i = 0; i < property.Value.Properties.Count; i++)
             if (property.Value.Properties[i].Name.Length == 0 || property.Value.Properties[i].Name[0] != '$')
                 diagnostics.Add("RTR0008", TextResourceDiagnosticSeverity.Error, "A metadata leaf cannot also contain child resources.", document.Source, property.Value.Properties[i].NameSpan);
-        JsonProperty? value = Required(property.Value, "$value", JsonKind.String, document.Source, diagnostics);
+        JsonProperty? value = property.Value.Property("$value");
+        if (value is null)
+        {
+            diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Metadata leaf is missing required member '$value'.", document.Source, property.Value.Span);
+            return;
+        }
+        if (value.Value.Kind != JsonKind.String && !(document.SchemaVersion == 2 && value.Value.Kind == JsonKind.Object))
+        {
+            diagnostics.Add("RTR0008", TextResourceDiagnosticSeverity.Error, "$value must be a string or a schema version 2 structured message.", document.Source, value.Value.Span);
+            return;
+        }
         if (value is null) return;
         string? description = ReadOptionalString(property.Value.Property("$description"), document.Source, diagnostics);
         string? since = ReadOptionalString(property.Value.Property("$since"), document.Source, diagnostics);
         string? deprecated = ReadOptionalString(property.Value.Property("$deprecated"), document.Source, diagnostics);
         string[] tags = ReadTags(property.Value.Property("$tags"), document.Source, diagnostics);
         PlaceholderModel[] placeholders = ReadPlaceholders(property.Value.Property("$placeholders"), document.Source, diagnostics, options);
-        AddLeaf(document, diagnostics, options, key, property.NameSpan, pathSpan, value.Value.Span, value.Value.Text!, description, since, deprecated, tags, placeholders);
+        if (value.Value.Kind == JsonKind.Object)
+            AddStructuredLeaf(document, diagnostics, options, key, property.NameSpan, pathSpan, value.Value, description, since, deprecated, tags);
+        else
+            AddLeaf(document, diagnostics, options, key, property.NameSpan, pathSpan, value.Value.Span, value.Value.Text!, description, since, deprecated, tags, placeholders);
+    }
+
+    private static void AddStructuredLeaf(DocumentModel document, DiagnosticBag diagnostics, TextResourceCompilerOptions options,
+        string key, ByteSpan keySpan, ByteSpan pathSpan, JsonValue value, string? description, string? since, string? deprecated, string[] tags)
+    {
+        ValidateKnownMembers(value, StructuredMessageMembers, document.Source, diagnostics);
+        JsonProperty? inputsProperty = Required(value, "inputs", JsonKind.Object, document.Source, diagnostics);
+        JsonProperty? selectorsProperty = Required(value, "selectors", JsonKind.Array, document.Source, diagnostics);
+        JsonProperty? variantsProperty = Required(value, "variants", JsonKind.Array, document.Source, diagnostics);
+        if (inputsProperty is null || selectorsProperty is null || variantsProperty is null) return;
+
+        PlaceholderModel[] placeholders = ReadPortableInputs(inputsProperty.Value, document.Source, diagnostics, options);
+        var inputTypes = new Dictionary<string, TextResourceArgumentType>(StringComparer.Ordinal);
+        for (int index = 0; index < placeholders.Length; index++) inputTypes[placeholders[index].Name] = placeholders[index].Type;
+        var declarations = ReadDeclarations(value.Property("declarations"), inputTypes, document.Source, diagnostics);
+        var selectors = new List<CompiledMessageSelector>();
+        var selectorNames = new HashSet<string>(StringComparer.Ordinal);
+        for (int index = 0; index < selectorsProperty.Value.Items.Count; index++)
+        {
+            JsonValue selector = selectorsProperty.Value.Items[index];
+            if (selector.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A selector must be an object.", document.Source, selector.Span); continue; }
+            ValidateKnownMembers(selector, SelectorMembers, document.Source, diagnostics);
+            JsonProperty? name = Required(selector, "name", JsonKind.String, document.Source, diagnostics);
+            JsonProperty? input = Required(selector, "input", JsonKind.String, document.Source, diagnostics);
+            JsonProperty? function = Required(selector, "function", JsonKind.String, document.Source, diagnostics);
+            if (name is null || input is null || function is null) continue;
+            if (!IsIdentifier(name.Value.Text!) || !selectorNames.Add(name.Value.Text!))
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Selector names must be unique identifiers.", document.Source, name.Value.Span);
+            if (!inputTypes.TryGetValue(input.Value.Text!, out TextResourceArgumentType inputType))
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Selector input '" + input.Value.Text + "' is not declared.", document.Source, input.Value.Span);
+            string functionName = function.Value.Text!;
+            if (functionName is not ("plural" or "ordinal" or "literal"))
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Unknown selector function '" + functionName + "'.", document.Source, function.Value.Span);
+            if (functionName is "plural" or "ordinal" && inputType is not (TextResourceArgumentType.Int or TextResourceArgumentType.Number))
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Plural selectors require an int64 or decimal input.", document.Source, input.Value.Span);
+            selectors.Add(new CompiledMessageSelector(name.Value.Text!, input.Value.Text!, functionName));
+        }
+
+        var variants = new List<CompiledMessageVariant>();
+        var signatures = new HashSet<string>(StringComparer.Ordinal);
+        bool catchAll = false;
+        for (int index = 0; index < variantsProperty.Value.Items.Count; index++)
+        {
+            JsonValue variant = variantsProperty.Value.Items[index];
+            if (variant.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A variant must be an object.", document.Source, variant.Span); continue; }
+            ValidateKnownMembers(variant, VariantMembers, document.Source, diagnostics);
+            JsonProperty? match = Required(variant, "match", JsonKind.Object, document.Source, diagnostics);
+            JsonProperty? pattern = variant.Property("value");
+            if (pattern is null || pattern.Value.Kind is not (JsonKind.String or JsonKind.Array))
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Variant value must be a string or structured pattern array.", document.Source, pattern?.Value.Span ?? variant.Span);
+                continue;
+            }
+            if (match is null || pattern is null) continue;
+            var matches = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            for (int m = 0; m < match.Value.Properties.Count; m++)
+            {
+                JsonProperty item = match.Value.Properties[m];
+                if (!selectorNames.Contains(item.Name) || item.Value.Kind != JsonKind.String || item.Value.Text!.Length == 0)
+                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Variant matches must name every declared selector and use a non-empty string.", document.Source, item.Value.Span);
+                else matches[item.Name] = item.Value.Text!;
+            }
+            if (matches.Count != selectors.Count)
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A variant must match every declared selector.", document.Source, match.Value.Span);
+            string signature = string.Join("|", matches);
+            if (!signatures.Add(signature)) diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Duplicate variant match.", document.Source, match.Value.Span);
+            bool all = matches.Count == selectors.Count;
+            foreach (KeyValuePair<string, string> item in matches) all &= item.Value == "*";
+            catchAll |= all;
+            CompiledMessagePattern? compiled = pattern.Value.Kind == JsonKind.String
+                ? MessagePatternCompiler.Compile(pattern.Value.Text!, document.Source, pattern.Value.Span, diagnostics, out HashSet<string> used)
+                : CompileStructuredPattern(pattern.Value, inputTypes, declarations, document.Source, diagnostics, out used);
+            foreach (string usedName in used) if (!inputTypes.ContainsKey(usedName))
+                diagnostics.Add("RTR0015", TextResourceDiagnosticSeverity.Error, "Input '" + usedName + "' is used but not declared.", document.Source, pattern.Value.Span);
+            if (compiled is not null) variants.Add(new CompiledMessageVariant(matches, compiled));
+        }
+        if (!catchAll) diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A structured message requires an all-'*' catch-all variant.", document.Source, variantsProperty.Value.Span);
+        if (variants.Count == 0) return;
+        CompiledMessagePattern message = new(Array.Empty<CompiledMessageNode>(), selectors.ToArray(), variants.ToArray());
+        string fallbackPattern = variants[^1].Pattern.Nodes.Count == 0 ? string.Empty : PatternText(variants[^1].Pattern);
+        document.Resources.Add(new ResourceModel(key, fallbackPattern, message, description, since, deprecated, tags, placeholders,
+            document.Source, keySpan, pathSpan, value.Span));
+    }
+
+    private static CompiledMessagePattern? CompileStructuredPattern(JsonValue pattern,
+        Dictionary<string, TextResourceArgumentType> inputTypes, Dictionary<string, CompiledMessageFormat> declarations,
+        TextResourceSource source, DiagnosticBag diagnostics,
+        out HashSet<string> used)
+    {
+        used = new HashSet<string>(StringComparer.Ordinal);
+        var nodes = new List<CompiledMessageNode>();
+        for (int index = 0; index < pattern.Items.Count; index++)
+        {
+            JsonValue item = pattern.Items[index];
+            if (item.Kind == JsonKind.String)
+            {
+                nodes.Add(new CompiledMessageText(item.Text!));
+                continue;
+            }
+            if (item.Kind != JsonKind.Object)
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Structured pattern nodes must be strings or objects.", source, item.Span);
+                continue;
+            }
+            JsonProperty? input = item.Property("input");
+            JsonProperty? format = item.Property("format");
+            JsonProperty? markup = item.Property("markup");
+            JsonProperty? local = item.Property("local");
+            int nodeMemberCount = (input is null ? 0 : 1) + (format is null ? 0 : 1) + (markup is null ? 0 : 1) + (local is null ? 0 : 1);
+            if (nodeMemberCount != 1)
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A structured pattern node must contain exactly one of 'input', 'local', 'format', or 'markup'.", source, item.Span);
+                continue;
+            }
+            if (input is not null)
+            {
+                ValidateKnownMembers(item, PatternInputMembers, source, diagnostics);
+                if (input.Value.Kind != JsonKind.String || !inputTypes.ContainsKey(input.Value.Text!))
+                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Pattern input is not declared.", source, input.Value.Span);
+                else { nodes.Add(new CompiledMessageInput(input.Value.Text!)); used.Add(input.Value.Text!); }
+                continue;
+            }
+            if (local is not null)
+            {
+                ValidateKnownMembers(item, PatternLocalMembers, source, diagnostics);
+                if (local.Value.Kind != JsonKind.String || !declarations.TryGetValue(local.Value.Text!, out CompiledMessageFormat? declaration))
+                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Pattern local is not declared.", source, local.Value.Span);
+                else
+                {
+                    nodes.Add(new CompiledMessageFormat(declaration.Input, declaration.Function, declaration.Format, declaration.Unit, declaration.Numeric));
+                    used.Add(declaration.Input);
+                }
+                continue;
+            }
+            if (markup is not null)
+            {
+                ValidateKnownMembers(item, PatternMarkupMembers, source, diagnostics);
+                if (markup.Value.Kind != JsonKind.Object)
+                {
+                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A markup expression must be an object.", source, markup.Value.Span);
+                    continue;
+                }
+                JsonValue markupExpression = markup.Value;
+                ValidateKnownMembers(markupExpression, MarkupExpressionMembers, source, diagnostics);
+                JsonProperty? name = Required(markupExpression, "name", JsonKind.String, source, diagnostics);
+                JsonProperty? children = Required(markupExpression, "children", JsonKind.Array, source, diagnostics);
+                JsonProperty? attributes = markupExpression.Property("attributes");
+                if (name is null || children is null || !IsIdentifier(name.Value.Text!))
+                {
+                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Markup names must be identifiers.", source, name?.Value.Span ?? markupExpression.Span);
+                    continue;
+                }
+                var compiledAttributes = new SortedDictionary<string, string>(StringComparer.Ordinal);
+                if (attributes is not null)
+                {
+                    if (attributes.Value.Kind != JsonKind.Object)
+                        diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Markup attributes must be an object.", source, attributes.Value.Span);
+                    else for (int attributeIndex = 0; attributeIndex < attributes.Value.Properties.Count; attributeIndex++)
+                    {
+                        JsonProperty attribute = attributes.Value.Properties[attributeIndex];
+                        if (!IsIdentifier(attribute.Name) || attribute.Value.Kind != JsonKind.String)
+                            diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Markup attributes require identifier names and string values.", source, attribute.Value.Span);
+                        else compiledAttributes[attribute.Name] = attribute.Value.Text!;
+                    }
+                }
+                CompiledMessagePattern? childPattern = CompileStructuredPattern(children.Value, inputTypes, declarations, source, diagnostics, out HashSet<string> childUsed);
+                foreach (string childInput in childUsed) used.Add(childInput);
+                if (childPattern is not null) nodes.Add(new CompiledMessageMarkup(name.Value.Text!, compiledAttributes, childPattern.Nodes));
+                continue;
+            }
+            ValidateKnownMembers(item, PatternFormatMembers, source, diagnostics);
+            if (format!.Value.Kind != JsonKind.Object)
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A format expression must be an object.", source, format.Value.Span);
+                continue;
+            }
+            JsonValue expression = format.Value;
+            ValidateKnownMembers(expression, FormatExpressionMembers, source, diagnostics);
+            JsonProperty? expressionInput = Required(expression, "input", JsonKind.String, source, diagnostics);
+            JsonProperty? function = Required(expression, "function", JsonKind.String, source, diagnostics);
+            if (expressionInput is null || function is null || !inputTypes.TryGetValue(expressionInput.Value.Text!, out TextResourceArgumentType inputType))
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Format input is not declared.", source, expression.Span);
+                continue;
+            }
+            CompiledMessageFormat? compiledFormat = CompileFormatExpression(
+                expression, expressionInput.Value.Text!, function.Value.Text!, inputType, source, diagnostics);
+            if (compiledFormat is not null) nodes.Add(compiledFormat);
+            used.Add(expressionInput.Value.Text!);
+        }
+        return new CompiledMessagePattern(nodes.ToArray());
+    }
+
+    private static Dictionary<string, CompiledMessageFormat> ReadDeclarations(JsonProperty? property,
+        Dictionary<string, TextResourceArgumentType> inputTypes, TextResourceSource source, DiagnosticBag diagnostics)
+    {
+        var result = new Dictionary<string, CompiledMessageFormat>(StringComparer.Ordinal);
+        if (property is null) return result;
+        if (property.Value.Kind != JsonKind.Array)
+        {
+            diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Declarations must be an array.", source, property.Value.Span);
+            return result;
+        }
+        for (int index = 0; index < property.Value.Items.Count; index++)
+        {
+            JsonValue declaration = property.Value.Items[index];
+            if (declaration.Kind != JsonKind.Object)
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A declaration must be an object.", source, declaration.Span);
+                continue;
+            }
+            ValidateKnownMembers(declaration, DeclarationMembers, source, diagnostics);
+            JsonProperty? name = Required(declaration, "name", JsonKind.String, source, diagnostics);
+            JsonProperty? input = Required(declaration, "input", JsonKind.String, source, diagnostics);
+            JsonProperty? function = Required(declaration, "function", JsonKind.String, source, diagnostics);
+            if (name is null || input is null || function is null) continue;
+            if (!IsIdentifier(name.Value.Text!) || result.ContainsKey(name.Value.Text!))
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Declaration names must be unique identifiers.", source, name.Value.Span);
+                continue;
+            }
+            if (!inputTypes.TryGetValue(input.Value.Text!, out TextResourceArgumentType inputType))
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Declaration input is not declared.", source, input.Value.Span);
+                continue;
+            }
+            CompiledMessageFormat? compiled = CompileFormatExpression(declaration, input.Value.Text!, function.Value.Text!, inputType, source, diagnostics);
+            if (compiled is not null) result.Add(name.Value.Text!, compiled);
+        }
+        return result;
+    }
+
+    private static CompiledMessageFormat? CompileFormatExpression(JsonValue expression, string input, string functionName,
+        TextResourceArgumentType inputType, TextResourceSource source, DiagnosticBag diagnostics)
+    {
+        foreach (string optionName in new[] { "format", "unit", "numeric" })
+        {
+            JsonProperty? option = expression.Property(optionName);
+            if (option is not null && option.Value.Kind != JsonKind.String)
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Format option '" + optionName + "' must be a string.", source, option.Value.Span);
+                return null;
+            }
+        }
+        string formatName = expression.Property("format")?.Value.Text ?? DefaultFormat(inputType);
+        if (functionName == "relativeTime")
+        {
+            string? unit = expression.Property("unit")?.Value.Text;
+            string numeric = expression.Property("numeric")?.Value.Text ?? "always";
+            if (inputType is not (TextResourceArgumentType.Int or TextResourceArgumentType.Number) ||
+                unit is not ("second" or "minute" or "hour" or "day" or "week" or "month" or "year") ||
+                numeric is not ("always" or "auto"))
+            {
+                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Relative-time format requires a numeric input, valid unit, and numeric mode.", source, expression.Span);
+                return null;
+            }
+            return new CompiledMessageFormat(input, functionName, "plain", unit, numeric);
+        }
+        if (!FunctionMatches(functionName, inputType) || !IsAllowedFormat(inputType, formatName))
+        {
+            diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Format function or format is incompatible with its input.", source, expression.Span);
+            return null;
+        }
+        return new CompiledMessageFormat(input, functionName, formatName, null, null);
+    }
+
+    private static bool FunctionMatches(string function, TextResourceArgumentType type) => function switch
+    {
+        "string" => type == TextResourceArgumentType.String,
+        "integer" => type == TextResourceArgumentType.Int,
+        "number" => type == TextResourceArgumentType.Number,
+        "date" => type == TextResourceArgumentType.Date,
+        "time" => type == TextResourceArgumentType.Time,
+        "datetime" => type == TextResourceArgumentType.DateTime,
+        "uuid" => type == TextResourceArgumentType.Guid,
+        _ => false,
+    };
+
+    private static string DefaultFormat(TextResourceArgumentType type) => type switch
+    {
+        TextResourceArgumentType.String => "none",
+        TextResourceArgumentType.Int or TextResourceArgumentType.Number => "plain",
+        TextResourceArgumentType.Boolean => "lower",
+        TextResourceArgumentType.Date or TextResourceArgumentType.Time or TextResourceArgumentType.DateTime => "iso",
+        TextResourceArgumentType.Guid => "d",
+        _ => "none",
+    };
+
+    private static PlaceholderModel[] ReadPortableInputs(JsonValue value, TextResourceSource source, DiagnosticBag diagnostics, TextResourceCompilerOptions options)
+    {
+        if (value.Properties.Count > options.MaximumPlaceholdersPerValue)
+            diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error, "Input count exceeds the configured limit.", source, value.Span);
+        var result = new List<PlaceholderModel>();
+        for (int index = 0; index < value.Properties.Count; index++)
+        {
+            JsonProperty input = value.Properties[index];
+            if (!IsIdentifier(input.Name) || input.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Invalid input declaration.", source, input.Value.Span); continue; }
+            ValidateKnownMembers(input.Value, PlaceholderMembers, source, diagnostics);
+            JsonProperty? type = Required(input.Value, "type", JsonKind.String, source, diagnostics);
+            JsonProperty? format = input.Value.Property("format");
+            if (type is null || !TryPortableArgumentType(type.Value.Text!, out TextResourceArgumentType argumentType, out string defaultFormat))
+            { diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Unknown portable input type.", source, type?.Value.Span ?? input.Value.Span); continue; }
+            string selected = format?.Value.Text ?? defaultFormat;
+            if (format is not null && (format.Value.Kind != JsonKind.String || !IsAllowedFormat(argumentType, selected)))
+            { diagnostics.Add("RTR0017", TextResourceDiagnosticSeverity.Error, "Invalid portable input format.", source, format.Value.Span); selected = defaultFormat; }
+            result.Add(new PlaceholderModel(input.Name, argumentType, selected, input.NameSpan, type.Value.Span, format?.Value.Span ?? type.Value.Span));
+        }
+        result.Sort((left, right) => StringComparer.Ordinal.Compare(left.Name, right.Name));
+        return result.ToArray();
+    }
+
+    private static bool TryPortableArgumentType(string value, out TextResourceArgumentType type, out string format)
+    {
+        string mapped = value switch { "int64" => "int", "decimal" => "number", "instant" => "datetime", "uuid" => "guid", _ => value };
+        return TryArgumentType(mapped, out type, out format);
+    }
+
+    private static string PatternText(CompiledMessagePattern pattern)
+    {
+        var builder = new StringBuilder();
+        Append(pattern.Nodes, builder);
+        return builder.ToString();
+
+        static void Append(IReadOnlyList<CompiledMessageNode> nodes, StringBuilder target)
+        {
+            for (int index = 0; index < nodes.Count; index++)
+            {
+                if (nodes[index] is CompiledMessageText text) target.Append(text.Value.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal));
+                else if (nodes[index] is CompiledMessageInput input) target.Append('{').Append(input.Name).Append('}');
+                else if (nodes[index] is CompiledMessageFormat format) target.Append('{').Append(format.Input).Append('}');
+                else if (nodes[index] is CompiledMessageMarkup markup) Append(markup.Children, target);
+            }
+        }
     }
 
     private static void AddLeaf(DocumentModel document, DiagnosticBag diagnostics, TextResourceCompilerOptions options, string key, ByteSpan keySpan, ByteSpan pathSpan, ByteSpan valueSpan,
@@ -534,8 +891,13 @@ public static class TextResourceCompiler
     {
         if (StrictJsonParser.StrictUtf8.GetByteCount(pattern) > options.MaximumValueBytes)
             diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error, "Resource value exceeds the configured byte limit.", document.Source, valueSpan);
-        HashSet<string>? patternNames = ParsePattern(pattern, document.Source, valueSpan, diagnostics);
-        if (patternNames is not null)
+        CompiledMessagePattern? message = MessagePatternCompiler.Compile(
+            pattern,
+            document.Source,
+            valueSpan,
+            diagnostics,
+            out HashSet<string> patternNames);
+        if (message is not null)
         {
             var declared = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < placeholders.Length; i++) declared.Add(placeholders[i].Name);
@@ -544,31 +906,11 @@ public static class TextResourceCompiler
             for (int i = 0; i < placeholders.Length; i++)
                 if (!patternNames.Contains(placeholders[i].Name)) diagnostics.Add("RTR0015", TextResourceDiagnosticSeverity.Error, "Placeholder '" + placeholders[i].Name + "' is declared but not used.", document.Source, placeholders[i].Span);
         }
-        document.Resources.Add(new ResourceModel(key, pattern, description, since, deprecated, tags, placeholders, document.Source, keySpan, pathSpan, valueSpan));
-    }
-
-    private static HashSet<string>? ParsePattern(string pattern, TextResourceSource source, ByteSpan span, DiagnosticBag diagnostics)
-    {
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        for (int i = 0; i < pattern.Length; i++)
-        {
-            char ch = pattern[i];
-            if (ch == '{')
-            {
-                if (i + 1 < pattern.Length && pattern[i + 1] == '{') { i++; continue; }
-                int close = pattern.IndexOf('}', i + 1);
-                if (close < 0) { diagnostics.Add("RTR0014", TextResourceDiagnosticSeverity.Error, "Message pattern contains an unmatched '{'.", source, span); return null; }
-                string name = pattern.Substring(i + 1, close - i - 1);
-                if (!IsIdentifier(name)) { diagnostics.Add("RTR0014", TextResourceDiagnosticSeverity.Error, "Message pattern contains an invalid placeholder.", source, span); return null; }
-                names.Add(name); i = close;
-            }
-            else if (ch == '}')
-            {
-                if (i + 1 < pattern.Length && pattern[i + 1] == '}') { i++; continue; }
-                diagnostics.Add("RTR0014", TextResourceDiagnosticSeverity.Error, "Message pattern contains an unmatched '}'.", source, span); return null;
-            }
-        }
-        return names;
+        // Keep the invalid leaf in the semantic model so the existing diagnostic
+        // pipeline does not manufacture secondary "missing canonical key" errors.
+        // Generation is never reached for a failed compilation.
+        message ??= new CompiledMessagePattern(Array.Empty<CompiledMessageNode>());
+        document.Resources.Add(new ResourceModel(key, pattern, message, description, since, deprecated, tags, placeholders, document.Source, keySpan, pathSpan, valueSpan));
     }
 
     private static PlaceholderModel[] ReadPlaceholders(JsonProperty? property, TextResourceSource source, DiagnosticBag diagnostics, TextResourceCompilerOptions options)
@@ -625,6 +967,12 @@ public static class TextResourceCompiler
         {
             cancellationToken.ThrowIfCancellationRequested();
             DocumentModel document = documents[i];
+            if (document.SchemaVersion != manifest.SchemaVersion)
+            {
+                diagnostics.Add("RTR0003", TextResourceDiagnosticSeverity.Error,
+                    "Resource document schemaVersion must match its catalog manifest.", document.Source, document.CatalogSpan);
+                continue;
+            }
             if (!localeMap.ContainsKey(document.Locale)) { diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "Document locale '" + document.Locale + "' is not declared.", document.Source, document.LocaleSpan); continue; }
             if (!layerMap.ContainsKey(document.Layer)) { diagnostics.Add("RTR0005", TextResourceDiagnosticSeverity.Error, "Document layer '" + document.Layer + "' is not declared.", document.Source, document.LayerSpan); continue; }
             if (!buckets.TryGetValue(document.Locale, out Dictionary<string, Dictionary<string, ResourceModel>>? byLayer)) { byLayer = new Dictionary<string, Dictionary<string, ResourceModel>>(StringComparer.Ordinal); buckets.Add(document.Locale, byLayer); }
@@ -674,6 +1022,21 @@ public static class TextResourceCompiler
             cancellationToken.ThrowIfCancellationRequested();
             LocaleModel locale = manifest.Locales[i];
             Dictionary<string, ResourceModel> direct = directByLocale[locale.Tag];
+            foreach (KeyValuePair<string, ResourceModel> pair in SortedPairs(canonical))
+            {
+                if (ContainsRelativeTime(pair.Value.Message) && !SupportsRelativeTime(locale.Tag))
+                    diagnostics.Add("RTR0031", TextResourceDiagnosticSeverity.Error,
+                        "The built-in relative-time registry does not support locale '" + locale.Tag + "'.",
+                        pair.Value.Source, pair.Value.ValueSpan);
+                for (int selectorIndex = 0; selectorIndex < pair.Value.Message.Selectors.Count; selectorIndex++)
+                {
+                    CompiledMessageSelector selector = pair.Value.Message.Selectors[selectorIndex];
+                    if (selector.Function is "plural" or "ordinal" && !SupportsBuiltInPlural(locale.Tag, selector.Function == "ordinal"))
+                        diagnostics.Add("RTR0031", TextResourceDiagnosticSeverity.Error,
+                            "The built-in plural registry does not support locale '" + locale.Tag + "' for selector '" + selector.Name + "'.",
+                            pair.Value.Source, pair.Value.ValueSpan);
+                }
+            }
             bool hasValidFallback = locale.Fallback is null || localeMap.ContainsKey(locale.Fallback);
             if (!string.Equals(locale.Tag, manifest.DefaultLocale, StringComparison.OrdinalIgnoreCase))
             {
@@ -713,11 +1076,12 @@ public static class TextResourceCompiler
                 CompileResources(direct, ids), CompileResources(resolved, ids)));
         }
         IReadOnlyList<CompiledTextResource> canonicalResources = CompileResources(canonical, ids);
-        string fingerprint = Fingerprint(manifest.Id, canonicalResources);
+        string fingerprint = Fingerprint(manifest.Id, manifest.SchemaVersion, canonicalResources);
         var layers = new List<CompiledTextLayer>();
         for (int i = 0; i < manifest.Layers.Count; i++) layers.Add(new CompiledTextLayer(manifest.Layers[i].Name, manifest.Layers[i].Priority));
         return new CompiledTextCatalog(manifest.Id, manifest.CodeNamespace, manifest.ClassName, manifest.Visibility, manifest.DefaultLocale,
-            layers.ToArray(), compiledLocales.ToArray(), canonicalResources, manifest.UnsupportedLocale, manifest.MissingKey, fingerprint);
+            layers.ToArray(), compiledLocales.ToArray(), canonicalResources, manifest.UnsupportedLocale, manifest.MissingKey, fingerprint,
+            manifest.SchemaVersion, manifest.SchemaVersion);
     }
 
     private static CompiledTextResource[] CompileResources(Dictionary<string, ResourceModel> resources, Dictionary<string, int> ids)
@@ -729,15 +1093,43 @@ public static class TextResourceCompiler
             var placeholders = new List<CompiledTextPlaceholder>();
             for (int i = 0; i < resource.Placeholders.Length; i++) placeholders.Add(new CompiledTextPlaceholder(resource.Placeholders[i].Name, resource.Placeholders[i].Type, resource.Placeholders[i].Format));
             result.Add(new CompiledTextResource(ids.TryGetValue(pair.Key, out int id) ? id : -1, pair.Key, resource.Pattern, resource.Description,
-                resource.Since, resource.DeprecatedReason, (string[])resource.Tags.Clone(), placeholders.ToArray(), DiagnosticBag.Location(resource.Source, resource.KeySpan)));
+                resource.Since, resource.DeprecatedReason, (string[])resource.Tags.Clone(), placeholders.ToArray(), DiagnosticBag.Location(resource.Source, resource.KeySpan), resource.Message));
         }
         return result.ToArray();
     }
 
-    private static string Fingerprint(string catalog, IReadOnlyList<CompiledTextResource> resources)
+    private static bool SupportsBuiltInPlural(string locale, bool ordinal)
+    {
+        string language = locale.Split('-')[0].ToLowerInvariant();
+        if (ordinal) return language == "en";
+        return language is "en" or "de" or "es" or "fr" or "it" or "nl" or "sv" or "no" or "da";
+    }
+
+    private static bool SupportsRelativeTime(string locale) =>
+        locale.Split('-')[0].ToLowerInvariant() is "en" or "de" or "fr";
+
+    private static bool ContainsRelativeTime(CompiledMessagePattern message)
+    {
+        if (Contains(message.Nodes)) return true;
+        for (int index = 0; index < message.Variants.Count; index++) if (Contains(message.Variants[index].Pattern.Nodes)) return true;
+        return false;
+
+        static bool Contains(IReadOnlyList<CompiledMessageNode> nodes)
+        {
+            for (int index = 0; index < nodes.Count; index++)
+            {
+                if (nodes[index] is CompiledMessageFormat { Function: "relativeTime" }) return true;
+                if (nodes[index] is CompiledMessageMarkup markup && Contains(markup.Children)) return true;
+            }
+            return false;
+        }
+    }
+
+    private static string Fingerprint(string catalog, int messageGrammarVersion, IReadOnlyList<CompiledTextResource> resources)
     {
         var builder = new StringBuilder();
-        builder.Append("{\"catalog\":").Append(JsonQuote(catalog)).Append(",\"messageGrammarVersion\":1,\"resources\":[");
+        builder.Append("{\"catalog\":").Append(JsonQuote(catalog)).Append(",\"messageGrammarVersion\":")
+            .Append(messageGrammarVersion).Append(",\"resources\":[");
         for (int i = 0; i < resources.Count; i++)
         {
             if (i != 0) builder.Append(',');
@@ -748,6 +1140,14 @@ public static class TextResourceCompiler
                 CompiledTextPlaceholder placeholder = resources[i].Placeholders[p];
                 builder.Append("{\"name\":").Append(JsonQuote(placeholder.Name)).Append(",\"type\":")
                     .Append(JsonQuote(ArgumentTypeName(placeholder.Type))).Append(",\"format\":").Append(JsonQuote(placeholder.Format)).Append('}');
+            }
+            builder.Append("],\"selectors\":[");
+            for (int selectorIndex = 0; selectorIndex < resources[i].Message.Selectors.Count; selectorIndex++)
+            {
+                if (selectorIndex != 0) builder.Append(',');
+                CompiledMessageSelector selector = resources[i].Message.Selectors[selectorIndex];
+                builder.Append("{\"name\":").Append(JsonQuote(selector.Name)).Append(",\"input\":")
+                    .Append(JsonQuote(selector.Input)).Append(",\"function\":").Append(JsonQuote(selector.Function)).Append('}');
             }
             builder.Append("]}");
         }
@@ -939,12 +1339,21 @@ public static class TextResourceCompiler
     private static bool SameContract(ResourceModel left, ResourceModel right, out ByteSpan mismatchSpan)
     {
         mismatchSpan = right.KeySpan;
+        if (left.Message.HasMarkup != right.Message.HasMarkup) { mismatchSpan = right.ValueSpan; return false; }
         if (left.Placeholders.Length != right.Placeholders.Length) return false;
         for (int i = 0; i < left.Placeholders.Length; i++)
         {
             if (left.Placeholders[i].Name != right.Placeholders[i].Name) { mismatchSpan = right.Placeholders[i].Span; return false; }
             if (left.Placeholders[i].Type != right.Placeholders[i].Type) { mismatchSpan = right.Placeholders[i].TypeSpan; return false; }
             if (left.Placeholders[i].Format != right.Placeholders[i].Format) { mismatchSpan = right.Placeholders[i].FormatSpan; return false; }
+        }
+        if (left.Message.Selectors.Count != right.Message.Selectors.Count) { mismatchSpan = right.ValueSpan; return false; }
+        for (int i = 0; i < left.Message.Selectors.Count; i++)
+        {
+            CompiledMessageSelector leftSelector = left.Message.Selectors[i];
+            CompiledMessageSelector rightSelector = right.Message.Selectors[i];
+            if (leftSelector.Name != rightSelector.Name || leftSelector.Input != rightSelector.Input || leftSelector.Function != rightSelector.Function)
+            { mismatchSpan = right.ValueSpan; return false; }
         }
         return true;
     }

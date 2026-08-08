@@ -125,7 +125,7 @@ internal static class Program
         writer.WriteLine("  runic-textresources schema --output <directory>");
         writer.WriteLine();
         writer.WriteLine("Arguments may be read from a UTF-8 response file with @<file>.");
-        writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest.");
+        writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest --emit-esm --emit-cpp.");
         writer.WriteLine("With no emit switches, generate and verify use all four output groups.");
         writer.WriteLine("Exit codes: 0 success; 1 validation or verification diagnostics; 2 invocation or operational failure.");
     }

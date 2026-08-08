@@ -9,6 +9,9 @@ internal static class Program
         TestRunner runner = new();
         RuntimeContractTests.Register(runner);
         CompilerTests.Register(runner);
+        EsmGenerationTests.Register(runner);
+        CppGenerationTests.Register(runner);
+        SchemaV2Tests.Register(runner);
         CorpusTests.Register(runner);
         SchemaTests.Register(runner);
         return runner.Run();

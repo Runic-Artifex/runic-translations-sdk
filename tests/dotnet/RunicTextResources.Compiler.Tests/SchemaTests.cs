@@ -41,6 +41,9 @@ internal static class SchemaTests
     {
         AssertReferencesResolve(ReadSchemaPath("catalog-v1.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("resources-v1.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("catalog-v2.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("resources-v2.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("message-ast-v2.schema.json"));
     }
 
     private static void ValidCorpusSourcesAreStrictJson()

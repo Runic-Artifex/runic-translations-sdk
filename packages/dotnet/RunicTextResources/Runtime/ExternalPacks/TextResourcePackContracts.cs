@@ -130,7 +130,8 @@ public sealed class TextResourcePackContract
         string catalog,
         string locale,
         string contractFingerprint,
-        IReadOnlyList<TextResourcePackMessageContract> messages)
+        IReadOnlyList<TextResourcePackMessageContract> messages,
+        int messageGrammarVersion = 1)
     {
         ArgumentNullException.ThrowIfNull(messages);
         if (!TextResourcePackValidation.IsCatalog(catalog))
@@ -139,10 +140,13 @@ public sealed class TextResourcePackContract
             throw new ArgumentException("The locale must be a canonical structural BCP 47 tag.", nameof(locale));
         if (!TextResourcePackValidation.IsFingerprint(contractFingerprint))
             throw new ArgumentException("The fingerprint must be lowercase sha256 hexadecimal text.", nameof(contractFingerprint));
+        if (messageGrammarVersion is not (1 or 2))
+            throw new ArgumentOutOfRangeException(nameof(messageGrammarVersion));
 
         Catalog = catalog;
         Locale = locale;
         ContractFingerprint = contractFingerprint;
+        MessageGrammarVersion = messageGrammarVersion;
         var copy = new TextResourcePackMessageContract[messages.Count];
         _messagesByName = new Dictionary<string, TextResourcePackMessageContract>(messages.Count, StringComparer.Ordinal);
         string? previousKey = null;
@@ -168,6 +172,8 @@ public sealed class TextResourcePackContract
     public string Locale { get; }
     /// <summary>The generated catalog contract fingerprint.</summary>
     public string ContractFingerprint { get; }
+    /// <summary>The message grammar expected in a matching locale artifact.</summary>
+    public int MessageGrammarVersion { get; }
     /// <summary>The ordinal-sorted known message contracts.</summary>
     public IReadOnlyList<TextResourcePackMessageContract> Messages => _messages;
 
@@ -178,12 +184,15 @@ public sealed class TextResourcePackContract
 /// <summary>One fully verified external message value.</summary>
 public sealed class VerifiedTextResourcePackMessage
 {
-    internal VerifiedTextResourcePackMessage(TextResourceKey key, string pattern) { Key = key; Pattern = pattern; }
+    internal VerifiedTextResourcePackMessage(TextResourceKey key, string pattern, CompiledTextMessage? message = null)
+    { Key = key; Pattern = pattern; Message = message; }
 
     /// <summary>The generated known key.</summary>
     public TextResourceKey Key { get; }
     /// <summary>The validated plain-text message pattern.</summary>
     public string Pattern { get; }
+    /// <summary>The verified normalized message for grammar v2, or null for grammar v1.</summary>
+    public CompiledTextMessage? Message { get; }
 }
 
 /// <summary>Immutable external pack data that passed integrity, shape, and compatibility validation.</summary>

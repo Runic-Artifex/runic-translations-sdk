@@ -18,6 +18,16 @@ internal static class CliIntegrationTests
         "MinimalText.Registration.g.cs",
         "minimal.asset-manifest-v1.json",
         "minimal.en.locale-v1.json",
+        "minimal.esm/dynamic.d.ts",
+        "minimal.esm/dynamic.js",
+        "minimal.esm/messages.d.ts",
+        "minimal.esm/messages.js",
+        "minimal.esm/messages/m$Hello.js",
+        "minimal.esm/runtime.d.ts",
+        "minimal.esm/runtime.js",
+        "minimal.esm/transport.d.ts",
+        "minimal.esm/transport.js",
+        "minimal.esm/web-module-manifest-v1.json",
         "minimal.template-manifest-v1.json",
         "minimal.text-resources-v1.d.ts",
     ];
@@ -89,7 +99,7 @@ internal static class CliIntegrationTests
         using TemporaryDirectory temporary = new();
         TestFixture.CopyMinimal(temporary);
         string manifest = File.ReadAllText(temporary.Resolve("manifest.json"), Encoding.UTF8);
-        File.WriteAllText(temporary.Resolve("manifest.json"), manifest.Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2", StringComparison.Ordinal), new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("manifest.json"), manifest.Replace("\"schemaVersion\": 1", "\"schemaVersion\": 3", StringComparison.Ordinal), new UTF8Encoding(false));
 
         ProcessResult result = TestFixture.RunTool(temporary, "validate", "--catalog", "manifest.json", "--documents", "en.json");
 
@@ -138,7 +148,7 @@ internal static class CliIntegrationTests
         using TemporaryDirectory temporary = GeneratedFixture();
         ProcessResult result = Verify(temporary);
         Assert.Equal(0, result.ExitCode, result.Combined);
-        Assert.Contains("verified 8 artifact(s)", result.StandardOutput);
+        Assert.Contains("verified 18 artifact(s)", result.StandardOutput);
     }
 
     private static void VerifyReportsMissing()

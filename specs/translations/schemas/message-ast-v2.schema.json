@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.dev/schemas/text-resources/message-ast-v2.schema.json",
+  "title": "Runic Text Resources normalized message AST v2",
+  "type": "object",
+  "required": ["astVersion", "kind", "inputs", "declarations", "selectors", "variants"],
+  "properties": {
+    "astVersion": { "const": 2 },
+    "kind": { "const": "message" },
+    "inputs": { "type": "object", "propertyNames": { "$ref": "#/$defs/name" }, "additionalProperties": { "$ref": "#/$defs/input" } },
+    "declarations": { "type": "array", "items": { "$ref": "#/$defs/declaration" } },
+    "selectors": { "type": "array", "items": { "$ref": "#/$defs/name" }, "uniqueItems": true },
+    "variants": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/variant" } },
+    "source": { "$ref": "#/$defs/source" },
+    "direction": { "enum": ["auto", "ltr", "rtl", "isolate"] }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "input": {
+      "type": "object", "required": ["type"],
+      "properties": { "type": { "enum": ["string", "bool", "int64", "decimal", "date", "time", "instant", "uuid"] } },
+      "additionalProperties": false, "unevaluatedProperties": false
+    },
+    "operand": {
+      "oneOf": [
+        { "type": "object", "required": ["kind", "name"], "properties": { "kind": { "const": "input" }, "name": { "$ref": "#/$defs/name" } }, "additionalProperties": false },
+        { "type": "object", "required": ["kind", "name"], "properties": { "kind": { "const": "local" }, "name": { "$ref": "#/$defs/name" } }, "additionalProperties": false }
+      ]
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": { "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }] }
+    },
+    "declaration": {
+      "type": "object", "required": ["name", "kind", "function", "operand", "options"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" }, "kind": { "const": "format" },
+        "function": { "enum": ["string", "integer", "number", "date", "time", "datetime", "plural", "relativeTime"] },
+        "operand": { "$ref": "#/$defs/operand" }, "options": { "$ref": "#/$defs/options" }
+      },
+      "additionalProperties": false, "unevaluatedProperties": false
+    },
+    "variant": {
+      "type": "object", "required": ["matches", "pattern"],
+      "properties": {
+        "matches": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
+        "pattern": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+      },
+      "additionalProperties": false, "unevaluatedProperties": false
+    },
+    "node": {
+      "oneOf": [
+        { "type": "object", "required": ["kind", "value"], "properties": { "kind": { "const": "text" }, "value": { "type": "string" } }, "additionalProperties": false },
+        { "type": "object", "required": ["kind", "name"], "properties": { "kind": { "const": "input" }, "name": { "$ref": "#/$defs/name" } }, "additionalProperties": false },
+        { "type": "object", "required": ["kind", "function", "operand", "options"], "properties": { "kind": { "const": "format" }, "function": { "enum": ["string", "integer", "number", "date", "time", "datetime", "relativeTime"] }, "operand": { "$ref": "#/$defs/operand" }, "options": { "$ref": "#/$defs/options" } }, "additionalProperties": false },
+        { "type": "object", "required": ["kind", "name", "attributes", "children"], "properties": { "kind": { "const": "markup" }, "name": { "$ref": "#/$defs/name" }, "attributes": { "type": "object", "additionalProperties": { "type": "string" } }, "children": { "type": "array", "items": { "$ref": "#/$defs/node" } } }, "additionalProperties": false }
+      ]
+    },
+    "source": {
+      "type": "object", "required": ["path", "startByte", "lengthBytes"],
+      "properties": { "path": { "type": "string" }, "startByte": { "type": "integer", "minimum": 0 }, "lengthBytes": { "type": "integer", "minimum": 0 } },
+      "additionalProperties": false, "unevaluatedProperties": false
+    }
+  }
+}

@@ -3,13 +3,15 @@
     <_TextResourcesBuildTargetsPath>$(MSBuildThisFileFullPath)</_TextResourcesBuildTargetsPath>
 
     <_TextResourcesEmitAny>false</_TextResourcesEmitAny>
-    <_TextResourcesEmitAny Condition="'$(TextResourcesEmitJson)' == 'true' or '$(TextResourcesEmitTypeScript)' == 'true' or '$(TextResourcesEmitTemplateManifest)' == 'true'">true</_TextResourcesEmitAny>
+    <_TextResourcesEmitAny Condition="'$(TextResourcesEmitJson)' == 'true' or '$(TextResourcesEmitTypeScript)' == 'true' or '$(TextResourcesEmitTemplateManifest)' == 'true' or '$(TextResourcesEmitEsm)' == 'true' or '$(TextResourcesEmitCpp)' == 'true'">true</_TextResourcesEmitAny>
     <_TextResourcesGenerationEnabled>false</_TextResourcesGenerationEnabled>
     <_TextResourcesGenerationEnabled Condition="'$(TextResourcesGenerateOnBuild)' == 'true' or '$(_TextResourcesEmitAny)' == 'true'">true</_TextResourcesGenerationEnabled>
     <_TextResourcesEmitArguments Condition="'$(TextResourcesEmitJson)' == 'true'">$(_TextResourcesEmitArguments) --emit-json</_TextResourcesEmitArguments>
     <_TextResourcesEmitArguments Condition="'$(TextResourcesEmitTypeScript)' == 'true'">$(_TextResourcesEmitArguments) --emit-typescript</_TextResourcesEmitArguments>
     <_TextResourcesEmitArguments Condition="'$(TextResourcesEmitTemplateManifest)' == 'true'">$(_TextResourcesEmitArguments) --emit-template-manifest</_TextResourcesEmitArguments>
-    <_TextResourcesEmitArguments Condition="'$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true'"> --emit-json --emit-typescript --emit-template-manifest</_TextResourcesEmitArguments>
+    <_TextResourcesEmitArguments Condition="'$(TextResourcesEmitEsm)' == 'true'">$(_TextResourcesEmitArguments) --emit-esm</_TextResourcesEmitArguments>
+    <_TextResourcesEmitArguments Condition="'$(TextResourcesEmitCpp)' == 'true'">$(_TextResourcesEmitArguments) --emit-cpp</_TextResourcesEmitArguments>
+    <_TextResourcesEmitArguments Condition="'$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true'"> --emit-json --emit-typescript --emit-template-manifest --emit-esm</_TextResourcesEmitArguments>
 
     <RunicTextResourcesBuildTargetsImported>true</RunicTextResourcesBuildTargetsImported>
   </PropertyGroup>
@@ -71,9 +73,9 @@
         <_OwnedFullPath>$([System.IO.Path]::GetFullPath('%(Identity)', '$(_TextResourcesOutputRoot)'))</_OwnedFullPath>
         <_OwnedRelativePath>$([System.IO.Path]::GetRelativePath('$(_TextResourcesOutputRoot)', '$([System.IO.Path]::GetFullPath('%(Identity)', '$(_TextResourcesOutputRoot)'))'))</_OwnedRelativePath>
       </_TextResourcesOwnedInventoryEntry>
-      <!-- Wave B artifacts are flat. Reject traversal and nested paths before any deletion. -->
+      <!-- Permit nested ESM modules while rejecting every path outside the owned root. -->
       <_TextResourcesUnsafeInventoryEntry Include="@(_TextResourcesOwnedInventoryEntry)"
-                                          Condition="'%(_OwnedRelativePath)' == '.' or $([System.IO.Path]::IsPathRooted('%(_OwnedRelativePath)')) or $([System.String]::Copy('%(_OwnedRelativePath)').Contains('\')) or $([System.String]::Copy('%(_OwnedRelativePath)').Contains('/'))" />
+                                          Condition="'%(_OwnedRelativePath)' == '.' or '%(_OwnedRelativePath)' == '..' or $([System.IO.Path]::IsPathRooted('%(_OwnedRelativePath)')) or $([System.String]::Copy('%(_OwnedRelativePath)').StartsWith('$(_TextResourcesParentPrefix)'))" />
     </ItemGroup>
     <Error Condition="'@(_TextResourcesUnsafeInventoryEntry)' != ''"
            Text="RTR0020: The text-resource output inventory contains a path that is not a direct child of TextResourcesOutputPath; the operation stopped before deleting files." />
@@ -114,6 +116,8 @@
       <_TextResourcesDesiredResponseLine Include="--emit-json" Condition="'$(TextResourcesEmitJson)' == 'true' or ('$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true')" />
       <_TextResourcesDesiredResponseLine Include="--emit-typescript" Condition="'$(TextResourcesEmitTypeScript)' == 'true' or ('$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true')" />
       <_TextResourcesDesiredResponseLine Include="--emit-template-manifest" Condition="'$(TextResourcesEmitTemplateManifest)' == 'true' or ('$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true')" />
+      <_TextResourcesDesiredResponseLine Include="--emit-esm" Condition="'$(TextResourcesEmitEsm)' == 'true' or ('$(TextResourcesGenerateOnBuild)' == 'true' and '$(_TextResourcesEmitAny)' != 'true')" />
+      <_TextResourcesDesiredResponseLine Include="--emit-cpp" Condition="'$(TextResourcesEmitCpp)' == 'true'" />
       <_TextResourcesDesiredResponseLine Include="$(TextResourcesToolAdditionalArguments)" Condition="'$(TextResourcesToolAdditionalArguments)' != ''" />
       <_TextResourcesMissingArtifact Include="@(_TextResourcesOwnedInventoryEntry)"
                                      Condition="!Exists('%(_OwnedFullPath)')" />
@@ -148,13 +152,7 @@
           Command="$(TextResourcesToolCommand) &quot;@$(_TextResourcesResponseFilePath)&quot;" />
     <ItemGroup>
       <_TextResourcesStagedArtifact Include="$(_TextResourcesStagingRoot)**\*" />
-      <_TextResourcesUnsafeStagedArtifact Include="@(_TextResourcesStagedArtifact)"
-                                          Condition="'%(RecursiveDir)' != ''" />
-    </ItemGroup>
-    <Error Condition="'@(_TextResourcesUnsafeStagedArtifact)' != ''"
-           Text="RTR0020: The text-resource tool emitted a nested path; Wave B build artifacts must be direct children of the output root." />
-    <ItemGroup>
-      <_TextResourcesGeneratedArtifact Include="@(_TextResourcesStagedArtifact->'$(_TextResourcesOutputRoot)%(Filename)%(Extension)')" />
+      <_TextResourcesGeneratedArtifact Include="@(_TextResourcesStagedArtifact->'$(_TextResourcesOutputRoot)%(RecursiveDir)%(Filename)%(Extension)')" />
       <_TextResourcesStaleArtifact Include="@(_TextResourcesOwnedInventoryEntry->'%(_OwnedFullPath)')" />
       <_TextResourcesStaleArtifact Remove="@(_TextResourcesGeneratedArtifact)" />
     </ItemGroup>

@@ -22,7 +22,9 @@ internal enum ToolEmission
     Json = 2,
     TypeScript = 4,
     TemplateManifest = 8,
-    All = CSharp | Json | TypeScript | TemplateManifest,
+    Esm = 16,
+    Cpp = 32,
+    All = CSharp | Json | TypeScript | TemplateManifest | Esm,
 }
 
 internal sealed record ToolInvocation(
@@ -108,6 +110,12 @@ internal static class CommandLine
                     break;
                 case "--emit-template-manifest":
                     AddEmission(ref emission, ToolEmission.TemplateManifest, option);
+                    break;
+                case "--emit-esm":
+                    AddEmission(ref emission, ToolEmission.Esm, option);
+                    break;
+                case "--emit-cpp":
+                    AddEmission(ref emission, ToolEmission.Cpp, option);
                     break;
                 default:
                     throw new ToolUsageException($"unknown option or positional argument '{option}'.");

@@ -57,6 +57,20 @@ internal static class CompilerOutputAdapter
                 catalogOutputs.Add(TextResourceOutputRenderer.RenderTypeScriptContract(catalog));
             }
 
+            if ((emission & ToolEmission.Esm) != 0)
+            {
+                IReadOnlyList<TextResourceGeneratedOutput> esm = TextResourceOutputRenderer.RenderEsmModules(catalog);
+                for (int outputIndex = 0; outputIndex < esm.Count; outputIndex++)
+                    catalogOutputs.Add(esm[outputIndex]);
+            }
+
+            if ((emission & ToolEmission.Cpp) != 0)
+            {
+                IReadOnlyList<TextResourceGeneratedOutput> cpp = TextResourceOutputRenderer.RenderCpp(catalog);
+                for (int outputIndex = 0; outputIndex < cpp.Count; outputIndex++)
+                    catalogOutputs.Add(cpp[outputIndex]);
+            }
+
             if ((emission & (ToolEmission.Json | ToolEmission.TemplateManifest | ToolEmission.TypeScript)) != 0)
                 catalogOutputs.Add(TextResourceOutputRenderer.RenderAssetManifestJson(catalog, catalogOutputs));
 

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace RunicTextResources;
 
@@ -10,6 +9,7 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
     private readonly CompiledTextResourceCatalog _catalog;
     private readonly CompiledTextResourceDefinition[] _definitions;
     private readonly string?[] _patterns;
+    private readonly CompiledTextMessage?[] _messages;
     private readonly string?[] _noArgumentText;
     private readonly ITextValueFormatter _valueFormatter;
 
@@ -31,7 +31,8 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
         _catalog = catalog;
         _definitions = catalog.DefinitionArray;
         _patterns = catalog.GetResolvedPatterns(canonicalLocale);
-        _noArgumentText = BuildNoArgumentText(_patterns, _definitions);
+        _messages = catalog.GetResolvedMessages(canonicalLocale);
+        _noArgumentText = BuildNoArgumentText(_messages, _definitions);
         _valueFormatter = valueFormatter ?? DefaultTextValueFormatter.Shared;
         Catalog = catalog.Catalog;
         Locale = canonicalLocale;
@@ -54,7 +55,9 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
         }
 
         var replacedPatterns = new string?[_patterns.Length];
+        var replacedMessages = new CompiledTextMessage?[_messages.Length];
         Array.Copy(_patterns, replacedPatterns, _patterns.Length);
+        Array.Copy(_messages, replacedMessages, _messages.Length);
         int previousId = -1;
         for (int i = 0; i < replacementValues.Count; i++)
         {
@@ -72,9 +75,18 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
             }
 
             ArgumentNullException.ThrowIfNull(value.Pattern);
-            if (!TextResourceDataValidation.PatternMatches(
-                value.Pattern,
-                _definitions[value.Id].PlaceholderArray))
+            CompiledTextMessage message;
+            try
+            {
+                message = value.Message ?? CompiledTextMessageRuntime.ParseVersion1(value.Pattern);
+            }
+            catch (TextResourceFormatException)
+            {
+                throw new ArgumentException(
+                    $"Replacement pattern for key '{_definitions[value.Id].Name}' is malformed.",
+                    nameof(replacementValues));
+            }
+            if (!CompiledTextMessageRuntime.MatchesContract(message, _definitions[value.Id].PlaceholderArray))
             {
                 throw new ArgumentException(
                     $"Replacement pattern for key '{_definitions[value.Id].Name}' does not match its placeholder contract.",
@@ -82,11 +94,13 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
             }
 
             replacedPatterns[value.Id] = value.Pattern;
+            replacedMessages[value.Id] = message;
             previousId = value.Id;
         }
 
         _patterns = replacedPatterns;
-        _noArgumentText = BuildNoArgumentText(replacedPatterns, _definitions);
+        _messages = replacedMessages;
+        _noArgumentText = BuildNoArgumentText(replacedMessages, _definitions);
     }
 
     /// <inheritdoc />
@@ -122,7 +136,7 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
     /// <inheritdoc />
     public string Format(TextResourceKey key, ReadOnlySpan<TextArgument> arguments)
     {
-        if (!TryGetKeyIndex(key, out int index) || _patterns[index] is not string pattern)
+        if (!TryGetKeyIndex(key, out int index) || _messages[index] is not CompiledTextMessage message)
         {
             return Missing(key);
         }
@@ -133,51 +147,34 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
         }
 
         ValidateArguments(_definitions[index], arguments);
-        return TextPatternFormatter.Format(pattern, arguments, Locale, _valueFormatter);
+        return CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter);
+    }
+
+    /// <inheritdoc />
+    public LocalizedTextContent FormatContent(TextResourceKey key, ReadOnlySpan<TextArgument> arguments)
+    {
+        if (!TryGetKeyIndex(key, out int index) || _messages[index] is not CompiledTextMessage message)
+            throw new TextResourceNotFoundException("Structured text resource was not found.");
+        if (!message.HasMarkup) throw new TextResourceFormatException("The resource does not produce structured content.");
+        ValidateArguments(_definitions[index], arguments);
+        return CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter);
     }
 
     private static string?[] BuildNoArgumentText(
-        string?[] patterns,
+        CompiledTextMessage?[] messages,
         CompiledTextResourceDefinition[] definitions)
     {
-        var result = new string?[patterns.Length];
-        for (int i = 0; i < patterns.Length; i++)
+        var result = new string?[messages.Length];
+        for (int i = 0; i < messages.Length; i++)
         {
-            string? pattern = patterns[i];
-            if (pattern is not null && definitions[i].PlaceholderArray.Length == 0)
+            CompiledTextMessage? message = messages[i];
+            if (message is not null && message.VariantArray.Length == 0 && definitions[i].PlaceholderArray.Length == 0)
             {
-                result[i] = RenderLiteralPattern(pattern);
+                result[i] = CompiledTextMessageRuntime.RenderLiteral(message);
             }
         }
 
         return result;
-    }
-
-    private static string RenderLiteralPattern(string pattern)
-    {
-        int escape = pattern.IndexOf("{{", StringComparison.Ordinal);
-        if (escape < 0)
-        {
-            escape = pattern.IndexOf("}}", StringComparison.Ordinal);
-        }
-
-        if (escape < 0)
-        {
-            return pattern;
-        }
-
-        var builder = new StringBuilder(pattern.Length - 1);
-        for (int i = 0; i < pattern.Length; i++)
-        {
-            char character = pattern[i];
-            builder.Append(character);
-            if ((character == '{' || character == '}') && i + 1 < pattern.Length && pattern[i + 1] == character)
-            {
-                i++;
-            }
-        }
-
-        return builder.ToString();
     }
 
     private static void ValidateArguments(

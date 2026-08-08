@@ -5,6 +5,8 @@
     <TextResourcesEmitJson Condition="'$(TextResourcesEmitJson)' == ''">false</TextResourcesEmitJson>
     <TextResourcesEmitTypeScript Condition="'$(TextResourcesEmitTypeScript)' == ''">false</TextResourcesEmitTypeScript>
     <TextResourcesEmitTemplateManifest Condition="'$(TextResourcesEmitTemplateManifest)' == ''">false</TextResourcesEmitTemplateManifest>
+    <TextResourcesEmitEsm Condition="'$(TextResourcesEmitEsm)' == ''">false</TextResourcesEmitEsm>
+    <TextResourcesEmitCpp Condition="'$(TextResourcesEmitCpp)' == ''">false</TextResourcesEmitCpp>
 
     <!-- Keep the launcher replaceable for local tools, pinned tool manifests, and package tests. -->
     <TextResourcesToolCommand Condition="'$(TextResourcesToolCommand)' == ''">dotnet tool run runic-textresources</TextResourcesToolCommand>
