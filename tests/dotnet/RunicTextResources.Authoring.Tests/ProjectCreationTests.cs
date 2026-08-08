@@ -16,6 +16,8 @@ internal static class ProjectCreationTests
         runner.Add("Unknown and cyclic fallbacks are rejected", InvalidFallbacksAreRejected);
         runner.Add("Creation commits the complete rendered project", CreationCommitsCompleteProject);
         runner.Add("Conflicting target remains unchanged", ConflictDoesNotWrite);
+        runner.Add("Creation permits a real parent beneath an ancestor alias", AncestorAliasIsAllowed);
+        runner.Add("Creation rejects a linked target parent", LinkedParentIsRejected);
         runner.Add("Project without starter messages remains compiler-valid", NoStarterIsValid);
     }
 
@@ -102,6 +104,35 @@ internal static class ProjectCreationTests
         Assert.Equal("customer.txt", string.Join('|', Directory.EnumerateFiles(target).Select(Path.GetFileName)));
     }
 
+    private static void AncestorAliasIsAllowed()
+    {
+        using TemporaryDirectory temporary = new();
+        string real = Path.Combine(temporary.Path, "real");
+        string alias = Path.Combine(temporary.Path, "alias");
+        Directory.CreateDirectory(Path.Combine(real, "projects"));
+        if (!TryCreateDirectoryLink(alias, real)) return;
+
+        string target = Path.Combine(alias, "projects", "Resources");
+        string result = TextResourceProjectWriter.Create(TextResourceProjectScaffolder.Render(Request(target, "en")));
+        Assert.Equal(Path.GetFullPath(target), result);
+        Assert.True(File.Exists(Path.Combine(real, "projects", "Resources", "product.en.json")), "Project was not created beneath the resolved ancestor.");
+    }
+
+    private static void LinkedParentIsRejected()
+    {
+        using TemporaryDirectory temporary = new();
+        string real = Path.Combine(temporary.Path, "real");
+        string alias = Path.Combine(temporary.Path, "alias");
+        Directory.CreateDirectory(real);
+        if (!TryCreateDirectoryLink(alias, real)) return;
+
+        string target = Path.Combine(alias, "Resources");
+        Assert.Throws<TextResourceAuthoringException>(
+            () => TextResourceProjectWriter.Create(TextResourceProjectScaffolder.Render(Request(target, "en"))),
+            "symbolic link or reparse point");
+        Assert.False(Directory.Exists(Path.Combine(real, "Resources")), "Rejected creation wrote through the linked parent.");
+    }
+
     private static void NoStarterIsValid()
     {
         TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(new TextResourceProjectCreationRequest(
@@ -127,6 +158,19 @@ internal static class ProjectCreationTests
 
     private static string LocaleText(TextResourceProjectLocale locale) =>
         locale.Fallback is null ? locale.Tag : $"{locale.Tag}:{locale.Fallback}";
+
+    private static bool TryCreateDirectoryLink(string path, string target)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(path, target);
+            return true;
+        }
+        catch (Exception exception) when (exception is UnauthorizedAccessException or IOException or PlatformNotSupportedException)
+        {
+            return false;
+        }
+    }
 
     private sealed class TemporaryDirectory : IDisposable
     {

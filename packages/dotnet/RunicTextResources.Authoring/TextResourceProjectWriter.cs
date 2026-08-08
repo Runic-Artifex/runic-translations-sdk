@@ -88,15 +88,15 @@ public static class TextResourceProjectWriter
     private static void RejectReparsePoints(string path)
     {
         DirectoryInfo? current = new(path);
-        while (current is not null)
+        while (current is not null && !current.Exists)
         {
-            if (current.Exists && (current.Attributes & FileAttributes.ReparsePoint) != 0)
-            {
-                throw new TextResourceAuthoringException(
-                    $"Target parent '{current.FullName}' is a symbolic link or reparse point.");
-            }
-
             current = current.Parent;
+        }
+
+        if (current is not null && (current.Attributes & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new TextResourceAuthoringException(
+                $"Target parent '{current.FullName}' is a symbolic link or reparse point.");
         }
     }
 

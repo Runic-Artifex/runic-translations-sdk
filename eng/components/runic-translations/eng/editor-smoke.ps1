@@ -68,3 +68,7 @@ finally {
         Remove-Item -Path $artifactsRoot -Recurse -Force
     }
 }
+
+# A best-effort template uninstall must not turn an otherwise successful smoke
+# run into a failing process on platforms where the CLI returns a cleanup error.
+$global:LASTEXITCODE = 0
