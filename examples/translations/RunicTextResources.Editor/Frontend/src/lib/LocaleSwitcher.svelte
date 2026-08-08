@@ -24,7 +24,7 @@
 		onselect: (locale: string) => void;
 	} = $props();
 
-	let scrollHeight = $derived(`${Math.min(Math.max(locales.length, 1) * 64, 256)}px`);
+	let scrollHeight = $derived(`${Math.min(Math.max(locales.length, 1) * 44, 220)}px`);
 </script>
 
 <section aria-label="Locale coverage" class="px-2 py-1">
@@ -50,14 +50,14 @@
 									<code>{locale.tag}</code>
 								</Badge>
 							</Item.Media>
-							<Item.Content class="min-w-0 gap-0.5">
-								<Item.Title>{locale.name}</Item.Title>
-								<Item.Description class="truncate">
-									{locale.translated}/{locale.total} translated · {locale.isSource ? "source" : `fallback ${locale.fallback ?? "none"}`}
-								</Item.Description>
+							<Item.Content class="min-w-0">
+								<Item.Title class="min-w-0">
+									<span class="truncate">{locale.name}</span>
+									<Badge variant="ghost">{locale.isSource ? "source" : `← ${locale.fallback ?? "none"}`}</Badge>
+								</Item.Title>
 							</Item.Content>
 							<Item.Actions>
-								<Badge variant="outline">{locale.percent}%</Badge>
+								<Badge variant="outline" aria-label={`${locale.percent}% translated`}>{locale.translated}/{locale.total}</Badge>
 							</Item.Actions>
 						</button>
 					{/snippet}

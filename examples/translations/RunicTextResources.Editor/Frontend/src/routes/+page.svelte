@@ -43,6 +43,7 @@
   import EditorToolbar from "$lib/EditorToolbar.svelte";
   import LocaleSwitcher from "$lib/LocaleSwitcher.svelte";
   import MessageHeading from "$lib/MessageHeading.svelte";
+  import MessageList, { type MessageListItem } from "$lib/MessageList.svelte";
   import MessageToolbar, { type MessageFilter } from "$lib/MessageToolbar.svelte";
   import ReviewWorkflow from "$lib/ReviewWorkflow.svelte";
   import TranslationEditor from "$lib/TranslationEditor.svelte";
@@ -225,6 +226,18 @@
     });
   });
   let renderedRows = $derived(visibleRows.slice(0, rowLimit));
+  let messageListItems = $derived.by((): MessageListItem[] => renderedRows.map((row) => {
+    const cell = row.cells[selectedLocale];
+    const rowReview = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
+    return {
+      key: row.key,
+      preview: preview(cell?.entry),
+      missing: cell?.entry === undefined,
+      structured: row.structured,
+      stale: isStale(rowReview, row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value),
+      needsReview: effectiveReviewState(rowReview, cell?.entry !== undefined) === "needs-review",
+    };
+  }));
   let selectedRow = $derived.by(() => rows.find((row) => row.key === selectedKey));
   let currentCell = $derived(selectedRow?.cells[selectedLocale]);
   let currentSourceValue = $derived(
@@ -1379,44 +1392,21 @@
         filterLabel="Message filters"
       />
 
-      <button class="add-message-button" onclick={() => prepareMutation("create-key")}>＋ Add message</button>
-
-      <div class="bulk-bar">
-        <span>{visibleRows.length} visible</span>
-        <button onclick={() => markVisible("needs-review")}>Mark for review</button>
-        <button onclick={() => markVisible("approved")}>Approve visible</button>
-      </div>
-
-      <nav class="message-list" aria-label="Translation messages">
-        {#each renderedRows as row (row.key)}
-          {@const cell = row.cells[selectedLocale]}
-          {@const rowReview = reviewIndex.get(reviewIdentity(row.key, selectedLocale))}
-          <button
-            class={selectedKey === row.key ? "message active" : "message"}
-            aria-current={selectedKey === row.key ? "true" : undefined}
-            onclick={() => selectRow(row)}
-          >
-            <span class={cell?.entry === undefined ? "translation-state missing" : row.structured ? "translation-state structured" : "translation-state"}></span>
-            <span class="message-copy">
-              <strong>{row.key}</strong>
-              <span>{preview(cell?.entry)}</span>
-            </span>
-            <span class="message-badges">
-              {#if isStale(rowReview, row.cells[snapshot.catalog.defaultLocale]?.entry?.value)}<span class="review-badge stale">stale</span>{/if}
-              {#if effectiveReviewState(rowReview, cell?.entry !== undefined) === "needs-review"}<span class="review-badge">review</span>{/if}
-              {#if row.structured}<span class="structure-badge">AST</span>{/if}
-            </span>
-          </button>
-        {:else}
-          <div class="empty-list">
-            <span>◇</span>
-            <p>{labels.noResults}</p>
-          </div>
-        {/each}
-        {#if renderedRows.length < visibleRows.length}
-          <button class="load-more" onclick={() => rowLimit += 300}>Show 300 more · {visibleRows.length - renderedRows.length} remaining</button>
-        {/if}
-      </nav>
+      <MessageList
+        items={messageListItems}
+        {selectedKey}
+        visibleCount={visibleRows.length}
+        remainingCount={visibleRows.length - renderedRows.length}
+        noResultsLabel={labels.noResults}
+        onselect={(key) => {
+          const row = renderedRows.find((candidate) => candidate.key === key);
+          if (row !== undefined) selectRow(row);
+        }}
+        onadd={() => prepareMutation("create-key")}
+        onmarkreview={() => markVisible("needs-review")}
+        onapprove={() => markVisible("approved")}
+        onloadmore={() => rowLimit += 300}
+      />
     </aside>
 
     <section class="editor-shell">
@@ -1919,28 +1909,6 @@
   .icon-button { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border: 0; border-radius: .35rem; color: #9da69f; background: transparent; cursor: pointer; }
   .icon-button:hover { color: #f2e5be; background: #2a312c; }
 
-  .bulk-bar { display: flex; align-items: center; gap: .3rem; padding: 0 1rem .55rem; }
-  .bulk-bar span { margin-right: auto; color: #606b63; font-size: .55rem; }
-  .bulk-bar button { border: 1px solid #353e38; border-radius: .3rem; padding: .3rem .4rem; color: #8d988f; background: #131815; font-size: .52rem; cursor: pointer; }
-  .message-list { flex: 1; min-height: 0; padding: .4rem .55rem 1rem; overflow-y: auto; scrollbar-color: #3a433d transparent; }
-  .message { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; width: 100%; border: 1px solid transparent; border-radius: .5rem; padding: .62rem .7rem; text-align: left; background: transparent; cursor: pointer; }
-  .message:hover { background: #171d19; }
-  .message.active { border-color: #4c4934; background: linear-gradient(90deg, #25261d, #1b211c); box-shadow: inset 2px 0 #c0a45e; }
-  .translation-state { width: .42rem; height: .42rem; border-radius: 50%; background: #629c74; }
-  .translation-state.missing { border: 1px solid #a06055; background: transparent; }
-  .translation-state.structured { background: #b99b52; }
-  .message-copy { display: grid; gap: .16rem; min-width: 0; }
-  .message-copy strong { overflow: hidden; color: #cbd2cd; font: .68rem ui-monospace, "SFMono-Regular", monospace; text-overflow: ellipsis; white-space: nowrap; }
-  .message-copy span { overflow: hidden; color: #68726c; font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
-  .message.active .message-copy strong { color: #f0e6ca; }
-  .structure-badge { border: 1px solid #5d5436; border-radius: .25rem; padding: .12rem .22rem; color: #bfa867; font: .48rem ui-monospace, monospace; }
-  .message-badges { display: flex; align-items: center; gap: .25rem; }
-  .review-badge { border-radius: .25rem; padding: .12rem .22rem; color: #d3a566; background: #342819; font: .47rem ui-monospace, monospace; }
-  .review-badge.stale { color: #df8f84; background: #38211e; }
-  .load-more { width: calc(100% - 1rem); margin: .5rem; border: 1px dashed #3e463f; border-radius: .4rem; padding: .55rem; color: #9a8c62; background: #111613; font-size: .58rem; cursor: pointer; }
-  .empty-list { display: grid; place-items: center; gap: .4rem; padding: 3rem 1rem; color: #5f6862; text-align: center; }
-  .empty-list span { font-size: 2rem; color: #766a46; }
-  .empty-list p { margin: 0; font-size: .72rem; }
 
   .editor-shell { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .primary { border: 1px solid #d0b460; border-radius: .45rem; padding: .58rem .85rem; color: #1a170e; background: linear-gradient(#d6bd70, #b9984f); font-weight: 750; cursor: pointer; box-shadow: 0 .35rem 1rem #0005; }
@@ -2010,7 +1978,6 @@
   .open-workspace-card input:focus { border-color: #8f7945; }
   .open-workspace-card small { color: #626d66; font-size: .58rem; }
   .welcome-actions { display: flex; gap: .65rem; margin-top: .8rem; }
-  .add-message-button { width: calc(100% - 2rem); margin: 0 1rem .55rem; border: 1px dashed #4d513d; border-radius: .4rem; padding: .55rem; color: #b9a564; background: #171914; font-size: .63rem; cursor: pointer; }
   .add-message-button:hover { border-color: #8d7c49; color: #e0cb89; }
   .repair-list { margin-top: 1.5rem; border: 1px solid #553b36; border-radius: .65rem; background: #17110f; overflow: hidden; }
   .repair-list > header { padding: .8rem 1rem; background: #251815; }
