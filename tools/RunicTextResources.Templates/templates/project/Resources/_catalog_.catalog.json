@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 2,
+  "catalog": "__CATALOG__",
+  "code": {
+    "namespace": "__NAMESPACE__",
+    "className": "__CLASS_NAME__",
+    "visibility": "public"
+  },
+  "defaultLocale": "__DEFAULT_LOCALE__",
+  "locales": [
+    {
+      "tag": "__DEFAULT_LOCALE__"
+    }
+  ],
+  "layers": [
+    {
+      "name": "base",
+      "priority": 0
+    }
+  ],
+  "validation": {
+    "translationCompleteness": "error",
+    "extraLocaleKeys": "error",
+    "emptyValues": "error"
+  },
+  "runtime": {
+    "unsupportedLocale": "parentsThenDefault",
+    "missingKey": "returnMarker"
+  },
+  "outputs": {
+    "typescript": {
+      "enabled": true,
+      "moduleName": "__CATALOG__"
+    }
+  }
+}

@@ -3,11 +3,18 @@
 Deterministic command-line validation and generation for RunicTextResources text-resource catalogs.
 
 ```text
+runic-textresources init --directory Resources --catalog product --default-locale de --locale en --locale fr --namespace Customer.Product --class ProductText
 runic-textresources validate --catalog catalog.json --documents "locales/**/*.json"
 runic-textresources generate --catalog catalog.json --documents "locales/**/*.json" --output obj/text-resources
 runic-textresources verify --catalog catalog.json --documents "locales/**/*.json" --output obj/text-resources
 runic-textresources schema --output schemas
 ```
+
+`init` creates a compiler-valid schema-v2 project as one all-or-nothing directory
+commit. Additional `--locale` values fall back to the default locale. Use
+`--locale <tag>:<fallback>` for an explicit fallback edge. Existing targets are
+never overwritten. ESM output metadata and an `Application.Name` starter message
+are included by default; use `--no-esm` or `--no-starter` to omit them.
 
 `schema` copies every bundled source, artifact, manifest, and normalized-AST schema.
 

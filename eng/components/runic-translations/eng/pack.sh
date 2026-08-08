@@ -25,6 +25,7 @@ package_projects=(
   "$repository_root/dotnet/src/RunicTextResources.Generator/RunicTextResources.Generator.csproj"
   "$repository_root/dotnet/src/RunicTextResources.Build/RunicTextResources.Build.csproj"
   "$repository_root/dotnet/tools/RunicTextResources.Tool/RunicTextResources.Tool.csproj"
+  "$repository_root/dotnet/templates/RunicTextResources.Templates/RunicTextResources.Templates.csproj"
 )
 
 for project in "${package_projects[@]}"; do

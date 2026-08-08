@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using RunicTextResources.Authoring;
 using RunicTextResources.Compiler;
 
 namespace RunicTextResources.Tool;
@@ -34,6 +35,11 @@ internal static class Program
             WriteUsage(Console.Error);
             return InvocationFailure;
         }
+        catch (TextResourceAuthoringException exception)
+        {
+            WriteToolError(exception.Message);
+            return InvocationFailure;
+        }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
         {
             WriteToolError(exception.Message);
@@ -59,6 +65,14 @@ internal static class Program
             IReadOnlyList<ToolArtifact> schemas = SchemaResources.Read();
             ArtifactFiles.WriteAtomically(invocation.OutputPath!, schemas);
             Console.Out.WriteLine($"wrote {schemas.Count} schemas.");
+            return Success;
+        }
+
+        if (invocation.Command == ToolCommand.Init)
+        {
+            TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(invocation.ProjectCreation!);
+            string target = TextResourceProjectWriter.Create(plan);
+            Console.Out.WriteLine($"created {plan.Files.Count} text-resource file(s) in {target}.");
             return Success;
         }
 
@@ -119,12 +133,14 @@ internal static class Program
     private static void WriteUsage(TextWriter writer)
     {
         writer.WriteLine("Usage:");
+        writer.WriteLine("  runic-textresources init --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [init-options]");
         writer.WriteLine("  runic-textresources validate --catalog <file> --documents <path-or-glob...>");
         writer.WriteLine("  runic-textresources generate --catalog <file> --documents <path-or-glob...> --output <directory> [emit-switches]");
         writer.WriteLine("  runic-textresources verify --catalog <file> --documents <path-or-glob...> --output <directory> [emit-switches]");
         writer.WriteLine("  runic-textresources schema --output <directory>");
         writer.WriteLine();
         writer.WriteLine("Arguments may be read from a UTF-8 response file with @<file>.");
+        writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --layer <name> --no-esm --no-starter.");
         writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest --emit-esm --emit-cpp.");
         writer.WriteLine("With no emit switches, generate and verify use all four output groups.");
         writer.WriteLine("Exit codes: 0 success; 1 validation or verification diagnostics; 2 invocation or operational failure.");

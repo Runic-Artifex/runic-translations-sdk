@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using RunicTextResources.Authoring;
 
 namespace RunicTextResources.Tool;
 
 internal enum ToolCommand
 {
     Help,
+    Init,
     Validate,
     Generate,
     Verify,
@@ -32,7 +34,8 @@ internal sealed record ToolInvocation(
     string? CatalogPath,
     IReadOnlyList<string> DocumentPatterns,
     string? OutputPath,
-    ToolEmission Emission);
+    ToolEmission Emission,
+    TextResourceProjectCreationRequest? ProjectCreation);
 
 internal static class CommandLine
 {
@@ -55,7 +58,12 @@ internal static class CommandLine
                 throw new ToolUsageException("help does not accept additional arguments.");
             }
 
-            return new ToolInvocation(ToolCommand.Help, null, Array.Empty<string>(), null, ToolEmission.None);
+            return new ToolInvocation(ToolCommand.Help, null, Array.Empty<string>(), null, ToolEmission.None, null);
+        }
+
+        if (expanded[0] == "init")
+        {
+            return ParseInit(expanded);
         }
 
         ToolCommand command = expanded[0] switch
@@ -168,7 +176,102 @@ internal static class CommandLine
             emission = ToolEmission.All;
         }
 
-        return new ToolInvocation(command, catalog, documents, output, emission);
+        return new ToolInvocation(command, catalog, documents, output, emission, null);
+    }
+
+    private static ToolInvocation ParseInit(List<string> arguments)
+    {
+        string? directory = null;
+        string? catalog = null;
+        string? defaultLocale = null;
+        string? codeNamespace = null;
+        string? className = null;
+        string layer = "base";
+        bool layerSpecified = false;
+        bool generateEsm = true;
+        bool includeStarter = true;
+        var locales = new List<TextResourceProjectLocale>();
+
+        for (int index = 1; index < arguments.Count; index++)
+        {
+            string option = arguments[index];
+            switch (option)
+            {
+                case "--directory":
+                    directory = ReadSingleValue(arguments, ref index, option, directory is not null);
+                    break;
+                case "--catalog":
+                    catalog = ReadSingleValue(arguments, ref index, option, catalog is not null);
+                    break;
+                case "--default-locale":
+                    defaultLocale = ReadSingleValue(arguments, ref index, option, defaultLocale is not null);
+                    break;
+                case "--namespace":
+                    codeNamespace = ReadSingleValue(arguments, ref index, option, codeNamespace is not null);
+                    break;
+                case "--class":
+                    className = ReadSingleValue(arguments, ref index, option, className is not null);
+                    break;
+                case "--layer":
+                    layer = ReadSingleValue(arguments, ref index, option, layerSpecified);
+                    layerSpecified = true;
+                    break;
+                case "--locale":
+                    locales.Add(ParseLocale(ReadSingleValue(arguments, ref index, option, duplicate: false)));
+                    break;
+                case "--no-esm":
+                    if (!generateEsm) throw new ToolUsageException("--no-esm may be specified only once.");
+                    generateEsm = false;
+                    break;
+                case "--no-starter":
+                    if (!includeStarter) throw new ToolUsageException("--no-starter may be specified only once.");
+                    includeStarter = false;
+                    break;
+                default:
+                    throw new ToolUsageException($"unknown option or positional argument '{option}'.");
+            }
+        }
+
+        RequireInitOption(directory, "--directory");
+        RequireInitOption(catalog, "--catalog");
+        RequireInitOption(defaultLocale, "--default-locale");
+        RequireInitOption(codeNamespace, "--namespace");
+        RequireInitOption(className, "--class");
+        var request = new TextResourceProjectCreationRequest(
+            directory!,
+            catalog!,
+            defaultLocale!,
+            codeNamespace!,
+            className!,
+            locales,
+            layer,
+            generateEsm,
+            includeStarter);
+        return new ToolInvocation(ToolCommand.Init, null, Array.Empty<string>(), null, ToolEmission.None, request);
+    }
+
+    private static TextResourceProjectLocale ParseLocale(string value)
+    {
+        int separator = value.IndexOf(':');
+        if (separator < 0)
+        {
+            return new TextResourceProjectLocale(value);
+        }
+
+        if (separator == 0 || separator == value.Length - 1 || value.IndexOf(':', separator + 1) >= 0)
+        {
+            throw new ToolUsageException("--locale expects <tag> or <tag>:<fallback>.");
+        }
+
+        return new TextResourceProjectLocale(value[..separator], value[(separator + 1)..]);
+    }
+
+    private static void RequireInitOption(string? value, string option)
+    {
+        if (value is null)
+        {
+            throw new ToolUsageException($"init requires {option} <value>.");
+        }
     }
 
     private static void AddEmission(ref ToolEmission emissions, ToolEmission value, string option)

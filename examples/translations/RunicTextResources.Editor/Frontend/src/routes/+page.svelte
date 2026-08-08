@@ -26,6 +26,8 @@
   import type {
     EditorDiagnostic,
     EditorDocument,
+    EditorProjectCreationRequest,
+    EditorProjectPlan,
     ValidationResult,
     WorkspaceSnapshot,
   } from "$lib/contracts";
@@ -42,6 +44,7 @@
 
   type Filter = "all" | "missing" | "structured";
   type EditorMode = "simple" | "advanced" | "raw";
+  type ProjectLocaleDraft = { id: number; tag: string; fallback: string };
 
   const bridge = createEditorBridge();
   let snapshot = $state.raw<WorkspaceSnapshot>();
@@ -63,6 +66,21 @@
   let searchInput = $state<HTMLInputElement>();
   let validationTimer: number | undefined;
   let validationEpoch = 0;
+  let projectDialogOpen = $state(false);
+  let projectStep = $state(1);
+  let projectDirectory = $state("");
+  let projectCatalog = $state("product");
+  let projectDefaultLocale = $state("en");
+  let projectLocales = $state<ProjectLocaleDraft[]>([]);
+  let projectNamespace = $state("Customer.Product");
+  let projectClassName = $state("ProductText");
+  let projectLayer = $state("base");
+  let projectGenerateEsm = $state(true);
+  let projectIncludeStarter = $state(true);
+  let projectPlan = $state.raw<EditorProjectPlan>();
+  let projectError = $state<string>();
+  let projectBusy = $state(false);
+  let nextProjectLocaleId = 1;
 
   let labels = $derived(labelsFor(uiLocale));
   let rows = $derived(buildRows(snapshot, drafts));
@@ -309,6 +327,118 @@
     return error instanceof Error ? error.message : String(error);
   }
 
+  function openProjectWizard(): void {
+    projectStep = 1;
+    projectDirectory = "";
+    projectCatalog = "product";
+    projectDefaultLocale = "en";
+    projectLocales = [];
+    projectNamespace = "Customer.Product";
+    projectClassName = "ProductText";
+    projectLayer = "base";
+    projectGenerateEsm = true;
+    projectIncludeStarter = true;
+    projectPlan = undefined;
+    projectError = undefined;
+    projectBusy = false;
+    projectDialogOpen = true;
+  }
+
+  function closeProjectWizard(): void {
+    if (!projectBusy) projectDialogOpen = false;
+  }
+
+  function addProjectLocale(): void {
+    projectLocales.push({ id: nextProjectLocaleId++, tag: "", fallback: "" });
+  }
+
+  function removeProjectLocale(id: number): void {
+    projectLocales = projectLocales.filter((locale) => locale.id !== id);
+  }
+
+  function projectRequest(): EditorProjectCreationRequest {
+    return {
+      directory: projectDirectory.trim(),
+      catalogId: projectCatalog.trim(),
+      defaultLocale: projectDefaultLocale.trim(),
+      additionalLocales: projectLocales.map((locale) => ({
+        tag: locale.tag.trim(),
+        fallback: locale.fallback.trim() || undefined,
+      })),
+      codeNamespace: projectNamespace.trim(),
+      className: projectClassName.trim(),
+      layerName: projectLayer.trim(),
+      generateEsm: projectGenerateEsm,
+      includeStarterMessage: projectIncludeStarter,
+    };
+  }
+
+  function validateProjectStep(): boolean {
+    if (projectStep === 1 && (projectDirectory.trim() === "" || projectCatalog.trim() === "")) {
+      projectError = "Choose a new directory and enter a catalog ID.";
+      return false;
+    }
+    if (projectStep === 2) {
+      const tags = [projectDefaultLocale.trim(), ...projectLocales.map((locale) => locale.tag.trim())];
+      if (tags.some((tag) => tag === "")) {
+        projectError = "Every language needs a locale tag.";
+        return false;
+      }
+      if (new Set(tags.map((tag) => tag.toLocaleLowerCase())).size !== tags.length) {
+        projectError = "Each language must use a different locale tag.";
+        return false;
+      }
+    }
+    if (projectStep === 3 && [projectNamespace, projectClassName, projectLayer].some((value) => value.trim() === "")) {
+      projectError = "Namespace, class name, and layer are required.";
+      return false;
+    }
+    projectError = undefined;
+    return true;
+  }
+
+  async function advanceProjectWizard(): Promise<void> {
+    if (!validateProjectStep()) return;
+    if (projectStep < 3) {
+      projectStep += 1;
+      return;
+    }
+    projectBusy = true;
+    try {
+      const plan = await bridge.previewProject(projectRequest());
+      projectPlan = plan;
+      if (!plan.ok) {
+        projectError = plan.message ?? "The proposed project is invalid.";
+        return;
+      }
+      projectStep = 4;
+    } catch (error) {
+      projectError = errorMessage(error);
+    } finally {
+      projectBusy = false;
+    }
+  }
+
+  async function createProject(): Promise<void> {
+    if (projectPlan?.ok !== true || projectBusy) return;
+    projectBusy = true;
+    projectError = undefined;
+    try {
+      const result = await bridge.createProject(projectRequest());
+      if (!result.ok || result.snapshot === undefined) {
+        projectError = result.message ?? "The project could not be created.";
+        return;
+      }
+      installSnapshot(result.snapshot, true);
+      operationMessage = "Project created";
+      projectDialogOpen = false;
+    } catch (error) {
+      projectError = errorMessage(error);
+    } finally {
+      projectBusy = false;
+    }
+  }
+
   function labelsFor(locale: string) {
     const options = { locale };
     return {
@@ -384,6 +514,7 @@
           </button>
         </div>
         <p title={snapshot.root}>{snapshot.root}</p>
+        <button class="new-project-button" onclick={openProjectWizard}>＋ New project</button>
       </section>
 
       <section class="locale-overview" aria-label="Locale coverage">
@@ -574,6 +705,140 @@
   </main>
 {/if}
 
+{#if projectDialogOpen}
+  <div class="dialog-backdrop">
+    <div class="project-dialog" role="dialog" aria-modal="true" aria-labelledby="project-dialog-title">
+      <header>
+        <div>
+          <p class="eyebrow">Create text resources</p>
+          <h2 id="project-dialog-title">New translation project</h2>
+        </div>
+        <button class="icon-button" aria-label="Close project wizard" disabled={projectBusy} onclick={closeProjectWizard}>×</button>
+      </header>
+
+      <ol class="project-steps" aria-label="Project creation steps">
+        {#each ["Project", "Languages", "Settings", "Review"] as title, index (title)}
+          <li class={{ active: projectStep === index + 1, complete: projectStep > index + 1 }}>
+            <span>{projectStep > index + 1 ? "✓" : index + 1}</span>{title}
+          </li>
+        {/each}
+      </ol>
+
+      <div class="project-body">
+        {#if projectStep === 1}
+          <div class="project-intro">
+            <span class="project-glyph">◇</span>
+            <div>
+              <h3>Where should the translations live?</h3>
+              <p>The editor creates a new directory and never overwrites an existing one.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <label class="wide">New project directory
+              <input bind:value={projectDirectory} placeholder="/projects/customer-app/Resources" autocomplete="off" />
+              <small>Enter an absolute path or a path relative to the editor process.</small>
+            </label>
+            <label>Catalog ID
+              <input bind:value={projectCatalog} placeholder="product" autocomplete="off" />
+              <small>Lowercase letters, numbers, dots, and hyphens.</small>
+            </label>
+          </div>
+        {:else if projectStep === 2}
+          <div class="project-intro">
+            <span class="project-glyph">文</span>
+            <div>
+              <h3>Which languages does this project use?</h3>
+              <p>One language is fully supported. Add translations now or later.</p>
+            </div>
+          </div>
+          <div class="locale-builder">
+            <div class="locale-row source">
+              <label>Source/default language
+                <input bind:value={projectDefaultLocale} placeholder="de" autocomplete="off" />
+              </label>
+              <span>Canonical source</span>
+            </div>
+            {#each projectLocales as locale (locale.id)}
+              <div class="locale-row">
+                <label>Additional language
+                  <input bind:value={locale.tag} placeholder="en" autocomplete="off" />
+                </label>
+                <label>Fallback
+                  <select bind:value={locale.fallback}>
+                    <option value="">Default ({projectDefaultLocale || "source"})</option>
+                    {#each projectLocales.filter((candidate) => candidate.id !== locale.id && candidate.tag.trim() !== "") as candidate (candidate.id)}
+                      <option value={candidate.tag}>{candidate.tag}</option>
+                    {/each}
+                  </select>
+                </label>
+                <button class="remove-locale" aria-label={`Remove locale ${locale.tag || "row"}`} onclick={() => removeProjectLocale(locale.id)}>×</button>
+              </div>
+            {/each}
+            <button class="secondary add-locale" onclick={addProjectLocale}>＋ Add another language</button>
+          </div>
+        {:else if projectStep === 3}
+          <div class="project-intro">
+            <span class="project-glyph">{"{ }"}</span>
+            <div>
+              <h3>Generated API and output</h3>
+              <p>These defaults work for most .NET and ESM consumers.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <label>Code namespace
+              <input bind:value={projectNamespace} autocomplete="off" />
+            </label>
+            <label>Generated class
+              <input bind:value={projectClassName} autocomplete="off" />
+            </label>
+            <label>Initial layer
+              <input bind:value={projectLayer} autocomplete="off" />
+            </label>
+          </div>
+          <div class="project-options">
+            <label><input type="checkbox" bind:checked={projectGenerateEsm} /> <span><strong>Enable ESM output</strong><small>Generate tree-shakeable modules for TypeScript and browser applications.</small></span></label>
+            <label><input type="checkbox" bind:checked={projectIncludeStarter} /> <span><strong>Add a starter message</strong><small>Create <code>Application.Name</code> in every language.</small></span></label>
+          </div>
+        {:else if projectStep === 4 && projectPlan !== undefined}
+          <div class="project-intro review">
+            <span class="project-glyph">✓</span>
+            <div>
+              <h3>Ready to create {projectPlan.catalogId}</h3>
+              <p>{projectPlan.locales.length} {projectPlan.locales.length === 1 ? "language" : "languages"} · {projectPlan.files.length} files · compiler validated</p>
+            </div>
+          </div>
+          <div class="review-card">
+            <div><span>Directory</span><code>{projectPlan.directory}</code></div>
+            <div><span>Languages</span><strong>{projectPlan.locales.map((locale) => locale.tag).join(", ")}</strong></div>
+          </div>
+          <div class="file-preview">
+            <h4>Files to create</h4>
+            {#each projectPlan.files as file (file)}
+              <div><span aria-hidden="true">◇</span><code>{file}</code></div>
+            {/each}
+          </div>
+        {/if}
+
+        {#if projectError}<p class="project-error" aria-live="polite">{projectError}</p>{/if}
+      </div>
+
+      <footer>
+        <button class="secondary" disabled={projectBusy} onclick={closeProjectWizard}>Cancel</button>
+        <div>
+          {#if projectStep > 1}
+            <button class="secondary" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>Back</button>
+          {/if}
+          {#if projectStep < 4}
+            <button class="primary" disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{projectBusy ? "Validating…" : "Continue"}</button>
+          {:else}
+            <button class="primary" disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{projectBusy ? "Creating…" : "Create project"}</button>
+          {/if}
+        </div>
+      </footer>
+    </div>
+  </div>
+{/if}
+
 <style>
   :global(*) { box-sizing: border-box; }
   :global(:root) {
@@ -605,6 +870,8 @@
   .workspace-title strong { overflow: hidden; color: #f4f1e8; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
   .workspace-title span, .workspace-card > p { color: #818b84; font-size: .68rem; }
   .workspace-card > p { overflow: hidden; margin: .6rem 0 0 1.15rem; text-overflow: ellipsis; white-space: nowrap; }
+  .new-project-button { width: 100%; margin-top: .7rem; border: 1px dashed #535744; border-radius: .4rem; padding: .45rem; color: #c3ad70; background: #24261d; font-size: .65rem; cursor: pointer; }
+  .new-project-button:hover { border-color: #8d7948; color: #eee1b9; background: #2c2c20; }
   .status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: #65b886; box-shadow: 0 0 .6rem #65b88688; }
   .status-dot.warning { background: #d4a95a; box-shadow: 0 0 .6rem #d4a95a88; }
   .icon-button { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border: 0; border-radius: .35rem; color: #9da69f; background: transparent; cursor: pointer; }
@@ -728,6 +995,60 @@
   .fatal-shell .mark { margin-bottom: 2rem; }
   .fatal-shell h1 { max-width: 36rem; margin: .8rem 0; color: #eee9da; font-family: Georgia, serif; font-size: 2.6rem; font-weight: 500; }
   .fatal-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0 0 1.5rem; }
+  .dialog-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 2rem; background: #050706d9; backdrop-filter: blur(10px); }
+  .project-dialog { display: flex; flex-direction: column; width: min(760px, 100%); max-height: calc(100vh - 4rem); border: 1px solid #444b44; border-radius: .85rem; background: #111613; box-shadow: 0 2rem 8rem #000b; overflow: hidden; }
+  .project-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 1.35rem 1.5rem 1.1rem; border-bottom: 1px solid #2d342f; }
+  .project-dialog h2 { margin: .25rem 0 0; color: #f1ead7; font-family: Georgia, serif; font-size: 1.65rem; font-weight: 500; }
+  .project-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 0; padding: .8rem 1.5rem; border-bottom: 1px solid #292f2b; list-style: none; background: #0e1210; }
+  .project-steps li { display: flex; align-items: center; gap: .45rem; color: #626c65; font-size: .62rem; }
+  .project-steps li::after { flex: 1; height: 1px; margin-inline: .35rem; background: #303832; content: ""; }
+  .project-steps li:last-child::after { display: none; }
+  .project-steps li span { display: grid; place-items: center; width: 1.4rem; height: 1.4rem; border: 1px solid #3c453f; border-radius: 50%; font: .55rem ui-monospace, monospace; }
+  .project-steps li.active { color: #e1d2a9; }
+  .project-steps li.active span { border-color: #b79a50; color: #211b0f; background: #c8ab61; }
+  .project-steps li.complete { color: #7fa48a; }
+  .project-steps li.complete span { border-color: #477156; color: #8bc29a; background: #1c3324; }
+  .project-body { min-height: 370px; padding: 1.5rem; overflow-y: auto; }
+  .project-intro { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.4rem; }
+  .project-intro h3 { margin: 0 0 .25rem; color: #e6e9e5; font-size: 1rem; }
+  .project-intro p { margin: 0; color: #7d8880; font-size: .7rem; line-height: 1.5; }
+  .project-glyph { display: grid; flex: 0 0 auto; place-items: center; width: 2.7rem; height: 2.7rem; border: 1px solid #5a5138; border-radius: .6rem; color: #d1b768; background: #2a291e; font: .9rem ui-monospace, monospace; }
+  .project-intro.review .project-glyph { border-color: #406b4d; color: #8ac29a; background: #1d3324; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .form-grid .wide { grid-column: 1 / -1; }
+  .form-grid label, .locale-row label { display: grid; gap: .38rem; color: #b8c0ba; font-size: .66rem; font-weight: 650; }
+  .form-grid input, .locale-row input, .locale-row select { width: 100%; border: 1px solid #3a433d; border-radius: .45rem; outline: 0; padding: .68rem .75rem; color: #edf0ed; background: #0c100e; font-size: .75rem; }
+  .form-grid input:focus, .locale-row input:focus, .locale-row select:focus { border-color: #8f7945; box-shadow: 0 0 0 2px #9a81451c; }
+  .form-grid small { color: #657069; font-size: .58rem; font-weight: 400; }
+  .locale-builder { display: grid; gap: .7rem; }
+  .locale-row { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: .7rem; border: 1px solid #303833; border-radius: .55rem; padding: .8rem; background: #0e1210; }
+  .locale-row.source { grid-template-columns: 1fr auto; border-color: #514a34; background: #1a1b15; }
+  .locale-row.source > span { align-self: center; border-radius: .25rem; padding: .25rem .4rem; color: #9eb9a4; background: #213128; font-size: .55rem; }
+  .remove-locale { width: 2.2rem; height: 2.2rem; border: 1px solid #553b36; border-radius: .4rem; color: #d48e82; background: #2c1c1a; cursor: pointer; }
+  .secondary { border: 1px solid #3d463f; border-radius: .45rem; padding: .58rem .85rem; color: #aab3ac; background: #181e1a; cursor: pointer; }
+  .secondary:hover:not(:disabled) { border-color: #626e65; color: #e1e6e2; }
+  .add-locale { justify-self: start; color: #c2ac70; }
+  .project-options { display: grid; gap: .65rem; margin-top: 1.2rem; }
+  .project-options > label { display: flex; align-items: flex-start; gap: .7rem; border: 1px solid #303833; border-radius: .55rem; padding: .8rem; background: #0e1210; cursor: pointer; }
+  .project-options input { margin-top: .15rem; accent-color: #c0a45e; }
+  .project-options span { display: grid; gap: .18rem; }
+  .project-options strong { color: #cbd2cd; font-size: .68rem; }
+  .project-options small { color: #6e7971; font-size: .6rem; }
+  .project-options code { color: #b9a46d; }
+  .review-card { display: grid; gap: .7rem; border: 1px solid #343d37; border-radius: .55rem; padding: .9rem; background: #0e1210; }
+  .review-card > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: .8rem; align-items: start; }
+  .review-card span, .file-preview h4 { color: #69746d; font-size: .58rem; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; }
+  .review-card code { overflow: hidden; color: #bfc7c1; font: .62rem ui-monospace, monospace; text-overflow: ellipsis; }
+  .review-card strong { color: #d5c99f; font-size: .68rem; }
+  .file-preview { margin-top: 1rem; border: 1px solid #303833; border-radius: .55rem; overflow: hidden; }
+  .file-preview h4 { margin: 0; padding: .7rem .8rem; background: #171c19; }
+  .file-preview > div { display: flex; align-items: center; gap: .6rem; border-top: 1px solid #292f2b; padding: .55rem .8rem; background: #0e1210; }
+  .file-preview > div span { color: #8c7c4d; }
+  .file-preview code { color: #aeb8b1; font: .62rem ui-monospace, monospace; }
+  .project-error { margin: 1rem 0 0; border: 1px solid #633d37; border-radius: .45rem; padding: .7rem .8rem; color: #e7a097; background: #2c1d1a; font-size: .67rem; }
+  .project-dialog > footer { display: flex; justify-content: space-between; gap: 1rem; border-top: 1px solid #2d342f; padding: .9rem 1.5rem; background: #0e1210; }
+  .project-dialog > footer > div { display: flex; gap: .55rem; }
+  .project-dialog button:disabled { cursor: not-allowed; opacity: .45; }
   @keyframes pulse { to { opacity: .35; } }
   @media (max-width: 1100px) {
     .app-shell { grid-template-columns: 335px minmax(0, 1fr); }

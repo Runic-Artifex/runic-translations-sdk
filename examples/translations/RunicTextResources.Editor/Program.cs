@@ -17,7 +17,7 @@ internal static class Program
         if (!Directory.Exists(webRoot))
             throw new DirectoryNotFoundException($"The SvelteKit build was not copied to '{webRoot}'.");
 
-        using var workspace = new EditorWorkspace(workspacePath);
+        using var session = new EditorSession(workspacePath);
         WebUiApplication.SetConnectionTimeout(15);
         WebUiApplication.SetLogger(static (level, message) => Console.WriteLine($"[WebUI:{level}] {message}"));
         WebUiApplication.UnhandledCallbackException += static (_, eventArgs) =>
@@ -33,11 +33,11 @@ internal static class Program
             window.SetRootFolder(webRoot);
 
             window.BindAsync("runicEditorLoad", async (_, cancellationToken) =>
-                WebUiResult.FromString(Serialize(await workspace.LoadAsync(cancellationToken).ConfigureAwait(false))));
+                WebUiResult.FromString(Serialize(await session.LoadAsync(cancellationToken).ConfigureAwait(false))));
 
             window.BindAsync("runicEditorValidate", async (webUiEvent, cancellationToken) =>
             {
-                ValidationResult result = await workspace.ValidateAsync(
+                ValidationResult result = await session.ValidateAsync(
                     webUiEvent.GetString(),
                     webUiEvent.GetString(1),
                     cancellationToken).ConfigureAwait(false);
@@ -46,11 +46,24 @@ internal static class Program
 
             window.BindAsync("runicEditorSave", async (webUiEvent, cancellationToken) =>
             {
-                EditorOperationResult result = await workspace.SaveAsync(
+                EditorOperationResult result = await session.SaveAsync(
                     webUiEvent.GetString(),
                     webUiEvent.GetString(1),
                     webUiEvent.GetString(2),
                     cancellationToken).ConfigureAwait(false);
+                return WebUiResult.FromString(Serialize(result));
+            });
+
+            window.Bind("runicEditorPreviewProject", webUiEvent =>
+            {
+                EditorProjectCreationRequest request = DeserializeProjectRequest(webUiEvent.GetString());
+                return WebUiResult.FromString(Serialize(EditorSession.PreviewProject(request)));
+            });
+
+            window.BindAsync("runicEditorCreateProject", async (webUiEvent, cancellationToken) =>
+            {
+                EditorProjectCreationRequest request = DeserializeProjectRequest(webUiEvent.GetString());
+                EditorOperationResult result = await session.CreateProjectAsync(request, cancellationToken).ConfigureAwait(false);
                 return WebUiResult.FromString(Serialize(result));
             });
 
@@ -75,6 +88,13 @@ internal static class Program
 
     private static string Serialize(EditorOperationResult value) =>
         JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorOperationResult);
+
+    private static string Serialize(EditorProjectPlan value) =>
+        JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorProjectPlan);
+
+    private static EditorProjectCreationRequest DeserializeProjectRequest(string value) =>
+        JsonSerializer.Deserialize(value, EditorJsonContext.Default.EditorProjectCreationRequest)
+        ?? throw new ArgumentException("The project creation request is required.", nameof(value));
 
     private static string? ArgumentValue(string[] args, string name)
     {

@@ -49,10 +49,33 @@ internal sealed record EditorOperationResult(
     WorkspaceSnapshot? Snapshot,
     ValidationResult? Validation);
 
+internal sealed record EditorProjectLocaleRequest(string Tag, string? Fallback);
+
+internal sealed record EditorProjectCreationRequest(
+    string Directory,
+    string CatalogId,
+    string DefaultLocale,
+    IReadOnlyList<EditorProjectLocaleRequest> AdditionalLocales,
+    string CodeNamespace,
+    string ClassName,
+    string LayerName,
+    bool GenerateEsm,
+    bool IncludeStarterMessage);
+
+internal sealed record EditorProjectPlan(
+    bool Ok,
+    string? Message,
+    string Directory,
+    string CatalogId,
+    IReadOnlyList<EditorLocale> Locales,
+    IReadOnlyList<string> Files);
+
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(WorkspaceSnapshot))]
 [JsonSerializable(typeof(ValidationResult))]
 [JsonSerializable(typeof(EditorOperationResult))]
+[JsonSerializable(typeof(EditorProjectCreationRequest))]
+[JsonSerializable(typeof(EditorProjectPlan))]
 internal sealed partial class EditorJsonContext : JsonSerializerContext;

@@ -14,6 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\RunicTextResources.Authoring\RunicTextResources.Authoring.csproj" />
     <ProjectReference Include="..\..\src\RunicTextResources.Compiler\RunicTextResources.Compiler.csproj" />
     <EmbeddedResource Include="..\..\..\spec\schemas\catalog-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.catalog-v1.schema.json" />
     <EmbeddedResource Include="..\..\..\spec\schemas\resources-v1.schema.json" LogicalName="RunicTextResources.Tool.Schemas.resources-v1.schema.json" />

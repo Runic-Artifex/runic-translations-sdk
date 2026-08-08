@@ -1,7 +1,10 @@
 # Runic Translations Editor product plan
 
-Status: proposed  
+Status: active
 Last updated: 8 August 2026
+
+Implementation progress: E0 and E1 are complete on the editor/tooling branch.
+The next implementation milestone is E2 (discovery, onboarding, and repair).
 
 ## Outcome
 

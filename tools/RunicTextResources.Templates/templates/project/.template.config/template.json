@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "RunicArtifex",
+  "classifications": ["Class Library", "Localization", "Resources", "Runic"],
+  "identity": "RunicArtifex.TextResources.Project",
+  "name": "Runic Text Resources project",
+  "shortName": "runic-textresources-project",
+  "description": "Creates a .NET class library with schema-v2 resources, generated C# APIs, and ESM output.",
+  "sourceName": "RunicTextResourcesProject",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "catalog": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "product",
+      "description": "Portable catalog identifier.",
+      "replaces": "__CATALOG__",
+      "fileRename": "_catalog_"
+    },
+    "defaultLocale": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "en",
+      "description": "Default BCP-47 locale tag.",
+      "replaces": "__DEFAULT_LOCALE__",
+      "fileRename": "_defaultLocale_"
+    },
+    "namespace": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "RunicTextResourcesProject",
+      "description": "Namespace for generated C# APIs.",
+      "replaces": "__NAMESPACE__"
+    },
+    "className": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "ProductText",
+      "description": "Class name for generated C# APIs.",
+      "replaces": "__CLASS_NAME__"
+    },
+    "packageVersion": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "0.1.0",
+      "description": "Matching Runic Text Resources package and tool version.",
+      "replaces": "__PACKAGE_VERSION__"
+    }
+  }
+}

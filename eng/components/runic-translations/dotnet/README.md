@@ -1,7 +1,8 @@
 # .NET implementation
 
-- `src/` contains the runtime, compiler, generator, and build packages.
+- `src/` contains the runtime, compiler, shared authoring layer, generator, and build packages.
 - `tools/` contains the independently packaged command-line tool.
+- `templates/` contains item and standalone-project templates.
 - `tests/` contains executable test suites and isolated package consumers.
 
 `RunicTextResources.slnx` includes the source projects, tool, and project-reference

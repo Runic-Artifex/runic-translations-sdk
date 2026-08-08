@@ -15,6 +15,30 @@ internal static class SchemaV2Tests
         runner.Add("schema v2 executes declarations multi-selectors formats relative time and safe markup", StructuredFeatures);
         runner.Add("generated ESM plural selection matches the shared v2 corpus", PluralCorpus);
         runner.Add("schema v2 requires deterministic catch-all coverage", RequiresCatchAll);
+        runner.Add("schema v2 permits an explicitly empty default locale document", EmptyCatalog);
+    }
+
+    private static void EmptyCatalog()
+    {
+        const string manifest = """
+            { "schemaVersion":2, "catalog":"empty", "code":{"namespace":"Tests","className":"EmptyText"},
+              "defaultLocale":"de", "locales":[{"tag":"de"}], "layers":[{"name":"base","priority":0}] }
+            """;
+        const string document = """
+            { "schemaVersion":2, "catalog":"empty", "locale":"de", "layer":"base", "resources":{} }
+            """;
+        TextResourceCompilation compilation = RunicTextResources.Compiler.TextResourceCompiler.Compile(
+            [CompilerTests.Source("manifest.json", manifest)],
+            [CompilerTests.Source("de.json", document)]);
+        Assert.True(compilation.Success, CompilerTests.DiagnosticsText(compilation.Diagnostics));
+        CompiledTextCatalog catalog = Assert.Single(compilation.Catalogs);
+        Assert.Equal(0, catalog.CanonicalResources.Count);
+        Assert.True(TextResourceOutputRenderer.RenderCSharpKeys(catalog).Text.Length > 0, "Empty catalog did not produce C# keys.");
+        Assert.True(TextResourceOutputRenderer.RenderCSharpAccessors(catalog).Text.Length > 0, "Empty catalog did not produce C# accessors.");
+        Assert.True(TextResourceOutputRenderer.RenderCSharpCatalogData(catalog).Text.Length > 0, "Empty catalog did not produce C# data.");
+        Assert.True(TextResourceOutputRenderer.RenderCSharpRegistration(catalog).Text.Length > 0, "Empty catalog did not produce C# registration.");
+        Assert.True(TextResourceOutputRenderer.RenderEsmModules(catalog).Count > 0, "Empty catalog did not produce its ESM runtime surface.");
+        CompileGeneratedCSharp(catalog);
     }
 
     private static void PluralCorpus()
