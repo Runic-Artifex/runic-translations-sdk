@@ -47,6 +47,9 @@ try {
     $previewTest = Join-Path $repositoryRoot "samples/RunicTextResources.Editor/Frontend/test/verify-message-preview.mjs"
     node $previewTest
     if ($LASTEXITCODE -ne 0) { throw "Editor message preview test failed." }
+    $reviewTest = Join-Path $repositoryRoot "samples/RunicTextResources.Editor/Frontend/test/verify-review-model.mjs"
+    node $reviewTest
+    if ($LASTEXITCODE -ne 0) { throw "Editor review and scale test failed." }
     dotnet run --project $editorProject --configuration $Configuration --no-build -- --smoke-test --workspace $exampleWorkspace
     if ($LASTEXITCODE -ne 0) { throw "Editor smoke test failed." }
 

@@ -50,6 +50,15 @@ let snapshot: WorkspaceSnapshot = {
   ],
   diagnostics: [],
   success: true,
+  review: {
+    path: ".runic-textresources/customer-product.editor-state.json",
+    revision: "mock-review-1",
+    entries: [
+      { key: "Common.Save", locale: "de", state: "approved", sourceFingerprint: "outdated", samples: {} },
+      { key: "Dashboard.Welcome", locale: "en", state: "needs-review", note: "Check the tone.", samples: { name: "Ada" } },
+    ],
+    terminology: [{ source: "Save", preferred: "Speichern", locale: "de", note: "Use for action buttons." }],
+  },
 };
 
 export const mockBridge: EditorBridge = {
@@ -115,6 +124,15 @@ export const mockBridge: EditorBridge = {
         }],
       };
     }
+  },
+  async saveReview(request) {
+    snapshot.review = {
+      path: snapshot.review?.path ?? ".runic-textresources/customer-product.editor-state.json",
+      revision: crypto.randomUUID(),
+      entries: structuredClone(request.entries),
+      terminology: structuredClone(request.terminology),
+    };
+    return { ok: true, review: structuredClone(snapshot.review) };
   },
   async save(path, content, revision) {
     const current = snapshot.documents.find((candidate) => candidate.path === path);

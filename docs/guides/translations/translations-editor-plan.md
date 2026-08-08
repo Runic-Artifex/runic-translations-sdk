@@ -3,8 +3,8 @@
 Status: active
 Last updated: 8 August 2026
 
-Implementation progress: E0 through E4 are complete on the editor/tooling branch.
-The next implementation milestone is E5 (review, quality, and scale).
+Implementation progress: E0 through E5 are complete on the editor/tooling branch.
+The next implementation milestone is E6 (distribution and customer release).
 
 ## Outcome
 
@@ -487,6 +487,8 @@ Acceptance:
 
 ### E5 — Review, quality, and scale
 
+Status: complete.
+
 Deliverables:
 
 - versioned optional editor-state sidecar;
@@ -502,6 +504,13 @@ Acceptance:
 - representative 50,000-key and 100-locale projects remain within agreed startup,
   search, memory, and save budgets;
 - filtered and bulk operations are deterministic and undoable before save.
+
+The enforced scale fixture contains 50,000 messages with review assignments
+distributed across 100 locales. Local quality, translation-memory, and search
+processing has a 10-second CI budget and a 256 MiB heap-growth budget; review
+sidecar save/load has a 15-second budget and an 8 MiB file bound. The UI renders
+at most 300 message rows per batch while search, filters, reports, and bulk
+selection continue to operate on the complete in-memory catalog.
 
 ### E6 — Distribution and customer release
 

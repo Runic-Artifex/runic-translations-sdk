@@ -10,6 +10,7 @@ internal static class Program
         ProjectCreationTests.Register(runner);
         WorkspaceDiscoveryTests.Register(runner);
         WorkspaceMutationTests.Register(runner);
+        EditorStateTests.Register(runner);
         return runner.Run();
     }
 }

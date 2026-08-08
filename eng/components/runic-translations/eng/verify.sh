@@ -108,6 +108,7 @@ editor_frontend="$editor_root/Frontend"
 editor_manifest="$editor_root/obj/$configuration/net10.0/text-resources/editor.esm/web-module-manifest-v1.json"
 RUNIC_TEXT_MANIFEST="$editor_manifest" npm --prefix "$editor_frontend" run check
 node "$editor_frontend/test/verify-message-preview.mjs"
+node "$editor_frontend/test/verify-review-model.mjs"
 node "$editor_frontend/test/verify-production.mjs"
 dotnet run --project "$editor_root/RunicTextResources.Editor.csproj" \
   -c "$configuration" --no-build -- \

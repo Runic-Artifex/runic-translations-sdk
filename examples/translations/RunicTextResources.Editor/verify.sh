@@ -12,6 +12,8 @@ dotnet build "$project" -c Release --nologo \
 
 RUNIC_TEXT_MANIFEST="$manifest" npm --prefix "$frontend" run check
 RUNIC_TEXT_MANIFEST="$manifest" npm --prefix "$frontend" run build
+node "$frontend/test/verify-message-preview.mjs"
+node "$frontend/test/verify-review-model.mjs"
 node "$frontend/test/verify-production.mjs"
 
 dotnet run --project "$project" -c Release --no-build -- \
