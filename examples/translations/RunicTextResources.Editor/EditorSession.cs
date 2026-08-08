@@ -16,6 +16,9 @@ internal sealed class EditorSession : IDisposable
     public Task<WorkspaceSnapshot> LoadAsync(CancellationToken cancellationToken = default) =>
         WithWorkspaceAsync(static (workspace, token) => workspace.LoadAsync(token), cancellationToken);
 
+    public Task<EditorExternalChanges> CheckExternalChangesAsync(CancellationToken cancellationToken = default) =>
+        WithWorkspaceAsync(static (workspace, token) => workspace.CheckExternalChangesAsync(token), cancellationToken);
+
     public Task<ValidationResult> ValidateAsync(
         string relativePath,
         string content,
@@ -82,6 +85,40 @@ internal sealed class EditorSession : IDisposable
         catch (Exception exception) when (exception is TextResourceAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return new EditorOperationResult(false, "project-creation", exception.Message, null, null);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<EditorOperationResult> OpenWorkspaceAsync(
+        EditorOpenWorkspaceRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            var replacement = new EditorWorkspace(request.Directory, request.CatalogId);
+            try
+            {
+                WorkspaceSnapshot snapshot = await replacement.LoadAsync(cancellationToken).ConfigureAwait(false);
+                EditorWorkspace previous = _workspace;
+                _workspace = replacement;
+                previous.Dispose();
+                return new EditorOperationResult(true, "opened", null, snapshot, null);
+            }
+            catch
+            {
+                replacement.Dispose();
+                throw;
+            }
+        }
+        catch (Exception exception) when (exception is TextResourceAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return new EditorOperationResult(false, "workspace-open", exception.Message, null, null);
         }
         finally
         {

@@ -26,6 +26,7 @@
   import type {
     EditorDiagnostic,
     EditorDocument,
+    EditorExternalFileChange,
     EditorProjectCreationRequest,
     EditorProjectPlan,
     ValidationResult,
@@ -45,6 +46,8 @@
   type Filter = "all" | "missing" | "structured";
   type EditorMode = "simple" | "advanced" | "raw";
   type ProjectLocaleDraft = { id: number; tag: string; fallback: string };
+  type StoredDraft = { content: string; baseRevision: string };
+  type RecentProject = { root: string; catalogId: string; openedAt: string };
 
   const bridge = createEditorBridge();
   let snapshot = $state.raw<WorkspaceSnapshot>();
@@ -81,6 +84,20 @@
   let projectError = $state<string>();
   let projectBusy = $state(false);
   let nextProjectLocaleId = 1;
+  let openDirectory = $state("");
+  let openingWorkspace = $state(false);
+  let pickingWorkspace = $state(false);
+  let openDialogOpen = $state(false);
+  let repairDocument = $state.raw<EditorDocument>();
+  let repairText = $state("");
+  let repairBusy = $state(false);
+  let repairMessage = $state<string>();
+  let externalChanges = $state<string[]>([]);
+  let externalFileChanges = $state<EditorExternalFileChange[]>([]);
+  let comparedExternalChange = $state.raw<EditorExternalFileChange>();
+  let mergedExternalText = $state("");
+  let recoveredDrafts = $state<Record<string, StoredDraft>>({});
+  let recentProjects = $state<RecentProject[]>([]);
 
   let labels = $derived(labelsFor(uiLocale));
   let rows = $derived(buildRows(snapshot, drafts));
@@ -116,19 +133,44 @@
   let diagnostics = $derived(validation?.diagnostics ?? snapshot?.diagnostics ?? []);
   let errorCount = $derived(diagnostics.filter((item) => item.severity === "error").length);
   let warningCount = $derived(diagnostics.filter((item) => item.severity === "warning").length);
+  let malformedDocuments = $derived(
+    snapshot?.documents.filter((document) => document.isMalformed) ?? [],
+  );
 
   onMount(() => {
+    recentProjects = readRecentProjects();
     void loadWorkspace(false);
+    const interval = window.setInterval(() => void checkExternalChanges(), 2_000);
+    return () => window.clearInterval(interval);
   });
+
+  async function checkExternalChanges(): Promise<void> {
+    if (loading || openingWorkspace || saving || snapshot === undefined) return;
+    try {
+      const result = await bridge.checkExternalChanges();
+      if (result.paths.length > 0) {
+        externalChanges = [...new Set([...externalChanges, ...result.paths])].sort();
+        externalFileChanges = [
+          ...externalFileChanges.filter((existing) => !result.changes.some((change) => change.path === existing.path)),
+          ...result.changes,
+        ].sort((left, right) => left.path.localeCompare(right.path));
+      }
+    } catch {
+      // The next poll retries; editing and saving remain available.
+    }
+  }
 
   async function loadWorkspace(confirmDiscard: boolean): Promise<void> {
     if (confirmDiscard && Object.keys(drafts).length > 0 && !confirm("Discard all unsaved changes?")) return;
+    if (confirmDiscard) clearStoredDrafts(snapshot);
     loading = true;
     operationMessage = undefined;
     clientError = undefined;
     try {
       const next = await bridge.load();
       installSnapshot(next, true);
+      externalChanges = [];
+      externalFileChanges = [];
     } catch (error) {
       clientError = errorMessage(error);
     } finally {
@@ -138,7 +180,10 @@
 
   function installSnapshot(next: WorkspaceSnapshot, resetSelection: boolean): void {
     snapshot = next;
-    drafts = {};
+    if (resetSelection) {
+      drafts = {};
+      recoveredDrafts = readStoredDrafts(next);
+    }
     validation = undefined;
     const nextRows = buildRows(next, {});
     if (resetSelection || !nextRows.some((row) => row.key === selectedKey)) {
@@ -148,6 +193,7 @@
       selectedLocale = next.catalog?.defaultLocale ?? next.catalog?.locales[0]?.tag ?? "";
     }
     configureEditor();
+    rememberProject(next);
   }
 
   function selectRow(row: TranslationRow): void {
@@ -215,6 +261,7 @@
         );
       }
       drafts[document.path] = content;
+      persistDrafts();
       scheduleValidation(document.path, content);
     } catch (error) {
       clientError = errorMessage(error);
@@ -268,6 +315,8 @@
       }
       const key = selectedKey;
       const locale = selectedLocale;
+      delete drafts[document.path];
+      persistDrafts();
       installSnapshot(result.snapshot, false);
       selectedKey = key;
       selectedLocale = locale;
@@ -439,6 +488,201 @@
     }
   }
 
+  async function openWorkspace(catalogId?: string, directoryOverride?: string): Promise<void> {
+    if (openingWorkspace) return;
+    if (Object.keys(drafts).length > 0 && !confirm("Discard all unsaved changes?")) return;
+    clearStoredDrafts(snapshot);
+    const directory = directoryOverride ?? (catalogId === undefined ? openDirectory.trim() : snapshot?.root ?? "");
+    if (directory === "") {
+      clientError = "Enter a workspace directory.";
+      return;
+    }
+    openingWorkspace = true;
+    clientError = undefined;
+    try {
+      const result = await bridge.openWorkspace({ directory, catalogId });
+      if (!result.ok || result.snapshot === undefined) {
+        clientError = result.message ?? "The workspace could not be opened.";
+        return;
+      }
+      installSnapshot(result.snapshot, true);
+      externalChanges = [];
+      externalFileChanges = [];
+      openDirectory = result.snapshot.root;
+      openDialogOpen = false;
+    } catch (error) {
+      clientError = errorMessage(error);
+    } finally {
+      openingWorkspace = false;
+    }
+  }
+
+  async function pickWorkspace(): Promise<void> {
+    if (pickingWorkspace || openingWorkspace) return;
+    pickingWorkspace = true;
+    clientError = undefined;
+    try {
+      const result = await bridge.pickWorkspace();
+      if (result.ok && result.directory !== undefined) {
+        openDirectory = result.directory;
+      } else if (!result.cancelled && result.message !== undefined) {
+        clientError = result.message;
+      }
+    } catch (error) {
+      clientError = errorMessage(error);
+    } finally {
+      pickingWorkspace = false;
+    }
+  }
+
+  function showOpenWorkspaceDialog(): void {
+    const current = snapshot;
+    if (current === undefined) return;
+    openDirectory = current.root;
+    openDialogOpen = true;
+  }
+
+  function recoverSavedDrafts(): void {
+    drafts = Object.fromEntries(Object.entries(recoveredDrafts).map(([path, draft]) => [path, draft.content]));
+    recoveredDrafts = {};
+    persistDrafts();
+    configureEditor();
+  }
+
+  function reviewExternalChanges(): void {
+    const change = externalFileChanges[0];
+    if (change === undefined) return;
+    comparedExternalChange = change;
+    const base = snapshot?.documents.find((document) => document.path === change.path);
+    mergedExternalText = drafts[change.path] ?? base?.content ?? change.content ?? "";
+  }
+
+  async function applyExternalMerge(): Promise<void> {
+    const change = comparedExternalChange;
+    if (change === undefined) return;
+    const retainedDrafts = { ...drafts, [change.path]: mergedExternalText };
+    loading = true;
+    clientError = undefined;
+    try {
+      const next = await bridge.load();
+      installSnapshot(next, true);
+      drafts = Object.fromEntries(Object.entries(retainedDrafts).filter(([path]) =>
+        next.documents.some((document) => document.path === path)));
+      if (drafts[change.path] === undefined) {
+        clientError = `The externally deleted file '${change.path}' cannot receive a merged draft.`;
+      }
+      persistDrafts();
+      externalChanges = [];
+      externalFileChanges = [];
+      comparedExternalChange = undefined;
+      configureEditor();
+    } catch (error) {
+      clientError = errorMessage(error);
+    } finally {
+      loading = false;
+    }
+  }
+
+  function discardSavedDrafts(): void {
+    recoveredDrafts = {};
+    clearStoredDrafts(snapshot);
+  }
+
+  function draftStorageKey(value: WorkspaceSnapshot): string {
+    return `runic-text-resources:drafts:1:${value.root}\n${value.catalog?.id ?? ""}`;
+  }
+
+  function persistDrafts(): void {
+    const current = snapshot;
+    if (current === undefined) return;
+    if (Object.keys(drafts).length === 0) {
+      clearStoredDrafts(current);
+      return;
+    }
+    const stored: Record<string, StoredDraft> = {};
+    for (const [path, content] of Object.entries(drafts)) {
+      const document = current.documents.find((candidate) => candidate.path === path);
+      if (document !== undefined) stored[path] = { content, baseRevision: document.revision };
+    }
+    localStorage.setItem(draftStorageKey(current), JSON.stringify({ version: 1, documents: stored }));
+  }
+
+  function readStoredDrafts(value: WorkspaceSnapshot): Record<string, StoredDraft> {
+    try {
+      const raw = localStorage.getItem(draftStorageKey(value));
+      if (raw === null) return {};
+      const parsed = JSON.parse(raw) as { version?: unknown; documents?: unknown };
+      if (parsed.version !== 1 || typeof parsed.documents !== "object" || parsed.documents === null) return {};
+      const recovered: Record<string, StoredDraft> = {};
+      for (const [path, candidate] of Object.entries(parsed.documents as Record<string, unknown>)) {
+        const document = value.documents.find((item) => item.path === path);
+        if (document === undefined || typeof candidate !== "object" || candidate === null) continue;
+        const draft = candidate as Partial<StoredDraft>;
+        if (typeof draft.content === "string" && typeof draft.baseRevision === "string") recovered[path] = draft as StoredDraft;
+      }
+      return recovered;
+    } catch {
+      return {};
+    }
+  }
+
+  function clearStoredDrafts(value: WorkspaceSnapshot | undefined): void {
+    if (value !== undefined) localStorage.removeItem(draftStorageKey(value));
+  }
+
+  function readRecentProjects(): RecentProject[] {
+    try {
+      const value = JSON.parse(localStorage.getItem("runic-text-resources:recent:1") ?? "[]") as unknown;
+      if (!Array.isArray(value)) return [];
+      return value.filter((item): item is RecentProject =>
+        typeof item === "object" && item !== null &&
+        typeof (item as RecentProject).root === "string" &&
+        typeof (item as RecentProject).catalogId === "string" &&
+        typeof (item as RecentProject).openedAt === "string").slice(0, 8);
+    } catch {
+      return [];
+    }
+  }
+
+  function rememberProject(value: WorkspaceSnapshot): void {
+    const catalogId = value.catalog?.id;
+    if (catalogId === undefined) return;
+    const entry = { root: value.root, catalogId, openedAt: new Date().toISOString() };
+    recentProjects = [entry, ...recentProjects.filter((item) => item.root !== entry.root || item.catalogId !== catalogId)].slice(0, 8);
+    localStorage.setItem("runic-text-resources:recent:1", JSON.stringify(recentProjects));
+  }
+
+  function beginRepair(document: EditorDocument): void {
+    repairDocument = document;
+    repairText = document.content;
+    repairMessage = undefined;
+  }
+
+  async function saveRepair(): Promise<void> {
+    const document = repairDocument;
+    if (document === undefined || repairBusy) return;
+    repairBusy = true;
+    repairMessage = undefined;
+    try {
+      const checked = await bridge.validate(document.path, repairText);
+      if (!checked.success) {
+        repairMessage = checked.diagnostics[0]?.message ?? "The document is still invalid.";
+        return;
+      }
+      const result = await bridge.save(document.path, repairText, document.revision);
+      if (!result.ok || result.snapshot === undefined) {
+        repairMessage = result.message ?? "The repaired document could not be saved.";
+        return;
+      }
+      repairDocument = undefined;
+      installSnapshot(result.snapshot, true);
+    } catch (error) {
+      repairMessage = errorMessage(error);
+    } finally {
+      repairBusy = false;
+    }
+  }
+
   function labelsFor(locale: string) {
     const options = { locale };
     return {
@@ -473,19 +717,120 @@
 </svelte:head>
 <svelte:window onkeydown={handleKeyboard} onbeforeunload={protectDraft} />
 
+{#if externalChanges.length > 0}
+  <aside class="external-change-banner" aria-live="polite">
+    <div><strong>Files changed outside the editor</strong><span>{externalChanges.join(", ")}</span></div>
+    <p>{Object.keys(drafts).length > 0 ? "Your local drafts are still intact." : "Reload to read the latest versions."}</p>
+    <button class="secondary" onclick={() => { externalChanges = []; externalFileChanges = []; }}>Keep current view</button>
+    <button class="secondary" onclick={reviewExternalChanges}>Compare / merge</button>
+    <button class="primary" onclick={() => void loadWorkspace(true)}>Reload files</button>
+  </aside>
+{/if}
+
+{#if Object.keys(recoveredDrafts).length > 0}
+  <aside class="draft-recovery-banner" aria-live="polite">
+    <div><strong>Unsaved work was recovered</strong><span>{Object.keys(recoveredDrafts).length} document {Object.keys(recoveredDrafts).length === 1 ? "draft" : "drafts"} found in local application storage.</span></div>
+    <button class="secondary" onclick={discardSavedDrafts}>Discard</button>
+    <button class="primary" onclick={recoverSavedDrafts}>Restore drafts</button>
+  </aside>
+{/if}
+
+{#if comparedExternalChange !== undefined}
+  <div class="dialog-backdrop" role="presentation">
+    <div class="project-dialog external-compare-dialog" role="dialog" aria-modal="true" aria-labelledby="external-compare-title">
+      <header><div><p class="eyebrow">External change</p><h2 id="external-compare-title">{comparedExternalChange.path}</h2></div>
+        <button class="icon-button" aria-label="Close comparison" onclick={() => comparedExternalChange = undefined}>×</button></header>
+      <div class="external-compare-grid">
+        <label>Editor base<textarea class="code" readonly value={snapshot?.documents.find((document) => document.path === comparedExternalChange?.path)?.content ?? "File was not previously loaded."}></textarea></label>
+        <label>Current disk<textarea class="code" readonly value={comparedExternalChange.content ?? "File was deleted externally."}></textarea></label>
+      </div>
+      <label class="merge-field">Merged draft<textarea class="code" bind:value={mergedExternalText} spellcheck={false}></textarea></label>
+      <footer><button class="secondary" onclick={() => comparedExternalChange = undefined}>Keep current view</button>
+        <div><button class="primary" onclick={() => void applyExternalMerge()}>Reload base and keep merged draft</button></div></footer>
+    </div>
+  </div>
+{/if}
+
 {#if loading}
   <main class="loading-shell" aria-live="polite">
     <div class="mark" aria-hidden="true"><span></span></div>
     <p>{labels.eyebrow}</p>
     <div class="loading-line"></div>
   </main>
-{:else if snapshot === undefined || snapshot.catalog === undefined}
+{:else if snapshot === undefined}
   <main class="fatal-shell">
     <div class="mark" aria-hidden="true"><span></span></div>
     <p class="eyebrow">{labels.eyebrow}</p>
     <h1>Could not open this translation workspace</h1>
     <p>{clientError ?? "No Runic Text Resources catalog was found."}</p>
     <button class="primary" onclick={() => void loadWorkspace(false)}>{labels.reload}</button>
+  </main>
+{:else if snapshot.catalog === undefined}
+  <main class="welcome-shell">
+    <header class="welcome-brand">
+      <div class="mark small" aria-hidden="true"><span></span></div>
+      <div><p class="eyebrow">{labels.eyebrow}</p><h1>{labels.title}</h1></div>
+      <select aria-label="Editor language" value={uiLocale} onchange={(event) => uiLocale = event.currentTarget.value}>
+        <option value="en">EN</option><option value="de">DE</option>
+      </select>
+    </header>
+    <section class="welcome-content">
+      <div class="welcome-heading">
+        <p class="eyebrow">Workspace onboarding</p>
+        <h2>{snapshot.catalogs.length > 1 ? "Choose a translation catalog" : "Open a translation project"}</h2>
+        <p>{snapshot.catalogs.length > 1
+          ? `We found ${snapshot.catalogs.length} catalogs below this workspace boundary.`
+          : "Open an existing workspace or create a compiler-valid project from scratch."}</p>
+      </div>
+
+      {#if snapshot.catalogs.length > 0}
+        <div class="catalog-choices">
+          {#each snapshot.catalogs as catalog (catalog.id)}
+            <button class="catalog-choice" onclick={() => void openWorkspace(catalog.id)} disabled={openingWorkspace}>
+              <span class={{ "status-dot": true, warning: !catalog.success }}></span>
+              <span><strong>{catalog.id}</strong><small>{catalog.manifestPaths.join(", ")}</small></span>
+              <span class="catalog-metrics">{catalog.localeCount} locales<br />{catalog.messageCount} messages</span>
+              <span class={catalog.errorCount > 0 ? "health error" : "health"}>{catalog.errorCount > 0 ? `${catalog.errorCount} errors` : "Healthy"}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+
+      <div class="open-workspace-card">
+        <label for="open-directory">Workspace directory</label>
+        <div><input id="open-directory" bind:value={openDirectory} placeholder="/projects/customer-app" autocomplete="off" />
+          <button class="secondary" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? "Choosing…" : "Browse…"}</button>
+          <button class="primary" disabled={openingWorkspace} onclick={() => void openWorkspace()}>{openingWorkspace ? "Opening…" : "Open"}</button></div>
+        <small>Traversal stays inside this boundary and ignores links, dependencies, and generated output.</small>
+      </div>
+
+      <div class="welcome-actions">
+        <button class="secondary" onclick={openProjectWizard}>＋ Create new project</button>
+        <button class="secondary" onclick={() => void loadWorkspace(false)}>↻ Scan {snapshot.root}</button>
+      </div>
+
+      {#if recentProjects.length > 0}
+        <section class="recent-projects">
+          <header><strong>Recent projects</strong><span>Stored only in your local application profile</span></header>
+          {#each recentProjects as project (`${project.root}\n${project.catalogId}`)}
+            <button onclick={() => void openWorkspace(project.catalogId, project.root)} disabled={openingWorkspace}>
+              <span><strong>{project.catalogId}</strong><code>{project.root}</code></span>
+              <small>{new Date(project.openedAt).toLocaleDateString(uiLocale)}</small>
+            </button>
+          {/each}
+        </section>
+      {/if}
+
+      {#if malformedDocuments.length > 0}
+        <section class="repair-list">
+          <header><div><strong>Repair malformed JSON</strong><span>{malformedDocuments.length} files need attention</span></div></header>
+          {#each malformedDocuments as document (document.path)}
+            <button onclick={() => beginRepair(document)}><span>!</span><code>{document.path}</code><small>Open repair editor →</small></button>
+          {/each}
+        </section>
+      {/if}
+      {#if clientError}<p class="project-error" aria-live="polite">{clientError}</p>{/if}
+    </section>
   </main>
 {:else}
   <main class="app-shell">
@@ -514,6 +859,15 @@
           </button>
         </div>
         <p title={snapshot.root}>{snapshot.root}</p>
+        {#if malformedDocuments.length > 0}
+          <div class="workspace-repairs">
+            <strong>{malformedDocuments.length} malformed {malformedDocuments.length === 1 ? "file" : "files"}</strong>
+            {#each malformedDocuments as document (document.path)}
+              <button title={document.path} onclick={() => beginRepair(document)}>Repair {document.path}</button>
+            {/each}
+          </div>
+        {/if}
+        <button class="new-project-button" onclick={showOpenWorkspaceDialog}>⌁ Open workspace</button>
         <button class="new-project-button" onclick={openProjectWizard}>＋ New project</button>
       </section>
 
@@ -705,6 +1059,40 @@
   </main>
 {/if}
 
+{#if repairDocument !== undefined}
+  <div class="dialog-backdrop">
+    <div class="project-dialog repair-dialog" role="dialog" aria-modal="true" aria-labelledby="repair-dialog-title">
+      <header><div><p class="eyebrow">Repair mode</p><h2 id="repair-dialog-title">{repairDocument.path}</h2></div>
+        <button class="icon-button" aria-label="Close repair editor" disabled={repairBusy} onclick={() => repairDocument = undefined}>×</button></header>
+      <div class="project-body">
+        <p class="repair-guidance">Edit the raw JSON below. The canonical compiler must accept it before it can replace the file.</p>
+        <textarea class="code" aria-label="Malformed JSON document" bind:value={repairText} spellcheck={false}></textarea>
+        {#if repairMessage}<p class="project-error" aria-live="polite">{repairMessage}</p>{/if}
+      </div>
+      <footer><button class="secondary" disabled={repairBusy} onclick={() => repairDocument = undefined}>Cancel</button>
+        <div><button class="primary" disabled={repairBusy} onclick={() => void saveRepair()}>{repairBusy ? "Validating…" : "Validate and save"}</button></div></footer>
+    </div>
+  </div>
+{/if}
+
+{#if openDialogOpen}
+  <div class="dialog-backdrop" role="presentation">
+    <div class="project-dialog open-dialog" role="dialog" aria-modal="true" aria-labelledby="open-dialog-title">
+      <header><div><p class="eyebrow">Workspace</p><h2 id="open-dialog-title">Open translation project</h2></div>
+        <button class="icon-button" aria-label="Close workspace dialog" disabled={openingWorkspace || pickingWorkspace} onclick={() => openDialogOpen = false}>×</button></header>
+      <div class="open-workspace-card dialog-card">
+        <label for="dialog-open-directory">Workspace directory</label>
+        <div><input id="dialog-open-directory" bind:value={openDirectory} autocomplete="off" />
+          <button class="secondary" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? "Choosing…" : "Browse…"}</button></div>
+        <small>Catalogs are discovered below this boundary. You will choose one if several are found.</small>
+      </div>
+      {#if clientError}<p class="project-error" aria-live="polite">{clientError}</p>{/if}
+      <footer><button class="secondary" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>Cancel</button>
+        <div><button class="primary" disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{openingWorkspace ? "Opening…" : "Open workspace"}</button></div></footer>
+    </div>
+  </div>
+{/if}
+
 {#if projectDialogOpen}
   <div class="dialog-backdrop">
     <div class="project-dialog" role="dialog" aria-modal="true" aria-labelledby="project-dialog-title">
@@ -870,6 +1258,10 @@
   .workspace-title strong { overflow: hidden; color: #f4f1e8; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
   .workspace-title span, .workspace-card > p { color: #818b84; font-size: .68rem; }
   .workspace-card > p { overflow: hidden; margin: .6rem 0 0 1.15rem; text-overflow: ellipsis; white-space: nowrap; }
+  .workspace-repairs { display: grid; gap: .35rem; margin: .7rem 0 0 1.15rem; border-left: 2px solid #9e554b; padding-left: .6rem; }
+  .workspace-repairs strong { color: #e1a49b; font-size: .6rem; }
+  .workspace-repairs button { overflow: hidden; border: 0; padding: 0; color: #c48379; text-align: left; text-overflow: ellipsis; white-space: nowrap; background: transparent; font: .56rem ui-monospace, monospace; cursor: pointer; }
+  .workspace-repairs button:hover { color: #efb1a7; }
   .new-project-button { width: 100%; margin-top: .7rem; border: 1px dashed #535744; border-radius: .4rem; padding: .45rem; color: #c3ad70; background: #24261d; font-size: .65rem; cursor: pointer; }
   .new-project-button:hover { border-color: #8d7948; color: #eee1b9; background: #2c2c20; }
   .status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: #65b886; box-shadow: 0 0 .6rem #65b88688; }
@@ -995,6 +1387,69 @@
   .fatal-shell .mark { margin-bottom: 2rem; }
   .fatal-shell h1 { max-width: 36rem; margin: .8rem 0; color: #eee9da; font-family: Georgia, serif; font-size: 2.6rem; font-weight: 500; }
   .fatal-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0 0 1.5rem; }
+  .welcome-shell { width: 100vw; min-height: 100vh; overflow-y: auto; background: radial-gradient(circle at 70% -10%, #29372f, transparent 42%), #0b0e0d; }
+  .welcome-brand { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .8rem; border-bottom: 1px solid #2c332e; padding: 1rem 1.5rem; background: #101412dd; }
+  .welcome-brand h1 { margin: .1rem 0 0; color: #ece8dc; font-family: Georgia, serif; font-size: 1.35rem; font-weight: 500; }
+  .welcome-brand select { border: 1px solid #3c443e; border-radius: .4rem; padding: .35rem .5rem; background: #171c19; }
+  .welcome-content { width: min(880px, calc(100% - 3rem)); margin: 0 auto; padding: 4rem 0; }
+  .welcome-heading { margin-bottom: 1.6rem; }
+  .welcome-heading h2 { margin: .55rem 0; color: #f0ece0; font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 500; letter-spacing: -.035em; }
+  .welcome-heading > p:last-child { max-width: 42rem; margin: 0; color: #869188; font-size: .78rem; line-height: 1.6; }
+  .catalog-choices { display: grid; gap: .65rem; margin: 1.4rem 0; }
+  .catalog-choice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: .9rem; width: 100%; border: 1px solid #343d37; border-radius: .65rem; padding: 1rem; text-align: left; background: #111613; cursor: pointer; }
+  .catalog-choice:hover { border-color: #7f7048; background: #181d19; }
+  .catalog-choice > span:nth-child(2) { display: grid; gap: .2rem; min-width: 0; }
+  .catalog-choice strong { color: #e2e6e3; font-size: .82rem; }
+  .catalog-choice small { overflow: hidden; color: #66716a; font: .58rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+  .catalog-metrics { color: #879189; font-size: .6rem; line-height: 1.55; text-align: right; }
+  .health { min-width: 4.5rem; border-radius: 1rem; padding: .25rem .45rem; color: #83bc91; background: #1d3224; font-size: .56rem; text-align: center; }
+  .health.error { color: #df958a; background: #39231f; }
+  .open-workspace-card { display: grid; gap: .45rem; margin-top: 1.2rem; border: 1px solid #343d37; border-radius: .65rem; padding: 1rem; background: #111613; }
+  .open-workspace-card label { color: #b8c0ba; font-size: .66rem; font-weight: 650; }
+  .open-workspace-card > div { display: grid; grid-template-columns: 1fr auto auto; gap: .6rem; }
+  .open-workspace-card input { min-width: 0; border: 1px solid #3a433d; border-radius: .45rem; outline: 0; padding: .68rem .75rem; color: #edf0ed; background: #0c100e; font-size: .75rem; }
+  .open-workspace-card input:focus { border-color: #8f7945; }
+  .open-workspace-card small { color: #626d66; font-size: .58rem; }
+  .welcome-actions { display: flex; gap: .65rem; margin-top: .8rem; }
+  .repair-list { margin-top: 1.5rem; border: 1px solid #553b36; border-radius: .65rem; background: #17110f; overflow: hidden; }
+  .repair-list > header { padding: .8rem 1rem; background: #251815; }
+  .repair-list > header > div { display: flex; justify-content: space-between; }
+  .repair-list strong { color: #e1afa7; font-size: .7rem; }
+  .repair-list header span { color: #9d6c65; font-size: .6rem; }
+  .repair-list > button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .7rem; width: 100%; border: 0; border-top: 1px solid #432c28; padding: .7rem 1rem; text-align: left; background: transparent; cursor: pointer; }
+  .repair-list > button:hover { background: #2a1b18; }
+  .repair-list > button > span { display: grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 50%; color: #f0a398; background: #492923; font-weight: 800; }
+  .repair-list code { color: #d5b0aa; font: .62rem ui-monospace, monospace; }
+  .repair-list small { color: #9b7069; font-size: .58rem; }
+  .repair-guidance { margin: 0 0 .8rem; color: #7f8a82; font-size: .68rem; }
+  .repair-dialog textarea { min-height: 420px; }
+  .external-change-banner { position: fixed; z-index: 30; right: 1rem; bottom: 1rem; display: grid; grid-template-columns: minmax(12rem, 1fr) auto auto auto auto; align-items: center; gap: .7rem; width: min(58rem, calc(100vw - 2rem)); border: 1px solid #75602f; border-radius: .7rem; padding: .8rem; color: #d8d0bd; background: #201c12; box-shadow: 0 1rem 3rem #0008; }
+  .external-change-banner div { display: grid; gap: .2rem; min-width: 0; }
+  .external-change-banner strong { color: #eadba9; font-size: .7rem; }
+  .external-change-banner span { overflow: hidden; color: #a79a77; font: .58rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+  .external-change-banner p { margin: 0; color: #9a9077; font-size: .6rem; }
+  .draft-recovery-banner { position: fixed; z-index: 31; right: 1rem; bottom: 1rem; display: grid; grid-template-columns: minmax(14rem, 1fr) auto auto; align-items: center; gap: .7rem; width: min(38rem, calc(100vw - 2rem)); border: 1px solid #456b56; border-radius: .7rem; padding: .8rem; color: #d3ddd6; background: #142019; box-shadow: 0 1rem 3rem #0008; }
+  .draft-recovery-banner div { display: grid; gap: .2rem; }
+  .draft-recovery-banner strong { color: #b9dfc7; font-size: .7rem; }
+  .draft-recovery-banner span { color: #789282; font-size: .59rem; }
+  .recent-projects { margin-top: 1.5rem; border: 1px solid #303832; border-radius: .65rem; background: #101512; overflow: hidden; }
+  .recent-projects > header { display: flex; justify-content: space-between; padding: .75rem 1rem; background: #171d19; }
+  .recent-projects header strong { color: #bfc8c1; font-size: .68rem; }
+  .recent-projects header span { color: #626c65; font-size: .56rem; }
+  .recent-projects > button { display: grid; grid-template-columns: 1fr auto; align-items: center; width: 100%; border: 0; border-top: 1px solid #29302c; padding: .7rem 1rem; color: #cbd2cd; text-align: left; background: transparent; cursor: pointer; }
+  .recent-projects > button:hover { background: #18201b; }
+  .recent-projects button > span { display: grid; gap: .2rem; min-width: 0; }
+  .recent-projects code { overflow: hidden; color: #68736b; font: .57rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+  .recent-projects small { color: #69746c; font-size: .55rem; }
+  .external-compare-dialog { width: min(70rem, calc(100vw - 3rem)); }
+  .open-dialog { width: min(42rem, calc(100vw - 3rem)); }
+  .dialog-card { margin-top: 0; }
+  .dialog-card > div { grid-template-columns: 1fr auto; }
+  .external-compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+  .external-compare-grid label, .merge-field { display: grid; gap: .35rem; color: #8e9991; font-size: .62rem; }
+  .external-compare-grid textarea { min-height: 12rem; color: #89948c; background: #0d110f; }
+  .merge-field { margin-top: .8rem; }
+  .merge-field textarea { min-height: 12rem; }
   .dialog-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 2rem; background: #050706d9; backdrop-filter: blur(10px); }
   .project-dialog { display: flex; flex-direction: column; width: min(760px, 100%); max-height: calc(100vh - 4rem); border: 1px solid #444b44; border-radius: .85rem; background: #111613; box-shadow: 0 2rem 8rem #000b; overflow: hidden; }
   .project-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 1.35rem 1.5rem 1.1rem; border-bottom: 1px solid #2d342f; }

@@ -41,3 +41,31 @@ jobs:
 
       - name: Ensure verification is reproducible
         run: git diff --exit-code
+
+  cross-platform-editor:
+    name: Editor smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, macos-15]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: samples/RunicTextResources.Editor/Frontend/package-lock.json
+
+      - name: Run cross-platform editor smoke
+        shell: pwsh
+        run: ./eng/editor-smoke.ps1

@@ -8,6 +8,17 @@ export interface EditorLayer {
   priority: number;
 }
 
+export interface EditorCatalogSummary {
+  id: string;
+  manifestPaths: string[];
+  documentCount: number;
+  localeCount: number;
+  messageCount: number;
+  errorCount: number;
+  warningCount: number;
+  success: boolean;
+}
+
 export interface EditorCatalog {
   id: string;
   schemaVersion: number;
@@ -21,6 +32,7 @@ export interface EditorDocument {
   content: string;
   revision: string;
   isManifest: boolean;
+  isMalformed: boolean;
   locale?: string;
   layer?: string;
 }
@@ -39,6 +51,7 @@ export interface EditorDiagnostic {
 export interface WorkspaceSnapshot {
   root: string;
   catalog?: EditorCatalog;
+  catalogs: EditorCatalogSummary[];
   documents: EditorDocument[];
   diagnostics: EditorDiagnostic[];
   success: boolean;
@@ -81,4 +94,29 @@ export interface EditorProjectPlan {
   catalogId: string;
   locales: EditorLocale[];
   files: string[];
+}
+
+export interface EditorOpenWorkspaceRequest {
+  directory: string;
+  catalogId?: string;
+}
+
+export interface EditorExternalChanges {
+  overflowed: boolean;
+  paths: string[];
+  changes: EditorExternalFileChange[];
+}
+
+export interface EditorExternalFileChange {
+  path: string;
+  exists: boolean;
+  content?: string;
+  revision?: string;
+}
+
+export interface EditorWorkspacePickerResult {
+  ok: boolean;
+  cancelled: boolean;
+  directory?: string;
+  message?: string;
 }

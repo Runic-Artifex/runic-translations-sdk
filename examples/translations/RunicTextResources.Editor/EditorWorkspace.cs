@@ -1,24 +1,91 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using RunicTextResources.Authoring;
 using RunicTextResources.Compiler;
 
 namespace RunicTextResources.Editor;
 
 internal sealed class EditorWorkspace : IDisposable
 {
-    private const int MaximumFiles = 512;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _root;
+    private readonly FileSystemWatcher _watcher;
+    private readonly ConcurrentDictionary<string, byte> _pendingChanges = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _knownRevisions = new(StringComparer.Ordinal);
+    private string? _catalogId;
+    private int _watcherOverflowed;
     private bool _disposed;
 
-    public EditorWorkspace(string root)
+    public EditorWorkspace(string root, string? catalogId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         _root = Path.GetFullPath(root);
+        _catalogId = catalogId;
         if (!Directory.Exists(_root))
             throw new DirectoryNotFoundException($"The text-resource workspace '{_root}' does not exist.");
+        _watcher = new FileSystemWatcher(_root)
+        {
+            IncludeSubdirectories = true,
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size,
+        };
+        _watcher.Changed += OnWatcherChanged;
+        _watcher.Created += OnWatcherChanged;
+        _watcher.Deleted += OnWatcherChanged;
+        _watcher.Renamed += OnWatcherRenamed;
+        _watcher.Error += OnWatcherError;
+        _watcher.EnableRaisingEvents = true;
+    }
+
+    public string Root => _root;
+
+    public async Task<EditorExternalChanges> CheckExternalChangesAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            bool overflowed = Interlocked.Exchange(ref _watcherOverflowed, 0) != 0;
+            if (!overflowed && _pendingChanges.IsEmpty)
+                return new EditorExternalChanges(false, [], []);
+
+            TextResourceWorkspaceDiscoveryResult discovery = TextResourceWorkspaceDiscovery.Discover(_root, cancellationToken: cancellationToken);
+            Dictionary<string, string> current = Fingerprints(discovery);
+            var candidates = new HashSet<string>(_pendingChanges.Keys, StringComparer.Ordinal);
+            _pendingChanges.Clear();
+            if (overflowed)
+            {
+                candidates.UnionWith(_knownRevisions.Keys);
+                candidates.UnionWith(current.Keys);
+            }
+
+            string[] changed = candidates
+                .Where(path => !_knownRevisions.TryGetValue(path, out string? known) ||
+                    !current.TryGetValue(path, out string? revision) ||
+                    !string.Equals(known, revision, StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var discoveredByPath = discovery.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
+            var changes = new EditorExternalFileChange[changed.Length];
+            for (int index = 0; index < changed.Length; index++)
+            {
+                string path = changed[index];
+                if (!discoveredByPath.TryGetValue(path, out TextResourceWorkspaceFile? file))
+                {
+                    changes[index] = new EditorExternalFileChange(path, false, null, null);
+                    continue;
+                }
+                byte[] bytes = file.GetUtf8Bytes();
+                changes[index] = new EditorExternalFileChange(path, true, StrictUtf8.GetString(bytes), Revision(bytes));
+            }
+            return new EditorExternalChanges(overflowed, changed, changes);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     public async Task<WorkspaceSnapshot> LoadAsync(CancellationToken cancellationToken = default)
@@ -47,6 +114,8 @@ internal sealed class EditorWorkspace : IDisposable
             ThrowIfDisposed();
             string path = NormalizeKnownPath(relativePath);
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
+            if (state.Files.Exists(file => string.Equals(file.Path, path, StringComparison.Ordinal) && file.Kind == DocumentKind.Malformed))
+                return MalformedValidation(path);
             return new ValidationResult(state.Compilation.Success, Diagnostics(state.Compilation));
         }
         finally
@@ -76,6 +145,15 @@ internal sealed class EditorWorkspace : IDisposable
                 return Failure("conflict", $"'{path}' changed on disk. Reload before saving your draft.");
 
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
+            if (state.Files.Exists(file => string.Equals(file.Path, path, StringComparison.Ordinal) && file.Kind == DocumentKind.Malformed))
+            {
+                return new EditorOperationResult(
+                    false,
+                    "validation",
+                    "The draft is not valid JSON.",
+                    null,
+                    MalformedValidation(path));
+            }
             if (!state.Compilation.Success)
             {
                 return new EditorOperationResult(
@@ -130,74 +208,89 @@ internal sealed class EditorWorkspace : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _watcher.EnableRaisingEvents = false;
+        _watcher.Dispose();
         _gate.Dispose();
     }
 
-    private async Task<WorkspaceState> ReadStateAsync(
+    private Task<WorkspaceState> ReadStateAsync(
         string? replacementPath,
         string? replacementContent,
         CancellationToken cancellationToken)
     {
-        var files = new List<WorkspaceFile>();
-        foreach (string fullPath in Directory.EnumerateFiles(_root, "*.json", SearchOption.AllDirectories))
+        TextResourceWorkspaceDiscoveryResult discovery = TextResourceWorkspaceDiscovery.Discover(_root, cancellationToken: cancellationToken);
+        if (replacementPath is null)
+        {
+            ReplaceKnownRevisions(Fingerprints(discovery));
+            _pendingChanges.Clear();
+            Interlocked.Exchange(ref _watcherOverflowed, 0);
+        }
+        if (_catalogId is null && discovery.Catalogs.Count == 1)
+            _catalogId = discovery.Catalogs[0].Id;
+        if (_catalogId is not null && !discovery.Catalogs.Any(catalog => string.Equals(catalog.Id, _catalogId, StringComparison.Ordinal)))
+            throw new ArgumentException($"Catalog '{_catalogId}' was not found in this workspace.");
+
+        var files = new List<WorkspaceFile>(discovery.Files.Count);
+        foreach (TextResourceWorkspaceFile discoveredFile in discovery.Files)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
-            if (IsIgnored(relativePath)) continue;
-            if (files.Count == MaximumFiles)
-                throw new InvalidOperationException($"The workspace exceeds the {MaximumFiles}-file editor limit.");
-
-            byte[] bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
+            string relativePath = discoveredFile.RelativePath;
+            byte[] bytes = discoveredFile.GetUtf8Bytes();
             string content = StrictUtf8.GetString(bytes);
-            DocumentKind kind = DetectKind(content);
-            if (kind == DocumentKind.Unrelated) continue;
             if (string.Equals(relativePath, replacementPath, StringComparison.Ordinal))
-            {
                 content = replacementContent ?? string.Empty;
-                bytes = StrictUtf8.GetBytes(content);
-            }
-            files.Add(new WorkspaceFile(relativePath, content, Revision(bytes), kind));
+            DocumentKind kind = string.Equals(relativePath, replacementPath, StringComparison.Ordinal)
+                ? DetectKind(content)
+                : ToDocumentKind(discoveredFile.Kind);
+            if (kind == DocumentKind.Unrelated) continue;
+            string? catalogId = discoveredFile.CatalogId;
+            string? locale = discoveredFile.Locale;
+            string? layer = discoveredFile.Layer;
+            if (string.Equals(relativePath, replacementPath, StringComparison.Ordinal))
+                ReadFileIdentity(content, out catalogId, out locale, out layer);
+            if (kind != DocumentKind.Malformed && _catalogId is not null && !string.Equals(catalogId, _catalogId, StringComparison.Ordinal))
+                continue;
+            files.Add(new WorkspaceFile(relativePath, content, Revision(bytes), kind, catalogId, locale, layer));
         }
 
         files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         if (replacementPath is not null && !files.Exists(file => string.Equals(file.Path, replacementPath, StringComparison.Ordinal)))
             throw new ArgumentException($"'{replacementPath}' is not a text-resource file in this workspace.", nameof(replacementPath));
 
-        TextResourceSource[] manifests = files
+        TextResourceSource[] manifests = (_catalogId is null ? Enumerable.Empty<WorkspaceFile>() : files)
             .Where(static file => file.Kind == DocumentKind.Manifest)
             .Select(static file => Source(file.Path, file.Content))
             .ToArray();
-        TextResourceSource[] documents = files
+        TextResourceSource[] documents = (_catalogId is null ? Enumerable.Empty<WorkspaceFile>() : files)
             .Where(static file => file.Kind == DocumentKind.Resource)
             .Select(static file => Source(file.Path, file.Content))
             .ToArray();
         TextResourceCompilation compilation = TextResourceCompiler.Compile(manifests, documents, cancellationToken);
-        return new WorkspaceState(files, compilation);
+        return Task.FromResult(new WorkspaceState(files, compilation, CatalogSummaries(discovery)));
     }
 
     private WorkspaceSnapshot CreateSnapshot(WorkspaceState state)
     {
         EditorCatalog? catalog = null;
-        WorkspaceFile? manifest = state.Files.Find(static file => file.Kind == DocumentKind.Manifest);
+        WorkspaceFile? manifest = _catalogId is null
+            ? null
+            : state.Files.Find(file => file.Kind == DocumentKind.Manifest && string.Equals(file.CatalogId, _catalogId, StringComparison.Ordinal));
         if (manifest is not null)
             catalog = ReadCatalog(manifest.Content);
 
         var documents = new List<EditorDocument>(state.Files.Count);
         foreach (WorkspaceFile file in state.Files)
         {
-            string? locale = null;
-            string? layer = null;
-            if (file.Kind == DocumentKind.Resource)
-                ReadDocumentIdentity(file.Content, out locale, out layer);
             documents.Add(new EditorDocument(
                 file.Path,
                 file.Content,
                 file.Revision,
                 file.Kind == DocumentKind.Manifest,
-                locale,
-                layer));
+                file.Kind == DocumentKind.Malformed,
+                file.Locale,
+                file.Layer));
         }
-        return new WorkspaceSnapshot(_root, catalog, documents, Diagnostics(state.Compilation), state.Compilation.Success);
+        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state.Compilation), state.Compilation.Success);
     }
 
     private static EditorDiagnostic[] Diagnostics(TextResourceCompilation compilation)
@@ -219,6 +312,10 @@ internal sealed class EditorWorkspace : IDisposable
         }
         return result;
     }
+
+    private static ValidationResult MalformedValidation(string path) => new(
+        false,
+        [new EditorDiagnostic("JSON", "error", "The document is not valid JSON.", path, 1, 1, 1, 1)]);
 
     private static EditorCatalog? ReadCatalog(string content)
     {
@@ -248,20 +345,30 @@ internal sealed class EditorWorkspace : IDisposable
         }
     }
 
-    private static void ReadDocumentIdentity(string content, out string? locale, out string? layer)
+    private static void ReadFileIdentity(string content, out string? catalog, out string? locale, out string? layer)
     {
+        catalog = null;
         locale = null;
         layer = null;
         try
         {
             using JsonDocument document = JsonDocument.Parse(content);
-            locale = document.RootElement.GetProperty("locale").GetString();
-            layer = document.RootElement.GetProperty("layer").GetString();
+            JsonElement root = document.RootElement;
+            catalog = StringProperty(root, "catalog");
+            locale = StringProperty(root, "locale");
+            layer = StringProperty(root, "layer");
         }
         catch (JsonException)
         {
         }
     }
+
+    private static string? StringProperty(JsonElement root, string name) =>
+        root.ValueKind == JsonValueKind.Object &&
+        root.TryGetProperty(name, out JsonElement property) &&
+        property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
 
     private static DocumentKind DetectKind(string content)
     {
@@ -278,8 +385,38 @@ internal sealed class EditorWorkspace : IDisposable
         }
         catch (JsonException)
         {
-            return DocumentKind.Unrelated;
+            return DocumentKind.Malformed;
         }
+    }
+
+    private static DocumentKind ToDocumentKind(TextResourceWorkspaceFileKind kind) => kind switch
+    {
+        TextResourceWorkspaceFileKind.CatalogManifest => DocumentKind.Manifest,
+        TextResourceWorkspaceFileKind.ResourceDocument => DocumentKind.Resource,
+        TextResourceWorkspaceFileKind.MalformedJson => DocumentKind.Malformed,
+        _ => DocumentKind.Unrelated,
+    };
+
+    private static EditorCatalogSummary[] CatalogSummaries(TextResourceWorkspaceDiscoveryResult discovery)
+    {
+        var summaries = new EditorCatalogSummary[discovery.Catalogs.Count];
+        for (int index = 0; index < summaries.Length; index++)
+        {
+            TextResourceDiscoveredCatalog catalog = discovery.Catalogs[index];
+            int errors = catalog.Compilation.Diagnostics.Count(diagnostic => diagnostic.Severity == TextResourceDiagnosticSeverity.Error);
+            int warnings = catalog.Compilation.Diagnostics.Count - errors;
+            CompiledTextCatalog? compiled = catalog.Compilation.Catalogs.Count == 0 ? null : catalog.Compilation.Catalogs[0];
+            summaries[index] = new EditorCatalogSummary(
+                catalog.Id,
+                catalog.ManifestPaths,
+                catalog.DocumentPaths.Count,
+                compiled?.Locales.Count ?? 0,
+                compiled?.CanonicalResources.Count ?? 0,
+                errors,
+                warnings,
+                catalog.Compilation.Success);
+        }
+        return summaries;
     }
 
     private string NormalizeKnownPath(string path)
@@ -302,15 +439,44 @@ internal sealed class EditorWorkspace : IDisposable
 
     private static string NormalizeRelativePath(string path) => path.Replace('\\', '/').TrimStart('/');
 
-    private static bool IsIgnored(string path) =>
-        path.StartsWith(".git/", StringComparison.Ordinal) ||
-        path.Contains("/node_modules/", StringComparison.Ordinal) ||
-        path.Contains("/bin/", StringComparison.Ordinal) ||
-        path.Contains("/obj/", StringComparison.Ordinal);
-
     private static TextResourceSource Source(string path, string content) => new(path, StrictUtf8.GetBytes(content));
 
     private static string Revision(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    private static Dictionary<string, string> Fingerprints(TextResourceWorkspaceDiscoveryResult discovery)
+    {
+        var result = new Dictionary<string, string>(discovery.Files.Count, StringComparer.Ordinal);
+        foreach (TextResourceWorkspaceFile file in discovery.Files)
+            result[file.RelativePath] = Revision(file.GetUtf8Bytes());
+        return result;
+    }
+
+    private void ReplaceKnownRevisions(Dictionary<string, string> revisions)
+    {
+        _knownRevisions.Clear();
+        foreach (KeyValuePair<string, string> revision in revisions)
+            _knownRevisions.Add(revision.Key, revision.Value);
+    }
+
+    private void OnWatcherChanged(object sender, FileSystemEventArgs eventArgs) => QueueChange(eventArgs.FullPath);
+
+    private void OnWatcherRenamed(object sender, RenamedEventArgs eventArgs)
+    {
+        QueueChange(eventArgs.OldFullPath);
+        QueueChange(eventArgs.FullPath);
+    }
+
+    private void OnWatcherError(object sender, ErrorEventArgs eventArgs) =>
+        Interlocked.Exchange(ref _watcherOverflowed, 1);
+
+    private void QueueChange(string fullPath)
+    {
+        if (_disposed) return;
+        if (!fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return;
+        string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
+        if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)) return;
+        _pendingChanges.TryAdd(relativePath, 0);
+    }
 
     private static EditorOperationResult Failure(string kind, string message) => new(false, kind, message, null, null);
 
@@ -321,9 +487,20 @@ internal sealed class EditorWorkspace : IDisposable
         Unrelated,
         Manifest,
         Resource,
+        Malformed,
     }
 
-    private sealed record WorkspaceFile(string Path, string Content, string Revision, DocumentKind Kind);
+    private sealed record WorkspaceFile(
+        string Path,
+        string Content,
+        string Revision,
+        DocumentKind Kind,
+        string? CatalogId,
+        string? Locale,
+        string? Layer);
 
-    private sealed record WorkspaceState(List<WorkspaceFile> Files, TextResourceCompilation Compilation);
+    private sealed record WorkspaceState(
+        List<WorkspaceFile> Files,
+        TextResourceCompilation Compilation,
+        IReadOnlyList<EditorCatalogSummary> Catalogs);
 }

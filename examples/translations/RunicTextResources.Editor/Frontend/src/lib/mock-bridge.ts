@@ -25,6 +25,16 @@ let snapshot: WorkspaceSnapshot = {
     locales: [{ tag: "de" }, { tag: "en", fallback: "de" }, { tag: "fr", fallback: "de" }],
     layers: [{ name: "base", priority: 0 }],
   },
+  catalogs: [{
+    id: "customer-product",
+    manifestPaths: ["product.catalog.json"],
+    documentCount: 3,
+    localeCount: 3,
+    messageCount: 4,
+    errorCount: 0,
+    warningCount: 0,
+    success: true,
+  }],
   documents: [
     manifest,
     document("product.de.json", "de", "base", resources("Speichern", "Abbrechen", "Willkommen zurück, {name}")),
@@ -44,6 +54,12 @@ let snapshot: WorkspaceSnapshot = {
 export const mockBridge: EditorBridge = {
   async load() {
     return structuredClone(snapshot);
+  },
+  async checkExternalChanges() {
+    return { overflowed: false, paths: [], changes: [] };
+  },
+  async pickWorkspace() {
+    return { ok: true, cancelled: false, directory: "/mock/multi-catalog" };
   },
   async validate(path, content) {
     try {
@@ -110,6 +126,16 @@ export const mockBridge: EditorBridge = {
         locales,
         layers: [{ name: request.layerName, priority: 0 }],
       },
+      catalogs: [{
+        id: request.catalogId,
+        manifestPaths: [`${request.catalogId}.catalog.json`],
+        documentCount: locales.length,
+        localeCount: locales.length,
+        messageCount: request.includeStarterMessage ? 1 : 0,
+        errorCount: 0,
+        warningCount: 0,
+        success: true,
+      }],
       documents: [
         nextManifest,
         ...locales.map((locale) => document(
@@ -131,6 +157,35 @@ export const mockBridge: EditorBridge = {
       success: true,
     };
     return { ok: true, kind: "created", snapshot: structuredClone(snapshot) };
+  },
+  async openWorkspace(request) {
+    if (request.catalogId === undefined && request.directory.includes("multi")) {
+      const choice = structuredClone(snapshot);
+      choice.root = request.directory;
+      choice.catalog = undefined;
+      choice.catalogs = [
+        { id: "storefront", manifestPaths: ["storefront/catalog.json"], documentCount: 2, localeCount: 2, messageCount: 18, errorCount: 0, warningCount: 0, success: true },
+        { id: "backoffice", manifestPaths: ["admin/catalog.json"], documentCount: 1, localeCount: 1, messageCount: 9, errorCount: 1, warningCount: 0, success: false },
+      ];
+      snapshot = choice;
+      return { ok: true, kind: "opened", snapshot: choice };
+    }
+    const opened = structuredClone(snapshot);
+    opened.root = request.directory;
+    if (request.catalogId !== undefined) {
+      const catalogId = request.catalogId;
+      opened.catalog = {
+        ...(opened.catalog ?? {
+          schemaVersion: 2,
+          defaultLocale: "en",
+          locales: [{ tag: "en" }],
+          layers: [{ name: "base", priority: 0 }],
+        }),
+        id: catalogId,
+      };
+    }
+    snapshot = opened;
+    return { ok: true, kind: "opened", snapshot: opened };
   },
 };
 
@@ -155,6 +210,7 @@ function document(
     locale,
     layer,
     isManifest: false,
+    isMalformed: false,
     revision: `mock-${path}`,
     content: `${JSON.stringify(value, null, 2)}\n`,
   };

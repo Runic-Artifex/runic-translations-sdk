@@ -35,6 +35,12 @@ internal static class Program
             window.BindAsync("runicEditorLoad", async (_, cancellationToken) =>
                 WebUiResult.FromString(Serialize(await session.LoadAsync(cancellationToken).ConfigureAwait(false))));
 
+            window.BindAsync("runicEditorCheckExternalChanges", async (_, cancellationToken) =>
+                WebUiResult.FromString(Serialize(await session.CheckExternalChangesAsync(cancellationToken).ConfigureAwait(false))));
+
+            window.BindAsync("runicEditorPickWorkspace", async (_, cancellationToken) =>
+                WebUiResult.FromString(Serialize(await EditorWorkspacePicker.PickAsync(cancellationToken).ConfigureAwait(false))));
+
             window.BindAsync("runicEditorValidate", async (webUiEvent, cancellationToken) =>
             {
                 ValidationResult result = await session.ValidateAsync(
@@ -67,6 +73,13 @@ internal static class Program
                 return WebUiResult.FromString(Serialize(result));
             });
 
+            window.BindAsync("runicEditorOpenWorkspace", async (webUiEvent, cancellationToken) =>
+            {
+                EditorOpenWorkspaceRequest request = DeserializeOpenRequest(webUiEvent.GetString());
+                EditorOperationResult result = await session.OpenWorkspaceAsync(request, cancellationToken).ConfigureAwait(false);
+                return WebUiResult.FromString(Serialize(result));
+            });
+
             if (Array.Exists(args, static argument => argument == "--webview"))
                 window.ShowWebView("index.html");
             else
@@ -92,9 +105,19 @@ internal static class Program
     private static string Serialize(EditorProjectPlan value) =>
         JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorProjectPlan);
 
+    private static string Serialize(EditorExternalChanges value) =>
+        JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorExternalChanges);
+
+    private static string Serialize(EditorWorkspacePickerResult value) =>
+        JsonSerializer.Serialize(value, EditorJsonContext.Default.EditorWorkspacePickerResult);
+
     private static EditorProjectCreationRequest DeserializeProjectRequest(string value) =>
         JsonSerializer.Deserialize(value, EditorJsonContext.Default.EditorProjectCreationRequest)
         ?? throw new ArgumentException("The project creation request is required.", nameof(value));
+
+    private static EditorOpenWorkspaceRequest DeserializeOpenRequest(string value) =>
+        JsonSerializer.Deserialize(value, EditorJsonContext.Default.EditorOpenWorkspaceRequest)
+        ?? throw new ArgumentException("The open-workspace request is required.", nameof(value));
 
     private static string? ArgumentValue(string[] args, string name)
     {

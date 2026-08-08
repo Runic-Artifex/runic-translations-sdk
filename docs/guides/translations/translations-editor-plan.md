@@ -3,8 +3,8 @@
 Status: active
 Last updated: 8 August 2026
 
-Implementation progress: E0 and E1 are complete on the editor/tooling branch.
-The next implementation milestone is E2 (discovery, onboarding, and repair).
+Implementation progress: E0, E1, and E2 are complete on the editor/tooling branch.
+The next implementation milestone is E3 (complete locale and key management).
 
 ## Outcome
 
@@ -60,8 +60,10 @@ The first vertical already provides:
 - browser-only mock development;
 - production-bundle, single-locale, multi-locale, save, and conflict smoke tests.
 
-The current vertical deliberately assumes one existing, valid catalog and
-existing locale documents. It is not yet a complete customer product.
+The current vertical now opens bounded one- and multi-catalog workspaces,
+preserves malformed JSON for repair, watches external changes, and restores
+local drafts explicitly. Locale/key lifecycle operations and the full visual
+schema-v2 composer remain before it is a complete customer product.
 
 ## Architecture decision
 
@@ -226,6 +228,12 @@ The folder picker must not weaken path containment. If CsWebUi cannot provide a
 portable native picker, use a small isolated host abstraction rather than exposing
 browser file handles or implementing platform-specific code in the Svelte app.
 
+Implementation decision: CsWebUi does not expose a portable folder picker. The
+editor therefore uses an isolated C# host adapter for the Windows folder dialog,
+macOS `choose folder`, and Zenity on Linux. When the Linux desktop does not ship
+Zenity, the same screen keeps a typed-path fallback. Every returned path still
+passes through normal workspace discovery and containment checks.
+
 ### Drafts and external changes
 
 - Keep in-memory drafts per document and key.
@@ -375,6 +383,8 @@ customer-ready release.
 
 ### E0 — Checkpoint and product boundary
 
+Status: complete.
+
 Deliverables:
 
 - commit the current editor vertical on a dedicated branch;
@@ -390,6 +400,8 @@ Acceptance:
 - editor changes do not expand the core runtime/compiler responsibilities.
 
 ### E1 — Shared authoring layer and project creation
+
+Status: complete.
 
 Deliverables:
 
@@ -408,6 +420,8 @@ Acceptance:
 - conflicting target directories remain unchanged after failure.
 
 ### E2 — Discovery, onboarding, and repair
+
+Status: complete.
 
 Deliverables:
 
