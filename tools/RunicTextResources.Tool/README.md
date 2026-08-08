@@ -9,12 +9,16 @@ runic-textresources verify --catalog catalog.json --documents "locales/**/*.json
 runic-textresources schema --output schemas
 ```
 
-`schema` copies all six versioned Wave A/B schemas bundled in the tool.
+`schema` copies every bundled source, artifact, manifest, and normalized-AST schema.
 
 `generate` and `verify` accept `--emit-csharp`, `--emit-json`,
-`--emit-typescript`, and `--emit-template-manifest`. When none is specified,
+`--emit-typescript`, `--emit-template-manifest`, `--emit-esm`, and the experimental
+`--emit-cpp`. When none is specified,
 all output groups are selected. When any is specified, only the selected groups
-are rendered. Any selected non-C# group also emits `{catalog}.asset-manifest-v1.json`.
+are rendered; experimental C++ remains opt-in. ESM output has its own nested,
+hashed `web-module-manifest-v1.json` and includes per-message modules, declarations,
+a locale/formatting runtime, and a bounded text-reference decoder. Any selected
+JSON/template/TypeScript-contract group also emits `{catalog}.asset-manifest-v1.json`.
 That frozen v1 host contract inventories every selected locale, template, and
 TypeScript artifact with its path, exact UTF-8 byte length, lowercase SHA-256,
 media type, and canonical locale where applicable; it never lists itself.

@@ -18,9 +18,20 @@ artifacts, and runtime ABI.
 | `RunicTextResources.Generator` | Incremental C# source generator |
 | `RunicTextResources.Build` | Dependency-free MSBuild integration |
 | `RunicTextResources.Tool` | `runic-textresources` validation and generation tool |
+| `@runic-artifex/vite-plugin-text-resources` | Optional virtual-module, watch, and HMR adapter |
 
 The normative schemas and compatibility corpus live in [`spec/`](spec/README.md).
 The `.NET` implementation is under [`dotnet/`](dotnet/).
+The implemented .NET and TypeScript/ESM architecture and delivery record are in
+[`docs/cross-runtime-plan.md`](docs/cross-runtime-plan.md).
+
+The compiler accepts the frozen version 1 source model and schema version 2.
+Version 2 adds portable inputs, literal/cardinal/ordinal selectors, ordered
+variants, and mandatory catch-all coverage. It emits typed, independently
+tree-shakable ESM message modules with no runtime pattern parser. Use
+`--emit-esm`, or `<TextResourcesEmitEsm>true</TextResourcesEmitEsm>` from MSBuild.
+An opt-in `--emit-cpp` / `TextResourcesEmitCpp` C++20 backend is available as a
+feasibility surface and is intentionally excluded from default output selection.
 
 ## Development
 

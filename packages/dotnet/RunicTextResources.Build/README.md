@@ -10,10 +10,11 @@ This package supplies dependency-free MSBuild integration for Runic Text Resourc
 
 <PropertyGroup>
   <TextResourcesEmitTypeScript>true</TextResourcesEmitTypeScript>
+  <TextResourcesEmitEsm>true</TextResourcesEmitEsm>
 </PropertyGroup>
 ```
 
-`AdditionalFiles` receive `RunicTextResourceKind` metadata with the value `Catalog` or `Document`. Artifact generation is opt-in: set one or more of `TextResourcesEmitJson`, `TextResourcesEmitTypeScript`, and `TextResourcesEmitTemplateManifest` to select exact non-C# output groups. Every non-C# selection also emits `{catalog}.asset-manifest-v1.json`, which inventories exactly those selected non-C# bytes. `TextResourcesGenerateOnBuild=true` with no individual emit property selects all three non-C# groups and their asset manifest. This package never adds generated C# files to compilation; C# generation belongs to the generator surface.
+`AdditionalFiles` receive `RunicTextResourceKind` metadata with the value `Catalog` or `Document`. Artifact generation is opt-in: set one or more of `TextResourcesEmitJson`, `TextResourcesEmitTypeScript`, `TextResourcesEmitTemplateManifest`, `TextResourcesEmitEsm`, or experimental `TextResourcesEmitCpp` to select exact output groups. JSON/template/TypeScript-contract selections use `{catalog}.asset-manifest-v1.json`; nested ESM output uses its own `web-module-manifest-v1.json`. `TextResourcesGenerateOnBuild=true` with no individual emit property selects JSON, TypeScript, template, and ESM. C++ remains explicit. This package never adds generated C# files to compilation; C# generation belongs to the generator surface.
 
 Generated files default to `$(IntermediateOutputPath)text-resources` and are exposed as `@(TextResourcesGeneratedFile)`. An override through `TextResourcesOutputPath` or the compatibility alias `TextResourcesWebOutputPath` must still resolve beneath `IntermediateOutputPath`; an unsafe path fails with `RTR0020`. `dotnet clean` removes only files recorded in the validated owned-output inventory plus private build bookkeeping. Unrelated files survive, and the output directory is removed only when empty.
 

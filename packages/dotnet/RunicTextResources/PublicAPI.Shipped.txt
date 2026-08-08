@@ -145,10 +145,17 @@ type enum RunicTextResources.TextArgumentType : System.Int32, System.IComparable
   field const RunicTextResources.TextArgumentType String = 0
   field const RunicTextResources.TextArgumentType Time = 5
 
+type static class RunicTextResources.TextMessageSelector
+  method static System.String SelectPlural(System.Decimal value, System.String locale, System.Boolean ordinal)
+
 type static class RunicTextResources.TextPatternFormatter
   field const System.Int32 DefaultMaximumOutputLength = 1048576
   field const System.Int32 MaximumArguments = 32
   method static System.String Format(System.String pattern, System.ReadOnlySpan<RunicTextResources.TextArgument> arguments, System.String resourceLocale, RunicTextResources.ITextValueFormatter valueFormatter = null, System.Int32 maximumOutputLength = 1048576)
+
+type sealed class RunicTextResources.TextResourceContractException : System.Exception, System.Runtime.Serialization.ISerializable
+  ctor RunicTextResources.TextResourceContractException(System.String message)
+  ctor RunicTextResources.TextResourceContractException(System.String message, System.Exception innerException)
 
 type sealed class RunicTextResources.TextResourceFormatException : System.FormatException, System.Runtime.Serialization.ISerializable
   ctor RunicTextResources.TextResourceFormatException(System.String message)
@@ -279,6 +286,34 @@ type readonly struct RunicTextResources.TextResourcePlaceholderDescriptor : Syst
   property RunicTextResources.TextArgumentFormat Format { get; init; }
   property RunicTextResources.TextArgumentType Type { get; init; }
   property System.String Name { get; init; }
+
+type sealed class RunicTextResources.TextResourceReference
+  ctor RunicTextResources.TextResourceReference(System.String catalog, System.String contractFingerprint, System.String key, System.Collections.Generic.IReadOnlyDictionary<System.String,RunicTextResources.TextResourceReferenceArgument> arguments = null, System.String fallbackText = null)
+  method System.Void ValidateCatalog(System.String expectedCatalog, System.String expectedContractFingerprint)
+  property System.Collections.Generic.IReadOnlyDictionary<System.String,RunicTextResources.TextResourceReferenceArgument> Arguments { get; }
+  property System.Int32 Version { get; }
+  property System.String Catalog { get; }
+  property System.String ContractFingerprint { get; }
+  property System.String FallbackText { get; }
+  property System.String Key { get; }
+
+type readonly struct RunicTextResources.TextResourceReferenceArgument : System.IEquatable<RunicTextResources.TextResourceReferenceArgument>
+  ctor RunicTextResources.TextResourceReferenceArgument(RunicTextResources.TextArgumentType type, System.String value)
+  method System.Boolean Equals(RunicTextResources.TextResourceReferenceArgument other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method static System.Boolean op_Equality(RunicTextResources.TextResourceReferenceArgument left, RunicTextResources.TextResourceReferenceArgument right)
+  method static System.Boolean op_Inequality(RunicTextResources.TextResourceReferenceArgument left, RunicTextResources.TextResourceReferenceArgument right)
+  property RunicTextResources.TextArgumentType Type { get; }
+  property System.String Value { get; }
+
+type static class RunicTextResources.TextResourceTransport
+  field const System.Int32 MaximumArgumentLength = 16384
+  field const System.Int32 MaximumArguments = 32
+  field const System.Int32 MaximumFallbackLength = 65536
+  field const System.Int32 MaximumKeyLength = 512
+  field const System.Int32 Version = 1
 
 type static class RunicTextResources.TextResourcesCompatibility
   field const System.Int32 CatalogSchemaVersion = 1

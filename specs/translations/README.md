@@ -1,4 +1,4 @@
-# Text Resources Wave A contract
+# Runic Text Resources contracts
 
 This directory freezes the TR0–TR1 language-neutral contracts for
 `RunicTextResources`. Together, these contracts form the portable protocol
@@ -10,10 +10,13 @@ diagnostic identities.
 
 | Contract | Current writer version |
 |---|---:|
-| Catalog manifest schema | 1 |
-| Resource document schema | 1 |
-| Message grammar | 1 |
+| Catalog manifest schema | 1 and 2 |
+| Resource document schema | 1 and 2 |
+| Message grammar | 1 and 2 |
+| Normalized message AST | 2 |
 | Runtime/generated-code ABI | 1 |
+| ESM ABI | 1 |
+| Transport contract | 1 |
 
 Package versions are independent from these integers. The schemas deliberately
 have no custom `$id`: the contract registry requires an owned and deployed
@@ -43,7 +46,7 @@ precedence.
 
 The contract fingerprint is `sha256:` followed by lowercase hexadecimal SHA-256
 of canonical UTF-8 JSON containing only the catalog ID, message grammar version,
-and the default locale's ordered key/placeholder contracts. It excludes source
+and the default locale's ordered key/input/selector contracts. It excludes source
 paths, translated patterns, descriptions, tags, and insignificant whitespace.
 
 ## Diagnostics and locations
@@ -58,6 +61,8 @@ target the most specific offending property or value token.
 output paths do not enter the pure compilation API. It becomes executable in the
 later build/CLI surface. `RTR0023`, `RTR0024`, and `RTR0099` belong to
 later external-pack, generator/runtime-ABI, and unexpected-failure surfaces.
+Schema version 2 uses `RTR0030` for structured-message validation and `RTR0031`
+for a locale outside a selected backend's built-in selector registry.
 
 The machine-readable [corpus](corpus/README.md) is the executable compatibility
 contract. Schema validation alone is intentionally insufficient for normalized

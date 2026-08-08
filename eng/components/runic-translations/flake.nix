@@ -27,6 +27,7 @@
               dotnet
               powershell
               clang
+              nodejs_24
               zlib
             ];
 

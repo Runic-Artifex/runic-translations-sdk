@@ -59,12 +59,24 @@ type enum RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind
   field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpCatalogData = 2
   field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpKeys = 0
   field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind CSharpRegistration = 3
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind CppHeader = 16
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind CppSource = 17
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind EsmMessage = 10
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind EsmMessagesIndex = 11
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind EsmMessagesTypes = 12
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind EsmRuntime = 8
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind EsmRuntimeTypes = 9
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind EsmTransport = 13
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind EsmTransportTypes = 14
   field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind LocaleJson = 4
   field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind TemplateManifestJson = 5
   field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind TypeScriptContract = 6
+  field const RunicTextResources.Compiler.Generation.TextResourceGeneratedOutputKind WebModuleManifestJson = 15
 
 type static class RunicTextResources.Compiler.Generation.TextResourceOutputRenderer
   field const System.Int32 AssetManifestVersion = 1
+  field const System.Int32 CppAbiVersion = 1
+  field const System.Int32 EsmAbiVersion = 1
   field const System.Int32 LocaleArtifactVersion = 1
   field const System.Int32 TemplateManifestVersion = 1
   field const System.Int32 TypeScriptContractVersion = 1
@@ -76,6 +88,8 @@ type static class RunicTextResources.Compiler.Generation.TextResourceOutputRende
   method static RunicTextResources.Compiler.Generation.TextResourceGeneratedOutput RenderLocaleJson(RunicTextResources.Compiler.CompiledTextCatalog catalog, System.String locale)
   method static RunicTextResources.Compiler.Generation.TextResourceGeneratedOutput RenderTemplateManifestJson(RunicTextResources.Compiler.CompiledTextCatalog catalog)
   method static RunicTextResources.Compiler.Generation.TextResourceGeneratedOutput RenderTypeScriptContract(RunicTextResources.Compiler.CompiledTextCatalog catalog)
+  method static System.Collections.Generic.IReadOnlyList<RunicTextResources.Compiler.Generation.TextResourceGeneratedOutput> RenderCpp(RunicTextResources.Compiler.CompiledTextCatalog catalog)
+  method static System.Collections.Generic.IReadOnlyList<RunicTextResources.Compiler.Generation.TextResourceGeneratedOutput> RenderEsmModules(RunicTextResources.Compiler.CompiledTextCatalog catalog)
 
 type enum RunicTextResources.Compiler.TextResourceArgumentType : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   field System.Int32 value__

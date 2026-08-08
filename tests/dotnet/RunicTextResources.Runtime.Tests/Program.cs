@@ -9,6 +9,7 @@ internal static class Program
         TestRunner runner = new();
         FormatterTests.Register(runner);
         RuntimeTests.Register(runner);
+        TextResourceReferenceTests.Register(runner);
         ExternalPackTests.Register(runner);
         WaveBCorpusTests.Register(runner);
         return await runner.RunAsync().ConfigureAwait(false);

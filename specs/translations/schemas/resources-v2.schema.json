@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Runic Text Resources document v2",
+  "type": "object",
+  "required": ["schemaVersion", "catalog", "locale", "layer", "resources"],
+  "properties": {
+    "$schema": { "type": "string", "minLength": 1 },
+    "schemaVersion": { "const": 2 },
+    "catalog": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
+    "locale": { "type": "string", "minLength": 2 },
+    "layer": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
+    "resources": { "$ref": "#/$defs/group" }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "input": { "type": "object", "required": ["type"], "properties": { "type": { "enum": ["string", "bool", "int64", "decimal", "date", "time", "instant", "uuid"] }, "format": { "type": "string" } }, "additionalProperties": false },
+    "selector": { "type": "object", "required": ["name", "input", "function"], "properties": { "name": { "$ref": "#/$defs/name" }, "input": { "$ref": "#/$defs/name" }, "function": { "enum": ["plural", "ordinal", "literal"] } }, "additionalProperties": false },
+    "variant": { "type": "object", "required": ["match", "value"], "properties": { "match": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } }, "value": { "type": "string" } }, "additionalProperties": false },
+    "message": { "type": "object", "required": ["inputs", "selectors", "variants"], "properties": { "inputs": { "type": "object", "propertyNames": { "$ref": "#/$defs/name" }, "additionalProperties": { "$ref": "#/$defs/input" } }, "selectors": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/selector" } }, "variants": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/variant" } } }, "additionalProperties": false },
+    "leaf": { "type": "object", "required": ["$value"], "properties": { "$value": { "oneOf": [{ "type": "string" }, { "$ref": "#/$defs/message" }] }, "$description": { "type": "string" }, "$since": { "type": "string" }, "$deprecated": { "type": "string" }, "$tags": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }, "$placeholders": { "type": "object", "additionalProperties": { "$ref": "#/$defs/input" } } }, "additionalProperties": false },
+    "group": { "type": "object", "propertyNames": { "$ref": "#/$defs/name" }, "additionalProperties": { "oneOf": [{ "type": "string" }, { "$ref": "#/$defs/leaf" }, { "$ref": "#/$defs/group" }] } }
+  }
+}

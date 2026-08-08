@@ -59,3 +59,12 @@ public sealed class TextResourcePackException : Exception
     /// <summary>Creates the exception with an inner cause.</summary>
     public TextResourcePackException(string message, Exception innerException) : base(message, innerException) { }
 }
+
+/// <summary>Thrown when a transported text reference is incompatible with the receiver.</summary>
+public sealed class TextResourceContractException : Exception
+{
+    /// <summary>Creates the exception.</summary>
+    public TextResourceContractException(string message) : base(message) { }
+    /// <summary>Creates the exception with an inner cause.</summary>
+    public TextResourceContractException(string message, Exception innerException) : base(message, innerException) { }
+}

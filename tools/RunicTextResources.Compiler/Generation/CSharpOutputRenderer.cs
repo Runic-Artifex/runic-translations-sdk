@@ -49,7 +49,7 @@ internal static class CSharpOutputRenderer
         }
         writer.Unindent();
         writer.Line("}");
-        WriteAccessorMembers(writer, root, catalog.ClassName + "Keys", rootManagerField);
+        WriteAccessorMembers(writer, root, catalog.ClassName + "Keys", rootManagerField, catalog);
         writer.Unindent();
         writer.Line("}");
         return Output(TextResourceGeneratedOutputKind.CSharpAccessors, catalog.ClassName + ".Accessors.g.cs", writer);
@@ -243,7 +243,7 @@ internal static class CSharpOutputRenderer
         }
     }
 
-    private static void WriteAccessorMembers(GenerationWriter writer, ResourceTreeNode node, string keyPath, string managerField)
+    private static void WriteAccessorMembers(GenerationWriter writer, ResourceTreeNode node, string keyPath, string managerField, CompiledTextCatalog catalog)
     {
         if (node.Children.Count > 0) writer.Blank();
         foreach (KeyValuePair<string, ResourceTreeNode> child in node.Children)
@@ -251,7 +251,7 @@ internal static class CSharpOutputRenderer
             string identifier = GenerationSupport.CSharpIdentifier(child.Key);
             string childKeyPath = keyPath + "." + identifier;
             if (child.Value.Resource is not null)
-                WriteAccessor(writer, child.Value.Resource, identifier, childKeyPath, managerField);
+                WriteAccessor(writer, child.Value.Resource, identifier, childKeyPath, managerField, catalog);
             else
             {
                 writer.Line("/// <summary>Accessors below <c>" + GenerationSupport.XmlDocumentation(child.Key) + "</c>.</summary>");
@@ -288,13 +288,13 @@ internal static class CSharpOutputRenderer
             }
             writer.Unindent();
             writer.Line("}");
-            WriteAccessorMembers(writer, child.Value, keyPath + "." + identifier, childManagerField);
+            WriteAccessorMembers(writer, child.Value, keyPath + "." + identifier, childManagerField, catalog);
             writer.Unindent();
             writer.Line("}");
         }
     }
 
-    private static void WriteAccessor(GenerationWriter writer, CompiledTextResource resource, string identifier, string keyPath, string managerField)
+    private static void WriteAccessor(GenerationWriter writer, CompiledTextResource resource, string identifier, string keyPath, string managerField, CompiledTextCatalog catalog)
     {
         WriteResourceDocumentation(writer, resource, true);
         WriteObsolete(writer, resource);
@@ -314,6 +314,13 @@ internal static class CSharpOutputRenderer
         writer.Line("public string " + identifier + "(" + string.Join(", ", parameters) + ")");
         writer.Line("{");
         writer.Indent();
+        if (resource.Message.IsVariant)
+        {
+            WriteVariantAccessor(writer, resource, placeholders, managerField, catalog);
+            writer.Unindent();
+            writer.Line("}");
+            return;
+        }
         writer.Line("return this." + managerField + ".Current.Format(" + keyPath + ", new global::RunicTextResources.TextArgument[]");
         writer.Line("{");
         writer.Indent();
@@ -329,6 +336,82 @@ internal static class CSharpOutputRenderer
         writer.Line("});");
         writer.Unindent();
         writer.Line("}");
+    }
+
+    private static void WriteVariantAccessor(GenerationWriter writer, CompiledTextResource canonical,
+        IReadOnlyList<CompiledTextPlaceholder> placeholders, string managerField, CompiledTextCatalog catalog)
+    {
+        writer.Line("global::RunicTextResources.ITextResourceSnapshot snapshot = this." + managerField + ".Current;");
+        writer.Line("string pattern = snapshot.Locale switch");
+        writer.Line("{");
+        writer.Indent();
+        IReadOnlyList<CompiledTextLocale> locales = GenerationSupport.OrderedLocales(catalog.Locales);
+        for (int index = 0; index < locales.Count; index++)
+        {
+            CompiledTextResource resource = FindResource(locales[index].ResolvedResources, canonical.Key);
+            writer.Line(GenerationSupport.CSharpString(locales[index].Tag) + " => " + CSharpVariantExpression(resource.Message) + ",");
+        }
+        writer.Line("_ => throw new global::System.InvalidOperationException(\"Unsupported compiled locale.\"),");
+        writer.Unindent();
+        writer.Line("};");
+        writer.Line("return global::RunicTextResources.TextPatternFormatter.Format(pattern, new global::RunicTextResources.TextArgument[]");
+        writer.Line("{");
+        writer.Indent();
+        for (int index = 0; index < placeholders.Count; index++)
+        {
+            CompiledTextPlaceholder placeholder = placeholders[index];
+            string argument = "new global::RunicTextResources.TextArgument(" + GenerationSupport.CSharpString(placeholder.Name) + ", " + GenerationSupport.CSharpIdentifier(placeholder.Name);
+            if (placeholder.Type != TextResourceArgumentType.String)
+                argument += ", global::RunicTextResources.TextArgumentFormat." + GenerationSupport.ArgumentFormatName(placeholder.Format);
+            writer.Line(argument + "),");
+        }
+        writer.Unindent();
+        writer.Line("}, snapshot.Locale);");
+    }
+
+    private static string CSharpVariantExpression(CompiledMessagePattern message)
+    {
+        var selectors = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (int index = 0; index < message.Selectors.Count; index++)
+        {
+            CompiledMessageSelector selector = message.Selectors[index];
+            string input = GenerationSupport.CSharpIdentifier(selector.Input);
+            selectors[selector.Name] = selector.Function switch
+            {
+                "plural" => "global::RunicTextResources.TextMessageSelector.SelectPlural(global::System.Convert.ToDecimal(" + input + ", global::System.Globalization.CultureInfo.InvariantCulture), snapshot.Locale, false)",
+                "ordinal" => "global::RunicTextResources.TextMessageSelector.SelectPlural(global::System.Convert.ToDecimal(" + input + ", global::System.Globalization.CultureInfo.InvariantCulture), snapshot.Locale, true)",
+                _ => "global::System.Convert.ToString(" + input + ", global::System.Globalization.CultureInfo.InvariantCulture)!",
+            };
+        }
+        string fallback = GenerationSupport.CSharpString(string.Empty);
+        for (int index = message.Variants.Count - 1; index >= 0; index--)
+        {
+            CompiledMessageVariant variant = message.Variants[index];
+            var conditions = new List<string>();
+            foreach (KeyValuePair<string, string> match in variant.Matches)
+                if (match.Value != "*") conditions.Add(selectors[match.Key] + " == " + GenerationSupport.CSharpString(match.Value));
+            string value = GenerationSupport.CSharpString(MessagePatternText(variant.Pattern));
+            fallback = conditions.Count == 0 ? value : "(" + string.Join(" && ", conditions) + " ? " + value + " : " + fallback + ")";
+        }
+        return fallback;
+    }
+
+    private static string MessagePatternText(CompiledMessagePattern pattern)
+    {
+        var value = new System.Text.StringBuilder();
+        for (int index = 0; index < pattern.Nodes.Count; index++)
+        {
+            if (pattern.Nodes[index] is CompiledMessageText text)
+                value.Append(text.Value.Replace("{", "{{", StringComparison.Ordinal).Replace("}", "}}", StringComparison.Ordinal));
+            else if (pattern.Nodes[index] is CompiledMessageInput input) value.Append('{').Append(input.Name).Append('}');
+        }
+        return value.ToString();
+    }
+
+    private static CompiledTextResource FindResource(IReadOnlyList<CompiledTextResource> resources, string key)
+    {
+        for (int index = 0; index < resources.Count; index++) if (resources[index].Key == key) return resources[index];
+        throw new InvalidOperationException("Resolved locale does not contain key '" + key + "'.");
     }
 
     private static void WriteDefinitions(GenerationWriter writer, IReadOnlyList<GeneratedCatalogDefinition> definitions, string suffix)

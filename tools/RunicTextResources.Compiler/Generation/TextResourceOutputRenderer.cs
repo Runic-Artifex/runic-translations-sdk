@@ -18,6 +18,12 @@ public static class TextResourceOutputRenderer
     /// <summary>The writer version of the host asset inventory edge contract.</summary>
     public const int AssetManifestVersion = 1;
 
+    /// <summary>The generated ESM API and runtime compatibility version.</summary>
+    public const int EsmAbiVersion = 1;
+
+    /// <summary>The experimental generated C++ ABI compatibility version.</summary>
+    public const int CppAbiVersion = 1;
+
     /// <summary>Renders the strongly typed key hierarchy.</summary>
     public static TextResourceGeneratedOutput RenderCSharpKeys(CompiledTextCatalog catalog) =>
         CSharpOutputRenderer.RenderKeys(RequireCatalog(catalog));
@@ -54,6 +60,14 @@ public static class TextResourceOutputRenderer
         CompiledTextCatalog catalog,
         IEnumerable<TextResourceGeneratedOutput> selectedOutputs) =>
         EdgeOutputRenderer.RenderAssetManifest(RequireCatalog(catalog), selectedOutputs);
+
+    /// <summary>Renders deterministic, independently tree-shakable ESM message modules and their manifest.</summary>
+    public static IReadOnlyList<TextResourceGeneratedOutput> RenderEsmModules(CompiledTextCatalog catalog) =>
+        EsmOutputRenderer.Render(RequireCatalog(catalog));
+
+    /// <summary>Renders an experimental dependency-free C++20 header/source pair.</summary>
+    public static IReadOnlyList<TextResourceGeneratedOutput> RenderCpp(CompiledTextCatalog catalog) =>
+        CppOutputRenderer.Render(RequireCatalog(catalog));
 
     private static CompiledTextCatalog RequireCatalog(CompiledTextCatalog catalog) =>
         catalog ?? throw new ArgumentNullException(nameof(catalog));
