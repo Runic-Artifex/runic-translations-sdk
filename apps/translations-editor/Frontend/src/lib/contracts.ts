@@ -56,3 +56,29 @@ export interface EditorOperationResult {
   snapshot?: WorkspaceSnapshot;
   validation?: ValidationResult;
 }
+
+export interface EditorProjectLocaleRequest {
+  tag: string;
+  fallback?: string;
+}
+
+export interface EditorProjectCreationRequest {
+  directory: string;
+  catalogId: string;
+  defaultLocale: string;
+  additionalLocales: EditorProjectLocaleRequest[];
+  codeNamespace: string;
+  className: string;
+  layerName: string;
+  generateEsm: boolean;
+  includeStarterMessage: boolean;
+}
+
+export interface EditorProjectPlan {
+  ok: boolean;
+  message?: string;
+  directory: string;
+  catalogId: string;
+  locales: EditorLocale[];
+  files: string[];
+}

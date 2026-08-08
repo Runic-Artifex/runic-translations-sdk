@@ -1,5 +1,7 @@
 import type {
   EditorOperationResult,
+  EditorProjectCreationRequest,
+  EditorProjectPlan,
   ValidationResult,
   WorkspaceSnapshot,
 } from "./contracts";
@@ -11,12 +13,16 @@ declare global {
   var runicEditorSave:
     | ((path: string, content: string, revision: string) => Promise<string>)
     | undefined;
+  var runicEditorPreviewProject: ((request: string) => Promise<string>) | undefined;
+  var runicEditorCreateProject: ((request: string) => Promise<string>) | undefined;
 }
 
 export interface EditorBridge {
   load(): Promise<WorkspaceSnapshot>;
   validate(path: string, content: string): Promise<ValidationResult>;
   save(path: string, content: string, revision: string): Promise<EditorOperationResult>;
+  previewProject(request: EditorProjectCreationRequest): Promise<EditorProjectPlan>;
+  createProject(request: EditorProjectCreationRequest): Promise<EditorOperationResult>;
 }
 
 export function createEditorBridge(): EditorBridge {
@@ -30,6 +36,18 @@ export function createEditorBridge(): EditorBridge {
     },
     async save(path, content, revision) {
       return parse(await binding("runicEditorSave", globalThis.runicEditorSave)(path, content, revision));
+    },
+    async previewProject(request) {
+      return parse(await binding(
+        "runicEditorPreviewProject",
+        globalThis.runicEditorPreviewProject,
+      )(JSON.stringify(request)));
+    },
+    async createProject(request) {
+      return parse(await binding(
+        "runicEditorCreateProject",
+        globalThis.runicEditorCreateProject,
+      )(JSON.stringify(request)));
     },
   };
 }

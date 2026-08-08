@@ -20,6 +20,8 @@ The implementation roadmap is in
   adapter;
 - CsWebUi serves the static SvelteKit application and exposes the narrow file
   operation bridge.
+- a guided New Project flow previews and creates one- or multi-locale projects
+  through the same compiler-validated authoring layer as the CLI.
 
 The included `ExampleWorkspace` deliberately uses German as its source locale,
 adds English and French, includes a structured plural message, and leaves some
@@ -58,14 +60,13 @@ nix develop -c ./samples/RunicTextResources.Editor/verify.sh
 ```
 
 The smoke path opens a copy of the example as both a multi-locale and
-single-locale workspace, asks the real compiler to validate valid and invalid
-drafts, performs an atomic save, and verifies stale-write rejection. It does not
-open a browser window.
+single-locale workspace, creates and switches to a new three-locale project,
+asks the real compiler to validate valid and invalid drafts, performs an atomic
+save, and verifies stale-write rejection. It does not open a browser window.
 
 ## Deliberate current scope
 
-This first vertical edits an existing schema-v2 catalog and its existing locale
-documents. Catalog creation, adding or removing locale documents, translation
+This vertical creates a new schema-v2 catalog or edits one existing catalog and
+its locale documents. Adding or removing locales after creation, translation
 memory, review/approval workflows, machine translation providers, and project
-discovery across multiple catalogs are product follow-ups rather than hidden
-filesystem behavior in this initial consumer.
+discovery across multiple catalogs remain explicit product follow-ups.

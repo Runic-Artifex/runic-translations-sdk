@@ -41,7 +41,27 @@ internal static class EditorSmokeTest
             Require(singleLocale.Success, Diagnostics(singleLocale));
             Require(singleLocale.Catalog?.Locales.Count == 1, "A single-locale catalog was not represented correctly.");
 
-            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales and a single-locale catalog, validated drafts, saved atomically, and rejected a stale write.");
+            string createdPath = Path.Combine(temporaryRoot, "CreatedProject");
+            using var session = new EditorSession(temporaryRoot);
+            var request = new EditorProjectCreationRequest(
+                createdPath,
+                "created-product",
+                "de-de",
+                [new EditorProjectLocaleRequest("en-us", null), new EditorProjectLocaleRequest("fr", "en-US")],
+                "Customer.Created",
+                "CreatedText",
+                "base",
+                true,
+                true);
+            EditorProjectPlan preview = EditorSession.PreviewProject(request);
+            Require(preview.Ok && preview.Files.Count == 4, preview.Message ?? "Project preview failed.");
+            EditorOperationResult created = await session.CreateProjectAsync(request).ConfigureAwait(false);
+            Require(created.Ok && created.Snapshot?.Catalog?.Locales.Count == 3, created.Message ?? "Project creation failed.");
+            WorkspaceSnapshot activeCreated = await session.LoadAsync().ConfigureAwait(false);
+            Require(activeCreated.Root == Path.GetFullPath(createdPath), "The editor did not switch to the newly created project.");
+            Require(activeCreated.Success, Diagnostics(activeCreated));
+
+            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales and a single-locale catalog, created a compiler-valid project, validated drafts, saved atomically, and rejected a stale write.");
             return 0;
         }
         catch (Exception exception)

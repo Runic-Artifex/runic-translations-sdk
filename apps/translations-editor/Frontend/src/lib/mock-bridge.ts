@@ -1,5 +1,9 @@
 import type { EditorBridge } from "./editor-bridge";
-import type { EditorDocument, WorkspaceSnapshot } from "./contracts";
+import type {
+  EditorDocument,
+  EditorProjectCreationRequest,
+  WorkspaceSnapshot,
+} from "./contracts";
 
 const manifest = document("product.catalog.json", undefined, undefined, {
   schemaVersion: 2,
@@ -70,7 +74,75 @@ export const mockBridge: EditorBridge = {
     snapshot = structuredClone(snapshot);
     return { ok: true, kind: "saved", snapshot: structuredClone(snapshot) };
   },
+  async previewProject(request) {
+    const locales = projectLocales(request);
+    return {
+      ok: request.directory.trim().length > 0,
+      message: request.directory.trim().length > 0 ? undefined : "Choose a project directory.",
+      directory: request.directory,
+      catalogId: request.catalogId,
+      locales,
+      files: [
+        `${request.catalogId}.catalog.json`,
+        ...locales.map((locale) => `${request.catalogId}.${locale.tag}.json`),
+      ].sort(),
+    };
+  },
+  async createProject(request) {
+    const locales = projectLocales(request);
+    const manifestValue = {
+      schemaVersion: 2,
+      catalog: request.catalogId,
+      code: { namespace: request.codeNamespace, className: request.className, visibility: "public" },
+      defaultLocale: request.defaultLocale,
+      locales,
+      layers: [{ name: request.layerName, priority: 0 }],
+      validation: { translationCompleteness: "error", extraLocaleKeys: "error", emptyValues: "error" },
+    };
+    const nextManifest = document(`${request.catalogId}.catalog.json`, undefined, undefined, manifestValue);
+    nextManifest.isManifest = true;
+    snapshot = {
+      root: request.directory,
+      catalog: {
+        id: request.catalogId,
+        schemaVersion: 2,
+        defaultLocale: request.defaultLocale,
+        locales,
+        layers: [{ name: request.layerName, priority: 0 }],
+      },
+      documents: [
+        nextManifest,
+        ...locales.map((locale) => document(
+          `${request.catalogId}.${locale.tag}.json`,
+          locale.tag,
+          request.layerName,
+          {
+            schemaVersion: 2,
+            catalog: request.catalogId,
+            locale: locale.tag,
+            layer: request.layerName,
+            resources: request.includeStarterMessage
+              ? { Application: { Name: request.className } }
+              : {},
+          },
+        )),
+      ],
+      diagnostics: [],
+      success: true,
+    };
+    return { ok: true, kind: "created", snapshot: structuredClone(snapshot) };
+  },
 };
+
+function projectLocales(request: EditorProjectCreationRequest) {
+  return [
+    { tag: request.defaultLocale },
+    ...request.additionalLocales.map((locale) => ({
+      tag: locale.tag,
+      fallback: locale.fallback ?? request.defaultLocale,
+    })),
+  ];
+}
 
 function document(
   path: string,

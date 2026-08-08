@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="CsWebUi" />
+    <ProjectReference Include="../../dotnet/src/RunicTextResources.Authoring/RunicTextResources.Authoring.csproj" />
     <ProjectReference Include="../../dotnet/src/RunicTextResources.Compiler/RunicTextResources.Compiler.csproj" />
     <ProjectReference Include="../../dotnet/tools/RunicTextResources.Tool/RunicTextResources.Tool.csproj"
                       ReferenceOutputAssembly="false" />
