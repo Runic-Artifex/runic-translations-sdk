@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 2,
+  "catalog": "customer-product",
+  "locale": "en",
+  "layer": "base",
+  "resources": {
+    "Common": {
+      "Save": "Save",
+      "Cancel": "Cancel"
+    },
+    "Dashboard": {
+      "Welcome": {
+        "$value": "Welcome back, {name}",
+        "$placeholders": {
+          "name": { "type": "string" }
+        }
+      }
+    },
+    "Files": {
+      "Selected": {
+        "$value": {
+          "inputs": {
+            "count": { "type": "int64" }
+          },
+          "selectors": [
+            { "name": "quantity", "input": "count", "function": "plural" }
+          ],
+          "variants": [
+            { "match": { "quantity": "one" }, "value": "One file selected" },
+            { "match": { "quantity": "*" }, "value": "{count} files selected" }
+          ]
+        }
+      }
+    }
+  }
+}

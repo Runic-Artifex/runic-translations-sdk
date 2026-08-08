@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "catalog": "editor",
+  "locale": "en",
+  "layer": "base",
+  "resources": {
+    "App": {
+      "Title": "Translations",
+      "Eyebrow": "Runic Text Resources",
+      "Search": "Search keys and translations",
+      "All": "All",
+      "Missing": "Missing",
+      "Structured": "Structured",
+      "Save": "Save document",
+      "Saving": "Saving…",
+      "Reload": "Reload",
+      "Simple": "Translation",
+      "Advanced": "Structured value",
+      "Raw": "Raw JSON",
+      "NoSelection": "Choose a message to start translating",
+      "NoResults": "No messages match this view",
+      "Valid": "Ready to save",
+      "Invalid": "Resolve validation errors before saving",
+      "Unsaved": "Unsaved changes",
+      "Saved": "Saved",
+      "DefaultLocale": "Source locale",
+      "Workspace": "Workspace",
+      "Diagnostics": "Diagnostics"
+    }
+  }
+}
