@@ -1004,7 +1004,12 @@ public static class TextResourceCompiler
                         foreach (KeyValuePair<string, ResourceModel> pair in layerResources) effective[pair.Key] = pair.Value;
             directByLocale[tag] = effective;
         }
-        if (!directByLocale.TryGetValue(manifest.DefaultLocale, out Dictionary<string, ResourceModel>? canonical) || canonical.Count == 0)
+        directByLocale.TryGetValue(manifest.DefaultLocale, out Dictionary<string, ResourceModel>? canonical);
+        bool hasDefaultDocument = false;
+        for (int i = 0; i < documents.Count; i++)
+            if (string.Equals(documents[i].Locale, manifest.DefaultLocale, StringComparison.OrdinalIgnoreCase))
+                hasDefaultDocument = true;
+        if (canonical is null || (canonical.Count == 0 && (manifest.SchemaVersion < 2 || !hasDefaultDocument)))
         {
             bool defaultDocumentHadLimitError = false;
             for (int i = 0; i < documents.Count; i++)

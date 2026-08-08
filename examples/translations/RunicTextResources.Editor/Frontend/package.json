@@ -1,0 +1,26 @@
+{
+  "name": "@runic-artifex/text-resources-editor-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite dev",
+    "dev:mock": "vite dev --mode mock",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "verify": "npm run check && node test/verify-message-preview.mjs && node test/verify-review-model.mjs && npm run build && node test/verify-production.mjs"
+  },
+  "dependencies": {
+    "svelte": "5.56.8"
+  },
+  "devDependencies": {
+    "@runic-artifex/vite-plugin-text-resources": "file:../../../web",
+    "@sveltejs/adapter-static": "3.0.10",
+    "@sveltejs/kit": "2.70.2",
+    "@sveltejs/vite-plugin-svelte": "7.2.0",
+    "@types/node": "24.10.4",
+    "svelte-check": "4.7.5",
+    "typescript": "5.9.3",
+    "vite": "8.2.1"
+  }
+}

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>RunicTextResources.Authoring</AssemblyName>
+    <RootNamespace>RunicTextResources.Authoring</RootNamespace>
+    <Description>Shared project creation and workspace authoring for Runic Text Resources.</Description>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RunicTextResources.Compiler\RunicTextResources.Compiler.csproj" />
+  </ItemGroup>
+</Project>

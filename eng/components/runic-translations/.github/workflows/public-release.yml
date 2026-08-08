@@ -86,7 +86,7 @@ jobs:
           artifact-directory: ${{ runner.temp }}/packages
           repository-url: https://github.com/Runic-Artifex/runic-text-resources
           repository-commit: ${{ github.sha }}
-          expected-nuget-count: "5"
+          expected-nuget-count: "6"
 
       - name: Record package digests
         working-directory: ${{ runner.temp }}/packages

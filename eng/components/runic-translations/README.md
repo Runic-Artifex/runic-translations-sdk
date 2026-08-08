@@ -18,12 +18,21 @@ artifacts, and runtime ABI.
 | `RunicTextResources.Generator` | Incremental C# source generator |
 | `RunicTextResources.Build` | Dependency-free MSBuild integration |
 | `RunicTextResources.Tool` | `runic-textresources` validation and generation tool |
+| `RunicTextResources.Templates` | Minimal item and standalone .NET project templates |
 | `@runic-artifex/vite-plugin-text-resources` | Optional virtual-module, watch, and HMR adapter |
 
 The normative schemas and compatibility corpus live in [`spec/`](spec/README.md).
 The `.NET` implementation is under [`dotnet/`](dotnet/).
 The implemented .NET and TypeScript/ESM architecture and delivery record are in
 [`docs/cross-runtime-plan.md`](docs/cross-runtime-plan.md).
+
+The first complete consumer is the
+[`RunicTextResources.Editor`](samples/RunicTextResources.Editor/README.md), a
+native C# and CsWebUi application with a SvelteKit frontend. It edits one- or
+many-locale schema-v2 workspaces, validates drafts with the canonical compiler,
+and consumes compiler-generated ESM for its own interface.
+The customer-product roadmap, including discovery and advanced authoring, is
+documented in [`docs/translations-editor-plan.md`](docs/translations-editor-plan.md).
 
 The compiler accepts the frozen version 1 source model and schema version 2.
 Version 2 adds portable inputs, local format declarations,
@@ -45,11 +54,11 @@ nix develop
 ```
 
 The pipeline restores and builds the standalone solution, runs every project-level
-test executable, packs all five packages into an isolated local feed, installs and
-executes the packed tool, consumes only those packages from a fixture project, and
-publishes the runtime consumer with NativeAOT. It also installs and tests the Vite
-package, type-checks generated declarations, and performs a real production
-tree-shaking build.
+test executable, packs all six packages into an isolated local feed, installs and
+executes the packed tool and templates, builds a generated standalone project,
+consumes only those packages from a fixture project, and publishes the runtime
+consumer with NativeAOT. It also installs and tests the Vite package, type-checks
+generated declarations, and performs a real production tree-shaking build.
 
 Pull requests and changes to `main` run the same pipeline in GitHub Actions. A
 manual prerelease workflow can also produce a uniquely versioned package artifact.

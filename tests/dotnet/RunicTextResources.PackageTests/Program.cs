@@ -66,6 +66,7 @@ internal static class Program
         string build = RequireSingle(feed, "RunicTextResources.Build.1.0.0.nupkg");
         string generator = RequireSingle(feed, "RunicTextResources.Generator.1.0.0.nupkg");
         string tool = RequireSingle(feed, "RunicTextResources.Tool.1.0.0.nupkg");
+        string templates = RequireSingle(feed, "RunicTextResources.Templates.1.0.0.nupkg");
 
         AssertPackageShape(runtime,
             "RunicTextResources.nuspec",
@@ -93,25 +94,40 @@ internal static class Program
             "tools/net10.0/any/RunicTextResources.Tool.deps.json",
             "tools/net10.0/any/RunicTextResources.Tool.dll",
             "tools/net10.0/any/RunicTextResources.Tool.runtimeconfig.json",
+            "tools/net10.0/any/RunicTextResources.Authoring.dll",
             "tools/net10.0/any/RunicTextResources.Compiler.dll");
+        AssertPackageShape(templates,
+            "RunicTextResources.Templates.nuspec",
+            "README.md",
+            "content/templates/item/.template.config/template.json",
+            "content/templates/item/_catalog_._defaultLocale_.json",
+            "content/templates/item/_catalog_.catalog.json",
+            "content/templates/project/.config/dotnet-tools.json",
+            "content/templates/project/.template.config/template.json",
+            "content/templates/project/Resources/_catalog_._defaultLocale_.json",
+            "content/templates/project/Resources/_catalog_.catalog.json",
+            "content/templates/project/RunicTextResourcesProject.csproj");
 
         AssertDependencies(runtime, Array.Empty<string>());
         AssertDependencies(compiler, Array.Empty<string>());
         AssertDependencies(build, Array.Empty<string>());
         AssertDependencies(generator, ["RunicTextResources"]);
         AssertDependencies(tool, Array.Empty<string>());
+        AssertDependencies(templates, Array.Empty<string>());
 
         AssertLicense(runtime);
         AssertLicense(compiler);
         AssertLicense(build);
         AssertLicense(generator);
         AssertLicense(tool);
+        AssertLicense(templates);
 
         AssertRepositoryMetadata(runtime);
         AssertRepositoryMetadata(compiler);
         AssertRepositoryMetadata(build);
         AssertRepositoryMetadata(generator);
         AssertRepositoryMetadata(tool);
+        AssertRepositoryMetadata(templates);
 
         AssertEmbeddedSourceLink(runtime, "lib/net10.0/RunicTextResources.dll");
         AssertEmbeddedSourceLink(compiler, "lib/net10.0/RunicTextResources.Compiler.dll");

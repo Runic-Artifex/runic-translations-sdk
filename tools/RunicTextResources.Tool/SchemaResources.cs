@@ -20,6 +20,7 @@ internal static class SchemaResources
         ("catalog-v2.schema.json", "RunicTextResources.Tool.Schemas.catalog-v2.schema.json"),
         ("resources-v2.schema.json", "RunicTextResources.Tool.Schemas.resources-v2.schema.json"),
         ("message-ast-v2.schema.json", "RunicTextResources.Tool.Schemas.message-ast-v2.schema.json"),
+        ("editor-state-v1.schema.json", "RunicTextResources.Tool.Schemas.editor-state-v1.schema.json"),
     ];
 
     internal static IReadOnlyList<ToolArtifact> Read()

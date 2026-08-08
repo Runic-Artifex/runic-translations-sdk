@@ -35,6 +35,10 @@ internal static class CliIntegrationTests
     public static void Register(TestRunner runner)
     {
         runner.Add("CLI help and invalid invocation use stable exit codes", HelpAndUsageExitCodes);
+        runner.Add("CLI init creates and validates a one-locale schema-v2 project", InitCreatesOneLocaleProject);
+        runner.Add("CLI init creates canonical locale files and explicit fallbacks", InitCreatesMultipleLocales);
+        runner.Add("CLI init rejects conflicts without changing the target", InitConflictDoesNotWrite);
+        runner.Add("CLI init supports an empty schema-v2 project", InitWithoutStarterIsValid);
         runner.Add("CLI validate succeeds without writing files", ValidateDoesNotWrite);
         runner.Add("CLI validation diagnostics return exit code one", InvalidCatalogReturnsDiagnosticExitCode);
         runner.Add("CLI generate writes the declared deterministic artifact set", GenerateWritesArtifactSet);
@@ -68,6 +72,124 @@ internal static class CliIntegrationTests
         ProcessResult invalid = TestFixture.RunTool(temporary, "unknown-command");
         Assert.Equal(2, invalid.ExitCode);
         Assert.Contains("unknown command", invalid.StandardError);
+    }
+
+    private static void InitCreatesOneLocaleProject()
+    {
+        using TemporaryDirectory temporary = new();
+        ProcessResult create = TestFixture.RunTool(
+            temporary,
+            "init",
+            "--directory",
+            "Resources",
+            "--catalog",
+            "product",
+            "--default-locale",
+            "de",
+            "--namespace",
+            "Customer.Product",
+            "--class",
+            "ProductText");
+
+        Assert.Equal(0, create.ExitCode, create.Combined);
+        Assert.Contains("created 2 text-resource file(s)", create.StandardOutput);
+        Assert.Equal(
+            "product.catalog.json|product.de.json",
+            string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
+        ProcessResult validate = TestFixture.RunTool(
+            temporary,
+            "validate",
+            "--catalog",
+            "Resources/product.catalog.json",
+            "--documents",
+            "Resources/product.de.json");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+    }
+
+    private static void InitCreatesMultipleLocales()
+    {
+        using TemporaryDirectory temporary = new();
+        ProcessResult create = TestFixture.RunTool(
+            temporary,
+            "init",
+            "--directory",
+            "Resources",
+            "--catalog",
+            "product",
+            "--default-locale",
+            "de-de",
+            "--locale",
+            "en-us",
+            "--locale",
+            "fr:en-US",
+            "--namespace",
+            "Customer.Product",
+            "--class",
+            "ProductText");
+
+        Assert.Equal(0, create.ExitCode, create.Combined);
+        Assert.Equal(
+            "product.catalog.json|product.de-DE.json|product.en-US.json|product.fr.json",
+            string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
+        string manifest = File.ReadAllText(temporary.Resolve("Resources", "product.catalog.json"), Encoding.UTF8);
+        Assert.Contains("\"tag\": \"en-US\"", manifest);
+        Assert.Contains("\"fallback\": \"de-DE\"", manifest);
+        Assert.Contains("\"fallback\": \"en-US\"", manifest);
+    }
+
+    private static void InitConflictDoesNotWrite()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("Resources"));
+        File.WriteAllText(temporary.Resolve("Resources", "customer.txt"), "keep", new UTF8Encoding(false));
+        ProcessResult create = TestFixture.RunTool(
+            temporary,
+            "init",
+            "--directory",
+            "Resources",
+            "--catalog",
+            "product",
+            "--default-locale",
+            "de",
+            "--namespace",
+            "Customer.Product",
+            "--class",
+            "ProductText");
+
+        Assert.Equal(2, create.ExitCode, create.Combined);
+        Assert.Contains("already exists; no files were written", create.StandardError);
+        Assert.Equal("customer.txt", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
+        Assert.Equal("keep", File.ReadAllText(temporary.Resolve("Resources", "customer.txt"), Encoding.UTF8));
+    }
+
+    private static void InitWithoutStarterIsValid()
+    {
+        using TemporaryDirectory temporary = new();
+        ProcessResult create = TestFixture.RunTool(
+            temporary,
+            "init",
+            "--directory",
+            "Resources",
+            "--catalog",
+            "empty",
+            "--default-locale",
+            "en",
+            "--namespace",
+            "Customer.Empty",
+            "--class",
+            "EmptyText",
+            "--no-starter");
+        Assert.Equal(0, create.ExitCode, create.Combined);
+        string document = File.ReadAllText(temporary.Resolve("Resources", "empty.en.json"), Encoding.UTF8);
+        Assert.Contains("\"resources\": {}", document);
+        ProcessResult validate = TestFixture.RunTool(
+            temporary,
+            "validate",
+            "--catalog",
+            "Resources/empty.catalog.json",
+            "--documents",
+            "Resources/empty.en.json");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
     }
 
     private static void ValidateDoesNotWrite()

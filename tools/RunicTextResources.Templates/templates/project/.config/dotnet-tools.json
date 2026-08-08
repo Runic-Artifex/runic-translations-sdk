@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "runictextresources.tool": {
+      "version": "__PACKAGE_VERSION__",
+      "commands": [
+        "runic-textresources"
+      ]
+    }
+  }
+}
