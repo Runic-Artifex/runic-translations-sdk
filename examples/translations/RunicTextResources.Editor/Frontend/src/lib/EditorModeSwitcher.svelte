@@ -42,11 +42,15 @@
     {#each options as option (option.value)}
       <ToggleGroup.Item
         value={option.value}
-        class="min-w-0 px-1 text-[0.6875rem] sm:flex-none sm:px-3 sm:text-sm"
+        class="min-w-0 overflow-hidden px-1 text-[0.6875rem] sm:w-auto sm:flex-none sm:px-3 sm:text-sm"
+        title={option.label}
         onclick={(event) => {
           if (mode === option.value) event.preventDefault();
         }}
-      >{option.label}</ToggleGroup.Item>
+      >
+        <span class="sm:hidden">{option.value === "advanced" ? "Structured" : option.value === "raw" ? "JSON" : option.label}</span>
+        <span class="hidden sm:inline">{option.label}</span>
+      </ToggleGroup.Item>
     {/each}
   </ToggleGroup.Root>
 </div>

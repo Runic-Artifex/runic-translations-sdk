@@ -1,10 +1,44 @@
 <script lang="ts">
+  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
+  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
+  import BracesIcon from "@lucide/svelte/icons/braces";
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
+  import CirclePlusIcon from "@lucide/svelte/icons/circle-plus";
+  import CodeXmlIcon from "@lucide/svelte/icons/code-xml";
+  import Settings2Icon from "@lucide/svelte/icons/settings-2";
+  import Trash2Icon from "@lucide/svelte/icons/trash-2";
+  import VariableIcon from "@lucide/svelte/icons/variable";
+  import AppDialog from "$lib/AppDialog.svelte";
+  import { Badge } from "$lib/components/ui/badge/index.js";
+  import { Button, buttonVariants } from "$lib/components/ui/button/index.js";
+  import * as Card from "$lib/components/ui/card/index.js";
+  import * as Collapsible from "$lib/components/ui/collapsible/index.js";
+  import * as Field from "$lib/components/ui/field/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import * as Popover from "$lib/components/ui/popover/index.js";
+  import * as Select from "$lib/components/ui/select/index.js";
+  import { Separator } from "$lib/components/ui/separator/index.js";
+  import { Textarea } from "$lib/components/ui/textarea/index.js";
   import PatternEditor from "./PatternEditor.svelte";
   import {
-    formatFunctions, inputTypes, nextIdentifier, patternNodes, patternText, relativeTimeUnits,
-    renameDeclaration, renameInput, renameSelector, selectorFunctions, synchronizeMatches,
-    toStructuredMessage, type FormatFunction, type InputType, type MessageFormat,
-    type MessagePatternNode, type StructuredMessage,
+    formatFunctions,
+    inputTypes,
+    nextIdentifier,
+    patternNodes,
+    patternText,
+    relativeTimeUnits,
+    renameDeclaration,
+    renameInput,
+    renameSelector,
+    selectorFunctions,
+    synchronizeMatches,
+    toStructuredMessage,
+    type FormatFunction,
+    type InputType,
+    type MessageFormat,
+    type MessagePatternNode,
+    type MessageSelector,
+    type StructuredMessage,
   } from "./message-composer";
   import type { ResourceValue } from "./resource-model";
 
@@ -13,10 +47,13 @@
     onchange: (value: StructuredMessage) => void;
   }
 
+  const pluralMatches = ["*", "zero", "one", "two", "few", "many", "other"] as const;
+
   let { value, onchange }: Props = $props();
   let rawMode = $state(false);
   let rawText = $state("");
   let rawError = $state<string>();
+  let structureOpen = $state(false);
   let message = $derived(toStructuredMessage(value));
   let inputNames = $derived(Object.keys(message.inputs));
   let declarationNames = $derived((message.declarations ?? []).map((item) => item.name));
@@ -27,10 +64,25 @@
     onchange(synchronizeMatches(next));
   }
 
-  function addInput(): void {
+  function addInput(type: InputType = "string", preferredName = "value"): void {
     commit((next) => {
-      const name = nextIdentifier("value", Object.keys(next.inputs));
-      next.inputs[name] = { type: "string" };
+      const name = nextIdentifier(preferredName, Object.keys(next.inputs));
+      next.inputs[name] = { type };
+    });
+  }
+
+  function ensureInput(name: string, type: InputType): void {
+    commit((next) => {
+      next.inputs[name] ??= { type };
+      next.inputs[name].type = type;
+    });
+  }
+
+  function updateInputFormat(name: string, format: string): void {
+    commit((next) => {
+      next.inputs[name] ??= { type: "string" };
+      if (format === "") delete next.inputs[name].format;
+      else next.inputs[name].format = format;
     });
   }
 
@@ -41,7 +93,8 @@
       next.selectors = next.selectors.filter((item) => item.input !== name);
       scrubNodes(next, (node) =>
         ("input" in node && node.input === name) ||
-        ("format" in node && node.format.input === name));
+        ("format" in node && node.format.input === name),
+      );
     });
   }
 
@@ -91,11 +144,41 @@
     });
   }
 
+  function enablePluralForms(): void {
+    commit((next) => {
+      let input = Object.keys(next.inputs).find((name) => next.inputs[name].type === "int64" || next.inputs[name].type === "decimal");
+      if (input === undefined) {
+        input = nextIdentifier("count", Object.keys(next.inputs));
+        next.inputs[input] = { type: "int64" };
+      }
+      const name = nextIdentifier("quantity", next.selectors.map((item) => item.name));
+      next.selectors.push({ name, input, function: "plural" });
+      const original = structuredClone(next.variants[0]?.value ?? "");
+      next.variants = [
+        { match: { [name]: "one" }, value: original },
+        { match: { [name]: "*" }, value: structuredClone(original) },
+      ];
+    });
+  }
+
   function addVariant(): void {
-    commit((next) => next.variants.splice(Math.max(0, next.variants.length - 1), 0, {
-      match: Object.fromEntries(next.selectors.map((selector) => [selector.name, "*"])),
-      value: "",
-    }));
+    commit((next) => {
+      const matches = Object.fromEntries(next.selectors.map((selector) => [selector.name, "*"]));
+      const primarySelector = next.selectors[0];
+      if (primarySelector !== undefined) {
+        const used = new Set(next.variants.map((variant) => variant.match[primarySelector.name]));
+        matches[primarySelector.name] = ["=0", "=1", "zero", "two", "few", "many", "other"].find((candidate) => !used.has(candidate)) ?? "*";
+      }
+      next.variants.splice(Math.max(0, next.variants.length - 1), 0, { match: matches, value: "" });
+    });
+  }
+
+  function updateMatch(variantIndex: number, selectorName: string, match: string): void {
+    commit((next) => next.variants[variantIndex].match[selectorName] = match || "*");
+  }
+
+  function editableText(value: string | MessagePatternNode[]): string | undefined {
+    return typeof value === "string" ? value : patternText(value);
   }
 
   function openRaw(): void {
@@ -113,6 +196,37 @@
     } catch (error) {
       rawError = error instanceof Error ? error.message : String(error);
     }
+  }
+
+  function variantTitle(index: number): string {
+    if (message.selectors.length === 0) return "Default translation";
+    const labels = message.selectors.map((selector) => matchLabel(selector, message.variants[index].match[selector.name] ?? "*"));
+    return labels.join(" + ");
+  }
+
+  function matchLabel(selector: MessageSelector, match: string): string {
+    if (match === "*") return selector.function === "literal" ? "Fallback" : "Other";
+    if (match.startsWith("=")) return `Exactly ${match.slice(1)}`;
+    return match.charAt(0).toLocaleUpperCase() + match.slice(1);
+  }
+
+  function conditionDescription(selector: MessageSelector, match: string): string {
+    if (match === "*") return `Used for every ${selector.input} value without a more specific translation`;
+    if (match.startsWith("=")) return `When ${selector.input} equals ${match.slice(1)}`;
+    if (selector.function === "plural") return match === "one" ? `Used for the language’s singular form of ${selector.input}` : `Used for the language’s “${match}” number form of ${selector.input}`;
+    if (selector.function === "ordinal") return `Used for the language’s “${match}” ordinal form of ${selector.input}`;
+    return `When ${selector.input} is “${match}”`;
+  }
+
+  function variantDescription(index: number): string {
+    if (message.selectors.length === 0) return "Shown whenever this message is used.";
+    return message.selectors
+      .map((selector) => conditionDescription(selector, message.variants[index].match[selector.name] ?? "*"))
+      .join(" · ");
+  }
+
+  function tokenNodes(value: string | MessagePatternNode[]): MessagePatternNode[] {
+    return typeof value === "string" ? patternNodes(value) : value;
   }
 
   function scrubNodes(
@@ -136,164 +250,361 @@
   }
 </script>
 
-<div class="composer">
-  <header class="composer-header">
-    <div>
-      <strong>Structured message composer</strong>
-      <span>Inputs and declarations stay protected while translators arrange content.</span>
+{#snippet inputToken(name: string, tokenId: string)}
+  <Popover.Root>
+    <Popover.Trigger
+      class={buttonVariants({
+        variant: name in message.inputs ? "secondary" : "outline",
+        size: "sm",
+        class: "mx-0.5 h-7 rounded-full px-2 font-mono text-xs align-middle",
+      })}
+      title={`Input ${name}. Click to inspect.`}
+    >
+      <VariableIcon data-icon="inline-start" />
+      {name}
+    </Popover.Trigger>
+    <Popover.Content align="start" class="w-[calc(100vw-2rem)] max-w-72">
+      <Popover.Header>
+        <Popover.Title class="font-mono">{name}</Popover.Title>
+        <Popover.Description>
+          {name in message.inputs ? "A protected value supplied by application code." : "This placeholder is used in the text but is not declared yet."}
+        </Popover.Description>
+      </Popover.Header>
+      <Field.Field>
+        <Field.Label for={`${tokenId}-type`}>Value type</Field.Label>
+        <Select.Root
+          type="single"
+          value={message.inputs[name]?.type ?? "string"}
+          onValueChange={(type) => ensureInput(name, type as InputType)}
+        >
+          <Select.Trigger id={`${tokenId}-type`} class="w-full">
+            {message.inputs[name]?.type ?? "string"}
+          </Select.Trigger>
+          <Select.Content>
+            <Select.Group>
+              {#each inputTypes as type (type)}
+                <Select.Item value={type} label={type}>{type}</Select.Item>
+              {/each}
+            </Select.Group>
+          </Select.Content>
+        </Select.Root>
+        <Field.Description>Type <code>{`{${name}}`}</code> anywhere to reuse this value.</Field.Description>
+      </Field.Field>
+      <Field.Field>
+        <Field.Label for={`${tokenId}-format`}>Default format</Field.Label>
+        <Input
+          id={`${tokenId}-format`}
+          value={message.inputs[name]?.format ?? ""}
+          placeholder="Compiler default"
+          oninput={(event) => updateInputFormat(name, event.currentTarget.value)}
+        />
+      </Field.Field>
+    </Popover.Content>
+  </Popover.Root>
+{/snippet}
+
+{#snippet patternPreview(nodes: MessagePatternNode[], prefix: string)}
+  {#each nodes as node, index (index)}
+    {#if typeof node === "string"}
+      <span class="whitespace-pre-wrap">{node}</span>
+    {:else if "input" in node}
+      {@render inputToken(node.input, `${prefix}-${index}`)}
+    {:else if "local" in node}
+      <Badge variant="secondary" class="mx-0.5 rounded-full font-mono">{node.local}</Badge>
+    {:else if "format" in node}
+      <Popover.Root>
+        <Popover.Trigger class={buttonVariants({ variant: "secondary", size: "sm", class: "mx-0.5 h-7 rounded-full px-2 font-mono text-xs align-middle" })}>
+          <VariableIcon data-icon="inline-start" />{node.format.input} · {node.format.function}
+        </Popover.Trigger>
+        <Popover.Content align="start">
+          <Popover.Header><Popover.Title>Formatted value</Popover.Title><Popover.Description>This token formats {node.format.input} as {node.format.function}. Open advanced structure to change its exact format.</Popover.Description></Popover.Header>
+        </Popover.Content>
+      </Popover.Root>
+    {:else}
+      <span class="rounded-2xl bg-muted px-2 py-1">
+        <Badge variant="outline" class="mr-1">{node.markup.name}</Badge>
+        {@render patternPreview(node.markup.children, `${prefix}-${index}`)}
+      </span>
+    {/if}
+  {/each}
+{/snippet}
+
+<div class="grid gap-4">
+  <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div class="grid gap-1">
+      <div class="flex flex-wrap items-center gap-2">
+        <h3 class="text-sm font-semibold">Translate the message</h3>
+        {#if message.selectors.some((selector) => selector.function === "plural")}
+          <Badge variant="secondary">Plural message</Badge>
+        {:else if message.selectors.length > 0}
+          <Badge variant="secondary">{message.variants.length} cases</Badge>
+        {/if}
+      </div>
+      <p class="text-xs leading-relaxed text-muted-foreground">
+        Write each translation naturally. Inputs such as <code>{"{count}"}</code> become protected, inspectable tokens below.
+      </p>
     </div>
-    <button class="raw-button" onclick={openRaw}>AST source</button>
+    <Button variant="outline" size="sm" onclick={openRaw}>
+      <CodeXmlIcon data-icon="inline-start" />
+      AST source
+    </Button>
   </header>
 
-  <details open>
-    <summary><span>1</span><strong>Inputs</strong><small>{inputNames.length} declared</small></summary>
-    <div class="section-body">
-      <p>Typed values supplied by application code. References become protected chips.</p>
-      <div class="table-list">
-        {#each Object.entries(message.inputs) as [name, descriptor] (name)}
-          <div class="input-row">
-            <label>Name<input pattern="[A-Za-z_][A-Za-z0-9_]*" value={name} onblur={(event) => onchange(renameInput(message, name, event.currentTarget.value))} /></label>
-            <label>Type<select value={descriptor.type} onchange={(event) => commit((next) => next.inputs[name].type = event.currentTarget.value as InputType)}>{#each inputTypes as type (type)}<option value={type}>{type}</option>{/each}</select></label>
-            <label>Default format<input value={descriptor.format ?? ""} placeholder="compiler default" oninput={(event) => commit((next) => { const input = next.inputs[name]; if (event.currentTarget.value === "") delete input.format; else input.format = event.currentTarget.value; })} /></label>
-            <button class="remove" aria-label={"Remove input " + name} onclick={() => removeInput(name)}>×</button>
-          </div>
-        {/each}
-      </div>
-      <button class="add" onclick={addInput}>＋ Add typed input</button>
-    </div>
-  </details>
+  {#if message.selectors.length === 0}
+    <Card.Root size="sm">
+      <Card.Header>
+        <Card.Title>One translation is used in every situation</Card.Title>
+        <Card.Description>If wording changes with a number, add plural forms and translate each case separately.</Card.Description>
+        <Card.Action>
+          <Button variant="outline" size="sm" onclick={enablePluralForms}>
+            <CirclePlusIcon data-icon="inline-start" />
+            Add plural forms
+          </Button>
+        </Card.Action>
+      </Card.Header>
+    </Card.Root>
+  {/if}
 
-  <details>
-    <summary><span>2</span><strong>Formatted declarations</strong><small>{declarationNames.length} reusable</small></summary>
-    <div class="section-body">
-      <p>Define a formatter once, then insert it as a declaration chip in any variant.</p>
-      {#each message.declarations ?? [] as declaration, index (declaration.name)}
-        <div class="declaration-card">
-          <div class="format-grid">
-            <label>Name<input value={declaration.name} onblur={(event) => onchange(renameDeclaration(message, declaration.name, event.currentTarget.value))} /></label>
-            <label>Input<select value={declaration.input} onchange={(event) => updateDeclaration(index, "input", event.currentTarget.value)}>{#each inputNames as name (name)}<option value={name}>{name}</option>{/each}</select></label>
-            <label>Formatter<select value={declaration.function} onchange={(event) => updateDeclaration(index, "function", event.currentTarget.value as FormatFunction)}>{#each formatFunctions as fn (fn)}<option value={fn}>{fn}</option>{/each}</select></label>
-            {#if declaration.function === "relativeTime"}
-              <label>Unit<select value={declaration.unit ?? "day"} onchange={(event) => updateDeclaration(index, "unit", event.currentTarget.value)}>{#each relativeTimeUnits as unit (unit)}<option value={unit}>{unit}</option>{/each}</select></label>
-              <label>Numeric<select value={declaration.numeric ?? "auto"} onchange={(event) => updateDeclaration(index, "numeric", event.currentTarget.value)}><option value="auto">auto</option><option value="always">always</option></select></label>
-            {:else}
-              <label>Format<input value={declaration.format ?? ""} placeholder="compiler default" oninput={(event) => updateDeclaration(index, "format", event.currentTarget.value)} /></label>
-            {/if}
+  <div class="grid gap-3">
+    {#each message.variants as variant, variantIndex (variantIndex)}
+      <Card.Root size="sm">
+        <Card.Header class="gap-2">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <Card.Title class="font-serif text-lg">{variantTitle(variantIndex)}</Card.Title>
+            {#each message.selectors as selector (selector.name)}
+              <Popover.Root>
+                <Popover.Trigger class={buttonVariants({ variant: "outline", size: "sm", class: "h-7 rounded-full px-2 text-xs" })}>
+                  {selector.input}: {message.variants[variantIndex].match[selector.name] ?? "*"}
+                </Popover.Trigger>
+                <Popover.Content align="start" class="w-[calc(100vw-2rem)] max-w-80">
+                  <Popover.Header>
+                    <Popover.Title>When is this translation used?</Popover.Title>
+                    <Popover.Description>{conditionDescription(selector, message.variants[variantIndex].match[selector.name] ?? "*")}</Popover.Description>
+                  </Popover.Header>
+                  {#if selector.function === "plural" || selector.function === "ordinal"}
+                    <Field.Field>
+                      <Field.Label for={`match-${variantIndex}-${selector.name}`}>Number form</Field.Label>
+                      <Select.Root
+                        type="single"
+                        value={message.variants[variantIndex].match[selector.name] ?? "*"}
+                        onValueChange={(match) => updateMatch(variantIndex, selector.name, match)}
+                      >
+                        <Select.Trigger id={`match-${variantIndex}-${selector.name}`} class="w-full">
+                          {matchLabel(selector, message.variants[variantIndex].match[selector.name] ?? "*")}
+                        </Select.Trigger>
+                        <Select.Content>
+                          <Select.Group>
+                            {#each pluralMatches as match (match)}
+                              <Select.Item value={match} label={match === "*" ? "Other (fallback)" : match}>
+                                {match === "*" ? "Other (fallback)" : match}
+                              </Select.Item>
+                            {/each}
+                          </Select.Group>
+                        </Select.Content>
+                      </Select.Root>
+                    </Field.Field>
+                  {/if}
+                  <Field.Field>
+                    <Field.Label for={`custom-match-${variantIndex}-${selector.name}`}>Exact or custom match</Field.Label>
+                    <Input
+                      id={`custom-match-${variantIndex}-${selector.name}`}
+                      value={message.variants[variantIndex].match[selector.name] ?? "*"}
+                      placeholder={selector.function === "literal" ? "premium" : "=0"}
+                      onblur={(event) => updateMatch(variantIndex, selector.name, event.currentTarget.value)}
+                    />
+                    <Field.Description>Use <code>=0</code> for an exact number or <code>*</code> for the final fallback.</Field.Description>
+                  </Field.Field>
+                </Popover.Content>
+              </Popover.Root>
+            {/each}
           </div>
-          <button class="remove" aria-label={"Remove declaration " + declaration.name} onclick={() => commit((next) => { next.declarations?.splice(index, 1); scrubNodes(next, (node) => "local" in node && node.local === declaration.name); })}>×</button>
-        </div>
-      {/each}
-      <button class="add" disabled={!inputNames.some((name) => message.inputs[name].type !== "bool")} onclick={addDeclaration}>＋ Add formatter declaration</button>
-    </div>
-  </details>
-
-  <details open>
-    <summary><span>3</span><strong>Selectors</strong><small>{message.selectors.length} dimensions</small></summary>
-    <div class="section-body">
-      <p>Choose variants using cardinal plural, ordinal plural, or literal values.</p>
-      {#each message.selectors as selector, index (selector.name)}
-        <div class="selector-row">
-          <label>Name<input value={selector.name} onblur={(event) => onchange(renameSelector(message, selector.name, event.currentTarget.value))} /></label>
-          <label>Input<select value={selector.input} onchange={(event) => commit((next) => next.selectors[index].input = event.currentTarget.value)}>{#each inputNames as name (name)}<option value={name}>{name}</option>{/each}</select></label>
-          <label>Function<select value={selector.function} onchange={(event) => commit((next) => next.selectors[index].function = event.currentTarget.value as typeof selector.function)}>{#each selectorFunctions as fn (fn)}<option value={fn}>{fn}</option>{/each}</select></label>
-          <button class="remove" aria-label={"Remove selector " + selector.name} onclick={() => commit((next) => next.selectors.splice(index, 1))}>×</button>
-        </div>
-      {/each}
-      <button class="add" disabled={inputNames.length === 0} onclick={addSelector}>＋ Add selector</button>
-    </div>
-  </details>
-
-  <details open>
-    <summary><span>4</span><strong>Variants and content</strong><small>{message.variants.length} rows</small></summary>
-    <div class="section-body variants">
-      <p>The first matching row wins. Keep an all-wildcard row as the final fallback.</p>
-      {#each message.variants as variant, variantIndex (variantIndex)}
-        <article class="variant-card">
-          <header>
-            <div class="matches">
-              {#if message.selectors.length === 0}<span class="always">Always</span>{/if}
-              {#each message.selectors as selector (selector.name)}
-                <label>{selector.name}<input aria-label={"Match " + selector.name} value={variant.match[selector.name] ?? "*"} oninput={(event) => commit((next) => next.variants[variantIndex].match[selector.name] = event.currentTarget.value)} /></label>
-              {/each}
-            </div>
-            <div class="variant-actions">
-              <button aria-label="Move variant up" disabled={variantIndex === 0} onclick={() => commit((next) => next.variants.splice(variantIndex - 1, 0, next.variants.splice(variantIndex, 1)[0]))}>↑</button>
-              <button aria-label="Move variant down" disabled={variantIndex === message.variants.length - 1} onclick={() => commit((next) => next.variants.splice(variantIndex + 1, 0, next.variants.splice(variantIndex, 1)[0]))}>↓</button>
-              <button class="remove" aria-label="Remove variant" disabled={message.variants.length === 1} onclick={() => commit((next) => next.variants.splice(variantIndex, 1))}>×</button>
-            </div>
-          </header>
-          <div class="pattern-mode">
-            <button class:active={typeof variant.value === "string"} disabled={Array.isArray(variant.value) && patternText(variant.value) === undefined} title={Array.isArray(variant.value) && patternText(variant.value) === undefined ? "Formatted declarations and markup require rich pattern mode." : undefined} onclick={() => commit((next) => { const current = next.variants[variantIndex].value; if (Array.isArray(current)) next.variants[variantIndex].value = patternText(current) ?? current; })}>Plain text</button>
-            <button class:active={Array.isArray(variant.value)} onclick={() => commit((next) => next.variants[variantIndex].value = patternNodes(next.variants[variantIndex].value))}>Rich pattern</button>
-          </div>
-          {#if typeof variant.value === "string"}
-            <textarea aria-label={"Text for variant " + (variantIndex + 1)} value={variant.value} oninput={(event) => commit((next) => next.variants[variantIndex].value = event.currentTarget.value)}></textarea>
+          <Card.Description>{variantDescription(variantIndex)}</Card.Description>
+          <Card.Action class="flex gap-1">
+            <Button variant="ghost" size="icon-sm" aria-label="Move translation up" disabled={variantIndex === 0} onclick={() => commit((next) => next.variants.splice(variantIndex - 1, 0, next.variants.splice(variantIndex, 1)[0]))}>
+              <ArrowUpIcon />
+            </Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Move translation down" disabled={variantIndex === message.variants.length - 1} onclick={() => commit((next) => next.variants.splice(variantIndex + 1, 0, next.variants.splice(variantIndex, 1)[0]))}>
+              <ArrowDownIcon />
+            </Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Remove translation" disabled={message.variants.length === 1} onclick={() => commit((next) => next.variants.splice(variantIndex, 1))}>
+              <Trash2Icon />
+            </Button>
+          </Card.Action>
+        </Card.Header>
+        <Card.Content class="grid gap-3">
+          {#if editableText(variant.value) !== undefined}
+            <Field.Field>
+              <Field.Label class="sr-only" for={`translation-case-${variantIndex}`}>Translation for {variantTitle(variantIndex)}</Field.Label>
+              <Textarea
+                id={`translation-case-${variantIndex}`}
+                class="field-sizing-fixed min-h-28 resize-y px-4 py-3 text-base leading-7"
+                value={editableText(variant.value) ?? ""}
+                spellcheck
+                placeholder="Write this translation…"
+                oninput={(event) => commit((next) => next.variants[variantIndex].value = event.currentTarget.value)}
+              />
+            </Field.Field>
           {:else}
-            <PatternEditor nodes={variant.value} inputs={message.inputs} localNames={declarationNames} onchange={(nodes) => commit((next) => next.variants[variantIndex].value = nodes)} />
+            <p class="text-xs text-muted-foreground">This case contains formatting or semantic markup. Edit its content blocks below.</p>
+            <PatternEditor nodes={variant.value as MessagePatternNode[]} inputs={message.inputs} localNames={declarationNames} onchange={(nodes) => commit((next) => next.variants[variantIndex].value = nodes)} />
           {/if}
-        </article>
-      {/each}
-      <button class="add" onclick={addVariant}>＋ Add variant before fallback</button>
+
+          <div class="rounded-2xl bg-muted/60 px-4 py-3 text-sm leading-7" aria-label={`Interactive structure for ${variantTitle(variantIndex)}`}>
+            <div class="mb-1 flex items-center gap-2 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+              <BracesIcon class="size-3" aria-hidden="true" />
+              Interactive structure
+            </div>
+            <div class="min-h-7 text-foreground">
+              {@render patternPreview(tokenNodes(variant.value), `variant-${variantIndex}`)}
+            </div>
+          </div>
+        </Card.Content>
+      </Card.Root>
+    {/each}
+  </div>
+
+  {#if message.selectors.length > 0}
+    <Button variant="outline" class="justify-self-start" onclick={addVariant}>
+      <CirclePlusIcon data-icon="inline-start" />
+      Add translation case
+    </Button>
+  {/if}
+
+  <Separator />
+
+  <Collapsible.Root bind:open={structureOpen} class="group/structure rounded-3xl bg-card shadow-sm ring-1 ring-foreground/5 dark:ring-foreground/10">
+    <div class="flex items-center justify-between gap-3 px-4 py-3">
+      <div class="grid gap-0.5">
+        <strong class="text-sm">Advanced structure</strong>
+        <span class="text-xs text-muted-foreground">Inputs, formatters, and selection rules used by the translations above.</span>
+      </div>
+      <Collapsible.Trigger class={buttonVariants({ variant: "ghost", size: "icon-sm" })} aria-label="Toggle advanced structure">
+        <ChevronDownIcon class="transition-transform group-data-[state=open]/structure:rotate-180" />
+      </Collapsible.Trigger>
     </div>
-  </details>
+    <Collapsible.Content>
+      <Separator />
+      <div class="grid gap-6 px-4 py-5">
+        <Field.Set>
+          <Field.Legend variant="label">Inputs</Field.Legend>
+          <Field.Description>Values supplied by application code. Translators insert them by typing <code>{"{name}"}</code>.</Field.Description>
+          <Field.Group class="gap-3">
+            {#each Object.entries(message.inputs) as [name, descriptor] (name)}
+              <div class="grid gap-3 rounded-2xl bg-muted/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)_auto] sm:items-end">
+                <Field.Field>
+                  <Field.Label for={`input-name-${name}`}>Name</Field.Label>
+                  <Input id={`input-name-${name}`} pattern="[A-Za-z_][A-Za-z0-9_]*" value={name} onblur={(event) => onchange(renameInput(message, name, event.currentTarget.value))} />
+                </Field.Field>
+                <Field.Field>
+                  <Field.Label for={`input-type-${name}`}>Type</Field.Label>
+                  <Select.Root type="single" value={descriptor.type} onValueChange={(type) => ensureInput(name, type as InputType)}>
+                    <Select.Trigger id={`input-type-${name}`} class="w-full">{descriptor.type}</Select.Trigger>
+                    <Select.Content><Select.Group>{#each inputTypes as type (type)}<Select.Item value={type} label={type}>{type}</Select.Item>{/each}</Select.Group></Select.Content>
+                  </Select.Root>
+                </Field.Field>
+                <Field.Field>
+                  <Field.Label for={`input-format-${name}`}>Default format</Field.Label>
+                  <Input id={`input-format-${name}`} value={descriptor.format ?? ""} placeholder="Compiler default" oninput={(event) => updateInputFormat(name, event.currentTarget.value)} />
+                </Field.Field>
+                <Button variant="ghost" size="icon" aria-label={`Remove input ${name}`} onclick={() => removeInput(name)}><Trash2Icon /></Button>
+              </div>
+            {/each}
+          </Field.Group>
+          <Button variant="outline" class="justify-self-start" onclick={() => addInput()}><CirclePlusIcon data-icon="inline-start" />Add input</Button>
+        </Field.Set>
+
+        <Field.Set>
+          <Field.Legend variant="label">Selection rules</Field.Legend>
+          <Field.Description>Rules decide which translation case is used for a given input.</Field.Description>
+          <Field.Group class="gap-3">
+            {#each message.selectors as selector, index (selector.name)}
+              <div class="grid gap-3 rounded-2xl bg-muted/50 p-3 sm:grid-cols-3 sm:items-end">
+                <Field.Field><Field.Label for={`selector-name-${selector.name}`}>Rule name</Field.Label><Input id={`selector-name-${selector.name}`} value={selector.name} onblur={(event) => onchange(renameSelector(message, selector.name, event.currentTarget.value))} /></Field.Field>
+                <Field.Field>
+                  <Field.Label for={`selector-input-${selector.name}`}>Uses input</Field.Label>
+                  <Select.Root type="single" value={selector.input} onValueChange={(input) => commit((next) => next.selectors[index].input = input)}>
+                    <Select.Trigger id={`selector-input-${selector.name}`} class="w-full">{selector.input}</Select.Trigger>
+                    <Select.Content><Select.Group>{#each inputNames as name (name)}<Select.Item value={name} label={name}>{name}</Select.Item>{/each}</Select.Group></Select.Content>
+                  </Select.Root>
+                </Field.Field>
+                <div class="flex items-end gap-2">
+                  <Field.Field>
+                    <Field.Label for={`selector-function-${selector.name}`}>Chooses by</Field.Label>
+                    <Select.Root type="single" value={selector.function} onValueChange={(fn) => commit((next) => next.selectors[index].function = fn as MessageSelector["function"])}>
+                      <Select.Trigger id={`selector-function-${selector.name}`} class="w-full">{selector.function}</Select.Trigger>
+                      <Select.Content><Select.Group>{#each selectorFunctions as fn (fn)}<Select.Item value={fn} label={fn}>{fn}</Select.Item>{/each}</Select.Group></Select.Content>
+                    </Select.Root>
+                  </Field.Field>
+                  <Button variant="ghost" size="icon" aria-label={`Remove selector ${selector.name}`} onclick={() => commit((next) => next.selectors.splice(index, 1))}><Trash2Icon /></Button>
+                </div>
+              </div>
+            {/each}
+          </Field.Group>
+          <Button variant="outline" class="justify-self-start" disabled={inputNames.length === 0} onclick={addSelector}><CirclePlusIcon data-icon="inline-start" />Add selection rule</Button>
+        </Field.Set>
+
+        <Field.Set>
+          <Field.Legend variant="label">Reusable formatters</Field.Legend>
+          <Field.Description>Optional named formats for dates, numbers, relative time, and other typed values.</Field.Description>
+          <Field.Group class="gap-3">
+            {#each message.declarations ?? [] as declaration, index (declaration.name)}
+              <div class="grid gap-3 rounded-2xl bg-muted/50 p-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Field.Field><Field.Label for={`declaration-name-${declaration.name}`}>Name</Field.Label><Input id={`declaration-name-${declaration.name}`} value={declaration.name} onblur={(event) => onchange(renameDeclaration(message, declaration.name, event.currentTarget.value))} /></Field.Field>
+                <Field.Field>
+                  <Field.Label for={`declaration-input-${declaration.name}`}>Input</Field.Label>
+                  <Select.Root type="single" value={declaration.input} onValueChange={(input) => updateDeclaration(index, "input", input)}><Select.Trigger id={`declaration-input-${declaration.name}`} class="w-full">{declaration.input}</Select.Trigger><Select.Content><Select.Group>{#each inputNames as name (name)}<Select.Item value={name} label={name}>{name}</Select.Item>{/each}</Select.Group></Select.Content></Select.Root>
+                </Field.Field>
+                <Field.Field>
+                  <Field.Label for={`declaration-function-${declaration.name}`}>Formatter</Field.Label>
+                  <Select.Root type="single" value={declaration.function} onValueChange={(fn) => updateDeclaration(index, "function", fn)}><Select.Trigger id={`declaration-function-${declaration.name}`} class="w-full">{declaration.function}</Select.Trigger><Select.Content><Select.Group>{#each formatFunctions as fn (fn)}<Select.Item value={fn} label={fn}>{fn}</Select.Item>{/each}</Select.Group></Select.Content></Select.Root>
+                </Field.Field>
+                <div class="flex items-end gap-2">
+                  {#if declaration.function === "relativeTime"}
+                    <Field.Field>
+                      <Field.Label for={`declaration-unit-${declaration.name}`}>Unit</Field.Label>
+                      <Select.Root type="single" value={declaration.unit ?? "day"} onValueChange={(unit) => updateDeclaration(index, "unit", unit)}><Select.Trigger id={`declaration-unit-${declaration.name}`} class="w-full">{declaration.unit ?? "day"}</Select.Trigger><Select.Content><Select.Group>{#each relativeTimeUnits as unit (unit)}<Select.Item value={unit} label={unit}>{unit}</Select.Item>{/each}</Select.Group></Select.Content></Select.Root>
+                    </Field.Field>
+                    <Field.Field>
+                      <Field.Label for={`declaration-numeric-${declaration.name}`}>Numeric</Field.Label>
+                      <Select.Root type="single" value={declaration.numeric ?? "auto"} onValueChange={(numeric) => updateDeclaration(index, "numeric", numeric)}><Select.Trigger id={`declaration-numeric-${declaration.name}`} class="w-full">{declaration.numeric ?? "auto"}</Select.Trigger><Select.Content><Select.Group><Select.Item value="auto" label="auto">auto</Select.Item><Select.Item value="always" label="always">always</Select.Item></Select.Group></Select.Content></Select.Root>
+                    </Field.Field>
+                  {:else}
+                    <Field.Field><Field.Label for={`declaration-format-${declaration.name}`}>Format</Field.Label><Input id={`declaration-format-${declaration.name}`} value={declaration.format ?? ""} placeholder="Compiler default" oninput={(event) => updateDeclaration(index, "format", event.currentTarget.value)} /></Field.Field>
+                  {/if}
+                  <Button variant="ghost" size="icon" aria-label={`Remove formatter ${declaration.name}`} onclick={() => commit((next) => { next.declarations?.splice(index, 1); scrubNodes(next, (node) => "local" in node && node.local === declaration.name); })}><Trash2Icon /></Button>
+                </div>
+              </div>
+            {/each}
+          </Field.Group>
+          <Button variant="outline" class="justify-self-start" disabled={!inputNames.some((name) => message.inputs[name].type !== "bool")} onclick={addDeclaration}><CirclePlusIcon data-icon="inline-start" />Add formatter</Button>
+        </Field.Set>
+      </div>
+    </Collapsible.Content>
+  </Collapsible.Root>
 </div>
 
-{#if rawMode}
-  <div class="raw-backdrop">
-    <div class="raw-dialog" role="dialog" aria-modal="true" aria-labelledby="raw-ast-title">
-      <header><div><strong id="raw-ast-title">Structured message source AST</strong><span>Escape hatch for exact schema-v2 source editing.</span></div><button aria-label="Close source AST" onclick={() => rawMode = false}>×</button></header>
-      <textarea bind:value={rawText} spellcheck={false}></textarea>
-      {#if rawError}<p aria-live="polite">{rawError}</p>{/if}
-      <footer><button onclick={() => rawMode = false}>Cancel</button><button class="apply" onclick={applyRaw}>Apply source</button></footer>
-    </div>
-  </div>
-{/if}
+<AppDialog
+  open={rawMode}
+  title="Structured message source AST"
+  description="An escape hatch for exact schema-v2 source editing."
+  class="sm:max-w-3xl"
+  bodyClass="grid gap-3"
+  onopenchange={(open) => rawMode = open}
+>
+  <Textarea class="field-sizing-fixed min-h-[55svh] resize-none font-mono text-xs leading-relaxed" bind:value={rawText} spellcheck={false} aria-label="Structured message source AST" />
+  {#if rawError}<p class="text-sm text-destructive" aria-live="polite">{rawError}</p>{/if}
+  {#snippet footer()}
+    <Button variant="outline" onclick={() => rawMode = false}>Cancel</Button>
+    <Button onclick={applyRaw}><Settings2Icon data-icon="inline-start" />Apply source</Button>
+  {/snippet}
+</AppDialog>
 
 <style>
-  .composer { display: grid; gap: .7rem; }
-  .composer-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border: 1px solid #3c453f; border-radius: .6rem; padding: .8rem .9rem; background: #151b17; }
-  .composer-header div { display: grid; gap: .2rem; }
-  .composer-header strong { color: #e0e4e1; font-size: .72rem; }
-  .composer-header span { color: #707b73; font-size: .59rem; }
-  button { border: 1px solid #3d463f; border-radius: .35rem; padding: .42rem .55rem; color: #aab3ac; background: #171d19; font-size: .59rem; cursor: pointer; }
-  button:hover:not(:disabled) { border-color: #716441; color: #e5d6aa; }
-  button:disabled { cursor: not-allowed; opacity: .35; }
-  .raw-button, .add { color: #c1aa69; }
-  details { border: 1px solid #303833; border-radius: .55rem; background: #0d110f; overflow: hidden; }
-  summary { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: .55rem; padding: .7rem .8rem; color: #bcc5be; background: #151a17; cursor: pointer; }
-  summary > span { display: grid; place-items: center; width: 1.3rem; height: 1.3rem; border: 1px solid #62583a; border-radius: 50%; color: #d1b96f; font: .54rem ui-monospace, monospace; }
-  summary strong { font-size: .66rem; }
-  summary small { justify-self: end; color: #657068; font-size: .55rem; font-weight: 400; }
-  .section-body { display: grid; gap: .6rem; padding: .75rem; }
-  .section-body > p { margin: 0; color: #6c776f; font-size: .59rem; line-height: 1.5; }
-  .table-list { display: grid; gap: .45rem; }
-  .input-row, .selector-row { display: grid; grid-template-columns: 1fr 1fr 1.25fr auto; align-items: end; gap: .45rem; }
-  .selector-row { grid-template-columns: 1fr 1fr 1fr auto; }
-  label { display: grid; gap: .28rem; color: #89948c; font-size: .56rem; font-weight: 650; }
-  input, select, textarea { min-width: 0; border: 1px solid #3a433d; border-radius: .35rem; outline: 0; padding: .48rem .52rem; color: #e5e9e6; background: #090d0b; font: .63rem ui-monospace, monospace; }
-  input:focus, select:focus, textarea:focus { border-color: #8c7848; }
-  .remove { color: #d28c82; }
-  .add { justify-self: start; border-style: dashed; }
-  .declaration-card { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: .5rem; border: 1px solid #313a34; border-radius: .45rem; padding: .6rem; background: #101512; }
-  .format-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .45rem; }
-  .variants { gap: .75rem; }
-  .variant-card { display: grid; gap: .55rem; border: 1px solid #363f39; border-radius: .55rem; padding: .7rem; background: #111613; }
-  .variant-card > header { display: flex; align-items: end; justify-content: space-between; gap: .5rem; }
-  .matches { display: flex; flex-wrap: wrap; gap: .45rem; }
-  .matches label { width: 9rem; }
-  .always { align-self: center; border-radius: 1rem; padding: .25rem .5rem; color: #9fc1a8; background: #1c3022; font-size: .56rem; }
-  .variant-actions, .pattern-mode { display: flex; gap: .25rem; }
-  .pattern-mode button { border: 0; color: #68736b; background: transparent; }
-  .pattern-mode button.active { color: #d3be7d; background: #29271b; }
-  .variant-card > textarea { min-height: 6rem; resize: vertical; line-height: 1.55; }
-  .raw-backdrop { position: fixed; z-index: 45; inset: 0; display: grid; place-items: center; padding: 2rem; background: #050706e8; }
-  .raw-dialog { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; width: min(780px, 100%); height: min(720px, calc(100vh - 4rem)); border: 1px solid #474f48; border-radius: .7rem; background: #101512; overflow: hidden; }
-  .raw-dialog > header, .raw-dialog > footer { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .8rem 1rem; background: #161c18; }
-  .raw-dialog header div { display: grid; gap: .15rem; }
-  .raw-dialog header strong { color: #e7e2d4; font-size: .75rem; }
-  .raw-dialog header span { color: #707b73; font-size: .58rem; }
-  .raw-dialog > textarea { border: 0; border-block: 1px solid #303833; border-radius: 0; padding: 1rem; resize: none; line-height: 1.55; }
-  .raw-dialog > p { margin: 0; padding: .6rem 1rem; color: #e39b90; background: #291b18; font-size: .62rem; }
-  .raw-dialog footer { justify-content: flex-end; }
-  .raw-dialog .apply { border-color: #b59a53; color: #1b170d; background: #c8ad63; font-weight: 700; }
+  code {
+    border-radius: var(--radius-sm);
+    padding: 0.08rem 0.25rem;
+    color: color-mix(in oklab, var(--primary) 72%, var(--foreground));
+    background: var(--muted);
+    font: 0.67rem ui-monospace, monospace;
+  }
 </style>

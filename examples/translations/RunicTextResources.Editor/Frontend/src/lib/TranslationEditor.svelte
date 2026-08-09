@@ -68,7 +68,7 @@
         {#if mode === "simple"}
           <span>Use <code>{"{name}"}</code> for inputs. Literal braces use <code>{"{{braces}}"}</code>.</span>
         {:else if mode === "advanced"}
-          <span>Edit selectors, variants, formats, and semantic markup as a schema-v2 value.</span>
+          <span>Write each case naturally, then inspect highlighted inputs or open advanced structure only when needed.</span>
         {:else}
           <span>Changes here affect the complete resource document.</span>
         {/if}
