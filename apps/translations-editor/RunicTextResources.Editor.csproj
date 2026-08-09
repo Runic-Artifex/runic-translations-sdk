@@ -8,9 +8,9 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <ImplicitUsings>enable</ImplicitUsings>
     <TextResourcesEmitEsm>true</TextResourcesEmitEsm>
+    <TextResourcesToolCommand>dotnet tool run runic-textresources --</TextResourcesToolCommand>
     <TextResourcesRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TextResourcesRuntimePath>
     <TextResourcesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TextResourcesRuntimePath)text-resources</TextResourcesOutputPath>
-    <TextResourcesToolCommand>dotnet &quot;$(MSBuildProjectDirectory)/../../dotnet/tools/RunicTextResources.Tool/bin/$(Configuration)/net10.0/$(TextResourcesRuntimePath)RunicTextResources.Tool.dll&quot;</TextResourcesToolCommand>
     <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
   </PropertyGroup>
 
@@ -21,10 +21,9 @@
 
   <ItemGroup>
     <PackageReference Include="CsWebUi" />
-    <ProjectReference Include="../../dotnet/src/RunicTextResources.Authoring/RunicTextResources.Authoring.csproj" />
-    <ProjectReference Include="../../dotnet/src/RunicTextResources.Compiler/RunicTextResources.Compiler.csproj" />
-    <ProjectReference Include="../../dotnet/tools/RunicTextResources.Tool/RunicTextResources.Tool.csproj"
-                      ReferenceOutputAssembly="false" />
+    <PackageReference Include="RunicTextResources.Authoring" />
+    <PackageReference Include="RunicTextResources.Build" PrivateAssets="all" />
+    <PackageReference Include="RunicTextResources.Compiler" />
   </ItemGroup>
 
   <ItemGroup>
@@ -36,7 +35,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
-    <None Include="../../LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
@@ -73,6 +72,4 @@
                              CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
-
-  <Import Project="../../dotnet/src/RunicTextResources.Build/build/RunicTextResources.Build.targets" />
 </Project>

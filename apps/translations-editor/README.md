@@ -1,101 +1,57 @@
 # Runic Translations Editor
 
-This is the first complete consuming application for Runic Text Resources. It
-is also the foundation for the customer-facing editor: the normal workflow is
-optimized for translators, while schema-v2 structures and raw JSON remain
-available to developers and localization specialists.
+A focused desktop editor for [Runic Translations](https://github.com/Runic-Artifex/runic-translations) workspaces. The interface is designed around translators: locale coverage, message search, review state, structured variants, variables, previews, and quality feedback are available without editing JSON directly.
 
-The implementation roadmap is in
-[`docs/translations-editor-plan.md`](../../docs/translations-editor-plan.md).
-The self-contained preview, update-channel, diagnostics, signing, and provenance
-contract is in
-[`docs/editor-distribution.md`](../../docs/editor-distribution.md).
+This repository owns the editor application, its cross-platform preview archives, and editor releases. The compiler, schema, runtime, command-line tooling, and language integrations remain in the Runic Translations repository. Existing `RunicTextResources.*` package and code identifiers are intentionally retained for compatibility.
 
-## What the vertical proves
+## Run locally
 
-- the C# host discovers and bounds a customer workspace;
-- the canonical compiler validates every draft before a save;
-- saves use revision checks and same-directory atomic replacement;
-- one-locale catalogs have the same focused workflow as multi-locale catalogs;
-- locale fallback, coverage, missing translations, warnings, and errors are
-  visible without reading JSON;
-- SvelteKit consumes the generated, tree-shakeable editor ESM through the Vite
-  adapter;
-- CsWebUi serves the static SvelteKit application and exposes the narrow file
-  operation bridge.
-- a guided New Project flow previews and creates one- or multi-locale projects
-  through the same compiler-validated authoring layer as the CLI.
-- locale/key lifecycle changes are previewed and committed through recoverable
-  workspace transactions;
-- the optional versioned editor-state sidecar carries review states, notes,
-  preview samples, and terminology without becoming a compiler input;
-- stale-source and local quality checks, translation-memory suggestions,
-  deterministic CSV reports, bulk workflow changes, and bounded message-list
-  rendering support large catalogs without requiring a network service.
-
-The included `ExampleWorkspace` deliberately uses German as its source locale,
-adds English and French, includes a structured plural message, and leaves some
-French translations missing. A customer with only German can declare only the
-`de` locale and use the same editor without comparison-only UI.
-
-## Run
-
-From the repository root:
+The editor currently consumes preview dependencies from GitHub Packages. Export a GitHub token with package-read access, then restore and run:
 
 ```bash
-nix develop
-dotnet run --project samples/RunicTextResources.Editor -- \
-  --workspace samples/RunicTextResources.Editor/ExampleWorkspace
+export GITHUB_ACTOR="your-github-user"
+export GITHUB_TOKEN="your-token"
+export NODE_AUTH_TOKEN="$GITHUB_TOKEN"
+
+dotnet tool restore
+npm --prefix Frontend ci
+dotnet run --project RunicTextResources.Editor.csproj -- \
+  --workspace ExampleWorkspace
 ```
 
-Add `--webview` to request an embedded WebView instead of the recommended
-installed browser. Pass any directory containing one catalog manifest and its
-resource documents to `--workspace`.
+Add `--webview` to request an embedded WebView instead of the recommended installed browser. Pass any directory containing one catalog manifest and its resource documents to `--workspace`.
 
-The frontend can be developed without a native host:
+For frontend-only development, build the .NET project once so the localized ESM module exists, then run:
 
 ```bash
-cd samples/RunicTextResources.Editor/Frontend
 RUNIC_TEXT_MANIFEST=../obj/Debug/net10.0/text-resources/editor.esm/web-module-manifest-v1.json \
-  npm run dev:mock
+  npm --prefix Frontend run dev:mock
 ```
 
-Build the .NET project once first so the editor's own localized ESM modules
-exist. Mock mode keeps writes in memory.
+Mock mode keeps writes in memory.
 
 ## Verify
 
 ```bash
-nix develop -c ./samples/RunicTextResources.Editor/verify.sh
+./verify.sh
 ```
 
-The smoke path opens a copy of the example as both a multi-locale and
-single-locale workspace, creates and switches to a new three-locale project,
-asks the real compiler to validate valid and invalid drafts, performs an atomic
-save, round-trips the optional review sidecar, and verifies stale-write
-rejection. The frontend verification also enforces a 50,000-message quality and
-search pass across 100 review locales, a 10-second processing budget, a 256 MiB
-heap-growth budget, and a 300-row rendering batch. It does not open a browser
-window.
+Verification builds against released packages only, checks the Svelte application and production bundle, runs the editor's compiler/save/recovery smoke path, and rejects unintended generated changes.
 
-## Self-contained preview
+## Package a preview
 
-The matching-OS packaging script publishes and launches a complete application
-that needs neither Node.js nor a separately installed .NET runtime:
+The matching-OS packaging script creates and starts a self-contained archive that requires neither Node.js nor a separately installed .NET runtime:
 
 ```bash
-nix develop -c pwsh -NoProfile -File ./eng/package-editor.ps1 \
+pwsh -NoProfile -File ./eng/package-editor.ps1 \
   -RuntimeIdentifier linux-x64 \
-  -OutputDirectory ./artifacts/editor
+  -OutputDirectory ./artifacts/editor \
+  -Version 0.1.0-preview.local \
+  -RepositoryCommit "$(git rev-parse HEAD)"
 ```
 
-The About dialog shows the embedded version/channel/commit and creates a
-privacy-bounded diagnostic zip. Preview archives also include a per-file hash
-manifest, archive checksum, license, and third-party notices.
+See [distribution and release policy](docs/editor-distribution.md) for supported targets, manifests, checksums, update channels, and the signing boundary.
 
-## Deliberate current scope
+## Current scope
 
-This vertical creates a new schema-v2 catalog, discovers and selects catalogs,
-repairs malformed documents, and edits locale documents, locale graphs, keys,
-structured messages, and review metadata. Machine-translation providers and
-signed customer distribution remain explicit product follow-ups.
+The editor creates schema-v2 projects; discovers, repairs, and edits catalogs and locale documents; manages locale graphs, keys, structured messages, and review metadata; and produces privacy-bounded diagnostics. Machine-translation providers and signed stable distribution remain explicit follow-ups.

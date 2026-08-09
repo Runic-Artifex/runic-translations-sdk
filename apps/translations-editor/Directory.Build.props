@@ -1,0 +1,32 @@
+<Project>
+  <PropertyGroup>
+    <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == '' and '$(CI)' == 'true'">Verification</RunicTextResourcesBuildMode>
+    <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == ''">Development</RunicTextResourcesBuildMode>
+    <RunicTextResourcesVerificationBuild Condition="'$(RunicTextResourcesBuildMode)' == 'Verification'">true</RunicTextResourcesVerificationBuild>
+    <RunicTextResourcesVerificationBuild Condition="'$(RunicTextResourcesVerificationBuild)' == ''">false</RunicTextResourcesVerificationBuild>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors Condition="'$(TreatWarningsAsErrors)' == ''">false</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <DebugType>embedded</DebugType>
+    <RepositoryType>git</RepositoryType>
+    <Authors>RunicArtifex</Authors>
+    <Company>RunicArtifex</Company>
+    <Copyright>Copyright (c) 2026 Viktor Jannicke</Copyright>
+    <RepositoryUrl>https://github.com/Runic-Artifex/runic-translations-editor</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PackageProjectUrl>https://github.com/Runic-Artifex/runic-translations-editor</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <NuGetAudit Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</NuGetAudit>
+    <NuGetAudit Condition="'$(NuGetAudit)' == ''">false</NuGetAudit>
+    <VersionPrefix Condition="'$(VersionPrefix)' == ''">0.1.0</VersionPrefix>
+  </PropertyGroup>
+</Project>
+

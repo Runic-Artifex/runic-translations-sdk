@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="CsWebUi" Version="2.5.0-beta.4.4" />
+    <PackageVersion Include="RunicTextResources.Authoring" Version="0.1.0-preview.3.2" />
+    <PackageVersion Include="RunicTextResources.Build" Version="0.1.0-preview.3.2" />
+    <PackageVersion Include="RunicTextResources.Compiler" Version="0.1.0-preview.3.2" />
+  </ItemGroup>
+</Project>

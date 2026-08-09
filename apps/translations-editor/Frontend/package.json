@@ -17,7 +17,7 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@internationalized/date": "^3.12.3",
     "@lucide/svelte": "^1.30.0",
-    "@runic-artifex/vite-plugin-text-resources": "file:../../../web",
+    "@runic-artifex/vite-plugin-text-resources": "0.1.0-preview.3.2",
     "@sveltejs/adapter-static": "3.0.10",
     "@sveltejs/kit": "2.70.2",
     "@sveltejs/vite-plugin-svelte": "7.2.0",
