@@ -23,15 +23,15 @@
 		selectedLocale,
 		onselect,
 		onmanage,
+		open = $bindable(true),
 	}: {
 		locales: LocaleSummary[];
 		selectedLocale: string;
 		onselect: (locale: string) => void;
 		onmanage: () => void;
+		open?: boolean;
 	} = $props();
 
-	let scrollHeight = $derived(`${Math.min(Math.max(locales.length, 1) * 44, 220)}px`);
-	let open = $state(true);
 	const sidebar = Sidebar.useSidebar();
 
 	onMount(() => {
@@ -48,8 +48,8 @@
 	}
 </script>
 
-<Collapsible.Root bind:open onOpenChange={persistOpen} class="group/languages">
-	<Sidebar.Group aria-label="Locale coverage" class="py-1">
+<Collapsible.Root bind:open onOpenChange={persistOpen} class={["group/languages", open && "min-h-0 flex flex-1 flex-col"]}>
+	<Sidebar.Group aria-label="Locale coverage" class={["py-1", open && "min-h-0 flex-1"]}>
 		<Sidebar.GroupLabel class="pr-10">
 			<Collapsible.Trigger class="flex min-w-0 flex-1 items-center gap-2 text-left">
 				<span>Languages</span>
@@ -60,9 +60,9 @@
 		<Sidebar.GroupAction aria-label="Manage languages" title="Manage languages" onclick={onmanage}>
 			<Settings2Icon />
 		</Sidebar.GroupAction>
-		<Collapsible.Content>
-			<Sidebar.GroupContent>
-				<ScrollArea.Root style={`height: ${scrollHeight}`}>
+		<Collapsible.Content class="min-h-0 flex-1 overflow-hidden">
+			<Sidebar.GroupContent class="min-h-0 flex-1">
+				<ScrollArea.Root class="h-full min-h-0">
 					<Item.Group class="gap-1 pr-2">
 					{#each locales as locale (locale.tag)}
 						<Item.Root

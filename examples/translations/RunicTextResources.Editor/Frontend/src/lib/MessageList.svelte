@@ -67,6 +67,7 @@
     onmarkreview,
     onapprove,
     onloadmore,
+    open = $bindable(true),
   }: {
     items: MessageListItem[];
     selectedKey: string;
@@ -79,10 +80,10 @@
     onmarkreview: () => void;
     onapprove: () => void;
     onloadmore: () => void;
+    open?: boolean;
   } = $props();
 
   const sidebar = Sidebar.useSidebar();
-  let open = $state(true);
   let tree = $derived(buildTree(items));
 
   onMount(() => {
