@@ -4,12 +4,12 @@
 </script>
 
 <script lang="ts">
+  import ListFilterIcon from "@lucide/svelte/icons/list-filter";
   import SearchIcon from "@lucide/svelte/icons/search";
   import { Badge } from "$lib/components/ui/badge/index.js";
+  import { buttonVariants } from "$lib/components/ui/button/index.js";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
   import * as InputGroup from "$lib/components/ui/input-group/index.js";
-  import * as Kbd from "$lib/components/ui/kbd/index.js";
-  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-  import * as ToggleGroup from "$lib/components/ui/toggle-group/index.js";
 
   let {
     query = $bindable(),
@@ -26,45 +26,45 @@
     options: MessageFilterOption[];
     filterLabel: string;
   } = $props();
+
+  let selectedOption = $derived(options.find((option) => option.value === filter) ?? options[0]);
 </script>
 
-<Sidebar.Group class="py-1">
-  <Sidebar.GroupContent class="grid gap-2">
-    <InputGroup.Root>
-      <InputGroup.Input bind:ref={inputRef} bind:value={query} type="search" {placeholder} />
-      <InputGroup.Addon>
-        <SearchIcon />
-      </InputGroup.Addon>
-      <InputGroup.Addon align="inline-end">
-        <Kbd.Root>⌘ K</Kbd.Root>
-      </InputGroup.Addon>
-    </InputGroup.Root>
-
-    <ToggleGroup.Root
-      type="single"
-      variant="outline"
-      size="sm"
-      spacing={1}
-      value={filter}
-      class="flex w-full flex-wrap justify-start gap-1"
-      aria-label={filterLabel}
-      onValueChange={(value) => {
-        if (value !== "") filter = value as MessageFilter;
-      }}
-    >
-      {#each options as option (option.value)}
-        <ToggleGroup.Item
-          value={option.value}
-          class="h-7 min-w-0 gap-1 px-2 text-xs"
-          aria-label={option.label}
-          onclick={(event) => {
-            if (filter === option.value) event.preventDefault();
-          }}
+<div class="px-2 pb-2">
+  <InputGroup.Root>
+    <InputGroup.Input bind:ref={inputRef} bind:value={query} type="search" {placeholder} />
+    <InputGroup.Addon>
+      <SearchIcon />
+    </InputGroup.Addon>
+    <InputGroup.Addon align="inline-end" class="gap-1">
+      {#if filter !== "all"}
+        <Badge variant="secondary" class="max-w-24 truncate">{selectedOption?.label}</Badge>
+      {/if}
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger
+          class={buttonVariants({ variant: filter === "all" ? "ghost" : "secondary", size: "icon-xs" })}
+          aria-label={`${filterLabel}: ${selectedOption?.label ?? filter}`}
+          title={`${filterLabel}: ${selectedOption?.label ?? filter}`}
         >
-          {option.label}
-          <Badge variant="secondary" class="h-4 min-w-4 px-1 text-[0.625rem]">{option.count}</Badge>
-        </ToggleGroup.Item>
-      {/each}
-    </ToggleGroup.Root>
-  </Sidebar.GroupContent>
-</Sidebar.Group>
+          <ListFilterIcon />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="end" class="w-56">
+          <DropdownMenu.Label>{filterLabel}</DropdownMenu.Label>
+          <DropdownMenu.Group>
+            <DropdownMenu.RadioGroup
+              value={filter}
+              onValueChange={(value) => filter = value as MessageFilter}
+            >
+              {#each options as option (option.value)}
+                <DropdownMenu.RadioItem value={option.value}>
+                  <span>{option.label}</span>
+                  <Badge variant="secondary" class="ml-auto mr-5">{option.count}</Badge>
+                </DropdownMenu.RadioItem>
+              {/each}
+            </DropdownMenu.RadioGroup>
+          </DropdownMenu.Group>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+    </InputGroup.Addon>
+  </InputGroup.Root>
+</div>
