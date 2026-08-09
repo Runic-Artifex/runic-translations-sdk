@@ -2,8 +2,11 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <AssemblyName>RunicTextResources.Editor</AssemblyName>
-    <RootNamespace>RunicTextResources.Editor</RootNamespace>
+    <AssemblyName>RunicTranslations.Editor</AssemblyName>
+    <RootNamespace>RunicTranslations.Editor</RootNamespace>
+    <Product>Runic Translations Editor</Product>
+    <Title>Runic Translations Editor</Title>
+    <Description>A focused desktop editor for Runic Translations workspaces.</Description>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <ImplicitUsings>enable</ImplicitUsings>

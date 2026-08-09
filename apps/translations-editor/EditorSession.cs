@@ -1,6 +1,6 @@
 using RunicTextResources.Authoring;
 
-namespace RunicTextResources.Editor;
+namespace RunicTranslations.Editor;
 
 internal sealed class EditorSession : IDisposable
 {

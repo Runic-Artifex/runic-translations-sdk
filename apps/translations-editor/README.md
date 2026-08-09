@@ -15,7 +15,7 @@ export NODE_AUTH_TOKEN="$GITHUB_TOKEN"
 
 dotnet tool restore
 npm --prefix Frontend ci
-dotnet run --project RunicTextResources.Editor.csproj -- \
+dotnet run --project RunicTranslations.Editor.csproj -- \
   --workspace ExampleWorkspace
 ```
 

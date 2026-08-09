@@ -9,7 +9,7 @@ credential-gated as specified by E6.
 
 ## Outcome
 
-Turn the current `RunicTextResources.Editor` vertical into the customer-facing
+Turn the current `RunicTranslations.Editor` application into the customer-facing
 application for creating, editing, validating, reviewing, and maintaining Runic
 Text Resources projects.
 
@@ -210,7 +210,7 @@ through the editor wizard or `runic-textresources init`.
 
 Template output is tested by the same compiler and package-consumer pipeline as
 CLI/editor output. The template pack is versioned and published with the other
-Runic Text Resources packages.
+Runic Translations packages.
 
 ## Workspace and file model
 

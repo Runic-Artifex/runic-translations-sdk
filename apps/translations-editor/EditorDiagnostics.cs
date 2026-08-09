@@ -3,11 +3,11 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
-namespace RunicTextResources.Editor;
+namespace RunicTranslations.Editor;
 
 internal static class EditorDiagnostics
 {
-    private const string BundleSchema = "runic.textresources.editor-diagnostics/1";
+    private const string BundleSchema = "runic.translations.editor-diagnostics/1";
 
     public static EditorAbout About()
     {
@@ -36,10 +36,10 @@ internal static class EditorDiagnostics
         ArgumentNullException.ThrowIfNull(snapshot);
         try
         {
-            string directory = Path.Combine(Path.GetTempPath(), "RunicTextResources", "Diagnostics");
+            string directory = Path.Combine(Path.GetTempPath(), "RunicTranslations", "Editor", "Diagnostics");
             Directory.CreateDirectory(directory);
             string path = Path.Combine(directory,
-                $"runic-text-resources-diagnostics-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.zip");
+                $"runic-translations-editor-diagnostics-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.zip");
             EditorDiagnosticGroup[] diagnostics = snapshot.Diagnostics
                 .GroupBy(static item => (item.Id, item.Severity))
                 .OrderBy(static group => group.Key.Id, StringComparer.Ordinal)

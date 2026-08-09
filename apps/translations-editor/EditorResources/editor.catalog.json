@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "catalog": "editor",
   "code": {
-    "namespace": "RunicTextResources.Editor.Generated",
+    "namespace": "RunicTranslations.Editor.Generated",
     "className": "EditorText"
   },
   "defaultLocale": "en",

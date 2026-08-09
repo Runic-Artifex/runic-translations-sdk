@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace RunicTextResources.Editor;
+namespace RunicTranslations.Editor;
 
 internal static class EditorWorkspacePicker
 {
@@ -52,7 +52,7 @@ internal static class EditorWorkspacePicker
             result.ArgumentList.Add(
                 "Add-Type -AssemblyName System.Windows.Forms; " +
                 "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; " +
-                "$dialog.Description = 'Open a Runic Text Resources workspace'; " +
+                "$dialog.Description = 'Open a Runic Translations workspace'; " +
                 "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) }");
             return result;
         }
@@ -61,7 +61,7 @@ internal static class EditorWorkspacePicker
         {
             var result = StartInfo("/usr/bin/osascript");
             result.ArgumentList.Add("-e");
-            result.ArgumentList.Add("POSIX path of (choose folder with prompt \"Open a Runic Text Resources workspace\")");
+            result.ArgumentList.Add("POSIX path of (choose folder with prompt \"Open a Runic Translations workspace\")");
             return result;
         }
 
@@ -70,7 +70,7 @@ internal static class EditorWorkspacePicker
         var linux = StartInfo(linuxPicker);
         linux.ArgumentList.Add("--file-selection");
         linux.ArgumentList.Add("--directory");
-        linux.ArgumentList.Add("--title=Open a Runic Text Resources workspace");
+        linux.ArgumentList.Add("--title=Open a Runic Translations workspace");
         return linux;
     }
 

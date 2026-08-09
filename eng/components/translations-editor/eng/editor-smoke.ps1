@@ -2,7 +2,7 @@ param([string]$Configuration = "Release")
 
 $ErrorActionPreference = "Stop"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repositoryRoot "RunicTextResources.Editor.csproj"
+$project = Join-Path $repositoryRoot "RunicTranslations.Editor.csproj"
 $frontend = Join-Path $repositoryRoot "Frontend"
 $workspace = Join-Path $repositoryRoot "ExampleWorkspace"
 $publishOutput = Join-Path ([System.IO.Path]::GetTempPath()) ("runic-editor-smoke-" + [Guid]::NewGuid().ToString("N"))
@@ -24,7 +24,7 @@ try {
 
     dotnet publish $project --configuration $Configuration --no-restore --output $publishOutput
     if ($LASTEXITCODE -ne 0) { throw "Editor publish failed." }
-    dotnet (Join-Path $publishOutput "RunicTextResources.Editor.dll") --smoke-test --workspace (Join-Path $publishOutput "ExampleWorkspace")
+    dotnet (Join-Path $publishOutput "RunicTranslations.Editor.dll") --smoke-test --workspace (Join-Path $publishOutput "ExampleWorkspace")
     if ($LASTEXITCODE -ne 0) { throw "Published editor smoke test failed." }
     Write-Host "Cross-platform editor smoke passed."
 }
@@ -33,4 +33,3 @@ finally {
 }
 
 $global:LASTEXITCODE = 0
-

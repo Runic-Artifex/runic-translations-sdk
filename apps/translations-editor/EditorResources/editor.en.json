@@ -6,7 +6,7 @@
   "resources": {
     "App": {
       "Title": "Translations",
-      "Eyebrow": "Runic Text Resources",
+      "Eyebrow": "Runic Translations Editor",
       "Search": "Search messages…",
       "All": "All",
       "Missing": "Missing",

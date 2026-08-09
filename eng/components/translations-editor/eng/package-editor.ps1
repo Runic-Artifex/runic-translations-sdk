@@ -10,9 +10,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$editorProject = Join-Path $repositoryRoot "RunicTextResources.Editor.csproj"
+$editorProject = Join-Path $repositoryRoot "RunicTranslations.Editor.csproj"
 $workRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("runic-editor-package-" + [Guid]::NewGuid().ToString("N"))
-$publishRoot = Join-Path $workRoot "RunicTextResources.Editor"
+$publishRoot = Join-Path $workRoot "RunicTranslations.Editor"
 $expectedRuntimeIdentifier = if ($IsWindows) { "win-x64" } elseif ($IsMacOS) { "osx-arm64" } else { "linux-x64" }
 
 if ($RuntimeIdentifier -ne $expectedRuntimeIdentifier) {
@@ -46,7 +46,7 @@ try {
     foreach ($required in @("www/index.html", "ExampleWorkspace/product.catalog.json", "LICENSE.txt", "THIRD-PARTY-NOTICES.md")) {
         if (-not (Test-Path (Join-Path $publishRoot $required))) { throw "Published editor omitted '$required'." }
     }
-    $executableName = if ($IsWindows) { "RunicTextResources.Editor.exe" } else { "RunicTextResources.Editor" }
+    $executableName = if ($IsWindows) { "RunicTranslations.Editor.exe" } else { "RunicTranslations.Editor" }
     $executable = Join-Path $publishRoot $executableName
     if (-not (Test-Path $executable)) { throw "Published editor executable was not produced." }
     $versionOutput = (& $executable --version) -join "`n"
@@ -80,7 +80,7 @@ try {
         Compress-Archive -Path (Join-Path $publishRoot "*") -DestinationPath $archive -CompressionLevel Optimal
     } else {
         $archive = Join-Path $OutputDirectory "$baseName.tar.gz"
-        tar -C $workRoot -czf $archive "RunicTextResources.Editor"
+        tar -C $workRoot -czf $archive "RunicTranslations.Editor"
         if ($LASTEXITCODE -ne 0) { throw "Editor archive creation failed." }
     }
     $digest = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
@@ -90,4 +90,3 @@ try {
 finally {
     if (Test-Path $workRoot) { Remove-Item -Path $workRoot -Recurse -Force }
 }
-

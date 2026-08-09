@@ -1,7 +1,7 @@
 using System.Text.Json;
 using CsWebUi;
 
-namespace RunicTextResources.Editor;
+namespace RunicTranslations.Editor;
 
 internal static class Program
 {

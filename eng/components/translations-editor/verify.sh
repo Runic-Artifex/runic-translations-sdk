@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-project="$repository_root/RunicTextResources.Editor.csproj"
+project="$repository_root/RunicTranslations.Editor.csproj"
 frontend="$repository_root/Frontend"
 manifest="$repository_root/obj/Release/net10.0/text-resources/editor.esm/web-module-manifest-v1.json"
 

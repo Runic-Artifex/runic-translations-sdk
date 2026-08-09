@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace RunicTextResources.Editor;
+namespace RunicTranslations.Editor;
 
 internal sealed record EditorCatalog(
     string Id,

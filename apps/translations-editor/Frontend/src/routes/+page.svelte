@@ -1245,8 +1245,8 @@
 </script>
 
 <svelte:head>
-  <title>{labels.title} · Runic Artifex</title>
-  <meta name="description" content="A focused editor for Runic Text Resources" />
+  <title>Runic Translations Editor</title>
+  <meta name="description" content="A focused desktop editor for Runic Translations workspaces" />
 </svelte:head>
 <svelte:window onkeydown={handleKeyboard} onbeforeunload={protectDraft} />
 
@@ -1341,7 +1341,7 @@
     <div class="mark" aria-hidden="true"><span></span></div>
     <p class="eyebrow">{labels.eyebrow}</p>
     <h1>Could not open this translation workspace</h1>
-    <p>{clientError ?? "No Runic Text Resources catalog was found."}</p>
+    <p>{clientError ?? "No Runic Translations catalog was found."}</p>
     <button class="primary" onclick={() => void loadWorkspace(false)}>{labels.reload}</button>
   </main>
 {:else if snapshot.pendingTransaction !== undefined}
@@ -1664,7 +1664,7 @@
         <Alert.Description>The zip contains version/runtime information, catalog counts, and grouped diagnostic IDs. It excludes workspace paths, file names, messages, source JSON, and translations.</Alert.Description>
         {#if diagnosticMessage}<p class="text-sm text-primary" aria-live="polite">{diagnosticMessage}</p>{/if}
       </Alert.Root>
-      <p class="text-sm text-muted-foreground">Runic Text Resources is MIT licensed. The packaged application includes <code>LICENSE.txt</code> and <code>THIRD-PARTY-NOTICES.md</code>.</p>
+      <p class="text-sm text-muted-foreground">Runic Translations is MIT licensed. The packaged application includes <code>LICENSE.txt</code> and <code>THIRD-PARTY-NOTICES.md</code>.</p>
     </div>
     {#snippet footer()}
       <Button variant="outline" onclick={() => aboutDialogOpen = false}>Close</Button>

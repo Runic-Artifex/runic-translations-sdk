@@ -2,7 +2,7 @@ using System.IO.Compression;
 using System.Text.Json.Nodes;
 using RunicTextResources.Authoring;
 
-namespace RunicTextResources.Editor;
+namespace RunicTranslations.Editor;
 
 internal static class EditorSmokeTest
 {
@@ -62,7 +62,7 @@ internal static class EditorSmokeTest
                     "The diagnostic bundle omitted legal notices.");
                 using StreamReader reader = new(archive.GetEntry("diagnostics.json")!.Open());
                 string diagnosticJson = await reader.ReadToEndAsync().ConfigureAwait(false);
-                Require(diagnosticJson.Contains("runic.textresources.editor-diagnostics/1", StringComparison.Ordinal),
+                Require(diagnosticJson.Contains("runic.translations.editor-diagnostics/1", StringComparison.Ordinal),
                     "The diagnostic bundle schema was not versioned.");
                 Require(!diagnosticJson.Contains(temporaryRoot, StringComparison.Ordinal) &&
                     !diagnosticJson.Contains("product.de.json", StringComparison.Ordinal) &&

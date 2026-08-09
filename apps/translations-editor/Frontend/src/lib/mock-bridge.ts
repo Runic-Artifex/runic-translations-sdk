@@ -147,7 +147,7 @@ export const mockBridge: EditorBridge = {
     };
   },
   async createDiagnosticBundle() {
-    return { ok: true, path: "/tmp/runic-text-resources-diagnostics-mock.zip" };
+    return { ok: true, path: "/tmp/runic-translations-editor-diagnostics-mock.zip" };
   },
   async save(path, content, revision) {
     const current = snapshot.documents.find((candidate) => candidate.path === path);

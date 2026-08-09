@@ -6,7 +6,7 @@ using RunicTextResources.Authoring;
 using RunicTextResources.Compiler;
 using RunicTextResources.Compiler.Generation;
 
-namespace RunicTextResources.Editor;
+namespace RunicTranslations.Editor;
 
 internal sealed class EditorWorkspace : IDisposable
 {
