@@ -249,7 +249,7 @@ public sealed class TextResourcesGenerator : IIncrementalGenerator
             "RunicTextResources",
             severity,
             isEnabledByDefault: true,
-            helpLinkUri: "https://github.com/RunicArtifex/runic-text-resources");
+            helpLinkUri: "https://github.com/Runic-Artifex/runic-translations");
     }
 
     private static int Clamp(int value, int minimum, int maximum)

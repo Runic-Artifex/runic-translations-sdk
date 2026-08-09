@@ -22,6 +22,7 @@ mkdir -p "$output_directory"
 package_projects=(
   "$repository_root/dotnet/src/RunicTextResources/RunicTextResources.csproj"
   "$repository_root/dotnet/src/RunicTextResources.Compiler/RunicTextResources.Compiler.csproj"
+  "$repository_root/dotnet/src/RunicTextResources.Authoring/RunicTextResources.Authoring.csproj"
   "$repository_root/dotnet/src/RunicTextResources.Generator/RunicTextResources.Generator.csproj"
   "$repository_root/dotnet/src/RunicTextResources.Build/RunicTextResources.Build.csproj"
   "$repository_root/dotnet/tools/RunicTextResources.Tool/RunicTextResources.Tool.csproj"

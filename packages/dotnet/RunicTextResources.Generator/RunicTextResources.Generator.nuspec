@@ -7,9 +7,9 @@
     <description>Incremental C# source generator for Runic Text Resources.</description>
     <license type="expression">MIT</license>
     <readme>README.md</readme>
-    <projectUrl>https://github.com/Runic-Artifex/runic-text-resources</projectUrl>
+    <projectUrl>https://github.com/Runic-Artifex/runic-translations</projectUrl>
     <tags>runic-artifex i18n localization resources dotnet nativeaot source-generator</tags>
-    <repository type="git" url="https://github.com/Runic-Artifex/runic-text-resources" commit="$repositoryCommit$" />
+    <repository type="git" url="https://github.com/Runic-Artifex/runic-translations" commit="$repositoryCommit$" />
     <developmentDependency>true</developmentDependency>
     <dependencies>
       <dependency id="RunicTextResources" version="[$packageVersion$]" exclude="Build,Analyzers" />

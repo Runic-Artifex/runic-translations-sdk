@@ -42,7 +42,7 @@ jobs:
       - name: Upload package artifact
         uses: actions/upload-artifact@v7
         with:
-          name: runic-text-resources-${{ env.PACKAGE_VERSION }}
+          name: runic-translations-${{ env.PACKAGE_VERSION }}
           path: ${{ runner.temp }}/packages/*.nupkg
           if-no-files-found: error
           retention-days: 14
@@ -64,7 +64,7 @@ jobs:
       - name: Download package artifact
         uses: actions/download-artifact@v8
         with:
-          name: runic-text-resources-${{ env.PACKAGE_VERSION }}
+          name: runic-translations-${{ env.PACKAGE_VERSION }}
           path: ${{ runner.temp }}/packages
 
       - name: Publish packages

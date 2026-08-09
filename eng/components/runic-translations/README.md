@@ -1,6 +1,6 @@
-# Runic Text Resources
+# Runic Translations
 
-Runic Text Resources is a deterministic, language-neutral localization system.
+Runic Translations is a deterministic, language-neutral localization system.
 It started inside Runic Toolkit, but its contracts, compiler, runtime, generator,
 build integration, and command-line tool are intentionally independent of any UI
 framework.
@@ -15,6 +15,7 @@ artifacts, and runtime ABI.
 |---|---|
 | `RunicTextResources` | NativeAOT-compatible .NET runtime contracts and snapshots |
 | `RunicTextResources.Compiler` | Deterministic, UI-independent compiler kernel |
+| `RunicTextResources.Authoring` | Supported workspace and project-authoring operations for tooling |
 | `RunicTextResources.Generator` | Incremental C# source generator |
 | `RunicTextResources.Build` | Dependency-free MSBuild integration |
 | `RunicTextResources.Tool` | `runic-textresources` validation and generation tool |
@@ -54,7 +55,7 @@ nix develop
 ```
 
 The pipeline restores and builds the standalone solution, runs every project-level
-test executable, packs all six packages into an isolated local feed, installs and
+test executable, packs all seven packages into an isolated local feed, installs and
 executes the packed tool and templates, builds a generated standalone project,
 consumes only those packages from a fixture project, and publishes the runtime
 consumer with NativeAOT. It also installs and tests the Vite package, type-checks
