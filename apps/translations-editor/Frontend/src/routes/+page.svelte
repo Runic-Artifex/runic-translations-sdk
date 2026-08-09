@@ -1972,10 +1972,9 @@
   :global(::selection) { color: var(--primary-foreground); background: var(--primary); }
 
   .eyebrow { margin: 0; color: var(--primary); font-size: .64rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
-  .mark { display: grid; place-items: center; width: 4rem; height: 4rem; transform: rotate(45deg); border: 1px solid color-mix(in oklch, var(--primary) 65%, var(--border)); border-radius: .35rem; background: linear-gradient(145deg, var(--secondary), var(--background)); box-shadow: inset 0 0 0 .28rem var(--background), 0 1rem 3rem color-mix(in oklch, var(--foreground) 22%, transparent); }
-  .mark span { width: 1.15rem; height: 1.15rem; border: 2px solid var(--primary); transform: rotate(45deg); }
-  .mark.small { width: 2rem; height: 2rem; border-radius: .2rem; box-shadow: inset 0 0 0 .18rem var(--background); }
-  .mark.small span { width: .55rem; height: .55rem; border-width: 1px; }
+  .mark { width: 4rem; height: 4rem; border-radius: 1rem; background: url("/brand/icon.png") center / cover no-repeat; box-shadow: 0 1rem 3rem color-mix(in oklch, var(--foreground) 22%, transparent); }
+  .mark span { display: none; }
+  .mark.small { width: 2.25rem; height: 2.25rem; border-radius: .65rem; box-shadow: 0 .35rem 1rem color-mix(in oklch, var(--foreground) 16%, transparent); }
 
   .status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--chart-2); box-shadow: 0 0 .6rem color-mix(in oklch, var(--chart-2) 55%, transparent); }
   .status-dot.warning { background: var(--primary); box-shadow: 0 0 .6rem color-mix(in oklch, var(--primary) 55%, transparent); }

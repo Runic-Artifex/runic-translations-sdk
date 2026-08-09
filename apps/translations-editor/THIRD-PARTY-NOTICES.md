@@ -40,7 +40,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-No WebUI or Runic logo asset is currently distributed by the editor. If one is
-added, its separate logo license must be included before release. The optional
-Windows NativeAOT/WebView2 static-link path is not used by these preview
-artifacts; enabling it requires adding Microsoft's WebView2 license and notices.
+The canonical Runic Translations Editor logo is original Runic Artifex artwork
+distributed under this project's MIT license. No separately licensed WebUI logo
+asset is distributed by the editor. The optional Windows NativeAOT/WebView2
+static-link path is not used by these preview artifacts; enabling it requires
+adding Microsoft's WebView2 license and notices.

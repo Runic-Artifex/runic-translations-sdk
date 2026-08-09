@@ -57,16 +57,17 @@
               aria-label={`Project ${catalogId}`}
               tooltipContent={catalogId}
             >
-              <Badge
-                variant={success ? "default" : "destructive"}
-                class="size-10 shrink-0 justify-center rounded-xl p-0"
-              >
-                {#if success}
-                  <LanguagesIcon aria-hidden="true" />
-                {:else}
+              {#if success}
+                <img
+                  src="/brand/icon.png"
+                  alt=""
+                  class="size-10 shrink-0 rounded-xl object-cover"
+                />
+              {:else}
+                <Badge variant="destructive" class="size-10 shrink-0 justify-center rounded-xl p-0">
                   <AlertCircleIcon aria-hidden="true" />
-                {/if}
-              </Badge>
+                </Badge>
+              {/if}
               <span class="grid min-w-0 flex-1 text-left leading-tight">
                 <span class="truncate font-semibold">{catalogId}</span>
                 <span class="truncate text-xs text-muted-foreground">

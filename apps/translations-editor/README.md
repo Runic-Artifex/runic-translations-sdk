@@ -1,3 +1,5 @@
+![Runic Translations Editor banner](.github/assets/brand/banner.png)
+
 # Runic Translations Editor
 
 A focused desktop editor for [Runic Translations](https://github.com/Runic-Artifex/runic-translations) workspaces. The interface is designed around translators: locale coverage, message search, review state, structured variants, variables, previews, and quality feedback are available without editing JSON directly.
