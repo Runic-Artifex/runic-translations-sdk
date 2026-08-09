@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  export type EditorMode = "simple" | "advanced" | "raw";
+  export type EditorMode = "translation" | "raw";
 </script>
 
 <script lang="ts">
@@ -8,20 +8,17 @@
   let {
     mode,
     simpleLabel,
-    advancedLabel,
     rawLabel,
     onchange,
   }: {
     mode: EditorMode;
     simpleLabel: string;
-    advancedLabel: string;
     rawLabel: string;
     onchange: (mode: EditorMode) => void;
   } = $props();
 
   let options: { value: EditorMode; label: string }[] = $derived([
-    { value: "simple", label: simpleLabel },
-    { value: "advanced", label: advancedLabel },
+    { value: "translation", label: simpleLabel },
     { value: "raw", label: rawLabel },
   ]);
 </script>
@@ -33,7 +30,7 @@
     size="sm"
     spacing={1}
     value={mode}
-    class="grid w-full grid-cols-3 sm:flex sm:w-auto"
+    class="grid w-full grid-cols-2 sm:flex sm:w-auto"
     aria-label="Editing mode"
     onValueChange={(value) => {
       if (value !== "") onchange(value as EditorMode);
@@ -48,8 +45,7 @@
           if (mode === option.value) event.preventDefault();
         }}
       >
-        <span class="sm:hidden">{option.value === "advanced" ? "Structured" : option.value === "raw" ? "JSON" : option.label}</span>
-        <span class="hidden sm:inline">{option.label}</span>
+        <span>{option.label}</span>
       </ToggleGroup.Item>
     {/each}
   </ToggleGroup.Root>

@@ -41,6 +41,7 @@
   import AppDialog from "$lib/AppDialog.svelte";
   import { createEditorBridge } from "$lib/editor-bridge";
   import EditorModeSwitcher, { type EditorMode } from "$lib/EditorModeSwitcher.svelte";
+  import EditorSettingsFooter from "$lib/EditorSettingsFooter.svelte";
   import EditorSidebarHeader from "$lib/EditorSidebarHeader.svelte";
   import EditorToolbar from "$lib/EditorToolbar.svelte";
   import LocaleSwitcher from "$lib/LocaleSwitcher.svelte";
@@ -102,7 +103,7 @@
   let selectedDocumentPath = $state("");
   let filter = $state<MessageFilter>("all");
   let query = $state("");
-  let mode = $state<EditorMode>("simple");
+  let mode = $state<EditorMode>("translation");
   let editorText = $state("");
   let uiLocale = $state("en");
   let loading = $state(true);
@@ -380,24 +381,27 @@
     previewSamples = {
       ...(reviewIndex.get(reviewIdentity(key, locale))?.samples ?? {}),
     };
-    const nextMode = preferredMode ?? (cell?.entry?.structured || row?.structured ? "advanced" : "simple");
+    const nextMode = preferredMode ?? "translation";
     mode = nextMode;
     if (nextMode === "raw") {
       editorText = document === undefined ? "" : (drafts[document.path] ?? document.content);
-    } else if (nextMode === "advanced") {
-      editorText = JSON.stringify(cell?.entry?.value ?? sourceEntry?.value ?? "", null, 2);
     } else {
-      editorText = typeof cell?.entry?.value === "string" ? cell.entry.value : "";
+      const resourceValue = cell?.entry?.value ?? sourceEntry?.value ?? "";
+      editorText = typeof resourceValue === "string" ? resourceValue : JSON.stringify(resourceValue, null, 2);
     }
     previewAst = undefined;
     previewResult = undefined;
     previewError = undefined;
-    if (nextMode === "advanced" && document !== undefined) {
+    if (nextMode === "translation" && document !== undefined) {
       schedulePreview(document.path, drafts[document.path] ?? document.content);
     }
   }
 
   function edit(value: string): void {
+    if (mode !== "raw") {
+      editResourceValue(value);
+      return;
+    }
     editorText = value;
     clientError = undefined;
     operationMessage = undefined;
@@ -407,25 +411,36 @@
       return;
     }
     try {
-      let content: string;
-      if (mode === "raw") {
-        content = value;
-      } else {
-        const resourceValue: ResourceValue = mode === "advanced"
-          ? parseResourceValue(value)
-          : value;
-        const sourceEntry = selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry;
-        content = updateResourceValue(
-          drafts[document.path] ?? document.content,
-          selectedKey,
-          resourceValue,
-          sourceEntry,
-        );
-      }
+      drafts[document.path] = value;
+      persistDrafts();
+      scheduleValidation(document.path, value);
+    } catch (error) {
+      clientError = errorMessage(error);
+      validation = { success: false, diagnostics: [] };
+    }
+  }
+
+  function editResourceValue(resourceValue: ResourceValue): void {
+    editorText = typeof resourceValue === "string" ? resourceValue : JSON.stringify(resourceValue, null, 2);
+    clientError = undefined;
+    operationMessage = undefined;
+    const document = currentDocument;
+    if (document === undefined) {
+      clientError = "This locale has no resource document to edit.";
+      return;
+    }
+    try {
+      const sourceEntry = selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry;
+      const content = updateResourceValue(
+        drafts[document.path] ?? document.content,
+        selectedKey,
+        resourceValue,
+        sourceEntry,
+      );
       drafts[document.path] = content;
       persistDrafts();
       scheduleValidation(document.path, content);
-      if (mode === "advanced") schedulePreview(document.path, content);
+      schedulePreview(document.path, content);
     } catch (error) {
       clientError = errorMessage(error);
       validation = { success: false, diagnostics: [] };
@@ -609,8 +624,8 @@
   }
 
   function applySuggestion(value: string): void {
-    mode = "simple";
-    edit(value);
+    mode = "translation";
+    editResourceValue(value);
   }
 
   function renderPreview(locale: string): void {
@@ -726,15 +741,6 @@
     } catch {
       return tag;
     }
-  }
-
-  function parseResourceValue(value: string): ResourceValue {
-    const parsed: unknown = JSON.parse(value);
-    if (typeof parsed === "string") return parsed;
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-    throw new TypeError("A resource value must be a string or structured message object.");
   }
 
   function errorMessage(error: unknown): string {
@@ -1227,29 +1233,37 @@
 {/snippet}
 
 {#if externalChanges.length > 0}
-  <Alert.Root class="fixed inset-x-4 bottom-4 mx-auto max-w-4xl shadow-xl" aria-live="polite">
-    <Alert.Title>Files changed outside the editor</Alert.Title>
-    <Alert.Description class="min-w-0">
-      <p class="truncate font-mono text-xs">{externalChanges.join(", ")}</p>
-      <p>{Object.keys(drafts).length > 0 ? "Your local drafts are still intact." : "Reload to read the latest versions."}</p>
-    </Alert.Description>
-    <Alert.Action class="flex flex-wrap gap-2">
-      <Button variant="ghost" size="xs" onclick={() => { externalChanges = []; externalFileChanges = []; }}>Keep current view</Button>
-      <Button variant="outline" size="xs" onclick={reviewExternalChanges}>Compare / merge</Button>
-      <Button size="xs" onclick={() => void loadWorkspace(true)}>Reload files</Button>
-    </Alert.Action>
-  </Alert.Root>
+  <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-4xl">
+    <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
+      <Alert.Title>Files changed outside the editor</Alert.Title>
+      <Alert.Description class="min-w-0">
+        <p class="truncate font-mono text-xs">{externalChanges.join(", ")}</p>
+        <p>{Object.keys(drafts).length > 0 ? "Your local drafts are still intact." : "Reload to read the latest versions."}</p>
+      </Alert.Description>
+      <Alert.Action class="static col-span-full mt-2 flex flex-wrap justify-end gap-2">
+        <Button variant="ghost" size="xs" onclick={() => { externalChanges = []; externalFileChanges = []; }}>Keep current view</Button>
+        <Button variant="outline" size="xs" onclick={reviewExternalChanges}>Compare / merge</Button>
+        <Button size="xs" onclick={() => void loadWorkspace(true)}>Reload files</Button>
+      </Alert.Action>
+    </Alert.Root>
+  </div>
 {/if}
 
 {#if Object.keys(recoveredDrafts).length > 0}
-  <Alert.Root class="fixed inset-x-4 bottom-4 mx-auto max-w-2xl shadow-xl" aria-live="polite">
-    <Alert.Title>Unsaved work was recovered</Alert.Title>
-    <Alert.Description>{Object.keys(recoveredDrafts).length} document {Object.keys(recoveredDrafts).length === 1 ? "draft" : "drafts"} found in local application storage.</Alert.Description>
-    <Alert.Action class="flex gap-2">
-      <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>Discard</Button>
-      <Button size="xs" onclick={recoverSavedDrafts}>Restore drafts</Button>
-    </Alert.Action>
-  </Alert.Root>
+  <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-2xl">
+    <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
+      <Alert.Title>Unsaved work was recovered</Alert.Title>
+      <Alert.Description>
+        {Object.keys(recoveredDrafts).length === 1
+          ? "One document draft was found in local application storage."
+          : `${Object.keys(recoveredDrafts).length} document drafts were found in local application storage.`}
+      </Alert.Description>
+      <Alert.Action class="static col-span-full mt-2 flex flex-col gap-2 min-[360px]:flex-row min-[360px]:justify-end">
+        <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>Discard</Button>
+        <Button size="xs" onclick={recoverSavedDrafts}>Restore drafts</Button>
+      </Alert.Action>
+    </Alert.Root>
+  </div>
 {/if}
 
 {#if comparedExternalChange !== undefined}
@@ -1317,7 +1331,7 @@
     <header class="welcome-brand">
       <div class="mark small" aria-hidden="true"><span></span></div>
       <div><p class="eyebrow">{labels.eyebrow}</p><h1>{labels.title}</h1></div>
-      <select aria-label="Editor language" value={uiLocale} onchange={(event) => uiLocale = event.currentTarget.value}>
+      <select aria-label="Interface language" value={uiLocale} onchange={(event) => uiLocale = event.currentTarget.value}>
         <option value="en">EN</option><option value="de">DE</option>
       </select>
     </header>
@@ -1380,36 +1394,36 @@
     </section>
   </main>
 {:else}
-  <Sidebar.Provider style="--sidebar-width: 23rem; --sidebar-width-mobile: min(23rem, 92vw);" class="h-svh min-h-0 overflow-hidden">
+  <Sidebar.Provider style="--sidebar-width: 21rem; --sidebar-width-mobile: min(20rem, calc(100vw - 1rem));" class="h-svh min-h-0 overflow-hidden">
     <Sidebar.Root collapsible="offcanvas">
       <EditorSidebarHeader
-        eyebrow={labels.eyebrow}
-        title={labels.title}
-        locale={uiLocale}
-        onlocalechange={(locale) => uiLocale = locale}
-      />
-
-      <Sidebar.Content class="gap-0 overflow-hidden">
-
-      <WorkspacePanel
-        workspaceLabel={labels.workspace}
         catalogId={snapshot.catalog.id}
         localeCount={snapshot.catalog.locales.length}
         schemaVersion={snapshot.catalog.schemaVersion}
         root={snapshot.root}
         success={snapshot.success}
         reloadLabel={labels.reload}
-        {malformedDocuments}
-        reviewError={snapshot.review?.error}
+        {recentProjects}
         onreload={() => void loadWorkspace(true)}
-        onrepair={beginRepair}
-        onmanagelanguages={() => prepareMutation("add-locale")}
         onopenworkspace={showOpenWorkspaceDialog}
         onnewproject={openProjectWizard}
-        onabout={() => void showAbout()}
+        onopenrecent={(project) => void openWorkspace(project.catalogId, project.root)}
       />
 
-      <LocaleSwitcher locales={localeSummaries} {selectedLocale} onselect={selectLocale} />
+      <Sidebar.Content class="gap-0 overflow-hidden">
+
+      <WorkspacePanel
+        {malformedDocuments}
+        reviewError={snapshot.review?.error}
+        onrepair={beginRepair}
+      />
+
+      <LocaleSwitcher
+        locales={localeSummaries}
+        {selectedLocale}
+        onselect={selectLocale}
+        onmanage={() => prepareMutation("add-locale")}
+      />
 
       <MessageList
         items={messageListItems}
@@ -1438,6 +1452,11 @@
         {/snippet}
       </MessageList>
       </Sidebar.Content>
+      <EditorSettingsFooter
+        locale={uiLocale}
+        onlocalechange={(locale) => uiLocale = locale}
+        onabout={() => void showAbout()}
+      />
       <Sidebar.Rail />
     </Sidebar.Root>
 
@@ -1484,7 +1503,7 @@
           <ReviewWorkflow
             state={currentReviewState}
             dirty={reviewDirty}
-            message={reviewMessage ?? "Optional project sidecar"}
+            message={reviewMessage ?? "Project notes"}
             disabled={snapshot.review?.error !== undefined}
             stale={currentIsStale}
             terminologyCount={terminology.length}
@@ -1503,27 +1522,27 @@
           <EditorModeSwitcher
             {mode}
             simpleLabel={labels.simple}
-            advancedLabel={labels.advanced}
             rawLabel={labels.raw}
             onchange={chooseMode}
           />
 
           <TranslationEditor
             {mode}
-            label={mode === "simple" ? localeName(selectedLocale) : mode === "advanced" ? labels.advanced : currentDocument?.path ?? "Resource document"}
+            locale={selectedLocale}
+            label={mode === "translation" ? localeName(selectedLocale) : currentDocument?.path ?? "Resource document"}
             value={editorText}
-            structuredValue={currentCell?.entry?.value ?? selectedRow.cells[snapshot.catalog.defaultLocale]?.entry?.value}
+            resourceValue={currentCell?.entry?.value ?? selectedRow.cells[snapshot.catalog.defaultLocale]?.entry?.value}
             missing={currentCell?.entry === undefined}
             invalid={clientError !== undefined || validation?.success === false}
-            onchange={edit}
-            onstructuredchange={(value) => edit(JSON.stringify(value, null, 2))}
+            onresourcechange={editResourceValue}
+            onrawchange={edit}
             onformatraw={formatRaw}
           />
 
-          {#if mode === "advanced"}
+          {#if mode === "translation"}
             <section class="message-preview" aria-live="polite">
               <header>
-                <div><strong>Compiler-backed preview</strong><span>Normalized locale AST · generated ESM semantics</span></div>
+                <div><strong>Preview</strong><span>Uses the same rules as the generated application message</span></div>
                 <span class="preview-state">{previewBusy ? "Compiling…" : previewAst === undefined ? "Unavailable" : selectedLocale}</span>
               </header>
               {#if previewAst !== undefined && Object.keys(previewAst.inputs).length > 0}

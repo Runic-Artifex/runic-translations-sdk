@@ -5,7 +5,6 @@
   import * as Collapsible from "$lib/components/ui/collapsible/index.js";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
   import { cn } from "$lib/utils.js";
-  import { untrack } from "svelte";
   import type { MessageListItem, MessageTreeNode } from "./MessageList.svelte";
 
   let {
@@ -18,7 +17,7 @@
     onselect: (key: string) => void;
   } = $props();
 
-  let open = $state(untrack(() => nodeContains(node, selectedKey)));
+  let open = $derived(nodeContains(node, selectedKey));
   let count = $derived(messageCount(node));
 
   function nodeContains(candidate: MessageTreeNode, key: string): boolean {
@@ -29,10 +28,10 @@
     return (candidate.item === undefined ? 0 : 1) + candidate.children.reduce((total, child) => total + messageCount(child), 0);
   }
 
-  function status(item: MessageListItem): "stale" | "review" | "AST" | undefined {
+  function status(item: MessageListItem): "stale" | "review" | "structured" | undefined {
     if (item.stale) return "stale";
     if (item.needsReview) return "review";
-    if (item.structured) return "AST";
+    if (item.structured) return "structured";
     return undefined;
   }
 </script>

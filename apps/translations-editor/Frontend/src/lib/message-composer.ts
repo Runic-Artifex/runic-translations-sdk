@@ -29,7 +29,7 @@ export type MessagePatternNode =
   | { format: Omit<MessageFormat, "name"> }
   | MessageMarkup;
 export interface MessageVariant { match: Record<string, string>; value: string | MessagePatternNode[] }
-export interface StructuredMessage {
+export interface StructuredMessage extends Record<string, unknown> {
   inputs: Record<string, MessageInput>;
   declarations?: MessageFormat[];
   selectors: MessageSelector[];
@@ -169,10 +169,11 @@ export function patternText(nodes: MessagePatternNode[]): string | undefined {
 }
 
 export function sourceMessageToArtifact(value: StructuredMessage): MessageArtifact {
+  const inputs = inferredInputs(value);
   const declarations = new Map((value.declarations ?? []).map((declaration) => [declaration.name, declaration]));
   return {
     astVersion: 2,
-    inputs: Object.fromEntries(Object.entries(value.inputs).map(([name, input]) => [name, {
+    inputs: Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, {
       type: artifactType(input.type),
       format: input.format ?? defaultFormat(input.type),
     }])),
@@ -182,6 +183,42 @@ export function sourceMessageToArtifact(value: StructuredMessage): MessageArtifa
       nodes: compileNodes(patternNodes(variant.value), declarations),
     })),
   };
+}
+
+function inferredInputs(message: StructuredMessage): Record<string, MessageInput> {
+  const inputs = structuredClone(message.inputs);
+  const ensure = (name: string, type: InputType): void => {
+    inputs[name] ??= { type };
+  };
+  for (const selector of message.selectors) {
+    ensure(selector.input, selector.function === "literal" ? "string" : "int64");
+  }
+  for (const declaration of message.declarations ?? []) {
+    ensure(declaration.input, inputTypeForFunction(declaration.function));
+  }
+  const visit = (nodes: MessagePatternNode[]): void => {
+    for (const node of nodes) {
+      if (typeof node === "string" || "local" in node) continue;
+      if ("input" in node) ensure(node.input, "string");
+      else if ("format" in node) ensure(node.format.input, inputTypeForFunction(node.format.function));
+      else visit(node.markup.children);
+    }
+  };
+  for (const variant of message.variants) visit(patternNodes(variant.value));
+  return inputs;
+}
+
+function inputTypeForFunction(fn: FormatFunction): InputType {
+  return ({
+    string: "string",
+    integer: "int64",
+    number: "decimal",
+    date: "date",
+    time: "time",
+    datetime: "instant",
+    uuid: "uuid",
+    relativeTime: "decimal",
+  } satisfies Record<FormatFunction, InputType>)[fn];
 }
 
 function compileNodes(nodes: MessagePatternNode[], declarations: Map<string, MessageFormat>): ArtifactNode[] {

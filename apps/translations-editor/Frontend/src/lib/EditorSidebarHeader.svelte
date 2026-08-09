@@ -1,42 +1,121 @@
+<script lang="ts" module>
+  export interface RecentProjectItem {
+    root: string;
+    catalogId: string;
+    openedAt: string;
+  }
+</script>
+
 <script lang="ts">
+  import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
+  import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
+  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import LanguagesIcon from "@lucide/svelte/icons/languages";
+  import PlusIcon from "@lucide/svelte/icons/plus";
+  import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
   import { Badge } from "$lib/components/ui/badge/index.js";
-  import * as Select from "$lib/components/ui/select/index.js";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
 
   let {
-    eyebrow,
-    title,
-    locale,
-    onlocalechange,
+    catalogId,
+    localeCount,
+    schemaVersion,
+    root,
+    success,
+    reloadLabel,
+    recentProjects,
+    onreload,
+    onopenworkspace,
+    onnewproject,
+    onopenrecent,
   }: {
-    eyebrow: string;
-    title: string;
-    locale: string;
-    onlocalechange: (locale: string) => void;
+    catalogId: string;
+    localeCount: number;
+    schemaVersion: number;
+    root: string;
+    success: boolean;
+    reloadLabel: string;
+    recentProjects: RecentProjectItem[];
+    onreload: () => void;
+    onopenworkspace: () => void;
+    onnewproject: () => void;
+    onopenrecent: (project: RecentProjectItem) => void;
   } = $props();
-
-  let localeLabel = $derived(locale.toLocaleUpperCase());
 </script>
 
-<Sidebar.Header class="border-b border-sidebar-border p-3">
-  <div class="flex min-w-0 items-center gap-3">
-    <Badge variant="outline" class="size-9 shrink-0 justify-center p-0">
-      <LanguagesIcon aria-hidden="true" />
-    </Badge>
-    <div class="min-w-0 flex-1">
-      <p class="truncate text-[0.625rem] font-semibold tracking-[0.14em] text-primary uppercase">{eyebrow}</p>
-      <h1 class="truncate font-serif text-lg font-medium">{title}</h1>
-    </div>
-    <Select.Root type="single" value={locale} onValueChange={onlocalechange}>
-      <Select.Trigger size="sm" class="w-16" aria-label="Editor language">{localeLabel}</Select.Trigger>
-      <Select.Content align="end">
-        <Select.Group>
-          <Select.Label>Editor language</Select.Label>
-          <Select.Item value="en" label="English">EN</Select.Item>
-          <Select.Item value="de" label="Deutsch">DE</Select.Item>
-        </Select.Group>
-      </Select.Content>
-    </Select.Root>
-  </div>
+<Sidebar.Header class="border-b border-sidebar-border p-2 pr-12 md:pr-2">
+  <Sidebar.Menu>
+    <Sidebar.MenuItem>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          {#snippet child({ props })}
+            <Sidebar.MenuButton
+              {...props}
+              size="lg"
+              class="h-auto min-h-16 py-2"
+              aria-label={`Project ${catalogId}`}
+              tooltipContent={catalogId}
+            >
+              <Badge
+                variant={success ? "default" : "destructive"}
+                class="size-10 shrink-0 justify-center rounded-xl p-0"
+              >
+                {#if success}
+                  <LanguagesIcon aria-hidden="true" />
+                {:else}
+                  <AlertCircleIcon aria-hidden="true" />
+                {/if}
+              </Badge>
+              <span class="grid min-w-0 flex-1 text-left leading-tight">
+                <span class="truncate font-semibold">{catalogId}</span>
+                <span class="truncate text-xs text-muted-foreground">
+                  {localeCount} {localeCount === 1 ? "locale" : "locales"} · schema v{schemaVersion}
+                </span>
+              </span>
+              <ChevronsUpDownIcon class="ml-auto" aria-hidden="true" />
+            </Sidebar.MenuButton>
+          {/snippet}
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content class="w-(--bits-dropdown-menu-anchor-width) min-w-72" align="start">
+          <DropdownMenu.Label class="grid gap-1">
+            <span>Current project</span>
+            <span class="truncate font-mono text-xs font-normal text-muted-foreground" title={root}>{root}</span>
+          </DropdownMenu.Label>
+
+          {#if recentProjects.length > 0}
+            <DropdownMenu.Separator />
+            <DropdownMenu.Group>
+              <DropdownMenu.Label>Recent projects</DropdownMenu.Label>
+              {#each recentProjects.slice(0, 5) as project (`${project.root}\n${project.catalogId}`)}
+                <DropdownMenu.Item onclick={() => onopenrecent(project)}>
+                  <LanguagesIcon />
+                  <span class="grid min-w-0">
+                    <span class="truncate">{project.catalogId}</span>
+                    <span class="truncate text-xs text-muted-foreground">{project.root}</span>
+                  </span>
+                </DropdownMenu.Item>
+              {/each}
+            </DropdownMenu.Group>
+          {/if}
+
+          <DropdownMenu.Separator />
+          <DropdownMenu.Group>
+            <DropdownMenu.Item onclick={onreload}>
+              <RefreshCwIcon />
+              {reloadLabel}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item onclick={onopenworkspace}>
+              <FolderOpenIcon />
+              Open workspace
+            </DropdownMenu.Item>
+            <DropdownMenu.Item onclick={onnewproject}>
+              <PlusIcon />
+              New project
+            </DropdownMenu.Item>
+          </DropdownMenu.Group>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+    </Sidebar.MenuItem>
+  </Sidebar.Menu>
 </Sidebar.Header>

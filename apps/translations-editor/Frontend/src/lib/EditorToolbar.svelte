@@ -1,7 +1,7 @@
 <script lang="ts">
+  import CheckIcon from "@lucide/svelte/icons/check";
   import SaveIcon from "@lucide/svelte/icons/save";
   import Undo2Icon from "@lucide/svelte/icons/undo-2";
-  import { Badge } from "$lib/components/ui/badge/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Kbd from "$lib/components/ui/kbd/index.js";
   import { Spinner } from "$lib/components/ui/spinner/index.js";
@@ -52,15 +52,23 @@
       </Button>
     {/if}
 
-    <Badge class="hidden sm:inline-flex" variant={isDirty ? "default" : "secondary"}>{saveState}</Badge>
-    <Button size="sm" disabled={saveDisabled} onclick={onsave} aria-label={saving ? savingLabel : saveLabel} title={saving ? savingLabel : saveLabel}>
+    <Button
+      size="sm"
+      variant={isDirty ? "default" : "secondary"}
+      disabled={saveDisabled}
+      onclick={onsave}
+      aria-label={saving ? savingLabel : isDirty ? saveLabel : saveState}
+      title={saving ? savingLabel : isDirty ? saveLabel : saveState}
+    >
       {#if saving}
         <Spinner data-icon="inline-start" />
+      {:else if !isDirty}
+        <CheckIcon data-icon="inline-start" />
       {:else}
         <SaveIcon data-icon="inline-start" />
       {/if}
-      <span class="hidden sm:inline">{saving ? savingLabel : saveLabel}</span>
-      <Kbd.Root class="hidden xl:inline-flex">⌘ S</Kbd.Root>
+      <span class="hidden sm:inline">{saving ? savingLabel : isDirty ? saveLabel : saveState}</span>
+      {#if isDirty}<Kbd.Root class="hidden xl:inline-flex">⌘ S</Kbd.Root>{/if}
     </Button>
   </div>
 </header>

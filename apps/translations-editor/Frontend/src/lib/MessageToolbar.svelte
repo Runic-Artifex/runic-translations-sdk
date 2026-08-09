@@ -31,8 +31,9 @@
 </script>
 
 <div class="px-2 pb-2">
+  <label class="sr-only" for="message-search">Search messages</label>
   <InputGroup.Root>
-    <InputGroup.Input bind:ref={inputRef} bind:value={query} type="search" {placeholder} />
+    <InputGroup.Input id="message-search" bind:ref={inputRef} bind:value={query} type="search" {placeholder} />
     <InputGroup.Addon>
       <SearchIcon />
     </InputGroup.Addon>
