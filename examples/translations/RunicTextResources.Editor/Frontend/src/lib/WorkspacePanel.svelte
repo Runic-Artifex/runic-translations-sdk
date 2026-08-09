@@ -1,5 +1,6 @@
 <script lang="ts">
   import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
+  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import InfoIcon from "@lucide/svelte/icons/info";
@@ -9,6 +10,7 @@
   import WrenchIcon from "@lucide/svelte/icons/wrench";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
+  import * as Collapsible from "$lib/components/ui/collapsible/index.js";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
   import type { EditorDocument } from "$lib/contracts";
@@ -46,11 +48,23 @@
     onnewproject: () => void;
     onabout: () => void;
   } = $props();
+
+  let open = $state(false);
 </script>
 
-<Sidebar.Group class="py-2" aria-label={workspaceLabel}>
-  <Sidebar.GroupLabel>{workspaceLabel}</Sidebar.GroupLabel>
-  <Sidebar.GroupContent>
+<Collapsible.Root bind:open class="group/workspace">
+  <Sidebar.Group class="py-1" aria-label={workspaceLabel}>
+    <Sidebar.GroupLabel>
+      {#snippet child({ props })}
+        <Collapsible.Trigger {...props}>
+          <span>{workspaceLabel}</span>
+          <span class="ml-auto max-w-40 truncate font-mono">{catalogId}</span>
+          <ChevronDownIcon class="transition-transform group-data-[state=open]/workspace:rotate-180" />
+        </Collapsible.Trigger>
+      {/snippet}
+    </Sidebar.GroupLabel>
+    <Collapsible.Content>
+      <Sidebar.GroupContent>
     <Sidebar.Menu>
       <Sidebar.MenuItem>
         <DropdownMenu.Root>
@@ -129,5 +143,7 @@
         <Alert.Description class="text-xs">{reviewError}</Alert.Description>
       </Alert.Root>
     {/if}
-  </Sidebar.GroupContent>
-</Sidebar.Group>
+      </Sidebar.GroupContent>
+    </Collapsible.Content>
+  </Sidebar.Group>
+</Collapsible.Root>

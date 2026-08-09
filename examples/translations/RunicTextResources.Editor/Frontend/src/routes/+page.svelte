@@ -197,11 +197,6 @@
       isSource: locale.tag === snapshot?.catalog?.defaultLocale,
     };
   }));
-  let editorLocaleOptions = $derived((snapshot?.catalog?.locales ?? []).map((locale) => ({
-    tag: locale.tag,
-    name: localeName(locale.tag),
-    isSource: locale.tag === snapshot?.catalog?.defaultLocale,
-  })));
   let reviewIndex = $derived(reviewMap(reviewEntries));
   let localeQuality = $derived(qualityIssues(
     rows,
@@ -1416,15 +1411,6 @@
 
       <LocaleSwitcher locales={localeSummaries} {selectedLocale} onselect={selectLocale} />
 
-      <MessageToolbar
-        bind:query
-        bind:filter
-        bind:inputRef={searchInput}
-        placeholder={labels.search}
-        options={filterOptions}
-        filterLabel="Message filters"
-      />
-
       <MessageList
         items={messageListItems}
         {selectedKey}
@@ -1439,16 +1425,24 @@
         onmarkreview={() => markVisible("needs-review")}
         onapprove={() => markVisible("approved")}
         onloadmore={() => rowLimit += 300}
-      />
+      >
+        {#snippet toolbar()}
+          <MessageToolbar
+            bind:query
+            bind:filter
+            bind:inputRef={searchInput}
+            placeholder={labels.search}
+            options={filterOptions}
+            filterLabel="Message filters"
+          />
+        {/snippet}
+      </MessageList>
       </Sidebar.Content>
       <Sidebar.Rail />
     </Sidebar.Root>
 
     <Sidebar.Inset class="editor-shell min-h-0 min-w-0 overflow-hidden">
       <EditorToolbar
-        locales={editorLocaleOptions}
-        {selectedLocale}
-        defaultLocaleLabel={labels.defaultLocale}
         {reviewDirty}
         {reviewSaving}
         reviewDisabled={snapshot.review?.error !== undefined}
@@ -1458,7 +1452,6 @@
         savingLabel={labels.saving}
         saveState={isDirty ? labels.unsaved : operationMessage ?? labels.saved}
         {isDirty}
-        onselectlocale={selectLocale}
         ondiscardreview={discardReview}
         onsavereview={() => void saveReview()}
         onsave={() => void save()}
