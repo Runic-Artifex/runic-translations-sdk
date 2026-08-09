@@ -33,6 +33,7 @@
     size="sm"
     spacing={1}
     value={mode}
+    class="grid w-full grid-cols-3 sm:flex sm:w-auto"
     aria-label="Editing mode"
     onValueChange={(value) => {
       if (value !== "") onchange(value as EditorMode);
@@ -41,6 +42,7 @@
     {#each options as option (option.value)}
       <ToggleGroup.Item
         value={option.value}
+        class="min-w-0 px-1 text-[0.6875rem] sm:flex-none sm:px-3 sm:text-sm"
         onclick={(event) => {
           if (mode === option.value) event.preventDefault();
         }}
