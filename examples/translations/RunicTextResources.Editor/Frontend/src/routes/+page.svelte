@@ -38,6 +38,13 @@
     ValidationResult,
     WorkspaceSnapshot,
   } from "$lib/contracts";
+  import {
+    applyAppearance,
+    readAppearance,
+    saveAppearance,
+    type ThemeMode,
+    type ThemePalette,
+  } from "$lib/appearance";
   import AppDialog from "$lib/AppDialog.svelte";
   import { createEditorBridge } from "$lib/editor-bridge";
   import EditorModeSwitcher, { type EditorMode } from "$lib/EditorModeSwitcher.svelte";
@@ -106,6 +113,8 @@
   let mode = $state<EditorMode>("translation");
   let editorText = $state("");
   let uiLocale = $state("en");
+  let themeMode = $state<ThemeMode>("dark");
+  let themePalette = $state<ThemePalette>("runic");
   let loading = $state(true);
   let saving = $state(false);
   let validationBusy = $state(false);
@@ -282,11 +291,33 @@
   );
 
   onMount(() => {
+    const appearance = readAppearance();
+    themeMode = appearance.mode;
+    themePalette = appearance.palette;
+    applyAppearance(themeMode, themePalette);
+    const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateSystemTheme = (): void => {
+      if (themeMode === "system") applyAppearance(themeMode, themePalette);
+    };
+    colorScheme.addEventListener("change", updateSystemTheme);
     recentProjects = readRecentProjects();
     void loadWorkspace(false);
     const interval = window.setInterval(() => void checkExternalChanges(), 2_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      colorScheme.removeEventListener("change", updateSystemTheme);
+      window.clearInterval(interval);
+    };
   });
+
+  function changeThemeMode(mode: ThemeMode): void {
+    themeMode = mode;
+    saveAppearance(themeMode, themePalette);
+  }
+
+  function changeThemePalette(palette: ThemePalette): void {
+    themePalette = palette;
+    saveAppearance(themeMode, themePalette);
+  }
 
   async function checkExternalChanges(): Promise<void> {
     if (loading || openingWorkspace || saving || snapshot === undefined) return;
@@ -1454,7 +1485,11 @@
       </Sidebar.Content>
       <EditorSettingsFooter
         locale={uiLocale}
+        {themeMode}
+        {themePalette}
         onlocalechange={(locale) => uiLocale = locale}
+        onthememodechange={changeThemeMode}
+        onthemepalettechange={changeThemePalette}
         onabout={() => void showAbout()}
       />
       <Sidebar.Rail />
@@ -1938,26 +1973,26 @@
   .primary:disabled { cursor: not-allowed; filter: grayscale(.5); opacity: .42; }
 
   .editor-content { flex: 1; min-width: 0; min-height: 0; padding: 1.25rem 1rem 2rem; overflow-x: hidden; overflow-y: auto; scrollbar-color: #3b443e transparent; }
-  .message-preview { max-width: 1000px; margin: 1.2rem auto 0; border: 1px solid #3b443e; border-radius: .65rem; background: #0e1310; overflow: hidden; }
-  .message-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; background: #171d19; }
+  .message-preview { max-width: 1000px; margin: 1.2rem auto 0; border: 1px solid var(--border); border-radius: .65rem; color: var(--card-foreground); background: color-mix(in oklch, var(--card) 94%, var(--primary)); overflow: hidden; }
+  .message-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; background: color-mix(in oklch, var(--muted) 82%, var(--primary)); }
   .message-preview > header > div { display: grid; gap: .15rem; }
-  .message-preview header strong { color: #d9dfda; font-size: .68rem; }
-  .message-preview header span { color: #6f7a72; font-size: .56rem; }
-  .preview-state { border: 1px solid #4b543e; border-radius: 1rem; padding: .23rem .5rem; color: #c1ab6b !important; background: #26251b; font: .53rem ui-monospace, monospace !important; }
-  .sample-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .55rem; border-top: 1px solid #2c332e; padding: .7rem .9rem; }
-  .sample-inputs label { display: grid; gap: .3rem; color: #929d95; font-size: .58rem; }
+  .message-preview header strong { color: var(--foreground); font-size: .68rem; }
+  .message-preview header span { color: var(--muted-foreground); font-size: .56rem; }
+  .preview-state { border: 1px solid color-mix(in oklch, var(--primary) 45%, var(--border)); border-radius: 1rem; padding: .23rem .5rem; color: var(--primary) !important; background: color-mix(in oklch, var(--primary) 12%, transparent); font: .53rem ui-monospace, monospace !important; }
+  .sample-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .55rem; border-top: 1px solid var(--border); padding: .7rem .9rem; }
+  .sample-inputs label { display: grid; gap: .3rem; color: var(--muted-foreground); font-size: .58rem; }
   .sample-inputs label > span { display: flex; justify-content: space-between; }
-  .sample-inputs small { color: #647068; font: .52rem ui-monospace, monospace; }
-  .sample-inputs input { min-width: 0; border: 1px solid #39423c; border-radius: .35rem; padding: .46rem .5rem; color: #e5e9e6; background: #090d0b; font: .62rem ui-monospace, monospace; }
-  .preview-canvas { min-height: 5rem; border-top: 1px solid #2c332e; padding: 1rem; color: #e7ebe8; background: radial-gradient(circle at 90% 0, #26302866, transparent 45%), #101512; font-size: .9rem; line-height: 1.7; }
+  .sample-inputs small { color: var(--muted-foreground); font: .52rem ui-monospace, monospace; }
+  .sample-inputs input { min-width: 0; border: 1px solid var(--input); border-radius: .35rem; padding: .46rem .5rem; color: var(--foreground); background: var(--background); font: .62rem ui-monospace, monospace; }
+  .preview-canvas { min-height: 5rem; border-top: 1px solid var(--border); padding: 1rem; color: var(--foreground); background: radial-gradient(circle at 90% 0, color-mix(in oklch, var(--primary) 13%, transparent), transparent 45%), var(--background); font-size: .9rem; line-height: 1.7; }
   .preview-canvas p { margin: 0; white-space: pre-wrap; }
-  .preview-placeholder { color: #67726a; font-size: .65rem; }
-  .preview-error { color: #e29b91; font-size: .65rem; }
+  .preview-placeholder { color: var(--muted-foreground); font-size: .65rem; }
+  .preview-error { color: var(--destructive); font-size: .65rem; }
   .safe-content, .preview-children { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .2rem; }
-  .preview-element { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .25rem; border: 1px solid #5b5135; border-radius: .35rem; padding: .24rem .35rem; background: #27251a; }
-  .preview-element-label { color: #d4b968; font: .52rem ui-monospace, monospace; }
-  .preview-attributes { color: #827750; font: .48rem ui-monospace, monospace; }
-  .safe-note { margin: 0; border-top: 1px solid #2c332e; padding: .55rem .9rem; color: #647068; font-size: .55rem; }
+  .preview-element { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .25rem; border: 1px solid color-mix(in oklch, var(--primary) 40%, var(--border)); border-radius: .35rem; padding: .24rem .35rem; background: color-mix(in oklch, var(--primary) 10%, var(--card)); }
+  .preview-element-label { color: var(--primary); font: .52rem ui-monospace, monospace; }
+  .preview-attributes { color: var(--muted-foreground); font: .48rem ui-monospace, monospace; }
+  .safe-note { margin: 0; border-top: 1px solid var(--border); padding: .55rem .9rem; color: var(--muted-foreground); font-size: .55rem; }
   .loading-shell, .fatal-shell, .recovery-shell { display: grid; place-content: center; place-items: center; height: 100vh; padding: 2rem; color: #8d978f; text-align: center; background: radial-gradient(circle at center, #1d2822, #0b0e0d 65%); }
   .loading-shell { gap: 1.5rem; }
   .loading-shell p { margin: 0; color: #a99150; font-size: .65rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
