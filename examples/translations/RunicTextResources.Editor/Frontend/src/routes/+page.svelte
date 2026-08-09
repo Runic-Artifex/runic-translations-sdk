@@ -38,8 +38,10 @@
     ValidationResult,
     WorkspaceSnapshot,
   } from "$lib/contracts";
+  import AppDialog from "$lib/AppDialog.svelte";
   import { createEditorBridge } from "$lib/editor-bridge";
   import EditorModeSwitcher, { type EditorMode } from "$lib/EditorModeSwitcher.svelte";
+  import EditorSidebarHeader from "$lib/EditorSidebarHeader.svelte";
   import EditorToolbar from "$lib/EditorToolbar.svelte";
   import LocaleSwitcher from "$lib/LocaleSwitcher.svelte";
   import MessageHeading from "$lib/MessageHeading.svelte";
@@ -50,7 +52,19 @@
   import ValidationPanel from "$lib/ValidationPanel.svelte";
   import WorkspacePanel from "$lib/WorkspacePanel.svelte";
   import MessageSquareTextIcon from "@lucide/svelte/icons/message-square-text";
+  import PlusIcon from "@lucide/svelte/icons/plus";
+  import Trash2Icon from "@lucide/svelte/icons/trash-2";
+  import * as Alert from "$lib/components/ui/alert/index.js";
+  import { Badge } from "$lib/components/ui/badge/index.js";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Checkbox } from "$lib/components/ui/checkbox/index.js";
   import * as Empty from "$lib/components/ui/empty/index.js";
+  import * as Field from "$lib/components/ui/field/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import * as Select from "$lib/components/ui/select/index.js";
+  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
+  import { Spinner } from "$lib/components/ui/spinner/index.js";
+  import { Textarea } from "$lib/components/ui/textarea/index.js";
   import type { MessageArtifact } from "$lib/message-composer";
   import { executeMessagePreview } from "$lib/message-preview.js";
   import {
@@ -914,7 +928,7 @@
     mutationLayer = current.catalog.layers[0]?.name ?? "base";
     mutationCopyFrom = current.catalog.defaultLocale;
     mutationSourceKey = selectedKey;
-    mutationTargetKey = kind === "duplicate-key" ? `${selectedKey}Copy` : selectedKey;
+    mutationTargetKey = kind === "duplicate-key" ? `${selectedKey}Copy` : kind === "create-key" ? "" : selectedKey;
     mutationInitialValue = "";
     mutationPreview = undefined;
     mutationError = undefined;
@@ -942,8 +956,8 @@
     mutationError = undefined;
   }
 
-  function changeMutationKind(event: Event): void {
-    const next = (event.currentTarget as HTMLSelectElement).value as MutationKind;
+  function changeMutationKind(value: string): void {
+    const next = value as MutationKind;
     mutationKind = next;
     const locales = snapshot?.catalog?.locales ?? [];
     const firstTarget = locales.find((locale) => locale.tag !== snapshot?.catalog?.defaultLocale)?.tag ?? "";
@@ -1218,37 +1232,59 @@
 {/snippet}
 
 {#if externalChanges.length > 0}
-  <aside class="external-change-banner" aria-live="polite">
-    <div><strong>Files changed outside the editor</strong><span>{externalChanges.join(", ")}</span></div>
-    <p>{Object.keys(drafts).length > 0 ? "Your local drafts are still intact." : "Reload to read the latest versions."}</p>
-    <button class="secondary" onclick={() => { externalChanges = []; externalFileChanges = []; }}>Keep current view</button>
-    <button class="secondary" onclick={reviewExternalChanges}>Compare / merge</button>
-    <button class="primary" onclick={() => void loadWorkspace(true)}>Reload files</button>
-  </aside>
+  <Alert.Root class="fixed inset-x-4 bottom-4 mx-auto max-w-4xl shadow-xl" aria-live="polite">
+    <Alert.Title>Files changed outside the editor</Alert.Title>
+    <Alert.Description class="min-w-0">
+      <p class="truncate font-mono text-xs">{externalChanges.join(", ")}</p>
+      <p>{Object.keys(drafts).length > 0 ? "Your local drafts are still intact." : "Reload to read the latest versions."}</p>
+    </Alert.Description>
+    <Alert.Action class="flex flex-wrap gap-2">
+      <Button variant="ghost" size="xs" onclick={() => { externalChanges = []; externalFileChanges = []; }}>Keep current view</Button>
+      <Button variant="outline" size="xs" onclick={reviewExternalChanges}>Compare / merge</Button>
+      <Button size="xs" onclick={() => void loadWorkspace(true)}>Reload files</Button>
+    </Alert.Action>
+  </Alert.Root>
 {/if}
 
 {#if Object.keys(recoveredDrafts).length > 0}
-  <aside class="draft-recovery-banner" aria-live="polite">
-    <div><strong>Unsaved work was recovered</strong><span>{Object.keys(recoveredDrafts).length} document {Object.keys(recoveredDrafts).length === 1 ? "draft" : "drafts"} found in local application storage.</span></div>
-    <button class="secondary" onclick={discardSavedDrafts}>Discard</button>
-    <button class="primary" onclick={recoverSavedDrafts}>Restore drafts</button>
-  </aside>
+  <Alert.Root class="fixed inset-x-4 bottom-4 mx-auto max-w-2xl shadow-xl" aria-live="polite">
+    <Alert.Title>Unsaved work was recovered</Alert.Title>
+    <Alert.Description>{Object.keys(recoveredDrafts).length} document {Object.keys(recoveredDrafts).length === 1 ? "draft" : "drafts"} found in local application storage.</Alert.Description>
+    <Alert.Action class="flex gap-2">
+      <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>Discard</Button>
+      <Button size="xs" onclick={recoverSavedDrafts}>Restore drafts</Button>
+    </Alert.Action>
+  </Alert.Root>
 {/if}
 
 {#if comparedExternalChange !== undefined}
-  <div class="dialog-backdrop" role="presentation">
-    <div class="project-dialog external-compare-dialog" role="dialog" aria-modal="true" aria-labelledby="external-compare-title">
-      <header><div><p class="eyebrow">External change</p><h2 id="external-compare-title">{comparedExternalChange.path}</h2></div>
-        <button class="icon-button" aria-label="Close comparison" onclick={() => comparedExternalChange = undefined}>×</button></header>
-      <div class="external-compare-grid">
-        <label>Editor base<textarea class="code" readonly value={snapshot?.documents.find((document) => document.path === comparedExternalChange?.path)?.content ?? "File was not previously loaded."}></textarea></label>
-        <label>Current disk<textarea class="code" readonly value={comparedExternalChange.content ?? "File was deleted externally."}></textarea></label>
-      </div>
-      <label class="merge-field">Merged draft<textarea class="code" bind:value={mergedExternalText} spellcheck={false}></textarea></label>
-      <footer><button class="secondary" onclick={() => comparedExternalChange = undefined}>Keep current view</button>
-        <div><button class="primary" onclick={() => void applyExternalMerge()}>Reload base and keep merged draft</button></div></footer>
+  <AppDialog
+    open
+    title={comparedExternalChange.path}
+    description="Compare the editor base with the current file, then keep or merge the change."
+    class="sm:max-w-6xl"
+    bodyClass="grid gap-4"
+    onopenchange={(open) => { if (!open) comparedExternalChange = undefined; }}
+  >
+    <div class="grid gap-4 lg:grid-cols-2">
+      <Field.Field>
+        <Field.Label for="external-editor-base">Editor base</Field.Label>
+        <Textarea id="external-editor-base" class="min-h-64 font-mono text-xs" readonly value={snapshot?.documents.find((document) => document.path === comparedExternalChange?.path)?.content ?? "File was not previously loaded."} />
+      </Field.Field>
+      <Field.Field>
+        <Field.Label for="external-current-disk">Current disk</Field.Label>
+        <Textarea id="external-current-disk" class="min-h-64 font-mono text-xs" readonly value={comparedExternalChange.content ?? "File was deleted externally."} />
+      </Field.Field>
     </div>
-  </div>
+    <Field.Field>
+      <Field.Label for="external-merged-draft">Merged draft</Field.Label>
+      <Textarea id="external-merged-draft" class="min-h-64 font-mono text-xs" bind:value={mergedExternalText} spellcheck={false} />
+    </Field.Field>
+    {#snippet footer()}
+      <Button variant="outline" onclick={() => comparedExternalChange = undefined}>Keep current view</Button>
+      <Button onclick={() => void applyExternalMerge()}>Reload base and keep merged draft</Button>
+    {/snippet}
+  </AppDialog>
 {/if}
 
 {#if loading}
@@ -1349,19 +1385,16 @@
     </section>
   </main>
 {:else}
-  <main class="app-shell">
-    <aside class="sidebar">
-      <header class="brand">
-        <div class="mark small" aria-hidden="true"><span></span></div>
-        <div>
-          <p class="eyebrow">{labels.eyebrow}</p>
-          <h1>{labels.title}</h1>
-        </div>
-        <select aria-label="Editor language" value={uiLocale} onchange={(event) => uiLocale = event.currentTarget.value}>
-          <option value="en">EN</option>
-          <option value="de">DE</option>
-        </select>
-      </header>
+  <Sidebar.Provider style="--sidebar-width: 23rem; --sidebar-width-mobile: min(23rem, 92vw);" class="h-svh min-h-0 overflow-hidden">
+    <Sidebar.Root collapsible="offcanvas">
+      <EditorSidebarHeader
+        eyebrow={labels.eyebrow}
+        title={labels.title}
+        locale={uiLocale}
+        onlocalechange={(locale) => uiLocale = locale}
+      />
+
+      <Sidebar.Content class="gap-0 overflow-hidden">
 
       <WorkspacePanel
         workspaceLabel={labels.workspace}
@@ -1407,9 +1440,11 @@
         onapprove={() => markVisible("approved")}
         onloadmore={() => rowLimit += 300}
       />
-    </aside>
+      </Sidebar.Content>
+      <Sidebar.Rail />
+    </Sidebar.Root>
 
-    <section class="editor-shell">
+    <Sidebar.Inset class="editor-shell min-h-0 min-w-0 overflow-hidden">
       <EditorToolbar
         locales={editorLocaleOptions}
         {selectedLocale}
@@ -1536,347 +1571,332 @@
           />
         </div>
       {/if}
-    </section>
-  </main>
+    </Sidebar.Inset>
+  </Sidebar.Provider>
 {/if}
 
 {#if aboutDialogOpen}
-  <div class="dialog-backdrop">
-    <div class="project-dialog about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
-      <header><div><p class="eyebrow">Application information</p><h2 id="about-title">{aboutInfo?.product ?? "Runic Translations Editor"}</h2></div><button class="icon-button" aria-label="Close about" onclick={() => aboutDialogOpen = false}>×</button></header>
-      <div class="project-body about-body">
-        {#if aboutBusy}
-          <p>Reading application information…</p>
-        {:else if aboutInfo !== undefined}
-          <dl>
-            <div><dt>Version</dt><dd>{aboutInfo.version}</dd></div>
-            <div><dt>Update channel</dt><dd>{aboutInfo.updateChannel}</dd></div>
-            <div><dt>Source revision</dt><dd>{aboutInfo.commit ?? "development build"}</dd></div>
-            <div><dt>Runtime</dt><dd>{aboutInfo.runtime}</dd></div>
-            <div><dt>Runtime identifier</dt><dd>{aboutInfo.runtimeIdentifier}</dd></div>
-            <div><dt>System</dt><dd>{aboutInfo.operatingSystem} · {aboutInfo.architecture}</dd></div>
-          </dl>
-        {/if}
-        <section class="diagnostic-explanation">
-          <strong>Sanitized diagnostic bundle</strong>
-          <p>The zip contains this version/runtime information, catalog counts, and grouped diagnostic IDs. It excludes workspace paths, file names, messages, source JSON, and translations.</p>
-          {#if diagnosticMessage}<p class="diagnostic-result" aria-live="polite">{diagnosticMessage}</p>{/if}
-        </section>
-        <p class="notice-copy">Runic Text Resources is MIT licensed. The packaged application includes <code>LICENSE.txt</code> and <code>THIRD-PARTY-NOTICES.md</code>.</p>
-      </div>
-      <footer><button class="secondary" onclick={() => aboutDialogOpen = false}>Close</button><div><button class="primary" disabled={diagnosticBusy || aboutBusy} onclick={() => void createDiagnosticBundle()}>{diagnosticBusy ? "Creating bundle…" : "Create diagnostic bundle"}</button></div></footer>
+  <AppDialog
+    open
+    title={aboutInfo?.product ?? "Runic Translations Editor"}
+    description="Application information and privacy-safe diagnostics."
+    onopenchange={(open) => aboutDialogOpen = open}
+  >
+    <div class="grid gap-4">
+      {#if aboutBusy}
+        <div class="flex items-center gap-2 text-muted-foreground"><Spinner />Reading application information…</div>
+      {:else if aboutInfo !== undefined}
+        <dl class="grid overflow-hidden rounded-xl border">
+          {#each [
+            ["Version", aboutInfo.version],
+            ["Update channel", aboutInfo.updateChannel],
+            ["Source revision", aboutInfo.commit ?? "development build"],
+            ["Runtime", aboutInfo.runtime],
+            ["Runtime identifier", aboutInfo.runtimeIdentifier],
+            ["System", `${aboutInfo.operatingSystem} · ${aboutInfo.architecture}`],
+          ] as item (item[0])}
+            <div class="grid gap-1 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[9rem_1fr] sm:gap-4">
+              <dt class="text-muted-foreground">{item[0]}</dt><dd class="m-0 overflow-wrap-anywhere font-mono text-xs">{item[1]}</dd>
+            </div>
+          {/each}
+        </dl>
+      {/if}
+      <Alert.Root>
+        <Alert.Title>Sanitized diagnostic bundle</Alert.Title>
+        <Alert.Description>The zip contains version/runtime information, catalog counts, and grouped diagnostic IDs. It excludes workspace paths, file names, messages, source JSON, and translations.</Alert.Description>
+        {#if diagnosticMessage}<p class="text-sm text-primary" aria-live="polite">{diagnosticMessage}</p>{/if}
+      </Alert.Root>
+      <p class="text-sm text-muted-foreground">Runic Text Resources is MIT licensed. The packaged application includes <code>LICENSE.txt</code> and <code>THIRD-PARTY-NOTICES.md</code>.</p>
     </div>
-  </div>
+    {#snippet footer()}
+      <Button variant="outline" onclick={() => aboutDialogOpen = false}>Close</Button>
+      <Button disabled={diagnosticBusy || aboutBusy} onclick={() => void createDiagnosticBundle()}>
+        {#if diagnosticBusy}<Spinner data-icon="inline-start" />{/if}
+        {diagnosticBusy ? "Creating bundle…" : "Create diagnostic bundle"}
+      </Button>
+    {/snippet}
+  </AppDialog>
 {/if}
 
 {#if terminologyDialogOpen}
-  <div class="dialog-backdrop">
-    <div class="project-dialog terminology-dialog" role="dialog" aria-modal="true" aria-labelledby="terminology-title">
-      <header><div><p class="eyebrow">Local quality</p><h2 id="terminology-title">Project terminology</h2></div><button class="icon-button" aria-label="Close terminology" onclick={() => terminologyDialogOpen = false}>×</button></header>
-      <div class="project-body terminology-body">
-        <p>Terms stay in the optional versioned sidecar and are checked locally. Nothing is sent to a service.</p>
-        <div class="term-form">
-          <label>Source term<input bind:value={termSource} placeholder="Save" /></label>
-          <label>Preferred translation<input bind:value={termPreferred} placeholder="Speichern" /></label>
-          <label>Locale<input bind:value={termLocale} placeholder="Optional, e.g. de" /></label>
-          <label>Note<input bind:value={termNote} placeholder="Optional usage guidance" /></label>
-          <button class="secondary" disabled={termSource.trim() === "" || termPreferred.trim() === ""} onclick={addTerm}>＋ Add term</button>
+  <AppDialog
+    open
+    title="Project terminology"
+    description="Terms stay in the optional versioned sidecar and are checked locally. Nothing is sent to a service."
+    class="sm:max-w-4xl"
+    onopenchange={(open) => terminologyDialogOpen = open}
+  >
+    <Field.FieldGroup class="grid gap-3 sm:grid-cols-2">
+      <Field.Field><Field.Label for="term-source">Source term</Field.Label><Input id="term-source" bind:value={termSource} placeholder="Save" /></Field.Field>
+      <Field.Field><Field.Label for="term-preferred">Preferred translation</Field.Label><Input id="term-preferred" bind:value={termPreferred} placeholder="Speichern" /></Field.Field>
+      <Field.Field><Field.Label for="term-locale">Locale</Field.Label><Input id="term-locale" bind:value={termLocale} placeholder="Optional, e.g. de" /></Field.Field>
+      <Field.Field><Field.Label for="term-note">Note</Field.Label><Input id="term-note" bind:value={termNote} placeholder="Optional usage guidance" /></Field.Field>
+      <Button class="justify-self-start sm:col-span-2" variant="outline" disabled={termSource.trim() === "" || termPreferred.trim() === ""} onclick={addTerm}>
+        <PlusIcon data-icon="inline-start" />Add term
+      </Button>
+    </Field.FieldGroup>
+    <div class="mt-5 grid overflow-hidden rounded-xl border">
+      {#each terminology as term, index (term)}
+        <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-4 py-3 last:border-b-0">
+          <div class="min-w-0">
+            <div class="flex min-w-0 flex-wrap items-center gap-2"><strong>{term.source}</strong><span class="text-muted-foreground">→</span><strong>{term.preferred}</strong>{#if term.locale}<Badge variant="outline">{term.locale}</Badge>{/if}</div>
+            <p class="truncate text-xs text-muted-foreground">{term.note ?? "No note"}</p>
+          </div>
+          <Button variant="ghost" size="icon-xs" aria-label={"Remove term " + term.source} onclick={() => removeTerm(index)}><Trash2Icon /></Button>
         </div>
-        <div class="term-list">
-          {#each terminology as term, index (term)}
-            <div><span><strong>{term.source}</strong><span>→</span><strong>{term.preferred}</strong>{#if term.locale}<code>{term.locale}</code>{/if}</span><small>{term.note ?? "No note"}</small><button aria-label={"Remove term " + term.source} onclick={() => removeTerm(index)}>×</button></div>
-          {:else}
-            <p>No terminology entries yet.</p>
-          {/each}
-        </div>
-      </div>
-      <footer><button class="secondary" onclick={() => terminologyDialogOpen = false}>Done</button><div><button class="primary" disabled={!reviewDirty || reviewSaving} onclick={() => void saveReview()}>Save workflow</button></div></footer>
+      {:else}
+        <p class="p-6 text-center text-sm text-muted-foreground">No terminology entries yet.</p>
+      {/each}
     </div>
-  </div>
+    {#snippet footer()}
+      <Button variant="outline" onclick={() => terminologyDialogOpen = false}>Done</Button>
+      <Button disabled={!reviewDirty || reviewSaving} onclick={() => void saveReview()}>
+        {#if reviewSaving}<Spinner data-icon="inline-start" />{/if}Save workflow
+      </Button>
+    {/snippet}
+  </AppDialog>
 {/if}
 
 {#if reportDialogOpen}
-  <div class="dialog-backdrop">
-    <div class="project-dialog report-dialog" role="dialog" aria-modal="true" aria-labelledby="quality-report-title">
-      <header><div><p class="eyebrow">Deterministic report</p><h2 id="quality-report-title">{selectedLocale} quality report</h2></div><button class="icon-button" aria-label="Close quality report" onclick={() => reportDialogOpen = false}>×</button></header>
-      <div class="project-body">
-        <p class="report-summary">{localeQuality.length} findings across {qualityKeySet.size} messages. CSV is ordered by key and finding kind.</p>
-        <textarea class="code report-output" readonly value={qualityReportCsv(localeQuality)}></textarea>
-      </div>
-      <footer><button class="secondary" onclick={() => reportDialogOpen = false}>Close</button><div></div></footer>
-    </div>
-  </div>
+  <AppDialog
+    open
+    title={`${selectedLocale} quality report`}
+    description={`${localeQuality.length} findings across ${qualityKeySet.size} messages. CSV is ordered by key and finding kind.`}
+    class="sm:max-w-4xl"
+    onopenchange={(open) => reportDialogOpen = open}
+  >
+    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label="Quality report CSV" readonly value={qualityReportCsv(localeQuality)} />
+    {#snippet footer()}<Button variant="outline" onclick={() => reportDialogOpen = false}>Close</Button>{/snippet}
+  </AppDialog>
 {/if}
 
 {#if repairDocument !== undefined}
-  <div class="dialog-backdrop">
-    <div class="project-dialog repair-dialog" role="dialog" aria-modal="true" aria-labelledby="repair-dialog-title">
-      <header><div><p class="eyebrow">Repair mode</p><h2 id="repair-dialog-title">{repairDocument.path}</h2></div>
-        <button class="icon-button" aria-label="Close repair editor" disabled={repairBusy} onclick={() => repairDocument = undefined}>×</button></header>
-      <div class="project-body">
-        <p class="repair-guidance">Edit the raw JSON below. The canonical compiler must accept it before it can replace the file.</p>
-        <textarea class="code" aria-label="Malformed JSON document" bind:value={repairText} spellcheck={false}></textarea>
-        {#if repairMessage}<p class="project-error" aria-live="polite">{repairMessage}</p>{/if}
-      </div>
-      <footer><button class="secondary" disabled={repairBusy} onclick={() => repairDocument = undefined}>Cancel</button>
-        <div><button class="primary" disabled={repairBusy} onclick={() => void saveRepair()}>{repairBusy ? "Validating…" : "Validate and save"}</button></div></footer>
-    </div>
-  </div>
+  <AppDialog
+    open
+    title={repairDocument.path}
+    description="Edit the raw JSON below. The canonical compiler must accept it before it can replace the file."
+    class="sm:max-w-4xl"
+    showCloseButton={!repairBusy}
+    onopenchange={(open) => { if (!open && !repairBusy) repairDocument = undefined; }}
+  >
+    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label="Malformed JSON document" bind:value={repairText} spellcheck={false} />
+    {#if repairMessage}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>Repair failed</Alert.Title><Alert.Description>{repairMessage}</Alert.Description></Alert.Root>{/if}
+    {#snippet footer()}
+      <Button variant="outline" disabled={repairBusy} onclick={() => repairDocument = undefined}>Cancel</Button>
+      <Button disabled={repairBusy} onclick={() => void saveRepair()}>{#if repairBusy}<Spinner data-icon="inline-start" />{/if}{repairBusy ? "Validating…" : "Validate and save"}</Button>
+    {/snippet}
+  </AppDialog>
 {/if}
 
 {#if openDialogOpen}
-  <div class="dialog-backdrop" role="presentation">
-    <div class="project-dialog open-dialog" role="dialog" aria-modal="true" aria-labelledby="open-dialog-title">
-      <header><div><p class="eyebrow">Workspace</p><h2 id="open-dialog-title">Open translation project</h2></div>
-        <button class="icon-button" aria-label="Close workspace dialog" disabled={openingWorkspace || pickingWorkspace} onclick={() => openDialogOpen = false}>×</button></header>
-      <div class="open-workspace-card dialog-card">
-        <label for="dialog-open-directory">Workspace directory</label>
-        <div><input id="dialog-open-directory" bind:value={openDirectory} autocomplete="off" />
-          <button class="secondary" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? "Choosing…" : "Browse…"}</button></div>
-        <small>Catalogs are discovered below this boundary. You will choose one if several are found.</small>
+  <AppDialog
+    open
+    title="Open translation project"
+    description="Catalogs are discovered below this workspace boundary. You will choose one if several are found."
+    showCloseButton={!openingWorkspace && !pickingWorkspace}
+    onopenchange={(open) => { if (!openingWorkspace && !pickingWorkspace) openDialogOpen = open; }}
+  >
+    <Field.Field>
+      <Field.Label for="dialog-open-directory">Workspace directory</Field.Label>
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <Input id="dialog-open-directory" class="min-w-0 flex-1" bind:value={openDirectory} autocomplete="off" />
+        <Button variant="outline" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? "Choosing…" : "Browse…"}</Button>
       </div>
-      {#if clientError}<p class="project-error" aria-live="polite">{clientError}</p>{/if}
-      <footer><button class="secondary" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>Cancel</button>
-        <div><button class="primary" disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{openingWorkspace ? "Opening…" : "Open workspace"}</button></div></footer>
-    </div>
-  </div>
+    </Field.Field>
+    {#if clientError}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>Could not open workspace</Alert.Title><Alert.Description>{clientError}</Alert.Description></Alert.Root>{/if}
+    {#snippet footer()}
+      <Button variant="outline" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>Cancel</Button>
+      <Button disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{#if openingWorkspace}<Spinner data-icon="inline-start" />{/if}{openingWorkspace ? "Opening…" : "Open workspace"}</Button>
+    {/snippet}
+  </AppDialog>
 {/if}
 
 {#if mutationDialogOpen && snapshot?.catalog !== undefined}
-  <div class="dialog-backdrop" role="presentation">
-    <div class="project-dialog mutation-dialog" role="dialog" aria-modal="true" aria-labelledby="mutation-dialog-title">
-      <header><div><p class="eyebrow">Compiler-backed workspace change</p><h2 id="mutation-dialog-title">{mutationTitle(mutationKind)}</h2></div>
-        <button class="icon-button" aria-label="Close workspace change" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>×</button></header>
-      <div class="project-body mutation-body">
-        {#if mutationKind === "add-locale" || mutationKind === "remove-locale" || mutationKind === "set-fallback"}
-          <label>Language operation
-            <select value={mutationKind} onchange={changeMutationKind}>
-              <option value="add-locale">Add a language</option>
-              <option value="remove-locale">Remove a language</option>
-              <option value="set-fallback">Change a fallback</option>
-            </select>
-          </label>
-        {/if}
+  <AppDialog
+    open
+    title={mutationTitle(mutationKind)}
+    description="Compiler-backed workspace change. Review the affected files before committing."
+    class="sm:max-w-3xl"
+    showCloseButton={!mutationBusy}
+    onopenchange={(open) => { if (!mutationBusy) mutationDialogOpen = open; }}
+  >
+    <Field.FieldGroup class="gap-4">
+      {#if mutationKind === "add-locale" || mutationKind === "remove-locale" || mutationKind === "set-fallback"}
+        <Field.Field>
+          <Field.Label for="language-operation">Language operation</Field.Label>
+          <Select.Root type="single" value={mutationKind} onValueChange={changeMutationKind}>
+            <Select.Trigger id="language-operation" class="w-full">{mutationTitle(mutationKind)}</Select.Trigger>
+            <Select.Content><Select.Group><Select.Label>Language operation</Select.Label>
+              <Select.Item value="add-locale" label="Add a language">Add a language</Select.Item>
+              <Select.Item value="remove-locale" label="Remove a language">Remove a language</Select.Item>
+              <Select.Item value="set-fallback" label="Change a fallback">Change a fallback</Select.Item>
+            </Select.Group></Select.Content>
+          </Select.Root>
+        </Field.Field>
+      {/if}
 
-        {#if mutationKind === "add-locale"}
-          <div class="form-grid">
-            <label>New locale tag<input bind:value={mutationLocale} oninput={invalidateMutationPreview} placeholder="fr-FR" autocomplete="off" /></label>
-            <label>Fallback
-              <select bind:value={mutationFallback} onchange={invalidateMutationPreview}>
-                {#each snapshot.catalog.locales as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
-              </select>
-            </label>
-            <label>Copy starter values from
-              <select bind:value={mutationCopyFrom} onchange={invalidateMutationPreview}>
-                {#each snapshot.catalog.locales as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
-              </select>
-              <small>Copied text keeps the new catalog compiler-valid and can then be translated.</small>
-            </label>
-            <label>Layer
-              <select bind:value={mutationLayer} onchange={invalidateMutationPreview}>
-                {#each snapshot.catalog.layers as layer (layer.name)}<option value={layer.name}>{layer.name}</option>{/each}
-              </select>
-            </label>
-          </div>
-        {:else if mutationKind === "remove-locale"}
-          <div class="form-grid">
-            <label>Language to remove
-              <select bind:value={mutationLocale} onchange={invalidateMutationPreview}>
-                {#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
-              </select>
-            </label>
-            <label>Redirect dependent fallbacks to
-              <select bind:value={mutationReplacementFallback} onchange={invalidateMutationPreview}>
-                {#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<option value={locale.tag}>{locale.tag}</option>{/each}
-              </select>
-            </label>
-          </div>
-          <p class="mutation-warning">All resource documents for this locale will be deleted after the preview is confirmed.</p>
-        {:else if mutationKind === "set-fallback"}
-          <div class="form-grid">
-            <label>Language
-              <select bind:value={mutationLocale} onchange={invalidateMutationPreview}>
-                {#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
-              </select>
-            </label>
-            <label>Fallback
-              <select bind:value={mutationFallback} onchange={invalidateMutationPreview}>
-                {#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<option value={locale.tag}>{locale.tag} · {localeName(locale.tag)}</option>{/each}
-              </select>
-            </label>
-          </div>
-          <div class="fallback-graph">
-            {#each snapshot.catalog.locales as locale (locale.tag)}
-              <span><strong>{locale.tag}</strong>{locale.tag === mutationLocale ? ` → ${mutationFallback}` : locale.fallback ? ` → ${locale.fallback}` : " · source"}</span>
-            {/each}
-          </div>
-        {:else if mutationKind === "create-key"}
-          <div class="form-grid">
-            <label class="wide">Message key<input bind:value={mutationTargetKey} oninput={invalidateMutationPreview} placeholder="Checkout.Actions.Pay" autocomplete="off" /><small>Use dots to organize messages into groups.</small></label>
-            <label class="wide">Initial text<textarea bind:value={mutationInitialValue} oninput={invalidateMutationPreview} placeholder="Pay now"></textarea><small>The initial value is added to every language so strict projects stay valid.</small></label>
-            <label>Layer<select bind:value={mutationLayer} onchange={invalidateMutationPreview}>{#each snapshot.catalog.layers as layer (layer.name)}<option value={layer.name}>{layer.name}</option>{/each}</select></label>
-          </div>
-        {:else if mutationKind === "rename-key" || mutationKind === "duplicate-key"}
-          <div class="form-grid">
-            <label class="wide">Existing key<input value={mutationSourceKey} readonly /></label>
-            <label class="wide">{mutationKind === "rename-key" ? "New key or group path" : "Duplicate key"}<input bind:value={mutationTargetKey} oninput={invalidateMutationPreview} autocomplete="off" /></label>
-          </div>
-          <p class="mutation-guidance">The change is applied across every locale and layer where the source message exists.</p>
-        {:else}
-          <p class="mutation-warning">Delete <strong>{mutationSourceKey}</strong> from every locale and layer? The preview below lists every file that will change.</p>
-        {/if}
+      {#if mutationKind === "add-locale"}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <Field.Field><Field.Label for="mutation-locale">New locale tag</Field.Label><Input id="mutation-locale" bind:value={mutationLocale} oninput={invalidateMutationPreview} placeholder="fr-FR" autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="mutation-fallback">Fallback</Field.Label>
+            <Select.Root type="single" value={mutationFallback} onValueChange={(value) => { mutationFallback = value; invalidateMutationPreview(); }}>
+              <Select.Trigger id="mutation-fallback" class="w-full">{mutationFallback} · {localeName(mutationFallback)}</Select.Trigger>
+              <Select.Content><Select.Group>{#each snapshot.catalog.locales as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
+            </Select.Root>
+          </Field.Field>
+          <Field.Field><Field.Label for="mutation-copy-from">Copy starter values from</Field.Label>
+            <Select.Root type="single" value={mutationCopyFrom} onValueChange={(value) => { mutationCopyFrom = value; invalidateMutationPreview(); }}>
+              <Select.Trigger id="mutation-copy-from" class="w-full">{mutationCopyFrom} · {localeName(mutationCopyFrom)}</Select.Trigger>
+              <Select.Content><Select.Group>{#each snapshot.catalog.locales as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
+            </Select.Root>
+            <Field.Description>Copied text keeps the new catalog compiler-valid and can then be translated.</Field.Description>
+          </Field.Field>
+          <Field.Field><Field.Label for="mutation-layer">Layer</Field.Label>
+            <Select.Root type="single" value={mutationLayer} onValueChange={(value) => { mutationLayer = value; invalidateMutationPreview(); }}>
+              <Select.Trigger id="mutation-layer" class="w-full">{mutationLayer}</Select.Trigger>
+              <Select.Content><Select.Group>{#each snapshot.catalog.layers as layer (layer.name)}<Select.Item value={layer.name} label={layer.name}>{layer.name}</Select.Item>{/each}</Select.Group></Select.Content>
+            </Select.Root>
+          </Field.Field>
+        </div>
+      {:else if mutationKind === "remove-locale"}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <Field.Field><Field.Label for="remove-locale">Language to remove</Field.Label>
+            <Select.Root type="single" value={mutationLocale} onValueChange={(value) => { mutationLocale = value; invalidateMutationPreview(); }}>
+              <Select.Trigger id="remove-locale" class="w-full">{mutationLocale} · {localeName(mutationLocale)}</Select.Trigger>
+              <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
+            </Select.Root>
+          </Field.Field>
+          <Field.Field><Field.Label for="replacement-fallback">Redirect dependent fallbacks to</Field.Label>
+            <Select.Root type="single" value={mutationReplacementFallback} onValueChange={(value) => { mutationReplacementFallback = value; invalidateMutationPreview(); }}>
+              <Select.Trigger id="replacement-fallback" class="w-full">{mutationReplacementFallback}</Select.Trigger>
+              <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={locale.tag}>{locale.tag}</Select.Item>{/each}</Select.Group></Select.Content>
+            </Select.Root>
+          </Field.Field>
+        </div>
+        <Alert.Root variant="destructive"><Alert.Title>Files will be deleted</Alert.Title><Alert.Description>All resource documents for this locale will be deleted after the preview is confirmed.</Alert.Description></Alert.Root>
+      {:else if mutationKind === "set-fallback"}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <Field.Field><Field.Label for="fallback-locale">Language</Field.Label>
+            <Select.Root type="single" value={mutationLocale} onValueChange={(value) => { mutationLocale = value; invalidateMutationPreview(); }}>
+              <Select.Trigger id="fallback-locale" class="w-full">{mutationLocale} · {localeName(mutationLocale)}</Select.Trigger>
+              <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
+            </Select.Root>
+          </Field.Field>
+          <Field.Field><Field.Label for="fallback-target">Fallback</Field.Label>
+            <Select.Root type="single" value={mutationFallback} onValueChange={(value) => { mutationFallback = value; invalidateMutationPreview(); }}>
+              <Select.Trigger id="fallback-target" class="w-full">{mutationFallback} · {localeName(mutationFallback)}</Select.Trigger>
+              <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
+            </Select.Root>
+          </Field.Field>
+        </div>
+        <div class="flex flex-wrap gap-2">{#each snapshot.catalog.locales as locale (locale.tag)}<Badge variant="outline"><strong>{locale.tag}</strong>{locale.tag === mutationLocale ? ` → ${mutationFallback}` : locale.fallback ? ` → ${locale.fallback}` : " · source"}</Badge>{/each}</div>
+      {:else if mutationKind === "create-key"}
+        <Field.Field><Field.Label for="mutation-target-key">Message key</Field.Label><Input id="mutation-target-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} placeholder="Checkout.Actions.Pay" autocomplete="off" /><Field.Description>Use dots to organize messages into groups.</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="mutation-initial-value">Initial text</Field.Label><Textarea id="mutation-initial-value" class="min-h-28" bind:value={mutationInitialValue} oninput={invalidateMutationPreview} placeholder="Pay now" /><Field.Description>The initial value is added to every language so strict projects stay valid.</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="message-layer">Layer</Field.Label>
+          <Select.Root type="single" value={mutationLayer} onValueChange={(value) => { mutationLayer = value; invalidateMutationPreview(); }}><Select.Trigger id="message-layer" class="w-full">{mutationLayer}</Select.Trigger><Select.Content><Select.Group>{#each snapshot.catalog.layers as layer (layer.name)}<Select.Item value={layer.name} label={layer.name}>{layer.name}</Select.Item>{/each}</Select.Group></Select.Content></Select.Root>
+        </Field.Field>
+      {:else if mutationKind === "rename-key" || mutationKind === "duplicate-key"}
+        <Field.Field><Field.Label for="mutation-source-key">Existing key</Field.Label><Input id="mutation-source-key" value={mutationSourceKey} readonly /></Field.Field>
+        <Field.Field><Field.Label for="mutation-new-key">{mutationKind === "rename-key" ? "New key or group path" : "Duplicate key"}</Field.Label><Input id="mutation-new-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} autocomplete="off" /><Field.Description>The change is applied across every locale and layer where the source message exists.</Field.Description></Field.Field>
+      {:else}
+        <Alert.Root variant="destructive"><Alert.Title>Delete {mutationSourceKey}?</Alert.Title><Alert.Description>The message will be removed from every locale and layer. The preview below lists every file that will change.</Alert.Description></Alert.Root>
+      {/if}
+    </Field.FieldGroup>
 
-        {#if mutationError}<p class="project-error" aria-live="polite">{mutationError}</p>{/if}
-        {#if mutationPreview?.ok}
-          <section class="mutation-preview">
-            <header><strong>Operation preview</strong><span>{mutationPreview.files.length} affected {mutationPreview.files.length === 1 ? "file" : "files"}</span></header>
-            {#each mutationPreview.files as file (file.path)}
-              <div><span class={`change-kind ${file.kind}`}>{file.kind}</span><code>{file.path}</code><small>{file.beforeBytes.toLocaleString()} → {file.afterBytes.toLocaleString()} bytes</small></div>
-            {/each}
-          </section>
-        {/if}
-      </div>
-      <footer><button class="secondary" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>Cancel</button>
-        <div>
-          {#if mutationPreview?.ok}<button class={mutationKind === "remove-locale" || mutationKind === "delete-key" ? "danger-button" : "primary"} disabled={mutationBusy} onclick={() => void applyMutation()}>{mutationBusy ? "Committing…" : "Commit change"}</button>
-          {:else}<button class="primary" disabled={mutationBusy} onclick={() => void previewMutation()}>{mutationBusy ? "Checking…" : "Preview change"}</button>{/if}
-        </div></footer>
-    </div>
-  </div>
+    {#if mutationError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>Change is not valid</Alert.Title><Alert.Description>{mutationError}</Alert.Description></Alert.Root>{/if}
+    {#if mutationPreview?.ok}
+      <section class="mt-5 overflow-hidden rounded-xl border" aria-label="Operation preview">
+        <header class="flex items-center justify-between gap-3 border-b px-4 py-3"><strong>Operation preview</strong><Badge variant="secondary">{mutationPreview.files.length} affected {mutationPreview.files.length === 1 ? "file" : "files"}</Badge></header>
+        {#each mutationPreview.files as file (file.path)}
+          <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"><Badge variant={file.kind === "delete" ? "destructive" : file.kind === "create" ? "default" : "secondary"}>{file.kind}</Badge><code class="truncate text-xs">{file.path}</code><small class="col-start-2 text-muted-foreground sm:col-start-auto">{file.beforeBytes.toLocaleString()} → {file.afterBytes.toLocaleString()} bytes</small></div>
+        {/each}
+      </section>
+    {/if}
+    {#snippet footer()}
+      <Button variant="outline" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>Cancel</Button>
+      {#if mutationPreview?.ok}
+        <Button variant={mutationKind === "remove-locale" || mutationKind === "delete-key" ? "destructive" : "default"} disabled={mutationBusy} onclick={() => void applyMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? "Committing…" : "Commit change"}</Button>
+      {:else}
+        <Button disabled={mutationBusy} onclick={() => void previewMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? "Checking…" : "Preview change"}</Button>
+      {/if}
+    {/snippet}
+  </AppDialog>
 {/if}
 
 {#if projectDialogOpen}
-  <div class="dialog-backdrop">
-    <div class="project-dialog" role="dialog" aria-modal="true" aria-labelledby="project-dialog-title">
-      <header>
-        <div>
-          <p class="eyebrow">Create text resources</p>
-          <h2 id="project-dialog-title">New translation project</h2>
-        </div>
-        <button class="icon-button" aria-label="Close project wizard" disabled={projectBusy} onclick={closeProjectWizard}>×</button>
-      </header>
+  <AppDialog
+    open
+    title="New translation project"
+    description="Create compiler-valid text resources without overwriting an existing directory."
+    class="sm:max-w-3xl"
+    showCloseButton={!projectBusy}
+    onopenchange={(open) => { if (!open && !projectBusy) closeProjectWizard(); }}
+  >
+    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Project creation steps">
+      {#each ["Project", "Languages", "Settings", "Review"] as title, index (title)}
+        <li class="flex items-center gap-2 text-sm" aria-current={projectStep === index + 1 ? "step" : undefined}>
+          <Badge variant={projectStep === index + 1 ? "default" : projectStep > index + 1 ? "secondary" : "outline"}>{projectStep > index + 1 ? "✓" : index + 1}</Badge>
+          <span class={projectStep === index + 1 ? "font-medium" : "text-muted-foreground"}>{title}</span>
+        </li>
+      {/each}
+    </ol>
 
-      <ol class="project-steps" aria-label="Project creation steps">
-        {#each ["Project", "Languages", "Settings", "Review"] as title, index (title)}
-          <li class={{ active: projectStep === index + 1, complete: projectStep > index + 1 }}>
-            <span>{projectStep > index + 1 ? "✓" : index + 1}</span>{title}
-          </li>
+    {#if projectStep === 1}
+      <div class="mb-5"><h3 class="font-medium">Where should the translations live?</h3><p class="text-sm text-muted-foreground">The editor creates a new directory and never overwrites an existing one.</p></div>
+      <Field.FieldGroup>
+        <Field.Field><Field.Label for="project-directory">New project directory</Field.Label><Input id="project-directory" bind:value={projectDirectory} placeholder="/projects/customer-app/Resources" autocomplete="off" /><Field.Description>Enter an absolute path or a path relative to the editor process.</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="project-catalog">Catalog ID</Field.Label><Input id="project-catalog" bind:value={projectCatalog} placeholder="product" autocomplete="off" /><Field.Description>Lowercase letters, numbers, dots, and hyphens.</Field.Description></Field.Field>
+      </Field.FieldGroup>
+    {:else if projectStep === 2}
+      <div class="mb-5"><h3 class="font-medium">Which languages does this project use?</h3><p class="text-sm text-muted-foreground">One language is fully supported. Add translations now or later.</p></div>
+      <div class="grid gap-3">
+        <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_auto]">
+          <Field.Field><Field.Label for="project-default-locale">Source/default language</Field.Label><Input id="project-default-locale" bind:value={projectDefaultLocale} placeholder="de" autocomplete="off" /></Field.Field>
+          <Badge variant="secondary" class="mb-2">Canonical source</Badge>
+        </div>
+        {#each projectLocales as locale (locale.id)}
+          <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_1fr_auto]">
+            <Field.Field><Field.Label for={`project-locale-${locale.id}`}>Additional language</Field.Label><Input id={`project-locale-${locale.id}`} bind:value={locale.tag} placeholder="en" autocomplete="off" /></Field.Field>
+            <Field.Field><Field.Label for={`project-fallback-${locale.id}`}>Fallback</Field.Label>
+              <Select.Root type="single" value={locale.fallback} onValueChange={(value) => locale.fallback = value}>
+                <Select.Trigger id={`project-fallback-${locale.id}`} class="w-full">{locale.fallback || `Default (${projectDefaultLocale || "source"})`}</Select.Trigger>
+                <Select.Content><Select.Group><Select.Item value="" label={`Default (${projectDefaultLocale || "source"})`}>Default ({projectDefaultLocale || "source"})</Select.Item>{#each projectLocales.filter((candidate) => candidate.id !== locale.id && candidate.tag.trim() !== "") as candidate (candidate.id)}<Select.Item value={candidate.tag} label={candidate.tag}>{candidate.tag}</Select.Item>{/each}</Select.Group></Select.Content>
+              </Select.Root>
+            </Field.Field>
+            <Button variant="ghost" size="icon-sm" aria-label={`Remove locale ${locale.tag || "row"}`} onclick={() => removeProjectLocale(locale.id)}><Trash2Icon /></Button>
+          </div>
         {/each}
-      </ol>
-
-      <div class="project-body">
-        {#if projectStep === 1}
-          <div class="project-intro">
-            <span class="project-glyph">◇</span>
-            <div>
-              <h3>Where should the translations live?</h3>
-              <p>The editor creates a new directory and never overwrites an existing one.</p>
-            </div>
-          </div>
-          <div class="form-grid">
-            <label class="wide">New project directory
-              <input bind:value={projectDirectory} placeholder="/projects/customer-app/Resources" autocomplete="off" />
-              <small>Enter an absolute path or a path relative to the editor process.</small>
-            </label>
-            <label>Catalog ID
-              <input bind:value={projectCatalog} placeholder="product" autocomplete="off" />
-              <small>Lowercase letters, numbers, dots, and hyphens.</small>
-            </label>
-          </div>
-        {:else if projectStep === 2}
-          <div class="project-intro">
-            <span class="project-glyph">文</span>
-            <div>
-              <h3>Which languages does this project use?</h3>
-              <p>One language is fully supported. Add translations now or later.</p>
-            </div>
-          </div>
-          <div class="locale-builder">
-            <div class="locale-row source">
-              <label>Source/default language
-                <input bind:value={projectDefaultLocale} placeholder="de" autocomplete="off" />
-              </label>
-              <span>Canonical source</span>
-            </div>
-            {#each projectLocales as locale (locale.id)}
-              <div class="locale-row">
-                <label>Additional language
-                  <input bind:value={locale.tag} placeholder="en" autocomplete="off" />
-                </label>
-                <label>Fallback
-                  <select bind:value={locale.fallback}>
-                    <option value="">Default ({projectDefaultLocale || "source"})</option>
-                    {#each projectLocales.filter((candidate) => candidate.id !== locale.id && candidate.tag.trim() !== "") as candidate (candidate.id)}
-                      <option value={candidate.tag}>{candidate.tag}</option>
-                    {/each}
-                  </select>
-                </label>
-                <button class="remove-locale" aria-label={`Remove locale ${locale.tag || "row"}`} onclick={() => removeProjectLocale(locale.id)}>×</button>
-              </div>
-            {/each}
-            <button class="secondary add-locale" onclick={addProjectLocale}>＋ Add another language</button>
-          </div>
-        {:else if projectStep === 3}
-          <div class="project-intro">
-            <span class="project-glyph">{"{ }"}</span>
-            <div>
-              <h3>Generated API and output</h3>
-              <p>These defaults work for most .NET and ESM consumers.</p>
-            </div>
-          </div>
-          <div class="form-grid">
-            <label>Code namespace
-              <input bind:value={projectNamespace} autocomplete="off" />
-            </label>
-            <label>Generated class
-              <input bind:value={projectClassName} autocomplete="off" />
-            </label>
-            <label>Initial layer
-              <input bind:value={projectLayer} autocomplete="off" />
-            </label>
-          </div>
-          <div class="project-options">
-            <label><input type="checkbox" bind:checked={projectGenerateEsm} /> <span><strong>Enable ESM output</strong><small>Generate tree-shakeable modules for TypeScript and browser applications.</small></span></label>
-            <label><input type="checkbox" bind:checked={projectIncludeStarter} /> <span><strong>Add a starter message</strong><small>Create <code>Application.Name</code> in every language.</small></span></label>
-          </div>
-        {:else if projectStep === 4 && projectPlan !== undefined}
-          <div class="project-intro review">
-            <span class="project-glyph">✓</span>
-            <div>
-              <h3>Ready to create {projectPlan.catalogId}</h3>
-              <p>{projectPlan.locales.length} {projectPlan.locales.length === 1 ? "language" : "languages"} · {projectPlan.files.length} files · compiler validated</p>
-            </div>
-          </div>
-          <div class="review-card">
-            <div><span>Directory</span><code>{projectPlan.directory}</code></div>
-            <div><span>Languages</span><strong>{projectPlan.locales.map((locale) => locale.tag).join(", ")}</strong></div>
-          </div>
-          <div class="file-preview">
-            <h4>Files to create</h4>
-            {#each projectPlan.files as file (file)}
-              <div><span aria-hidden="true">◇</span><code>{file}</code></div>
-            {/each}
-          </div>
-        {/if}
-
-        {#if projectError}<p class="project-error" aria-live="polite">{projectError}</p>{/if}
+        <Button variant="outline" class="justify-self-start" onclick={addProjectLocale}><PlusIcon data-icon="inline-start" />Add another language</Button>
       </div>
-
-      <footer>
-        <button class="secondary" disabled={projectBusy} onclick={closeProjectWizard}>Cancel</button>
-        <div>
-          {#if projectStep > 1}
-            <button class="secondary" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>Back</button>
-          {/if}
-          {#if projectStep < 4}
-            <button class="primary" disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{projectBusy ? "Validating…" : "Continue"}</button>
-          {:else}
-            <button class="primary" disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{projectBusy ? "Creating…" : "Create project"}</button>
-          {/if}
+    {:else if projectStep === 3}
+      <div class="mb-5"><h3 class="font-medium">Generated API and output</h3><p class="text-sm text-muted-foreground">These defaults work for most .NET and ESM consumers.</p></div>
+      <Field.FieldGroup>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <Field.Field><Field.Label for="project-namespace">Code namespace</Field.Label><Input id="project-namespace" bind:value={projectNamespace} autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="project-class">Generated class</Field.Label><Input id="project-class" bind:value={projectClassName} autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="project-layer">Initial layer</Field.Label><Input id="project-layer" bind:value={projectLayer} autocomplete="off" /></Field.Field>
         </div>
-      </footer>
-    </div>
-  </div>
+        <Field.Field orientation="horizontal"><Checkbox id="project-esm" bind:checked={projectGenerateEsm} /><Field.Content><Field.Label for="project-esm">Enable ESM output</Field.Label><Field.Description>Generate tree-shakeable modules for TypeScript and browser applications.</Field.Description></Field.Content></Field.Field>
+        <Field.Field orientation="horizontal"><Checkbox id="project-starter" bind:checked={projectIncludeStarter} /><Field.Content><Field.Label for="project-starter">Add a starter message</Field.Label><Field.Description>Create <code>Application.Name</code> in every language.</Field.Description></Field.Content></Field.Field>
+      </Field.FieldGroup>
+    {:else if projectStep === 4 && projectPlan !== undefined}
+      <Alert.Root><Alert.Title>Ready to create {projectPlan.catalogId}</Alert.Title><Alert.Description>{projectPlan.locales.length} {projectPlan.locales.length === 1 ? "language" : "languages"} · {projectPlan.files.length} files · compiler validated</Alert.Description></Alert.Root>
+      <dl class="mt-4 grid gap-3 rounded-xl border p-4"><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">Directory</dt><dd class="m-0 truncate font-mono text-xs">{projectPlan.directory}</dd></div><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">Languages</dt><dd class="m-0 font-medium">{projectPlan.locales.map((locale) => locale.tag).join(", ")}</dd></div></dl>
+      <section class="mt-4 overflow-hidden rounded-xl border" aria-label="Files to create"><h4 class="border-b px-4 py-3 font-medium">Files to create</h4>{#each projectPlan.files as file (file)}<div class="border-b px-4 py-3 last:border-b-0"><code class="text-xs">{file}</code></div>{/each}</section>
+    {/if}
+
+    {#if projectError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>Project is not valid</Alert.Title><Alert.Description>{projectError}</Alert.Description></Alert.Root>{/if}
+    {#snippet footer()}
+      <Button variant="outline" disabled={projectBusy} onclick={closeProjectWizard}>Cancel</Button>
+      {#if projectStep > 1}<Button variant="ghost" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>Back</Button>{/if}
+      {#if projectStep < 4}
+        <Button disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? "Validating…" : "Continue"}</Button>
+      {:else}
+        <Button disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? "Creating…" : "Create project"}</Button>
+      {/if}
+    {/snippet}
+  </AppDialog>
 {/if}
 
 <style>
@@ -1893,12 +1913,7 @@
   :global(button:focus-visible), :global(input:focus-visible), :global(textarea:focus-visible), :global(select:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
   :global(::selection) { color: var(--primary-foreground); background: var(--primary); }
 
-  .app-shell { display: grid; grid-template-columns: 390px minmax(0, 1fr); width: 100vw; max-width: 100%; height: 100vh; overflow: hidden; background: radial-gradient(circle at 80% -20%, #26332d 0, transparent 40%), #0c100e; }
-  .sidebar { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid #2c332e; background: #101412f2; box-shadow: 1rem 0 4rem #0004; }
-  .brand { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .8rem; padding: 1.25rem 1.25rem 1rem; }
-  .brand h1 { margin: .1rem 0 0; font-family: Georgia, serif; font-size: 1.6rem; font-weight: 500; letter-spacing: -.025em; }
   .eyebrow { margin: 0; color: #bda35f; font-size: .64rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
-  .brand select { align-self: start; border: 1px solid #3c443e; border-radius: .4rem; padding: .32rem .45rem; color: #bac2bc; background: #171c19; font-size: .7rem; }
   .mark { display: grid; place-items: center; width: 4rem; height: 4rem; transform: rotate(45deg); border: 1px solid #9b8144; border-radius: .35rem; background: linear-gradient(145deg, #2e3127, #151b17); box-shadow: inset 0 0 0 .28rem #0e120f, 0 1rem 3rem #0007; }
   .mark span { width: 1.15rem; height: 1.15rem; border: 2px solid #d2b96f; transform: rotate(45deg); }
   .mark.small { width: 2rem; height: 2rem; border-radius: .2rem; box-shadow: inset 0 0 0 .18rem #0e120f; }
@@ -1906,19 +1921,11 @@
 
   .status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: #65b886; box-shadow: 0 0 .6rem #65b88688; }
   .status-dot.warning { background: #d4a95a; box-shadow: 0 0 .6rem #d4a95a88; }
-  .icon-button { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border: 0; border-radius: .35rem; color: #9da69f; background: transparent; cursor: pointer; }
-  .icon-button:hover { color: #f2e5be; background: #2a312c; }
-
-
-  .editor-shell { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .primary { border: 1px solid #d0b460; border-radius: .45rem; padding: .58rem .85rem; color: #1a170e; background: linear-gradient(#d6bd70, #b9984f); font-weight: 750; cursor: pointer; box-shadow: 0 .35rem 1rem #0005; }
   .primary:hover:not(:disabled) { filter: brightness(1.08); }
   .primary:disabled { cursor: not-allowed; filter: grayscale(.5); opacity: .42; }
 
-  .editor-content { flex: 1; min-width: 0; min-height: 0; padding: 2rem clamp(2rem, 5vw, 5rem) 3rem; overflow-x: hidden; overflow-y: auto; scrollbar-color: #3b443e transparent; }
-  textarea { display: block; width: 100%; min-height: 240px; resize: vertical; border: 1px solid #38413b; border-radius: .65rem; outline: 0; padding: 1.2rem 1.3rem; color: #eef1ed; background: #111613; font-size: 1rem; line-height: 1.7; caret-color: #d4b760; box-shadow: inset 0 1px .25rem #0006, 0 1rem 4rem #0002; }
-  textarea:focus { border-color: #8c7847; box-shadow: 0 0 0 3px #ad914426, inset 0 1px .25rem #0006; }
-  textarea.code { min-height: 380px; tab-size: 2; color: #d8dfda; font: .78rem/1.65 "SFMono-Regular", Consolas, monospace; white-space: pre; }
+  .editor-content { flex: 1; min-width: 0; min-height: 0; padding: 1.25rem 1rem 2rem; overflow-x: hidden; overflow-y: auto; scrollbar-color: #3b443e transparent; }
   .message-preview { max-width: 1000px; margin: 1.2rem auto 0; border: 1px solid #3b443e; border-radius: .65rem; background: #0e1310; overflow: hidden; }
   .message-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; background: #171d19; }
   .message-preview > header > div { display: grid; gap: .15rem; }
@@ -1978,7 +1985,6 @@
   .open-workspace-card input:focus { border-color: #8f7945; }
   .open-workspace-card small { color: #626d66; font-size: .58rem; }
   .welcome-actions { display: flex; gap: .65rem; margin-top: .8rem; }
-  .add-message-button:hover { border-color: #8d7c49; color: #e0cb89; }
   .repair-list { margin-top: 1.5rem; border: 1px solid #553b36; border-radius: .65rem; background: #17110f; overflow: hidden; }
   .repair-list > header { padding: .8rem 1rem; background: #251815; }
   .repair-list > header > div { display: flex; justify-content: space-between; }
@@ -1989,17 +1995,6 @@
   .repair-list > button > span { display: grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 50%; color: #f0a398; background: #492923; font-weight: 800; }
   .repair-list code { color: #d5b0aa; font: .62rem ui-monospace, monospace; }
   .repair-list small { color: #9b7069; font-size: .58rem; }
-  .repair-guidance { margin: 0 0 .8rem; color: #7f8a82; font-size: .68rem; }
-  .repair-dialog textarea { min-height: 420px; }
-  .external-change-banner { position: fixed; z-index: 30; right: 1rem; bottom: 1rem; display: grid; grid-template-columns: minmax(12rem, 1fr) auto auto auto auto; align-items: center; gap: .7rem; width: min(58rem, calc(100vw - 2rem)); border: 1px solid #75602f; border-radius: .7rem; padding: .8rem; color: #d8d0bd; background: #201c12; box-shadow: 0 1rem 3rem #0008; }
-  .external-change-banner div { display: grid; gap: .2rem; min-width: 0; }
-  .external-change-banner strong { color: #eadba9; font-size: .7rem; }
-  .external-change-banner span { overflow: hidden; color: #a79a77; font: .58rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
-  .external-change-banner p { margin: 0; color: #9a9077; font-size: .6rem; }
-  .draft-recovery-banner { position: fixed; z-index: 31; right: 1rem; bottom: 1rem; display: grid; grid-template-columns: minmax(14rem, 1fr) auto auto; align-items: center; gap: .7rem; width: min(38rem, calc(100vw - 2rem)); border: 1px solid #456b56; border-radius: .7rem; padding: .8rem; color: #d3ddd6; background: #142019; box-shadow: 0 1rem 3rem #0008; }
-  .draft-recovery-banner div { display: grid; gap: .2rem; }
-  .draft-recovery-banner strong { color: #b9dfc7; font-size: .7rem; }
-  .draft-recovery-banner span { color: #789282; font-size: .59rem; }
   .recent-projects { margin-top: 1.5rem; border: 1px solid #303832; border-radius: .65rem; background: #101512; overflow: hidden; }
   .recent-projects > header { display: flex; justify-content: space-between; padding: .75rem 1rem; background: #171d19; }
   .recent-projects header strong { color: #bfc8c1; font-size: .68rem; }
@@ -2009,122 +2004,10 @@
   .recent-projects button > span { display: grid; gap: .2rem; min-width: 0; }
   .recent-projects code { overflow: hidden; color: #68736b; font: .57rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
   .recent-projects small { color: #69746c; font-size: .55rem; }
-  .external-compare-dialog { width: min(70rem, calc(100vw - 3rem)); }
-  .mutation-dialog { width: min(760px, calc(100vw - 3rem)); }
-  .terminology-dialog, .report-dialog { width: min(880px, calc(100vw - 3rem)); }
-  .about-dialog { width: min(680px, calc(100vw - 3rem)); }
-  .about-body { display: grid; gap: 1rem; }
-  .about-body > p { margin: 0; color: #849088; font-size: .68rem; }
-  .about-body dl { display: grid; margin: 0; border: 1px solid #333c36; border-radius: .5rem; overflow: hidden; }
-  .about-body dl > div { display: grid; grid-template-columns: 9rem 1fr; gap: .7rem; border-top: 1px solid #2c342f; padding: .55rem .7rem; }
-  .about-body dl > div:first-child { border-top: 0; }
-  .about-body dt { color: #6e7971; font-size: .57rem; }
-  .about-body dd { overflow-wrap: anywhere; margin: 0; color: #c6cec8; font: .59rem ui-monospace, monospace; }
-  .diagnostic-explanation { border: 1px solid #39443d; border-radius: .5rem; padding: .75rem; background: #101713; }
-  .diagnostic-explanation strong { color: #c2ccc5; font-size: .66rem; }
-  .diagnostic-explanation p { margin: .35rem 0 0; color: #78847c; font-size: .61rem; line-height: 1.55; }
-  .diagnostic-explanation .diagnostic-result { color: #bca96d; overflow-wrap: anywhere; }
-  .notice-copy code { color: #bda968; font-size: .58rem; }
-  .terminology-body > p, .report-summary { margin: 0 0 .8rem; color: #78837b; font-size: .65rem; }
-  .term-form { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; border: 1px solid #343d37; border-radius: .5rem; padding: .75rem; background: #0d110f; }
-  .term-form label { display: grid; gap: .3rem; color: #89948c; font-size: .56rem; }
-  .term-form input { border: 1px solid #3a433d; border-radius: .35rem; padding: .5rem; color: #e4e9e5; background: #090d0b; }
-  .term-form button { justify-self: start; }
-  .term-list { margin-top: .7rem; border: 1px solid #303833; border-radius: .45rem; overflow: hidden; }
-  .term-list > div { display: grid; grid-template-columns: 1fr 1fr auto; align-items: center; gap: .6rem; border-top: 1px solid #29302c; padding: .55rem .65rem; }
-  .term-list > div:first-child { border-top: 0; }
-  .term-list > div > span { display: flex; gap: .4rem; align-items: center; }
-  .term-list strong { color: #c8d0ca; font-size: .62rem; }
-  .term-list span span, .term-list small { color: #657068; font-size: .55rem; }
-  .term-list code { border-radius: .2rem; padding: .12rem .25rem; color: #c1ab69; background: #29261a; font: .5rem ui-monospace, monospace; }
-  .term-list button { border: 0; color: #d28d82; background: transparent; cursor: pointer; }
-  .term-list > p { margin: 0; padding: 1rem; color: #68736b; font-size: .62rem; }
-  textarea.report-output { min-height: 420px; font-size: .68rem; }
-  .mutation-body { display: grid; gap: 1rem; }
-  .mutation-body > label { display: grid; gap: .4rem; color: #b8c0ba; font-size: .66rem; font-weight: 650; }
-  .mutation-body select, .form-grid select { width: 100%; border: 1px solid #3a433d; border-radius: .45rem; outline: 0; padding: .68rem .75rem; color: #edf0ed; background: #0c100e; font-size: .75rem; }
-  .mutation-body .form-grid textarea { min-height: 7rem; padding: .75rem; font-size: .78rem; line-height: 1.5; }
-  .mutation-guidance, .mutation-warning { margin: 0; border-radius: .45rem; padding: .75rem .85rem; color: #849087; background: #171c19; font-size: .65rem; line-height: 1.55; }
-  .mutation-warning { border: 1px solid #603b35; color: #d99a90; background: #281b18; }
-  .fallback-graph { display: flex; flex-wrap: wrap; gap: .4rem; }
-  .fallback-graph span { border: 1px solid #37413a; border-radius: 1rem; padding: .3rem .55rem; color: #879289; background: #101512; font: .58rem ui-monospace, monospace; }
-  .fallback-graph strong { color: #d3c283; }
-  .mutation-preview { border: 1px solid #3a433d; border-radius: .55rem; overflow: hidden; }
-  .mutation-preview > header { display: flex; justify-content: space-between; padding: .7rem .8rem; background: #181e1a; }
-  .mutation-preview header strong { color: #cad2cc; font-size: .67rem; }
-  .mutation-preview header span { color: #6d786f; font-size: .58rem; }
-  .mutation-preview > div { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; border-top: 1px solid #2c332e; padding: .6rem .8rem; background: #0e1210; }
-  .mutation-preview code { overflow: hidden; color: #aeb8b1; font: .61rem ui-monospace, monospace; text-overflow: ellipsis; }
-  .mutation-preview small { color: #626d65; font-size: .55rem; }
-  .change-kind { min-width: 3.7rem; border-radius: .25rem; padding: .2rem .35rem; color: #c4a963; background: #302919; font: .52rem ui-monospace, monospace; text-align: center; text-transform: uppercase; }
-  .change-kind.create { color: #85bf94; background: #1d3424; }
-  .change-kind.delete { color: #df9388; background: #39221f; }
-  .danger-button { border: 1px solid #7b463e; border-radius: .45rem; padding: .58rem .85rem; color: #f0a297; background: #3a211d; cursor: pointer; }
-  .open-dialog { width: min(42rem, calc(100vw - 3rem)); }
-  .dialog-card { margin-top: 0; }
-  .dialog-card > div { grid-template-columns: 1fr auto; }
-  .external-compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
-  .external-compare-grid label, .merge-field { display: grid; gap: .35rem; color: #8e9991; font-size: .62rem; }
-  .external-compare-grid textarea { min-height: 12rem; color: #89948c; background: #0d110f; }
-  .merge-field { margin-top: .8rem; }
-  .merge-field textarea { min-height: 12rem; }
-  .dialog-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 2rem; background: #050706d9; backdrop-filter: blur(10px); }
-  .project-dialog { display: flex; flex-direction: column; width: min(760px, 100%); max-height: calc(100vh - 4rem); border: 1px solid #444b44; border-radius: .85rem; background: #111613; box-shadow: 0 2rem 8rem #000b; overflow: hidden; }
-  .project-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 1.35rem 1.5rem 1.1rem; border-bottom: 1px solid #2d342f; }
-  .project-dialog h2 { margin: .25rem 0 0; color: #f1ead7; font-family: Georgia, serif; font-size: 1.65rem; font-weight: 500; }
-  .project-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin: 0; padding: .8rem 1.5rem; border-bottom: 1px solid #292f2b; list-style: none; background: #0e1210; }
-  .project-steps li { display: flex; align-items: center; gap: .45rem; color: #626c65; font-size: .62rem; }
-  .project-steps li::after { flex: 1; height: 1px; margin-inline: .35rem; background: #303832; content: ""; }
-  .project-steps li:last-child::after { display: none; }
-  .project-steps li span { display: grid; place-items: center; width: 1.4rem; height: 1.4rem; border: 1px solid #3c453f; border-radius: 50%; font: .55rem ui-monospace, monospace; }
-  .project-steps li.active { color: #e1d2a9; }
-  .project-steps li.active span { border-color: #b79a50; color: #211b0f; background: #c8ab61; }
-  .project-steps li.complete { color: #7fa48a; }
-  .project-steps li.complete span { border-color: #477156; color: #8bc29a; background: #1c3324; }
-  .project-body { min-height: 370px; padding: 1.5rem; overflow-y: auto; }
-  .project-intro { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.4rem; }
-  .project-intro h3 { margin: 0 0 .25rem; color: #e6e9e5; font-size: 1rem; }
-  .project-intro p { margin: 0; color: #7d8880; font-size: .7rem; line-height: 1.5; }
-  .project-glyph { display: grid; flex: 0 0 auto; place-items: center; width: 2.7rem; height: 2.7rem; border: 1px solid #5a5138; border-radius: .6rem; color: #d1b768; background: #2a291e; font: .9rem ui-monospace, monospace; }
-  .project-intro.review .project-glyph { border-color: #406b4d; color: #8ac29a; background: #1d3324; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .form-grid .wide { grid-column: 1 / -1; }
-  .form-grid label, .locale-row label { display: grid; gap: .38rem; color: #b8c0ba; font-size: .66rem; font-weight: 650; }
-  .form-grid input, .locale-row input, .locale-row select { width: 100%; border: 1px solid #3a433d; border-radius: .45rem; outline: 0; padding: .68rem .75rem; color: #edf0ed; background: #0c100e; font-size: .75rem; }
-  .form-grid input:focus, .locale-row input:focus, .locale-row select:focus { border-color: #8f7945; box-shadow: 0 0 0 2px #9a81451c; }
-  .form-grid small { color: #657069; font-size: .58rem; font-weight: 400; }
-  .locale-builder { display: grid; gap: .7rem; }
-  .locale-row { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: .7rem; border: 1px solid #303833; border-radius: .55rem; padding: .8rem; background: #0e1210; }
-  .locale-row.source { grid-template-columns: 1fr auto; border-color: #514a34; background: #1a1b15; }
-  .locale-row.source > span { align-self: center; border-radius: .25rem; padding: .25rem .4rem; color: #9eb9a4; background: #213128; font-size: .55rem; }
-  .remove-locale { width: 2.2rem; height: 2.2rem; border: 1px solid #553b36; border-radius: .4rem; color: #d48e82; background: #2c1c1a; cursor: pointer; }
   .secondary { border: 1px solid #3d463f; border-radius: .45rem; padding: .58rem .85rem; color: #aab3ac; background: #181e1a; cursor: pointer; }
   .secondary:hover:not(:disabled) { border-color: #626e65; color: #e1e6e2; }
-  .add-locale { justify-self: start; color: #c2ac70; }
-  .project-options { display: grid; gap: .65rem; margin-top: 1.2rem; }
-  .project-options > label { display: flex; align-items: flex-start; gap: .7rem; border: 1px solid #303833; border-radius: .55rem; padding: .8rem; background: #0e1210; cursor: pointer; }
-  .project-options input { margin-top: .15rem; accent-color: #c0a45e; }
-  .project-options span { display: grid; gap: .18rem; }
-  .project-options strong { color: #cbd2cd; font-size: .68rem; }
-  .project-options small { color: #6e7971; font-size: .6rem; }
-  .project-options code { color: #b9a46d; }
-  .review-card { display: grid; gap: .7rem; border: 1px solid #343d37; border-radius: .55rem; padding: .9rem; background: #0e1210; }
-  .review-card > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: .8rem; align-items: start; }
-  .review-card span, .file-preview h4 { color: #69746d; font-size: .58rem; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; }
-  .review-card code { overflow: hidden; color: #bfc7c1; font: .62rem ui-monospace, monospace; text-overflow: ellipsis; }
-  .review-card strong { color: #d5c99f; font-size: .68rem; }
-  .file-preview { margin-top: 1rem; border: 1px solid #303833; border-radius: .55rem; overflow: hidden; }
-  .file-preview h4 { margin: 0; padding: .7rem .8rem; background: #171c19; }
-  .file-preview > div { display: flex; align-items: center; gap: .6rem; border-top: 1px solid #292f2b; padding: .55rem .8rem; background: #0e1210; }
-  .file-preview > div span { color: #8c7c4d; }
-  .file-preview code { color: #aeb8b1; font: .62rem ui-monospace, monospace; }
   .project-error { margin: 1rem 0 0; border: 1px solid #633d37; border-radius: .45rem; padding: .7rem .8rem; color: #e7a097; background: #2c1d1a; font-size: .67rem; }
-  .project-dialog > footer { display: flex; justify-content: space-between; gap: 1rem; border-top: 1px solid #2d342f; padding: .9rem 1.5rem; background: #0e1210; }
-  .project-dialog > footer > div { display: flex; gap: .55rem; }
-  .project-dialog button:disabled { cursor: not-allowed; opacity: .45; }
   @keyframes pulse { to { opacity: .35; } }
-  @media (max-width: 1100px) {
-    .app-shell { grid-template-columns: 335px minmax(0, 1fr); }
-    .editor-content { padding-inline: 2rem; }
-  }
+  @media (min-width: 640px) { .editor-content { padding: 1.5rem; } }
+  @media (min-width: 1100px) { .editor-content { padding: 2rem clamp(2rem, 5vw, 5rem) 3rem; } }
 </style>

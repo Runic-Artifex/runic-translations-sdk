@@ -35,7 +35,7 @@
         {#if index > 0}<span aria-hidden="true">/</span>{/if}<span>{segment}</span>
       {/each}
     </div>
-    <h2 class="font-serif text-5xl tracking-tight">{messageKey.split(".").at(-1)}</h2>
+    <h2 class="font-serif text-4xl tracking-tight sm:text-5xl">{messageKey.split(".").at(-1)}</h2>
     {#if description}<p class="mt-2 max-w-2xl text-sm text-muted-foreground">{description}</p>{/if}
     {#if tags.length > 0}
       <div class="mt-3 flex flex-wrap gap-1.5">
@@ -51,17 +51,17 @@
       {#if inheritedFrom}<Badge variant="secondary">falls back to {inheritedFrom}</Badge>{/if}
     </div>
     <div class="flex gap-1.5">
-      <Button variant="outline" size="xs" title="Rename or move this message" onclick={onrename}>
+      <Button variant="outline" size="xs" aria-label="Rename" title="Rename or move this message" onclick={onrename}>
         <PencilIcon data-icon="inline-start" />
-        Rename
+        <span class="hidden min-[360px]:inline">Rename</span>
       </Button>
-      <Button variant="outline" size="xs" title="Duplicate this message" onclick={onduplicate}>
+      <Button variant="outline" size="xs" aria-label="Duplicate" title="Duplicate this message" onclick={onduplicate}>
         <CopyIcon data-icon="inline-start" />
-        Duplicate
+        <span class="hidden min-[360px]:inline">Duplicate</span>
       </Button>
-      <Button variant="destructive" size="xs" title="Delete this message" onclick={ondelete}>
+      <Button variant="destructive" size="xs" aria-label="Delete" title="Delete this message" onclick={ondelete}>
         <Trash2Icon data-icon="inline-start" />
-        Delete
+        <span class="hidden min-[360px]:inline">Delete</span>
       </Button>
     </div>
   </div>

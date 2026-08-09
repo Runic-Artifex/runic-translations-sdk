@@ -18,6 +18,7 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Empty from "$lib/components/ui/empty/index.js";
   import * as Item from "$lib/components/ui/item/index.js";
+  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
 
   let {
     items,
@@ -42,12 +43,24 @@
     onapprove: () => void;
     onloadmore: () => void;
   } = $props();
+
+  const sidebar = Sidebar.useSidebar();
+
+  function selectMessage(key: string): void {
+    onselect(key);
+    if (sidebar.isMobile) sidebar.setOpenMobile(false);
+  }
+
+  function addMessage(): void {
+    onadd();
+    if (sidebar.isMobile) sidebar.setOpenMobile(false);
+  }
 </script>
 
-<section class="flex min-h-0 flex-1 flex-col" aria-label="Messages">
-  <header class="flex h-9 items-center justify-between gap-2 px-4">
+<Sidebar.Group class="min-h-0 flex-1 py-1" aria-label="Messages">
+  <Sidebar.GroupLabel class="justify-between">
     <div class="flex items-center gap-2">
-      <span class="text-xs font-medium text-muted-foreground">Messages</span>
+      Messages
       <Badge variant="secondary">{visibleCount}</Badge>
     </div>
     <div class="flex items-center gap-1">
@@ -71,13 +84,14 @@
       >
         <CheckCheckIcon />
       </Button>
-      <Button variant="ghost" size="icon-xs" aria-label="Add message" title="Add message" onclick={onadd}>
+      <Button variant="ghost" size="icon-xs" aria-label="Add message" title="Add message" onclick={addMessage}>
         <PlusIcon />
       </Button>
     </div>
-  </header>
+  </Sidebar.GroupLabel>
 
-  <nav class="min-h-0 flex-1 overflow-y-auto px-2 pb-3" aria-label="Translation messages">
+  <Sidebar.GroupContent class="min-h-0 flex-1">
+  <nav class="min-h-0 flex-1 overflow-y-auto pb-3" aria-label="Translation messages">
     {#if items.length === 0}
       <Empty.Root class="p-6">
         <Empty.Header>
@@ -93,7 +107,7 @@
             variant={selectedKey === item.key ? "muted" : "default"}
             size="xs"
             aria-current={selectedKey === item.key ? "true" : undefined}
-            onclick={() => onselect(item.key)}
+            onclick={() => selectMessage(item.key)}
             class="cursor-pointer"
           >
             {#snippet child({ props })}
@@ -129,4 +143,5 @@
       </Button>
     {/if}
   </nav>
-</section>
+  </Sidebar.GroupContent>
+</Sidebar.Group>

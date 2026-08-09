@@ -2,7 +2,7 @@
 	import { Badge } from "$lib/components/ui/badge/index.js";
 	import * as Item from "$lib/components/ui/item/index.js";
 	import * as ScrollArea from "$lib/components/ui/scroll-area/index.js";
-	import { Separator } from "$lib/components/ui/separator/index.js";
+	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
 
 	export interface LocaleSummary {
 		tag: string;
@@ -27,13 +27,14 @@
 	let scrollHeight = $derived(`${Math.min(Math.max(locales.length, 1) * 44, 220)}px`);
 </script>
 
-<section aria-label="Locale coverage" class="px-2 py-1">
-	<header class="flex h-8 items-center justify-between px-2">
-		<span class="text-xs font-medium text-muted-foreground">Languages</span>
+<Sidebar.Group aria-label="Locale coverage" class="py-1">
+	<Sidebar.GroupLabel class="justify-between">
+		Languages
 		<Badge variant="secondary">{locales.length}</Badge>
-	</header>
-	<ScrollArea.Root style={`height: ${scrollHeight}`}>
-		<Item.Group class="gap-1 pr-2">
+	</Sidebar.GroupLabel>
+	<Sidebar.GroupContent>
+		<ScrollArea.Root style={`height: ${scrollHeight}`}>
+			<Item.Group class="gap-1 pr-2">
 			{#each locales as locale (locale.tag)}
 				<Item.Root
 					variant={selectedLocale === locale.tag ? "muted" : "default"}
@@ -63,7 +64,7 @@
 					{/snippet}
 				</Item.Root>
 			{/each}
-		</Item.Group>
-	</ScrollArea.Root>
-	<Separator class="mt-2" />
-</section>
+			</Item.Group>
+		</ScrollArea.Root>
+	</Sidebar.GroupContent>
+</Sidebar.Group>
