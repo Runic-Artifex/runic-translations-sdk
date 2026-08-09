@@ -232,6 +232,7 @@ internal static class Program
     {
         using ZipArchive archive = ZipFile.OpenRead(package);
         var expected = new HashSet<string>(expectedEntries, StringComparer.OrdinalIgnoreCase);
+        expected.Add("icon.png");
         foreach (ZipArchiveEntry entry in archive.Entries)
         {
             string name = entry.FullName;
