@@ -1,3 +1,5 @@
+![Runic Translations banner](.github/assets/brand/banner.png)
+
 # Runic Translations
 
 Runic Translations is a deterministic, language-neutral localization system.

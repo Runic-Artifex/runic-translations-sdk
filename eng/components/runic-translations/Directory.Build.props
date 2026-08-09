@@ -29,6 +29,7 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <PackageProjectUrl>https://github.com/Runic-Artifex/runic-translations</PackageProjectUrl>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags Condition="'$(PackageTags)' == ''">runic-artifex;i18n;localization;resources;dotnet;nativeaot</PackageTags>
     <!-- Libraries leave dependency resolution to their consuming applications. -->
@@ -40,4 +41,8 @@
     <RunicTextResourcesCompatibilityTargetFramework>net10.0</RunicTextResourcesCompatibilityTargetFramework>
     <RunicTextResourcesGeneratorTargetFramework>net10.0</RunicTextResourcesGeneratorTargetFramework>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory).github/assets/brand/icon.png" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 </Project>

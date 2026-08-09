@@ -6,6 +6,7 @@
     <authors>RunicArtifex</authors>
     <description>Incremental C# source generator for Runic Text Resources.</description>
     <license type="expression">MIT</license>
+    <icon>icon.png</icon>
     <readme>README.md</readme>
     <projectUrl>https://github.com/Runic-Artifex/runic-translations</projectUrl>
     <tags>runic-artifex i18n localization resources dotnet nativeaot source-generator</tags>
@@ -19,5 +20,6 @@
     <file src="bin\$configuration$\net10.0\RunicTextResources.Generator.dll" target="analyzers/dotnet/cs" />
     <file src="bin\$configuration$\net10.0\RunicTextResources.Compiler.dll" target="analyzers/dotnet/cs" />
     <file src="README.md" target="" />
+    <file src="..\..\..\.github\assets\brand\icon.png" target="" />
   </files>
 </package>
