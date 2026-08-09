@@ -27,13 +27,10 @@ The `.NET` implementation is under [`dotnet/`](dotnet/).
 The implemented .NET and TypeScript/ESM architecture and delivery record are in
 [`docs/cross-runtime-plan.md`](docs/cross-runtime-plan.md).
 
-The first complete consumer is the
-[`RunicTextResources.Editor`](samples/RunicTextResources.Editor/README.md), a
-native C# and CsWebUi application with a SvelteKit frontend. It edits one- or
-many-locale schema-v2 workspaces, validates drafts with the canonical compiler,
-and consumes compiler-generated ESM for its own interface.
-The customer-product roadmap, including discovery and advanced authoring, is
-documented in [`docs/translations-editor-plan.md`](docs/translations-editor-plan.md).
+The customer-facing [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-editor)
+is developed and released from its own repository. It consumes these packages
+as an ordinary downstream application, which keeps editor releases independent
+from compiler, runtime, schema, and tooling releases.
 
 The compiler accepts the frozen version 1 source model and schema version 2.
 Version 2 adds portable inputs, local format declarations,

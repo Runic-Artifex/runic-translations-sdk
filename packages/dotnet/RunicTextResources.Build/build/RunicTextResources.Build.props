@@ -9,7 +9,7 @@
     <TextResourcesEmitCpp Condition="'$(TextResourcesEmitCpp)' == ''">false</TextResourcesEmitCpp>
 
     <!-- Keep the launcher replaceable for local tools, pinned tool manifests, and package tests. -->
-    <TextResourcesToolCommand Condition="'$(TextResourcesToolCommand)' == ''">dotnet tool run runic-textresources</TextResourcesToolCommand>
+    <TextResourcesToolCommand Condition="'$(TextResourcesToolCommand)' == ''">dotnet tool run runic-textresources --</TextResourcesToolCommand>
     <TextResourcesToolAdditionalArguments Condition="'$(TextResourcesToolAdditionalArguments)' == ''"></TextResourcesToolAdditionalArguments>
 
     <RunicTextResourcesBuildPropsImported>true</RunicTextResourcesBuildPropsImported>

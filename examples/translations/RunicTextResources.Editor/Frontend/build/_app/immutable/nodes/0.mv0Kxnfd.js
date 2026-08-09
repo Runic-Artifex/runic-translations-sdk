@@ -1,0 +1,1 @@
+import{F as e,N as t,Ot as n,T as r,Tt as i,nt as a}from"../chunks/M9KRQcaz.js";import"../chunks/xihTtKlq.js";var o=n({prerender:()=>!1,ssr:()=>!1}),s=e(`<div class="contents text-foreground"><!></div>`);function c(e,n){var o=s(),c=a(o);r(c,()=>n.children),i(o),t(e,o)}export{c as component,o as universal};

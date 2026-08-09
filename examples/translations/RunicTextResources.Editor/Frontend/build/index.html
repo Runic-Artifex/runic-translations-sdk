@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" class="dark" data-theme="runic">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <script>
+      (() => {
+        try {
+          const mode = localStorage.getItem("runic-text-resources.theme-mode") ?? "dark";
+          const palette = localStorage.getItem("runic-text-resources.theme-palette") ?? "runic";
+          const dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.dataset.theme = ["runic", "moss", "fjord", "ember"].includes(palette) ? palette : "runic";
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch {}
+      })();
+    </script>
+    <script src="webui.js"></script>
+    <link href="/_app/immutable/entry/start.BDcJijOc.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/I-o7jpDw.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/M9KRQcaz.js" rel="modulepreload">
+		<link href="/_app/immutable/entry/app.uIl9NDp5.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/xihTtKlq.js" rel="modulepreload">
+		<link href="/_app/immutable/nodes/0.mv0Kxnfd.js" rel="modulepreload">
+		
+		<link href="/_app/immutable/assets/0.C13eyaW4.css" rel="stylesheet">
+  </head>
+  <body data-sveltekit-preload-data="off">
+    <div style="display: contents">
+			<script>
+				{
+					__sveltekit_hpzq0n = {
+						base: ""
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/_app/immutable/entry/start.BDcJijOc.js"),
+						import("/_app/immutable/entry/app.uIl9NDp5.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+				}
+			</script>
+		</div>
+  </body>
+</html>
