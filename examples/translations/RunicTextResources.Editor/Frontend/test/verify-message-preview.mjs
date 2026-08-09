@@ -1,4 +1,5 @@
 import { executeMessagePreview, flattenPreview } from "../src/lib/message-preview.js";
+import { sourceMessageToArtifact, toStructuredMessage } from "../src/lib/message-composer.ts";
 
 const artifact = {
   astVersion: 2,
@@ -44,5 +45,14 @@ if (rich.nodes[0].kind !== "element" || rich.nodes[0].name !== "script") throw n
 if (rich.nodes[0].attributes.payload !== "<img src=x onerror=alert(1)>") throw new Error("Markup attributes were altered.");
 if (flattenPreview(rich.nodes) !== "1,234 items for guest, yesterday") throw new Error("Formatted preview diverged from generated ESM semantics.");
 if (typeof rich.nodes[0] !== "object" || "outerHTML" in rich.nodes[0]) throw new Error("Semantic data became an HTML node.");
+
+const inferredArtifact = sourceMessageToArtifact(toStructuredMessage("Welcome back, {name}"));
+if (inferredArtifact.inputs.name?.type !== "string" || inferredArtifact.inputs.name.format !== "none") {
+  throw new Error("Plain-message placeholders were not inferred as string inputs.");
+}
+const inferred = executeMessagePreview(inferredArtifact, "en", { name: "Viktor" });
+if (inferred.kind !== "text" || inferred.value !== "Welcome back, Viktor") {
+  throw new Error("An inferred plain-message placeholder could not be previewed.");
+}
 
 console.log("PASS: editor preview matches the normalized ESM AST semantics and keeps hostile markup inert.");

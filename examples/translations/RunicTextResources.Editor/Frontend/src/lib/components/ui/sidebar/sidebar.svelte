@@ -41,10 +41,10 @@
 			data-slot="sidebar"
 			data-mobile="true"
 			class={cn(
-				"w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden",
+				"w-(--sidebar-width)! bg-sidebar p-0 text-sidebar-foreground data-[side=left]:w-(--sidebar-width)! data-[side=right]:w-(--sidebar-width)!",
 				className
 			)}
-			style="--sidebar-width: {SIDEBAR_WIDTH_MOBILE};"
+			style="--sidebar-width: var(--sidebar-width-mobile, {SIDEBAR_WIDTH_MOBILE});"
 			{side}
 		>
 			<Sheet.Header class="sr-only">

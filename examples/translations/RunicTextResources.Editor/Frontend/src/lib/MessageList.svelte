@@ -52,6 +52,7 @@
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
   import { cn } from "$lib/utils.js";
   import type { Snippet } from "svelte";
+  import { onMount } from "svelte";
   import MessageTreeNodeView from "./MessageTreeNode.svelte";
 
   let {
@@ -84,6 +85,14 @@
   let open = $state(true);
   let tree = $derived(buildTree(items));
 
+  onMount(() => {
+    open = localStorage.getItem("runic.sidebar.messages") !== "closed";
+  });
+
+  function persistOpen(value: boolean): void {
+    localStorage.setItem("runic.sidebar.messages", value ? "open" : "closed");
+  }
+
   function selectMessage(key: string): void {
     onselect(key);
     if (sidebar.isMobile) sidebar.setOpenMobile(false);
@@ -95,7 +104,7 @@
   }
 </script>
 
-<Collapsible.Root bind:open class={cn("group/messages", open && "min-h-0 flex flex-1 flex-col")}>
+<Collapsible.Root bind:open onOpenChange={persistOpen} class={cn("group/messages", open && "min-h-0 flex flex-1 flex-col")}>
   <Sidebar.Group class={cn("py-1", open && "min-h-0 flex-1")} aria-label="Messages">
     <Sidebar.GroupLabel class="justify-between">
       <Collapsible.Trigger class="flex min-w-0 flex-1 items-center gap-2 text-left">
