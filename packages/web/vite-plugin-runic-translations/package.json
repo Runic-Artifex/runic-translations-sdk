@@ -1,6 +1,6 @@
 {
   "name": "@runic-artifex/vite-plugin-text-resources",
-  "version": "0.1.0",
+  "version": "0.1.0-preview.3.2",
   "type": "module",
   "exports": {
     ".": {
@@ -25,6 +25,14 @@
     }
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Runic-Artifex/runic-translations.git",
+    "directory": "web"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "devDependencies": {
     "typescript": "^5.9.3",
     "vite": "^7.3.6"

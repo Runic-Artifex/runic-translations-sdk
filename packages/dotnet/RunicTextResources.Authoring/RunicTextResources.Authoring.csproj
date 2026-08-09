@@ -4,11 +4,13 @@
     <AssemblyName>RunicTextResources.Authoring</AssemblyName>
     <RootNamespace>RunicTextResources.Authoring</RootNamespace>
     <Description>Shared project creation and workspace authoring for Runic Text Resources.</Description>
-    <IsPackable>false</IsPackable>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\RunicTextResources.Compiler\RunicTextResources.Compiler.csproj" />
+    <None Update="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>

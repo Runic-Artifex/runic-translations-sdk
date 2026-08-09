@@ -17,7 +17,7 @@ namespace RunicTextResources.PackageTests;
 internal static class Program
 {
     private const string Fingerprint = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    private const string RepositoryUrl = "https://github.com/Runic-Artifex/runic-text-resources";
+    private const string RepositoryUrl = "https://github.com/Runic-Artifex/runic-translations";
     private static readonly Guid SourceLinkKind = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
     private static int _passed;
 
@@ -63,6 +63,7 @@ internal static class Program
     {
         string runtime = RequireSingle(feed, "RunicTextResources.1.0.0.nupkg");
         string compiler = RequireSingle(feed, "RunicTextResources.Compiler.1.0.0.nupkg");
+        string authoring = RequireSingle(feed, "RunicTextResources.Authoring.1.0.0.nupkg");
         string build = RequireSingle(feed, "RunicTextResources.Build.1.0.0.nupkg");
         string generator = RequireSingle(feed, "RunicTextResources.Generator.1.0.0.nupkg");
         string tool = RequireSingle(feed, "RunicTextResources.Tool.1.0.0.nupkg");
@@ -77,6 +78,10 @@ internal static class Program
             "RunicTextResources.Compiler.nuspec",
             "README.md",
             "lib/net10.0/RunicTextResources.Compiler.dll");
+        AssertPackageShape(authoring,
+            "RunicTextResources.Authoring.nuspec",
+            "README.md",
+            "lib/net10.0/RunicTextResources.Authoring.dll");
         AssertPackageShape(build,
             "RunicTextResources.Build.nuspec",
             "README.md",
@@ -110,6 +115,7 @@ internal static class Program
 
         AssertDependencies(runtime, Array.Empty<string>());
         AssertDependencies(compiler, Array.Empty<string>());
+        AssertDependencies(authoring, ["RunicTextResources.Compiler"]);
         AssertDependencies(build, Array.Empty<string>());
         AssertDependencies(generator, ["RunicTextResources"]);
         AssertDependencies(tool, Array.Empty<string>());
@@ -117,6 +123,7 @@ internal static class Program
 
         AssertLicense(runtime);
         AssertLicense(compiler);
+        AssertLicense(authoring);
         AssertLicense(build);
         AssertLicense(generator);
         AssertLicense(tool);
@@ -124,6 +131,7 @@ internal static class Program
 
         AssertRepositoryMetadata(runtime);
         AssertRepositoryMetadata(compiler);
+        AssertRepositoryMetadata(authoring);
         AssertRepositoryMetadata(build);
         AssertRepositoryMetadata(generator);
         AssertRepositoryMetadata(tool);
@@ -131,6 +139,7 @@ internal static class Program
 
         AssertEmbeddedSourceLink(runtime, "lib/net10.0/RunicTextResources.dll");
         AssertEmbeddedSourceLink(compiler, "lib/net10.0/RunicTextResources.Compiler.dll");
+        AssertEmbeddedSourceLink(authoring, "lib/net10.0/RunicTextResources.Authoring.dll");
         AssertEmbeddedSourceLink(generator, "analyzers/dotnet/cs/RunicTextResources.Generator.dll");
         AssertEmbeddedSourceLink(tool, "tools/net10.0/any/RunicTextResources.Tool.dll");
     }
@@ -324,7 +333,7 @@ internal static class Program
             .Single(information => reader.GetGuid(information.Kind) == SourceLinkKind);
         string documentMap = Encoding.UTF8.GetString(reader.GetBlobBytes(sourceLink.Value));
         Assert(
-            documentMap.Contains("raw.githubusercontent.com/Runic-Artifex/runic-text-resources/", StringComparison.Ordinal),
+            documentMap.Contains("raw.githubusercontent.com/Runic-Artifex/runic-translations/", StringComparison.Ordinal),
             $"{Path.GetFileName(package)} embeds Source Link metadata for the organization repository");
     }
 

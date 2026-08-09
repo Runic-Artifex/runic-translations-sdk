@@ -1,6 +1,6 @@
-# Runic Text Resources
+# Runic Translations
 
-Runic Text Resources is a deterministic, language-neutral localization system.
+Runic Translations is a deterministic, language-neutral localization system.
 It started inside Runic Toolkit, but its contracts, compiler, runtime, generator,
 build integration, and command-line tool are intentionally independent of any UI
 framework.
@@ -15,6 +15,7 @@ artifacts, and runtime ABI.
 |---|---|
 | `RunicTextResources` | NativeAOT-compatible .NET runtime contracts and snapshots |
 | `RunicTextResources.Compiler` | Deterministic, UI-independent compiler kernel |
+| `RunicTextResources.Authoring` | Supported workspace and project-authoring operations for tooling |
 | `RunicTextResources.Generator` | Incremental C# source generator |
 | `RunicTextResources.Build` | Dependency-free MSBuild integration |
 | `RunicTextResources.Tool` | `runic-textresources` validation and generation tool |
@@ -26,13 +27,10 @@ The `.NET` implementation is under [`dotnet/`](dotnet/).
 The implemented .NET and TypeScript/ESM architecture and delivery record are in
 [`docs/cross-runtime-plan.md`](docs/cross-runtime-plan.md).
 
-The first complete consumer is the
-[`RunicTextResources.Editor`](samples/RunicTextResources.Editor/README.md), a
-native C# and CsWebUi application with a SvelteKit frontend. It edits one- or
-many-locale schema-v2 workspaces, validates drafts with the canonical compiler,
-and consumes compiler-generated ESM for its own interface.
-The customer-product roadmap, including discovery and advanced authoring, is
-documented in [`docs/translations-editor-plan.md`](docs/translations-editor-plan.md).
+The customer-facing [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-editor)
+is developed and released from its own repository. It consumes these packages
+as an ordinary downstream application, which keeps editor releases independent
+from compiler, runtime, schema, and tooling releases.
 
 The compiler accepts the frozen version 1 source model and schema version 2.
 Version 2 adds portable inputs, local format declarations,
@@ -54,7 +52,7 @@ nix develop
 ```
 
 The pipeline restores and builds the standalone solution, runs every project-level
-test executable, packs all six packages into an isolated local feed, installs and
+test executable, packs all seven packages into an isolated local feed, installs and
 executes the packed tool and templates, builds a generated standalone project,
 consumes only those packages from a fixture project, and publishes the runtime
 consumer with NativeAOT. It also installs and tests the Vite package, type-checks

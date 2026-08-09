@@ -84,9 +84,9 @@ jobs:
         with:
           version: ${{ env.PACKAGE_VERSION }}
           artifact-directory: ${{ runner.temp }}/packages
-          repository-url: https://github.com/Runic-Artifex/runic-text-resources
+          repository-url: https://github.com/Runic-Artifex/runic-translations
           repository-commit: ${{ github.sha }}
-          expected-nuget-count: "6"
+          expected-nuget-count: "7"
 
       - name: Record package digests
         working-directory: ${{ runner.temp }}/packages
@@ -95,7 +95,7 @@ jobs:
       - name: Upload release candidate
         uses: actions/upload-artifact@v7
         with:
-          name: runic-text-resources-${{ env.PACKAGE_VERSION }}
+          name: runic-translations-${{ env.PACKAGE_VERSION }}
           path: ${{ runner.temp }}/packages/
           if-no-files-found: error
           retention-days: 14
@@ -118,7 +118,7 @@ jobs:
       - name: Download release candidate
         uses: actions/download-artifact@v8
         with:
-          name: runic-text-resources-${{ env.PACKAGE_VERSION }}
+          name: runic-translations-${{ env.PACKAGE_VERSION }}
           path: ${{ runner.temp }}/packages
 
       - name: Verify package digests

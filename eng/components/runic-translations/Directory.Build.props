@@ -25,10 +25,10 @@
     <Authors>RunicArtifex</Authors>
     <Company>RunicArtifex</Company>
     <Copyright>Copyright (c) 2026 Viktor Jannicke</Copyright>
-    <RepositoryUrl>https://github.com/Runic-Artifex/runic-text-resources</RepositoryUrl>
+    <RepositoryUrl>https://github.com/Runic-Artifex/runic-translations</RepositoryUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <PackageProjectUrl>https://github.com/Runic-Artifex/runic-text-resources</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Runic-Artifex/runic-translations</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags Condition="'$(PackageTags)' == ''">runic-artifex;i18n;localization;resources;dotnet;nativeaot</PackageTags>
     <!-- Libraries leave dependency resolution to their consuming applications. -->
