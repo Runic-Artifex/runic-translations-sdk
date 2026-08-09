@@ -9,7 +9,7 @@ if (!index.includes("/_app/immutable/")) throw new Error("The SvelteKit client e
 const scripts = [];
 await collect(build, scripts);
 const bundled = (await Promise.all(scripts.map((file) => readFile(file, "utf8")))).join("\n");
-for (const text of ["Translations", "Übersetzungen", "runicEditorSave", "runicEditorSaveReview", "runicEditorAbout", "runicEditorCreateDiagnosticBundle", "runicEditorPreviewMessage", "Translate the message", "Create new variable", "Message source", "Preview", "Editor settings", "Quality report", "About &amp; diagnostics", "Terminology", "schema v"]) {
+for (const text of ["Translations", "Übersetzungen", "runicEditorSave", "runicEditorSaveReview", "runicEditorAbout", "runicEditorCreateDiagnosticBundle", "runicEditorPreviewMessage", "Translate the message", "Create new variable", "Message source", "Preview", "Editor settings", "Runic Gold", "Fjord", "Ember", "Quality report", "About &amp; diagnostics", "Terminology", "schema v"]) {
   if (!bundled.includes(text)) throw new Error(`The production client omitted '${text}'.`);
 }
 if (bundled.includes("node:fs") || bundled.includes("RunicTextResources.Compiler.dll")) {
