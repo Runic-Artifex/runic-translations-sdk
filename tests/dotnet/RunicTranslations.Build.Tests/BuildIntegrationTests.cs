@@ -145,7 +145,7 @@ internal static class BuildIntegrationTests
     {
         using TemporaryDirectory temporary = CreateConsumer(
             generationEnabled: true,
-            toolCommand: "definitely-missing-textresources-tool");
+            toolCommand: "definitely-missing-translations-tool");
         ProcessResult result = Build(temporary);
         Assert.True(result.ExitCode != 0, "Build unexpectedly succeeded without its configured tool.");
         Assert.False(

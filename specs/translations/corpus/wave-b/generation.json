@@ -68,7 +68,7 @@
     },
     {
       "id": "output-path-contained",
-      "outputRoot": "obj/textresources",
+      "outputRoot": "obj/translations",
       "relativePath": "app/app.de.locale-v1.json",
       "expected": {
         "accepted": true
@@ -76,7 +76,7 @@
     },
     {
       "id": "output-path-parent-escape",
-      "outputRoot": "obj/textresources",
+      "outputRoot": "obj/translations",
       "relativePath": "../tracked.json",
       "expected": {
         "accepted": false,

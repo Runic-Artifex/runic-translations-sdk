@@ -48,7 +48,7 @@ internal static class ArtifactFiles
 
         EnsureNoReparsePoint(outputRoot, NormalizePath(outputPath));
         Directory.CreateDirectory(parent);
-        string temporaryRoot = Path.Combine(parent, $".{Path.GetFileName(outputRoot)}.textresources-{Guid.NewGuid():N}.tmp");
+        string temporaryRoot = Path.Combine(parent, $".{Path.GetFileName(outputRoot)}.translations-{Guid.NewGuid():N}.tmp");
         var sourcePaths = new string[normalizedArtifacts.Count];
         var destinationPaths = new string[normalizedArtifacts.Count];
         var backupPaths = new string[normalizedArtifacts.Count];
