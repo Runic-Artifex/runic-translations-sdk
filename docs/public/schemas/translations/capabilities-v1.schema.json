@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/capabilities-v1.schema.json",
+  "title": "Runic Translations capability matrix v1",
+  "type": "object",
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "required": ["capabilityMatrixVersion", "releaseTarget", "cldr", "backends", "equivalence", "formatterProfile", "messageProfile", "locales"],
+  "properties": {
+    "capabilityMatrixVersion": { "const": 1 },
+    "releaseTarget": { "type": "string", "minLength": 1 },
+    "cldr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "jsonTag", "source", "sha512", "license"],
+      "properties": {
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+        "jsonTag": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "source": { "type": "string", "format": "uri" },
+        "sha512": { "type": "string", "pattern": "^[0-9a-f]{128}$" },
+        "license": { "const": "Unicode-3.0" }
+      }
+    },
+    "backends": {
+      "type": "array",
+      "prefixItems": [{ "const": "dotnet" }, { "const": "esm" }],
+      "items": false
+    },
+    "equivalence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact", "semantic"],
+      "properties": {
+        "exact": { "type": "string", "minLength": 1 },
+        "semantic": { "type": "string", "minLength": 1 }
+      }
+    },
+    "formatterProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["string", "boolean", "integer", "number", "date", "time", "datetime", "uuid"],
+      "properties": {
+        "string": { "$ref": "#/$defs/defaultFormat" },
+        "boolean": { "$ref": "#/$defs/defaultFormat" },
+        "integer": { "$ref": "#/$defs/integerFormat" },
+        "number": { "$ref": "#/$defs/numberFormat" },
+        "date": { "$ref": "#/$defs/temporalFormat" },
+        "time": { "$ref": "#/$defs/temporalFormat" },
+        "datetime": { "$ref": "#/$defs/temporalFormat" },
+        "uuid": { "$ref": "#/$defs/uuidFormat" }
+      }
+    },
+    "messageProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cardinal", "ordinal", "relativeTime"],
+      "properties": {
+        "cardinal": { "$ref": "#/$defs/equivalence" },
+        "ordinal": { "$ref": "#/$defs/equivalence" },
+        "relativeTime": { "$ref": "#/$defs/equivalence" }
+      }
+    },
+    "locales": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/locale" }
+    }
+  },
+  "$defs": {
+    "equivalence": { "enum": ["exact", "semantic"] },
+    "defaultFormat": {
+      "type": "object", "additionalProperties": false, "required": ["default"],
+      "properties": { "default": { "$ref": "#/$defs/equivalence" } }
+    },
+    "integerFormat": {
+      "type": "object", "additionalProperties": false, "required": ["plain", "grouped"],
+      "properties": { "plain": { "$ref": "#/$defs/equivalence" }, "grouped": { "$ref": "#/$defs/equivalence" } }
+    },
+    "numberFormat": {
+      "type": "object", "additionalProperties": false, "required": ["plain", "grouped", "fixed", "percent"],
+      "properties": {
+        "plain": { "$ref": "#/$defs/equivalence" }, "grouped": { "$ref": "#/$defs/equivalence" },
+        "fixed": { "$ref": "#/$defs/equivalence" }, "percent": { "$ref": "#/$defs/equivalence" }
+      }
+    },
+    "temporalFormat": {
+      "type": "object", "additionalProperties": false, "required": ["iso", "localized"],
+      "properties": { "iso": { "$ref": "#/$defs/equivalence" }, "localized": { "$ref": "#/$defs/equivalence" } }
+    },
+    "uuidFormat": {
+      "type": "object", "additionalProperties": false, "required": ["d", "n"],
+      "properties": { "d": { "$ref": "#/$defs/equivalence" }, "n": { "$ref": "#/$defs/equivalence" } }
+    },
+    "locale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag", "cardinal", "ordinal", "relativeTime"],
+      "properties": {
+        "tag": { "type": "string", "pattern": "^[a-z]{2,8}$" },
+        "cardinal": { "type": "boolean" },
+        "ordinal": { "type": "boolean" },
+        "relativeTime": { "type": "boolean" }
+      }
+    }
+  }
+}
