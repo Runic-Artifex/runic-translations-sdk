@@ -21,6 +21,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Review and scale test failed." }
     dotnet run --project $project --configuration $Configuration --no-build -- --smoke-test --workspace $workspace
     if ($LASTEXITCODE -ne 0) { throw "Editor smoke test failed." }
+    dotnet run --project $project --configuration $Configuration --no-build -- validate $workspace
+    if ($LASTEXITCODE -ne 0) { throw "Headless editor validation failed." }
 
     dotnet publish $project --configuration $Configuration --no-restore --output $publishOutput
     if ($LASTEXITCODE -ne 0) { throw "Editor publish failed." }

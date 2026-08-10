@@ -12,6 +12,8 @@ internal static class EditorSmokeTest
         CopyDirectory(workspacePath, temporaryRoot);
         try
         {
+            await VerifyDeterministicDiffsAsync(workspacePath).ConfigureAwait(false);
+
             using var workspace = new EditorWorkspace(temporaryRoot);
             WorkspaceSnapshot snapshot = await workspace.LoadAsync().ConfigureAwait(false);
             Require(snapshot.Success, Diagnostics(snapshot));
@@ -179,7 +181,7 @@ internal static class EditorSmokeTest
             Require(activeCreated.Root == Path.GetFullPath(createdPath), "The editor did not switch to the newly created project.");
             Require(activeCreated.Success, Diagnostics(activeCreated));
 
-            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales, selected one of multiple catalogs, repaired malformed JSON, previewed and committed structural key transactions, round-tripped isolated review metadata, produced privacy-bounded diagnostics, handled a single-locale catalog, created a compiler-valid project, validated drafts, saved atomically, and rejected stale writes.");
+            Console.WriteLine($"PASS: editor loaded {catalog.Locales.Count} locales, selected one of multiple catalogs, repaired malformed JSON, previewed and committed deterministic structural diffs, round-tripped isolated review metadata, produced privacy-bounded diagnostics, handled a single-locale catalog, created a compiler-valid project, validated drafts, saved atomically, and rejected stale writes.");
             return 0;
         }
         catch (Exception exception)
@@ -201,6 +203,81 @@ internal static class EditorSmokeTest
         foreach (string directory in Directory.EnumerateDirectories(source))
             CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
     }
+
+    private static async Task VerifyDeterministicDiffsAsync(string workspacePath)
+    {
+        string firstRoot = Path.Combine(Path.GetTempPath(), $"runic-editor-diff-a-{Guid.NewGuid():N}");
+        string secondRoot = Path.Combine(Path.GetTempPath(), $"runic-editor-diff-b-{Guid.NewGuid():N}");
+        CopyDirectory(workspacePath, firstRoot);
+        CopyDirectory(workspacePath, secondRoot);
+        try
+        {
+            Dictionary<string, byte[]> before = ReadFiles(firstRoot);
+            var mutation = new EditorMutationRequest(
+                "create-key", null, null, null, "base", null, null, "Diff.Deterministic", "Reviewable output");
+            var review = new EditorReviewSaveRequest(
+                null,
+                [new EditorReviewEntry("Diff.Deterministic", "de", "approved", "Deterministic review", "source:diff", new Dictionary<string, string>())],
+                []);
+            var reviewPaths = new List<string>();
+
+            foreach (string root in new[] { firstRoot, secondRoot })
+            {
+                using var session = new EditorSession(root);
+                WorkspaceSnapshot loaded = await session.LoadAsync().ConfigureAwait(false);
+                Require(loaded.Success && loaded.Catalog is not null,
+                    "The deterministic diff fixture did not load a catalog.");
+                EditorMutationPreview preview = session.PreviewMutation(mutation);
+                Require(preview.Ok, preview.Message ?? "The deterministic mutation could not be previewed.");
+                Require(preview.Files.Select(static file => file.Path).SequenceEqual(
+                    preview.Files.Select(static file => file.Path).Order(StringComparer.Ordinal), StringComparer.Ordinal),
+                    "Mutation preview paths were not deterministically ordered.");
+                EditorOperationResult applied = await session.ApplyMutationAsync(mutation).ConfigureAwait(false);
+                Require(applied.Ok && applied.Snapshot?.Success == true,
+                    applied.Message ?? "The deterministic mutation could not be applied.");
+                EditorReviewOperationResult reviewSaved = await session.SaveReviewAsync(review).ConfigureAwait(false);
+                Require(reviewSaved.Ok, reviewSaved.Message ?? "The deterministic review state could not be saved.");
+                string reviewPath = reviewSaved.Review?.Path
+                    ?? throw new InvalidOperationException("The deterministic review save returned no sidecar path.");
+                reviewPaths.Add((Path.IsPathRooted(reviewPath) ? Path.GetRelativePath(root, reviewPath) : reviewPath)
+                    .Replace('\\', '/'));
+            }
+
+            Dictionary<string, byte[]> first = ReadFiles(firstRoot);
+            Dictionary<string, byte[]> second = ReadFiles(secondRoot);
+            Require(first.Keys.Order(StringComparer.Ordinal).SequenceEqual(
+                second.Keys.Order(StringComparer.Ordinal), StringComparer.Ordinal),
+                "Equivalent edits produced different file sets.");
+            foreach (string path in first.Keys.Order(StringComparer.Ordinal))
+                Require(first[path].AsSpan().SequenceEqual(second[path]), $"Equivalent edits produced different bytes for '{path}'.");
+
+            string[] changedSourceFiles = before.Keys
+                .Where(path => !before[path].AsSpan().SequenceEqual(first[path]))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            Require(changedSourceFiles.SequenceEqual(
+                new[] { "product.de.json", "product.en.json", "product.fr.json" },
+                StringComparer.Ordinal),
+                $"The key edit changed an unexpected source-file set: {string.Join(", ", changedSourceFiles)}.");
+            string addedFile = first.Keys.Except(before.Keys, StringComparer.Ordinal).Single();
+            Require(reviewPaths.Count == 2 && string.Equals(reviewPaths[0], reviewPaths[1], StringComparison.Ordinal) &&
+                string.Equals(addedFile, reviewPaths[0], StringComparison.Ordinal),
+                "Review-only data was not isolated in one deterministic editor-state sidecar.");
+        }
+        finally
+        {
+            if (Directory.Exists(firstRoot)) Directory.Delete(firstRoot, true);
+            if (Directory.Exists(secondRoot)) Directory.Delete(secondRoot, true);
+        }
+    }
+
+    private static Dictionary<string, byte[]> ReadFiles(string root) =>
+        Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+            .Order(StringComparer.Ordinal)
+            .ToDictionary(
+                path => Path.GetRelativePath(root, path).Replace('\\', '/'),
+                File.ReadAllBytes,
+                StringComparer.Ordinal);
 
     private static string Diagnostics(WorkspaceSnapshot snapshot) =>
         string.Join(Environment.NewLine, snapshot.Diagnostics.Select(static diagnostic =>

@@ -7,6 +7,13 @@ internal static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        if (Array.Exists(args, static argument => argument is "--help" or "-h") ||
+            args is ["help", ..])
+        {
+            PrintHelp();
+            return 0;
+        }
+
         if (Array.Exists(args, static argument => argument == "--version"))
         {
             EditorAbout about = EditorDiagnostics.About();
@@ -17,17 +24,38 @@ internal static class Program
             return 0;
         }
 
+        string? command = args.FirstOrDefault() is string first &&
+            (string.Equals(first, "edit", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(first, "validate", StringComparison.OrdinalIgnoreCase))
+            ? first.ToLowerInvariant()
+            : null;
+        bool validate = Array.Exists(args, static argument => argument == "--validate") ||
+            string.Equals(command, "validate", StringComparison.OrdinalIgnoreCase);
+        bool edit = command is null || string.Equals(command, "edit", StringComparison.OrdinalIgnoreCase);
+        if (!validate && !edit && !Array.Exists(args, static argument => argument == "--smoke-test"))
+        {
+            Console.Error.WriteLine($"Unknown command '{command}'. Run with --help for usage.");
+            return 2;
+        }
+
         string workspacePath = ArgumentValue(args, "--workspace")
-            ?? Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace");
+            ?? PositionalWorkspace(args, command)
+            ?? (validate || command == "edit"
+                ? Environment.CurrentDirectory
+                : Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace"));
+        string? catalogId = ArgumentValue(args, "--catalog");
 
         if (Array.Exists(args, static argument => argument == "--smoke-test"))
             return await EditorSmokeTest.RunAsync(workspacePath).ConfigureAwait(false);
+
+        if (validate)
+            return await ValidateWorkspaceAsync(workspacePath, catalogId).ConfigureAwait(false);
 
         string webRoot = Path.Combine(AppContext.BaseDirectory, "www");
         if (!Directory.Exists(webRoot))
             throw new DirectoryNotFoundException($"The SvelteKit build was not copied to '{webRoot}'.");
 
-        using var session = new EditorSession(workspacePath);
+        using var session = new EditorSession(workspacePath, catalogId);
         WebUiApplication.SetConnectionTimeout(15);
         WebUiApplication.SetLogger(static (level, message) => Console.WriteLine($"[WebUI:{level}] {message}"));
         WebUiApplication.UnhandledCallbackException += static (_, eventArgs) =>
@@ -197,7 +225,78 @@ internal static class Program
         int index = Array.IndexOf(args, name);
         if (index < 0) return null;
         if (index + 1 == args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal))
-            throw new ArgumentException($"{name} requires a directory path.", nameof(args));
+            throw new ArgumentException($"{name} requires a value.", nameof(args));
         return args[index + 1];
+    }
+
+    private static string? PositionalWorkspace(string[] args, string? command)
+    {
+        int start = command is "edit" or "validate" ? 1 : 0;
+        for (int index = start; index < args.Length; index++)
+        {
+            if (args[index] is "--workspace" or "--catalog")
+            {
+                index++;
+                continue;
+            }
+            if (!args[index].StartsWith('-')) return args[index];
+        }
+        return null;
+    }
+
+    private static async Task<int> ValidateWorkspaceAsync(string workspacePath, string? catalogId)
+    {
+        try
+        {
+            using var workspace = new EditorWorkspace(workspacePath, catalogId);
+            WorkspaceSnapshot snapshot = await workspace.LoadAsync().ConfigureAwait(false);
+            foreach (EditorDiagnostic diagnostic in snapshot.Diagnostics)
+            {
+                string path = string.IsNullOrWhiteSpace(diagnostic.Path) ? "workspace" : diagnostic.Path;
+                Console.WriteLine($"{path}({diagnostic.Line},{diagnostic.Column}): {diagnostic.Severity} {diagnostic.Id}: {diagnostic.Message}");
+            }
+
+            if (snapshot.Catalog is null && snapshot.Catalogs.Count > 1)
+            {
+                Console.Error.WriteLine("The workspace contains multiple catalogs. Select one with --catalog <id>:");
+                foreach (EditorCatalogSummary catalog in snapshot.Catalogs.OrderBy(static value => value.Id, StringComparer.Ordinal))
+                    Console.Error.WriteLine($"  {catalog.Id}");
+                return 1;
+            }
+
+            if (!snapshot.Success)
+            {
+                Console.Error.WriteLine($"Validation failed with {snapshot.Diagnostics.Count} diagnostic(s).");
+                return 1;
+            }
+
+            if (snapshot.Catalog is null)
+            {
+                Console.Error.WriteLine("Validation found no catalog in the workspace.");
+                return 1;
+            }
+
+            string catalogName = snapshot.Catalog.Id;
+            Console.WriteLine($"Validation passed for '{catalogName}' ({snapshot.Documents.Count} document(s)).");
+            return 0;
+        }
+        catch (Exception exception) when (exception is ArgumentException or DirectoryNotFoundException or IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"Validation could not start: {exception.Message}");
+            return 2;
+        }
+    }
+
+    private static void PrintHelp()
+    {
+        Console.WriteLine("Runic Translations Editor");
+        Console.WriteLine();
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  runic-translations-editor edit [workspace] [--catalog <id>] [--webview]");
+        Console.WriteLine("  runic-translations-editor validate [workspace] [--catalog <id>]");
+        Console.WriteLine("  runic-translations-editor --version");
+        Console.WriteLine();
+        Console.WriteLine("The packaged launcher opens the current directory when no workspace is given.");
+        Console.WriteLine("Validation uses the same compiler path and diagnostics as editor load and save.");
     }
 }

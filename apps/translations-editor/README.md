@@ -6,9 +6,32 @@ A focused desktop editor for [Runic Translations](https://github.com/Runic-Artif
 
 This repository owns the editor application, its cross-platform preview archives, and editor releases. The compiler, schema, runtime, command-line tooling, and language integrations remain in the Runic Translations repository. Its dependencies use the canonical `RunicTranslations.*` package and code identifiers.
 
-## Run locally
+## Install the public preview
 
-The editor currently consumes preview dependencies from GitHub Packages. Export a GitHub token with package-read access, then restore and run:
+Download the archive and its sibling `.sha256` file for your platform from [GitHub Releases](https://github.com/Runic-Artifex/runic-translations-editor/releases). These archives are self-contained: the machine needs neither Node.js, the .NET SDK, nor package-registry credentials.
+
+Verify the checksum, extract the complete archive, and launch a translation workspace:
+
+```bash
+# Linux
+sha256sum -c RunicTranslations.Editor-*.sha256
+./RunicTranslations.Editor/runic-translations-editor edit /path/to/translations
+
+# macOS
+shasum -a 256 -c RunicTranslations.Editor-*.sha256
+./RunicTranslations.Editor/runic-translations-editor edit /path/to/translations
+
+# Windows PowerShell
+(Get-FileHash .\RunicTranslations.Editor-*.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+# Compare it with the first value in the .sha256 file, then extract the archive.
+.\RunicTranslations.Editor\runic-translations-editor.cmd edit C:\path\to\translations
+```
+
+The preview is unsigned. Read [the preview notice](PREVIEW-NOTICE.md) before downloading and the [distribution policy](docs/editor-distribution.md) for exact verification and platform trust guidance.
+
+## Develop locally
+
+Source builds currently consume preview dependencies from GitHub Packages. Export a GitHub token with package-read access, then restore and run:
 
 ```bash
 export GITHUB_ACTOR="your-github-user"
@@ -39,6 +62,18 @@ Mock mode keeps writes in memory.
 ```
 
 Verification builds against released packages only, checks the Svelte application and production bundle, runs the editor's compiler/save/recovery smoke path, and rejects unintended generated changes.
+
+The supported headless validation command uses the exact compiler-backed workspace load that supplies editor diagnostics and gates editor saves:
+
+```bash
+# From an extracted preview archive
+./runic-translations-editor validate /path/to/translations
+
+# From this source checkout
+dotnet run --project RunicTranslations.Editor.csproj -- validate ExampleWorkspace
+```
+
+It returns `0` for a valid selected catalog, `1` for compiler diagnostics or an ambiguous multi-catalog workspace, and `2` when validation could not start. Use `--catalog <id>` when a directory contains more than one catalog.
 
 ## Package a preview
 

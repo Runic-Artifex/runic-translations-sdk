@@ -8,9 +8,9 @@ internal sealed class EditorSession : IDisposable
     private EditorWorkspace _workspace;
     private bool _disposed;
 
-    public EditorSession(string workspacePath)
+    public EditorSession(string workspacePath, string? catalogId = null)
     {
-        _workspace = new EditorWorkspace(workspacePath);
+        _workspace = new EditorWorkspace(workspacePath, catalogId);
     }
 
     public Task<WorkspaceSnapshot> LoadAsync(CancellationToken cancellationToken = default) =>
@@ -286,10 +286,13 @@ internal sealed class EditorSession : IDisposable
 
     private static EditorMutationFile[] MutationFiles(TranslationWorkspaceTransactionPlan plan)
     {
-        var result = new EditorMutationFile[plan.Edits.Count];
+        TranslationWorkspaceEdit[] edits = plan.Edits
+            .OrderBy(static edit => edit.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+        var result = new EditorMutationFile[edits.Length];
         for (int index = 0; index < result.Length; index++)
         {
-            TranslationWorkspaceEdit edit = plan.Edits[index];
+            TranslationWorkspaceEdit edit = edits[index];
             string fullPath = Path.GetFullPath(edit.RelativePath.Replace('/', Path.DirectorySeparatorChar), plan.Root);
             byte[]? replacement = edit.GetUtf8Bytes();
             result[index] = new EditorMutationFile(

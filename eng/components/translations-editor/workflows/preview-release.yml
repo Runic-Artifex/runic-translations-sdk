@@ -62,11 +62,20 @@ jobs:
     needs: package
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v7
         with:
           path: artifacts
           merge-multiple: true
+      - name: Verify the complete release set
+        working-directory: artifacts
+        run: |
+          test "$(find . -maxdepth 1 -type f -name '*-linux-x64.tar.gz' | wc -l)" -eq 1
+          test "$(find . -maxdepth 1 -type f -name '*-win-x64.zip' | wc -l)" -eq 1
+          test "$(find . -maxdepth 1 -type f -name '*-osx-arm64.tar.gz' | wc -l)" -eq 1
+          test "$(find . -maxdepth 1 -type f -name '*.sha256' | wc -l)" -eq 3
+          sha256sum --check *.sha256
       - name: Publish preview release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/* --verify-tag --prerelease --generate-notes --title "Runic Translations Editor $GITHUB_REF_NAME"
+        run: gh release create "$GITHUB_REF_NAME" artifacts/* --verify-tag --prerelease --notes-file PREVIEW-NOTICE.md --title "Runic Translations Editor $GITHUB_REF_NAME"

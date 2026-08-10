@@ -11,6 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $editorProject = Join-Path $repositoryRoot "RunicTranslations.Editor.csproj"
+$packageVerifier = Join-Path $repositoryRoot "eng/verify-editor-package.ps1"
 $workRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("runic-editor-package-" + [Guid]::NewGuid().ToString("N"))
 $publishRoot = Join-Path $workRoot "RunicTranslations.Editor"
 $expectedRuntimeIdentifier = if ($IsWindows) { "win-x64" } elseif ($IsMacOS) { "osx-arm64" } else { "linux-x64" }
@@ -43,18 +44,16 @@ try {
         -p:RunicEditorUpdateChannel=preview
     if ($LASTEXITCODE -ne 0) { throw "Self-contained editor publish failed." }
 
-    foreach ($required in @("www/index.html", "ExampleWorkspace/product.catalog.json", "LICENSE.txt", "THIRD-PARTY-NOTICES.md")) {
+    foreach ($required in @("www/index.html", "ExampleWorkspace/product.catalog.json", "LICENSE.txt", "THIRD-PARTY-NOTICES.md", "PREVIEW-NOTICE.md", "runic-translations-editor", "runic-translations-editor.cmd")) {
         if (-not (Test-Path (Join-Path $publishRoot $required))) { throw "Published editor omitted '$required'." }
     }
     $executableName = if ($IsWindows) { "RunicTranslations.Editor.exe" } else { "RunicTranslations.Editor" }
     $executable = Join-Path $publishRoot $executableName
     if (-not (Test-Path $executable)) { throw "Published editor executable was not produced." }
-    $versionOutput = (& $executable --version) -join "`n"
-    if ($LASTEXITCODE -ne 0 -or -not $versionOutput.Contains($Version) -or -not $versionOutput.Contains($RepositoryCommit) -or -not $versionOutput.Contains("Channel: preview")) {
-        throw "The packaged executable did not carry the requested version, commit, and update channel."
+    if (-not $IsWindows) {
+        chmod +x (Join-Path $publishRoot "runic-translations-editor")
+        if ($LASTEXITCODE -ne 0) { throw "The Unix launcher could not be marked executable." }
     }
-    & $executable --smoke-test --workspace (Join-Path $publishRoot "ExampleWorkspace")
-    if ($LASTEXITCODE -ne 0) { throw "The self-contained editor failed its packaged startup smoke test." }
 
     $files = Get-ChildItem -Path $publishRoot -File -Recurse | Sort-Object FullName | ForEach-Object {
         [ordered]@{
@@ -77,7 +76,7 @@ try {
     $baseName = "RunicTranslations.Editor-$Version-$RuntimeIdentifier"
     if ($IsWindows) {
         $archive = Join-Path $OutputDirectory "$baseName.zip"
-        Compress-Archive -Path (Join-Path $publishRoot "*") -DestinationPath $archive -CompressionLevel Optimal
+        Compress-Archive -Path $publishRoot -DestinationPath $archive -CompressionLevel Optimal
     } else {
         $archive = Join-Path $OutputDirectory "$baseName.tar.gz"
         tar -C $workRoot -czf $archive "RunicTranslations.Editor"
@@ -85,6 +84,30 @@ try {
     }
     $digest = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
     Set-Content -Path "$archive.sha256" -Value "$digest  $([System.IO.Path]::GetFileName($archive))" -Encoding ascii
+    $recordedDigest = ((Get-Content -Raw -Path "$archive.sha256").Trim() -split '\s+', 2)[0]
+    if ($recordedDigest -ne (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()) {
+        throw "The archive does not match its sibling SHA-256 file."
+    }
+
+    $extractionRoot = Join-Path $workRoot "archive-test"
+    New-Item -ItemType Directory -Path $extractionRoot -Force | Out-Null
+    if ($IsWindows) {
+        Expand-Archive -Path $archive -DestinationPath $extractionRoot
+    } else {
+        tar -C $extractionRoot -xzf $archive
+        if ($LASTEXITCODE -ne 0) { throw "The editor archive could not be extracted." }
+    }
+    $extractedPackage = Join-Path $extractionRoot "RunicTranslations.Editor"
+    if (-not (Test-Path $extractedPackage -PathType Container)) {
+        throw "The archive did not contain the expected RunicTranslations.Editor root directory."
+    }
+    & $packageVerifier `
+        -PackageDirectory $extractedPackage `
+        -Version $Version `
+        -RepositoryCommit $RepositoryCommit `
+        -RuntimeIdentifier $RuntimeIdentifier
+    if ($LASTEXITCODE -ne 0) { throw "The extracted editor package verification failed." }
+
     Write-Host "Created self-contained editor preview: $archive"
 }
 finally {
