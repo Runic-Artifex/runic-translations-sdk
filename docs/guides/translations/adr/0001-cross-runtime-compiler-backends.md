@@ -5,7 +5,7 @@ Date: 7 August 2026
 
 ## Context
 
-Runic Text Resources already owns a deterministic compiler, versioned source and
+Runic Translations already owns a deterministic compiler, versioned source and
 artifact contracts, generated C#, and a Native-AOT-compatible .NET runtime. The
 next product tranche must support TypeScript/ESM without creating a second source
 compiler or making the browser depend on .NET runtime behavior. A later C++
@@ -80,4 +80,3 @@ markup. Simple authored messages remain strings.
   guarantees.
 - Generated output inventories must support nested paths without weakening path
   containment or cleanup safety.
-

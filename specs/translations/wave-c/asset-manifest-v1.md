@@ -1,6 +1,6 @@
 # Asset Manifest v1 publication edge
 
-`{catalog}.asset-manifest-v1.json` is emitted whenever the Text Resources tool
+`{catalog}.asset-manifest-v1.json` is emitted whenever the `runic-translations` tool
 selects at least one non-C# artifact group. Its filename and the schema at
 `../schemas/asset-manifest-v1.schema.json` are the frozen v1 publication
 contract.

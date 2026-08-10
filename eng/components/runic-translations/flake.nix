@@ -1,5 +1,5 @@
 {
-  description = "RunicTextResources development environment";
+  description = "Runic Translations development environment";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";

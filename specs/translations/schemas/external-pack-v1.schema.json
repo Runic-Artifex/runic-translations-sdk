@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RunicTextResources Text Resources External Pack v1",
+  "title": "Runic Translations External Pack v1",
   "description": "Versioned external-pack facade. Version 1 is byte-compatible with the locale artifact payload; integrity metadata is deliberately outside the payload and is evaluated over the complete raw bytes before parsing.",
   "$ref": "locale-artifact-v1.schema.json"
 }

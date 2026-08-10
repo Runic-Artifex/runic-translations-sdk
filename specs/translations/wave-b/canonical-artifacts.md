@@ -24,7 +24,7 @@ Non-C# artifact names are relative safe names:
 
 - `{catalog}.{locale}.locale-v1.json` for a resolved locale artifact;
 - `{catalog}.template-manifest-v1.json` for the versioned value-free edge;
-- `{catalog}.text-resources-v1.d.ts` for the versioned TypeScript declaration edge;
+- `{catalog}.translations-v1.d.ts` for the versioned TypeScript declaration edge;
 - `{catalog}.asset-manifest-v1.json` for the selected non-C# asset inventory.
 
 The Asset Manifest v1 is emitted whenever at least one locale, template manifest,

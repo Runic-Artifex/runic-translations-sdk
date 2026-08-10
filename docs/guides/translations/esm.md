@@ -9,7 +9,7 @@ compiler AST and never parse authoring patterns or fetch JSON.
 
 For SSR, pass `{ locale }` on each call. The configurable resolver is synchronous
 host state intended for browser applications, not a request-global SSR locale.
-The optional Vite package maps `virtual:runic-text-resources/{catalog}`, `/runtime`,
+The optional Vite package maps `virtual:runic-translations/{catalog}`, `/runtime`,
 `/transport`, and `/dynamic` to these ordinary modules and invalidates them on
 watched changes.
 

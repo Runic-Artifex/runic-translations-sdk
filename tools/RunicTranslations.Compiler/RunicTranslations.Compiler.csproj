@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(RunicTranslationsGeneratorTargetFramework)</TargetFramework>
+    <AssemblyName>RunicTranslations.Compiler</AssemblyName>
+    <RootNamespace>RunicTranslations.Compiler</RootNamespace>
+    <Description>Pure deterministic compiler kernel for Runic Translations.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- These names deliberately mirror the normative serialized descriptor vocabulary. -->
+    <NoWarn>$(NoWarn);CA1720</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "catalog": "packageconsumer",
+  "code": {
+    "namespace": "RunicTranslations.PackageConsumer",
+    "className": "ConsumerText"
+  },
+  "defaultLocale": "en",
+  "locales": [{ "tag": "en" }],
+  "layers": [{ "name": "base", "priority": 0 }]
+}

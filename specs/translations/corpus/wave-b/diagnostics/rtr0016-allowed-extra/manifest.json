@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "catalog": "allowed-extra",
   "code": {
-    "namespace": "RunicTextResources.Corpus",
+    "namespace": "RunicTranslations.Corpus",
     "className": "AllowedExtraText"
   },
   "defaultLocale": "en",

@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://runic-artifex.dev/schemas/text-resources/editor-state-v1.schema.json",
-  "title": "Runic Text Resources optional editor state v1",
+  "$id": "https://runic-artifex.dev/schemas/translations/editor-state-v1.schema.json",
+  "title": "Runic Translations optional editor state v1",
   "type": "object",
   "required": ["$schema", "catalog", "messages", "terminology"],
   "properties": {
-    "$schema": { "const": "runic.textresources.editor-state/1" },
+    "$schema": { "const": "runic.translations.editor-state/1" },
     "catalog": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
     "messages": {
       "type": "object",

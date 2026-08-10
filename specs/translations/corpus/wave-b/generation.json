@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "identity": "RunicTextResources.Generation.Conformance",
+  "identity": "RunicTranslations.Generation.Conformance",
   "cases": [
     {
       "id": "canonical-locale-artifact-bytes",
@@ -54,7 +54,7 @@
         "app.zh-Hant-TW.locale-v1.json"
       ],
       "expectedTemplateManifestPath": "app.template-manifest-v1.json",
-      "expectedTypeScriptDeclarationPath": "app.text-resources-v1.d.ts"
+      "expectedTypeScriptDeclarationPath": "app.translations-v1.d.ts"
     },
     {
       "id": "template-manifest-is-value-free",

@@ -1,6 +1,7 @@
 {
-  "name": "@runic-artifex/vite-plugin-text-resources",
+  "name": "@runic-artifex/vite-plugin-runic-translations",
   "version": "0.1.0-preview.3.2",
+  "description": "Vite integration for compiling Runic Translations catalogs into application resources",
   "type": "module",
   "exports": {
     ".": {
@@ -31,7 +32,8 @@
     "directory": "web"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

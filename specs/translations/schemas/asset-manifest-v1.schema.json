@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RunicTextResources Text Resources Asset Manifest v1",
-  "description": "Versioned edge contract describing deterministic Text Resources artifacts for a host or packaging layer. It does not grant the host authority to redefine artifact bytes.",
+  "title": "Runic Translations Asset Manifest v1",
+  "description": "Versioned edge contract describing deterministic Translations artifacts for a host or packaging layer. It does not grant the host authority to redefine artifact bytes.",
   "type": "object",
   "required": [
     "assetManifestVersion",

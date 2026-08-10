@@ -1,8 +1,8 @@
-# Runic Text Resources contracts
+# Runic Translations contracts
 
 This directory freezes the TR0–TR1 language-neutral contracts for
-`RunicTextResources`. Together, these contracts form the portable protocol
-family `runic.textresources/1`. The standalone planning document remains the source
+`RunicTranslations`. Together, these contracts form the portable protocol
+family `runic.translations/1`. The standalone planning document remains the source
 for product intent; ADR 0001 and ADR 0005 replace its retired product and
 diagnostic identities.
 
@@ -20,7 +20,7 @@ diagnostic identities.
 | Transport contract | 1 |
 
 Package versions are independent from these integers. New cross-runtime schemas
-use canonical `https://runic-artifex.dev/schemas/text-resources/` identifiers;
+use canonical `https://runic-artifex.dev/schemas/translations/` identifiers;
 legacy wave schemas retain their frozen identity behavior. An instance `$schema`
 member is a semantic compiler concern and is not a behavior selector;
 `schemaVersion` selects compiler behavior.

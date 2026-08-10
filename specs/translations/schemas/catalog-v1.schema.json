@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RunicTextResources Text Resources Catalog Manifest v1",
-  "description": "Normative schema for a RunicTextResources Text Resources catalog manifest with schemaVersion 1.",
+  "title": "Runic Translations Catalog Manifest v1",
+  "description": "Normative schema for a Runic Translations catalog manifest with schemaVersion 1.",
   "type": "object",
   "required": [
     "schemaVersion",

@@ -4,15 +4,15 @@
       Development is the approachable inner loop. Verification is selected by CI
       and eng/verify.ps1 for release-grade analysis.
     -->
-    <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == '' and '$(CI)' == 'true'">Verification</RunicTextResourcesBuildMode>
-    <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == ''">Development</RunicTextResourcesBuildMode>
-    <RunicTextResourcesVerificationBuild Condition="'$(RunicTextResourcesBuildMode)' == 'Verification'">true</RunicTextResourcesVerificationBuild>
-    <RunicTextResourcesVerificationBuild Condition="'$(RunicTextResourcesVerificationBuild)' == ''">false</RunicTextResourcesVerificationBuild>
+    <RunicTranslationsBuildMode Condition="'$(RunicTranslationsBuildMode)' == '' and '$(CI)' == 'true'">Verification</RunicTranslationsBuildMode>
+    <RunicTranslationsBuildMode Condition="'$(RunicTranslationsBuildMode)' == ''">Development</RunicTranslationsBuildMode>
+    <RunicTranslationsVerificationBuild Condition="'$(RunicTranslationsBuildMode)' == 'Verification'">true</RunicTranslationsVerificationBuild>
+    <RunicTranslationsVerificationBuild Condition="'$(RunicTranslationsVerificationBuild)' == ''">false</RunicTranslationsVerificationBuild>
 
     <LangVersion>14.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <TreatWarningsAsErrors Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors Condition="'$(RunicTranslationsVerificationBuild)' == 'true'">true</TreatWarningsAsErrors>
     <TreatWarningsAsErrors Condition="'$(TreatWarningsAsErrors)' == ''">false</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
@@ -33,13 +33,13 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags Condition="'$(PackageTags)' == ''">runic-artifex;i18n;localization;resources;dotnet;nativeaot</PackageTags>
     <!-- Libraries leave dependency resolution to their consuming applications. -->
-    <NuGetAudit Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</NuGetAudit>
+    <NuGetAudit Condition="'$(RunicTranslationsVerificationBuild)' == 'true'">true</NuGetAudit>
     <NuGetAudit Condition="'$(NuGetAudit)' == ''">false</NuGetAudit>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <VersionPrefix Condition="'$(VersionPrefix)' == ''">0.1.0</VersionPrefix>
-    <RunicTextResourcesDefaultTargetFramework>net10.0</RunicTextResourcesDefaultTargetFramework>
-    <RunicTextResourcesCompatibilityTargetFramework>net10.0</RunicTextResourcesCompatibilityTargetFramework>
-    <RunicTextResourcesGeneratorTargetFramework>net10.0</RunicTextResourcesGeneratorTargetFramework>
+    <RunicTranslationsDefaultTargetFramework>net10.0</RunicTranslationsDefaultTargetFramework>
+    <RunicTranslationsCompatibilityTargetFramework>net10.0</RunicTranslationsCompatibilityTargetFramework>
+    <RunicTranslationsGeneratorTargetFramework>net10.0</RunicTranslationsGeneratorTargetFramework>
   </PropertyGroup>
 
   <ItemGroup>

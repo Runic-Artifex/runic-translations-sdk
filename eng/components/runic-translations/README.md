@@ -7,7 +7,7 @@ It started inside Runic Toolkit, but its contracts, compiler, runtime, generator
 build integration, and command-line tool are intentionally independent of any UI
 framework.
 
-The portable contract family is named `runic.textresources/1`. Package versions
+The portable contract family is named `runic.translations/1`. Package versions
 evolve independently from its versioned source schemas, message grammar, generated
 artifacts, and runtime ABI.
 
@@ -15,14 +15,14 @@ artifacts, and runtime ABI.
 
 | Package | Purpose |
 |---|---|
-| `RunicTextResources` | NativeAOT-compatible .NET runtime contracts and snapshots |
-| `RunicTextResources.Compiler` | Deterministic, UI-independent compiler kernel |
-| `RunicTextResources.Authoring` | Supported workspace and project-authoring operations for tooling |
-| `RunicTextResources.Generator` | Incremental C# source generator |
-| `RunicTextResources.Build` | Dependency-free MSBuild integration |
-| `RunicTextResources.Tool` | `runic-textresources` validation and generation tool |
-| `RunicTextResources.Templates` | Minimal item and standalone .NET project templates |
-| `@runic-artifex/vite-plugin-text-resources` | Optional virtual-module, watch, and HMR adapter |
+| `RunicTranslations` | NativeAOT-compatible .NET runtime contracts and snapshots |
+| `RunicTranslations.Compiler` | Deterministic, UI-independent compiler kernel |
+| `RunicTranslations.Authoring` | Supported workspace and project-authoring operations for tooling |
+| `RunicTranslations.Generator` | Incremental C# source generator |
+| `RunicTranslations.Build` | Dependency-free MSBuild integration |
+| `RunicTranslations.Tool` | `runic-translations` validation and generation tool |
+| `RunicTranslations.Templates` | Minimal item and standalone .NET project templates |
+| `@runic-artifex/vite-plugin-runic-translations` | Optional virtual-module, watch, and HMR adapter |
 
 The normative schemas and compatibility corpus live in [`spec/`](spec/README.md).
 The `.NET` implementation is under [`dotnet/`](dotnet/).
@@ -40,8 +40,8 @@ literal/cardinal/ordinal selectors, ordered multi-selector variants, relative
 time, structured scalar formats, safe semantic markup, and mandatory catch-all
 coverage. It emits typed, independently tree-shakable ESM message modules with no
 runtime pattern parser, plus explicit validated dynamic locale artifacts. Use
-`--emit-esm`, or `<TextResourcesEmitEsm>true</TextResourcesEmitEsm>` from MSBuild.
-An opt-in `--emit-cpp` / `TextResourcesEmitCpp` C++20 backend is available as a
+`--emit-esm`, or `<TranslationsEmitEsm>true</TranslationsEmitEsm>` from MSBuild.
+An opt-in `--emit-cpp` / `TranslationsEmitCpp` C++20 backend is available as a
 feasibility surface and is intentionally excluded from default output selection.
 
 ## Development
@@ -73,9 +73,9 @@ debuggers need GitHub access to retrieve source files.
 
 This repository is being extracted from Runic Toolkit and has not made its first
 independent public release. Package identity is intentionally clean-break
-`RunicTextResources.*`; retired Toolkit identities are not compatibility aliases.
+`RunicTranslations.*`; retired Toolkit identities are not compatibility aliases.
 
 ## License
 
-Runic Text Resources is licensed under the [MIT License](LICENSE). Third-party
+Runic Translations is licensed under the [MIT License](LICENSE). Third-party
 components, when present, retain their own license and attribution terms.

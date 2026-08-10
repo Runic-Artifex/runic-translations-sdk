@@ -1,4 +1,4 @@
-# Text Resources Wave B contract
+# Runic Translations Wave B contract
 
 Wave B implements the R2, R3, and bounded R5 kernel tranche on top of the frozen
 Wave A source schemas, message grammar, compiler IR, fingerprint, and runtime ABI
@@ -32,5 +32,5 @@ These schemas deliberately have no custom `$id`. A canonical schema URI remains
 blocked until the registry owns and publishes a domain. The standard draft URI
 declares the JSON Schema dialect only.
 
-All public identities use `RunicTextResources.*`. Retired planning names
+All public identities use `RunicTranslations.*`. Retired planning names
 are not compatibility aliases.

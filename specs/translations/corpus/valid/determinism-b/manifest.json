@@ -2,7 +2,7 @@
   "layers": [{ "priority": 0, "name": "base" }],
   "locales": [{ "tag": "en" }],
   "defaultLocale": "en",
-  "code": { "className": "StableText", "namespace": "RunicTextResources.Examples.Localization" },
+  "code": { "className": "StableText", "namespace": "RunicTranslations.Examples.Localization" },
   "catalog": "stable",
   "schemaVersion": 1
 }

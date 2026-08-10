@@ -5,7 +5,7 @@
 - `templates/` contains item and standalone-project templates.
 - `tests/` contains executable test suites and isolated package consumers.
 
-`RunicTextResources.slnx` includes the source projects, tool, and project-reference
+`RunicTranslations.slnx` includes the source projects, tool, and project-reference
 tests. The package-only and NativeAOT consumers are deliberately excluded because
 they restore version `1.0.0` exclusively from the local feed produced by
 `eng/verify.sh`.

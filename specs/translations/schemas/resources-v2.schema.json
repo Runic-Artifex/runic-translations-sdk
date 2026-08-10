@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Runic Text Resources document v2",
+  "title": "Runic Translations document v2",
   "type": "object",
   "required": ["schemaVersion", "catalog", "locale", "layer", "resources"],
   "properties": {

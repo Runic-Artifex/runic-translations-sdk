@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RunicTextResources Web Module Manifest v1",
+  "title": "RunicTranslations Web Module Manifest v1",
   "description": "Inventory and entrypoints for one deterministic generated ESM catalog.",
   "type": "object",
   "required": [

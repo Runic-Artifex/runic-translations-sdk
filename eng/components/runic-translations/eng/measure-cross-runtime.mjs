@@ -31,7 +31,7 @@ try {
     await writeFile(manifestPath, JSON.stringify(manifest));
     await writeFile(documentPath, JSON.stringify(document));
     const started = performance.now();
-    await run("dotnet", ["run", "--project", join(repository, "dotnet/tools/RunicTextResources.Tool"), "-c", "Release", "--no-restore", "--",
+    await run("dotnet", ["run", "--project", join(repository, "dotnet/tools/RunicTranslations.Tool"), "-c", "Release", "--no-restore", "--",
       "generate", "--catalog", manifestPath, "--documents", documentPath, "--output", output, "--emit-esm"]);
     const elapsed = performance.now() - started;
     const files = await inventory(output);
@@ -47,12 +47,12 @@ try {
   for (let index = 0; index < 100; index++) cppResources[`Message${String(index).padStart(5, "0")}`] = `MESSAGE_${index}`;
   await writeFile(cppDocument, JSON.stringify({ schemaVersion: 1, catalog: "scale", locale: "en", layer: "base", resources: cppResources }));
   const cppOutput = join(cpp, "out");
-  await run("dotnet", ["run", "--project", join(repository, "dotnet/tools/RunicTextResources.Tool"), "-c", "Release", "--no-restore", "--",
+  await run("dotnet", ["run", "--project", join(repository, "dotnet/tools/RunicTranslations.Tool"), "-c", "Release", "--no-restore", "--",
     "generate", "--catalog", cppManifest, "--documents", cppDocument, "--output", cppOutput, "--emit-cpp"]);
   const main = join(cppOutput, "main.cpp");
-  await writeFile(main, "#include \"scale.text-resources-v1.hpp\"\n#include <iostream>\nint main(){ using namespace runic_text_resources::catalog_scale; for(int i=0;i<100000;i++) { auto value=m_12Message00000(\"en\"); if(value.empty()) return 2; } std::cout << \"ok\"; }\n");
+  await writeFile(main, "#include \"scale.translations-v1.hpp\"\n#include <iostream>\nint main(){ using namespace runic_translations::catalog_scale; for(int i=0;i<100000;i++) { auto value=m_12Message00000(\"en\"); if(value.empty()) return 2; } std::cout << \"ok\"; }\n");
   const compileStarted = performance.now();
-  await run("clang++", ["-std=c++20", "-O2", join(cppOutput, "scale.text-resources-v1.cpp"), main, "-o", join(cppOutput, "measure")]);
+  await run("clang++", ["-std=c++20", "-O2", join(cppOutput, "scale.translations-v1.cpp"), main, "-o", join(cppOutput, "measure")]);
   const compileMilliseconds = Math.round(performance.now() - compileStarted);
   const runStarted = performance.now();
   await run(join(cppOutput, "measure"), []);

@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "identity": "RunicTextResources.Formatting.Conformance",
+  "identity": "RunicTranslations.Formatting.Conformance",
   "messageGrammarVersion": 1,
   "valueEncoding": {
     "int": "base-10 signed integer string",

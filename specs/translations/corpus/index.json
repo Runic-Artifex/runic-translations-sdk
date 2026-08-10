@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "identity": "RunicTextResources.Conformance",
+  "identity": "RunicTranslations.Conformance",
   "sourceContracts": {
     "catalogSchemaVersion": 1,
     "resourceSchemaVersion": 1,
@@ -154,7 +154,7 @@
       "manifest": "invalid/rtr0003-schema-uri/manifest.json",
       "documents": ["shared/en.json"],
       "expected": { "diagnostics": [
-        { "id": "RTR0003", "severity": "error", "path": "invalid/rtr0003-schema-uri/manifest.json", "line": 2, "column": 14, "endLine": 2, "endColumn": 77 }
+        { "id": "RTR0003", "severity": "error", "path": "invalid/rtr0003-schema-uri/manifest.json", "line": 2, "column": 14, "endLine": 2, "endColumn": 75 }
       ] }
     },
     {

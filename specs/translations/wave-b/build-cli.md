@@ -1,6 +1,6 @@
 # Build and CLI contract
 
-The build task and `runic-textresources` tool are adapters over the same pure
+The build task and `runic-translations` tool are adapters over the same pure
 compiler and renderers. They MUST report the same `RTR` diagnostic ID,
 severity, invariant message arguments, normalized source path, and source span
 for equivalent input.
@@ -48,7 +48,7 @@ are removed only as part of the successful replacement transaction.
 `verify` renders to an isolated temporary directory and compares bytes. It
 reports ordinal-sorted `missing`, `changed`, and `extra` relative paths and does
 not modify the requested output directory. "Extra" means a file claimed by the
-Text Resources asset manifest but absent from the expected render set; unrelated
+Translations asset manifest but absent from the expected render set; unrelated
 consumer files outside that manifest are not claimed or deleted.
 
 Output roots are canonicalized before writes. Absolute child paths, rooted

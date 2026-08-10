@@ -1,4 +1,4 @@
-# Text Resources compiler conformance corpus
+# Runic Translations compiler conformance corpus
 
 This directory is the language-neutral Wave A corpus for the version 1 catalog
 and resource source contracts. `index.json` is the machine-readable entry point.

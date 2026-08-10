@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "identity": "RunicTextResources.CompilerDiagnostics.Conformance",
+  "identity": "RunicTranslations.CompilerDiagnostics.Conformance",
   "locationConvention": {
     "lineBase": 1,
     "columnBase": 1,

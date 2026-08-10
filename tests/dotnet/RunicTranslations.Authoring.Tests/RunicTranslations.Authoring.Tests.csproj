@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>RunicTranslations.Authoring.Tests</AssemblyName>
+    <RootNamespace>RunicTranslations.Authoring.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RunicTranslations.Authoring\RunicTranslations.Authoring.csproj" />
+  </ItemGroup>
+</Project>

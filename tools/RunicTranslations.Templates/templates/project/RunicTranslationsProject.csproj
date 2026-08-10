@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <TranslationsGenerateOnBuild>true</TranslationsGenerateOnBuild>
+    <TranslationsEmitEsm>true</TranslationsEmitEsm>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RunicTranslations" Version="__PACKAGE_VERSION__" />
+    <PackageReference Include="RunicTranslations.Build" Version="__PACKAGE_VERSION__" PrivateAssets="all" />
+    <PackageReference Include="RunicTranslations.Generator"
+                      Version="__PACKAGE_VERSION__"
+                      PrivateAssets="all"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TextResourceCatalog Include="Resources\__CATALOG__.catalog.json" />
+    <TextResourceDocument Include="Resources\__CATALOG__.__DEFAULT_LOCALE__.json" />
+  </ItemGroup>
+</Project>

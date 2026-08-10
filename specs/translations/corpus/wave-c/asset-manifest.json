@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "identity": "RunicTextResources.WaveC.AssetManifest",
+  "identity": "RunicTranslations.WaveC.AssetManifest",
   "assetManifestVersion": 1,
   "schema": "../../schemas/asset-manifest-v1.schema.json",
   "cases": [
@@ -26,7 +26,7 @@
       "id": "typescript-only",
       "emit": ["--emit-typescript"],
       "assetManifest": true,
-      "assets": ["minimal.text-resources-v1.d.ts"]
+      "assets": ["minimal.translations-v1.d.ts"]
     },
     {
       "id": "combined-non-csharp",
@@ -35,7 +35,7 @@
       "assets": [
         "minimal.en.locale-v1.json",
         "minimal.template-manifest-v1.json",
-        "minimal.text-resources-v1.d.ts"
+        "minimal.translations-v1.d.ts"
       ]
     }
   ]

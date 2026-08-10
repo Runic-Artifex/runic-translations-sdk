@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalog": "complete",
-  "code": { "namespace": "RunicTextResources.Examples.Localization", "className": "CompleteText" },
+  "code": { "namespace": "RunicTranslations.Examples.Localization", "className": "CompleteText" },
   "defaultLocale": "en",
   "locales": [{ "tag": "en" }, { "tag": "de", "fallback": "en" }],
   "layers": [{ "name": "base", "priority": 0 }],

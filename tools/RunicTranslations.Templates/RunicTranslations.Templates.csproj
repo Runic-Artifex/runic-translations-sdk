@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <PackageId>RunicTranslations.Templates</PackageId>
+    <Description>.NET project and item templates for Runic Translations.</Description>
+    <PackageType>Template</PackageType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IsPackable>true</IsPackable>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PrepareVersionedProjectTemplate</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="templates\**\*"
+             Exclude="templates\**\bin\**;templates\**\obj\**;templates\project\.template.config\template.json" />
+    <None Update="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <Target Name="PrepareVersionedProjectTemplate">
+    <PropertyGroup>
+      <_ProjectTemplateSource>$(MSBuildProjectDirectory)/templates/project/.template.config/template.json</_ProjectTemplateSource>
+      <_ProjectTemplateDestination>$(IntermediateOutputPath)versioned-project-template.json</_ProjectTemplateDestination>
+      <_ProjectTemplateContent>$([System.IO.File]::ReadAllText('$(_ProjectTemplateSource)').Replace('&quot;defaultValue&quot;: &quot;0.1.0&quot;', '&quot;defaultValue&quot;: &quot;$(PackageVersion)&quot;'))</_ProjectTemplateContent>
+    </PropertyGroup>
+    <WriteLinesToFile
+      File="$(_ProjectTemplateDestination)"
+      Lines="$(_ProjectTemplateContent)"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true"
+      Encoding="UTF-8" />
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(_ProjectTemplateDestination)">
+        <PackagePath>content/templates/project/.template.config/template.json</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+</Project>

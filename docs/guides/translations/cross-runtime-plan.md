@@ -1,4 +1,4 @@
-# Runic Text Resources cross-runtime plan
+# Runic Translations cross-runtime plan
 
 Status: implemented
 Last updated: 8 August 2026
@@ -37,11 +37,11 @@ recorded in `cross-runtime-measurements.md`.
 
 ## Decision
 
-Runic Text Resources will be a Runic-owned, deterministic localization compiler
+Runic Translations will be a Runic-owned, deterministic localization compiler
 and portable message model with generated backends for .NET and TypeScript/ESM.
 A C++ backend may follow after the portable message model is stable.
 
-Runic Text Resources will not implement compatibility with Paraglide JS, inlang,
+Runic Translations will not implement compatibility with Paraglide JS, inlang,
 or their source formats, generated APIs, project models, or runtimes. Their useful
 architectural ideas may inform this design, but Runic contracts and versioning
 remain independent.
@@ -330,7 +330,7 @@ Each generated message function:
 An illustrative API is:
 
 ```ts
-import { messages } from "virtual:runic-text-resources/app";
+import { messages } from "virtual:runic-translations/app";
 
 const text = messages.Files_Deleted(
   { count: 3, folder: "Archive" },
@@ -450,8 +450,8 @@ Add exact output selections rather than a single ambiguous web switch:
 Corresponding MSBuild properties should include:
 
 ```xml
-<TextResourcesEmitEsm>true</TextResourcesEmitEsm>
-<TextResourcesEmitJson>false</TextResourcesEmitJson>
+<TranslationsEmitEsm>true</TranslationsEmitEsm>
+<TranslationsEmitJson>false</TranslationsEmitJson>
 ```
 
 Requirements:
@@ -696,5 +696,5 @@ This plan borrows general compiler and localization concepts from:
   especially declarations, selectors, variants, structured formatting, and
   markup.
 
-These are research inputs, not compatibility targets. Runic Text Resources owns
+These are research inputs, not compatibility targets. Runic Translations owns
 its schemas, AST, diagnostics, generated APIs, runtime behavior, and versioning.

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalog": "cycle",
-  "code": { "namespace": "RunicTextResources.Examples.Localization", "className": "CycleText" },
+  "code": { "namespace": "RunicTranslations.Examples.Localization", "className": "CycleText" },
   "defaultLocale": "en",
   "locales": [
     { "tag": "en" },

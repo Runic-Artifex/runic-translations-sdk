@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalog": "canonical-locale",
-  "code": { "namespace": "RunicTextResources.Examples.Localization", "className": "CanonicalLocaleText" },
+  "code": { "namespace": "RunicTranslations.Examples.Localization", "className": "CanonicalLocaleText" },
   "defaultLocale": "EN-us",
   "locales": [
     { "tag": "en-US" },

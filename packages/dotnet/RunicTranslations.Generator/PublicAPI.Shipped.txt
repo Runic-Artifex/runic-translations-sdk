@@ -1,0 +1,8 @@
+# Public API approval baseline
+# Assembly: RunicTranslations.Generator
+# Generated deterministically; intentional changes require baseline review.
+# Nullability metadata is intentionally normalized away; readonly/init/ref/constraints and contract attributes are retained.
+
+type sealed class RunicTranslations.Generator.TranslationsGenerator : Microsoft.CodeAnalysis.IIncrementalGenerator [Microsoft.CodeAnalysis.GeneratorAttribute("C#", [])]
+  ctor RunicTranslations.Generator.TranslationsGenerator()
+  method System.Void Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context)

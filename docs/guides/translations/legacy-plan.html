@@ -4,21 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="Standalone implementation plan for generated, validated, Native-AOT-safe text resources for .NET and web frontends.">
-  <title>CsWebUi.TextResources — Standalone Implementation Plan</title>
+  <meta name="description" content="Standalone implementation plan for generated, validated, Native-AOT-safe translations for .NET and web frontends.">
+  <title>CsWebUi.Translations — Standalone Implementation Plan</title>
   <style>
     :root{--ink:#fff9ed;--muted:#c8baa3;--faint:#8c7e68;--page:#130f08;--surface:#241c10;--surface2:#302516;--line:#514027;--gold:#f5c96d;--orange:#ff9e64;--green:#92d490;--red:#ff8c86;--blue:#8fc6ff;--radius:18px;--content:1180px}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:var(--ink);background:radial-gradient(circle at 10% -8%,rgba(245,201,109,.16),transparent 34rem),radial-gradient(circle at 92% 3%,rgba(255,158,100,.1),transparent 32rem),var(--page);font:16px/1.65 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:var(--orange);text-decoration:none}a:hover{text-decoration:underline}code,pre{font-family:"Cascadia Code",Consolas,monospace}code{padding:.12rem .35rem;border:1px solid rgba(245,201,109,.2);border-radius:6px;color:#ffe8b9;background:rgba(245,201,109,.08)}pre{margin:1rem 0 0;padding:1.15rem 1.25rem;overflow:auto;border:1px solid var(--line);border-radius:14px;color:#ffebc6;background:#100c06;line-height:1.55;tab-size:2}pre code{padding:0;border:0;background:none}h1,h2,h3,h4{margin:0;line-height:1.15;letter-spacing:-.025em}h1{max-width:980px;font-size:clamp(2.8rem,7vw,5.7rem)}h2{font-size:clamp(2rem,4vw,3.15rem)}h3{font-size:1.2rem}h4{margin-top:1rem;font-size:1rem}p{margin:.65rem 0 0}ul,ol{padding-left:1.25rem}li+li{margin-top:.4rem}.skip{position:fixed;top:.7rem;left:.7rem;z-index:50;padding:.55rem .8rem;transform:translateY(-150%);border-radius:8px;color:var(--page);background:var(--gold)}.skip:focus{transform:none}.topbar{position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(81,64,39,.85);background:rgba(19,15,8,.9);backdrop-filter:blur(16px)}.topbar-inner{display:flex;align-items:center;justify-content:space-between;gap:1.4rem;width:min(calc(100% - 2rem),var(--content));min-height:64px;margin:auto}.brand{display:flex;align-items:center;gap:.7rem;color:var(--ink);font-weight:760}.mark{display:grid;width:32px;height:32px;place-items:center;border-radius:9px;color:var(--page);background:linear-gradient(135deg,var(--gold),var(--orange))}nav{display:flex;gap:1rem;overflow-x:auto;white-space:nowrap}nav a{color:var(--muted);font-size:.84rem}nav a:hover{color:var(--ink);text-decoration:none}.wrap{width:min(calc(100% - 2rem),var(--content));margin:auto}.hero{padding:clamp(5rem,11vw,8.5rem) 0 5rem}.eyebrow{display:inline-flex;align-items:center;gap:.55rem;margin-bottom:1.2rem;color:var(--gold);font-size:.8rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.eyebrow:before{width:24px;height:2px;content:"";background:var(--gold)}.lede{max-width:900px;margin-top:1.4rem;color:var(--muted);font-size:clamp(1.08rem,2vw,1.3rem)}.pills{display:flex;flex-wrap:wrap;gap:.65rem;margin-top:2rem}.pill{padding:.42rem .7rem;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:rgba(36,28,16,.76);font-size:.84rem}.pill strong{color:var(--ink)}section{padding:5rem 0;scroll-margin-top:64px}section+section{border-top:1px solid rgba(81,64,39,.56)}.section-head{display:grid;grid-template-columns:.65fr 1.35fr;gap:2rem;margin-bottom:2.4rem}.section-head p{max-width:780px;color:var(--muted);font-size:1.05rem}.kicker{margin-bottom:.5rem;color:var(--orange);font-size:.78rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1rem}.card{grid-column:span 4;padding:1.35rem;border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(145deg,rgba(48,37,22,.94),rgba(36,28,16,.94))}.card.wide{grid-column:span 6}.card.full{grid-column:1/-1}.card p,.card li{color:var(--muted)}.number{display:grid;width:2.1rem;height:2.1rem;margin-bottom:1rem;place-items:center;border:1px solid rgba(245,201,109,.34);border-radius:9px;color:var(--gold);background:rgba(245,201,109,.09);font-size:.78rem;font-weight:800}.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}table{width:100%;border-collapse:collapse}th,td{padding:1rem 1.1rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--faint);background:rgba(19,15,8,.35);font-size:.77rem;letter-spacing:.08em;text-transform:uppercase}td{color:var(--muted)}td:first-child{color:var(--ink);font-weight:720}tr:last-child td{border-bottom:0}.callout{margin-top:1rem;padding:1rem 1.15rem;border-left:3px solid var(--gold);border-radius:0 12px 12px 0;color:var(--muted);background:rgba(245,201,109,.09)}.callout strong{color:var(--ink)}.danger{border-left-color:var(--red);background:rgba(255,140,134,.08)}.good{border-left-color:var(--green);background:rgba(146,212,144,.08)}.phase-list{display:grid;gap:1rem}.phase{display:grid;grid-template-columns:88px minmax(0,1fr) 170px;gap:1.2rem;padding:1.3rem;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.phase-id{color:var(--gold);font-size:.78rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.phase p,.phase li{color:var(--muted)}.effort{padding-left:1rem;border-left:1px solid var(--line);color:var(--muted)}.effort strong{display:block;color:var(--ink)}.gate{display:block;margin-top:.65rem;color:var(--green);font-size:.82rem;font-weight:700}.tag{display:inline-block;margin:.15rem .25rem .15rem 0;padding:.15rem .45rem;border:1px solid var(--line);border-radius:999px;color:var(--blue);font-size:.76rem}.checklist{columns:2;column-gap:2rem}.checklist li{break-inside:avoid;color:var(--muted)}footer{padding:3rem 0 4rem;border-top:1px solid var(--line);color:var(--faint)}.footer-inner{display:flex;justify-content:space-between;gap:1rem}button{padding:.55rem .8rem;border:1px solid var(--line);border-radius:9px;color:var(--muted);background:var(--surface);cursor:pointer}button:hover{color:var(--ink);border-color:var(--gold)}@media(max-width:920px){nav{display:none}.section-head{grid-template-columns:1fr}.card,.card.wide{grid-column:1/-1}.phase{grid-template-columns:1fr}.effort{padding:0;border:0}.checklist{columns:1}}@media(max-width:560px){.footer-inner{flex-direction:column}}@media print{:root{--ink:#111827;--muted:#334155;--faint:#64748b;--page:white;--surface:white;--line:#cbd5e1}body{background:white;font-size:10pt}.topbar,button{display:none}.hero,section{padding:2rem 0}.card,.table-wrap,.phase,pre{break-inside:avoid}a{color:#1d4ed8}}
   </style>
 </head>
 <body>
-  <a class="skip" href="#main">Skip to text-resource plan</a>
-  <header class="topbar"><div class="topbar-inner"><a class="brand" href="library-candidates.html"><span class="mark">T</span><span>CsWebUi.TextResources</span></a><nav aria-label="Text-resource sections"><a href="#scope">Scope</a><a href="#files">Files</a><a href="#formatting">Formatting</a><a href="#generator">Generator</a><a href="#api">API</a><a href="#outputs">Outputs</a><a href="#diagnostics">Diagnostics</a><a href="#delivery">Delivery</a></nav></div></header>
+  <a class="skip" href="#main">Skip to translation plan</a>
+  <header class="topbar"><div class="topbar-inner"><a class="brand" href="library-candidates.html"><span class="mark">T</span><span>CsWebUi.Translations</span></a><nav aria-label="Text-resource sections"><a href="#scope">Scope</a><a href="#files">Files</a><a href="#formatting">Formatting</a><a href="#generator">Generator</a><a href="#api">API</a><a href="#outputs">Outputs</a><a href="#diagnostics">Diagnostics</a><a href="#delivery">Delivery</a></nav></div></header>
   <main id="main">
     <div class="hero wrap">
       <div class="eyebrow">Standalone implementation specification · draft 2</div>
       <h1>Typed text at compile time. Deterministic locale snapshots at runtime.</h1>
-      <p class="lede">This document is the complete build plan for an independent, open-source text-resource compiler and runtime. It requires no access to any prior application, private repository, or design discussion. Implement the JSON schema, incremental generator, runtime, web artifacts, diagnostics and tests described here as the normative 1.0 contract.</p>
-      <div class="pills"><span class="pill"><strong>Working packages</strong> CsWebUi.TextResources.*</span><span class="pill"><strong>Input</strong> UTF-8 JSON</span><span class="pill"><strong>Primary output</strong> typed C#</span><span class="pill"><strong>Optional output</strong> TypeScript + template manifest</span><span class="pill"><strong>Runtime</strong> trimming + Native AOT</span><span class="pill"><strong>Updated</strong> 17 July 2026</span></div>
+      <p class="lede">This document is the complete build plan for an independent, open-source translation compiler and runtime. It requires no access to any prior application, private repository, or design discussion. Implement the JSON schema, incremental generator, runtime, web artifacts, diagnostics and tests described here as the normative 1.0 contract.</p>
+      <div class="pills"><span class="pill"><strong>Working packages</strong> CsWebUi.Translations.*</span><span class="pill"><strong>Input</strong> UTF-8 JSON</span><span class="pill"><strong>Primary output</strong> typed C#</span><span class="pill"><strong>Optional output</strong> TypeScript + template manifest</span><span class="pill"><strong>Runtime</strong> trimming + Native AOT</span><span class="pill"><strong>Updated</strong> 17 July 2026</span></div>
     </div>
 
     <section id="scope"><div class="wrap">
@@ -41,14 +41,14 @@
 &lt;/ItemGroup&gt;
 
 &lt;PropertyGroup&gt;
-  &lt;TextResourcesEmitTypeScript&gt;true&lt;/TextResourcesEmitTypeScript&gt;
-  &lt;TextResourcesWebOutputPath&gt;$(IntermediateOutputPath)text-resources/web&lt;/TextResourcesWebOutputPath&gt;
+  &lt;TranslationsEmitTypeScript&gt;true&lt;/TranslationsEmitTypeScript&gt;
+  &lt;TranslationsWebOutputPath&gt;$(IntermediateOutputPath)translations/web&lt;/TranslationsWebOutputPath&gt;
 &lt;/PropertyGroup&gt;</code></pre>
       <p class="callout"><strong>No filename discovery:</strong> the package supplies MSBuild targets that convert these item types into Roslyn <code>AdditionalFiles</code> with metadata. A file not included by one of these items is invisible to the compiler. This keeps design-time, command-line and CI builds identical.</p>
 
       <h3 style="margin-top:2rem">Catalog manifest: schema version 1</h3>
       <pre><code>{
-  "$schema": "https://schemas.cswebui.dev/text-resources/catalog-v1.schema.json",
+  "$schema": "https://schemas.cswebui.dev/translations/catalog-v1.schema.json",
   "schemaVersion": 1,
   "catalog": "app",
   "code": {
@@ -95,7 +95,7 @@
 
       <h3 style="margin-top:2rem">Resource document: schema version 1</h3>
       <pre><code>{
-  "$schema": "https://schemas.cswebui.dev/text-resources/resources-v1.schema.json",
+  "$schema": "https://schemas.cswebui.dev/translations/resources-v1.schema.json",
   "schemaVersion": 1,
   "catalog": "app",
   "locale": "en",
@@ -163,10 +163,10 @@ name         := [A-Za-z_][A-Za-z0-9_]*</code></pre><p>A single unmatched brace, 
     <section id="generator"><div class="wrap">
       <div class="section-head"><div><div class="kicker">04 · Compiler architecture</div><h2>One pure kernel, three build surfaces</h2></div><p>The Roslyn generator emits C# only. A deterministic build task and CLI emit files outside the compilation, because source generators must not write arbitrary files. All surfaces call the same parser, validator and model builder.</p></div>
       <div class="table-wrap"><table><thead><tr><th>Component</th><th>Responsibility</th><th>Constraints</th></tr></thead><tbody>
-        <tr><td><code>CsWebUi.TextResources.Compiler</code></td><td>Internal parser, source-span model, schema validation, locale/layer merge, pattern compiler, diagnostics, canonical intermediate representation (IR), C#/web renderers.</td><td>Pure inputs/outputs; no environment, current directory, clock, network or reflection. Target <code>net10.0</code>.</td></tr>
-        <tr><td><code>CsWebUi.TextResources.Generator</code></td><td><code>IIncrementalGenerator</code>; maps AdditionalFiles and analyzer options to compiler inputs, reports Roslyn diagnostics and adds generated C# sources.</td><td>Target <code>net10.0</code>; packaged under <code>analyzers/dotnet/cs</code>; no runtime dependency copied to apps.</td></tr>
-        <tr><td><code>CsWebUi.TextResources.Build</code></td><td>MSBuild targets/task for TypeScript, JSON and template artifacts under <code>obj</code>; declares Inputs/Outputs and exposes generated assets as items.</td><td>Never edits source files. Output root must resolve beneath an explicit intermediate/output directory.</td></tr>
-        <tr><td><code>runic-textresources</code></td><td>CLI commands <code>validate</code>, <code>generate</code>, <code>verify</code> and <code>schema</code>.</td><td>Same diagnostics and bytes as build task; response-file support; deterministic exit codes.</td></tr>
+        <tr><td><code>CsWebUi.Translations.Compiler</code></td><td>Internal parser, source-span model, schema validation, locale/layer merge, pattern compiler, diagnostics, canonical intermediate representation (IR), C#/web renderers.</td><td>Pure inputs/outputs; no environment, current directory, clock, network or reflection. Target <code>net10.0</code>.</td></tr>
+        <tr><td><code>CsWebUi.Translations.Generator</code></td><td><code>IIncrementalGenerator</code>; maps AdditionalFiles and analyzer options to compiler inputs, reports Roslyn diagnostics and adds generated C# sources.</td><td>Target <code>net10.0</code>; packaged under <code>analyzers/dotnet/cs</code>; no runtime dependency copied to apps.</td></tr>
+        <tr><td><code>CsWebUi.Translations.Build</code></td><td>MSBuild targets/task for TypeScript, JSON and template artifacts under <code>obj</code>; declares Inputs/Outputs and exposes generated assets as items.</td><td>Never edits source files. Output root must resolve beneath an explicit intermediate/output directory.</td></tr>
+        <tr><td><code>runic-translations</code></td><td>CLI commands <code>validate</code>, <code>generate</code>, <code>verify</code> and <code>schema</code>.</td><td>Same diagnostics and bytes as build task; response-file support; deterministic exit codes.</td></tr>
       </tbody></table></div>
 
       <h3 style="margin-top:2rem">Incremental generator pipeline</h3>
@@ -292,7 +292,7 @@ public static class AppTextCatalog
 // Generated when the optional DI adapter is referenced.
 public static class AppTextServiceCollectionExtensions
 {
-    public static IServiceCollection AddAppTextResources(
+    public static IServiceCollection AddAppTranslations(
         this IServiceCollection services,
         Action&lt;TextResourceOptions&gt;? configure = null);
 }</code></pre>
@@ -409,30 +409,30 @@ export function formatText&lt;K extends AppTextKey&gt;(
     web-artifact-v1.schema.json
     template-manifest-v1.schema.json
   src/
-    CsWebUi.TextResources/                 # runtime, net10.0+
-    CsWebUi.TextResources.DependencyInjection/ # optional Microsoft DI adapter
-    CsWebUi.TextResources.Compiler/        # internal shared compiler, net10.0
-    CsWebUi.TextResources.Generator/       # Roslyn analyzer, net10.0
-    CsWebUi.TextResources.Build/           # task + props/targets
-    runic-textresources/                  # tool, net10.0+
+    CsWebUi.Translations/                 # runtime, net10.0+
+    CsWebUi.Translations.DependencyInjection/ # optional Microsoft DI adapter
+    CsWebUi.Translations.Compiler/        # internal shared compiler, net10.0
+    CsWebUi.Translations.Generator/       # Roslyn analyzer, net10.0
+    CsWebUi.Translations.Build/           # task + props/targets
+    runic-translations/                  # tool, net10.0+
   test/
-    CsWebUi.TextResources.Compiler.Tests/
-    CsWebUi.TextResources.Generator.Tests/
-    CsWebUi.TextResources.Runtime.Tests/
-    CsWebUi.TextResources.Build.Tests/
-    CsWebUi.TextResources.PackageTests/
-    CsWebUi.TextResources.AotTests/
-    CsWebUi.TextResources.TypeScript.Tests/
+    CsWebUi.Translations.Compiler.Tests/
+    CsWebUi.Translations.Generator.Tests/
+    CsWebUi.Translations.Runtime.Tests/
+    CsWebUi.Translations.Build.Tests/
+    CsWebUi.Translations.PackageTests/
+    CsWebUi.Translations.AotTests/
+    CsWebUi.Translations.TypeScript.Tests/
   samples/
     ConsoleCatalog/
     HostedCatalog/
     BrowserCatalog/</code></pre>
       <div class="table-wrap" style="margin-top:1rem"><table><thead><tr><th>Published package/tool</th><th>Contents and dependency policy</th></tr></thead><tbody>
-        <tr><td><code>CsWebUi.TextResources</code></td><td>Runtime contracts and generated-provider helpers. No Roslyn, JSON serializer or Microsoft DI dependency. Target initial minimum <code>net10.0</code>.</td></tr>
-        <tr><td><code>CsWebUi.TextResources.DependencyInjection</code></td><td>Optional adapter for Microsoft.Extensions.DependencyInjection. Depends on runtime abstractions only.</td></tr>
-        <tr><td><code>CsWebUi.TextResources.Generator</code></td><td>Analyzer package containing generator and private compiler dependencies. Marked <code>PrivateAssets=all</code> in examples.</td></tr>
-        <tr><td><code>CsWebUi.TextResources.Build</code></td><td>Props, targets and task for non-C# artifacts. May be combined with the generator package before 1.0 if consumer ergonomics are demonstrably better.</td></tr>
-        <tr><td><code>runic-textresources</code></td><td>.NET tool for validate/generate/verify/schema; its implementation packages are not runtime dependencies.</td></tr>
+        <tr><td><code>CsWebUi.Translations</code></td><td>Runtime contracts and generated-provider helpers. No Roslyn, JSON serializer or Microsoft DI dependency. Target initial minimum <code>net10.0</code>.</td></tr>
+        <tr><td><code>CsWebUi.Translations.DependencyInjection</code></td><td>Optional adapter for Microsoft.Extensions.DependencyInjection. Depends on runtime abstractions only.</td></tr>
+        <tr><td><code>CsWebUi.Translations.Generator</code></td><td>Analyzer package containing generator and private compiler dependencies. Marked <code>PrivateAssets=all</code> in examples.</td></tr>
+        <tr><td><code>CsWebUi.Translations.Build</code></td><td>Props, targets and task for non-C# artifacts. May be combined with the generator package before 1.0 if consumer ergonomics are demonstrably better.</td></tr>
+        <tr><td><code>runic-translations</code></td><td>.NET tool for validate/generate/verify/schema; its implementation packages are not runtime dependencies.</td></tr>
       </tbody></table></div>
     </div></section>
 
@@ -507,6 +507,6 @@ export function formatText&lt;K extends AppTextKey&gt;(
       </ul>
     </div></section>
   </main>
-  <footer><div class="wrap footer-inner"><div>CsWebUi.TextResources standalone plan · Draft 2 · 17 July 2026 · <a href="library-candidates.html">Return to candidates</a></div><button type="button" onclick="window.print()">Print / save as PDF</button></div></footer>
+  <footer><div class="wrap footer-inner"><div>CsWebUi.Translations standalone plan · Draft 2 · 17 July 2026 · <a href="library-candidates.html">Return to candidates</a></div><button type="button" onclick="window.print()">Print / save as PDF</button></div></footer>
 </body>
 </html>

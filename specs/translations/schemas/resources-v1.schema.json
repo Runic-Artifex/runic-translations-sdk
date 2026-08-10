@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RunicTextResources Text Resources Document v1",
-  "description": "Normative schema for a RunicTextResources Text Resources resource document with schemaVersion 1.",
+  "title": "Runic Translations Document v1",
+  "description": "Normative schema for a Runic Translations resource document with schemaVersion 1.",
   "type": "object",
   "required": [
     "schemaVersion",

@@ -1,6 +1,6 @@
 # C++ feasibility backend
 
-`--emit-cpp` (or `TextResourcesEmitCpp`) emits a deterministic C++20 header/source
+`--emit-cpp` (or `TranslationsEmitCpp`) emits a deterministic C++20 header/source
 pair from the canonical compiler AST. It provides typed argument structs,
 injective message function names, compiled locale branches, scalar formatting,
 and initial selector support. The fixture compiles with Clang under `-Werror`.

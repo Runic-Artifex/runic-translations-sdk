@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { build } from "vite";
-import { runicTextResources } from "../index.js";
+import { runicTranslations } from "../index.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,13 +28,13 @@ test("resolves generated entrypoints and declares watch inputs", async () => {
   }));
   const source = join(root, "en.json");
   await writeFile(source, "{}");
-  const plugin = runicTextResources({ manifest, sourceFiles: [source] });
+  const plugin = runicTranslations({ manifest, sourceFiles: [source] });
   const watched = [];
   await plugin.buildStart.call({ addWatchFile(path) { watched.push(path); } });
   assert.ok(watched.includes(manifest));
   assert.ok(watched.includes(source));
-  const id = await plugin.resolveId("virtual:runic-text-resources/app");
-  assert.equal(id, "\0virtual:runic-text-resources/app/messages");
+  const id = await plugin.resolveId("virtual:runic-translations/app");
+  assert.equal(id, "\0virtual:runic-translations/app/messages");
   const module = await plugin.load(id);
   assert.match(module, /export \* from .*app\.esm\/messages\.js/);
 });
@@ -48,8 +48,8 @@ test("rejects manifest paths that escape the generated root", async () => {
     entrypoints: { messages: "../messages.js", runtime: "runtime.js" },
     assets: [],
   }));
-  const plugin = runicTextResources({ manifest });
-  await assert.rejects(() => plugin.resolveId("virtual:runic-text-resources/app"), /escapes/);
+  const plugin = runicTranslations({ manifest });
+  await assert.rejects(() => plugin.resolveId("virtual:runic-translations/app"), /escapes/);
 });
 
 test("Vite production build tree-shakes unrelated generated messages", async () => {
@@ -74,12 +74,12 @@ test("Vite production build tree-shakes unrelated generated messages", async () 
       ],
     }));
     const entry = join(root, "main.js");
-    await writeFile(entry, "import { used } from 'virtual:runic-text-resources/app'; export const result = used();\n");
+    await writeFile(entry, "import { used } from 'virtual:runic-translations/app'; export const result = used();\n");
     const outDir = join(root, "dist");
     await build({
       configFile: false,
       logLevel: "silent",
-      plugins: [runicTextResources({ manifest })],
+      plugins: [runicTranslations({ manifest })],
       build: { outDir, minify: false, lib: { entry, formats: ["es"], fileName: () => "bundle.js" } },
     });
     const bundle = await readFile(join(outDir, "bundle.js"), "utf8");
@@ -105,9 +105,9 @@ test("source changes invalidate every loaded Runic virtual module for HMR", asyn
     }));
     const source = join(root, "en.json");
     await writeFile(source, "{}\n");
-    const plugin = runicTextResources({ manifest, sourceFiles: [source] });
+    const plugin = runicTranslations({ manifest, sourceFiles: [source] });
     await plugin.buildStart.call({ addWatchFile() {} });
-    const ids = ["messages", "runtime", "transport", "dynamic"].map(kind => `\0virtual:runic-text-resources/app/${kind}`);
+    const ids = ["messages", "runtime", "transport", "dynamic"].map(kind => `\0virtual:runic-translations/app/${kind}`);
     const modules = new Map(ids.map(id => [id, { id }]));
     const invalidated = [];
     const result = await plugin.handleHotUpdate({

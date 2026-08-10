@@ -1,15 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, resolve, sep } from "node:path";
 
-const prefix = "\0virtual:runic-text-resources/";
+const prefix = "\0virtual:runic-translations/";
 
 /**
  * Exposes compiler-generated ESM without coupling messages to Vite or a UI framework.
  * @param {{ manifest: string, sourceFiles?: readonly string[] }} options
  */
-export function runicTextResources(options) {
+export function runicTranslations(options) {
   if (!options || typeof options.manifest !== "string" || options.manifest.length === 0)
-    throw new TypeError("runicTextResources requires a manifest path.");
+    throw new TypeError("runicTranslations requires a manifest path.");
 
   const manifestPath = resolve(options.manifest);
   const sourceFiles = Object.freeze((options.sourceFiles ?? []).map(path => resolve(path)));
@@ -38,7 +38,7 @@ export function runicTextResources(options) {
   }
 
   return {
-    name: "runic-text-resources",
+    name: "runic-translations",
     enforce: "pre",
 
     async buildStart() {
@@ -50,13 +50,13 @@ export function runicTextResources(options) {
 
     async resolveId(id) {
       if (!entries) await refresh();
-      if (id === `virtual:runic-text-resources/${catalog}` || id === `virtual:runic-text-resources/${catalog}/messages`)
+      if (id === `virtual:runic-translations/${catalog}` || id === `virtual:runic-translations/${catalog}/messages`)
         return virtualId("messages");
-      if (id === `virtual:runic-text-resources/${catalog}/runtime`)
+      if (id === `virtual:runic-translations/${catalog}/runtime`)
         return virtualId("runtime");
-      if (id === `virtual:runic-text-resources/${catalog}/transport`)
+      if (id === `virtual:runic-translations/${catalog}/transport`)
         return virtualId("transport");
-      if (id === `virtual:runic-text-resources/${catalog}/dynamic`)
+      if (id === `virtual:runic-translations/${catalog}/dynamic`)
         return virtualId("dynamic");
       return null;
     },

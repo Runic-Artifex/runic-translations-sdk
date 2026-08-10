@@ -7,16 +7,24 @@ on:
       - .github/workflows/public-release.yml
       - Directory.Build.props
       - eng/pack.sh
+      - eng/publish-public-npm.sh
+      - eng/publish-public-nuget.sh
+      - eng/validate-public-npm.mjs
       - dotnet/**/*.csproj
+      - web/**
   workflow_dispatch:
     inputs:
       version:
         description: Exact SemVer package version
         required: true
-        default: 0.1.0-preview.2.1
         type: string
       publish_public:
-        description: Publish the verified artifacts to nuget.org
+        description: Publish the verified artifacts to nuget.org and npmjs.org
+        required: true
+        default: false
+        type: boolean
+      npm_bootstrap:
+        description: Use the one-time npm bootstrap token
         required: true
         default: false
         type: boolean
@@ -27,16 +35,15 @@ on:
 
 permissions:
   contents: read
-  packages: read
 
 concurrency:
-  group: public-release-${{ inputs.version }}
+  group: public-release-${{ inputs.version || github.sha }}
   cancel-in-progress: false
 
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
-  PACKAGE_VERSION: ${{ inputs.version || format('0.1.0-preview.{0}.{1}', github.run_number, github.run_attempt) }}
+  PACKAGE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '0.0.0-pr-validation' }}
 
 jobs:
   package:
@@ -70,6 +77,13 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
       - name: Run verification pipeline
         run: ./eng/verify.sh
 
@@ -77,7 +91,16 @@ jobs:
         run: git diff --exit-code
 
       - name: Create packages
-        run: ./eng/pack.sh "$PACKAGE_VERSION" "$RUNNER_TEMP/packages"
+        run: |
+          mkdir -p "$RUNNER_TEMP/packages"
+          ./eng/pack.sh "$PACKAGE_VERSION" "$RUNNER_TEMP/packages"
+          npm version "$PACKAGE_VERSION" --no-git-tag-version --allow-same-version --prefix web
+          npm pkg set \
+            "gitHead=$GITHUB_SHA" \
+            "publishConfig.registry=https://registry.npmjs.org" \
+            "publishConfig.access=public" \
+            --prefix web
+          npm pack "$GITHUB_WORKSPACE/web" --pack-destination "$RUNNER_TEMP/packages"
 
       - name: Validate public package contract
         uses: Runic-Artifex/.github/.github/actions/validate-release-artifacts@main
@@ -88,9 +111,16 @@ jobs:
           repository-commit: ${{ github.sha }}
           expected-nuget-count: "7"
 
+      - name: Validate public npm package contract
+        run: >-
+          node ./eng/validate-public-npm.mjs
+          "$PACKAGE_VERSION"
+          "$RUNNER_TEMP/packages"
+          "$GITHUB_SHA"
+
       - name: Record package digests
         working-directory: ${{ runner.temp }}/packages
-        run: sha256sum ./*.nupkg > SHA256SUMS
+        run: sha256sum ./*.nupkg ./*.tgz > SHA256SUMS
 
       - name: Upload release candidate
         uses: actions/upload-artifact@v7
@@ -101,19 +131,30 @@ jobs:
           retention-days: 14
 
   publish:
-    name: Publish to nuget.org
+    name: Publish to nuget.org and npmjs.org
     if: ${{ inputs.publish_public && inputs.confirmation == 'PUBLISH PUBLIC' && github.ref == 'refs/heads/main' }}
     needs: package
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment: public-release
     permissions:
       contents: read
       id-token: write
     steps:
+      - name: Check out release plumbing
+        uses: actions/checkout@v7
+
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.18.0
+          registry-url: https://registry.npmjs.org
+          scope: "@runic-artifex"
 
       - name: Download release candidate
         uses: actions/download-artifact@v8
@@ -125,19 +166,35 @@ jobs:
         working-directory: ${{ runner.temp }}/packages
         run: sha256sum --check SHA256SUMS
 
+      - name: Preflight npm publication state
+        run: ./eng/publish-public-npm.sh "$RUNNER_TEMP/packages" "$PACKAGE_VERSION" --preflight-only
+
+      - name: Preflight NuGet publication state
+        run: ./eng/publish-public-nuget.sh "$RUNNER_TEMP/packages" "$PACKAGE_VERSION" "$GITHUB_SHA" --preflight-only
+
+      - name: Validate npm bootstrap credential
+        if: ${{ inputs.npm_bootstrap }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: test -n "$NODE_AUTH_TOKEN"
+
       - name: Sign in to nuget.org with trusted publishing
         id: nuget-login
         uses: NuGet/login@v1
         with:
           user: ${{ vars.NUGET_USER }}
 
-      - name: Publish packages
+      - name: Publish NuGet packages
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-        run: |
-          set -euo pipefail
-          for package in "$RUNNER_TEMP"/packages/*.nupkg; do
-            dotnet nuget push "$package" \
-              --source https://api.nuget.org/v3/index.json \
-              --api-key "$NUGET_API_KEY"
-          done
+        run: ./eng/publish-public-nuget.sh "$RUNNER_TEMP/packages" "$PACKAGE_VERSION" "$GITHUB_SHA"
+
+      - name: Publish npm package with bootstrap token
+        if: ${{ inputs.npm_bootstrap }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: ./eng/publish-public-npm.sh "$RUNNER_TEMP/packages" "$PACKAGE_VERSION"
+
+      - name: Publish npm package with trusted publishing
+        if: ${{ !inputs.npm_bootstrap }}
+        run: ./eng/publish-public-npm.sh "$RUNNER_TEMP/packages" "$PACKAGE_VERSION"

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "catalog": "patterns",
   "code": {
-    "namespace": "RunicTextResources.Examples.Localization",
+    "namespace": "RunicTranslations.Examples.Localization",
     "className": "PatternText"
   },
   "defaultLocale": "en",

@@ -1,16 +1,16 @@
 <Project>
-  <PropertyGroup Condition="'$(RunicTextResourcesShippingProject)' == 'true'">
-    <EnableTrimAnalyzer Condition="'$(EnableTrimAnalyzer)' == '' and ('$(RunicTextResourcesVerificationBuild)' == 'true' or '$(PublishTrimmed)' == 'true' or '$(PublishAot)' == 'true')">true</EnableTrimAnalyzer>
+  <PropertyGroup Condition="'$(RunicTranslationsShippingProject)' == 'true'">
+    <EnableTrimAnalyzer Condition="'$(EnableTrimAnalyzer)' == '' and ('$(RunicTranslationsVerificationBuild)' == 'true' or '$(PublishTrimmed)' == 'true' or '$(PublishAot)' == 'true')">true</EnableTrimAnalyzer>
     <EnableTrimAnalyzer Condition="'$(EnableTrimAnalyzer)' == ''">false</EnableTrimAnalyzer>
-    <EnableAotAnalyzer Condition="'$(EnableAotAnalyzer)' == '' and ('$(RunicTextResourcesVerificationBuild)' == 'true' or '$(PublishAot)' == 'true')">true</EnableAotAnalyzer>
+    <EnableAotAnalyzer Condition="'$(EnableAotAnalyzer)' == '' and ('$(RunicTranslationsVerificationBuild)' == 'true' or '$(PublishAot)' == 'true')">true</EnableAotAnalyzer>
     <EnableAotAnalyzer Condition="'$(EnableAotAnalyzer)' == ''">false</EnableAotAnalyzer>
     <IsTrimmable>true</IsTrimmable>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
-  <Target Name="ValidateRunicTextResourcesBuildMode" BeforeTargets="PrepareForBuild">
+  <Target Name="ValidateRunicTranslationsBuildMode" BeforeTargets="PrepareForBuild">
     <Error
-      Condition="'$(RunicTextResourcesBuildMode)' != 'Development' and '$(RunicTextResourcesBuildMode)' != 'Verification'"
-      Text="RunicTextResourcesBuildMode must be either Development or Verification." />
+      Condition="'$(RunicTranslationsBuildMode)' != 'Development' and '$(RunicTranslationsBuildMode)' != 'Verification'"
+      Text="RunicTranslationsBuildMode must be either Development or Verification." />
   </Target>
 </Project>

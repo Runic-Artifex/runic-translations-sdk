@@ -1,8 +1,0 @@
-# Public API approval baseline
-# Assembly: RunicTextResources.Generator
-# Generated deterministically; intentional changes require baseline review.
-# Nullability metadata is intentionally normalized away; readonly/init/ref/constraints and contract attributes are retained.
-
-type sealed class RunicTextResources.Generator.TextResourcesGenerator : Microsoft.CodeAnalysis.IIncrementalGenerator [Microsoft.CodeAnalysis.GeneratorAttribute("C#", [])]
-  ctor RunicTextResources.Generator.TextResourcesGenerator()
-  method System.Void Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context)

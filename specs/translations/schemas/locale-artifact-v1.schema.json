@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RunicTextResources Text Resources Locale Artifact v1",
+  "title": "Runic Translations Locale Artifact v1",
   "description": "Normative wire schema for a resolved locale artifact with artifactVersion 1. It is also the structural payload accepted by the version 1 external-pack reader.",
   "type": "object",
   "required": [

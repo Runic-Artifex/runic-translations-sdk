@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://runic-artifex.dev/schemas/text-resources/locale-artifact-v2.schema.json",
-  "title": "Runic Text Resources resolved locale artifact v2",
+  "$id": "https://runic-artifex.dev/schemas/translations/locale-artifact-v2.schema.json",
+  "title": "Runic Translations resolved locale artifact v2",
   "type": "object",
   "required": ["artifactVersion", "messageGrammarVersion", "catalog", "locale", "contractFingerprint", "messages"],
   "properties": {

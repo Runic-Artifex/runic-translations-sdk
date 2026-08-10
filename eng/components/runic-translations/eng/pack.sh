@@ -20,13 +20,13 @@ fi
 mkdir -p "$output_directory"
 
 package_projects=(
-  "$repository_root/dotnet/src/RunicTextResources/RunicTextResources.csproj"
-  "$repository_root/dotnet/src/RunicTextResources.Compiler/RunicTextResources.Compiler.csproj"
-  "$repository_root/dotnet/src/RunicTextResources.Authoring/RunicTextResources.Authoring.csproj"
-  "$repository_root/dotnet/src/RunicTextResources.Generator/RunicTextResources.Generator.csproj"
-  "$repository_root/dotnet/src/RunicTextResources.Build/RunicTextResources.Build.csproj"
-  "$repository_root/dotnet/tools/RunicTextResources.Tool/RunicTextResources.Tool.csproj"
-  "$repository_root/dotnet/templates/RunicTextResources.Templates/RunicTextResources.Templates.csproj"
+  "$repository_root/dotnet/src/RunicTranslations/RunicTranslations.csproj"
+  "$repository_root/dotnet/src/RunicTranslations.Compiler/RunicTranslations.Compiler.csproj"
+  "$repository_root/dotnet/src/RunicTranslations.Authoring/RunicTranslations.Authoring.csproj"
+  "$repository_root/dotnet/src/RunicTranslations.Generator/RunicTranslations.Generator.csproj"
+  "$repository_root/dotnet/src/RunicTranslations.Build/RunicTranslations.Build.csproj"
+  "$repository_root/dotnet/tools/RunicTranslations.Tool/RunicTranslations.Tool.csproj"
+  "$repository_root/dotnet/templates/RunicTranslations.Templates/RunicTranslations.Templates.csproj"
 )
 
 for project in "${package_projects[@]}"; do
@@ -34,6 +34,6 @@ for project in "${package_projects[@]}"; do
     -p:PackageVersion="$package_version" \
     -p:RepositoryCommit="$repository_commit" \
     -p:ContinuousIntegrationBuild=true \
-    -p:RunicTextResourcesBuildMode=Verification \
+    -p:RunicTranslationsBuildMode=Verification \
     -o "$output_directory"
 done

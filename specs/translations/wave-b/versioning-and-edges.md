@@ -23,7 +23,7 @@ Changing generated namespace/class or catalog ID is an explicit source migration
 
 ## Cross-owner edges
 
-Text Resources owns the bytes and schemas for locale, template, and asset
+Runic Translations owns the bytes and schemas for locale, template, and asset
 metadata. Template, browser, and hosting systems may consume these versioned
 artifacts but do not redefine their properties, ordering, hash, or compatibility
 rules. This Wave does not edit template, web, or Hosting projects.
@@ -35,7 +35,7 @@ template code, and dynamic-key policy remain owned by the template system.
 
 The asset manifest lists relative path, complete-byte SHA-256, byte length,
 media type, and optional locale. A host may aggregate or copy listed assets but
-must verify their bytes and must not synthesize a different Text Resources
+must verify their bytes and must not synthesize a different Runic Translations
 fingerprint. Host URL routing and deployment policy remain host-owned.
 
 The TypeScript filename and type projection are reserved edge artifacts. A full
