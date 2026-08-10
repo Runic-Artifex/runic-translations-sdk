@@ -1104,14 +1104,10 @@ public static class TranslationCompiler
     }
 
     private static bool SupportsBuiltInPlural(string locale, bool ordinal)
-    {
-        string language = locale.Split('-')[0].ToLowerInvariant();
-        if (ordinal) return language == "en";
-        return language is "en" or "de" or "es" or "fr" or "it" or "nl" or "sv" or "no" or "da";
-    }
+        => ordinal ? TranslationCapabilityRegistry.SupportsOrdinal(locale) : TranslationCapabilityRegistry.SupportsCardinal(locale);
 
     private static bool SupportsRelativeTime(string locale) =>
-        locale.Split('-')[0].ToLowerInvariant() is "en" or "de" or "fr";
+        TranslationCapabilityRegistry.SupportsRelativeTime(locale);
 
     private static bool ContainsRelativeTime(CompiledMessagePattern message)
     {

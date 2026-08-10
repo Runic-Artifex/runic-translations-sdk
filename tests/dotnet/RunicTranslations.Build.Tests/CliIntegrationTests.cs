@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace RunicTranslations.Build.Tests;
@@ -22,6 +23,7 @@ internal static class CliIntegrationTests
         "minimal.esm/dynamic.js",
         "minimal.esm/messages.d.ts",
         "minimal.esm/messages.js",
+        "minimal.esm/messages/_index.js",
         "minimal.esm/messages/m$Hello.js",
         "minimal.esm/runtime.d.ts",
         "minimal.esm/runtime.js",
@@ -35,11 +37,17 @@ internal static class CliIntegrationTests
     public static void Register(TestRunner runner)
     {
         runner.Add("CLI help and invalid invocation use stable exit codes", HelpAndUsageExitCodes);
+        runner.Add("CLI import converts the lossless JSON and inlang subset", ImportConvertsLosslessSubset);
+        runner.Add("CLI import preserves conventional JSON strings without guessing syntax", ImportPreservesConventionalJson);
+        runner.Add("CLI import is byte deterministic", ImportIsByteDeterministic);
+        runner.Add("CLI import dry-run diagnoses unsupported constructs without writes", ImportDryRunDoesNotWrite);
+        runner.Add("CLI import partial mode writes only the portable common subset", ImportPartialWritesPortableSubset);
         runner.Add("CLI init creates and validates a one-locale schema-v2 project", InitCreatesOneLocaleProject);
         runner.Add("CLI init creates canonical locale files and explicit fallbacks", InitCreatesMultipleLocales);
         runner.Add("CLI init rejects conflicts without changing the target", InitConflictDoesNotWrite);
         runner.Add("CLI init supports an empty schema-v2 project", InitWithoutStarterIsValid);
         runner.Add("CLI validate succeeds without writing files", ValidateDoesNotWrite);
+        runner.Add("CLI analyze emits deterministic conservative JSON and CI exit codes", AnalyzeReportsUsageAndFindings);
         runner.Add("CLI validation diagnostics return exit code one", InvalidCatalogReturnsDiagnosticExitCode);
         runner.Add("CLI generate writes the declared deterministic artifact set", GenerateWritesArtifactSet);
         runner.Add("CLI generation is byte deterministic", GenerateIsByteDeterministic);
@@ -72,6 +80,175 @@ internal static class CliIntegrationTests
         ProcessResult invalid = TestFixture.RunTool(temporary, "unknown-command");
         Assert.Equal(2, invalid.ExitCode);
         Assert.Contains("unknown command", invalid.StandardError);
+    }
+
+    private static void ImportConvertsLosslessSubset()
+    {
+        using TemporaryDirectory temporary = new();
+        CopyImportFixture(temporary, "lossless");
+        ProcessResult import = RunImport(temporary, "imported");
+
+        Assert.Equal(0, import.ExitCode, import.Combined);
+        Assert.Equal(
+            "imported.catalog.json|imported.de.json|imported.en.json|runic-import-report.json",
+            string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("imported"))));
+        string manifest = File.ReadAllText(temporary.Resolve("imported", "imported.catalog.json"), Encoding.UTF8);
+        string english = File.ReadAllText(temporary.Resolve("imported", "imported.en.json"), Encoding.UTF8);
+        string report = File.ReadAllText(temporary.Resolve("imported", "runic-import-report.json"), Encoding.UTF8);
+        Assert.Contains("\"fallback\": \"en\"", manifest);
+        Assert.Contains("\"welcome_message\"", english);
+        Assert.Contains("\"type\": \"decimal\"", english);
+        Assert.Contains("\"function\": \"plural\"", english);
+        Assert.Contains("\"function\": \"literal\"", english);
+        Assert.Contains("\"markup\"", english);
+        Assert.Contains("\"sourceKey\": \"nested.welcome-message\"", report);
+        Assert.Contains("\"runicKey\": \"nested.welcome_message\"", report);
+        Assert.Contains("\"mappingChanged\": true", report);
+        Assert.Contains("\"success\": true", report);
+
+        var goldenHashes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["imported.catalog.json"] = "393c17b13fd69a009bcdc2c27c4c7018db9119ae685d2bc9ad156e5272b780b0",
+            ["imported.de.json"] = "9f78eb9a423e829daf1f00282f8d805b35eba1795054ad82fc888db64d1ffa07",
+            ["imported.en.json"] = "997df58806daf316a38007709dba6f8bd807a82805967e7990aa9bdc0eddcff8",
+            ["runic-import-report.json"] = "3d8967faf6041dd4c6f447d6cf13f1b767cb694dd68db8871e86d7c2179cf840",
+        };
+        foreach (KeyValuePair<string, string> golden in goldenHashes)
+        {
+            string actual = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(temporary.Resolve("imported", golden.Key)))).ToLowerInvariant();
+            Assert.Equal(golden.Value, actual, $"Golden import output changed for {golden.Key}.");
+        }
+
+        ProcessResult validate = TestFixture.RunTool(
+            temporary,
+            "validate",
+            "--catalog",
+            "imported/imported.catalog.json",
+            "--documents",
+            "imported/imported.de.json",
+            "imported/imported.en.json");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+    }
+
+    private static void ImportPreservesConventionalJson()
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(
+            temporary.Resolve("en.json"),
+            "{\"literal\":\"Use {braces} exactly\",\"nested\":{\"key\":\"Value\"}}",
+            new UTF8Encoding(false));
+        ProcessResult result = TestFixture.RunTool(
+            temporary,
+            "import",
+            "--source",
+            "en=en.json",
+            "--catalog",
+            "plain",
+            "--default-locale",
+            "en",
+            "--namespace",
+            "Tests.Plain",
+            "--class",
+            "PlainText",
+            "--output",
+            "plain",
+            "--format",
+            "json");
+
+        Assert.Equal(0, result.ExitCode, result.Combined);
+        string document = File.ReadAllText(temporary.Resolve("plain", "plain.en.json"), Encoding.UTF8);
+        Assert.Contains("Use {braces} exactly", document);
+        Assert.Contains("\"inputs\": {}", document);
+        Assert.Contains("\"nested\"", document);
+        Assert.Contains("\"key\"", document);
+    }
+
+    private static void ImportIsByteDeterministic()
+    {
+        using TemporaryDirectory temporary = new();
+        CopyImportFixture(temporary, "lossless");
+        ProcessResult first = RunImport(temporary, "first");
+        ProcessResult second = RunImport(temporary, "second");
+        Assert.Equal(0, first.ExitCode, first.Combined);
+        Assert.Equal(0, second.ExitCode, second.Combined);
+        string[] paths = TestFixture.RelativeFiles(temporary.Resolve("first"));
+        Assert.Equal(string.Join('|', paths), string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("second"))));
+        foreach (string path in paths)
+        {
+            byte[] firstBytes = File.ReadAllBytes(temporary.Resolve("first", path));
+            byte[] secondBytes = File.ReadAllBytes(temporary.Resolve("second", path));
+            Assert.True(firstBytes.AsSpan().SequenceEqual(secondBytes), $"Imported bytes changed for {path}.");
+        }
+    }
+
+    private static void ImportDryRunDoesNotWrite()
+    {
+        using TemporaryDirectory temporary = new();
+        File.Copy(
+            RepositoryPaths.Resolve("spec", "corpus", "import", "invalid.json"),
+            temporary.Resolve("en.json"));
+        Dictionary<string, (long Length, DateTime LastWriteUtc)> before = TestFixture.SnapshotFiles(temporary.Path);
+        ProcessResult result = TestFixture.RunTool(
+            temporary,
+            "import",
+            "--source",
+            "en=en.json",
+            "--catalog",
+            "diagnostic",
+            "--default-locale",
+            "en",
+            "--namespace",
+            "Tests.Diagnostic",
+            "--class",
+            "DiagnosticText",
+            "--output",
+            "out",
+            "--dry-run");
+
+        Assert.Equal(1, result.ExitCode, result.Combined);
+        Assert.Contains("RIM0005", result.StandardError);
+        Assert.Contains("RIM0008", result.StandardError);
+        Assert.Contains("\"mode\": \"dry-run\"", result.StandardOutput);
+        Assert.Contains("\"status\": \"rejected\"", result.StandardOutput);
+        Assert.True(!Directory.Exists(temporary.Resolve("out")), "Dry-run created its output directory.");
+        Dictionary<string, (long Length, DateTime LastWriteUtc)> after = TestFixture.SnapshotFiles(temporary.Path);
+        Assert.Equal(string.Join('|', before.Keys), string.Join('|', after.Keys));
+        foreach (string path in before.Keys) Assert.Equal(before[path], after[path], $"Dry-run changed {path}.");
+    }
+
+    private static void ImportPartialWritesPortableSubset()
+    {
+        using TemporaryDirectory temporary = new();
+        CopyImportFixture(temporary, "partial");
+        ProcessResult result = TestFixture.RunTool(
+            temporary,
+            "import",
+            "--source",
+            "en=sources/en.json",
+            "--source",
+            "de=sources/de.json",
+            "--catalog",
+            "partial",
+            "--default-locale",
+            "en",
+            "--namespace",
+            "Tests.Partial",
+            "--class",
+            "PartialText",
+            "--output",
+            "partial",
+            "--allow-partial");
+
+        Assert.Equal(0, result.ExitCode, result.Combined);
+        Assert.Contains("warning RIM0005", result.StandardError);
+        Assert.Contains("warning RIM0007", result.StandardError);
+        string english = File.ReadAllText(temporary.Resolve("partial", "partial.en.json"), Encoding.UTF8);
+        string report = File.ReadAllText(temporary.Resolve("partial", "runic-import-report.json"), Encoding.UTF8);
+        Assert.Contains("\"safe\"", english);
+        Assert.True(!english.Contains("markup_options", StringComparison.Ordinal), "Rejected markup was emitted.");
+        Assert.True(!english.Contains("metadata", StringComparison.Ordinal), "Unsupported metadata was emitted.");
+        Assert.Contains("\"status\": \"rejected\"", report);
+        Assert.Contains("\"success\": true", report);
     }
 
     private static void InitCreatesOneLocaleProject()
@@ -230,6 +407,50 @@ internal static class CliIntegrationTests
         Assert.Contains("manifest.json(", result.StandardError);
     }
 
+    private static void AnalyzeReportsUsageAndFindings()
+    {
+        using TemporaryDirectory temporary = new();
+        TestFixture.CopyMinimal(temporary);
+        File.WriteAllText(temporary.Resolve("app.ts"), "const value = m.Hello();\n", new UTF8Encoding(false));
+        ProcessResult current = TestFixture.RunTool(
+            temporary,
+            "analyze",
+            "--catalog", "manifest.json",
+            "--documents", "en.json",
+            "--sources", "app.ts",
+            "--format", "json",
+            "--fail-on-findings");
+        Assert.Equal(0, current.ExitCode, current.Combined);
+        Assert.Contains("\"usage\":\"proven\"", current.StandardOutput);
+        Assert.Contains("\"hasFindings\":false", current.StandardOutput);
+
+        File.WriteAllText(temporary.Resolve("app.ts"), "const value = m[key]();\n", new UTF8Encoding(false));
+        ProcessResult dynamic = TestFixture.RunTool(
+            temporary,
+            "analyze",
+            "--catalog", "manifest.json",
+            "--documents", "en.json",
+            "--sources", "app.ts",
+            "--format", "json");
+        Assert.Equal(0, dynamic.ExitCode, dynamic.Combined);
+        Assert.Contains("\"usage\":\"possible-dynamic\"", dynamic.StandardOutput);
+        Assert.Contains("\"isDeletionCandidate\":false", dynamic.StandardOutput);
+
+        ProcessResult stale = TestFixture.RunTool(
+            temporary,
+            "analyze",
+            "--catalog", "manifest.json",
+            "--documents", "en.json",
+            "--sources", "app.ts",
+            "--format", "json",
+            "--artifact-fingerprint", "sha256:" + new string('0', 64),
+            "--artifact-path", "generated",
+            "--fail-on-findings");
+        Assert.Equal(1, stale.ExitCode, stale.Combined);
+        Assert.Contains("\"artifactStatus\":\"stale\"", stale.StandardOutput);
+        Assert.Contains("\"requiresRegeneration\":true", stale.StandardOutput);
+    }
+
     private static void GenerateWritesArtifactSet()
     {
         using TemporaryDirectory temporary = new();
@@ -270,7 +491,7 @@ internal static class CliIntegrationTests
         using TemporaryDirectory temporary = GeneratedFixture();
         ProcessResult result = Verify(temporary);
         Assert.Equal(0, result.ExitCode, result.Combined);
-        Assert.Contains("verified 18 artifact(s)", result.StandardOutput);
+        Assert.Contains("verified 19 artifact(s)", result.StandardOutput);
     }
 
     private static void VerifyReportsMissing()
@@ -598,6 +819,35 @@ internal static class CliIntegrationTests
         int end = registration.IndexOf('"', start);
         return registration[start..end];
     }
+
+    private static void CopyImportFixture(TemporaryDirectory temporary, string name)
+    {
+        string source = RepositoryPaths.Resolve("spec", "corpus", "import", name);
+        string destination = temporary.Resolve("sources");
+        Directory.CreateDirectory(destination);
+        foreach (string path in Directory.EnumerateFiles(source, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            File.Copy(path, Path.Combine(destination, Path.GetFileName(path)));
+        }
+    }
+
+    private static ProcessResult RunImport(TemporaryDirectory temporary, string output) => TestFixture.RunTool(
+        temporary,
+        "import",
+        "--source",
+        "en=sources/en.json",
+        "--source",
+        "de=sources/de.json",
+        "--catalog",
+        "imported",
+        "--default-locale",
+        "en",
+        "--namespace",
+        "Tests.Imported",
+        "--class",
+        "ImportedText",
+        "--output",
+        output);
 
     private static TemporaryDirectory GeneratedFixture()
     {

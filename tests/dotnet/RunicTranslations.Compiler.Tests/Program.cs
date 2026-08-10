@@ -12,6 +12,8 @@ internal static class Program
         EsmGenerationTests.Register(runner);
         CppGenerationTests.Register(runner);
         SchemaV2Tests.Register(runner);
+        CapabilityMatrixTests.Register(runner);
+        AnalysisTests.Register(runner);
         CorpusTests.Register(runner);
         SchemaTests.Register(runner);
         return runner.Run();

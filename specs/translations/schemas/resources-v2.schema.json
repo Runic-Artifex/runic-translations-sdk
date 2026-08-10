@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/resources-v2.schema.json",
   "title": "Runic Translations document v2",
   "type": "object",
   "required": ["schemaVersion", "catalog", "locale", "layer", "resources"],

@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/asset-manifest-v1.schema.json",
   "title": "Runic Translations Asset Manifest v1",
   "description": "Versioned edge contract describing deterministic Translations artifacts for a host or packaging layer. It does not grant the host authority to redefine artifact bytes.",
   "type": "object",

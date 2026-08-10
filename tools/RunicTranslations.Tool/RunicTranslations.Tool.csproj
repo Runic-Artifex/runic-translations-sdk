@@ -28,6 +28,9 @@
     <EmbeddedResource Include="..\..\..\spec\schemas\resources-v2.schema.json" LogicalName="RunicTranslations.Tool.Schemas.resources-v2.schema.json" />
     <EmbeddedResource Include="..\..\..\spec\schemas\message-ast-v2.schema.json" LogicalName="RunicTranslations.Tool.Schemas.message-ast-v2.schema.json" />
     <EmbeddedResource Include="..\..\..\spec\schemas\editor-state-v1.schema.json" LogicalName="RunicTranslations.Tool.Schemas.editor-state-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\capabilities-v1.schema.json" LogicalName="RunicTranslations.Tool.Schemas.capabilities-v1.schema.json" />
     <None Update="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
 </Project>

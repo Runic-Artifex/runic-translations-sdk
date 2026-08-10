@@ -1,0 +1,11 @@
+{
+  "valid": "Value",
+  "number": 42,
+  "broken": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "One" }
+    }
+  ]
+}

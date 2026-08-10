@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://runic-artifex.dev/schemas/translations/message-ast-v2.schema.json",
+  "$id": "https://runic-artifex.eu/schemas/translations/message-ast-v2.schema.json",
   "title": "Runic Translations normalized message AST v2",
   "type": "object",
   "required": ["astVersion", "kind", "inputs", "declarations", "selectors", "variants"],

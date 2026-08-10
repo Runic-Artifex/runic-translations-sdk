@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/catalog-v2.schema.json",
   "title": "Runic Translations catalog manifest v2",
   "type": "object",
   "required": ["schemaVersion", "catalog", "code", "defaultLocale", "locales", "layers"],

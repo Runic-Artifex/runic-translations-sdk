@@ -19,6 +19,7 @@ internal static class ProjectCreationTests
         runner.Add("Creation permits a real parent beneath an ancestor alias", AncestorAliasIsAllowed);
         runner.Add("Creation rejects a linked target parent", LinkedParentIsRejected);
         runner.Add("Project without starter messages remains compiler-valid", NoStarterIsValid);
+        runner.Add("VS Code settings are opt-in and scoped to the created catalog", VsCodeSettingsAreOptIn);
     }
 
     private static void GermanOnlyIsValid()
@@ -144,6 +145,22 @@ internal static class ProjectCreationTests
             includeStarterMessage: false));
         Assert.True(plan.Compilation.Success, "Empty schema-v2 project did not compile.");
         Assert.False(Utf8(plan, "product.de.json").Contains("Application", StringComparison.Ordinal), "Starter message was unexpectedly emitted.");
+    }
+
+    private static void VsCodeSettingsAreOptIn()
+    {
+        TranslationProjectPlan plan = TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
+            "unused",
+            "product",
+            "en",
+            "Customer.Product",
+            "ProductText",
+            includeVsCodeSettings: true));
+        string settings = Utf8(plan, ".vscode/settings.json");
+        Assert.True(settings.Contains("catalog-v2.schema.json", StringComparison.Ordinal), "Catalog schema association is missing.");
+        Assert.True(settings.Contains("resources-v2.schema.json", StringComparison.Ordinal), "Resource schema association is missing.");
+        Assert.True(settings.Contains("**/product.*.json", StringComparison.Ordinal), "Resource association is not catalog-scoped.");
+        Assert.True(settings.Contains("!**/product.catalog.json", StringComparison.Ordinal), "Catalog exclusion is missing.");
     }
 
     private static TranslationProjectCreationRequest Request(string directory, string locale) => new(

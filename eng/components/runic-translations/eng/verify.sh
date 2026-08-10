@@ -11,6 +11,8 @@ rm -rf "$artifacts_root"
 mkdir -p "$package_feed"
 
 npm --prefix "$repository_root/web" ci
+node "$repository_root/eng/generate-cldr.mjs" --check
+node "$repository_root/eng/render-capabilities.mjs" --check
 
 dotnet restore "$repository_root/RunicTranslations.slnx"
 dotnet build "$repository_root/RunicTranslations.slnx" -c "$configuration" --no-restore \

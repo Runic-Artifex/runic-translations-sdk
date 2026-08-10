@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://runic-artifex.dev/schemas/translations/editor-state-v1.schema.json",
+  "$id": "https://runic-artifex.eu/schemas/translations/editor-state-v1.schema.json",
   "title": "Runic Translations optional editor state v1",
   "type": "object",
   "required": ["$schema", "catalog", "messages", "terminology"],

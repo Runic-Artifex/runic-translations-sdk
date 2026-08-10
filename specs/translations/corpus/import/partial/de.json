@@ -1,0 +1,13 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "safe": "Sicher",
+  "markup_options": "Hier {#link href=$url}öffnen{/link}",
+  "metadata": [
+    {
+      "declarations": [],
+      "selectors": [],
+      "match": { "other": "Wert" },
+      "description": "darf nicht verworfen werden"
+    }
+  ]
+}

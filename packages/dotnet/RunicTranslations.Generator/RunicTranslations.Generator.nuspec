@@ -20,6 +20,8 @@
     <file src="bin\$configuration$\net10.0\RunicTranslations.Generator.dll" target="analyzers/dotnet/cs" />
     <file src="bin\$configuration$\net10.0\RunicTranslations.Compiler.dll" target="analyzers/dotnet/cs" />
     <file src="README.md" target="" />
+    <file src="..\..\..\THIRD-PARTY-NOTICES.md" target="" />
+    <file src="..\..\..\eng\cldr\LICENSE" target="licenses/LICENSE" />
     <file src="..\..\..\.github\assets\brand\icon.png" target="" />
   </files>
 </package>

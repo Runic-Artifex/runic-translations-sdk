@@ -10,7 +10,7 @@ internal static class EsmOutputRenderer
     {
         string root = catalog.Id + ".esm/";
         IReadOnlyList<CompiledTranslation> canonical = GenerationSupport.OrderedResources(catalog.CanonicalResources);
-        var outputs = new List<TranslationGeneratedOutput>(canonical.Count + 5)
+        var outputs = new List<TranslationGeneratedOutput>(canonical.Count + 10)
         {
             Output(TranslationGeneratedOutputKind.EsmRuntime, root + "runtime.js", "text/javascript", Runtime(catalog)),
             Output(TranslationGeneratedOutputKind.EsmRuntimeTypes, root + "runtime.d.ts", "text/typescript", RuntimeTypes(catalog)),
@@ -35,10 +35,15 @@ internal static class EsmOutputRenderer
         }
 
         outputs.Add(Output(
+            TranslationGeneratedOutputKind.EsmMessageNamespace,
+            root + "messages/_index.js",
+            "text/javascript",
+            MessageNamespaceIndex(modules)));
+        outputs.Add(Output(
             TranslationGeneratedOutputKind.EsmMessagesIndex,
             root + "messages.js",
             "text/javascript",
-            MessagesIndex(modules)));
+            MessagesIndex()));
         outputs.Add(Output(
             TranslationGeneratedOutputKind.EsmMessagesTypes,
             root + "messages.d.ts",
@@ -62,6 +67,7 @@ internal static class EsmOutputRenderer
         writer.Line("export const baseLocale = " + GenerationSupport.JsonString(catalog.DefaultLocale) + ";");
         writer.Line("export const locales = Object.freeze(" + JsonLocales(catalog.Locales) + ");");
         writer.Line("const localeSet = new Set(locales);");
+        writer.Line("const generatedLocaleData = " + TranslationCapabilityRegistry.EsmLocaleDataJson + ";");
         writer.Line("let localeResolver = () => baseLocale;");
         writer.Blank();
         writer.Line("export function configureLocaleResolver(resolver) {");
@@ -74,6 +80,35 @@ internal static class EsmOutputRenderer
         writer.Line("}");
         writer.Blank();
         writer.Line("export function getLocale() { return resolveLocale(localeResolver()); }");
+        writer.Blank();
+        writer.Line("export function createLocaleSource(options = {}) {");
+        writer.Indent();
+        writer.Line("if (typeof options !== \"object\" || options === null || Array.isArray(options)) throw new TypeError(\"Locale source options must be an object.\");");
+        writer.Line("let current = resolveLocale(options.initialLocale ?? baseLocale);");
+        writer.Line("const listeners = new Set();");
+        writer.Line("return Object.freeze({");
+        writer.Indent();
+        writer.Line("getLocale() { return current; },");
+        writer.Line("subscribe(listener) {");
+        writer.Indent();
+        writer.Line("if (typeof listener !== \"function\") throw new TypeError(\"A locale listener must be a function.\");");
+        writer.Line("listeners.add(listener);");
+        writer.Line("let subscribed = true;");
+        writer.Line("return () => { if (subscribed) { subscribed = false; listeners.delete(listener); } };");
+        writer.Unindent();
+        writer.Line("},");
+        writer.Line("setLocale(requested) {");
+        writer.Indent();
+        writer.Line("const next = resolveLocale(requested);");
+        writer.Line("if (next === current) return;");
+        writer.Line("current = next;");
+        writer.Line("for (const listener of Array.from(listeners)) listener(next);");
+        writer.Unindent();
+        writer.Line("},");
+        writer.Unindent();
+        writer.Line("});");
+        writer.Unindent();
+        writer.Line("}");
         writer.Blank();
         writer.Line("export function resolveLocale(requested) {");
         writer.Indent();
@@ -135,7 +170,36 @@ internal static class EsmOutputRenderer
         writer.Blank();
         writer.Line("export function localized(value) { return value; }");
         writer.Line("export function localizedContent(nodes) { return Object.freeze({ kind: \"localized-content\", nodes: Object.freeze(nodes) }); }");
-        writer.Line("export function formatRelativeTime(inputs, name, unit, numeric, locale) { const value = inputs[name]; const number = typeof value === \"bigint\" ? Number(value) : value; if (typeof number !== \"number\" || !Number.isFinite(number) || (typeof value === \"bigint\" && !Number.isSafeInteger(number))) return invalidType(name, \"a finite exactly representable relative-time number\"); return new Intl.RelativeTimeFormat(locale, { numeric }).format(number, unit); }");
+        writer.Line("export function selectPlural(value, locale, ordinal = false) {");
+        writer.Indent();
+        writer.Line("if (typeof value !== \"bigint\" && (typeof value !== \"number\" || !Number.isFinite(value))) throw new TypeError(\"Plural values must be finite numbers or bigint values.\");");
+        writer.Line("const language = canonicalizeLocale(locale).split(\"-\")[0].toLowerCase();");
+        writer.Line("const rules = generatedLocaleData.plural[language]; if (!rules) throw new RangeError(`Plural selection is not supported for locale '${locale}'.`);");
+        writer.Line("const rule = rules[ordinal ? 1 : 0]; const absolute = value < 0 ? -value : value;");
+        writer.Line("const integral = typeof absolute === \"bigint\" || Number.isInteger(absolute);");
+        writer.Line("const equals = expected => typeof absolute === \"bigint\" ? absolute === BigInt(expected) : absolute === expected;");
+        writer.Line("const modulo = divisor => Number(absolute % (typeof absolute === \"bigint\" ? BigInt(divisor) : divisor));");
+        writer.Line("if (rule === \"english\" && integral) { const mod100 = modulo(100); const mod10 = modulo(10); if (mod10 === 1 && mod100 !== 11) return \"one\"; if (mod10 === 2 && mod100 !== 12) return \"two\"; if (mod10 === 3 && mod100 !== 13) return \"few\"; }");
+        writer.Line("else if (rule === \"italian\") return [8, 11, 80, 800].some(equals) ? \"many\" : \"other\";");
+        writer.Line("else if (rule === \"swedish\") { const mod100 = modulo(100); const mod10 = modulo(10); return (mod10 === 1 || mod10 === 2) && mod100 !== 11 && mod100 !== 12 ? \"one\" : \"other\"; }");
+        writer.Line("else if (rule === \"one\" || rule === \"integer-one\") return equals(1) ? \"one\" : \"other\";");
+        writer.Line("else if (rule === \"danish\") return equals(1) || (typeof absolute === \"number\" && !integral && (Math.trunc(absolute) === 0 || Math.trunc(absolute) === 1)) ? \"one\" : \"other\";");
+        writer.Line("else if (rule === \"one-and-million\") { if (equals(1)) return \"one\"; return integral && !equals(0) && modulo(1000000) === 0 ? \"many\" : \"other\"; }");
+        writer.Line("else if (rule === \"french\") { if (integral && !equals(0) && modulo(1000000) === 0) return \"many\"; const integer = typeof absolute === \"bigint\" ? absolute : Math.trunc(absolute); return integer === 0 || integer === 0n || integer === 1 || integer === 1n ? \"one\" : \"other\"; }");
+        writer.Line("return \"other\";");
+        writer.Unindent();
+        writer.Line("}");
+        writer.Line("export function formatRelativeTime(inputs, name, unit, numeric, locale) {");
+        writer.Indent();
+        writer.Line("const value = inputs[name]; if (typeof value !== \"bigint\" && (typeof value !== \"number\" || !Number.isFinite(value))) return invalidType(name, \"a finite relative-time number\");");
+        writer.Line("if (![\"second\",\"minute\",\"hour\",\"day\",\"week\",\"month\",\"year\"].includes(unit) || ![\"always\",\"auto\"].includes(numeric)) throw new RangeError(\"Invalid relative-time options.\");");
+        writer.Line("const language = canonicalizeLocale(locale).split(\"-\")[0].toLowerCase(); const data = generatedLocaleData.relativeTime[language]; if (!data) throw new RangeError(`Relative-time formatting is not supported for locale '${locale}'.`);");
+        writer.Line("if (numeric === \"auto\" && unit === \"day\" && (value === -1 || value === -1n || value === 0 || value === 0n || value === 1 || value === 1n)) return data.autoDay[Number(value) + 1];");
+        writer.Line("const absolute = value < 0 ? -value : value; const forms = data.units[unit]; const noun = forms[selectPlural(absolute, locale, false) === \"one\" ? 0 : 1];");
+        writer.Line("const number = typeof absolute === \"bigint\" ? absolute.toString() : expandExponent(String(absolute));");
+        writer.Line("return (value < 0 ? data.past : data.future).replace(\"{0}\", number).replace(\"{unit}\", noun);");
+        writer.Unindent();
+        writer.Line("}");
         writer.Blank();
         writer.Line("function canonicalizeLocale(locale) {");
         writer.Indent();
@@ -231,9 +295,15 @@ internal static class EsmOutputRenderer
         writer.Line("export type LocalizedContentNode = { readonly kind: \"text\"; readonly value: string } | { readonly kind: \"element\"; readonly name: string; readonly attributes: Readonly<Record<string, string>>; readonly children: readonly LocalizedContentNode[] }; ");
         writer.Line("export interface LocalizedContent { readonly kind: \"localized-content\"; readonly nodes: readonly LocalizedContentNode[]; }");
         writer.Line("export interface MessageOptions { readonly locale?: Locale | string; }");
+        writer.Line("export interface LocaleSource { getLocale(): Locale; subscribe(listener: (locale: Locale) => void): () => void; }");
+        writer.Line("export interface MutableLocaleSource extends LocaleSource { setLocale(locale: Locale | string): void; }");
+        writer.Line("export interface CreateLocaleSourceOptions { readonly initialLocale?: Locale | string; }");
         writer.Line("export declare function configureLocaleResolver(resolver: () => string): () => void;");
         writer.Line("export declare function getLocale(): Locale;");
+        writer.Line("export declare function createLocaleSource(options?: CreateLocaleSourceOptions): MutableLocaleSource;");
         writer.Line("export declare function resolveLocale(requested: string): Locale;");
+        writer.Line("export declare function selectPlural(value: number | bigint, locale: Locale | string, ordinal?: boolean): string;");
+        writer.Line("export declare function formatRelativeTime(inputs: Readonly<Record<string, number | bigint>>, name: string, unit: \"second\" | \"minute\" | \"hour\" | \"day\" | \"week\" | \"month\" | \"year\", numeric: \"always\" | \"auto\", locale: Locale | string): string;");
         return writer.ToString();
     }
 
@@ -301,7 +371,7 @@ internal static class EsmOutputRenderer
     {
         var writer = new GenerationWriter();
         writer.Line("// <auto-generated />");
-        writer.Line("import { formatInput, formatRelativeTime, localized, localizedContent, resolveLocale, validateInputs } from \"./runtime.js\";");
+        writer.Line("import { formatInput, formatRelativeTime, localized, localizedContent, resolveLocale, selectPlural, validateInputs } from \"./runtime.js\";");
         writer.Line("const catalog = " + GenerationSupport.JsonString(catalog.Id) + ";");
         writer.Line("const contractFingerprint = " + GenerationSupport.JsonString(catalog.Fingerprint) + ";");
         writer.Line("const contracts = Object.freeze({");
@@ -348,7 +418,7 @@ internal static class EsmOutputRenderer
         writer.Line("const ast = artifact.messages[key]; if (!ast) throw new RangeError(`Locale artifact has no message '${key}'.`);");
         writer.Line("const locale = resolveLocale(options?.locale ?? artifact.locale); if (locale !== artifact.locale) throw new RangeError(\"A dynamic locale artifact can only format its own locale.\");");
         writer.Line("const names = Object.keys(ast.inputs).sort(); validateInputs(inputs, names);");
-        writer.Line("const selected = ast.selectors.map(selector => { const value = inputs[selector.input]; if (selector.function === \"plural\") return new Intl.PluralRules(locale, { type: \"cardinal\" }).select(Number(value)); if (selector.function === \"ordinal\") return new Intl.PluralRules(locale, { type: \"ordinal\" }).select(Number(value)); return String(value); });");
+        writer.Line("const selected = ast.selectors.map(selector => { const value = inputs[selector.input]; if (selector.function === \"plural\") return selectPlural(value, locale, false); if (selector.function === \"ordinal\") return selectPlural(value, locale, true); return String(value); });");
         writer.Line("const variant = ast.variants.find(candidate => ast.selectors.every((selector, index) => candidate.matches[selector.name] === \"*\" || candidate.matches[selector.name] === selected[index]));");
         writer.Line("if (!variant) throw new RangeError(\"The decoded message has no matching variant.\");");
         writer.Line("return hasMarkup(variant.nodes) ? localizedContent(contentNodes(variant.nodes, ast.inputs, inputs, locale)) : localized(textNodes(variant.nodes, ast.inputs, inputs, locale));");
@@ -396,7 +466,7 @@ internal static class EsmOutputRenderer
         IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(canonical.Placeholders);
         var writer = new GenerationWriter();
         writer.Line("// <auto-generated />");
-        writer.Line("import { formatInput, formatRelativeTime, localized, localizedContent, resolveLocale, getLocale, validateInputs } from \"../runtime.js\";");
+        writer.Line("import { formatInput, formatRelativeTime, localized, localizedContent, resolveLocale, selectPlural, getLocale, validateInputs } from \"../runtime.js\";");
         writer.Line("const expectedInputs = Object.freeze(" + JsonPlaceholderNames(placeholders) + ");");
         writer.Blank();
         string parameters = placeholders.Count == 0 ? "options" : "inputs, options";
@@ -438,8 +508,8 @@ internal static class EsmOutputRenderer
             string input = "inputs[" + GenerationSupport.JsonString(selector.Input) + "]";
             string expression = selector.Function switch
             {
-                "plural" => "new Intl.PluralRules(locale, { type: \"cardinal\" }).select(Number(" + input + "))",
-                "ordinal" => "new Intl.PluralRules(locale, { type: \"ordinal\" }).select(Number(" + input + "))",
+                "plural" => "selectPlural(" + input + ", locale, false)",
+                "ordinal" => "selectPlural(" + input + ", locale, true)",
                 _ => "String(" + input + ")",
             };
             selectors[selector.Name] = expression;
@@ -501,8 +571,8 @@ internal static class EsmOutputRenderer
             string input = "inputs[" + GenerationSupport.JsonString(selector.Input) + "]";
             selectors[selector.Name] = selector.Function switch
             {
-                "plural" => "new Intl.PluralRules(locale, { type: \"cardinal\" }).select(Number(" + input + "))",
-                "ordinal" => "new Intl.PluralRules(locale, { type: \"ordinal\" }).select(Number(" + input + "))",
+                "plural" => "selectPlural(" + input + ", locale, false)",
+                "ordinal" => "selectPlural(" + input + ", locale, true)",
                 _ => "String(" + input + ")",
             };
         }
@@ -560,12 +630,21 @@ internal static class EsmOutputRenderer
         return "[" + string.Join(",", result) + "]";
     }
 
-    private static string MessagesIndex(IReadOnlyList<MessageModule> modules)
+    private static string MessageNamespaceIndex(IReadOnlyList<MessageModule> modules)
     {
         var writer = new GenerationWriter();
         writer.Line("// <auto-generated />");
         for (int index = 0; index < modules.Count; index++)
-            writer.Line("export { " + modules[index].Identifier + " } from \"./messages/" + modules[index].FileName + "\";");
+            writer.Line("export { " + modules[index].Identifier + " as " + GenerationSupport.JsonString(modules[index].Resource.Key) +
+                " } from \"./" + modules[index].FileName + "\";");
+        return writer.ToString();
+    }
+
+    private static string MessagesIndex()
+    {
+        var writer = new GenerationWriter();
+        writer.Line("// <auto-generated />");
+        writer.Line("export * as m from \"./messages/_index.js\";");
         return writer.ToString();
     }
 
@@ -575,6 +654,8 @@ internal static class EsmOutputRenderer
         writer.Line("// <auto-generated />");
         writer.Line("import type { LocalizedContent, LocalizedString, MessageOptions } from \"./runtime.js\";");
         writer.Blank();
+        writer.Line("export declare const m: Readonly<{");
+        writer.Indent();
         for (int index = 0; index < modules.Count; index++)
         {
             MessageModule module = modules[index];
@@ -582,10 +663,11 @@ internal static class EsmOutputRenderer
             IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(module.Resource.Placeholders);
             if (placeholders.Count == 0)
             {
-                writer.Line("export declare function " + module.Identifier + "(options?: MessageOptions): " + (module.Resource.ProducesStructuredContent ? "LocalizedContent" : "LocalizedString") + ";");
+                writer.Line("readonly " + GenerationSupport.JsonString(module.Resource.Key) + ": (options?: MessageOptions) => " +
+                    (module.Resource.ProducesStructuredContent ? "LocalizedContent" : "LocalizedString") + ";");
                 continue;
             }
-            writer.Line("export declare function " + module.Identifier + "(inputs: Readonly<{");
+            writer.Line("readonly " + GenerationSupport.JsonString(module.Resource.Key) + ": (inputs: Readonly<{");
             writer.Indent();
             for (int placeholderIndex = 0; placeholderIndex < placeholders.Count; placeholderIndex++)
             {
@@ -593,8 +675,10 @@ internal static class EsmOutputRenderer
                 writer.Line("readonly " + placeholder.Name + ": " + EsmType(placeholder.Type) + ";");
             }
             writer.Unindent();
-            writer.Line("}>, options?: MessageOptions): " + (module.Resource.ProducesStructuredContent ? "LocalizedContent" : "LocalizedString") + ";");
+            writer.Line("}>, options?: MessageOptions) => " + (module.Resource.ProducesStructuredContent ? "LocalizedContent" : "LocalizedString") + ";");
         }
+        writer.Unindent();
+        writer.Line("}>;");
         return writer.ToString();
     }
 

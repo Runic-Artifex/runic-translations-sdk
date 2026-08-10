@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using RunicTranslations.Compiler;
+using RunicTranslations.Compiler.Analysis;
 
 namespace RunicTranslations.Tool;
 
@@ -58,6 +59,55 @@ internal static class InputFiles
         return new CompilerInputs(
             ReadSource(catalogFullPath, DisplayPath(catalogFullPath, currentDirectory)),
             documents);
+    }
+
+    internal static IReadOnlyList<TranslationUsageSource> ReadUsageSources(
+        IReadOnlyList<string> sourcePatterns,
+        string catalogId)
+    {
+        ArgumentNullException.ThrowIfNull(sourcePatterns);
+        ArgumentException.ThrowIfNullOrWhiteSpace(catalogId);
+        string currentDirectory = Path.GetFullPath(Environment.CurrentDirectory);
+        var paths = new Dictionary<string, string>(PathComparer);
+        for (int index = 0; index < sourcePatterns.Count; index++)
+        {
+            string pattern = sourcePatterns[index];
+            string[] matches = ExpandPattern(pattern, currentDirectory);
+            if (matches.Length == 0) throw new ToolUsageException($"usage source path or glob '{NormalizePath(pattern)}' matched no files.");
+            for (int matchIndex = 0; matchIndex < matches.Length; matchIndex++)
+                paths.TryAdd(matches[matchIndex], DisplayPath(matches[matchIndex], currentDirectory));
+        }
+
+        var ordered = new List<KeyValuePair<string, string>>(paths);
+        ordered.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Value, right.Value));
+        var result = new List<TranslationUsageSource>(ordered.Count);
+        var strictUtf8 = new UTF8Encoding(false, true);
+        for (int index = 0; index < ordered.Count; index++)
+        {
+            KeyValuePair<string, string> item = ordered[index];
+            TranslationUsageSourceLanguage language = Language(item.Key);
+            byte[] bytes = ReadSource(item.Key, item.Value).GetUtf8Bytes();
+            try
+            {
+                result.Add(new TranslationUsageSource(item.Value, strictUtf8.GetString(bytes), language, catalogId));
+            }
+            catch (DecoderFallbackException exception)
+            {
+                throw new ToolUsageException($"usage source '{item.Value}' is not valid UTF-8.", exception);
+            }
+        }
+        return result;
+
+        static TranslationUsageSourceLanguage Language(string file)
+        {
+            string extension = Path.GetExtension(file).ToLowerInvariant();
+            return extension switch
+            {
+                ".cs" => TranslationUsageSourceLanguage.CSharp,
+                ".ts" or ".tsx" or ".js" or ".jsx" or ".mjs" or ".cjs" or ".svelte" => TranslationUsageSourceLanguage.TypeScript,
+                _ => throw new ToolUsageException($"cannot infer analysis language for usage source '{NormalizePath(file)}'; use a C#, TypeScript, JavaScript, or Svelte file."),
+            };
+        }
     }
 
     private static TranslationSource ReadSource(string fullPath, string displayPath)

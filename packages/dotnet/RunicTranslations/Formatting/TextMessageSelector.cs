@@ -12,9 +12,12 @@ public static class TextMessageSelector
         ArgumentException.ThrowIfNullOrWhiteSpace(locale);
         string language = locale.Split('-')[0].ToLowerInvariant();
         decimal absolute = Math.Abs(value);
-        if (ordinal)
+        GeneratedPluralLocale? localeRules = GeneratedLocaleData.FindPlural(language);
+        if (localeRules is null) return "other";
+        string rule = ordinal ? localeRules.OrdinalRule : localeRules.CardinalRule;
+        if (rule == "english")
         {
-            if (language == "en" && decimal.Truncate(absolute) == absolute)
+            if (decimal.Truncate(absolute) == absolute)
             {
                 int mod100 = (int)(absolute % 100);
                 int mod10 = (int)(absolute % 10);
@@ -24,12 +27,29 @@ public static class TextMessageSelector
             }
             return "other";
         }
-
-        return language switch
+        if (rule == "italian")
+            return absolute is 8 or 11 or 80 or 800 ? "many" : "other";
+        if (rule == "swedish")
         {
-            "fr" when decimal.Truncate(absolute) is 0 or 1 => "one",
-            "en" or "de" or "es" or "it" or "nl" or "sv" or "no" or "da" when absolute == 1 => "one",
-            _ => "other",
-        };
+            decimal mod100 = absolute % 100;
+            decimal mod10 = absolute % 10;
+            return (mod10 is 1 or 2) && (mod100 is not (11 or 12)) ? "one" : "other";
+        }
+        if (rule == "one") return absolute == 1 ? "one" : "other";
+        if (rule == "other") return "other";
+        if (rule == "danish")
+            return absolute == 1 || (absolute != decimal.Truncate(absolute) && decimal.Truncate(absolute) is 0 or 1) ? "one" : "other";
+        if (rule == "integer-one") return absolute == 1 ? "one" : "other";
+        if (rule == "one-and-million")
+        {
+            if (absolute == 1) return "one";
+            return absolute != 0 && absolute == decimal.Truncate(absolute) && absolute % 1_000_000 == 0 ? "many" : "other";
+        }
+        if (rule == "french")
+        {
+            if (absolute != 0 && absolute == decimal.Truncate(absolute) && absolute % 1_000_000 == 0) return "many";
+            return decimal.Truncate(absolute) is 0 or 1 ? "one" : "other";
+        }
+        return "other";
     }
 }

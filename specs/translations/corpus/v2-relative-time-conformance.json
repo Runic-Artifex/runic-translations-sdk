@@ -1,0 +1,16 @@
+{
+  "corpusVersion": 1,
+  "cldrVersion": "48.2",
+  "cases": [
+    { "locale": "de", "value": "-1", "unit": "day", "numeric": "auto", "expected": "gestern" },
+    { "locale": "de", "value": "2", "unit": "week", "numeric": "always", "expected": "in 2 Wochen" },
+    { "locale": "en", "value": "-1", "unit": "day", "numeric": "auto", "expected": "yesterday" },
+    { "locale": "en", "value": "-2", "unit": "month", "numeric": "always", "expected": "2 months ago" },
+    { "locale": "es", "value": "-1", "unit": "day", "numeric": "auto", "expected": "ayer" },
+    { "locale": "es", "value": "2", "unit": "year", "numeric": "always", "expected": "dentro de 2 años" },
+    { "locale": "fr", "value": "0", "unit": "day", "numeric": "auto", "expected": "aujourd’hui" },
+    { "locale": "fr", "value": "-2", "unit": "hour", "numeric": "always", "expected": "il y a 2 heures" },
+    { "locale": "it", "value": "1", "unit": "day", "numeric": "auto", "expected": "domani" },
+    { "locale": "it", "value": "2", "unit": "minute", "numeric": "always", "expected": "tra 2 minuti" }
+  ]
+}

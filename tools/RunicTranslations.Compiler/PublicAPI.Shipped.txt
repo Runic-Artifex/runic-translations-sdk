@@ -3,6 +3,117 @@
 # Generated deterministically; intentional changes require baseline review.
 # Nullability metadata is intentionally normalized away; readonly/init/ref/constraints and contract attributes are retained.
 
+type sealed class RunicTranslations.Compiler.Analysis.TranslationAnalysisOptions
+  ctor RunicTranslations.Compiler.Analysis.TranslationAnalysisOptions(RunicTranslations.Compiler.Analysis.TranslationDynamicUsagePolicy dynamicUsagePolicy = Conservative)
+  property RunicTranslations.Compiler.Analysis.TranslationDynamicUsagePolicy DynamicUsagePolicy { get; }
+
+type static class RunicTranslations.Compiler.Analysis.TranslationAnalysisRenderer
+  method static System.String RenderJson(RunicTranslations.Compiler.Analysis.TranslationAnalysisReport report)
+  method static System.String RenderText(RunicTranslations.Compiler.Analysis.TranslationAnalysisReport report)
+
+type sealed class RunicTranslations.Compiler.Analysis.TranslationAnalysisReport
+  field const System.Int32 ReportVersion = 1
+  property RunicTranslations.Compiler.Analysis.TranslationDynamicUsagePolicy DynamicUsagePolicy { get; }
+  property System.Boolean HasFindings { get; }
+  property System.Collections.Generic.IReadOnlyList<RunicTranslations.Compiler.Analysis.TranslationCatalogAnalysis> Catalogs { get; }
+
+type static class RunicTranslations.Compiler.Analysis.TranslationAnalyzer
+  method static RunicTranslations.Compiler.Analysis.TranslationAnalysisReport Analyze(RunicTranslations.Compiler.TranslationCompilation compilation, System.Collections.Generic.IEnumerable<RunicTranslations.Compiler.Analysis.TranslationUsageSource> usageSources, RunicTranslations.Compiler.Analysis.TranslationAnalysisOptions options = null)
+  method static RunicTranslations.Compiler.Analysis.TranslationAnalysisReport Analyze(RunicTranslations.Compiler.TranslationCompilation compilation, System.Collections.Generic.IEnumerable<RunicTranslations.Compiler.Analysis.TranslationUsageSource> usageSources, System.Collections.Generic.IEnumerable<RunicTranslations.Compiler.Analysis.TranslationArtifactSnapshot> artifactSnapshots, RunicTranslations.Compiler.Analysis.TranslationAnalysisOptions options = null)
+
+type sealed class RunicTranslations.Compiler.Analysis.TranslationArtifactSnapshot
+  ctor RunicTranslations.Compiler.Analysis.TranslationArtifactSnapshot(System.String catalogId, System.String sourceFingerprint, System.String path)
+  property System.String CatalogId { get; }
+  property System.String Path { get; }
+  property System.String SourceFingerprint { get; }
+
+type enum RunicTranslations.Compiler.Analysis.TranslationArtifactStatus : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTranslations.Compiler.Analysis.TranslationArtifactStatus Current = 1
+  field const RunicTranslations.Compiler.Analysis.TranslationArtifactStatus Missing = 3
+  field const RunicTranslations.Compiler.Analysis.TranslationArtifactStatus Stale = 2
+  field const RunicTranslations.Compiler.Analysis.TranslationArtifactStatus Unknown = 0
+
+type sealed class RunicTranslations.Compiler.Analysis.TranslationCatalogAnalysis
+  property RunicTranslations.Compiler.Analysis.TranslationArtifactStatus ArtifactStatus { get; }
+  property System.Boolean RequiresRegeneration { get; }
+  property System.Collections.Generic.IReadOnlyList<RunicTranslations.Compiler.Analysis.TranslationKeyAnalysis> Keys { get; }
+  property System.String ArtifactPath { get; }
+  property System.String CatalogId { get; }
+  property System.String ContractFingerprint { get; }
+  property System.String SourceFingerprint { get; }
+
+type enum RunicTranslations.Compiler.Analysis.TranslationContractStatus : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTranslations.Compiler.Analysis.TranslationContractStatus Drift = 1
+  field const RunicTranslations.Compiler.Analysis.TranslationContractStatus Matches = 0
+  field const RunicTranslations.Compiler.Analysis.TranslationContractStatus Missing = 2
+
+type enum RunicTranslations.Compiler.Analysis.TranslationDynamicUsagePolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTranslations.Compiler.Analysis.TranslationDynamicUsagePolicy Conservative = 0
+  field const RunicTranslations.Compiler.Analysis.TranslationDynamicUsagePolicy IgnoreForDeletionCandidates = 1
+
+type sealed class RunicTranslations.Compiler.Analysis.TranslationKeyAnalysis
+  property RunicTranslations.Compiler.Analysis.TranslationUsageClassification Usage { get; }
+  property RunicTranslations.Compiler.Analysis.TranslationUsageLanguage UsageLanguages { get; }
+  property System.Boolean IsDeletionCandidate { get; }
+  property System.Collections.Generic.IReadOnlyList<RunicTranslations.Compiler.Analysis.TranslationLocaleAnalysis> Locales { get; }
+  property System.Collections.Generic.IReadOnlyList<RunicTranslations.Compiler.Analysis.TranslationUsageEvidence> Evidence { get; }
+  property System.String Key { get; }
+
+type sealed class RunicTranslations.Compiler.Analysis.TranslationLocaleAnalysis
+  property RunicTranslations.Compiler.Analysis.TranslationContractStatus ContractStatus { get; }
+  property RunicTranslations.Compiler.Analysis.TranslationLocaleAvailability Availability { get; }
+  property System.String Locale { get; }
+  property System.String ResolvedFromLocale { get; }
+
+type enum RunicTranslations.Compiler.Analysis.TranslationLocaleAvailability : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTranslations.Compiler.Analysis.TranslationLocaleAvailability Direct = 0
+  field const RunicTranslations.Compiler.Analysis.TranslationLocaleAvailability FallbackOnly = 1
+  field const RunicTranslations.Compiler.Analysis.TranslationLocaleAvailability Missing = 2
+
+type enum RunicTranslations.Compiler.Analysis.TranslationUsageClassification : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageClassification PossibleDynamic = 1
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageClassification Proven = 0
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageClassification Unknown = 2
+
+type sealed class RunicTranslations.Compiler.Analysis.TranslationUsageEvidence
+  property RunicTranslations.Compiler.Analysis.TranslationUsageEvidenceKind Kind { get; }
+  property RunicTranslations.Compiler.Analysis.TranslationUsageLanguage Language { get; }
+  property System.Int32 Column { get; }
+  property System.Int32 Line { get; }
+  property System.String Path { get; }
+
+type enum RunicTranslations.Compiler.Analysis.TranslationUsageEvidenceKind : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageEvidenceKind CSharpGeneratedAccessor = 1
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageEvidenceKind CSharpGeneratedKey = 0
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageEvidenceKind CSharpTranslationKey = 2
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageEvidenceKind DynamicLookup = 5
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageEvidenceKind TypeScriptGeneratedIdentifier = 4
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageEvidenceKind TypeScriptMessageNamespace = 3
+
+type enum RunicTranslations.Compiler.Analysis.TranslationUsageLanguage : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable [System.FlagsAttribute]
+  field System.Int32 value__
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageLanguage CSharp = 1
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageLanguage None = 0
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageLanguage TypeScript = 2
+
+type sealed class RunicTranslations.Compiler.Analysis.TranslationUsageSource
+  ctor RunicTranslations.Compiler.Analysis.TranslationUsageSource(System.String path, System.String text, RunicTranslations.Compiler.Analysis.TranslationUsageSourceLanguage language, System.String catalogId = null)
+  property RunicTranslations.Compiler.Analysis.TranslationUsageSourceLanguage Language { get; }
+  property System.String CatalogId { get; }
+  property System.String Path { get; }
+  property System.String Text { get; }
+
+type enum RunicTranslations.Compiler.Analysis.TranslationUsageSourceLanguage : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageSourceLanguage CSharp = 0
+  field const RunicTranslations.Compiler.Analysis.TranslationUsageSourceLanguage TypeScript = 1
+
 type sealed class RunicTranslations.Compiler.CompiledTextCatalog
   property RunicTranslations.Compiler.TranslationMissingKeyPolicy MissingKey { get; }
   property RunicTranslations.Compiler.TranslationUnsupportedLocalePolicy UnsupportedLocale { get; }
@@ -65,6 +176,7 @@ type enum RunicTranslations.Compiler.Generation.TranslationGeneratedOutputKind :
   field const RunicTranslations.Compiler.Generation.TranslationGeneratedOutputKind EsmDynamic = 18
   field const RunicTranslations.Compiler.Generation.TranslationGeneratedOutputKind EsmDynamicTypes = 19
   field const RunicTranslations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessage = 10
+  field const RunicTranslations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessageNamespace = 20
   field const RunicTranslations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessagesIndex = 11
   field const RunicTranslations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessagesTypes = 12
   field const RunicTranslations.Compiler.Generation.TranslationGeneratedOutputKind EsmRuntime = 8
@@ -79,7 +191,7 @@ type enum RunicTranslations.Compiler.Generation.TranslationGeneratedOutputKind :
 type static class RunicTranslations.Compiler.Generation.TranslationOutputRenderer
   field const System.Int32 AssetManifestVersion = 1
   field const System.Int32 CppAbiVersion = 1
-  field const System.Int32 EsmAbiVersion = 1
+  field const System.Int32 EsmAbiVersion = 2
   field const System.Int32 LocaleArtifactV2Version = 2
   field const System.Int32 LocaleArtifactVersion = 1
   field const System.Int32 TemplateManifestVersion = 1

@@ -29,6 +29,19 @@ The `.NET` implementation is under [`dotnet/`](dotnet/).
 The implemented .NET and TypeScript/ESM architecture and delivery record are in
 [`docs/cross-runtime-plan.md`](docs/cross-runtime-plan.md).
 
+Start with the [ten-minute Vite workflow](docs/quickstart-vite.md) and review the
+[compatibility and migration policy](docs/compatibility.md) before coordinating
+compiler, adapter, generated-output, and editor upgrades.
+The generated [locale and formatter capability matrix](docs/capabilities.md)
+defines the first-preview cross-runtime support promise.
+For migration and maintenance, the deterministic [catalog analysis](docs/analysis.md)
+reports locale coverage, contract drift, artifact freshness, and conservative
+C#/TypeScript usage evidence.
+For JSON completion and structural validation, see the [VS Code schema setup](docs/vscode.md).
+Existing JSON or Paraglide/inlang message catalogs can use the diagnostic
+[one-way importer](docs/importing.md); it creates native Runic files and does not
+introduce a foreign runtime or project-format contract.
+
 The customer-facing [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-editor)
 is developed and released from its own repository. It consumes these packages
 as an ordinary downstream application, which keeps editor releases independent
@@ -39,7 +52,7 @@ Version 2 adds portable inputs, local format declarations,
 literal/cardinal/ordinal selectors, ordered multi-selector variants, relative
 time, structured scalar formats, safe semantic markup, and mandatory catch-all
 coverage. It emits typed, independently tree-shakable ESM message modules with no
-runtime pattern parser, plus explicit validated dynamic locale artifacts. Use
+runtime pattern parser, plus an exact-key `m` namespace and explicit validated dynamic locale artifacts. Use
 `--emit-esm`, or `<TranslationsEmitEsm>true</TranslationsEmitEsm>` from MSBuild.
 An opt-in `--emit-cpp` / `TranslationsEmitCpp` C++20 backend is available as a
 feasibility surface and is intentionally excluded from default output selection.
@@ -78,4 +91,5 @@ independent public release. Package identity is intentionally clean-break
 ## License
 
 Runic Translations is licensed under the [MIT License](LICENSE). Third-party
-components, when present, retain their own license and attribution terms.
+components retain their own license and attribution terms; see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

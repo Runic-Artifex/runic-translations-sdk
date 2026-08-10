@@ -21,7 +21,7 @@ public static class TranslationOutputRenderer
     public const int AssetManifestVersion = 1;
 
     /// <summary>The generated ESM API and runtime compatibility version.</summary>
-    public const int EsmAbiVersion = 1;
+    public const int EsmAbiVersion = 2;
 
     /// <summary>The experimental generated C++ ABI compatibility version.</summary>
     public const int CppAbiVersion = 1;

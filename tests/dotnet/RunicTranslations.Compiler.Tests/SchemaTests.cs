@@ -13,6 +13,7 @@ internal static class SchemaTests
     {
         runner.Add("schemas are strict versioned JSON Schema 2020-12 documents", SchemasAreVersionedAndClosed);
         runner.Add("schemas contain only resolvable local references", LocalReferencesResolve);
+        runner.Add("published schema identifiers match their bundled file names", CanonicalIdentifiersMatchFiles);
         runner.Add("valid corpus sources are strict JSON", ValidCorpusSourcesAreStrictJson);
     }
 
@@ -44,6 +45,7 @@ internal static class SchemaTests
         AssertReferencesResolve(ReadSchemaPath("catalog-v2.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("resources-v2.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("message-ast-v2.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("capabilities-v1.schema.json"));
     }
 
     private static void ValidCorpusSourcesAreStrictJson()
@@ -67,6 +69,22 @@ internal static class SchemaTests
             using JsonDocument document = JsonDocument.Parse(utf8, options);
             Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind, path);
             Assert.Equal(1, document.RootElement.GetProperty("schemaVersion").GetInt32(), path);
+        }
+    }
+
+    private static void CanonicalIdentifiersMatchFiles()
+    {
+        string directory = RepositoryPaths.Resolve("spec", "schemas");
+        string[] paths = Directory.GetFiles(directory, "*.schema.json", SearchOption.TopDirectoryOnly);
+        Array.Sort(paths, StringComparer.Ordinal);
+        Assert.True(paths.Length != 0, "No published schemas were found.");
+        foreach (string path in paths)
+        {
+            using JsonDocument schema = ReadSchema(Path.GetFileName(path));
+            Assert.Equal(
+                "https://runic-artifex.eu/schemas/translations/" + Path.GetFileName(path),
+                schema.RootElement.GetProperty("$id").GetString(),
+                path);
         }
     }
 

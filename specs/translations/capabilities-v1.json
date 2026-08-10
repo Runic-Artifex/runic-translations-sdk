@@ -1,0 +1,114 @@
+{
+  "capabilityMatrixVersion": 1,
+  "releaseTarget": "0.1.0-public-preview",
+  "cldr": {
+    "version": "48.2",
+    "jsonTag": "48.2.0",
+    "source": "https://unicode.org/Public/cldr/48.2/cldr-common-48.2.zip",
+    "sha512": "de8660f5371e0fcfd03a42e3b4fc4c686ec6cd602b402f1e3d227844005a54eb7952873894443523837d5828c42874a1a267a19f91ded207a2d166144791fa62",
+    "license": "Unicode-3.0"
+  },
+  "backends": [
+    "dotnet",
+    "esm"
+  ],
+  "equivalence": {
+    "exact": "Backends produce the same canonical value for every accepted portable input.",
+    "semantic": "Backends preserve meaning but platform globalization can change punctuation, spacing, names, or representable decimal precision."
+  },
+  "formatterProfile": {
+    "string": {
+      "default": "exact"
+    },
+    "boolean": {
+      "default": "exact"
+    },
+    "integer": {
+      "plain": "exact",
+      "grouped": "semantic"
+    },
+    "number": {
+      "plain": "semantic",
+      "grouped": "semantic",
+      "fixed": "semantic",
+      "percent": "semantic"
+    },
+    "date": {
+      "iso": "exact",
+      "localized": "semantic"
+    },
+    "time": {
+      "iso": "exact",
+      "localized": "semantic"
+    },
+    "datetime": {
+      "iso": "semantic",
+      "localized": "semantic"
+    },
+    "uuid": {
+      "d": "exact",
+      "n": "exact"
+    }
+  },
+  "messageProfile": {
+    "cardinal": "exact",
+    "ordinal": "exact",
+    "relativeTime": "semantic"
+  },
+  "locales": [
+    {
+      "tag": "da",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false
+    },
+    {
+      "tag": "de",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true
+    },
+    {
+      "tag": "en",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true
+    },
+    {
+      "tag": "es",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true
+    },
+    {
+      "tag": "fr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true
+    },
+    {
+      "tag": "it",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true
+    },
+    {
+      "tag": "nl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false
+    },
+    {
+      "tag": "no",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false
+    },
+    {
+      "tag": "sv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false
+    }
+  ]
+}

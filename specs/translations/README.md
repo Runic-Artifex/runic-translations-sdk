@@ -16,14 +16,18 @@ diagnostic identities.
 | Normalized message AST | 2 |
 | Resolved locale artifact | 1 (grammar 1) and 2 (grammar 2) |
 | Runtime/generated-code ABI | 1 |
-| ESM ABI | 1 |
+| ESM ABI | 2 |
 | Transport contract | 1 |
 
 Package versions are independent from these integers. New cross-runtime schemas
-use canonical `https://runic-artifex.dev/schemas/translations/` identifiers;
+use canonical `https://runic-artifex.eu/schemas/translations/` identifiers;
 legacy wave schemas retain their frozen identity behavior. An instance `$schema`
 member is a semantic compiler concern and is not a behavior selector;
 `schemaVersion` selects compiler behavior.
+
+Every bundled schema's `$id` is its public URL beneath that canonical root. CI
+checks that the URL suffix and bundled filename remain identical. The same bytes
+can be exported for pinned or offline tooling with `runic-translations schema`.
 
 ## Canonical compiler IR
 

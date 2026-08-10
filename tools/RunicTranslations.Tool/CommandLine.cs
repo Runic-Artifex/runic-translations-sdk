@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using RunicTranslations.Authoring;
+using RunicTranslations.Compiler.Analysis;
 
 namespace RunicTranslations.Tool;
 
@@ -14,6 +15,8 @@ internal enum ToolCommand
     Generate,
     Verify,
     Schema,
+    Import,
+    Analyze,
 }
 
 [Flags]
@@ -35,7 +38,19 @@ internal sealed record ToolInvocation(
     IReadOnlyList<string> DocumentPatterns,
     string? OutputPath,
     ToolEmission Emission,
-    TranslationProjectCreationRequest? ProjectCreation);
+    TranslationProjectCreationRequest? ProjectCreation,
+    CatalogImportRequest? CatalogImport,
+    CatalogAnalysisRequest? CatalogAnalysis);
+
+internal sealed record CatalogAnalysisRequest(
+    string CatalogPath,
+    IReadOnlyList<string> DocumentPatterns,
+    IReadOnlyList<string> SourcePatterns,
+    bool Json,
+    bool FailOnFindings,
+    TranslationDynamicUsagePolicy DynamicUsagePolicy,
+    string? ArtifactFingerprint,
+    string? ArtifactPath);
 
 internal static class CommandLine
 {
@@ -58,12 +73,21 @@ internal static class CommandLine
                 throw new ToolUsageException("help does not accept additional arguments.");
             }
 
-            return new ToolInvocation(ToolCommand.Help, null, Array.Empty<string>(), null, ToolEmission.None, null);
+            return new ToolInvocation(ToolCommand.Help, null, Array.Empty<string>(), null, ToolEmission.None, null, null, null);
         }
 
         if (expanded[0] == "init")
         {
             return ParseInit(expanded);
+        }
+
+        if (expanded[0] == "import")
+        {
+            return ParseImport(expanded);
+        }
+        if (expanded[0] == "analyze")
+        {
+            return ParseAnalyze(expanded);
         }
 
         ToolCommand command = expanded[0] switch
@@ -176,7 +200,7 @@ internal static class CommandLine
             emission = ToolEmission.All;
         }
 
-        return new ToolInvocation(command, catalog, documents, output, emission, null);
+        return new ToolInvocation(command, catalog, documents, output, emission, null, null, null);
     }
 
     private static ToolInvocation ParseInit(List<string> arguments)
@@ -190,6 +214,7 @@ internal static class CommandLine
         bool layerSpecified = false;
         bool generateEsm = true;
         bool includeStarter = true;
+        bool includeVsCodeSettings = false;
         var locales = new List<TranslationProjectLocale>();
 
         for (int index = 1; index < arguments.Count; index++)
@@ -227,6 +252,10 @@ internal static class CommandLine
                     if (!includeStarter) throw new ToolUsageException("--no-starter may be specified only once.");
                     includeStarter = false;
                     break;
+                case "--vscode":
+                    if (includeVsCodeSettings) throw new ToolUsageException("--vscode may be specified only once.");
+                    includeVsCodeSettings = true;
+                    break;
                 default:
                     throw new ToolUsageException($"unknown option or positional argument '{option}'.");
             }
@@ -246,8 +275,193 @@ internal static class CommandLine
             locales,
             layer,
             generateEsm,
-            includeStarter);
-        return new ToolInvocation(ToolCommand.Init, null, Array.Empty<string>(), null, ToolEmission.None, request);
+            includeStarter,
+            includeVsCodeSettings);
+        return new ToolInvocation(ToolCommand.Init, null, Array.Empty<string>(), null, ToolEmission.None, request, null, null);
+    }
+
+    private static ToolInvocation ParseImport(List<string> arguments)
+    {
+        string? output = null;
+        string? catalog = null;
+        string? defaultLocale = null;
+        string? codeNamespace = null;
+        string? className = null;
+        bool dryRun = false;
+        bool allowPartial = false;
+        string format = "auto";
+        bool formatSpecified = false;
+        var sources = new List<CatalogImportSource>();
+
+        for (int index = 1; index < arguments.Count; index++)
+        {
+            string option = arguments[index];
+            switch (option)
+            {
+                case "--source":
+                    sources.Add(ParseImportSource(ReadSingleValue(arguments, ref index, option, duplicate: false)));
+                    break;
+                case "--output":
+                    output = ReadSingleValue(arguments, ref index, option, output is not null);
+                    break;
+                case "--catalog":
+                    catalog = ReadSingleValue(arguments, ref index, option, catalog is not null);
+                    break;
+                case "--default-locale":
+                    defaultLocale = ReadSingleValue(arguments, ref index, option, defaultLocale is not null);
+                    break;
+                case "--namespace":
+                    codeNamespace = ReadSingleValue(arguments, ref index, option, codeNamespace is not null);
+                    break;
+                case "--class":
+                    className = ReadSingleValue(arguments, ref index, option, className is not null);
+                    break;
+                case "--dry-run":
+                    if (dryRun) throw new ToolUsageException("--dry-run may be specified only once.");
+                    dryRun = true;
+                    break;
+                case "--allow-partial":
+                    if (allowPartial) throw new ToolUsageException("--allow-partial may be specified only once.");
+                    allowPartial = true;
+                    break;
+                case "--format":
+                    format = ReadSingleValue(arguments, ref index, option, formatSpecified);
+                    formatSpecified = true;
+                    if (format is not ("auto" or "json" or "inlang"))
+                    {
+                        throw new ToolUsageException("--format expects auto, json, or inlang.");
+                    }
+                    break;
+                default:
+                    throw new ToolUsageException($"unknown option or positional argument '{option}'.");
+            }
+        }
+
+        RequireImportOption(output, "--output");
+        RequireImportOption(catalog, "--catalog");
+        RequireImportOption(defaultLocale, "--default-locale");
+        RequireImportOption(codeNamespace, "--namespace");
+        RequireImportOption(className, "--class");
+        if (sources.Count == 0)
+        {
+            throw new ToolUsageException("import requires at least one --source <locale>=<file>.");
+        }
+
+        var request = new CatalogImportRequest(
+            sources,
+            output!,
+            catalog!,
+            defaultLocale!,
+            codeNamespace!,
+            className!,
+            dryRun,
+            allowPartial,
+            format);
+        return new ToolInvocation(ToolCommand.Import, null, Array.Empty<string>(), null, ToolEmission.None, null, request, null);
+    }
+
+    private static ToolInvocation ParseAnalyze(List<string> arguments)
+    {
+        string? catalog = null;
+        string format = "text";
+        bool formatSpecified = false;
+        bool failOnFindings = false;
+        bool unsafeIgnoreDynamic = false;
+        string? artifactFingerprint = null;
+        string? artifactPath = null;
+        var documents = new List<string>();
+        var sources = new List<string>();
+        for (int index = 1; index < arguments.Count; index++)
+        {
+            string option = arguments[index];
+            switch (option)
+            {
+                case "--catalog":
+                    catalog = ReadSingleValue(arguments, ref index, option, catalog is not null);
+                    break;
+                case "--documents":
+                    ReadMany(arguments, ref index, option, documents);
+                    break;
+                case "--sources":
+                    ReadMany(arguments, ref index, option, sources);
+                    break;
+                case "--format":
+                    format = ReadSingleValue(arguments, ref index, option, formatSpecified);
+                    formatSpecified = true;
+                    if (format is not ("text" or "json")) throw new ToolUsageException("--format expects text or json.");
+                    break;
+                case "--fail-on-findings":
+                    if (failOnFindings) throw new ToolUsageException("--fail-on-findings may be specified only once.");
+                    failOnFindings = true;
+                    break;
+                case "--unsafe-ignore-dynamic":
+                    if (unsafeIgnoreDynamic) throw new ToolUsageException("--unsafe-ignore-dynamic may be specified only once.");
+                    unsafeIgnoreDynamic = true;
+                    break;
+                case "--artifact-fingerprint":
+                    artifactFingerprint = ReadSingleValue(arguments, ref index, option, artifactFingerprint is not null);
+                    break;
+                case "--artifact-path":
+                    artifactPath = ReadSingleValue(arguments, ref index, option, artifactPath is not null);
+                    break;
+                default:
+                    throw new ToolUsageException($"unknown option or positional argument '{option}'.");
+            }
+        }
+
+        if (catalog is null) throw new ToolUsageException("analyze requires --catalog <file>.");
+        if (documents.Count == 0) throw new ToolUsageException("analyze requires --documents <path-or-glob...>.");
+        if ((artifactFingerprint is null) != (artifactPath is null))
+            throw new ToolUsageException("--artifact-fingerprint and --artifact-path must be supplied together.");
+        if (artifactFingerprint is not null &&
+            (artifactFingerprint.Length != 71 || !artifactFingerprint.StartsWith("sha256:", StringComparison.Ordinal) ||
+             !IsLowerHex(artifactFingerprint.AsSpan(7))))
+            throw new ToolUsageException("--artifact-fingerprint expects sha256: followed by 64 lowercase hexadecimal characters.");
+
+        var request = new CatalogAnalysisRequest(
+            catalog,
+            documents,
+            sources,
+            format == "json",
+            failOnFindings,
+            unsafeIgnoreDynamic ? TranslationDynamicUsagePolicy.IgnoreForDeletionCandidates : TranslationDynamicUsagePolicy.Conservative,
+            artifactFingerprint,
+            artifactPath);
+        return new ToolInvocation(ToolCommand.Analyze, catalog, documents, null, ToolEmission.None, null, null, request);
+    }
+
+    private static void ReadMany(List<string> arguments, ref int index, string option, List<string> values)
+    {
+        if (values.Count != 0) throw new ToolUsageException($"{option} may be specified only once.");
+        while (index + 1 < arguments.Count && !arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
+            values.Add(arguments[++index]);
+        if (values.Count == 0) throw new ToolUsageException($"{option} requires at least one explicit path or glob.");
+    }
+
+    private static bool IsLowerHex(ReadOnlySpan<char> value)
+    {
+        for (int index = 0; index < value.Length; index++)
+            if (value[index] is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')) return false;
+        return true;
+    }
+
+    private static CatalogImportSource ParseImportSource(string value)
+    {
+        int separator = value.IndexOf('=');
+        if (separator <= 0 || separator == value.Length - 1)
+        {
+            throw new ToolUsageException("--source expects <locale>=<file>.");
+        }
+
+        return new CatalogImportSource(value[..separator], value[(separator + 1)..]);
+    }
+
+    private static void RequireImportOption(string? value, string option)
+    {
+        if (value is null)
+        {
+            throw new ToolUsageException($"import requires {option} <value>.");
+        }
     }
 
     private static TranslationProjectLocale ParseLocale(string value)

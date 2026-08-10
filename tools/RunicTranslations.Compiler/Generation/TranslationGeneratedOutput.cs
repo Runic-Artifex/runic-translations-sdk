@@ -47,6 +47,8 @@ public enum TranslationGeneratedOutputKind
     EsmDynamic,
     /// <summary>TypeScript declarations for explicit runtime-loaded v2 locale artifacts.</summary>
     EsmDynamicTypes,
+    /// <summary>The internal exact-key re-export index backing the public ESM message namespace.</summary>
+    EsmMessageNamespace,
 }
 
 /// <summary>A deterministic, UTF-8 compiler output for exactly one concern.</summary>

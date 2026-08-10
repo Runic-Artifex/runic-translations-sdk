@@ -50,17 +50,18 @@ internal static class SchemaV2Tests
             """;
         const string ordinalManifest = """
             {"schemaVersion":2,"catalog":"ordinal","code":{"namespace":"Tests","className":"OrdinalText"},"defaultLocale":"en",
-             "locales":[{"tag":"en"}],"layers":[{"name":"base","priority":0}]}
+             "locales":[{"tag":"en"},{"tag":"de","fallback":"en"},{"tag":"es","fallback":"en"},{"tag":"fr","fallback":"en"},{"tag":"it","fallback":"en"},{"tag":"nl","fallback":"en"},{"tag":"sv","fallback":"en"},{"tag":"no","fallback":"en"},{"tag":"da","fallback":"en"}],
+             "layers":[{"name":"base","priority":0}],"validation":{"translationCompleteness":"allow"}}
             """;
         const string cardinal = """
             {"schemaVersion":2,"catalog":"cardinal","locale":"en","layer":"base","resources":{"Category":{"$value":{
               "inputs":{"value":{"type":"decimal"}},"selectors":[{"name":"category","input":"value","function":"plural"}],
-              "variants":[{"match":{"category":"one"},"value":"one"},{"match":{"category":"*"},"value":"other"}]}}}}
+              "variants":[{"match":{"category":"one"},"value":"one"},{"match":{"category":"many"},"value":"many"},{"match":{"category":"*"},"value":"other"}]}}}}
             """;
         const string ordinal = """
             {"schemaVersion":2,"catalog":"ordinal","locale":"en","layer":"base","resources":{"Category":{"$value":{
               "inputs":{"value":{"type":"int64"}},"selectors":[{"name":"category","input":"value","function":"ordinal"}],
-              "variants":[{"match":{"category":"one"},"value":"one"},{"match":{"category":"two"},"value":"two"},{"match":{"category":"few"},"value":"few"},{"match":{"category":"*"},"value":"other"}]}}}}
+              "variants":[{"match":{"category":"one"},"value":"one"},{"match":{"category":"two"},"value":"two"},{"match":{"category":"few"},"value":"few"},{"match":{"category":"many"},"value":"many"},{"match":{"category":"*"},"value":"other"}]}}}}
             """;
         var compilation = RunicTranslations.Compiler.TranslationCompiler.Compile(
             [CompilerTests.Source("cardinal-manifest.json", cardinalManifest), CompilerTests.Source("ordinal-manifest.json", ordinalManifest)],
@@ -81,11 +82,15 @@ internal static class SchemaV2Tests
             string script = Path.Combine(directory, "test.mjs");
             File.WriteAllText(script, """
                 import { readFile } from "node:fs/promises";
-                import { m$Category as cardinal } from "./cardinal.esm/messages.js";
-                import { m$Category as ordinal } from "./ordinal.esm/messages.js";
+                import { m as cardinalMessages } from "./cardinal.esm/messages.js";
+                import { m as ordinalMessages } from "./ordinal.esm/messages.js";
+                const cardinal = cardinalMessages.Category;
+                const ordinal = ordinalMessages.Category;
                 const corpus = JSON.parse(await readFile(new URL("./cases.json", import.meta.url), "utf8"));
                 for (const item of corpus.cases) {
-                  const actual = item.ordinal ? ordinal({ value: BigInt(item.value) }) : cardinal({ value: Number(item.value) }, { locale: item.locale });
+                  const actual = item.ordinal
+                    ? ordinal({ value: BigInt(item.value) }, { locale: item.locale })
+                    : cardinal({ value: item.integer ? BigInt(item.value) : Number(item.value) }, { locale: item.locale });
                   if (actual !== item.expected) throw new Error(`${item.locale}/${item.value}: expected ${item.expected}; actual ${actual}`);
                 }
                 """, new UTF8Encoding(false));
@@ -102,7 +107,8 @@ internal static class SchemaV2Tests
     {
         const string manifest = """
             { "schemaVersion": 2, "catalog": "features", "code": { "namespace": "Tests", "className": "FeatureText" },
-              "defaultLocale": "en", "locales": [{"tag":"en"}], "layers": [{"name":"base","priority":0}] }
+              "defaultLocale": "en", "locales": [{"tag":"en"},{"tag":"de","fallback":"en"},{"tag":"es","fallback":"en"},{"tag":"fr","fallback":"en"},{"tag":"it","fallback":"en"}],
+              "layers": [{"name":"base","priority":0}], "validation":{"translationCompleteness":"allow"} }
             """;
         const string english = """
             { "schemaVersion":2, "catalog":"features", "locale":"en", "layer":"base", "resources": {
@@ -151,14 +157,16 @@ internal static class SchemaV2Tests
             TranslationGeneratedOutput localeArtifact = TranslationOutputRenderer.RenderLocaleJson(catalog, "en");
             Assert.True(localeArtifact.RelativePath.EndsWith("locale-v2.json", StringComparison.Ordinal), "Schema v2 was emitted as a v1 locale artifact.");
             File.WriteAllBytes(Path.Combine(directory, "artifact.json"), localeArtifact.GetUtf8Bytes());
+            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "spec", "corpus", "v2-relative-time-conformance.json"), Path.Combine(directory, "relative-cases.json"));
             string script = Path.Combine(directory, "test.mjs");
             File.WriteAllText(script, """
                 import { readFile } from "node:fs/promises";
-                import { m$Dashboard$Summary } from "./features.esm/messages.js";
+                import { m } from "./features.esm/messages.js";
+                import { formatRelativeTime } from "./features.esm/runtime.js";
                 import { decodeLocaleArtifact, formatDynamicMessage } from "./features.esm/dynamic.js";
-                const exact = m$Dashboard$Summary({ count: 1n, delta: -1, owner: "admin" });
+                const exact = m["Dashboard.Summary"]({ count: 1n, delta: -1, owner: "admin" });
                 if (exact.kind !== "localized-content" || exact.nodes.map(node => node.value).join("") !== "Exactly 1") throw new Error("multi-selector exact variant failed");
-                const content = m$Dashboard$Summary({ count: 1234n, delta: -1, owner: "guest" });
+                const content = m["Dashboard.Summary"]({ count: 1234n, delta: -1, owner: "guest" });
                 if (content.kind !== "localized-content" || content.nodes.length !== 3) throw new Error("structured result failed");
                 const strong = content.nodes[0];
                 if (strong.kind !== "element" || strong.name !== "strong" || strong.attributes.tone !== "critical") throw new Error("semantic markup failed");
@@ -175,6 +183,11 @@ internal static class SchemaV2Tests
                 if (!decoded.ok) throw new Error(`dynamic artifact rejected: ${decoded.reason}`);
                 const dynamic = formatDynamicMessage(decoded.value, "Dashboard.Summary", { count: 1234n, delta: -1, owner: "guest" });
                 if (JSON.stringify(dynamic) !== JSON.stringify(content)) throw new Error("compiled and dynamic modes diverged");
+                const relativeCorpus = JSON.parse(await readFile(new URL("./relative-cases.json", import.meta.url), "utf8"));
+                for (const item of relativeCorpus.cases) {
+                  const actual = formatRelativeTime({ value: Number(item.value) }, "value", item.unit, item.numeric, item.locale);
+                  if (actual !== item.expected) throw new Error(`${item.locale}/${item.value}/${item.unit}: expected ${item.expected}; actual ${actual}`);
+                }
                 """, new UTF8Encoding(false));
             var start = new ProcessStartInfo("node", script) { RedirectStandardError = true, UseShellExecute = false };
             using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Node.js.");
@@ -242,10 +255,10 @@ internal static class SchemaV2Tests
             }
             string script = Path.Combine(directory, "test.mjs");
             File.WriteAllText(script, """
-                import { m$Files$Deleted } from "./v2.esm/messages.js";
-                if (m$Files$Deleted({ count: 1n }) !== "One file") throw new Error("cardinal one failed");
-                if (m$Files$Deleted({ count: 3n }) !== "3 files") throw new Error("catch-all failed");
-                if (m$Files$Deleted({ count: 1n }, { locale: "de" }) !== "Eine Datei") throw new Error("localized variant failed");
+                import { m } from "./v2.esm/messages.js";
+                if (m["Files.Deleted"]({ count: 1n }) !== "One file") throw new Error("cardinal one failed");
+                if (m["Files.Deleted"]({ count: 3n }) !== "3 files") throw new Error("catch-all failed");
+                if (m["Files.Deleted"]({ count: 1n }, { locale: "de" }) !== "Eine Datei") throw new Error("localized variant failed");
                 """, new UTF8Encoding(false));
             var start = new ProcessStartInfo("node", script) { RedirectStandardError = true, UseShellExecute = false };
             using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Node.js.");

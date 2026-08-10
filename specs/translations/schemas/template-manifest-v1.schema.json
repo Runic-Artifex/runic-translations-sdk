@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/template-manifest-v1.schema.json",
   "title": "Runic Translations Template Manifest v1",
   "description": "Versioned, value-free edge contract for template compilers and editor tooling. It does not authorize template syntax or runtime behavior.",
   "type": "object",

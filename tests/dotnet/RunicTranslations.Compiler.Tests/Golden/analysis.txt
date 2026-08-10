@@ -1,0 +1,12 @@
+Runic Translations analysis v1 (dynamic usage: conservative)
+catalog alpha artifact=unknown source={{alphaSourceFingerprint}}
+  completeness direct=1 fallback-only=0 missing=0 contract-drift=0
+  usage proven=1 possible-dynamic=0 unknown=0 deletion-candidates=0
+  Shared.Key usage=proven languages=csharp,typescript deletion-candidate=false locales=en:direct
+    src/alpha.cs:1:11 csharp-generated-key
+    src/alpha.ts:1:1 typescript-message-namespace
+catalog beta artifact=unknown source={{betaSourceFingerprint}}
+  completeness direct=1 fallback-only=0 missing=0 contract-drift=0
+  usage proven=0 possible-dynamic=1 unknown=0 deletion-candidates=0
+  Shared.Key usage=possible-dynamic languages=typescript deletion-candidate=false locales=en:direct
+    src/beta.ts:2:1 dynamic-lookup

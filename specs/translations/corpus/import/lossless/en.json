@@ -1,0 +1,29 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "plain": "Hello",
+  "nested": {
+    "welcome-message": "Welcome, {name}!",
+    "amount": "Total: {value: number}",
+    "rich": "Read {#strong}carefully{/strong}."
+  },
+  "items": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "One item",
+        "countPlural=other": "{count} items"
+      }
+    }
+  ],
+  "audience": [
+    {
+      "declarations": ["input role"],
+      "selectors": ["role"],
+      "match": {
+        "role=admin": "Administrator",
+        "role=other": "User"
+      }
+    }
+  ]
+}

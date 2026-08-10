@@ -70,9 +70,10 @@ public static class TranslationProjectScaffolder
             locales.GetRange(1, locales.Count - 1),
             layerName,
             request.GenerateEsm,
-            request.IncludeStarterMessage);
+            request.IncludeStarterMessage,
+            request.IncludeVsCodeSettings);
 
-        var files = new List<TranslationProjectFile>(locales.Count + 1)
+        var files = new List<TranslationProjectFile>(locales.Count + 2)
         {
             new($"{catalogId}.catalog.json", RenderManifest(canonicalRequest, locales)),
         };
@@ -82,12 +83,18 @@ public static class TranslationProjectScaffolder
                 $"{catalogId}.{locales[index].Tag}.json",
                 RenderDocument(canonicalRequest, locales[index].Tag)));
         }
-
         files.Sort((left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
         TranslationCompilation compilation = Compile(files);
         if (!compilation.Success)
         {
             throw new TranslationAuthoringException(FormatDiagnostics(compilation.Diagnostics));
+        }
+        if (canonicalRequest.IncludeVsCodeSettings)
+        {
+            files.Add(new TranslationProjectFile(
+                ".vscode/settings.json",
+                RenderVsCodeSettings(canonicalRequest.CatalogId)));
+            files.Sort((left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
         }
 
         return new TranslationProjectPlan(canonicalRequest, locales.ToArray(), files.ToArray(), compilation);
@@ -165,6 +172,27 @@ public static class TranslationProjectScaffolder
 
         writer.WriteEndObject();
         writer.WriteEndObject();
+    });
+
+    private static byte[] RenderVsCodeSettings(string catalogId) => RenderJson(writer =>
+    {
+        const string schemaRoot = "https://runic-artifex.eu/schemas/translations/";
+        writer.WriteStartObject();
+        writer.WriteStartArray("json.schemas");
+        WriteAssociation(writer, schemaRoot + "catalog-v2.schema.json", ["**/*.catalog.json"]);
+        WriteAssociation(writer, schemaRoot + "resources-v2.schema.json", ["**/" + catalogId + ".*.json", "!**/" + catalogId + ".catalog.json"]);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+
+        static void WriteAssociation(Utf8JsonWriter writer, string url, string[] patterns)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("url", url);
+            writer.WriteStartArray("fileMatch");
+            for (int index = 0; index < patterns.Length; index++) writer.WriteStringValue(patterns[index]);
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
     });
 
     private static byte[] RenderJson(Action<Utf8JsonWriter> write)

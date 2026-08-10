@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/web-module-manifest-v1.schema.json",
   "title": "RunicTranslations Web Module Manifest v1",
   "description": "Inventory and entrypoints for one deterministic generated ESM catalog.",
   "type": "object",
@@ -13,7 +14,7 @@
   ],
   "properties": {
     "webModuleManifestVersion": { "const": 1 },
-    "esmAbiVersion": { "const": 1 },
+    "esmAbiVersion": { "const": 2 },
     "catalog": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
     "contractFingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "entrypoints": {

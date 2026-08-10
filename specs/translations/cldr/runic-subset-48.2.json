@@ -1,0 +1,35 @@
+{
+  "source": {
+    "cldrVersion": "48.2",
+    "cldrJsonTag": "48.2.0",
+    "archive": "https://unicode.org/Public/cldr/48.2/cldr-common-48.2.zip",
+    "archiveSha512": "de8660f5371e0fcfd03a42e3b4fc4c686ec6cd602b402f1e3d227844005a54eb7952873894443523837d5828c42874a1a267a19f91ded207a2d166144791fa62",
+    "license": "Unicode-3.0"
+  },
+  "locales": [
+    { "tag": "da", "cardinalRule": "danish", "ordinalRule": "other" },
+    { "tag": "de", "cardinalRule": "integer-one", "ordinalRule": "other", "relativeTime": {
+      "autoDay": ["gestern", "heute", "morgen"], "past": "vor {0} {unit}", "future": "in {0} {unit}",
+      "units": { "second": ["Sekunde", "Sekunden"], "minute": ["Minute", "Minuten"], "hour": ["Stunde", "Stunden"], "day": ["Tag", "Tagen"], "week": ["Woche", "Wochen"], "month": ["Monat", "Monaten"], "year": ["Jahr", "Jahren"] }
+    } },
+    { "tag": "en", "cardinalRule": "integer-one", "ordinalRule": "english", "relativeTime": {
+      "autoDay": ["yesterday", "today", "tomorrow"], "past": "{0} {unit} ago", "future": "in {0} {unit}",
+      "units": { "second": ["second", "seconds"], "minute": ["minute", "minutes"], "hour": ["hour", "hours"], "day": ["day", "days"], "week": ["week", "weeks"], "month": ["month", "months"], "year": ["year", "years"] }
+    } },
+    { "tag": "es", "cardinalRule": "one-and-million", "ordinalRule": "other", "relativeTime": {
+      "autoDay": ["ayer", "hoy", "mañana"], "past": "hace {0} {unit}", "future": "dentro de {0} {unit}",
+      "units": { "second": ["segundo", "segundos"], "minute": ["minuto", "minutos"], "hour": ["hora", "horas"], "day": ["día", "días"], "week": ["semana", "semanas"], "month": ["mes", "meses"], "year": ["año", "años"] }
+    } },
+    { "tag": "fr", "cardinalRule": "french", "ordinalRule": "one", "relativeTime": {
+      "autoDay": ["hier", "aujourd’hui", "demain"], "past": "il y a {0} {unit}", "future": "dans {0} {unit}",
+      "units": { "second": ["seconde", "secondes"], "minute": ["minute", "minutes"], "hour": ["heure", "heures"], "day": ["jour", "jours"], "week": ["semaine", "semaines"], "month": ["mois", "mois"], "year": ["an", "ans"] }
+    } },
+    { "tag": "it", "cardinalRule": "one-and-million", "ordinalRule": "italian", "relativeTime": {
+      "autoDay": ["ieri", "oggi", "domani"], "past": "{0} {unit} fa", "future": "tra {0} {unit}",
+      "units": { "second": ["secondo", "secondi"], "minute": ["minuto", "minuti"], "hour": ["ora", "ore"], "day": ["giorno", "giorni"], "week": ["settimana", "settimane"], "month": ["mese", "mesi"], "year": ["anno", "anni"] }
+    } },
+    { "tag": "nl", "cardinalRule": "integer-one", "ordinalRule": "other" },
+    { "tag": "no", "cardinalRule": "one", "ordinalRule": "other" },
+    { "tag": "sv", "cardinalRule": "integer-one", "ordinalRule": "swedish" }
+  ]
+}

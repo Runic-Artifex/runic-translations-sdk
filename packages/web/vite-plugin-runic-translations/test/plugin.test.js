@@ -19,6 +19,7 @@ test("resolves generated entrypoints and declares watch inputs", async () => {
   const manifest = join(generated, "web-module-manifest-v1.json");
   await writeFile(manifest, JSON.stringify({
     webModuleManifestVersion: 1,
+    esmAbiVersion: 2,
     catalog: "app",
     entrypoints: { messages: "messages.js", runtime: "runtime.js", types: "messages.d.ts" },
     assets: [
@@ -44,6 +45,7 @@ test("rejects manifest paths that escape the generated root", async () => {
   const manifest = join(root, "web-module-manifest-v1.json");
   await writeFile(manifest, JSON.stringify({
     webModuleManifestVersion: 1,
+    esmAbiVersion: 2,
     catalog: "app",
     entrypoints: { messages: "../messages.js", runtime: "runtime.js" },
     assets: [],
@@ -52,29 +54,88 @@ test("rejects manifest paths that escape the generated root", async () => {
   await assert.rejects(() => plugin.resolveId("virtual:runic-translations/app"), /escapes/);
 });
 
+test("runs the pinned compiler workflow before loading generated modules", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-compiler-"));
+  try {
+    const generated = join(root, "generated", "app.esm");
+    await mkdir(generated, { recursive: true });
+    await writeFile(join(generated, "messages.js"), "export const m = {};\n");
+    await writeFile(join(generated, "runtime.js"), "export const locale = 'en';\n");
+    await writeFile(join(generated, "transport.js"), "export const version = 1;\n");
+    await writeFile(join(generated, "dynamic.js"), "export const version = 2;\n");
+    const manifest = join(generated, "web-module-manifest-v1.json");
+    await writeFile(manifest, JSON.stringify({
+      webModuleManifestVersion: 1,
+      esmAbiVersion: 2,
+      catalog: "app",
+      entrypoints: { messages: "messages.js", runtime: "runtime.js", types: "messages.d.ts", dynamic: "dynamic.js" },
+      assets: [
+        { path: "messages.js" }, { path: "runtime.js" }, { path: "transport.js" }, { path: "dynamic.js" },
+      ],
+    }));
+    const catalog = join(root, "app.catalog.json");
+    const document = join(root, "app.en.json");
+    const calls = join(root, "compiler-calls.txt");
+    await writeFile(catalog, "{}\n");
+    await writeFile(document, "{}\n");
+    const compiler = join(root, "compiler.mjs");
+    await writeFile(compiler, `import { appendFile } from "node:fs/promises"; await appendFile(${JSON.stringify(calls)}, process.argv.slice(2).join("|") + "\\n");\n`);
+    const plugin = runicTranslations({
+      manifest,
+      compiler: {
+        catalog,
+        documents: [document],
+        output: join(root, "generated"),
+        command: process.execPath,
+        commandArguments: [compiler],
+      },
+    });
+    const watched = [];
+    await plugin.buildStart.call({ addWatchFile(path) { watched.push(path); } });
+    assert.ok(watched.includes(catalog));
+    assert.ok(watched.includes(document));
+    await plugin.handleHotUpdate({
+      file: document,
+      server: { moduleGraph: { getModuleById() { return undefined; }, invalidateModule() {} } },
+    });
+    const invocations = (await readFile(calls, "utf8")).trim().split("\n");
+    assert.equal(invocations.length, 2);
+    for (const invocation of invocations) {
+      assert.match(invocation, /^generate\|--catalog\|/);
+      assert.match(invocation, /\|--documents\|/);
+      assert.match(invocation, /\|--output\|/);
+      assert.match(invocation, /\|--emit-esm$/);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Vite production build tree-shakes unrelated generated messages", async () => {
   const root = await mkdtemp(join(tmpdir(), "runic-vite-production-"));
   try {
     const generated = join(root, "generated", "app.esm");
     const messages = join(generated, "messages");
     await mkdir(messages, { recursive: true });
-    await writeFile(join(messages, "used.js"), "export const used = () => 'USED_MESSAGE';\n");
-    await writeFile(join(messages, "unused.js"), "export const unused = () => 'UNRELATED_MESSAGE_SENTINEL';\n");
-    await writeFile(join(generated, "messages.js"), "export { used } from './messages/used.js';\nexport { unused } from './messages/unused.js';\n");
+    await writeFile(join(messages, "used.js"), "export const internalUsed = () => 'USED_MESSAGE';\n");
+    await writeFile(join(messages, "unused.js"), "export const internalUnused = () => 'UNRELATED_MESSAGE_SENTINEL';\n");
+    await writeFile(join(messages, "_index.js"), "export { internalUsed as used } from './used.js';\nexport { internalUnused as unused } from './unused.js';\n");
+    await writeFile(join(generated, "messages.js"), "export * as m from './messages/_index.js';\n");
     await writeFile(join(generated, "runtime.js"), "export const locale = 'en';\n");
     await writeFile(join(generated, "transport.js"), "export const version = 1;\n");
     const manifest = join(generated, "web-module-manifest-v1.json");
     await writeFile(manifest, JSON.stringify({
       webModuleManifestVersion: 1,
+      esmAbiVersion: 2,
       catalog: "app",
       entrypoints: { messages: "messages.js", runtime: "runtime.js", types: "messages.d.ts" },
       assets: [
-        { path: "messages.js" }, { path: "messages/used.js" }, { path: "messages/unused.js" },
+        { path: "messages.js" }, { path: "messages/_index.js" }, { path: "messages/used.js" }, { path: "messages/unused.js" },
         { path: "runtime.js" }, { path: "transport.js" },
       ],
     }));
     const entry = join(root, "main.js");
-    await writeFile(entry, "import { used } from 'virtual:runic-translations/app'; export const result = used();\n");
+    await writeFile(entry, "import { m } from 'virtual:runic-translations/app'; export const result = m.used();\n");
     const outDir = join(root, "dist");
     await build({
       configFile: false,
@@ -100,6 +161,7 @@ test("source changes invalidate every loaded Runic virtual module for HMR", asyn
     const manifest = join(generated, "web-module-manifest-v1.json");
     await writeFile(manifest, JSON.stringify({
       webModuleManifestVersion: 1, catalog: "app",
+      esmAbiVersion: 2,
       entrypoints: { messages: "messages.js", runtime: "runtime.js", types: "messages.d.ts" },
       assets: [{ path: "messages.js" }, { path: "runtime.js" }, { path: "transport.js" }, { path: "dynamic.js" }],
     }));
