@@ -51,7 +51,7 @@ let snapshot: WorkspaceSnapshot = {
   diagnostics: [],
   success: true,
   review: {
-    path: ".runic-textresources/customer-product.editor-state.json",
+    path: ".runic-translations/customer-product.editor-state.json",
     revision: "mock-review-1",
     entries: [
       { key: "Common.Save", locale: "de", state: "approved", sourceFingerprint: "outdated", samples: {} },
@@ -127,7 +127,7 @@ export const mockBridge: EditorBridge = {
   },
   async saveReview(request) {
     snapshot.review = {
-      path: snapshot.review?.path ?? ".runic-textresources/customer-product.editor-state.json",
+      path: snapshot.review?.path ?? ".runic-translations/customer-product.editor-state.json",
       revision: crypto.randomUUID(),
       entries: structuredClone(request.entries),
       terminology: structuredClone(request.terminology),

@@ -1,6 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json.Nodes;
-using RunicTextResources.Authoring;
+using RunicTranslations.Authoring;
 
 namespace RunicTranslations.Editor;
 

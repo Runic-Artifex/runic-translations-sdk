@@ -12,7 +12,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Runic Translations tool restore failed." }
     npm --prefix $frontend ci --ignore-scripts --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw "Frontend dependency restore failed." }
-    dotnet build $project --configuration $Configuration -p:RunicTextResourcesBuildMode=Verification
+    dotnet build $project --configuration $Configuration -p:RunicTranslationsBuildMode=Verification
     if ($LASTEXITCODE -ne 0) { throw "Warning-free editor build failed." }
 
     node (Join-Path $frontend "test/verify-message-preview.mjs")

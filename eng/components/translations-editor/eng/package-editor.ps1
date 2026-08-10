@@ -37,7 +37,7 @@ try {
         --self-contained true `
         --no-restore `
         --output $publishRoot `
-        -p:RunicTextResourcesBuildMode=Verification `
+        -p:RunicTranslationsBuildMode=Verification `
         -p:Version=$Version `
         -p:SourceRevisionId=$RepositoryCommit `
         -p:RunicEditorUpdateChannel=preview

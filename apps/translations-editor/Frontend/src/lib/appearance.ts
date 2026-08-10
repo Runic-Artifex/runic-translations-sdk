@@ -4,8 +4,8 @@ export const themePalettes = ["runic", "moss", "fjord", "ember"] as const;
 export type ThemeMode = typeof themeModes[number];
 export type ThemePalette = typeof themePalettes[number];
 
-const modeKey = "runic-text-resources.theme-mode";
-const paletteKey = "runic-text-resources.theme-palette";
+const modeKey = "runic-translations.theme-mode";
+const paletteKey = "runic-translations.theme-palette";
 
 export function readAppearance(): { mode: ThemeMode; palette: ThemePalette } {
   if (typeof localStorage === "undefined") return { mode: "dark", palette: "runic" };

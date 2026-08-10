@@ -2,9 +2,9 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using RunicTextResources.Authoring;
-using RunicTextResources.Compiler;
-using RunicTextResources.Compiler.Generation;
+using RunicTranslations.Authoring;
+using RunicTranslations.Compiler;
+using RunicTranslations.Compiler.Generation;
 
 namespace RunicTranslations.Editor;
 
@@ -26,7 +26,7 @@ internal sealed class EditorWorkspace : IDisposable
         _root = Path.GetFullPath(root);
         _catalogId = catalogId;
         if (!Directory.Exists(_root))
-            throw new DirectoryNotFoundException($"The text-resource workspace '{_root}' does not exist.");
+            throw new DirectoryNotFoundException($"The translation workspace '{_root}' does not exist.");
         _watcher = new FileSystemWatcher(_root)
         {
             IncludeSubdirectories = true,
@@ -336,7 +336,7 @@ internal sealed class EditorWorkspace : IDisposable
 
         files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         if (replacementPath is not null && !files.Exists(file => string.Equals(file.Path, replacementPath, StringComparison.Ordinal)))
-            throw new ArgumentException($"'{replacementPath}' is not a text-resource file in this workspace.", nameof(replacementPath));
+            throw new ArgumentException($"'{replacementPath}' is not a translation file in this workspace.", nameof(replacementPath));
 
         TextResourceSource[] manifests = (_catalogId is null ? Enumerable.Empty<WorkspaceFile>() : files)
             .Where(static file => file.Kind == DocumentKind.Manifest)
@@ -568,7 +568,7 @@ internal sealed class EditorWorkspace : IDisposable
         if (!fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return;
         string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
         if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)) return;
-        if (relativePath.StartsWith(".runic-textresources/", StringComparison.Ordinal)) return;
+        if (relativePath.StartsWith(".runic-translations/", StringComparison.Ordinal)) return;
         _pendingChanges.TryAdd(relativePath, 0);
     }
 

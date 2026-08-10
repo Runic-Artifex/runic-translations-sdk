@@ -10,10 +10,10 @@
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <ImplicitUsings>enable</ImplicitUsings>
-    <TextResourcesEmitEsm>true</TextResourcesEmitEsm>
-    <TextResourcesToolCommand>dotnet tool run runic-textresources --</TextResourcesToolCommand>
-    <TextResourcesRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TextResourcesRuntimePath>
-    <TextResourcesOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TextResourcesRuntimePath)text-resources</TextResourcesOutputPath>
+    <TranslationsEmitEsm>true</TranslationsEmitEsm>
+    <TranslationsToolCommand>dotnet tool run runic-translations --</TranslationsToolCommand>
+    <TranslationsRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TranslationsRuntimePath>
+    <TranslationsOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</TranslationsOutputPath>
     <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
   </PropertyGroup>
 
@@ -24,9 +24,9 @@
 
   <ItemGroup>
     <PackageReference Include="CsWebUi" />
-    <PackageReference Include="RunicTextResources.Authoring" />
-    <PackageReference Include="RunicTextResources.Build" PrivateAssets="all" />
-    <PackageReference Include="RunicTextResources.Compiler" />
+    <PackageReference Include="RunicTranslations.Authoring" />
+    <PackageReference Include="RunicTranslations.Build" PrivateAssets="all" />
+    <PackageReference Include="RunicTranslations.Compiler" />
   </ItemGroup>
 
   <ItemGroup>
@@ -42,21 +42,21 @@
     <None Include="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <Target Name="BuildTextResourcesEditorFrontend"
+  <Target Name="BuildTranslationsEditorFrontend"
           BeforeTargets="BeforeCompile"
-          DependsOnTargets="RunicTextResourcesGenerateTextResourceArtifacts"
-          Inputs="@(EditorFrontendInput);$(TextResourcesOutputPath)/editor.esm/web-module-manifest-v1.json"
+          DependsOnTargets="RunicTranslationsGenerateTextResourceArtifacts"
+          Inputs="@(EditorFrontendInput);$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json"
           Outputs="Frontend/build/index.html">
     <Exec WorkingDirectory="Frontend"
           Command="npm ci --ignore-scripts --no-audit --no-fund" />
     <Exec WorkingDirectory="Frontend"
           Command="npm run build"
-          EnvironmentVariables="RUNIC_TEXT_MANIFEST=$(MSBuildProjectDirectory)/$(TextResourcesOutputPath)/editor.esm/web-module-manifest-v1.json" />
+          EnvironmentVariables="RUNIC_TEXT_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json" />
   </Target>
 
-  <Target Name="CopyTextResourcesEditorFrontend"
+  <Target Name="CopyTranslationsEditorFrontend"
           AfterTargets="Build"
-          DependsOnTargets="BuildTextResourcesEditorFrontend">
+          DependsOnTargets="BuildTranslationsEditorFrontend">
     <ItemGroup>
       <_EditorFrontendOutput Include="Frontend/build/**/*" />
     </ItemGroup>
@@ -65,9 +65,9 @@
           SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="IncludeTextResourcesEditorFrontendInPublish"
+  <Target Name="IncludeTranslationsEditorFrontendInPublish"
           BeforeTargets="ComputeFilesToPublish"
-          DependsOnTargets="BuildTextResourcesEditorFrontend">
+          DependsOnTargets="BuildTranslationsEditorFrontend">
     <ItemGroup>
       <_EditorFrontendPublish Include="Frontend/build/**/*" />
       <ResolvedFileToPublish Include="@(_EditorFrontendPublish)"

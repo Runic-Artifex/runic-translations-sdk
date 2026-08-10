@@ -1,5 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
-import { runicTextResources } from "@runic-artifex/vite-plugin-text-resources";
+import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
 
@@ -12,7 +12,7 @@ if (manifest === undefined || manifest.length === 0) {
 export default defineConfig({
   plugins: [
     tailwindcss(),
-    runicTextResources({
+    runicTranslations({
       manifest,
       sourceFiles: [
         "../EditorResources/editor.en.json",

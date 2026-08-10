@@ -22,7 +22,7 @@
     m$App$Unsaved,
     m$App$Valid,
     m$App$Workspace,
-  } from "virtual:runic-text-resources/editor";
+  } from "virtual:runic-translations/editor";
   import type {
     EditorAbout,
     EditorDiagnostic,
@@ -1110,7 +1110,7 @@
   }
 
   function draftStorageKey(value: WorkspaceSnapshot): string {
-    return `runic-text-resources:drafts:1:${value.root}\n${value.catalog?.id ?? ""}`;
+    return `runic-translations:drafts:1:${value.root}\n${value.catalog?.id ?? ""}`;
   }
 
   function persistDrafts(): void {
@@ -1153,7 +1153,7 @@
 
   function readRecentProjects(): RecentProject[] {
     try {
-      const value = JSON.parse(localStorage.getItem("runic-text-resources:recent:1") ?? "[]") as unknown;
+      const value = JSON.parse(localStorage.getItem("runic-translations:recent:1") ?? "[]") as unknown;
       if (!Array.isArray(value)) return [];
       return value.filter((item): item is RecentProject =>
         typeof item === "object" && item !== null &&
@@ -1170,7 +1170,7 @@
     if (catalogId === undefined) return;
     const entry = { root: value.root, catalogId, openedAt: new Date().toISOString() };
     recentProjects = [entry, ...recentProjects.filter((item) => item.root !== entry.root || item.catalogId !== catalogId)].slice(0, 8);
-    localStorage.setItem("runic-text-resources:recent:1", JSON.stringify(recentProjects));
+    localStorage.setItem("runic-translations:recent:1", JSON.stringify(recentProjects));
   }
 
   function beginRepair(document: EditorDocument): void {
@@ -1886,7 +1886,7 @@
   <AppDialog
     open
     title="New translation project"
-    description="Create compiler-valid text resources without overwriting an existing directory."
+    description="Create compiler-valid translations without overwriting an existing directory."
     class="sm:max-w-3xl"
     showCloseButton={!projectBusy}
     onopenchange={(open) => { if (!open && !projectBusy) closeProjectWizard(); }}

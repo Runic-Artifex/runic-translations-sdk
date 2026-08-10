@@ -1,4 +1,4 @@
-declare module "virtual:runic-text-resources/editor" {
+declare module "virtual:runic-translations/editor" {
   type Options = Readonly<{ locale?: string }>;
   type Message = (options?: Options) => string;
 

@@ -57,8 +57,8 @@ for (const palette of themePalettes) {
   }
 }
 
-stored.set("runic-text-resources.theme-mode", "sepia");
-stored.set("runic-text-resources.theme-palette", "unknown");
+stored.set("runic-translations.theme-mode", "sepia");
+stored.set("runic-translations.theme-palette", "unknown");
 assert.deepEqual(readAppearance(), { mode: "dark", palette: "runic" });
 
 const css = await readFile(new URL("../src/routes/layout.css", import.meta.url), "utf8");

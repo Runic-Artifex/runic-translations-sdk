@@ -1,13 +1,13 @@
 <Project>
   <PropertyGroup>
-    <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == '' and '$(CI)' == 'true'">Verification</RunicTextResourcesBuildMode>
-    <RunicTextResourcesBuildMode Condition="'$(RunicTextResourcesBuildMode)' == ''">Development</RunicTextResourcesBuildMode>
-    <RunicTextResourcesVerificationBuild Condition="'$(RunicTextResourcesBuildMode)' == 'Verification'">true</RunicTextResourcesVerificationBuild>
-    <RunicTextResourcesVerificationBuild Condition="'$(RunicTextResourcesVerificationBuild)' == ''">false</RunicTextResourcesVerificationBuild>
+    <RunicTranslationsBuildMode Condition="'$(RunicTranslationsBuildMode)' == '' and '$(CI)' == 'true'">Verification</RunicTranslationsBuildMode>
+    <RunicTranslationsBuildMode Condition="'$(RunicTranslationsBuildMode)' == ''">Development</RunicTranslationsBuildMode>
+    <RunicTranslationsVerificationBuild Condition="'$(RunicTranslationsBuildMode)' == 'Verification'">true</RunicTranslationsVerificationBuild>
+    <RunicTranslationsVerificationBuild Condition="'$(RunicTranslationsVerificationBuild)' == ''">false</RunicTranslationsVerificationBuild>
     <LangVersion>14.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <TreatWarningsAsErrors Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors Condition="'$(RunicTranslationsVerificationBuild)' == 'true'">true</TreatWarningsAsErrors>
     <TreatWarningsAsErrors Condition="'$(TreatWarningsAsErrors)' == ''">false</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
@@ -24,7 +24,7 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <PackageProjectUrl>https://github.com/Runic-Artifex/runic-translations-editor</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <NuGetAudit Condition="'$(RunicTextResourcesVerificationBuild)' == 'true'">true</NuGetAudit>
+    <NuGetAudit Condition="'$(RunicTranslationsVerificationBuild)' == 'true'">true</NuGetAudit>
     <NuGetAudit Condition="'$(NuGetAudit)' == ''">false</NuGetAudit>
     <VersionPrefix Condition="'$(VersionPrefix)' == ''">0.1.0</VersionPrefix>
   </PropertyGroup>

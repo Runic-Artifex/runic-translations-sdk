@@ -11,7 +11,7 @@ credential-gated as specified by E6.
 
 Turn the current `RunicTranslations.Editor` application into the customer-facing
 application for creating, editing, validating, reviewing, and maintaining Runic
-Text Resources projects.
+Translations projects.
 
 The product must be comfortable for a customer whose application has only one
 language and must scale to projects with many locales, fallbacks, layers,
@@ -20,7 +20,7 @@ knowledge of the JSON schema. The complete schema-v2 surface must remain
 available through guided controls and an explicit raw JSON escape hatch.
 
 This plan also adds first-class project creation. A customer must be able to
-start with an empty directory using the editor, the `runic-textresources` CLI,
+start with an empty directory using the editor, the `runic-translations` CLI,
 or a .NET template.
 
 ## Product principles
@@ -82,7 +82,7 @@ CsWebUi, Svelte, Vite, or any application framework.
 ```mermaid
 flowchart TD
     T[".NET templates"] --> F["Generated minimal files"]
-    C["runic-textresources CLI"] --> A["Runic authoring layer"]
+    C["runic-translations CLI"] --> A["Runic authoring layer"]
     E["Translations Editor"] --> A
     A --> D["Discovery and project model"]
     A --> S["Scaffolding and mutations"]
@@ -94,7 +94,7 @@ flowchart TD
     F --> K
 ```
 
-Create `RunicTextResources.Authoring` as a non-UI assembly in this repository.
+Create `RunicTranslations.Authoring` as a non-UI assembly in this repository.
 Initially it is an implementation dependency shipped inside the CLI and editor,
 not a promised public extensibility API. It can become a supported package after
 the editor and CLI have exercised the contracts.
@@ -106,7 +106,7 @@ Responsibilities:
 - create new projects and locale documents;
 - create, rename, move, and delete resource keys;
 - mutate messages without discarding unknown formatting or canonical metadata;
-- validate proposed changes with `RunicTextResources.Compiler`;
+- validate proposed changes with `RunicTranslations.Compiler`;
 - create and commit bounded multi-file transactions;
 - expose diagnostics and edit locations as data-transfer records suitable for
   the CLI and CsWebUi bridge.
@@ -140,10 +140,10 @@ compiles it, then commits it through a workspace transaction.
 
 ### CLI
 
-Add these commands to `runic-textresources`:
+Add these commands to `runic-translations`:
 
 ```bash
-runic-textresources init \
+runic-translations init \
   --directory Resources \
   --catalog product \
   --default-locale de \
@@ -151,9 +151,9 @@ runic-textresources init \
   --namespace Customer.Product \
   --class ProductText
 
-runic-textresources locale add --catalog Resources/product.catalog.json --locale es --fallback de
-runic-textresources locale remove --catalog Resources/product.catalog.json --locale fr
-runic-textresources key add --catalog Resources/product.catalog.json --key Common.Save
+runic-translations locale add --catalog Resources/product.catalog.json --locale es --fallback de
+runic-translations locale remove --catalog Resources/product.catalog.json --locale fr
+runic-translations key add --catalog Resources/product.catalog.json --key Common.Save
 ```
 
 `init` is the full-fidelity noninteractive interface and supports any number of
@@ -178,26 +178,26 @@ directly in source-editing mode.
 
 ### .NET templates
 
-Add a `RunicTextResources.Templates` template pack with two templates:
+Add a `RunicTranslations.Templates` template pack with two templates:
 
-1. `runic-textresources` — an item-style template that adds a minimal resource
+1. `runic-translations` — an item-style template that adds a minimal resource
    folder to an existing .NET project.
-2. `runic-textresources-project` — a standalone .NET class-library project with
+2. `runic-translations-project` — a standalone .NET class-library project with
    the runtime, generator/build integration, one schema-v2 catalog, one default
    locale document, and optional ESM generation enabled.
 
 Example:
 
 ```bash
-dotnet new install RunicTextResources.Templates
-dotnet new runic-textresources \
+dotnet new install RunicTranslations.Templates
+dotnet new runic-translations \
   --output Resources \
   --catalog product \
   --defaultLocale de \
   --namespace Customer.Product \
   --className ProductText
 
-dotnet new runic-textresources-project \
+dotnet new runic-translations-project \
   --name Customer.Product.Text \
   --catalog product \
   --defaultLocale de
@@ -206,7 +206,7 @@ dotnet new runic-textresources-project \
 .NET templates are intentionally responsible only for a valid minimal
 single-locale project. Static template expansion is not used to imitate an
 arbitrary locale loop or fallback graph. Customers add arbitrary locale sets
-through the editor wizard or `runic-textresources init`.
+through the editor wizard or `runic-translations init`.
 
 Template output is tested by the same compiler and package-consumer pipeline as
 CLI/editor output. The template pack is versioned and published with the other
@@ -362,7 +362,7 @@ Build one editor surface per increasing capability level.
 
 Compiler inputs should not acquire editor-only workflow fields. Define an
 optional, separately versioned sidecar contract such as
-`runic.textresources.editor-state/1` for:
+`runic.translations.editor-state/1` for:
 
 - per key/locale state: draft, translated, needs-review, approved;
 - translator/reviewer notes without account identity requirements;
@@ -413,11 +413,11 @@ Status: complete.
 
 Deliverables:
 
-- `RunicTextResources.Authoring` project and test suite;
+- `RunicTranslations.Authoring` project and test suite;
 - canonical project creation request and renderer;
-- `runic-textresources init`;
+- `runic-translations init`;
 - editor New Project wizard;
-- `RunicTextResources.Templates` with minimal item and standalone templates;
+- `RunicTranslations.Templates` with minimal item and standalone templates;
 - package-consumer tests for CLI, editor, and both templates.
 
 Acceptance:

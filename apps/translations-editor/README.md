@@ -4,7 +4,7 @@
 
 A focused desktop editor for [Runic Translations](https://github.com/Runic-Artifex/runic-translations) workspaces. The interface is designed around translators: locale coverage, message search, review state, structured variants, variables, previews, and quality feedback are available without editing JSON directly.
 
-This repository owns the editor application, its cross-platform preview archives, and editor releases. The compiler, schema, runtime, command-line tooling, and language integrations remain in the Runic Translations repository. Existing `RunicTextResources.*` package and code identifiers are intentionally retained for compatibility.
+This repository owns the editor application, its cross-platform preview archives, and editor releases. The compiler, schema, runtime, command-line tooling, and language integrations remain in the Runic Translations repository. Its dependencies use the canonical `RunicTranslations.*` package and code identifiers.
 
 ## Run locally
 
@@ -26,7 +26,7 @@ Add `--webview` to request an embedded WebView instead of the recommended instal
 For frontend-only development, build the .NET project once so the localized ESM module exists, then run:
 
 ```bash
-RUNIC_TEXT_MANIFEST=../obj/Debug/net10.0/text-resources/editor.esm/web-module-manifest-v1.json \
+RUNIC_TEXT_MANIFEST=../obj/Debug/net10.0/translations/editor.esm/web-module-manifest-v1.json \
   npm --prefix Frontend run dev:mock
 ```
 

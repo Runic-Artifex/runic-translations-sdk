@@ -4,12 +4,12 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project="$repository_root/RunicTranslations.Editor.csproj"
 frontend="$repository_root/Frontend"
-manifest="$repository_root/obj/Release/net10.0/text-resources/editor.esm/web-module-manifest-v1.json"
+manifest="$repository_root/obj/Release/net10.0/translations/editor.esm/web-module-manifest-v1.json"
 
 dotnet tool restore
 npm --prefix "$frontend" ci --ignore-scripts --no-audit --no-fund
 dotnet build "$project" -c Release --nologo \
-  -p:RunicTextResourcesBuildMode=Verification
+  -p:RunicTranslationsBuildMode=Verification
 
 RUNIC_TEXT_MANIFEST="$manifest" npm --prefix "$frontend" run check
 RUNIC_TEXT_MANIFEST="$manifest" npm --prefix "$frontend" run build

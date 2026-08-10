@@ -1,4 +1,4 @@
-using RunicTextResources.Authoring;
+using RunicTranslations.Authoring;
 
 namespace RunicTranslations.Editor;
 
