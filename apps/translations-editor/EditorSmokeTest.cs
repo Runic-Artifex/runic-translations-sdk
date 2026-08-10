@@ -82,8 +82,8 @@ internal static class EditorSmokeTest
             Require(!conflict.Ok && conflict.Kind == "conflict", "An obsolete revision overwrote a newer document.");
 
             string secondProjectPath = Path.Combine(temporaryRoot, "SecondCatalog");
-            TextResourceProjectWriter.Create(TextResourceProjectScaffolder.Render(
-                new TextResourceProjectCreationRequest(
+            TranslationProjectWriter.Create(TranslationProjectScaffolder.Render(
+                new TranslationProjectCreationRequest(
                     secondProjectPath,
                     "backoffice",
                     "en",

@@ -11,8 +11,8 @@ npm --prefix "$frontend" ci --ignore-scripts --no-audit --no-fund
 dotnet build "$project" -c Release --nologo \
   -p:RunicTranslationsBuildMode=Verification
 
-RUNIC_TEXT_MANIFEST="$manifest" npm --prefix "$frontend" run check
-RUNIC_TEXT_MANIFEST="$manifest" npm --prefix "$frontend" run build
+RUNIC_TRANSLATIONS_MANIFEST="$manifest" npm --prefix "$frontend" run check
+RUNIC_TRANSLATIONS_MANIFEST="$manifest" npm --prefix "$frontend" run build
 node "$frontend/test/verify-appearance.mjs"
 node "$frontend/test/verify-message-preview.mjs"
 node "$frontend/test/verify-review-model.mjs"

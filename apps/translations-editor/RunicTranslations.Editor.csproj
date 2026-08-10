@@ -30,9 +30,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <TextResourceCatalog Include="EditorResources/editor.catalog.json" />
-    <TextResourceDocument Include="EditorResources/editor.en.json" />
-    <TextResourceDocument Include="EditorResources/editor.de.json" />
+    <TranslationCatalog Include="EditorResources/editor.catalog.json" />
+    <TranslationDocument Include="EditorResources/editor.en.json" />
+    <TranslationDocument Include="EditorResources/editor.de.json" />
     <EditorFrontendInput Include="Frontend/package.json;Frontend/package-lock.json;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/*.json" />
     <None Update="ExampleWorkspace/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -44,14 +44,14 @@
 
   <Target Name="BuildTranslationsEditorFrontend"
           BeforeTargets="BeforeCompile"
-          DependsOnTargets="RunicTranslationsGenerateTextResourceArtifacts"
+          DependsOnTargets="RunicTranslationsGenerateTranslationArtifacts"
           Inputs="@(EditorFrontendInput);$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json"
           Outputs="Frontend/build/index.html">
     <Exec WorkingDirectory="Frontend"
           Command="npm ci --ignore-scripts --no-audit --no-fund" />
     <Exec WorkingDirectory="Frontend"
           Command="npm run build"
-          EnvironmentVariables="RUNIC_TEXT_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json" />
+          EnvironmentVariables="RUNIC_TRANSLATIONS_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json" />
   </Target>
 
   <Target Name="CopyTranslationsEditorFrontend"

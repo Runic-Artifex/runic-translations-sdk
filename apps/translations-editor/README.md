@@ -26,7 +26,7 @@ Add `--webview` to request an embedded WebView instead of the recommended instal
 For frontend-only development, build the .NET project once so the localized ESM module exists, then run:
 
 ```bash
-RUNIC_TEXT_MANIFEST=../obj/Debug/net10.0/translations/editor.esm/web-module-manifest-v1.json \
+RUNIC_TRANSLATIONS_MANIFEST=../obj/Debug/net10.0/translations/editor.esm/web-module-manifest-v1.json \
   npm --prefix Frontend run dev:mock
 ```
 

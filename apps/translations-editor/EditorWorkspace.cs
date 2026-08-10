@@ -53,7 +53,7 @@ internal sealed class EditorWorkspace : IDisposable
             if (!overflowed && _pendingChanges.IsEmpty)
                 return new EditorExternalChanges(false, [], []);
 
-            TextResourceWorkspaceDiscoveryResult discovery = TextResourceWorkspaceDiscovery.Discover(_root, cancellationToken: cancellationToken);
+            TranslationWorkspaceDiscoveryResult discovery = TranslationWorkspaceDiscovery.Discover(_root, cancellationToken: cancellationToken);
             Dictionary<string, string> current = Fingerprints(discovery);
             var candidates = new HashSet<string>(_pendingChanges.Keys, StringComparer.Ordinal);
             _pendingChanges.Clear();
@@ -74,7 +74,7 @@ internal sealed class EditorWorkspace : IDisposable
             for (int index = 0; index < changed.Length; index++)
             {
                 string path = changed[index];
-                if (!discoveredByPath.TryGetValue(path, out TextResourceWorkspaceFile? file))
+                if (!discoveredByPath.TryGetValue(path, out TranslationWorkspaceFile? file))
                 {
                     changes[index] = new EditorExternalFileChange(path, false, null, null);
                     continue;
@@ -96,7 +96,7 @@ internal sealed class EditorWorkspace : IDisposable
         try
         {
             ThrowIfDisposed();
-            TextResourcePendingTransaction? pending = TextResourceWorkspaceTransaction.GetPending(_root);
+            TranslationPendingTransaction? pending = TranslationWorkspaceTransaction.GetPending(_root);
             if (pending is not null)
             {
                 return new WorkspaceSnapshot(
@@ -156,7 +156,7 @@ internal sealed class EditorWorkspace : IDisposable
             if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
                 return new EditorMessagePreview(false, null, null, diagnostics);
 
-            TextResourceGeneratedOutput artifact = TextResourceOutputRenderer.RenderLocaleJson(
+            TranslationGeneratedOutput artifact = TranslationOutputRenderer.RenderLocaleJson(
                 state.Compilation.Catalogs[0], locale);
             using JsonDocument document = JsonDocument.Parse(artifact.Text);
             JsonElement messages = document.RootElement.GetProperty("messages");
@@ -266,16 +266,16 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             if (_catalogId is null) return new EditorReviewOperationResult(false, "Select a catalog before saving review data.", null);
-            var state = new TextResourceEditorState(
+            var state = new TranslationEditorState(
                 _catalogId,
-                request.Entries.Select(static entry => new TextResourceEditorStateEntry(
+                request.Entries.Select(static entry => new TranslationEditorStateEntry(
                     entry.Key, entry.Locale, entry.State, entry.Note, entry.SourceFingerprint, entry.Samples)).ToArray(),
-                request.Terminology.Select(static term => new TextResourceTerminologyEntry(
+                request.Terminology.Select(static term => new TranslationTerminologyEntry(
                     term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
-            TextResourceEditorStateLoadResult saved = TextResourceEditorStateStore.Save(_root, state, request.ExpectedRevision);
+            TranslationEditorStateLoadResult saved = TranslationEditorStateStore.Save(_root, state, request.ExpectedRevision);
             return new EditorReviewOperationResult(true, null, Review(saved));
         }
-        catch (Exception exception) when (exception is TextResourceEditorStateException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
         {
             return new EditorReviewOperationResult(false, exception.Message, null);
         }
@@ -299,7 +299,7 @@ internal sealed class EditorWorkspace : IDisposable
         string? replacementContent,
         CancellationToken cancellationToken)
     {
-        TextResourceWorkspaceDiscoveryResult discovery = TextResourceWorkspaceDiscovery.Discover(_root, cancellationToken: cancellationToken);
+        TranslationWorkspaceDiscoveryResult discovery = TranslationWorkspaceDiscovery.Discover(_root, cancellationToken: cancellationToken);
         if (replacementPath is null)
         {
             ReplaceKnownRevisions(Fingerprints(discovery));
@@ -312,7 +312,7 @@ internal sealed class EditorWorkspace : IDisposable
             throw new ArgumentException($"Catalog '{_catalogId}' was not found in this workspace.");
 
         var files = new List<WorkspaceFile>(discovery.Files.Count);
-        foreach (TextResourceWorkspaceFile discoveredFile in discovery.Files)
+        foreach (TranslationWorkspaceFile discoveredFile in discovery.Files)
         {
             cancellationToken.ThrowIfCancellationRequested();
             string relativePath = discoveredFile.RelativePath;
@@ -338,15 +338,15 @@ internal sealed class EditorWorkspace : IDisposable
         if (replacementPath is not null && !files.Exists(file => string.Equals(file.Path, replacementPath, StringComparison.Ordinal)))
             throw new ArgumentException($"'{replacementPath}' is not a translation file in this workspace.", nameof(replacementPath));
 
-        TextResourceSource[] manifests = (_catalogId is null ? Enumerable.Empty<WorkspaceFile>() : files)
+        TranslationSource[] manifests = (_catalogId is null ? Enumerable.Empty<WorkspaceFile>() : files)
             .Where(static file => file.Kind == DocumentKind.Manifest)
             .Select(static file => Source(file.Path, file.Content))
             .ToArray();
-        TextResourceSource[] documents = (_catalogId is null ? Enumerable.Empty<WorkspaceFile>() : files)
+        TranslationSource[] documents = (_catalogId is null ? Enumerable.Empty<WorkspaceFile>() : files)
             .Where(static file => file.Kind == DocumentKind.Resource)
             .Select(static file => Source(file.Path, file.Content))
             .ToArray();
-        TextResourceCompilation compilation = TextResourceCompiler.Compile(manifests, documents, cancellationToken);
+        TranslationCompilation compilation = TranslationCompiler.Compile(manifests, documents, cancellationToken);
         return Task.FromResult(new WorkspaceState(files, compilation, CatalogSummaries(discovery)));
     }
 
@@ -373,11 +373,11 @@ internal sealed class EditorWorkspace : IDisposable
         }
         EditorReviewSnapshot? review = _catalogId is null
             ? null
-            : Review(TextResourceEditorStateStore.Load(_root, _catalogId));
+            : Review(TranslationEditorStateStore.Load(_root, _catalogId));
         return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state.Compilation), state.Compilation.Success, null, review);
     }
 
-    private static EditorReviewSnapshot Review(TextResourceEditorStateLoadResult result) => new(
+    private static EditorReviewSnapshot Review(TranslationEditorStateLoadResult result) => new(
         result.Path,
         result.Revision,
         result.Error,
@@ -386,16 +386,16 @@ internal sealed class EditorWorkspace : IDisposable
         result.State.Terminology.Select(static term => new EditorTerminologyEntry(
             term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
 
-    private static EditorDiagnostic[] Diagnostics(TextResourceCompilation compilation)
+    private static EditorDiagnostic[] Diagnostics(TranslationCompilation compilation)
     {
         var result = new EditorDiagnostic[compilation.Diagnostics.Count];
         for (int index = 0; index < result.Length; index++)
         {
-            TextResourceDiagnostic diagnostic = compilation.Diagnostics[index];
+            TranslationDiagnostic diagnostic = compilation.Diagnostics[index];
             TextSourceLocation location = diagnostic.Location;
             result[index] = new EditorDiagnostic(
                 diagnostic.Id,
-                diagnostic.Severity == TextResourceDiagnosticSeverity.Error ? "error" : "warning",
+                diagnostic.Severity == TranslationDiagnosticSeverity.Error ? "error" : "warning",
                 diagnostic.Message,
                 location.Path,
                 location.Line,
@@ -482,21 +482,21 @@ internal sealed class EditorWorkspace : IDisposable
         }
     }
 
-    private static DocumentKind ToDocumentKind(TextResourceWorkspaceFileKind kind) => kind switch
+    private static DocumentKind ToDocumentKind(TranslationWorkspaceFileKind kind) => kind switch
     {
-        TextResourceWorkspaceFileKind.CatalogManifest => DocumentKind.Manifest,
-        TextResourceWorkspaceFileKind.ResourceDocument => DocumentKind.Resource,
-        TextResourceWorkspaceFileKind.MalformedJson => DocumentKind.Malformed,
+        TranslationWorkspaceFileKind.CatalogManifest => DocumentKind.Manifest,
+        TranslationWorkspaceFileKind.ResourceDocument => DocumentKind.Resource,
+        TranslationWorkspaceFileKind.MalformedJson => DocumentKind.Malformed,
         _ => DocumentKind.Unrelated,
     };
 
-    private static EditorCatalogSummary[] CatalogSummaries(TextResourceWorkspaceDiscoveryResult discovery)
+    private static EditorCatalogSummary[] CatalogSummaries(TranslationWorkspaceDiscoveryResult discovery)
     {
         var summaries = new EditorCatalogSummary[discovery.Catalogs.Count];
         for (int index = 0; index < summaries.Length; index++)
         {
-            TextResourceDiscoveredCatalog catalog = discovery.Catalogs[index];
-            int errors = catalog.Compilation.Diagnostics.Count(diagnostic => diagnostic.Severity == TextResourceDiagnosticSeverity.Error);
+            TranslationDiscoveredCatalog catalog = discovery.Catalogs[index];
+            int errors = catalog.Compilation.Diagnostics.Count(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
             int warnings = catalog.Compilation.Diagnostics.Count - errors;
             CompiledTextCatalog? compiled = catalog.Compilation.Catalogs.Count == 0 ? null : catalog.Compilation.Catalogs[0];
             summaries[index] = new EditorCatalogSummary(
@@ -532,14 +532,14 @@ internal sealed class EditorWorkspace : IDisposable
 
     private static string NormalizeRelativePath(string path) => path.Replace('\\', '/').TrimStart('/');
 
-    private static TextResourceSource Source(string path, string content) => new(path, StrictUtf8.GetBytes(content));
+    private static TranslationSource Source(string path, string content) => new(path, StrictUtf8.GetBytes(content));
 
     private static string Revision(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    private static Dictionary<string, string> Fingerprints(TextResourceWorkspaceDiscoveryResult discovery)
+    private static Dictionary<string, string> Fingerprints(TranslationWorkspaceDiscoveryResult discovery)
     {
         var result = new Dictionary<string, string>(discovery.Files.Count, StringComparer.Ordinal);
-        foreach (TextResourceWorkspaceFile file in discovery.Files)
+        foreach (TranslationWorkspaceFile file in discovery.Files)
             result[file.RelativePath] = Revision(file.GetUtf8Bytes());
         return result;
     }
@@ -595,6 +595,6 @@ internal sealed class EditorWorkspace : IDisposable
 
     private sealed record WorkspaceState(
         List<WorkspaceFile> Files,
-        TextResourceCompilation Compilation,
+        TranslationCompilation Compilation,
         IReadOnlyList<EditorCatalogSummary> Catalogs);
 }

@@ -26,10 +26,10 @@ internal sealed class EditorSession : IDisposable
         try
         {
             ThrowIfDisposed();
-            TextResourceWorkspaceTransactionPlan plan = PlanMutation(_workspace, request);
+            TranslationWorkspaceTransactionPlan plan = PlanMutation(_workspace, request);
             return new EditorMutationPreview(true, null, MutationFiles(plan));
         }
-        catch (Exception exception) when (exception is TextResourceAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return new EditorMutationPreview(false, exception.Message, []);
         }
@@ -48,12 +48,12 @@ internal sealed class EditorSession : IDisposable
         try
         {
             ThrowIfDisposed();
-            TextResourceWorkspaceTransactionPlan plan = PlanMutation(_workspace, request);
-            TextResourceWorkspaceTransaction.Commit(plan);
+            TranslationWorkspaceTransactionPlan plan = PlanMutation(_workspace, request);
+            TranslationWorkspaceTransaction.Commit(plan);
             WorkspaceSnapshot snapshot = await _workspace.LoadAsync(cancellationToken).ConfigureAwait(false);
             return new EditorOperationResult(true, "mutated", null, snapshot, null);
         }
-        catch (Exception exception) when (exception is TextResourceAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return new EditorOperationResult(false, "workspace-mutation", exception.Message, null, null);
         }
@@ -72,17 +72,17 @@ internal sealed class EditorSession : IDisposable
         try
         {
             ThrowIfDisposed();
-            TextResourceWorkspaceRecoveryMode mode = request.Mode switch
+            TranslationWorkspaceRecoveryMode mode = request.Mode switch
             {
-                "complete" => TextResourceWorkspaceRecoveryMode.Complete,
-                "rollback" => TextResourceWorkspaceRecoveryMode.Rollback,
+                "complete" => TranslationWorkspaceRecoveryMode.Complete,
+                "rollback" => TranslationWorkspaceRecoveryMode.Rollback,
                 _ => throw new ArgumentException("Recovery mode must be 'complete' or 'rollback'."),
             };
-            TextResourceWorkspaceTransaction.Recover(_workspace.Root, mode);
+            TranslationWorkspaceTransaction.Recover(_workspace.Root, mode);
             WorkspaceSnapshot snapshot = await _workspace.LoadAsync(cancellationToken).ConfigureAwait(false);
             return new EditorOperationResult(true, "recovered", null, snapshot, null);
         }
-        catch (Exception exception) when (exception is TextResourceAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return new EditorOperationResult(false, "workspace-recovery", exception.Message, null, null);
         }
@@ -138,7 +138,7 @@ internal sealed class EditorSession : IDisposable
         ArgumentNullException.ThrowIfNull(request);
         try
         {
-            TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(ToAuthoringRequest(request));
+            TranslationProjectPlan plan = TranslationProjectScaffolder.Render(ToAuthoringRequest(request));
             return new EditorProjectPlan(
                 true,
                 null,
@@ -147,7 +147,7 @@ internal sealed class EditorSession : IDisposable
                 plan.Locales.Select(static locale => new EditorLocale(locale.Tag, locale.Fallback)).ToArray(),
                 plan.Files.Select(static file => file.RelativePath).ToArray());
         }
-        catch (Exception exception) when (exception is TextResourceAuthoringException or ArgumentException or IOException)
+        catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException)
         {
             return new EditorProjectPlan(false, exception.Message, request.Directory, request.CatalogId, [], []);
         }
@@ -162,8 +162,8 @@ internal sealed class EditorSession : IDisposable
         try
         {
             ThrowIfDisposed();
-            TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(ToAuthoringRequest(request));
-            string target = TextResourceProjectWriter.Create(plan);
+            TranslationProjectPlan plan = TranslationProjectScaffolder.Render(ToAuthoringRequest(request));
+            string target = TranslationProjectWriter.Create(plan);
             var replacement = new EditorWorkspace(target);
             try
             {
@@ -179,7 +179,7 @@ internal sealed class EditorSession : IDisposable
                 throw;
             }
         }
-        catch (Exception exception) when (exception is TextResourceAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return new EditorOperationResult(false, "project-creation", exception.Message, null, null);
         }
@@ -213,7 +213,7 @@ internal sealed class EditorSession : IDisposable
                 throw;
             }
         }
-        catch (Exception exception) when (exception is TextResourceAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return new EditorOperationResult(false, "workspace-open", exception.Message, null, null);
         }
@@ -247,49 +247,49 @@ internal sealed class EditorSession : IDisposable
         }
     }
 
-    private static TextResourceProjectCreationRequest ToAuthoringRequest(EditorProjectCreationRequest request) => new(
+    private static TranslationProjectCreationRequest ToAuthoringRequest(EditorProjectCreationRequest request) => new(
         request.Directory,
         request.CatalogId,
         request.DefaultLocale,
         request.CodeNamespace,
         request.ClassName,
-        request.AdditionalLocales.Select(static locale => new TextResourceProjectLocale(locale.Tag, locale.Fallback)),
+        request.AdditionalLocales.Select(static locale => new TranslationProjectLocale(locale.Tag, locale.Fallback)),
         request.LayerName,
         request.GenerateEsm,
         request.IncludeStarterMessage);
 
-    private static TextResourceWorkspaceTransactionPlan PlanMutation(EditorWorkspace workspace, EditorMutationRequest request)
+    private static TranslationWorkspaceTransactionPlan PlanMutation(EditorWorkspace workspace, EditorMutationRequest request)
     {
         string catalogId = workspace.CatalogId
-            ?? throw new TextResourceAuthoringException("Select a catalog before changing locales or keys.");
+            ?? throw new TranslationAuthoringException("Select a catalog before changing locales or keys.");
         return request.Kind switch
         {
-            "add-locale" => TextResourceWorkspaceMutation.AddLocale(new TextResourceAddLocaleRequest(
+            "add-locale" => TranslationWorkspaceMutation.AddLocale(new TranslationAddLocaleRequest(
                 workspace.Root, catalogId, request.Locale ?? string.Empty, request.Fallback,
                 request.Layer ?? string.Empty, request.CopyFromLocale ?? string.Empty)),
-            "remove-locale" => TextResourceWorkspaceMutation.RemoveLocale(new TextResourceRemoveLocaleRequest(
+            "remove-locale" => TranslationWorkspaceMutation.RemoveLocale(new TranslationRemoveLocaleRequest(
                 workspace.Root, catalogId, request.Locale ?? string.Empty, request.ReplacementFallback)),
-            "set-fallback" => TextResourceWorkspaceMutation.SetFallback(new TextResourceSetFallbackRequest(
+            "set-fallback" => TranslationWorkspaceMutation.SetFallback(new TranslationSetFallbackRequest(
                 workspace.Root, catalogId, request.Locale ?? string.Empty, request.Fallback)),
-            "create-key" => TextResourceWorkspaceMutation.CreateKey(new TextResourceCreateKeyRequest(
+            "create-key" => TranslationWorkspaceMutation.CreateKey(new TranslationCreateKeyRequest(
                 workspace.Root, catalogId, request.TargetKey ?? string.Empty, request.InitialValue ?? string.Empty, request.Layer ?? string.Empty)),
-            "rename-key" => KeyMutation(TextResourceKeyMutationKind.RenameOrMove),
-            "duplicate-key" => KeyMutation(TextResourceKeyMutationKind.Duplicate),
-            "delete-key" => KeyMutation(TextResourceKeyMutationKind.Delete),
-            _ => throw new TextResourceAuthoringException($"Unknown editor mutation '{request.Kind}'."),
+            "rename-key" => KeyMutation(TranslationKeyMutationKind.RenameOrMove),
+            "duplicate-key" => KeyMutation(TranslationKeyMutationKind.Duplicate),
+            "delete-key" => KeyMutation(TranslationKeyMutationKind.Delete),
+            _ => throw new TranslationAuthoringException($"Unknown editor mutation '{request.Kind}'."),
         };
 
-        TextResourceWorkspaceTransactionPlan KeyMutation(TextResourceKeyMutationKind kind) =>
-            TextResourceWorkspaceMutation.MutateKey(new TextResourceKeyMutationRequest(
+        TranslationWorkspaceTransactionPlan KeyMutation(TranslationKeyMutationKind kind) =>
+            TranslationWorkspaceMutation.MutateKey(new TranslationKeyMutationRequest(
                 workspace.Root, catalogId, kind, request.SourceKey ?? string.Empty, request.TargetKey));
     }
 
-    private static EditorMutationFile[] MutationFiles(TextResourceWorkspaceTransactionPlan plan)
+    private static EditorMutationFile[] MutationFiles(TranslationWorkspaceTransactionPlan plan)
     {
         var result = new EditorMutationFile[plan.Edits.Count];
         for (int index = 0; index < result.Length; index++)
         {
-            TextResourceWorkspaceEdit edit = plan.Edits[index];
+            TranslationWorkspaceEdit edit = plan.Edits[index];
             string fullPath = Path.GetFullPath(edit.RelativePath.Replace('/', Path.DirectorySeparatorChar), plan.Root);
             byte[]? replacement = edit.GetUtf8Bytes();
             result[index] = new EditorMutationFile(

@@ -3,10 +3,10 @@ import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
 
-const manifest = process.env.RUNIC_TEXT_MANIFEST;
+const manifest = process.env.RUNIC_TRANSLATIONS_MANIFEST;
 
 if (manifest === undefined || manifest.length === 0) {
-  throw new Error("RUNIC_TEXT_MANIFEST must point to the generated editor web-module manifest.");
+  throw new Error("RUNIC_TRANSLATIONS_MANIFEST must point to the generated editor web-module manifest.");
 }
 
 export default defineConfig({
