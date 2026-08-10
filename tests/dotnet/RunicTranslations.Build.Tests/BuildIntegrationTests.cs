@@ -27,7 +27,7 @@ internal static class BuildIntegrationTests
     private static void ImportsExposeSentinels()
     {
         using TemporaryDirectory temporary = CreateConsumer(generationEnabled: false);
-        ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Consumer.csproj", "/nologo", "/t:DumpTextResourceItems", "/v:minimal");
+        ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Consumer.csproj", "/nologo", "/t:DumpTranslationItems", "/v:minimal");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string[] lines = File.ReadAllLines(temporary.Resolve("dump.txt"));
         Assert.True(lines.Contains("PropsImported=true", StringComparer.Ordinal), "Props import sentinel was not true.");
@@ -37,7 +37,7 @@ internal static class BuildIntegrationTests
     private static void ItemsMapToAdditionalFiles()
     {
         using TemporaryDirectory temporary = CreateConsumer(generationEnabled: false);
-        ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Consumer.csproj", "/nologo", "/t:DumpTextResourceItems", "/v:minimal");
+        ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Consumer.csproj", "/nologo", "/t:DumpTranslationItems", "/v:minimal");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string dump = File.ReadAllText(temporary.Resolve("dump.txt"), Encoding.UTF8).Replace('\\', '/');
         Assert.Contains("manifest|Catalog", dump);
@@ -55,11 +55,11 @@ internal static class BuildIntegrationTests
         XDocument document = XDocument.Load(targetsPath, LoadOptions.PreserveWhitespace);
         XElement target = document
             .Descendants("Target")
-            .Single(element => string.Equals((string?)element.Attribute("Name"), "_RunicTranslationsGenerateTextResourceArtifactsCore", StringComparison.Ordinal));
+            .Single(element => string.Equals((string?)element.Attribute("Name"), "_RunicTranslationsGenerateTranslationArtifactsCore", StringComparison.Ordinal));
         string inputs = (string?)target.Attribute("Inputs") ?? string.Empty;
         string outputs = (string?)target.Attribute("Outputs") ?? string.Empty;
-        Assert.Contains("@(TextResourceCatalog)", inputs);
-        Assert.Contains("@(TextResourceDocument)", inputs);
+        Assert.Contains("@(TranslationCatalog)", inputs);
+        Assert.Contains("@(TranslationDocument)", inputs);
         Assert.Contains("$(MSBuildProjectFullPath)", inputs);
         Assert.Equal("$(TranslationsOutputStamp)", outputs);
     }
@@ -250,16 +250,16 @@ internal static class BuildIntegrationTests
                 {{extraProperties}}
               </PropertyGroup>
               <ItemGroup>
-                <TextResourceCatalog Include="Resources/manifest.json" />
-                <TextResourceDocument Include="Resources/en.json" />
+                <TranslationCatalog Include="Resources/manifest.json" />
+                <TranslationDocument Include="Resources/en.json" />
               </ItemGroup>
               <Import Project="{{targets}}" />
-              <Target Name="DumpTextResourceItems">
+              <Target Name="DumpTranslationItems">
                 <WriteLinesToFile File="dump.txt"
                                   Overwrite="true"
-                                  Lines="PropsImported=$(RunicTranslationsBuildPropsImported);TargetsImported=$(RunicTranslationsBuildTargetsImported);@(AdditionalFiles->'%(Filename)|%(RunicTextResourceKind)')" />
+                                  Lines="PropsImported=$(RunicTranslationsBuildPropsImported);TargetsImported=$(RunicTranslationsBuildTargetsImported);@(AdditionalFiles->'%(Filename)|%(RunicTranslationKind)')" />
               </Target>
-              <Target Name="CaptureTextResourceGeneratedFiles" AfterTargets="RunicTranslationsCollectTextResourceArtifacts">
+              <Target Name="CaptureTranslationGeneratedFiles" AfterTargets="RunicTranslationsCollectTranslationArtifacts">
                 <WriteLinesToFile File="artifacts/generated-items.txt"
                                   Overwrite="true"
                                   Lines="@(TranslationsGeneratedFile->'%(Filename)%(Extension)', '|')" />

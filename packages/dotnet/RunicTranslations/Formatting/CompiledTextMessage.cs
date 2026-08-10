@@ -68,7 +68,7 @@ public sealed class CompiledTextMessageNode
         for (int index = 0; index < attributes.Count; index++)
         {
             CompiledTextMarkupProperty attribute = attributes[index];
-            if (!TextResourceDataValidation.IsIdentifier(attribute.Name) || attribute.Value is null ||
+            if (!TranslationDataValidation.IsIdentifier(attribute.Name) || attribute.Value is null ||
                 (previous is not null && string.CompareOrdinal(previous, attribute.Name) >= 0))
                 throw new ArgumentException("Markup attributes must be unique ordinally ordered identifiers with non-null values.", nameof(attributes));
             result[index] = attribute;
@@ -196,7 +196,7 @@ public sealed class CompiledTextMessage
         {
             CompiledTextMessageNode node = nodes[index] ?? throw new ArgumentException("Compiled message nodes cannot contain null.", parameterName);
             if (!Enum.IsDefined(node.Kind)) throw new ArgumentException("Unknown compiled message node kind.", parameterName);
-            if (node.Kind != CompiledTextMessageNodeKind.Text && !TextResourceDataValidation.IsIdentifier(node.Value))
+            if (node.Kind != CompiledTextMessageNodeKind.Text && !TranslationDataValidation.IsIdentifier(node.Value))
                 throw new ArgumentException("Compiled message input names must be identifiers.", parameterName);
             if (node.Kind == CompiledTextMessageNodeKind.RelativeTime &&
                 (node.Unit is not ("second" or "minute" or "hour" or "day" or "week" or "month" or "year") ||
@@ -214,9 +214,9 @@ public sealed class CompiledTextMessage
         for (int index = 0; index < selectors.Count; index++)
         {
             CompiledTextMessageSelector selector = selectors[index];
-            if (!TextResourceDataValidation.IsIdentifier(selector.Name) || !names.Add(selector.Name))
+            if (!TranslationDataValidation.IsIdentifier(selector.Name) || !names.Add(selector.Name))
                 throw new ArgumentException("Selector names must be unique identifiers.", nameof(selectors));
-            if (!TextResourceDataValidation.IsIdentifier(selector.Input) || !Enum.IsDefined(selector.Kind))
+            if (!TranslationDataValidation.IsIdentifier(selector.Input) || !Enum.IsDefined(selector.Kind))
                 throw new ArgumentException("A selector contains an invalid input or kind.", nameof(selectors));
             result[index] = selector;
         }
@@ -277,7 +277,7 @@ internal static class CompiledTextMessageRuntime
                 int close = pattern.IndexOf('}', position + 1);
                 if (close < 0) throw InvalidPattern(position);
                 string name = pattern.Substring(position + 1, close - position - 1);
-                if (!TextResourceDataValidation.IsIdentifier(name)) throw InvalidPattern(position);
+                if (!TranslationDataValidation.IsIdentifier(name)) throw InvalidPattern(position);
                 Flush(nodes, text);
                 nodes.Add(new CompiledTextMessageNode(CompiledTextMessageNodeKind.Input, name));
                 position = close;
@@ -294,7 +294,7 @@ internal static class CompiledTextMessageRuntime
         return new CompiledTextMessage(nodes);
     }
 
-    internal static bool MatchesContract(CompiledTextMessage message, TextResourcePlaceholderDescriptor[] descriptors)
+    internal static bool MatchesContract(CompiledTextMessage message, TranslationPlaceholderDescriptor[] descriptors)
     {
         var used = new bool[descriptors.Length];
         if (!Mark(message.NodeArray, descriptors, used)) return false;
@@ -319,7 +319,7 @@ internal static class CompiledTextMessageRuntime
     {
         CompiledTextMessageNode[] nodes = message.NodeArray;
         if (message.VariantArray.Length != 0) nodes = SelectVariant(message, arguments, locale);
-        if (message.HasMarkup) throw new TextResourceFormatException("Structured localized content must be requested through FormatContent.");
+        if (message.HasMarkup) throw new TranslationFormatException("Structured localized content must be requested through FormatContent.");
         var builder = new StringBuilder();
         for (int index = 0; index < nodes.Length; index++)
         {
@@ -328,7 +328,7 @@ internal static class CompiledTextMessageRuntime
             else
             {
                 int argument = FindArgument(arguments, node.Value);
-                if (argument < 0) throw new TextResourceFormatException("Required argument '" + node.Value + "' was not supplied.");
+                if (argument < 0) throw new TranslationFormatException("Required argument '" + node.Value + "' was not supplied.");
                 TextArgument value = arguments[argument];
                 string? formatted;
                 if (node.Kind == CompiledTextMessageNodeKind.Format)
@@ -340,7 +340,7 @@ internal static class CompiledTextMessageRuntime
                     formatted = TextRelativeTimeFormatter.Format(DecimalValue(value), node.Unit!, node.Numeric!, locale);
                 else formatted = formatter.Format(in value, locale);
                 if (formatted is null)
-                    throw new TextResourceFormatException("The value formatter returned null for argument '" + node.Value + "'.");
+                    throw new TranslationFormatException("The value formatter returned null for argument '" + node.Value + "'.");
                 Append(builder, formatted, maximumOutputLength);
             }
         }
@@ -371,7 +371,7 @@ internal static class CompiledTextMessageRuntime
             else
             {
                 int argumentIndex = FindArgument(arguments, node.Value);
-                if (argumentIndex < 0) throw new TextResourceFormatException("Required argument '" + node.Value + "' was not supplied.");
+                if (argumentIndex < 0) throw new TranslationFormatException("Required argument '" + node.Value + "' was not supplied.");
                 TextArgument argument = arguments[argumentIndex];
                 if (node.Kind == CompiledTextMessageNodeKind.Format)
                 {
@@ -381,10 +381,10 @@ internal static class CompiledTextMessageRuntime
                 else if (node.Kind == CompiledTextMessageNodeKind.RelativeTime)
                     value = TextRelativeTimeFormatter.Format(DecimalValue(argument), node.Unit!, node.Numeric!, locale);
                 else value = formatter.Format(in argument, locale);
-                if (value is null) throw new TextResourceFormatException("The value formatter returned null.");
+                if (value is null) throw new TranslationFormatException("The value formatter returned null.");
             }
             outputLength += value.Length;
-            if (outputLength > maximumOutputLength) throw new TextResourceFormatException("Formatted text exceeds the configured output limit.");
+            if (outputLength > maximumOutputLength) throw new TranslationFormatException("Formatted text exceeds the configured output limit.");
             result.Add(new LocalizedTextContentNode(LocalizedTextContentNodeKind.Text, value));
         }
         return new LocalizedTextContent(result);
@@ -404,7 +404,7 @@ internal static class CompiledTextMessageRuntime
         for (int index = 0; index < selectors.Length; index++)
         {
             int argumentIndex = FindArgument(arguments, selectors[index].Input);
-            if (argumentIndex < 0) throw new TextResourceFormatException("Selector input '" + selectors[index].Input + "' was not supplied.");
+            if (argumentIndex < 0) throw new TranslationFormatException("Selector input '" + selectors[index].Input + "' was not supplied.");
             TextArgument argument = arguments[argumentIndex];
             selected[index] = selectors[index].Kind switch
             {
@@ -424,14 +424,14 @@ internal static class CompiledTextMessageRuntime
             }
             if (matches) return variants[variantIndex].NodeArray;
         }
-        throw new TextResourceFormatException("Compiled message variant selection has no catch-all.");
+        throw new TranslationFormatException("Compiled message variant selection has no catch-all.");
     }
 
     private static decimal DecimalValue(TextArgument argument)
     {
         if (argument.TryGetValue(out long integer)) return integer;
         if (argument.TryGetValue(out decimal number)) return number;
-        throw new TextResourceFormatException("Plural selector input must be numeric.");
+        throw new TranslationFormatException("Plural selector input must be numeric.");
     }
 
     private static string CanonicalValue(TextArgument argument) => argument.Type switch
@@ -443,7 +443,7 @@ internal static class CompiledTextMessageRuntime
         _ => DefaultTextValueFormatter.Shared.Format(in argument, "en"),
     };
 
-    private static bool Mark(CompiledTextMessageNode[] nodes, TextResourcePlaceholderDescriptor[] descriptors, bool[] used)
+    private static bool Mark(CompiledTextMessageNode[] nodes, TranslationPlaceholderDescriptor[] descriptors, bool[] used)
     {
         for (int index = 0; index < nodes.Length; index++)
         {
@@ -455,7 +455,7 @@ internal static class CompiledTextMessageRuntime
         return true;
     }
 
-    private static int FindDescriptor(TextResourcePlaceholderDescriptor[] descriptors, string name)
+    private static int FindDescriptor(TranslationPlaceholderDescriptor[] descriptors, string name)
     {
         for (int index = 0; index < descriptors.Length; index++) if (descriptors[index].Name == name) return index;
         return -1;
@@ -477,7 +477,7 @@ internal static class CompiledTextMessageRuntime
         if (argument.TryGetValue(out TimeOnly time)) return new TextArgument(argument.Name, time, format);
         if (argument.TryGetValue(out DateTimeOffset instant)) return new TextArgument(argument.Name, instant, format);
         if (argument.TryGetValue(out Guid guid)) return new TextArgument(argument.Name, guid, format);
-        throw new TextResourceFormatException("Compiled format node has an incompatible input.");
+        throw new TranslationFormatException("Compiled format node has an incompatible input.");
     }
 
     private static void Flush(List<CompiledTextMessageNode> nodes, StringBuilder text)
@@ -489,10 +489,10 @@ internal static class CompiledTextMessageRuntime
 
     private static void Append(StringBuilder builder, string value, int maximum)
     {
-        if (value.Length > maximum - builder.Length) throw new TextResourceFormatException("Formatted text exceeds the configured output limit.");
+        if (value.Length > maximum - builder.Length) throw new TranslationFormatException("Formatted text exceeds the configured output limit.");
         builder.Append(value);
     }
 
-    private static TextResourceFormatException InvalidPattern(int position) =>
+    private static TranslationFormatException InvalidPattern(int position) =>
         new("Invalid version 1 message pattern at character " + position.ToString(CultureInfo.InvariantCulture) + ".");
 }

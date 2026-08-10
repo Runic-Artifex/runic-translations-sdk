@@ -10,12 +10,12 @@ namespace RunicTranslations;
 /// <param name="content">The complete caller-owned pack bytes.</param>
 /// <param name="cancellationToken">Cancels integrity verification.</param>
 /// <returns><see langword="true"/> when the bytes are trusted enough to parse.</returns>
-public delegate ValueTask<bool> TextResourcePackIntegrityVerifier(
+public delegate ValueTask<bool> TranslationPackIntegrityVerifier(
     ReadOnlyMemory<byte> content,
     CancellationToken cancellationToken);
 
 /// <summary>Bounds untrusted external pack input.</summary>
-public sealed class TextResourcePackLimits
+public sealed class TranslationPackLimits
 {
     /// <summary>The maximum supported external pack size.</summary>
     public const int DefaultMaximumDocumentBytes = 8 * 1024 * 1024;
@@ -29,14 +29,14 @@ public sealed class TextResourcePackLimits
     public const int DefaultMaximumArgumentsPerMessage = 32;
 
     /// <summary>Creates the default runtime limits.</summary>
-    public TextResourcePackLimits()
+    public TranslationPackLimits()
         : this(DefaultMaximumDocumentBytes, DefaultMaximumDepth, DefaultMaximumMessages,
             DefaultMaximumPatternBytes, DefaultMaximumArgumentsPerMessage)
     {
     }
 
     /// <summary>Creates limits no less restrictive than the runtime defaults.</summary>
-    public TextResourcePackLimits(
+    public TranslationPackLimits(
         int maximumDocumentBytes,
         int maximumDepth,
         int maximumMessages,
@@ -74,37 +74,37 @@ public sealed class TextResourcePackLimits
 }
 
 /// <summary>Describes one generated placeholder contract.</summary>
-public readonly record struct TextResourcePackArgumentContract(
+public readonly record struct TranslationPackArgumentContract(
     string Name,
     TextArgumentType Type,
     TextArgumentFormat Format);
 
 /// <summary>Describes one generated key and its locale-independent placeholder contract.</summary>
-public sealed class TextResourcePackMessageContract
+public sealed class TranslationPackMessageContract
 {
-    private readonly ReadOnlyCollection<TextResourcePackArgumentContract> _arguments;
+    private readonly ReadOnlyCollection<TranslationPackArgumentContract> _arguments;
 
     /// <summary>Creates a generated message contract.</summary>
-    public TextResourcePackMessageContract(
-        TextResourceKey key,
-        IReadOnlyList<TextResourcePackArgumentContract>? arguments = null)
+    public TranslationPackMessageContract(
+        TranslationKey key,
+        IReadOnlyList<TranslationPackArgumentContract>? arguments = null)
     {
         if (string.IsNullOrEmpty(key.Catalog)) throw new ArgumentException("A key catalog is required.", nameof(key));
         if (key.Id < 0) throw new ArgumentOutOfRangeException(nameof(key), "A key identifier cannot be negative.");
-        if (!TextResourcePackValidation.IsResourceKey(key.Name))
+        if (!TranslationPackValidation.IsResourceKey(key.Name))
             throw new ArgumentException("The key name is not a valid dotted resource key.", nameof(key));
 
         Key = key;
-        var copy = new TextResourcePackArgumentContract[arguments?.Count ?? 0];
+        var copy = new TranslationPackArgumentContract[arguments?.Count ?? 0];
         string? previousName = null;
         for (int i = 0; i < copy.Length; i++)
         {
-            TextResourcePackArgumentContract argument = arguments![i];
-            if (!TextResourcePackValidation.IsIdentifier(argument.Name))
+            TranslationPackArgumentContract argument = arguments![i];
+            if (!TranslationPackValidation.IsIdentifier(argument.Name))
                 throw new ArgumentException("An argument name is invalid.", nameof(arguments));
             if (previousName is not null && string.CompareOrdinal(previousName, argument.Name) >= 0)
                 throw new ArgumentException("Argument contracts must be unique and ordinal-sorted.", nameof(arguments));
-            if (!TextResourcePackValidation.IsFormatAllowed(argument.Type, argument.Format))
+            if (!TranslationPackValidation.IsFormatAllowed(argument.Type, argument.Format))
                 throw new ArgumentException("An argument type and format combination is invalid.", nameof(arguments));
             copy[i] = argument;
             previousName = argument.Name;
@@ -114,31 +114,31 @@ public sealed class TextResourcePackMessageContract
     }
 
     /// <summary>The generated key.</summary>
-    public TextResourceKey Key { get; }
+    public TranslationKey Key { get; }
     /// <summary>The ordinal-sorted placeholder contract.</summary>
-    public IReadOnlyList<TextResourcePackArgumentContract> Arguments => _arguments;
+    public IReadOnlyList<TranslationPackArgumentContract> Arguments => _arguments;
 }
 
 /// <summary>The generated compatibility contract used to validate one locale pack.</summary>
-public sealed class TextResourcePackContract
+public sealed class TranslationPackContract
 {
-    private readonly ReadOnlyCollection<TextResourcePackMessageContract> _messages;
-    private readonly Dictionary<string, TextResourcePackMessageContract> _messagesByName;
+    private readonly ReadOnlyCollection<TranslationPackMessageContract> _messages;
+    private readonly Dictionary<string, TranslationPackMessageContract> _messagesByName;
 
     /// <summary>Creates a contract for one catalog and canonical locale.</summary>
-    public TextResourcePackContract(
+    public TranslationPackContract(
         string catalog,
         string locale,
         string contractFingerprint,
-        IReadOnlyList<TextResourcePackMessageContract> messages,
+        IReadOnlyList<TranslationPackMessageContract> messages,
         int messageGrammarVersion = 1)
     {
         ArgumentNullException.ThrowIfNull(messages);
-        if (!TextResourcePackValidation.IsCatalog(catalog))
+        if (!TranslationPackValidation.IsCatalog(catalog))
             throw new ArgumentException("The catalog identifier is invalid.", nameof(catalog));
-        if (!TextResourcePackValidation.IsCanonicalLocale(locale))
+        if (!TranslationPackValidation.IsCanonicalLocale(locale))
             throw new ArgumentException("The locale must be a canonical structural BCP 47 tag.", nameof(locale));
-        if (!TextResourcePackValidation.IsFingerprint(contractFingerprint))
+        if (!TranslationPackValidation.IsFingerprint(contractFingerprint))
             throw new ArgumentException("The fingerprint must be lowercase sha256 hexadecimal text.", nameof(contractFingerprint));
         if (messageGrammarVersion is not (1 or 2))
             throw new ArgumentOutOfRangeException(nameof(messageGrammarVersion));
@@ -147,12 +147,12 @@ public sealed class TextResourcePackContract
         Locale = locale;
         ContractFingerprint = contractFingerprint;
         MessageGrammarVersion = messageGrammarVersion;
-        var copy = new TextResourcePackMessageContract[messages.Count];
-        _messagesByName = new Dictionary<string, TextResourcePackMessageContract>(messages.Count, StringComparer.Ordinal);
+        var copy = new TranslationPackMessageContract[messages.Count];
+        _messagesByName = new Dictionary<string, TranslationPackMessageContract>(messages.Count, StringComparer.Ordinal);
         string? previousKey = null;
         for (int i = 0; i < copy.Length; i++)
         {
-            TextResourcePackMessageContract message = messages[i]
+            TranslationPackMessageContract message = messages[i]
                 ?? throw new ArgumentException("Message contracts cannot contain null.", nameof(messages));
             if (!string.Equals(message.Key.Catalog, catalog, StringComparison.Ordinal))
                 throw new ArgumentException("Every message key must belong to the contract catalog.", nameof(messages));
@@ -175,20 +175,20 @@ public sealed class TextResourcePackContract
     /// <summary>The message grammar expected in a matching locale artifact.</summary>
     public int MessageGrammarVersion { get; }
     /// <summary>The ordinal-sorted known message contracts.</summary>
-    public IReadOnlyList<TextResourcePackMessageContract> Messages => _messages;
+    public IReadOnlyList<TranslationPackMessageContract> Messages => _messages;
 
-    internal bool TryGetMessage(string name, out TextResourcePackMessageContract contract) =>
+    internal bool TryGetMessage(string name, out TranslationPackMessageContract contract) =>
         _messagesByName.TryGetValue(name, out contract!);
 }
 
 /// <summary>One fully verified external message value.</summary>
-public sealed class VerifiedTextResourcePackMessage
+public sealed class VerifiedTranslationPackMessage
 {
-    internal VerifiedTextResourcePackMessage(TextResourceKey key, string pattern, CompiledTextMessage? message = null)
+    internal VerifiedTranslationPackMessage(TranslationKey key, string pattern, CompiledTextMessage? message = null)
     { Key = key; Pattern = pattern; Message = message; }
 
     /// <summary>The generated known key.</summary>
-    public TextResourceKey Key { get; }
+    public TranslationKey Key { get; }
     /// <summary>The validated plain-text message pattern.</summary>
     public string Pattern { get; }
     /// <summary>The verified normalized message for grammar v2, or null for grammar v1.</summary>
@@ -196,22 +196,22 @@ public sealed class VerifiedTextResourcePackMessage
 }
 
 /// <summary>Immutable external pack data that passed integrity, shape, and compatibility validation.</summary>
-public sealed class VerifiedExternalTextResourcePack
+public sealed class VerifiedExternalTranslationPack
 {
-    private readonly ReadOnlyCollection<VerifiedTextResourcePackMessage> _messages;
-    private readonly Dictionary<TextResourceKey, string> _patterns;
+    private readonly ReadOnlyCollection<VerifiedTranslationPackMessage> _messages;
+    private readonly Dictionary<TranslationKey, string> _patterns;
 
-    internal VerifiedExternalTextResourcePack(
+    internal VerifiedExternalTranslationPack(
         string catalog,
         string locale,
         string contractFingerprint,
-        VerifiedTextResourcePackMessage[] messages)
+        VerifiedTranslationPackMessage[] messages)
     {
         Catalog = catalog;
         Locale = locale;
         ContractFingerprint = contractFingerprint;
         _messages = Array.AsReadOnly(messages);
-        _patterns = new Dictionary<TextResourceKey, string>(messages.Length);
+        _patterns = new Dictionary<TranslationKey, string>(messages.Length);
         for (int i = 0; i < messages.Length; i++) _patterns.Add(messages[i].Key, messages[i].Pattern);
     }
 
@@ -222,8 +222,8 @@ public sealed class VerifiedExternalTextResourcePack
     /// <summary>The verified generated contract fingerprint.</summary>
     public string ContractFingerprint { get; }
     /// <summary>The verified messages in ordinal key order.</summary>
-    public IReadOnlyList<VerifiedTextResourcePackMessage> Messages => _messages;
+    public IReadOnlyList<VerifiedTranslationPackMessage> Messages => _messages;
 
     /// <summary>Attempts to obtain a verified replacement pattern for a generated key.</summary>
-    public bool TryGetPattern(TextResourceKey key, out string pattern) => _patterns.TryGetValue(key, out pattern!);
+    public bool TryGetPattern(TranslationKey key, out string pattern) => _patterns.TryGetValue(key, out pattern!);
 }

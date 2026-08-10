@@ -5,14 +5,14 @@ namespace RunicTranslations.Compiler.Generation;
 
 internal static class CppOutputRenderer
 {
-    internal static IReadOnlyList<TextResourceGeneratedOutput> Render(CompiledTextCatalog catalog)
+    internal static IReadOnlyList<TranslationGeneratedOutput> Render(CompiledTextCatalog catalog)
     {
         ValidateExperimentalCapabilities(catalog);
         string stem = catalog.Id + ".translations-v1";
         return new[]
         {
-            new TextResourceGeneratedOutput(TextResourceGeneratedOutputKind.CppHeader, stem + ".hpp", "text/x-c++hdr", Header(catalog)),
-            new TextResourceGeneratedOutput(TextResourceGeneratedOutputKind.CppSource, stem + ".cpp", "text/x-c++src", Source(catalog, stem + ".hpp")),
+            new TranslationGeneratedOutput(TranslationGeneratedOutputKind.CppHeader, stem + ".hpp", "text/x-c++hdr", Header(catalog)),
+            new TranslationGeneratedOutput(TranslationGeneratedOutputKind.CppSource, stem + ".cpp", "text/x-c++src", Source(catalog, stem + ".hpp")),
         };
     }
 
@@ -48,13 +48,13 @@ internal static class CppOutputRenderer
         writer.Line("#include <string_view>");
         writer.Blank();
         writer.Line("namespace runic_translations::" + Namespace(catalog.Id) + " {");
-        writer.Line("inline constexpr int cpp_abi_version = " + TextResourceOutputRenderer.CppAbiVersion + ";");
+        writer.Line("inline constexpr int cpp_abi_version = " + TranslationOutputRenderer.CppAbiVersion + ";");
         writer.Line("inline constexpr std::string_view contract_fingerprint = " + CppString(catalog.Fingerprint) + ";");
         writer.Blank();
-        IReadOnlyList<CompiledTextResource> resources = GenerationSupport.OrderedResources(catalog.CanonicalResources);
+        IReadOnlyList<CompiledTranslation> resources = GenerationSupport.OrderedResources(catalog.CanonicalResources);
         for (int index = 0; index < resources.Count; index++)
         {
-            CompiledTextResource resource = resources[index];
+            CompiledTranslation resource = resources[index];
             IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(resource.Placeholders);
             if (placeholders.Count != 0)
             {
@@ -89,11 +89,11 @@ internal static class CppOutputRenderer
         writer.Line("[[maybe_unused]] std::string format(double value) { return format_number(value); }");
         writer.Line("template<class T> [[maybe_unused]] std::string plural(T value, std::string_view locale, bool ordinal) { const auto language = locale.substr(0, 2); const auto integer = static_cast<std::int64_t>(value); if (ordinal && language == \"en\") { const auto mod100 = integer % 100; const auto mod10 = integer % 10; if (mod10 == 1 && mod100 != 11) return \"one\"; if (mod10 == 2 && mod100 != 12) return \"two\"; if (mod10 == 3 && mod100 != 13) return \"few\"; } if (!ordinal && ((language == \"fr\" && (value == 0 || value == 1)) || (language != \"fr\" && value == 1))) return \"one\"; return \"other\"; }");
         writer.Line("}");
-        IReadOnlyList<CompiledTextResource> resources = GenerationSupport.OrderedResources(catalog.CanonicalResources);
+        IReadOnlyList<CompiledTranslation> resources = GenerationSupport.OrderedResources(catalog.CanonicalResources);
         IReadOnlyList<CompiledTextLocale> locales = GenerationSupport.OrderedLocales(catalog.Locales);
         for (int index = 0; index < resources.Count; index++)
         {
-            CompiledTextResource canonical = resources[index];
+            CompiledTranslation canonical = resources[index];
             IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(canonical.Placeholders);
             writer.Blank();
             writer.Line("std::string " + Identifier(canonical.Key) + "(std::string_view locale" +
@@ -101,7 +101,7 @@ internal static class CppOutputRenderer
             writer.Indent();
             for (int localeIndex = 0; localeIndex < locales.Count; localeIndex++)
             {
-                CompiledTextResource localized = Find(locales[localeIndex].ResolvedResources, canonical.Key);
+                CompiledTranslation localized = Find(locales[localeIndex].ResolvedResources, canonical.Key);
                 writer.Line((localeIndex == 0 ? "if" : "else if") + " (locale == " + CppString(locales[localeIndex].Tag) + ") return " + Pattern(localized) + ";");
             }
             writer.Line("throw std::invalid_argument(\"unsupported locale\");");
@@ -112,7 +112,7 @@ internal static class CppOutputRenderer
         return writer.ToString();
     }
 
-    private static string Pattern(CompiledTextResource resource)
+    private static string Pattern(CompiledTranslation resource)
     {
         if (resource.Message.IsVariant) return VariantPattern(resource.Message);
         return NodesPattern(resource.Message);
@@ -156,17 +156,17 @@ internal static class CppOutputRenderer
         return string.Join(" + ", parts);
     }
 
-    private static CompiledTextResource Find(IReadOnlyList<CompiledTextResource> resources, string key)
+    private static CompiledTranslation Find(IReadOnlyList<CompiledTranslation> resources, string key)
     {
         for (int index = 0; index < resources.Count; index++) if (resources[index].Key == key) return resources[index];
         throw new InvalidOperationException("Missing resolved key '" + key + "'.");
     }
 
-    private static string CppType(TextResourceArgumentType type) => type switch
+    private static string CppType(TranslationArgumentType type) => type switch
     {
-        TextResourceArgumentType.Int => "std::int64_t",
-        TextResourceArgumentType.Number => "double",
-        TextResourceArgumentType.Boolean => "bool",
+        TranslationArgumentType.Int => "std::int64_t",
+        TranslationArgumentType.Number => "double",
+        TranslationArgumentType.Boolean => "bool",
         _ => "std::string_view",
     };
 

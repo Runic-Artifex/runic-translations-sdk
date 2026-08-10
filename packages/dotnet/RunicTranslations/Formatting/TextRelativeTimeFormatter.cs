@@ -66,6 +66,6 @@ public static class TextRelativeTimeFormatter
         _ => throw Unsupported(language),
     };
 
-    private static TextResourceFormatException Unsupported(string locale) =>
+    private static TranslationFormatException Unsupported(string locale) =>
         new("Relative-time formatting is not supported for locale '" + locale + "'.");
 }

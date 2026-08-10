@@ -16,26 +16,26 @@ internal static class Program
     {
         try
         {
-            CompiledTextResourceCatalog catalog = CreateCatalog();
-            var greeting = new TextResourceKey("app", 0, "greeting");
-            var title = new TextResourceKey("app", 1, "title");
+            CompiledTranslationCatalog catalog = CreateCatalog();
+            var greeting = new TranslationKey("app", 0, "greeting");
+            var title = new TranslationKey("app", 1, "title");
             byte[] bytes = CreatePackBytes();
-            var externalFactory = new ExternalTextResourceSnapshotFactory(
+            var externalFactory = new ExternalTranslationSnapshotFactory(
                 new MemoryPackSource(bytes),
                 "app",
                 Fingerprint,
                 CreatePackContract,
                 integrityVerifier: VerifyIntegrity);
-            var provider = new CompiledTextResourceProvider(
+            var provider = new CompiledTranslationProvider(
                 catalog,
                 snapshotFactory: externalFactory);
-            ITextResourceSnapshot initial = new CompiledTextResourceSnapshot(catalog, "en");
-            var manager = new TextResourceManager(provider, initial);
+            ITranslationSnapshot initial = new CompiledTranslationSnapshot(catalog, "en");
+            var manager = new TranslationManager(provider, initial);
 
             Require(manager.Current.Format(greeting, [new TextArgument("name", "Ada")]) == "Hello Ada", "format");
-            var reference = new TextResourceReference("app", Fingerprint, "greeting",
-                new Dictionary<string, TextResourceReferenceArgument> { ["name"] = new(TextArgumentType.String, "Ada") });
-            string referenceJson = JsonSerializer.Serialize(reference, TextResourceReferenceJsonContext.Default.TextResourceReference);
+            var reference = new TranslationReference("app", Fingerprint, "greeting",
+                new Dictionary<string, TranslationReferenceArgument> { ["name"] = new(TextArgumentType.String, "Ada") });
+            string referenceJson = JsonSerializer.Serialize(reference, TranslationReferenceJsonContext.Default.TranslationReference);
             Require(referenceJson.Contains("\"arguments\":{\"name\":\"Ada\"}", StringComparison.Ordinal), "text-reference JSON");
 
             Task[] swaps = new Task[16];
@@ -65,16 +65,16 @@ internal static class Program
         return ValueTask.FromResult(content.Length > 0);
     }
 
-    private static TextResourcePackContract CreatePackContract(string locale) => new(
+    private static TranslationPackContract CreatePackContract(string locale) => new(
         "app",
         locale,
         Fingerprint,
         [
-            new TextResourcePackMessageContract(
-                new TextResourceKey("app", 0, "greeting"),
-                [new TextResourcePackArgumentContract("name", TextArgumentType.String, TextArgumentFormat.None)]),
-            new TextResourcePackMessageContract(
-                new TextResourceKey("app", 1, "title")),
+            new TranslationPackMessageContract(
+                new TranslationKey("app", 0, "greeting"),
+                [new TranslationPackArgumentContract("name", TextArgumentType.String, TextArgumentFormat.None)]),
+            new TranslationPackMessageContract(
+                new TranslationKey("app", 1, "title")),
         ]);
 
     private static byte[] CreatePackBytes() => Encoding.UTF8.GetBytes(
@@ -82,18 +82,18 @@ internal static class Program
         "\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"greeting\":{" +
         "\"pattern\":\"Extern {name}\",\"arguments\":[{\"name\":\"name\",\"type\":\"string\",\"format\":\"none\"}]}}}");
 
-    private static CompiledTextResourceCatalog CreateCatalog() => new(
+    private static CompiledTranslationCatalog CreateCatalog() => new(
         "app",
         "en",
         [
-            new CompiledTextResourceDefinition("greeting",
-                [new TextResourcePlaceholderDescriptor("name", TextArgumentType.String, TextArgumentFormat.None)]),
-            new CompiledTextResourceDefinition("title", Array.Empty<TextResourcePlaceholderDescriptor>()),
+            new CompiledTranslationDefinition("greeting",
+                [new TranslationPlaceholderDescriptor("name", TextArgumentType.String, TextArgumentFormat.None)]),
+            new CompiledTranslationDefinition("title", Array.Empty<TranslationPlaceholderDescriptor>()),
         ],
         [
-            new CompiledTextResourceLocale("de", "en", [new CompiledTextResourceValue(0, "Hallo {name}")]),
-            new CompiledTextResourceLocale("en", null,
-                [new CompiledTextResourceValue(0, "Hello {name}"), new CompiledTextResourceValue(1, "Application")]),
+            new CompiledTranslationLocale("de", "en", [new CompiledTranslationValue(0, "Hallo {name}")]),
+            new CompiledTranslationLocale("en", null,
+                [new CompiledTranslationValue(0, "Hello {name}"), new CompiledTranslationValue(1, "Application")]),
         ]);
 
     private static void Require(bool condition, string operation)
@@ -104,16 +104,16 @@ internal static class Program
         }
     }
 
-    private sealed class MemoryPackSource(byte[] bytes) : IExternalTextResourceSource
+    private sealed class MemoryPackSource(byte[] bytes) : IExternalTranslationSource
     {
-        public ValueTask<ExternalTextResourcePack?> LoadAsync(
+        public ValueTask<ExternalTranslationPack?> LoadAsync(
             string catalog,
             string locale,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ExternalTextResourcePack? pack = catalog == "app" && locale == "de"
-                ? new ExternalTextResourcePack(bytes)
+            ExternalTranslationPack? pack = catalog == "app" && locale == "de"
+                ? new ExternalTranslationPack(bytes)
                 : null;
             return ValueTask.FromResult(pack);
         }

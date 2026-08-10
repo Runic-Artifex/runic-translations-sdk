@@ -5,8 +5,8 @@ contract fingerprint, stable dotted key, canonical arguments, and optional plain
 fallback text. Integer and decimal wire values are canonical decimal strings;
 booleans are JSON booleans; other portable values are strings.
 
-The .NET runtime exposes bounded immutable `TextResourceReference` and
-`TextResourceReferenceArgument` types plus `TextResourceReferenceJsonContext` for
+The .NET runtime exposes bounded immutable `TranslationReference` and
+`TranslationReferenceArgument` types plus `TranslationReferenceJsonContext` for
 reflection-free Native-AOT-safe serialization. Generated ESM `transport.js` verifies the
 version, catalog, fingerprint, known key, exact argument names/types, and size
 limits before producing decoded arguments. Formatting remains explicit: pass a

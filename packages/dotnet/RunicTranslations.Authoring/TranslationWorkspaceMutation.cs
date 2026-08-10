@@ -10,19 +10,19 @@ using RunicTranslations.Compiler;
 
 namespace RunicTranslations.Authoring;
 
-public static class TextResourceWorkspaceMutation
+public static class TranslationWorkspaceMutation
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
-    public static TextResourceWorkspaceTransactionPlan AddLocale(TextResourceAddLocaleRequest request)
+    public static TranslationWorkspaceTransactionPlan AddLocale(TranslationAddLocaleRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         WorkspaceModel workspace = Load(request.Root, request.CatalogId);
-        string locale = TextResourceProjectScaffolder.CanonicalizeLocale(Required(request.Locale, "locale"));
-        string copyFrom = TextResourceProjectScaffolder.CanonicalizeLocale(Required(request.CopyFromLocale, "copy-from locale"));
+        string locale = TranslationProjectScaffolder.CanonicalizeLocale(Required(request.Locale, "locale"));
+        string copyFrom = TranslationProjectScaffolder.CanonicalizeLocale(Required(request.CopyFromLocale, "copy-from locale"));
         string? fallback = request.Fallback is null
             ? workspace.DefaultLocale
-            : TextResourceProjectScaffolder.CanonicalizeLocale(Required(request.Fallback, "fallback"));
+            : TranslationProjectScaffolder.CanonicalizeLocale(Required(request.Fallback, "fallback"));
         string layer = Required(request.Layer, "layer");
         if (workspace.LocaleObjects.ContainsKey(locale)) throw Error($"Locale '{locale}' is already declared.");
         if (!workspace.LocaleObjects.ContainsKey(copyFrom)) throw Error($"Copy-from locale '{copyFrom}' is not declared.");
@@ -54,11 +54,11 @@ public static class TextResourceWorkspaceMutation
         return Plan(workspace);
     }
 
-    public static TextResourceWorkspaceTransactionPlan RemoveLocale(TextResourceRemoveLocaleRequest request)
+    public static TranslationWorkspaceTransactionPlan RemoveLocale(TranslationRemoveLocaleRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         WorkspaceModel workspace = Load(request.Root, request.CatalogId);
-        string locale = TextResourceProjectScaffolder.CanonicalizeLocale(Required(request.Locale, "locale"));
+        string locale = TranslationProjectScaffolder.CanonicalizeLocale(Required(request.Locale, "locale"));
         if (string.Equals(locale, workspace.DefaultLocale, StringComparison.Ordinal))
             throw Error("The default locale cannot be removed. Change the default locale in the manifest first.");
         if (!workspace.LocaleObjects.Remove(locale, out JsonObject? removed)) throw Error($"Locale '{locale}' is not declared.");
@@ -66,7 +66,7 @@ public static class TextResourceWorkspaceMutation
 
         string? replacement = request.ReplacementFallback is null
             ? workspace.DefaultLocale
-            : TextResourceProjectScaffolder.CanonicalizeLocale(Required(request.ReplacementFallback, "replacement fallback"));
+            : TranslationProjectScaffolder.CanonicalizeLocale(Required(request.ReplacementFallback, "replacement fallback"));
         if (replacement is not null && string.Equals(replacement, locale, StringComparison.Ordinal))
             throw Error("The replacement fallback cannot be the locale being removed.");
         if (replacement is not null && !workspace.LocaleObjects.ContainsKey(replacement))
@@ -83,11 +83,11 @@ public static class TextResourceWorkspaceMutation
         return Plan(workspace);
     }
 
-    public static TextResourceWorkspaceTransactionPlan SetFallback(TextResourceSetFallbackRequest request)
+    public static TranslationWorkspaceTransactionPlan SetFallback(TranslationSetFallbackRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         WorkspaceModel workspace = Load(request.Root, request.CatalogId);
-        string locale = TextResourceProjectScaffolder.CanonicalizeLocale(Required(request.Locale, "locale"));
+        string locale = TranslationProjectScaffolder.CanonicalizeLocale(Required(request.Locale, "locale"));
         if (!workspace.LocaleObjects.TryGetValue(locale, out JsonObject? localeObject)) throw Error($"Locale '{locale}' is not declared.");
         if (string.Equals(locale, workspace.DefaultLocale, StringComparison.Ordinal) && request.Fallback is not null)
             throw Error("The default locale cannot declare a fallback.");
@@ -97,7 +97,7 @@ public static class TextResourceWorkspaceMutation
         }
         else
         {
-            string fallback = TextResourceProjectScaffolder.CanonicalizeLocale(Required(request.Fallback, "fallback"));
+            string fallback = TranslationProjectScaffolder.CanonicalizeLocale(Required(request.Fallback, "fallback"));
             if (string.Equals(locale, fallback, StringComparison.Ordinal)) throw Error($"Locale '{locale}' cannot fall back to itself.");
             if (!workspace.LocaleObjects.ContainsKey(fallback)) throw Error($"Fallback locale '{fallback}' is not declared.");
             localeObject["fallback"] = fallback;
@@ -106,7 +106,7 @@ public static class TextResourceWorkspaceMutation
         return Plan(workspace);
     }
 
-    public static TextResourceWorkspaceTransactionPlan CreateKey(TextResourceCreateKeyRequest request)
+    public static TranslationWorkspaceTransactionPlan CreateKey(TranslationCreateKeyRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         WorkspaceModel workspace = Load(request.Root, request.CatalogId);
@@ -126,12 +126,12 @@ public static class TextResourceWorkspaceMutation
         return Plan(workspace);
     }
 
-    public static TextResourceWorkspaceTransactionPlan MutateKey(TextResourceKeyMutationRequest request)
+    public static TranslationWorkspaceTransactionPlan MutateKey(TranslationKeyMutationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         WorkspaceModel workspace = Load(request.Root, request.CatalogId);
         string[] source = KeySegments(request.SourceKey);
-        string[]? target = request.Kind == TextResourceKeyMutationKind.Delete
+        string[]? target = request.Kind == TranslationKeyMutationKind.Delete
             ? null
             : KeySegments(Required(request.TargetKey, "target key"));
         if (target is not null && IsStrictPrefix(source, target))
@@ -145,7 +145,7 @@ public static class TextResourceWorkspaceMutation
             if (value is null) continue;
             found = true;
             JsonNode clone = value.DeepClone();
-            if (request.Kind != TextResourceKeyMutationKind.Duplicate) Remove(file.Resources, source);
+            if (request.Kind != TranslationKeyMutationKind.Duplicate) Remove(file.Resources, source);
             if (target is not null && !TrySet(file.Resources, target, clone, overwrite: false))
                 throw Error($"Target key '{request.TargetKey}' conflicts with a group in '{file.Path}'.");
             file.Changed = true;
@@ -157,14 +157,14 @@ public static class TextResourceWorkspaceMutation
     private static WorkspaceModel Load(string root, string catalogId)
     {
         string requiredCatalog = Required(catalogId, "catalog ID");
-        TextResourceWorkspaceDiscoveryResult discovery = TextResourceWorkspaceDiscovery.Discover(root);
-        TextResourceDiscoveredCatalog catalog = discovery.Catalogs.SingleOrDefault(candidate =>
+        TranslationWorkspaceDiscoveryResult discovery = TranslationWorkspaceDiscovery.Discover(root);
+        TranslationDiscoveredCatalog catalog = discovery.Catalogs.SingleOrDefault(candidate =>
             string.Equals(candidate.Id, requiredCatalog, StringComparison.Ordinal))
             ?? throw Error($"Catalog '{requiredCatalog}' was not found.");
         if (!catalog.Compilation.Success) throw Error("The catalog must compile before structural mutations can be planned.");
         if (catalog.ManifestPaths.Count != 1) throw Error($"Catalog '{requiredCatalog}' must have exactly one manifest.");
 
-        TextResourceWorkspaceFile manifestFile = discovery.Files.Single(file => file.RelativePath == catalog.ManifestPaths[0]);
+        TranslationWorkspaceFile manifestFile = discovery.Files.Single(file => file.RelativePath == catalog.ManifestPaths[0]);
         JsonObject manifest = ParseObject(manifestFile);
         JsonArray locales = manifest["locales"]?.AsArray() ?? throw Error("The catalog manifest has no locales array.");
         var localeObjects = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
@@ -181,7 +181,7 @@ public static class TextResourceWorkspaceMutation
         var resources = new List<ResourceFile>();
         foreach (string path in catalog.DocumentPaths)
         {
-            TextResourceWorkspaceFile file = discovery.Files.Single(candidate => candidate.RelativePath == path);
+            TranslationWorkspaceFile file = discovery.Files.Single(candidate => candidate.RelativePath == path);
             JsonObject document = ParseObject(file);
             resources.Add(new ResourceFile(
                 path,
@@ -204,36 +204,36 @@ public static class TextResourceWorkspaceMutation
             manifest["schemaVersion"]?.GetValue<int>() ?? 2);
     }
 
-    private static TextResourceWorkspaceTransactionPlan Plan(WorkspaceModel workspace)
+    private static TranslationWorkspaceTransactionPlan Plan(WorkspaceModel workspace)
     {
-        var edits = new List<TextResourceWorkspaceEdit>();
+        var edits = new List<TranslationWorkspaceEdit>();
         if (workspace.ManifestChanged)
-            edits.Add(new TextResourceWorkspaceEdit(workspace.ManifestPath, TextResourceWorkspaceEditKind.Replace, workspace.ManifestRevision, Render(workspace.Manifest)));
+            edits.Add(new TranslationWorkspaceEdit(workspace.ManifestPath, TranslationWorkspaceEditKind.Replace, workspace.ManifestRevision, Render(workspace.Manifest)));
         foreach (ResourceFile file in workspace.Resources)
         {
-            if (file.Delete) edits.Add(new TextResourceWorkspaceEdit(file.Path, TextResourceWorkspaceEditKind.Delete, file.Revision, null));
-            else if (file.Changed) edits.Add(new TextResourceWorkspaceEdit(file.Path, TextResourceWorkspaceEditKind.Replace, file.Revision, Render(file.Document)));
+            if (file.Delete) edits.Add(new TranslationWorkspaceEdit(file.Path, TranslationWorkspaceEditKind.Delete, file.Revision, null));
+            else if (file.Changed) edits.Add(new TranslationWorkspaceEdit(file.Path, TranslationWorkspaceEditKind.Replace, file.Revision, Render(file.Document)));
         }
         foreach (ResourceFile file in workspace.AddedResources)
-            edits.Add(new TextResourceWorkspaceEdit(file.Path, TextResourceWorkspaceEditKind.Create, null, Render(file.Document)));
+            edits.Add(new TranslationWorkspaceEdit(file.Path, TranslationWorkspaceEditKind.Create, null, Render(file.Document)));
         if (edits.Count == 0) throw Error("The requested mutation does not change the workspace.");
         edits.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
 
-        var manifests = new List<TextResourceSource> { new(workspace.ManifestPath, ProposedBytes(workspace.ManifestPath)) };
-        var documents = new List<TextResourceSource>();
+        var manifests = new List<TranslationSource> { new(workspace.ManifestPath, ProposedBytes(workspace.ManifestPath)) };
+        var documents = new List<TranslationSource>();
         foreach (ResourceFile file in workspace.Resources)
         {
-            if (!file.Delete) documents.Add(new TextResourceSource(file.Path, ProposedBytes(file.Path)));
+            if (!file.Delete) documents.Add(new TranslationSource(file.Path, ProposedBytes(file.Path)));
         }
         foreach (ResourceFile file in workspace.AddedResources)
-            documents.Add(new TextResourceSource(file.Path, Render(file.Document)));
-        TextResourceCompilation compilation = TextResourceCompiler.Compile(manifests, documents);
+            documents.Add(new TranslationSource(file.Path, Render(file.Document)));
+        TranslationCompilation compilation = TranslationCompiler.Compile(manifests, documents);
         if (!compilation.Success) throw Error(FormatDiagnostics(compilation));
-        return new TextResourceWorkspaceTransactionPlan(workspace.Discovery.Root, workspace.CatalogId, edits.ToArray(), compilation);
+        return new TranslationWorkspaceTransactionPlan(workspace.Discovery.Root, workspace.CatalogId, edits.ToArray(), compilation);
 
         byte[] ProposedBytes(string path)
         {
-            TextResourceWorkspaceEdit? edit = edits.Find(candidate => candidate.RelativePath == path);
+            TranslationWorkspaceEdit? edit = edits.Find(candidate => candidate.RelativePath == path);
             if (edit?.Bytes is not null) return edit.Bytes;
             return workspace.Discovery.Files.Single(file => file.RelativePath == path).GetUtf8Bytes();
         }
@@ -247,7 +247,7 @@ public static class TextResourceWorkspaceMutation
         return directory.Length == 0 ? fileName : directory + "/" + fileName;
     }
 
-    private static JsonObject ParseObject(TextResourceWorkspaceFile file) =>
+    private static JsonObject ParseObject(TranslationWorkspaceFile file) =>
         JsonNode.Parse(file.GetUtf8Bytes())?.AsObject() ?? throw Error($"'{file.RelativePath}' is not a JSON object.");
 
     private static byte[] Render(JsonObject value) => Utf8.GetBytes(value.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
@@ -326,14 +326,14 @@ public static class TextResourceWorkspaceMutation
         string.IsNullOrWhiteSpace(value) ? throw Error($"The {name} is required.") : value.Trim();
 
     private static string Revision(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
-    private static string FormatDiagnostics(TextResourceCompilation compilation) => string.Join('\n', compilation.Diagnostics
-        .Where(static diagnostic => diagnostic.Severity == TextResourceDiagnosticSeverity.Error)
+    private static string FormatDiagnostics(TranslationCompilation compilation) => string.Join('\n', compilation.Diagnostics
+        .Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error)
         .Select(static diagnostic => $"{diagnostic.Location.Path}({diagnostic.Location.Line},{diagnostic.Location.Column}): {diagnostic.Id} {diagnostic.Message}"));
-    private static TextResourceAuthoringException Error(string message) => new(message);
+    private static TranslationAuthoringException Error(string message) => new(message);
     private static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     private sealed class WorkspaceModel(
-        TextResourceWorkspaceDiscoveryResult discovery,
+        TranslationWorkspaceDiscoveryResult discovery,
         string catalogId,
         string manifestPath,
         string manifestRevision,
@@ -345,7 +345,7 @@ public static class TextResourceWorkspaceMutation
         string defaultLocale,
         int schemaVersion)
     {
-        public TextResourceWorkspaceDiscoveryResult Discovery { get; } = discovery;
+        public TranslationWorkspaceDiscoveryResult Discovery { get; } = discovery;
         public string CatalogId { get; } = catalogId;
         public string ManifestPath { get; } = manifestPath;
         public string ManifestRevision { get; } = manifestRevision;

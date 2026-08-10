@@ -19,7 +19,7 @@ public static class TextPatternFormatter
     /// <param name="resourceLocale">The resource locale used for locale-sensitive values.</param>
     /// <param name="valueFormatter">An optional closed-value formatter.</param>
     /// <param name="maximumOutputLength">The maximum result length in UTF-16 code units.</param>
-    /// <exception cref="TextResourceFormatException">
+    /// <exception cref="TranslationFormatException">
     /// The pattern is invalid, arguments are missing, duplicated or unknown, or the output limit is exceeded.
     /// </exception>
     public static string Format(
@@ -35,7 +35,7 @@ public static class TextPatternFormatter
 
         if (arguments.Length > MaximumArguments)
         {
-            throw new TextResourceFormatException(
+            throw new TranslationFormatException(
                 "Argument count exceeds the version 1 limit of " +
                 MaximumArguments.ToString(CultureInfo.InvariantCulture) + ".");
         }
@@ -65,7 +65,7 @@ public static class TextPatternFormatter
                 string formatted = formatter.Format(in arguments[argumentIndex], resourceLocale);
                 if (formatted is null)
                 {
-                    throw new TextResourceFormatException(
+                    throw new TranslationFormatException(
                         "The value formatter returned null for argument '" + name.ToString() + "'.");
                 }
 
@@ -123,7 +123,7 @@ public static class TextPatternFormatter
                 int argumentIndex = FindArgument(arguments, name);
                 if (argumentIndex < 0)
                 {
-                    throw new TextResourceFormatException(
+                    throw new TranslationFormatException(
                         "Required argument '" + name.ToString() + "' was not supplied.");
                 }
 
@@ -148,7 +148,7 @@ public static class TextPatternFormatter
         {
             if (!used[index])
             {
-                throw new TextResourceFormatException(
+                throw new TranslationFormatException(
                     "Unknown argument '" + arguments[index].Name + "' was supplied.");
             }
         }
@@ -161,7 +161,7 @@ public static class TextPatternFormatter
             string? name = arguments[index].Name;
             if (string.IsNullOrEmpty(name) || !IsPlaceholderName(name.AsSpan()))
             {
-                throw new TextResourceFormatException(
+                throw new TranslationFormatException(
                     "Argument at index " + index.ToString(CultureInfo.InvariantCulture) + " has an invalid name.");
             }
 
@@ -169,7 +169,7 @@ public static class TextPatternFormatter
             {
                 if (string.Equals(arguments[prior].Name, name, StringComparison.Ordinal))
                 {
-                    throw new TextResourceFormatException("Argument '" + name + "' was supplied more than once.");
+                    throw new TranslationFormatException("Argument '" + name + "' was supplied more than once.");
                 }
             }
         }
@@ -249,11 +249,11 @@ public static class TextPatternFormatter
         builder.Append(value);
     }
 
-    private static TextResourceFormatException InvalidPattern(string reason, int position) =>
+    private static TranslationFormatException InvalidPattern(string reason, int position) =>
         new("Invalid version 1 message pattern (" + reason + ") at character " +
             position.ToString(CultureInfo.InvariantCulture) + ".");
 
-    private static TextResourceFormatException OutputTooLong(int maximumOutputLength) =>
+    private static TranslationFormatException OutputTooLong(int maximumOutputLength) =>
         new("Formatted text exceeds the configured output limit of " +
             maximumOutputLength.ToString(CultureInfo.InvariantCulture) +
             " UTF-16 code units.");

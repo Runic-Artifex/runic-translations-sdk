@@ -18,9 +18,9 @@
 
   <!-- The generator consumes only explicitly declared inputs and their versioned metadata. -->
   <ItemGroup>
-    <AdditionalFiles Include="@(TextResourceCatalog)" RunicTextResourceKind="Catalog" />
-    <AdditionalFiles Include="@(TextResourceDocument)" RunicTextResourceKind="Document" />
-    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTextResourceKind" />
+    <AdditionalFiles Include="@(TranslationCatalog)" RunicTranslationKind="Catalog" />
+    <AdditionalFiles Include="@(TranslationDocument)" RunicTranslationKind="Document" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationKind" />
   </ItemGroup>
 
   <Target Name="_RunicTranslationsValidateTranslationsOutputPath">
@@ -108,9 +108,9 @@
     <ItemGroup>
       <_TranslationsDesiredResponseLine Include="generate" />
       <_TranslationsDesiredResponseLine Include="--catalog" />
-      <_TranslationsDesiredResponseLine Include="@(TextResourceCatalog->'&quot;%(FullPath)&quot;')" />
+      <_TranslationsDesiredResponseLine Include="@(TranslationCatalog->'&quot;%(FullPath)&quot;')" />
       <_TranslationsDesiredResponseLine Include="--documents" />
-      <_TranslationsDesiredResponseLine Include="@(TextResourceDocument->'&quot;%(FullPath)&quot;')" />
+      <_TranslationsDesiredResponseLine Include="@(TranslationDocument->'&quot;%(FullPath)&quot;')" />
       <_TranslationsDesiredResponseLine Include="--output" />
       <_TranslationsDesiredResponseLine Include="&quot;$(_TranslationsStagingDirectory)&quot;" />
       <_TranslationsDesiredResponseLine Include="--emit-json" Condition="'$(TranslationsEmitJson)' == 'true' or ('$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
@@ -134,19 +134,19 @@
             Condition="'@(_TranslationsMissingArtifact)' != '' or !Exists('$(_TranslationsGenerationInventoryPath)')" />
   </Target>
 
-  <Target Name="RunicTranslationsGenerateTextResourceArtifacts"
+  <Target Name="RunicTranslationsGenerateTranslationArtifacts"
           BeforeTargets="BeforeCompile"
-          DependsOnTargets="_RunicTranslationsPrepareTranslationsGeneration;_RunicTranslationsGenerateTextResourceArtifactsCore"
-          Condition="'$(_TranslationsGenerationEnabled)' == 'true' and ('@(TextResourceCatalog)' != '' or '@(TextResourceDocument)' != '')" />
+          DependsOnTargets="_RunicTranslationsPrepareTranslationsGeneration;_RunicTranslationsGenerateTranslationArtifactsCore"
+          Condition="'$(_TranslationsGenerationEnabled)' == 'true' and ('@(TranslationCatalog)' != '' or '@(TranslationDocument)' != '')" />
 
   <!-- This target is reached only after deferred path defaults and generation state exist. -->
-  <Target Name="_RunicTranslationsGenerateTextResourceArtifactsCore"
-          Inputs="@(TextResourceCatalog);@(TextResourceDocument);@(TranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
+  <Target Name="_RunicTranslationsGenerateTranslationArtifactsCore"
+          Inputs="@(TranslationCatalog);@(TranslationDocument);@(TranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
           Outputs="$(TranslationsOutputStamp)">
-    <Error Condition="'@(TextResourceCatalog->Count())' != '1'"
-           Text="RTR0002: Exactly one TextResourceCatalog item is required for artifact generation by this build-package version." />
-    <Error Condition="'@(TextResourceDocument)' == ''"
-           Text="RTR0002: At least one TextResourceDocument item is required for artifact generation." />
+    <Error Condition="'@(TranslationCatalog->Count())' != '1'"
+           Text="RTR0002: Exactly one TranslationCatalog item is required for artifact generation by this build-package version." />
+    <Error Condition="'@(TranslationDocument)' == ''"
+           Text="RTR0002: At least one TranslationDocument item is required for artifact generation." />
 
     <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
           Command="$(TranslationsToolCommand) &quot;@$(_TranslationsResponseFilePath)&quot;" />
@@ -173,8 +173,8 @@
     </ItemGroup>
   </Target>
 
-  <Target Name="RunicTranslationsCollectTextResourceArtifacts"
-          AfterTargets="RunicTranslationsGenerateTextResourceArtifacts"
+  <Target Name="RunicTranslationsCollectTranslationArtifacts"
+          AfterTargets="RunicTranslationsGenerateTranslationArtifacts"
           Condition="'$(_TranslationsGenerationEnabled)' == 'true'">
     <ItemGroup>
       <_TranslationsCurrentArtifact Include="@(_TranslationsExistingArtifact)"
@@ -185,7 +185,7 @@
     </ItemGroup>
   </Target>
 
-  <Target Name="RunicTranslationsCleanTextResourceArtifacts"
+  <Target Name="RunicTranslationsCleanTranslationArtifacts"
           BeforeTargets="CoreClean"
           DependsOnTargets="_RunicTranslationsReadAndValidateTranslationsInventory">
     <Delete Files="@(_TranslationsOwnedInventoryEntry->'%(_OwnedFullPath)')" />

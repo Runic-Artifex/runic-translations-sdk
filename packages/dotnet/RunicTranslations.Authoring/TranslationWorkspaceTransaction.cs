@@ -7,86 +7,86 @@ using System.Text.Json;
 
 namespace RunicTranslations.Authoring;
 
-public static class TextResourceWorkspaceTransaction
+public static class TranslationWorkspaceTransaction
 {
     private const string JournalFileName = ".runic-translations.transaction.json";
     private const int JournalVersion = 1;
     private const int MaximumEdits = 512;
     private const int MaximumJournalBytes = 96 * 1024 * 1024;
 
-    public static void Commit(TextResourceWorkspaceTransactionPlan plan) => CommitCore(plan, null);
+    public static void Commit(TranslationWorkspaceTransactionPlan plan) => CommitCore(plan, null);
 
-    public static TextResourcePendingTransaction? GetPending(string root)
+    public static TranslationPendingTransaction? GetPending(string root)
     {
         string fullRoot = RequireRoot(root);
         string journalPath = Path.Combine(fullRoot, JournalFileName);
         if (!File.Exists(journalPath)) return null;
         TransactionJournal journal = ReadJournal(fullRoot, journalPath);
-        return new TextResourcePendingTransaction(
+        return new TranslationPendingTransaction(
             fullRoot,
             journal.CatalogId,
             journal.Entries.Select(static entry => entry.Path).ToArray());
     }
 
-    public static void Recover(string root, TextResourceWorkspaceRecoveryMode mode)
+    public static void Recover(string root, TranslationWorkspaceRecoveryMode mode)
     {
         string fullRoot = RequireRoot(root);
         string journalPath = Path.Combine(fullRoot, JournalFileName);
         if (!File.Exists(journalPath))
-            throw new TextResourceAuthoringException($"Workspace '{fullRoot}' has no pending transaction.");
+            throw new TranslationAuthoringException($"Workspace '{fullRoot}' has no pending transaction.");
         TransactionJournal journal = ReadJournal(fullRoot, journalPath);
         try
         {
-            if (mode == TextResourceWorkspaceRecoveryMode.Complete) Complete(fullRoot, journal);
+            if (mode == TranslationWorkspaceRecoveryMode.Complete) Complete(fullRoot, journal);
             else Rollback(fullRoot, journal);
             Cleanup(fullRoot, journal, journalPath);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            throw new TextResourceAuthoringException(
+            throw new TranslationAuthoringException(
                 $"Could not {mode.ToString().ToLowerInvariant()} the pending transaction; its recovery journal was retained.",
                 exception);
         }
     }
 
-    internal static void CommitForTesting(TextResourceWorkspaceTransactionPlan plan, int failAfterAppliedEdit) =>
+    internal static void CommitForTesting(TranslationWorkspaceTransactionPlan plan, int failAfterAppliedEdit) =>
         CommitCore(plan, applied =>
         {
             if (applied == failAfterAppliedEdit) throw new SimulatedInterruptionException();
         });
 
-    private static void CommitCore(TextResourceWorkspaceTransactionPlan plan, Action<int>? afterApply)
+    private static void CommitCore(TranslationWorkspaceTransactionPlan plan, Action<int>? afterApply)
     {
         ArgumentNullException.ThrowIfNull(plan);
         if (!plan.Compilation.Success)
-            throw new TextResourceAuthoringException("A workspace transaction cannot commit a compiler-invalid plan.");
+            throw new TranslationAuthoringException("A workspace transaction cannot commit a compiler-invalid plan.");
         if (plan.Edits.Count is 0 or > MaximumEdits)
-            throw new TextResourceAuthoringException($"A workspace transaction must contain between 1 and {MaximumEdits} edits.");
+            throw new TranslationAuthoringException($"A workspace transaction must contain between 1 and {MaximumEdits} edits.");
 
         string root = RequireRoot(plan.Root);
         string journalPath = Path.Combine(root, JournalFileName);
         if (File.Exists(journalPath))
-            throw new TextResourceAuthoringException("The workspace has a pending transaction that must be recovered first.");
+            throw new TranslationAuthoringException("The workspace has a pending transaction that must be recovered first.");
 
-        TextResourceWorkspaceEdit[] edits = plan.Edits.OrderBy(static edit => edit.RelativePath, StringComparer.Ordinal).ToArray();
+        TranslationWorkspaceEdit[] edits = plan.Edits.OrderBy(static edit => edit.RelativePath, StringComparer.Ordinal).ToArray();
         RejectDuplicatePaths(edits);
         var entries = new List<JournalEntry>(edits.Length);
         for (int index = 0; index < edits.Length; index++)
         {
-            TextResourceWorkspaceEdit edit = edits[index];
+            TranslationWorkspaceEdit edit = edits[index];
             string target = ResolveContainedPath(root, edit.RelativePath);
             bool exists = File.Exists(target);
             byte[]? original = exists ? File.ReadAllBytes(target) : null;
             ValidateExpectedRevision(edit, original);
             ValidateEditKind(edit, exists);
-            string? temporaryPath = edit.Kind == TextResourceWorkspaceEditKind.Delete
+            string? temporaryPath = edit.Kind == TranslationWorkspaceEditKind.Delete
                 ? null
                 : $".{Path.GetFileName(target)}.runic-{Guid.NewGuid():N}.tmp";
             entries.Add(new JournalEntry(
                 NormalizePath(edit.RelativePath),
                 temporaryPath,
                 original is null ? null : Convert.ToBase64String(original),
-                edit.Kind == TextResourceWorkspaceEditKind.Delete,
+                edit.Kind == TranslationWorkspaceEditKind.Delete,
                 edit.Bytes is null ? null : Revision(edit.Bytes)));
         }
 
@@ -124,11 +124,11 @@ public static class TextResourceWorkspaceTransaction
             }
             catch (Exception rollbackException) when (rollbackException is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
-                throw new TextResourceAuthoringException(
+                throw new TranslationAuthoringException(
                     "The workspace transaction failed and automatic rollback was incomplete; use the retained recovery journal.",
                     new AggregateException(exception, rollbackException));
             }
-            throw new TextResourceAuthoringException("The workspace transaction failed and was rolled back.", exception);
+            throw new TranslationAuthoringException("The workspace transaction failed and was rolled back.", exception);
         }
         finally
         {
@@ -138,7 +138,7 @@ public static class TextResourceWorkspaceTransaction
 
     private static void WriteTemporaryFiles(
         string root,
-        TextResourceWorkspaceEdit[] edits,
+        TranslationWorkspaceEdit[] edits,
         JournalEntry[] entries)
     {
         for (int index = 0; index < edits.Length; index++)
@@ -162,7 +162,7 @@ public static class TextResourceWorkspaceTransaction
     {
         var info = new FileInfo(path);
         if (info.Length > MaximumJournalBytes)
-            throw new TextResourceAuthoringException($"The transaction recovery journal exceeds {MaximumJournalBytes} bytes.");
+            throw new TranslationAuthoringException($"The transaction recovery journal exceeds {MaximumJournalBytes} bytes.");
         try
         {
             TransactionJournal? journal = JsonSerializer.Deserialize<TransactionJournal>(File.ReadAllBytes(path));
@@ -189,9 +189,9 @@ public static class TextResourceWorkspaceTransaction
             }
             return journal;
         }
-        catch (Exception exception) when (exception is JsonException or IOException or InvalidOperationException or FormatException or ArgumentException or TextResourceAuthoringException)
+        catch (Exception exception) when (exception is JsonException or IOException or InvalidOperationException or FormatException or ArgumentException or TranslationAuthoringException)
         {
-            throw new TextResourceAuthoringException("The pending transaction recovery journal is invalid.", exception);
+            throw new TranslationAuthoringException("The pending transaction recovery journal is invalid.", exception);
         }
     }
 
@@ -284,32 +284,32 @@ public static class TextResourceWorkspaceTransaction
         TryDelete(journalPath);
     }
 
-    private static void ValidateExpectedRevision(TextResourceWorkspaceEdit edit, byte[]? original)
+    private static void ValidateExpectedRevision(TranslationWorkspaceEdit edit, byte[]? original)
     {
         string? actual = original is null ? null : Revision(original);
         if (!string.Equals(edit.ExpectedRevision, actual, StringComparison.Ordinal))
-            throw new TextResourceAuthoringException($"'{edit.RelativePath}' changed after the operation was planned.");
+            throw new TranslationAuthoringException($"'{edit.RelativePath}' changed after the operation was planned.");
     }
 
-    private static void ValidateEditKind(TextResourceWorkspaceEdit edit, bool exists)
+    private static void ValidateEditKind(TranslationWorkspaceEdit edit, bool exists)
     {
         bool valid = edit.Kind switch
         {
-            TextResourceWorkspaceEditKind.Create => !exists && edit.Bytes is not null,
-            TextResourceWorkspaceEditKind.Replace => exists && edit.Bytes is not null,
-            TextResourceWorkspaceEditKind.Delete => exists && edit.Bytes is null,
+            TranslationWorkspaceEditKind.Create => !exists && edit.Bytes is not null,
+            TranslationWorkspaceEditKind.Replace => exists && edit.Bytes is not null,
+            TranslationWorkspaceEditKind.Delete => exists && edit.Bytes is null,
             _ => false,
         };
-        if (!valid) throw new TextResourceAuthoringException($"Edit '{edit.RelativePath}' is inconsistent with the current workspace.");
+        if (!valid) throw new TranslationAuthoringException($"Edit '{edit.RelativePath}' is inconsistent with the current workspace.");
     }
 
-    private static void RejectDuplicatePaths(TextResourceWorkspaceEdit[] edits)
+    private static void RejectDuplicatePaths(TranslationWorkspaceEdit[] edits)
     {
         var paths = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         for (int index = 0; index < edits.Length; index++)
         {
             if (!paths.Add(NormalizePath(edits[index].RelativePath)))
-                throw new TextResourceAuthoringException($"Transaction path '{edits[index].RelativePath}' is declared more than once.");
+                throw new TranslationAuthoringException($"Transaction path '{edits[index].RelativePath}' is declared more than once.");
         }
     }
 
@@ -317,35 +317,35 @@ public static class TextResourceWorkspaceTransaction
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         string fullRoot = Path.GetFullPath(root);
-        if (!Directory.Exists(fullRoot)) throw new TextResourceAuthoringException($"Workspace '{fullRoot}' does not exist.");
+        if (!Directory.Exists(fullRoot)) throw new TranslationAuthoringException($"Workspace '{fullRoot}' does not exist.");
         if ((File.GetAttributes(fullRoot) & FileAttributes.ReparsePoint) != 0)
-            throw new TextResourceAuthoringException($"Workspace root '{fullRoot}' is a symbolic link or reparse point.");
+            throw new TranslationAuthoringException($"Workspace root '{fullRoot}' is a symbolic link or reparse point.");
         return fullRoot;
     }
 
     private static string ResolveContainedPath(string root, string relativePath)
     {
         if (string.IsNullOrWhiteSpace(relativePath) || Path.IsPathRooted(relativePath))
-            throw new TextResourceAuthoringException("Transaction paths must be non-empty relative paths.");
+            throw new TranslationAuthoringException("Transaction paths must be non-empty relative paths.");
         string normalized = NormalizePath(relativePath);
         string fullPath = Path.GetFullPath(normalized.Replace('/', Path.DirectorySeparatorChar), root);
         string boundary = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
         if (!fullPath.StartsWith(boundary, PathComparison))
-            throw new TextResourceAuthoringException($"Transaction path '{relativePath}' escapes the workspace.");
+            throw new TranslationAuthoringException($"Transaction path '{relativePath}' escapes the workspace.");
 
         string? parent = Path.GetDirectoryName(fullPath);
         if (parent is null || !Directory.Exists(parent))
-            throw new TextResourceAuthoringException($"Parent directory for transaction path '{relativePath}' does not exist.");
+            throw new TranslationAuthoringException($"Parent directory for transaction path '{relativePath}' does not exist.");
         var current = new DirectoryInfo(parent);
         while (!string.Equals(current.FullName, root, PathComparison))
         {
             if ((current.Attributes & FileAttributes.ReparsePoint) != 0)
-                throw new TextResourceAuthoringException($"Transaction path '{relativePath}' crosses a symbolic link or reparse point.");
+                throw new TranslationAuthoringException($"Transaction path '{relativePath}' crosses a symbolic link or reparse point.");
             current = current.Parent
-                ?? throw new TextResourceAuthoringException($"Transaction path '{relativePath}' escapes the workspace.");
+                ?? throw new TranslationAuthoringException($"Transaction path '{relativePath}' escapes the workspace.");
         }
         if (File.Exists(fullPath) && (File.GetAttributes(fullPath) & FileAttributes.ReparsePoint) != 0)
-            throw new TextResourceAuthoringException($"Transaction path '{relativePath}' is a symbolic link or reparse point.");
+            throw new TranslationAuthoringException($"Transaction path '{relativePath}' is a symbolic link or reparse point.");
         return fullPath;
     }
 

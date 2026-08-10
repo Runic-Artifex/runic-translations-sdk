@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <TextResourceCatalog Include="Fixtures\catalog.json" />
-    <TextResourceDocument Include="Fixtures\en.json" />
+    <TranslationCatalog Include="Fixtures\catalog.json" />
+    <TranslationDocument Include="Fixtures\en.json" />
   </ItemGroup>
 </Project>

@@ -19,17 +19,17 @@ internal static class CompilerOutputAdapter
         }
 
         orderedCatalogs.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Id, right.Id));
-        var outputs = new List<TextResourceGeneratedOutput>();
+        var outputs = new List<TranslationGeneratedOutput>();
         for (int index = 0; index < orderedCatalogs.Count; index++)
         {
             CompiledTextCatalog catalog = orderedCatalogs[index];
-            var catalogOutputs = new List<TextResourceGeneratedOutput>();
+            var catalogOutputs = new List<TranslationGeneratedOutput>();
             if ((emission & ToolEmission.CSharp) != 0)
             {
-                catalogOutputs.Add(TextResourceOutputRenderer.RenderCSharpKeys(catalog));
-                catalogOutputs.Add(TextResourceOutputRenderer.RenderCSharpAccessors(catalog));
-                catalogOutputs.Add(TextResourceOutputRenderer.RenderCSharpCatalogData(catalog));
-                catalogOutputs.Add(TextResourceOutputRenderer.RenderCSharpRegistration(catalog));
+                catalogOutputs.Add(TranslationOutputRenderer.RenderCSharpKeys(catalog));
+                catalogOutputs.Add(TranslationOutputRenderer.RenderCSharpAccessors(catalog));
+                catalogOutputs.Add(TranslationOutputRenderer.RenderCSharpCatalogData(catalog));
+                catalogOutputs.Add(TranslationOutputRenderer.RenderCSharpRegistration(catalog));
             }
 
             if ((emission & ToolEmission.Json) != 0)
@@ -43,36 +43,36 @@ internal static class CompilerOutputAdapter
                 locales.Sort(StringComparer.Ordinal);
                 for (int localeIndex = 0; localeIndex < locales.Count; localeIndex++)
                 {
-                    catalogOutputs.Add(TextResourceOutputRenderer.RenderLocaleJson(catalog, locales[localeIndex]));
+                    catalogOutputs.Add(TranslationOutputRenderer.RenderLocaleJson(catalog, locales[localeIndex]));
                 }
             }
 
             if ((emission & ToolEmission.TemplateManifest) != 0)
             {
-                catalogOutputs.Add(TextResourceOutputRenderer.RenderTemplateManifestJson(catalog));
+                catalogOutputs.Add(TranslationOutputRenderer.RenderTemplateManifestJson(catalog));
             }
 
             if ((emission & ToolEmission.TypeScript) != 0)
             {
-                catalogOutputs.Add(TextResourceOutputRenderer.RenderTypeScriptContract(catalog));
+                catalogOutputs.Add(TranslationOutputRenderer.RenderTypeScriptContract(catalog));
             }
 
             if ((emission & ToolEmission.Esm) != 0)
             {
-                IReadOnlyList<TextResourceGeneratedOutput> esm = TextResourceOutputRenderer.RenderEsmModules(catalog);
+                IReadOnlyList<TranslationGeneratedOutput> esm = TranslationOutputRenderer.RenderEsmModules(catalog);
                 for (int outputIndex = 0; outputIndex < esm.Count; outputIndex++)
                     catalogOutputs.Add(esm[outputIndex]);
             }
 
             if ((emission & ToolEmission.Cpp) != 0)
             {
-                IReadOnlyList<TextResourceGeneratedOutput> cpp = TextResourceOutputRenderer.RenderCpp(catalog);
+                IReadOnlyList<TranslationGeneratedOutput> cpp = TranslationOutputRenderer.RenderCpp(catalog);
                 for (int outputIndex = 0; outputIndex < cpp.Count; outputIndex++)
                     catalogOutputs.Add(cpp[outputIndex]);
             }
 
             if ((emission & (ToolEmission.Json | ToolEmission.TemplateManifest | ToolEmission.TypeScript)) != 0)
-                catalogOutputs.Add(TextResourceOutputRenderer.RenderAssetManifestJson(catalog, catalogOutputs));
+                catalogOutputs.Add(TranslationOutputRenderer.RenderAssetManifestJson(catalog, catalogOutputs));
 
             outputs.AddRange(catalogOutputs);
         }

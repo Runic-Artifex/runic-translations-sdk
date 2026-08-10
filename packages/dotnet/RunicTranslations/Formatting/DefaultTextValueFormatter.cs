@@ -29,13 +29,13 @@ public sealed class DefaultTextValueFormatter : ITextValueFormatter
                 _ => throw InvalidDescriptor(in value),
             };
         }
-        catch (TextResourceFormatException)
+        catch (TranslationFormatException)
         {
             throw;
         }
         catch (FormatException exception)
         {
-            throw new TextResourceFormatException(
+            throw new TranslationFormatException(
                 "Argument '" + (value.Name ?? "<unnamed>") + "' could not be formatted.", exception);
         }
     }
@@ -162,7 +162,7 @@ public sealed class DefaultTextValueFormatter : ITextValueFormatter
             return value;
         }
 
-        throw new TextResourceFormatException(
+        throw new TranslationFormatException(
             "Argument '" + (argument.Name ?? "<unnamed>") + "' does not contain its declared " +
             argument.Type.ToString() + " value.");
     }
@@ -175,7 +175,7 @@ public sealed class DefaultTextValueFormatter : ITextValueFormatter
         }
         catch (CultureNotFoundException exception)
         {
-            throw new TextResourceFormatException(
+            throw new TranslationFormatException(
                 "Resource locale '" + resourceLocale + "' is not available for locale-sensitive formatting.", exception);
         }
     }
@@ -202,7 +202,7 @@ public sealed class DefaultTextValueFormatter : ITextValueFormatter
         }
     }
 
-    private static TextResourceFormatException InvalidDescriptor(in TextArgument argument) =>
+    private static TranslationFormatException InvalidDescriptor(in TextArgument argument) =>
         new("Argument '" + (argument.Name ?? "<unnamed>") + "' has invalid format '" +
             argument.Format.ToString() + "' for type '" + argument.Type.ToString() + "'.");
 }

@@ -4,20 +4,20 @@ using RunicTranslations.Compiler;
 
 namespace RunicTranslations.Authoring;
 
-public enum TextResourceWorkspaceEditKind
+public enum TranslationWorkspaceEditKind
 {
     Create,
     Replace,
     Delete,
 }
 
-public sealed class TextResourceWorkspaceEdit
+public sealed class TranslationWorkspaceEdit
 {
     private readonly byte[]? _utf8Bytes;
 
-    internal TextResourceWorkspaceEdit(
+    internal TranslationWorkspaceEdit(
         string relativePath,
-        TextResourceWorkspaceEditKind kind,
+        TranslationWorkspaceEditKind kind,
         string? expectedRevision,
         byte[]? utf8Bytes)
     {
@@ -28,19 +28,19 @@ public sealed class TextResourceWorkspaceEdit
     }
 
     public string RelativePath { get; }
-    public TextResourceWorkspaceEditKind Kind { get; }
+    public TranslationWorkspaceEditKind Kind { get; }
     public string? ExpectedRevision { get; }
     public byte[]? GetUtf8Bytes() => _utf8Bytes is null ? null : (byte[])_utf8Bytes.Clone();
     internal byte[]? Bytes => _utf8Bytes;
 }
 
-public sealed class TextResourceWorkspaceTransactionPlan
+public sealed class TranslationWorkspaceTransactionPlan
 {
-    internal TextResourceWorkspaceTransactionPlan(
+    internal TranslationWorkspaceTransactionPlan(
         string root,
         string catalogId,
-        IReadOnlyList<TextResourceWorkspaceEdit> edits,
-        TextResourceCompilation compilation)
+        IReadOnlyList<TranslationWorkspaceEdit> edits,
+        TranslationCompilation compilation)
     {
         Root = root;
         CatalogId = catalogId;
@@ -50,17 +50,17 @@ public sealed class TextResourceWorkspaceTransactionPlan
 
     public string Root { get; }
     public string CatalogId { get; }
-    public IReadOnlyList<TextResourceWorkspaceEdit> Edits { get; }
-    public TextResourceCompilation Compilation { get; }
+    public IReadOnlyList<TranslationWorkspaceEdit> Edits { get; }
+    public TranslationCompilation Compilation { get; }
 }
 
-public enum TextResourceWorkspaceRecoveryMode
+public enum TranslationWorkspaceRecoveryMode
 {
     Complete,
     Rollback,
 }
 
-public sealed record TextResourcePendingTransaction(
+public sealed record TranslationPendingTransaction(
     string Root,
     string CatalogId,
     IReadOnlyList<string> Paths);

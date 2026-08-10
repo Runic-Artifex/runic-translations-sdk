@@ -7,7 +7,7 @@ using RunicTranslations.Compiler;
 
 namespace RunicTranslations.Tool;
 
-internal sealed record CompilerInputs(TextResourceSource Catalog, IReadOnlyList<TextResourceSource> Documents);
+internal sealed record CompilerInputs(TranslationSource Catalog, IReadOnlyList<TranslationSource> Documents);
 
 internal static class InputFiles
 {
@@ -49,7 +49,7 @@ internal static class InputFiles
 
         var ordered = new List<KeyValuePair<string, string>>(paths);
         ordered.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Value, right.Value));
-        var documents = new List<TextResourceSource>(ordered.Count);
+        var documents = new List<TranslationSource>(ordered.Count);
         for (int index = 0; index < ordered.Count; index++)
         {
             documents.Add(ReadSource(ordered[index].Key, ordered[index].Value));
@@ -60,7 +60,7 @@ internal static class InputFiles
             documents);
     }
 
-    private static TextResourceSource ReadSource(string fullPath, string displayPath)
+    private static TranslationSource ReadSource(string fullPath, string displayPath)
     {
         var information = new FileInfo(fullPath);
         if (information.Length > MaximumDocumentBytes)
@@ -89,7 +89,7 @@ internal static class InputFiles
             output.Write(buffer, 0, read);
         }
 
-        return new TextResourceSource(displayPath, output.ToArray());
+        return new TranslationSource(displayPath, output.ToArray());
     }
 
     private static string[] ExpandPattern(string pattern, string currentDirectory)

@@ -23,7 +23,7 @@ internal static class ProjectCreationTests
 
     private static void GermanOnlyIsValid()
     {
-        TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(Request("unused", "de"));
+        TranslationProjectPlan plan = TranslationProjectScaffolder.Render(Request("unused", "de"));
         Assert.True(plan.Compilation.Success, "Generated project did not compile.");
         Assert.Equal(2, plan.Files.Count);
         Assert.Equal("de", plan.Locales[0].Tag);
@@ -32,7 +32,7 @@ internal static class ProjectCreationTests
 
     private static void ThreeLocalesAreCanonical()
     {
-        TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(new TextResourceProjectCreationRequest(
+        TranslationProjectPlan plan = TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
             "unused",
             "product",
             "de-de",
@@ -49,8 +49,8 @@ internal static class ProjectCreationTests
 
     private static void RenderingIsDeterministic()
     {
-        TextResourceProjectPlan first = TextResourceProjectScaffolder.Render(Request("first", "en"));
-        TextResourceProjectPlan second = TextResourceProjectScaffolder.Render(Request("second", "EN"));
+        TranslationProjectPlan first = TranslationProjectScaffolder.Render(Request("first", "en"));
+        TranslationProjectPlan second = TranslationProjectScaffolder.Render(Request("second", "EN"));
         Assert.Equal(first.Files.Count, second.Files.Count);
         for (int index = 0; index < first.Files.Count; index++)
         {
@@ -63,12 +63,12 @@ internal static class ProjectCreationTests
 
     private static void InvalidFallbacksAreRejected()
     {
-        Assert.Throws<TextResourceAuthoringException>(
-            () => TextResourceProjectScaffolder.Render(new TextResourceProjectCreationRequest(
+        Assert.Throws<TranslationAuthoringException>(
+            () => TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
                 "unused", "product", "de", "Customer.Product", "ProductText", [new("fr", "es")])),
             "is not declared");
-        Assert.Throws<TextResourceAuthoringException>(
-            () => TextResourceProjectScaffolder.Render(new TextResourceProjectCreationRequest(
+        Assert.Throws<TranslationAuthoringException>(
+            () => TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
                 "unused", "product", "de", "Customer.Product", "ProductText", [new("en", "fr"), new("fr", "en")])),
             "contain a cycle");
     }
@@ -77,8 +77,8 @@ internal static class ProjectCreationTests
     {
         using TemporaryDirectory temporary = new();
         string target = Path.Combine(temporary.Path, "Resources");
-        TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(Request(target, "en"));
-        string result = TextResourceProjectWriter.Create(plan);
+        TranslationProjectPlan plan = TranslationProjectScaffolder.Render(Request(target, "en"));
+        string result = TranslationProjectWriter.Create(plan);
         Assert.Equal(Path.GetFullPath(target), result);
         Assert.Equal(
             string.Join('|', plan.Files.Select(file => file.RelativePath)),
@@ -98,8 +98,8 @@ internal static class ProjectCreationTests
         Directory.CreateDirectory(target);
         string sentinel = Path.Combine(target, "customer.txt");
         File.WriteAllText(sentinel, "keep", new UTF8Encoding(false));
-        TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(Request(target, "en"));
-        Assert.Throws<TextResourceAuthoringException>(() => TextResourceProjectWriter.Create(plan), "already exists");
+        TranslationProjectPlan plan = TranslationProjectScaffolder.Render(Request(target, "en"));
+        Assert.Throws<TranslationAuthoringException>(() => TranslationProjectWriter.Create(plan), "already exists");
         Assert.Equal("keep", File.ReadAllText(sentinel, Encoding.UTF8));
         Assert.Equal("customer.txt", string.Join('|', Directory.EnumerateFiles(target).Select(Path.GetFileName)));
     }
@@ -113,7 +113,7 @@ internal static class ProjectCreationTests
         if (!TryCreateDirectoryLink(alias, real)) return;
 
         string target = Path.Combine(alias, "projects", "Resources");
-        string result = TextResourceProjectWriter.Create(TextResourceProjectScaffolder.Render(Request(target, "en")));
+        string result = TranslationProjectWriter.Create(TranslationProjectScaffolder.Render(Request(target, "en")));
         Assert.Equal(Path.GetFullPath(target), result);
         Assert.True(File.Exists(Path.Combine(real, "projects", "Resources", "product.en.json")), "Project was not created beneath the resolved ancestor.");
     }
@@ -127,15 +127,15 @@ internal static class ProjectCreationTests
         if (!TryCreateDirectoryLink(alias, real)) return;
 
         string target = Path.Combine(alias, "Resources");
-        Assert.Throws<TextResourceAuthoringException>(
-            () => TextResourceProjectWriter.Create(TextResourceProjectScaffolder.Render(Request(target, "en"))),
+        Assert.Throws<TranslationAuthoringException>(
+            () => TranslationProjectWriter.Create(TranslationProjectScaffolder.Render(Request(target, "en"))),
             "symbolic link or reparse point");
         Assert.False(Directory.Exists(Path.Combine(real, "Resources")), "Rejected creation wrote through the linked parent.");
     }
 
     private static void NoStarterIsValid()
     {
-        TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(new TextResourceProjectCreationRequest(
+        TranslationProjectPlan plan = TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
             "unused",
             "product",
             "de",
@@ -146,17 +146,17 @@ internal static class ProjectCreationTests
         Assert.False(Utf8(plan, "product.de.json").Contains("Application", StringComparison.Ordinal), "Starter message was unexpectedly emitted.");
     }
 
-    private static TextResourceProjectCreationRequest Request(string directory, string locale) => new(
+    private static TranslationProjectCreationRequest Request(string directory, string locale) => new(
         directory,
         "product",
         locale,
         "Customer.Product",
         "ProductText");
 
-    private static string Utf8(TextResourceProjectPlan plan, string name) => Encoding.UTF8.GetString(
+    private static string Utf8(TranslationProjectPlan plan, string name) => Encoding.UTF8.GetString(
         plan.Files.Single(file => file.RelativePath == name).GetUtf8Bytes());
 
-    private static string LocaleText(TextResourceProjectLocale locale) =>
+    private static string LocaleText(TranslationProjectLocale locale) =>
         locale.Fallback is null ? locale.Tag : $"{locale.Tag}:{locale.Fallback}";
 
     private static bool TryCreateDirectoryLink(string path, string target)

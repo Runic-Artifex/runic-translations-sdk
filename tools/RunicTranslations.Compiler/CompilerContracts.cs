@@ -3,40 +3,40 @@ using System.Collections.Generic;
 
 namespace RunicTranslations.Compiler;
 
-public enum TextResourceDiagnosticSeverity
+public enum TranslationDiagnosticSeverity
 {
     Warning,
     Error,
 }
 
-public enum TextResourceVisibility
+public enum TranslationVisibility
 {
     Public,
     Internal,
 }
 
-public enum TextResourcePolicy
+public enum TranslationPolicy
 {
     Allow,
     Warning,
     Error,
 }
 
-public enum TextResourceUnsupportedLocalePolicy
+public enum TranslationUnsupportedLocalePolicy
 {
     Exact,
     ParentsThenDefault,
     Default,
 }
 
-public enum TextResourceMissingKeyPolicy
+public enum TranslationMissingKeyPolicy
 {
     Throw,
     ReturnKey,
     ReturnMarker,
 }
 
-public enum TextResourceArgumentType
+public enum TranslationArgumentType
 {
     String,
     Int,
@@ -48,11 +48,11 @@ public enum TextResourceArgumentType
     Guid,
 }
 
-public sealed class TextResourceSource
+public sealed class TranslationSource
 {
     private readonly byte[] _utf8Bytes;
 
-    public TextResourceSource(string path, byte[] utf8Bytes)
+    public TranslationSource(string path, byte[] utf8Bytes)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(utf8Bytes);
@@ -74,9 +74,9 @@ public sealed class TextResourceSource
     }
 }
 
-public sealed class TextResourceCompilerOptions
+public sealed class TranslationCompilerOptions
 {
-    public TextResourceCompilerOptions(
+    public TranslationCompilerOptions(
         int maximumDocumentBytes = 8 * 1024 * 1024,
         int maximumDepth = 64,
         int maximumKeysPerCatalog = 50_000,
@@ -130,9 +130,9 @@ public sealed class TextSourceLocation
     public override string ToString() => Path + "(" + Line + "," + Column + ")";
 }
 
-public sealed class TextResourceDiagnostic
+public sealed class TranslationDiagnostic
 {
-    public TextResourceDiagnostic(string id, TextResourceDiagnosticSeverity severity, string message, TextSourceLocation location)
+    public TranslationDiagnostic(string id, TranslationDiagnosticSeverity severity, string message, TextSourceLocation location)
     {
         Id = id;
         Severity = severity;
@@ -141,27 +141,27 @@ public sealed class TextResourceDiagnostic
     }
 
     public string Id { get; }
-    public TextResourceDiagnosticSeverity Severity { get; }
+    public TranslationDiagnosticSeverity Severity { get; }
     public string Message { get; }
     public TextSourceLocation Location { get; }
 }
 
-public sealed class TextResourceCompilation
+public sealed class TranslationCompilation
 {
-    internal TextResourceCompilation(IReadOnlyList<CompiledTextCatalog> catalogs, IReadOnlyList<TextResourceDiagnostic> diagnostics)
+    internal TranslationCompilation(IReadOnlyList<CompiledTextCatalog> catalogs, IReadOnlyList<TranslationDiagnostic> diagnostics)
     {
         Catalogs = catalogs;
         Diagnostics = diagnostics;
     }
 
     public IReadOnlyList<CompiledTextCatalog> Catalogs { get; }
-    public IReadOnlyList<TextResourceDiagnostic> Diagnostics { get; }
+    public IReadOnlyList<TranslationDiagnostic> Diagnostics { get; }
     public bool Success
     {
         get
         {
             for (int i = 0; i < Diagnostics.Count; i++)
-                if (Diagnostics[i].Severity == TextResourceDiagnosticSeverity.Error) return false;
+                if (Diagnostics[i].Severity == TranslationDiagnosticSeverity.Error) return false;
             return true;
         }
     }
@@ -169,10 +169,10 @@ public sealed class TextResourceCompilation
 
 public sealed class CompiledTextCatalog
 {
-    internal CompiledTextCatalog(string id, string codeNamespace, string className, TextResourceVisibility visibility,
+    internal CompiledTextCatalog(string id, string codeNamespace, string className, TranslationVisibility visibility,
         string defaultLocale, IReadOnlyList<CompiledTextLayer> layers, IReadOnlyList<CompiledTextLocale> locales,
-        IReadOnlyList<CompiledTextResource> canonicalResources, TextResourceUnsupportedLocalePolicy unsupportedLocale,
-        TextResourceMissingKeyPolicy missingKey, string fingerprint, int schemaVersion = 1, int messageGrammarVersion = 1)
+        IReadOnlyList<CompiledTranslation> canonicalResources, TranslationUnsupportedLocalePolicy unsupportedLocale,
+        TranslationMissingKeyPolicy missingKey, string fingerprint, int schemaVersion = 1, int messageGrammarVersion = 1)
     {
         Id = id;
         CodeNamespace = codeNamespace;
@@ -194,13 +194,13 @@ public sealed class CompiledTextCatalog
     public string Id { get; }
     public string CodeNamespace { get; }
     public string ClassName { get; }
-    public TextResourceVisibility Visibility { get; }
+    public TranslationVisibility Visibility { get; }
     public string DefaultLocale { get; }
     public IReadOnlyList<CompiledTextLayer> Layers { get; }
     public IReadOnlyList<CompiledTextLocale> Locales { get; }
-    public IReadOnlyList<CompiledTextResource> CanonicalResources { get; }
-    public TextResourceUnsupportedLocalePolicy UnsupportedLocale { get; }
-    public TextResourceMissingKeyPolicy MissingKey { get; }
+    public IReadOnlyList<CompiledTranslation> CanonicalResources { get; }
+    public TranslationUnsupportedLocalePolicy UnsupportedLocale { get; }
+    public TranslationMissingKeyPolicy MissingKey { get; }
     public string Fingerprint { get; }
 }
 
@@ -213,8 +213,8 @@ public sealed class CompiledTextLayer
 
 public sealed class CompiledTextLocale
 {
-    internal CompiledTextLocale(string tag, string? fallbackTag, IReadOnlyList<CompiledTextResource> directResources,
-        IReadOnlyList<CompiledTextResource> resolvedResources)
+    internal CompiledTextLocale(string tag, string? fallbackTag, IReadOnlyList<CompiledTranslation> directResources,
+        IReadOnlyList<CompiledTranslation> resolvedResources)
     {
         Tag = tag;
         FallbackTag = fallbackTag;
@@ -224,13 +224,13 @@ public sealed class CompiledTextLocale
 
     public string Tag { get; }
     public string? FallbackTag { get; }
-    public IReadOnlyList<CompiledTextResource> DirectResources { get; }
-    public IReadOnlyList<CompiledTextResource> ResolvedResources { get; }
+    public IReadOnlyList<CompiledTranslation> DirectResources { get; }
+    public IReadOnlyList<CompiledTranslation> ResolvedResources { get; }
 }
 
-public sealed class CompiledTextResource
+public sealed class CompiledTranslation
 {
-    internal CompiledTextResource(int id, string key, string pattern, string? description, string? since,
+    internal CompiledTranslation(int id, string key, string pattern, string? description, string? since,
         string? deprecatedReason, IReadOnlyList<string> tags, IReadOnlyList<CompiledTextPlaceholder> placeholders,
         TextSourceLocation sourceLocation, CompiledMessagePattern message)
     {
@@ -262,7 +262,7 @@ public sealed class CompiledTextResource
 
 public sealed class CompiledTextPlaceholder
 {
-    internal CompiledTextPlaceholder(string name, TextResourceArgumentType type, string format)
+    internal CompiledTextPlaceholder(string name, TranslationArgumentType type, string format)
     {
         Name = name;
         Type = type;
@@ -270,6 +270,6 @@ public sealed class CompiledTextPlaceholder
     }
 
     public string Name { get; }
-    public TextResourceArgumentType Type { get; }
+    public TranslationArgumentType Type { get; }
     public string Format { get; }
 }

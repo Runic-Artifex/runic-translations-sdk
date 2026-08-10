@@ -15,7 +15,7 @@ namespace RunicTranslations.Generator;
 [Generator(LanguageNames.CSharp)]
 public sealed class TranslationsGenerator : IIncrementalGenerator
 {
-    private const string KindMetadata = "build_metadata.AdditionalFiles.RunicTextResourceKind";
+    private const string KindMetadata = "build_metadata.AdditionalFiles.RunicTranslationKind";
     private const string ProjectDirectoryProperty = "build_property.ProjectDir";
 
     /// <inheritdoc />
@@ -25,14 +25,14 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             .Combine(context.AnalyzerConfigOptionsProvider)
             .Select(static (pair, cancellationToken) => CreateInput(pair.Left, pair.Right, cancellationToken))
             .Where(static input => input.Kind != InputKind.None)
-            .WithTrackingName("TextResourceInputs");
+            .WithTrackingName("TranslationInputs");
 
         IncrementalValueProvider<RuntimeAbiState> runtimeAbi = context.CompilationProvider
             .Select(static (compilation, _) => InspectRuntimeAbi(compilation))
-            .WithTrackingName("TextResourceRuntimeAbi");
+            .WithTrackingName("TranslationRuntimeAbi");
 
         context.RegisterSourceOutput(
-            inputs.Collect().WithTrackingName("TextResourceCompilation").Combine(runtimeAbi),
+            inputs.Collect().WithTrackingName("TranslationCompilation").Combine(runtimeAbi),
             static (productionContext, pair) =>
             {
                 if (!pair.Right.IsCompatible)
@@ -128,8 +128,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
 
     private static void Generate(SourceProductionContext context, IEnumerable<GeneratorInput> inputs)
     {
-        var manifests = new List<TextResourceSource>();
-        var documents = new List<TextResourceSource>();
+        var manifests = new List<TranslationSource>();
+        var documents = new List<TranslationSource>();
         var sourceTexts = new Dictionary<string, SourceText>(StringComparer.Ordinal);
 
         var materializedInputs = new List<GeneratorInput>();
@@ -153,12 +153,12 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
 
             SourceText sourceText = SourceText.From(input.Text, new UTF8Encoding(false, true));
             sourceTexts[input.Path] = sourceText;
-            var source = new TextResourceSource(input.Path, new UTF8Encoding(false, true).GetBytes(input.Text));
+            var source = new TranslationSource(input.Path, new UTF8Encoding(false, true).GetBytes(input.Text));
             if (input.Kind == InputKind.Catalog) manifests.Add(source);
             else documents.Add(source);
         }
 
-        TextResourceCompilation compilation = TextResourceCompiler.Compile(
+        TranslationCompilation compilation = TranslationCompiler.Compile(
             manifests,
             documents,
             options: null,
@@ -167,9 +167,9 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         bool hasErrors = false;
         for (int i = 0; i < compilation.Diagnostics.Count; i++)
         {
-            TextResourceDiagnostic diagnostic = compilation.Diagnostics[i];
+            TranslationDiagnostic diagnostic = compilation.Diagnostics[i];
             context.ReportDiagnostic(CreateDiagnostic(diagnostic, sourceTexts));
-            if (diagnostic.Severity == TextResourceDiagnosticSeverity.Error) hasErrors = true;
+            if (diagnostic.Severity == TranslationDiagnosticSeverity.Error) hasErrors = true;
         }
 
         if (hasErrors) return;
@@ -179,17 +179,17 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         {
             context.CancellationToken.ThrowIfCancellationRequested();
             CompiledTextCatalog catalog = compilation.Catalogs[catalogIndex];
-            TextResourceGeneratedOutput[] outputs =
+            TranslationGeneratedOutput[] outputs =
             {
-                TextResourceOutputRenderer.RenderCSharpKeys(catalog),
-                TextResourceOutputRenderer.RenderCSharpAccessors(catalog),
-                TextResourceOutputRenderer.RenderCSharpCatalogData(catalog),
-                TextResourceOutputRenderer.RenderCSharpRegistration(catalog),
+                TranslationOutputRenderer.RenderCSharpKeys(catalog),
+                TranslationOutputRenderer.RenderCSharpAccessors(catalog),
+                TranslationOutputRenderer.RenderCSharpCatalogData(catalog),
+                TranslationOutputRenderer.RenderCSharpRegistration(catalog),
             };
 
             for (int outputIndex = 0; outputIndex < outputs.Length; outputIndex++)
             {
-                TextResourceGeneratedOutput output = outputs[outputIndex];
+                TranslationGeneratedOutput output = outputs[outputIndex];
                 if (!emittedHints.Add(output.RelativePath))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
@@ -213,7 +213,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     }
 
     private static Diagnostic CreateDiagnostic(
-        TextResourceDiagnostic diagnostic,
+        TranslationDiagnostic diagnostic,
         Dictionary<string, SourceText> sourceTexts)
     {
         Location location = Location.None;
@@ -234,7 +234,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             location = Location.Create(diagnostic.Location.Path, TextSpan.FromBounds(start, end), lineSpan);
         }
 
-        DiagnosticSeverity severity = diagnostic.Severity == TextResourceDiagnosticSeverity.Warning
+        DiagnosticSeverity severity = diagnostic.Severity == TranslationDiagnosticSeverity.Warning
             ? DiagnosticSeverity.Warning
             : DiagnosticSeverity.Error;
         return Diagnostic.Create(Descriptor(diagnostic.Id, severity), location, diagnostic.Message);

@@ -22,7 +22,7 @@ internal static class WorkspaceDiscoveryTests
         using TemporaryWorkspace workspace = new();
         WriteProject(workspace.Path, "nested/second", "second", "de", "SecondText");
         WriteProject(workspace.Path, "first", "first", "en", "FirstText");
-        TextResourceWorkspaceDiscoveryResult result = TextResourceWorkspaceDiscovery.Discover(workspace.Path);
+        TranslationWorkspaceDiscoveryResult result = TranslationWorkspaceDiscovery.Discover(workspace.Path);
         Assert.Equal("first|second", string.Join('|', result.Catalogs.Select(catalog => catalog.Id)));
         Assert.True(result.Catalogs.All(catalog => catalog.Compilation.Success), "A discovered catalog did not compile.");
         Assert.Equal(4, result.Files.Count);
@@ -34,9 +34,9 @@ internal static class WorkspaceDiscoveryTests
         using TemporaryWorkspace workspace = new();
         WriteProject(workspace.Path, "valid", "valid", "en", "ValidText");
         Write(workspace.Path, "broken/catalog.catalog.json", "{ \"schemaVersion\": 2,");
-        TextResourceWorkspaceDiscoveryResult result = TextResourceWorkspaceDiscovery.Discover(workspace.Path);
-        TextResourceWorkspaceFile malformed = result.Files.Single(file => file.RelativePath == "broken/catalog.catalog.json");
-        Assert.Equal(TextResourceWorkspaceFileKind.MalformedJson, malformed.Kind);
+        TranslationWorkspaceDiscoveryResult result = TranslationWorkspaceDiscovery.Discover(workspace.Path);
+        TranslationWorkspaceFile malformed = result.Files.Single(file => file.RelativePath == "broken/catalog.catalog.json");
+        Assert.Equal(TranslationWorkspaceFileKind.MalformedJson, malformed.Kind);
         Assert.True(result.Diagnostics.Any(diagnostic => diagnostic.Id == "RTRA0006"), "Malformed JSON diagnostic is missing.");
         Assert.Equal("valid", AssertSingle(result.Catalogs).Id);
     }
@@ -47,7 +47,7 @@ internal static class WorkspaceDiscoveryTests
         WriteProject(workspace.Path, "Resources", "product", "en", "ProductText");
         Write(workspace.Path, "node_modules/hostile.catalog.json", "{");
         Write(workspace.Path, "obj/hostile.json", "{");
-        TextResourceWorkspaceDiscoveryResult result = TextResourceWorkspaceDiscovery.Discover(workspace.Path);
+        TranslationWorkspaceDiscoveryResult result = TranslationWorkspaceDiscovery.Discover(workspace.Path);
         Assert.Equal(2, result.Files.Count);
         Assert.Equal(0, result.Diagnostics.Count);
     }
@@ -57,15 +57,15 @@ internal static class WorkspaceDiscoveryTests
         using TemporaryWorkspace workspace = new();
         Write(workspace.Path, "one.json", "{}");
         Write(workspace.Path, "two.json", "{}");
-        Assert.Throws<TextResourceAuthoringException>(
-            () => TextResourceWorkspaceDiscovery.Discover(
+        Assert.Throws<TranslationAuthoringException>(
+            () => TranslationWorkspaceDiscovery.Discover(
                 workspace.Path,
-                new TextResourceWorkspaceDiscoveryOptions(maximumJsonFiles: 1)),
+                new TranslationWorkspaceDiscoveryOptions(maximumJsonFiles: 1)),
             "JSON-file discovery limit");
-        Assert.Throws<TextResourceAuthoringException>(
-            () => TextResourceWorkspaceDiscovery.Discover(
+        Assert.Throws<TranslationAuthoringException>(
+            () => TranslationWorkspaceDiscovery.Discover(
                 workspace.Path,
-                new TextResourceWorkspaceDiscoveryOptions(maximumEntries: 1)),
+                new TranslationWorkspaceDiscoveryOptions(maximumEntries: 1)),
             "entry discovery limit");
     }
 
@@ -76,7 +76,7 @@ internal static class WorkspaceDiscoveryTests
         using TemporaryWorkspace outside = new();
         WriteProject(outside.Path, "", "outside", "en", "OutsideText");
         Directory.CreateSymbolicLink(Path.Combine(workspace.Path, "linked"), outside.Path);
-        TextResourceWorkspaceDiscoveryResult result = TextResourceWorkspaceDiscovery.Discover(workspace.Path);
+        TranslationWorkspaceDiscoveryResult result = TranslationWorkspaceDiscovery.Discover(workspace.Path);
         Assert.Equal(0, result.Catalogs.Count);
         Assert.True(result.Diagnostics.Any(diagnostic => diagnostic.Id == "RTRA0003"), "Link rejection diagnostic is missing.");
     }

@@ -2,7 +2,7 @@ using System;
 
 namespace RunicTranslations;
 
-internal static class TextResourcePackValidation
+internal static class TranslationPackValidation
 {
     internal static bool IsCatalog(string? value)
     {

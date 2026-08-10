@@ -7,25 +7,25 @@ using System.Threading.Tasks;
 
 namespace RunicTranslations;
 
-/// <summary>Verifies and parses caller-supplied external text resource pack bytes.</summary>
-public static class TextResourcePackLoader
+/// <summary>Verifies and parses caller-supplied external translation pack bytes.</summary>
+public static class TranslationPackLoader
 {
     /// <summary>
     /// Requests bytes from an explicit caller source and verifies them when a pack is available.
     /// The runtime itself performs no file or network discovery.
     /// </summary>
-    public static async ValueTask<VerifiedExternalTextResourcePack?> LoadAsync(
-        IExternalTextResourceSource source,
-        TextResourcePackContract contract,
-        TextResourcePackLimits? limits = null,
-        TextResourcePackIntegrityVerifier? integrityVerifier = null,
+    public static async ValueTask<VerifiedExternalTranslationPack?> LoadAsync(
+        IExternalTranslationSource source,
+        TranslationPackContract contract,
+        TranslationPackLimits? limits = null,
+        TranslationPackIntegrityVerifier? integrityVerifier = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(contract);
         cancellationToken.ThrowIfCancellationRequested();
 
-        ExternalTextResourcePack? pack;
+        ExternalTranslationPack? pack;
         try
         {
             pack = await source.LoadAsync(contract.Catalog, contract.Locale, cancellationToken).ConfigureAwait(false);
@@ -36,7 +36,7 @@ public static class TextResourcePackLoader
         }
         catch (Exception)
         {
-            throw PackError("The external pack source failed to load a pack.", TextResourcePackFailureReason.SourceFailure);
+            throw PackError("The external pack source failed to load a pack.", TranslationPackFailureReason.SourceFailure);
         }
 
         if (pack is null) return null;
@@ -47,23 +47,23 @@ public static class TextResourcePackLoader
     /// Runs optional integrity verification, then fully validates an external pack without
     /// performing any file or network access.
     /// </summary>
-    public static async ValueTask<VerifiedExternalTextResourcePack> VerifyAsync(
-        ExternalTextResourcePack pack,
-        TextResourcePackContract contract,
-        TextResourcePackLimits? limits = null,
-        TextResourcePackIntegrityVerifier? integrityVerifier = null,
+    public static async ValueTask<VerifiedExternalTranslationPack> VerifyAsync(
+        ExternalTranslationPack pack,
+        TranslationPackContract contract,
+        TranslationPackLimits? limits = null,
+        TranslationPackIntegrityVerifier? integrityVerifier = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pack);
         ArgumentNullException.ThrowIfNull(contract);
-        limits ??= new TextResourcePackLimits();
+        limits ??= new TranslationPackLimits();
         cancellationToken.ThrowIfCancellationRequested();
 
         ReadOnlyMemory<byte> callerContent = pack.Content;
         if (callerContent.Length == 0) throw PackError("The external pack is empty.");
         if (callerContent.Length > limits.MaximumDocumentBytes) throw LimitError("The external pack exceeds the configured document limit.");
 
-        // ExternalTextResourcePack deliberately accepts caller-owned memory. Take one bounded
+        // ExternalTranslationPack deliberately accepts caller-owned memory. Take one bounded
         // snapshot before the first await and use that exact snapshot for integrity and parse,
         // so mutation of the caller's backing store cannot create a verification/parsing TOCTOU.
         byte[] ownedContent = callerContent.ToArray();
@@ -82,22 +82,22 @@ public static class TextResourcePackLoader
             }
             catch (Exception)
             {
-                throw PackError("External pack integrity verification failed.", TextResourcePackFailureReason.IntegrityRejected);
+                throw PackError("External pack integrity verification failed.", TranslationPackFailureReason.IntegrityRejected);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            if (!accepted) throw PackError("The external pack was rejected by the integrity policy.", TextResourcePackFailureReason.IntegrityRejected);
+            if (!accepted) throw PackError("The external pack was rejected by the integrity policy.", TranslationPackFailureReason.IntegrityRejected);
         }
 
         return contract.MessageGrammarVersion == 2 && IsVersion2(ownedContent, cancellationToken)
-            ? TextResourcePackV2Loader.Parse(ownedContent, contract, limits, cancellationToken)
+            ? TranslationPackV2Loader.Parse(ownedContent, contract, limits, cancellationToken)
             : Parse(ownedContent, contract, limits, cancellationToken);
     }
 
-    private static VerifiedExternalTextResourcePack Parse(
+    private static VerifiedExternalTranslationPack Parse(
         ReadOnlySpan<byte> content,
-        TextResourcePackContract contract,
-        TextResourcePackLimits limits,
+        TranslationPackContract contract,
+        TranslationPackLimits limits,
         CancellationToken cancellationToken)
     {
         var options = new JsonReaderOptions
@@ -120,7 +120,7 @@ public static class TextResourcePackLoader
             string? catalog = null;
             string? locale = null;
             string? fingerprint = null;
-            List<VerifiedTextResourcePackMessage>? messages = null;
+            List<VerifiedTranslationPackMessage>? messages = null;
             var rootMembers = new HashSet<string>(StringComparer.Ordinal);
 
             while (Read(ref reader, cancellationToken))
@@ -146,23 +146,23 @@ public static class TextResourcePackLoader
                     case "catalog":
                         RequireToken(reader.TokenType, JsonTokenType.String, "'catalog' must be a string.");
                         catalog = GetString(ref reader, "'catalog' is not valid text.");
-                        if (!TextResourcePackValidation.IsCatalog(catalog)) throw PackError("The external pack catalog identifier is invalid.");
+                        if (!TranslationPackValidation.IsCatalog(catalog)) throw PackError("The external pack catalog identifier is invalid.");
                         break;
                     case "locale":
                         RequireToken(reader.TokenType, JsonTokenType.String, "'locale' must be a string.");
                         locale = GetString(ref reader, "'locale' is not valid text.");
-                        if (!TextResourcePackValidation.IsCanonicalLocale(locale)) throw PackError("The external pack locale is not canonical.");
+                        if (!TranslationPackValidation.IsCanonicalLocale(locale)) throw PackError("The external pack locale is not canonical.");
                         break;
                     case "contractFingerprint":
                         RequireToken(reader.TokenType, JsonTokenType.String, "'contractFingerprint' must be a string.");
                         fingerprint = GetString(ref reader, "'contractFingerprint' is not valid text.");
-                        if (!TextResourcePackValidation.IsFingerprint(fingerprint)) throw PackError("The external pack contract fingerprint is invalid.");
+                        if (!TranslationPackValidation.IsFingerprint(fingerprint)) throw PackError("The external pack contract fingerprint is invalid.");
                         break;
                     case "messages":
                         messages = ReadMessages(ref reader, contract, limits, cancellationToken);
                         break;
                     default:
-                        throw PackError("The external pack contains unknown property '" + member + "'.", TextResourcePackFailureReason.UnknownMember);
+                        throw PackError("The external pack contains unknown property '" + member + "'.", TranslationPackFailureReason.UnknownMember);
                 }
             }
 
@@ -171,20 +171,20 @@ public static class TextResourcePackLoader
             if (Read(ref reader, cancellationToken)) throw PackError("The external pack contains data after the root object.");
             if (artifactVersion is null || grammarVersion is null || catalog is null || locale is null || fingerprint is null || messages is null)
                 throw PackError("The external pack is missing one or more required properties.");
-            if (artifactVersion.Value != 1) throw PackError("The external pack artifact version is unsupported.", TextResourcePackFailureReason.ArtifactVersionMismatch);
+            if (artifactVersion.Value != 1) throw PackError("The external pack artifact version is unsupported.", TranslationPackFailureReason.ArtifactVersionMismatch);
             if (grammarVersion.Value != contract.MessageGrammarVersion || grammarVersion.Value != 1)
-                throw PackError("The external pack message grammar version is unsupported.", TextResourcePackFailureReason.MessageGrammarVersionMismatch);
+                throw PackError("The external pack message grammar version is unsupported.", TranslationPackFailureReason.MessageGrammarVersionMismatch);
             if (!string.Equals(catalog, contract.Catalog, StringComparison.Ordinal))
-                throw PackError("The external pack catalog does not match the generated contract.", TextResourcePackFailureReason.CatalogMismatch);
+                throw PackError("The external pack catalog does not match the generated contract.", TranslationPackFailureReason.CatalogMismatch);
             if (!string.Equals(locale, contract.Locale, StringComparison.Ordinal))
-                throw PackError("The external pack locale does not match the requested canonical locale.", TextResourcePackFailureReason.LocaleMismatch);
+                throw PackError("The external pack locale does not match the requested canonical locale.", TranslationPackFailureReason.LocaleMismatch);
             if (!string.Equals(fingerprint, contract.ContractFingerprint, StringComparison.Ordinal))
-                throw PackError("The external pack fingerprint does not match the generated contract.", TextResourcePackFailureReason.ContractFingerprintMismatch);
+                throw PackError("The external pack fingerprint does not match the generated contract.", TranslationPackFailureReason.ContractFingerprintMismatch);
 
             messages.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Key.Name, right.Key.Name));
-            return new VerifiedExternalTextResourcePack(catalog, locale, fingerprint, messages.ToArray());
+            return new VerifiedExternalTranslationPack(catalog, locale, fingerprint, messages.ToArray());
         }
-        catch (TextResourcePackException)
+        catch (TranslationPackException)
         {
             throw;
         }
@@ -216,14 +216,14 @@ public static class TextResourcePackLoader
         return false;
     }
 
-    private static List<VerifiedTextResourcePackMessage> ReadMessages(
+    private static List<VerifiedTranslationPackMessage> ReadMessages(
         ref Utf8JsonReader reader,
-        TextResourcePackContract contract,
-        TextResourcePackLimits limits,
+        TranslationPackContract contract,
+        TranslationPackLimits limits,
         CancellationToken cancellationToken)
     {
         RequireToken(reader.TokenType, JsonTokenType.StartObject, "'messages' must be an object.");
-        var result = new List<VerifiedTextResourcePackMessage>();
+        var result = new List<VerifiedTranslationPackMessage>();
         var names = new HashSet<string>(StringComparer.Ordinal);
         while (Read(ref reader, cancellationToken))
         {
@@ -232,25 +232,25 @@ public static class TextResourcePackLoader
             string key = GetString(ref reader, "The messages object contains an invalid key.");
             if (!names.Add(key)) throw PackError("The external pack contains duplicate message key '" + SafeKey(key) + "'.");
             if (result.Count >= limits.MaximumMessages) throw LimitError("The external pack exceeds the configured message limit.");
-            if (!TextResourcePackValidation.IsResourceKey(key)) throw PackError("The external pack contains an invalid message key.");
-            if (!contract.TryGetMessage(key, out TextResourcePackMessageContract known))
-                throw PackError("The external pack contains unknown message key '" + SafeKey(key) + "'.", TextResourcePackFailureReason.UnknownKey);
+            if (!TranslationPackValidation.IsResourceKey(key)) throw PackError("The external pack contains an invalid message key.");
+            if (!contract.TryGetMessage(key, out TranslationPackMessageContract known))
+                throw PackError("The external pack contains unknown message key '" + SafeKey(key) + "'.", TranslationPackFailureReason.UnknownKey);
             RequireRead(ref reader, "The external pack message is missing a value.", cancellationToken);
             result.Add(ReadMessage(ref reader, known, limits, cancellationToken));
         }
         throw PackError("The external pack messages object is incomplete.");
     }
 
-    private static VerifiedTextResourcePackMessage ReadMessage(
+    private static VerifiedTranslationPackMessage ReadMessage(
         ref Utf8JsonReader reader,
-        TextResourcePackMessageContract contract,
-        TextResourcePackLimits limits,
+        TranslationPackMessageContract contract,
+        TranslationPackLimits limits,
         CancellationToken cancellationToken)
     {
         RequireToken(reader.TokenType, JsonTokenType.StartObject,
             "Message '" + contract.Key.Name + "' must be an object.");
         string? pattern = null;
-        TextResourcePackArgumentContract[]? arguments = null;
+        TranslationPackArgumentContract[]? arguments = null;
         var members = new HashSet<string>(StringComparer.Ordinal);
         while (Read(ref reader, cancellationToken))
         {
@@ -274,24 +274,24 @@ public static class TextResourcePackLoader
                     arguments = ReadArguments(ref reader, contract.Key.Name, limits, cancellationToken);
                     break;
                 default:
-                    throw PackError("Message '" + contract.Key.Name + "' contains unknown property '" + member + "'.", TextResourcePackFailureReason.UnknownMember);
+                    throw PackError("Message '" + contract.Key.Name + "' contains unknown property '" + member + "'.", TranslationPackFailureReason.UnknownMember);
             }
         }
         if (reader.TokenType != JsonTokenType.EndObject || pattern is null || arguments is null)
             throw PackError("Message '" + contract.Key.Name + "' is incomplete.");
         ValidateArgumentParity(contract, arguments);
         ValidatePattern(contract, pattern);
-        return new VerifiedTextResourcePackMessage(contract.Key, pattern);
+        return new VerifiedTranslationPackMessage(contract.Key, pattern);
     }
 
-    private static TextResourcePackArgumentContract[] ReadArguments(
+    private static TranslationPackArgumentContract[] ReadArguments(
         ref Utf8JsonReader reader,
         string key,
-        TextResourcePackLimits limits,
+        TranslationPackLimits limits,
         CancellationToken cancellationToken)
     {
         RequireToken(reader.TokenType, JsonTokenType.StartArray, "Message '" + key + "' arguments must be an array.");
-        var result = new List<TextResourcePackArgumentContract>();
+        var result = new List<TranslationPackArgumentContract>();
         while (Read(ref reader, cancellationToken))
         {
             if (reader.TokenType == JsonTokenType.EndArray) return result.ToArray();
@@ -303,7 +303,7 @@ public static class TextResourcePackLoader
         throw PackError("Message '" + key + "' arguments are incomplete.");
     }
 
-    private static TextResourcePackArgumentContract ReadArgument(
+    private static TranslationPackArgumentContract ReadArgument(
         ref Utf8JsonReader reader,
         string key,
         CancellationToken cancellationToken)
@@ -326,33 +326,33 @@ public static class TextResourcePackLoader
                 case "name": name = value; break;
                 case "type": typeName = value; break;
                 case "format": formatName = value; break;
-                default: throw PackError("Message '" + key + "' contains unknown argument property '" + member + "'.", TextResourcePackFailureReason.UnknownMember);
+                default: throw PackError("Message '" + key + "' contains unknown argument property '" + member + "'.", TranslationPackFailureReason.UnknownMember);
             }
         }
         if (reader.TokenType != JsonTokenType.EndObject || name is null || typeName is null || formatName is null)
             throw PackError("Message '" + key + "' contains an incomplete argument descriptor.");
-        if (!TextResourcePackValidation.IsIdentifier(name)) throw PackError("Message '" + key + "' contains an invalid argument name.");
+        if (!TranslationPackValidation.IsIdentifier(name)) throw PackError("Message '" + key + "' contains an invalid argument name.");
         if (!TryType(typeName, out TextArgumentType type) || !TryFormat(formatName, out TextArgumentFormat format) ||
-            !TextResourcePackValidation.IsFormatAllowed(type, format))
-            throw PackError("Message '" + key + "' contains an invalid argument type or format and does not match its generated argument contract.", TextResourcePackFailureReason.ArgumentContractMismatch);
-        return new TextResourcePackArgumentContract(name, type, format);
+            !TranslationPackValidation.IsFormatAllowed(type, format))
+            throw PackError("Message '" + key + "' contains an invalid argument type or format and does not match its generated argument contract.", TranslationPackFailureReason.ArgumentContractMismatch);
+        return new TranslationPackArgumentContract(name, type, format);
     }
 
     private static void ValidateArgumentParity(
-        TextResourcePackMessageContract contract,
-        TextResourcePackArgumentContract[] actual)
+        TranslationPackMessageContract contract,
+        TranslationPackArgumentContract[] actual)
     {
         if (actual.Length != contract.Arguments.Count)
-            throw PackError("Message '" + contract.Key.Name + "' does not match its generated argument contract.", TextResourcePackFailureReason.ArgumentContractMismatch);
+            throw PackError("Message '" + contract.Key.Name + "' does not match its generated argument contract.", TranslationPackFailureReason.ArgumentContractMismatch);
         for (int i = 0; i < actual.Length; i++)
         {
-            TextResourcePackArgumentContract expected = contract.Arguments[i];
+            TranslationPackArgumentContract expected = contract.Arguments[i];
             if (actual[i] != expected)
-                throw PackError("Message '" + contract.Key.Name + "' does not match its generated argument contract.", TextResourcePackFailureReason.ArgumentContractMismatch);
+                throw PackError("Message '" + contract.Key.Name + "' does not match its generated argument contract.", TranslationPackFailureReason.ArgumentContractMismatch);
         }
     }
 
-    private static void ValidatePattern(TextResourcePackMessageContract contract, string pattern)
+    private static void ValidatePattern(TranslationPackMessageContract contract, string pattern)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < pattern.Length; i++)
@@ -364,7 +364,7 @@ public static class TextResourcePackLoader
                 int close = pattern.IndexOf('}', i + 1);
                 if (close < 0) throw PatternError(contract.Key.Name);
                 string name = pattern.Substring(i + 1, close - i - 1);
-                if (!TextResourcePackValidation.IsIdentifier(name)) throw PatternError(contract.Key.Name);
+                if (!TranslationPackValidation.IsIdentifier(name)) throw PatternError(contract.Key.Name);
                 names.Add(name);
                 i = close;
             }
@@ -380,8 +380,8 @@ public static class TextResourcePackLoader
             if (!names.Contains(contract.Arguments[i].Name)) throw PatternError(contract.Key.Name);
     }
 
-    private static TextResourcePackException PatternError(string key) =>
-        PackError("Message '" + key + "' pattern does not match its generated argument contract.", TextResourcePackFailureReason.MalformedPattern);
+    private static TranslationPackException PatternError(string key) =>
+        PackError("Message '" + key + "' pattern does not match its generated argument contract.", TranslationPackFailureReason.MalformedPattern);
 
     private static bool TryType(string value, out TextArgumentType type)
     {
@@ -435,7 +435,7 @@ public static class TextResourcePackLoader
         return utf8.GetByteCount(value);
     }
 
-    private static string SafeKey(string key) => TextResourcePackValidation.IsResourceKey(key) ? key : "<invalid>";
+    private static string SafeKey(string key) => TranslationPackValidation.IsResourceKey(key) ? key : "<invalid>";
 
     private static bool Read(ref Utf8JsonReader reader, CancellationToken cancellationToken)
     {
@@ -468,11 +468,11 @@ public static class TextResourcePackLoader
         if (actual != expected) throw PackError(message);
     }
 
-    private static TextResourcePackException LimitError(string message) =>
-        PackError(message, TextResourcePackFailureReason.LimitExceeded);
+    private static TranslationPackException LimitError(string message) =>
+        PackError(message, TranslationPackFailureReason.LimitExceeded);
 
-    private static TextResourcePackException PackError(
+    private static TranslationPackException PackError(
         string message,
-        TextResourcePackFailureReason reason = TextResourcePackFailureReason.Malformed) =>
-        TextResourcePackFailure.Create(message, reason);
+        TranslationPackFailureReason reason = TranslationPackFailureReason.Malformed) =>
+        TranslationPackFailure.Create(message, reason);
 }

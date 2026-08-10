@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 namespace RunicTranslations;
 
 /// <summary>A stable machine-readable reason for an external pack failure.</summary>
-public enum TextResourcePackFailureReason
+public enum TranslationPackFailureReason
 {
     /// <summary>The exception was not created by the external pack loader or has no registered reason.</summary>
     Unknown,
@@ -39,30 +39,30 @@ public enum TextResourcePackFailureReason
 }
 
 /// <summary>Reads stable machine-classifiable metadata from external pack exceptions.</summary>
-public static class TextResourcePackFailure
+public static class TranslationPackFailure
 {
     /// <summary>The reserved diagnostic identity for external pack incompatibility or rejection.</summary>
     public const string DiagnosticId = "RTR0023";
 
-    private static readonly ConditionalWeakTable<TextResourcePackException, FailureReasonHolder> Reasons = new();
+    private static readonly ConditionalWeakTable<TranslationPackException, FailureReasonHolder> Reasons = new();
 
     /// <summary>
-    /// Returns the registered reason, or <see cref="TextResourcePackFailureReason.Unknown"/> for
+    /// Returns the registered reason, or <see cref="TranslationPackFailureReason.Unknown"/> for
     /// exceptions created outside the external pack loader.
     /// </summary>
-    public static TextResourcePackFailureReason GetReason(TextResourcePackException exception)
+    public static TranslationPackFailureReason GetReason(TranslationPackException exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
         return Reasons.TryGetValue(exception, out FailureReasonHolder? holder)
             ? holder.Reason
-            : TextResourcePackFailureReason.Unknown;
+            : TranslationPackFailureReason.Unknown;
     }
 
     /// <summary>
     /// Returns the stable location-free diagnostic identity for an external pack failure.
     /// Runtime pack failures do not manufacture a source span.
     /// </summary>
-    public static string GetDiagnosticId(TextResourcePackException exception)
+    public static string GetDiagnosticId(TranslationPackException exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
         return DiagnosticId;
@@ -72,27 +72,27 @@ public static class TextResourcePackFailure
     /// Classifies a pack exception or cancellation without requiring callers to branch on
     /// exception type before reading the stable reason.
     /// </summary>
-    public static TextResourcePackFailureReason GetReason(Exception exception)
+    public static TranslationPackFailureReason GetReason(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
         return exception switch
         {
-            OperationCanceledException => TextResourcePackFailureReason.Cancelled,
-            TextResourcePackException packException => GetReason(packException),
-            _ => TextResourcePackFailureReason.Unknown,
+            OperationCanceledException => TranslationPackFailureReason.Cancelled,
+            TranslationPackException packException => GetReason(packException),
+            _ => TranslationPackFailureReason.Unknown,
         };
     }
 
-    internal static TextResourcePackException Create(string message, TextResourcePackFailureReason reason)
+    internal static TranslationPackException Create(string message, TranslationPackFailureReason reason)
     {
-        var exception = new TextResourcePackException(message);
+        var exception = new TranslationPackException(message);
         Reasons.Add(exception, new FailureReasonHolder(reason));
         return exception;
     }
 
     private sealed class FailureReasonHolder
     {
-        internal FailureReasonHolder(TextResourcePackFailureReason reason) => Reason = reason;
-        internal TextResourcePackFailureReason Reason { get; }
+        internal FailureReasonHolder(TranslationPackFailureReason reason) => Reason = reason;
+        internal TranslationPackFailureReason Reason { get; }
     }
 }

@@ -30,13 +30,13 @@ internal static class CompiledMessageTests
                         new CompiledTextMessageNode(CompiledTextMessageNodeKind.Text, " files"),
                     ]),
             ]);
-        var catalog = new CompiledTextResourceCatalog(
+        var catalog = new CompiledTranslationCatalog(
             "ast",
             "en",
-            [new CompiledTextResourceDefinition("Files", [new TextResourcePlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain)])],
-            [new CompiledTextResourceLocale("en", null, [new CompiledTextResourceValue(0, "deliberately { malformed", message)])]);
-        var snapshot = new CompiledTextResourceSnapshot(catalog, "en");
-        var key = new TextResourceKey("ast", 0, "Files");
+            [new CompiledTranslationDefinition("Files", [new TranslationPlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain)])],
+            [new CompiledTranslationLocale("en", null, [new CompiledTranslationValue(0, "deliberately { malformed", message)])]);
+        var snapshot = new CompiledTranslationSnapshot(catalog, "en");
+        var key = new TranslationKey("ast", 0, "Files");
         Assert.Equal("One file", snapshot.Format(key, [new TextArgument("count", 1)]));
         Assert.Equal("3 files", snapshot.Format(key, [new TextArgument("count", 3)]));
     }
@@ -66,14 +66,14 @@ internal static class CompiledMessageTests
                     new CompiledTextMessageNode(CompiledTextMessageNodeKind.RelativeTime, "delta", TextArgumentFormat.Plain, "day", "auto"),
                 ]),
             ]);
-        var catalog = new CompiledTextResourceCatalog("ast", "en",
-            [new CompiledTextResourceDefinition("Summary", [
-                new TextResourcePlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain),
-                new TextResourcePlaceholderDescriptor("delta", TextArgumentType.Number, TextArgumentFormat.Plain),
-                new TextResourcePlaceholderDescriptor("owner", TextArgumentType.String, TextArgumentFormat.None),
-            ])], [new CompiledTextResourceLocale("en", null, [new CompiledTextResourceValue(0, "compatibility", message)])]);
-        var snapshot = new CompiledTextResourceSnapshot(catalog, "en");
-        LocalizedTextContent content = snapshot.FormatContent(new TextResourceKey("ast", 0, "Summary"),
+        var catalog = new CompiledTranslationCatalog("ast", "en",
+            [new CompiledTranslationDefinition("Summary", [
+                new TranslationPlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain),
+                new TranslationPlaceholderDescriptor("delta", TextArgumentType.Number, TextArgumentFormat.Plain),
+                new TranslationPlaceholderDescriptor("owner", TextArgumentType.String, TextArgumentFormat.None),
+            ])], [new CompiledTranslationLocale("en", null, [new CompiledTranslationValue(0, "compatibility", message)])]);
+        var snapshot = new CompiledTranslationSnapshot(catalog, "en");
+        LocalizedTextContent content = snapshot.FormatContent(new TranslationKey("ast", 0, "Summary"),
             [new TextArgument("count", 1234), new TextArgument("delta", -1m), new TextArgument("owner", "guest")]);
         LocalizedTextContentNode[] nodes = content.Nodes.ToArray();
         Assert.Equal(LocalizedTextContentNodeKind.ElementStart, nodes[0].Kind);
@@ -83,7 +83,7 @@ internal static class CompiledMessageTests
         Assert.Equal("guest", nodes[3].Value);
         Assert.Equal(LocalizedTextContentNodeKind.ElementEnd, nodes[4].Kind);
         Assert.Equal("yesterday", nodes[6].Value);
-        Assert.Throws<TextResourceFormatException>(() => snapshot.Format(new TextResourceKey("ast", 0, "Summary"),
+        Assert.Throws<TranslationFormatException>(() => snapshot.Format(new TranslationKey("ast", 0, "Summary"),
             [new TextArgument("count", 2), new TextArgument("delta", -1m), new TextArgument("owner", "guest")]));
     }
 

@@ -6,7 +6,7 @@ namespace RunicTranslations;
 /// <summary>
 /// Contains validated, immutable generated catalog data used to create locale snapshots.
 /// </summary>
-public sealed class CompiledTextResourceCatalog
+public sealed class CompiledTranslationCatalog
 {
     /// <summary>The key-ID sentinel used for name-based lookup of permitted locale extras.</summary>
     public const int DynamicKeyId = -1;
@@ -14,26 +14,26 @@ public sealed class CompiledTextResourceCatalog
     private const int MaximumKeys = 50_000;
     private const int MaximumLocales = 256;
 
-    private readonly CompiledTextResourceDefinition[] _definitions;
-    private readonly CompiledTextResourceLocale[] _locales;
+    private readonly CompiledTranslationDefinition[] _definitions;
+    private readonly CompiledTranslationLocale[] _locales;
     private readonly Dictionary<string, int> _idByName;
     private readonly Dictionary<string, LocaleState> _localeByTag;
 
     /// <summary>Creates a validated compiled catalog from generated closed data.</summary>
-    public CompiledTextResourceCatalog(
+    public CompiledTranslationCatalog(
         string catalog,
         string defaultLocale,
-        IReadOnlyList<CompiledTextResourceDefinition> definitions,
-        IReadOnlyList<CompiledTextResourceLocale> locales,
+        IReadOnlyList<CompiledTranslationDefinition> definitions,
+        IReadOnlyList<CompiledTranslationLocale> locales,
         UnsupportedLocalePolicy unsupportedLocale = UnsupportedLocalePolicy.ParentsThenDefault,
-        MissingTextResourcePolicy missingKey = MissingTextResourcePolicy.Throw)
+        MissingTranslationPolicy missingKey = MissingTranslationPolicy.Throw)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(catalog);
         ArgumentException.ThrowIfNullOrWhiteSpace(defaultLocale);
         ArgumentNullException.ThrowIfNull(definitions);
         ArgumentNullException.ThrowIfNull(locales);
 
-        if (!TextResourceDataValidation.IsCatalog(catalog))
+        if (!TranslationDataValidation.IsCatalog(catalog))
         {
             throw new ArgumentException("The catalog identifier is not canonical.", nameof(catalog));
         }
@@ -109,10 +109,10 @@ public sealed class CompiledTextResourceCatalog
         MissingKey = missingKey;
     }
 
-    private CompiledTextResourceCatalog(
-        CompiledTextResourceCatalog source,
+    private CompiledTranslationCatalog(
+        CompiledTranslationCatalog source,
         UnsupportedLocalePolicy unsupportedLocale,
-        MissingTextResourcePolicy missingKey)
+        MissingTranslationPolicy missingKey)
     {
         _definitions = source._definitions;
         _locales = source._locales;
@@ -134,20 +134,20 @@ public sealed class CompiledTextResourceCatalog
     public UnsupportedLocalePolicy UnsupportedLocale { get; }
 
     /// <summary>The missing-resource policy.</summary>
-    public MissingTextResourcePolicy MissingKey { get; }
+    public MissingTranslationPolicy MissingKey { get; }
 
     /// <summary>The definitions in canonical ordinal key-ID order.</summary>
-    public ReadOnlyMemory<CompiledTextResourceDefinition> Definitions =>
-        (CompiledTextResourceDefinition[])_definitions.Clone();
+    public ReadOnlyMemory<CompiledTranslationDefinition> Definitions =>
+        (CompiledTranslationDefinition[])_definitions.Clone();
 
     /// <summary>The declared locales in ordinal canonical-tag order.</summary>
-    public ReadOnlyMemory<CompiledTextResourceLocale> Locales =>
-        (CompiledTextResourceLocale[])_locales.Clone();
+    public ReadOnlyMemory<CompiledTranslationLocale> Locales =>
+        (CompiledTranslationLocale[])_locales.Clone();
 
     /// <summary>
     /// Captures caller options into an immutable catalog view without mutating generated data.
     /// </summary>
-    public CompiledTextResourceCatalog WithOptions(TextResourceOptions? options)
+    public CompiledTranslationCatalog WithOptions(TranslationOptions? options)
     {
         if (options is null)
         {
@@ -155,17 +155,17 @@ public sealed class CompiledTextResourceCatalog
         }
 
         UnsupportedLocalePolicy unsupportedLocale = options.UnsupportedLocale;
-        MissingTextResourcePolicy missingKey = options.MissingKey;
+        MissingTranslationPolicy missingKey = options.MissingKey;
         ValidatePolicies(unsupportedLocale, missingKey, nameof(options), nameof(options));
         if (unsupportedLocale == UnsupportedLocale && missingKey == MissingKey)
         {
             return this;
         }
 
-        return new CompiledTextResourceCatalog(this, unsupportedLocale, missingKey);
+        return new CompiledTranslationCatalog(this, unsupportedLocale, missingKey);
     }
 
-    internal CompiledTextResourceDefinition[] DefinitionArray => _definitions;
+    internal CompiledTranslationDefinition[] DefinitionArray => _definitions;
 
     internal string ResolveRequestedLocale(string requestedLocale)
     {
@@ -200,7 +200,7 @@ public sealed class CompiledTextResourceCatalog
                 return DefaultLocale;
             case UnsupportedLocalePolicy.Exact:
             default:
-                throw new TextResourceNotFoundException(
+                throw new TranslationNotFoundException(
                     $"Locale '{canonical}' is not declared by catalog '{Catalog}'.");
         }
     }
@@ -211,7 +211,7 @@ public sealed class CompiledTextResourceCatalog
     internal CompiledTextMessage?[] GetResolvedMessages(string canonicalLocale) =>
         _localeByTag[canonicalLocale].ResolvedMessages;
 
-    internal bool TryResolveKey(TextResourceKey key, out int id)
+    internal bool TryResolveKey(TranslationKey key, out int id)
     {
         id = key.Id;
         if (!string.Equals(key.Catalog, Catalog, StringComparison.Ordinal))
@@ -231,17 +231,17 @@ public sealed class CompiledTextResourceCatalog
             string.Equals(key.Name, _definitions[id].Name, StringComparison.Ordinal);
     }
 
-    private static CompiledTextResourceDefinition[] CopyDefinitions(
-        IReadOnlyList<CompiledTextResourceDefinition> definitions)
+    private static CompiledTranslationDefinition[] CopyDefinitions(
+        IReadOnlyList<CompiledTranslationDefinition> definitions)
     {
-        var result = new CompiledTextResourceDefinition[definitions.Count];
+        var result = new CompiledTranslationDefinition[definitions.Count];
         string? previousCanonical = null;
         string? previousExtra = null;
         bool sawExtra = false;
         var names = new HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < definitions.Count; i++)
         {
-            CompiledTextResourceDefinition definition = definitions[i] ??
+            CompiledTranslationDefinition definition = definitions[i] ??
                 throw new ArgumentException("Definitions cannot contain null values.", nameof(definitions));
             if (!names.Add(definition.Name))
             {
@@ -282,7 +282,7 @@ public sealed class CompiledTextResourceCatalog
     }
 
     private static Dictionary<string, int> BuildDefinitionIndex(
-        CompiledTextResourceDefinition[] definitions)
+        CompiledTranslationDefinition[] definitions)
     {
         var result = new Dictionary<string, int>(definitions.Length, StringComparer.Ordinal);
         for (int i = 0; i < definitions.Length; i++)
@@ -308,7 +308,7 @@ public sealed class CompiledTextResourceCatalog
 
     private static void ValidatePolicies(
         UnsupportedLocalePolicy unsupportedLocale,
-        MissingTextResourcePolicy missingKey,
+        MissingTranslationPolicy missingKey,
         string unsupportedParameterName,
         string missingParameterName)
     {
@@ -319,21 +319,21 @@ public sealed class CompiledTextResourceCatalog
             throw new ArgumentOutOfRangeException(unsupportedParameterName, unsupportedLocale, "Unknown unsupported-locale policy.");
         }
 
-        if (missingKey is not MissingTextResourcePolicy.Throw and
-            not MissingTextResourcePolicy.ReturnKey and
-            not MissingTextResourcePolicy.ReturnMarker)
+        if (missingKey is not MissingTranslationPolicy.Throw and
+            not MissingTranslationPolicy.ReturnKey and
+            not MissingTranslationPolicy.ReturnMarker)
         {
             throw new ArgumentOutOfRangeException(missingParameterName, missingKey, "Unknown missing-key policy.");
         }
     }
 
-    private static CompiledTextResourceLocale[] CopyLocales(IReadOnlyList<CompiledTextResourceLocale> locales)
+    private static CompiledTranslationLocale[] CopyLocales(IReadOnlyList<CompiledTranslationLocale> locales)
     {
-        var result = new CompiledTextResourceLocale[locales.Count];
+        var result = new CompiledTranslationLocale[locales.Count];
         string? previous = null;
         for (int i = 0; i < locales.Count; i++)
         {
-            CompiledTextResourceLocale locale = locales[i] ??
+            CompiledTranslationLocale locale = locales[i] ??
                 throw new ArgumentException("Locales cannot contain null values.", nameof(locales));
             if (previous is not null && string.CompareOrdinal(previous, locale.Locale) >= 0)
             {
@@ -350,19 +350,19 @@ public sealed class CompiledTextResourceCatalog
     }
 
     private static Dictionary<string, LocaleState> BuildLocaleStates(
-        CompiledTextResourceLocale[] locales,
-        CompiledTextResourceDefinition[] definitions)
+        CompiledTranslationLocale[] locales,
+        CompiledTranslationDefinition[] definitions)
     {
         var result = new Dictionary<string, LocaleState>(locales.Length, StringComparer.Ordinal);
         for (int i = 0; i < locales.Length; i++)
         {
-            CompiledTextResourceLocale locale = locales[i];
+            CompiledTranslationLocale locale = locales[i];
             var directPatterns = new string?[definitions.Length];
             var directMessages = new CompiledTextMessage?[definitions.Length];
-            CompiledTextResourceValue[] values = locale.ValueArray;
+            CompiledTranslationValue[] values = locale.ValueArray;
             for (int valueIndex = 0; valueIndex < values.Length; valueIndex++)
             {
-                CompiledTextResourceValue value = values[valueIndex];
+                CompiledTranslationValue value = values[valueIndex];
                 if (value.Id >= definitions.Length)
                 {
                     throw new ArgumentException(
@@ -375,7 +375,7 @@ public sealed class CompiledTextResourceCatalog
                 {
                     message = value.Message ?? CompiledTextMessageRuntime.ParseVersion1(value.Pattern);
                 }
-                catch (TextResourceFormatException)
+                catch (TranslationFormatException)
                 {
                     throw new ArgumentException(
                         $"Locale '{locale.Locale}' pattern for key '{definitions[value.Id].Name}' is malformed.",

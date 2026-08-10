@@ -20,13 +20,13 @@ internal static class CppGenerationTests
     {
         var compilation = CompilerTests.CompileCase("valid", "minimal");
         Assert.True(compilation.Success, CompilerTests.DiagnosticsText(compilation.Diagnostics));
-        IReadOnlyList<TextResourceGeneratedOutput> outputs = TextResourceOutputRenderer.RenderCpp(Assert.Single(compilation.Catalogs));
+        IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderCpp(Assert.Single(compilation.Catalogs));
         Assert.Equal(2, outputs.Count);
         string directory = Path.Combine(Path.GetTempPath(), "runic-cpp-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
-            foreach (TextResourceGeneratedOutput output in outputs)
+            foreach (TranslationGeneratedOutput output in outputs)
                 File.WriteAllBytes(Path.Combine(directory, output.RelativePath), output.GetUtf8Bytes());
             File.WriteAllText(Path.Combine(directory, "main.cpp"), """
                 #include "minimal.translations-v1.hpp"
@@ -58,15 +58,15 @@ internal static class CppGenerationTests
               "selectors":[{"name":"quantity","input":"count","function":"plural"},{"name":"roleKind","input":"role","function":"literal"}],
               "variants":[{"match":{"quantity":"one","roleKind":"admin"},"value":"one admin"},{"match":{"quantity":"*","roleKind":"*"},"value":"{count} {role}"}]}}}}
             """;
-        var compilation = RunicTranslations.Compiler.TextResourceCompiler.Compile(
+        var compilation = RunicTranslations.Compiler.TranslationCompiler.Compile(
             [CompilerTests.Source("manifest.json", manifest)], [CompilerTests.Source("en.json", english)]);
         Assert.True(compilation.Success, CompilerTests.DiagnosticsText(compilation.Diagnostics));
-        IReadOnlyList<TextResourceGeneratedOutput> outputs = TextResourceOutputRenderer.RenderCpp(Assert.Single(compilation.Catalogs));
+        IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderCpp(Assert.Single(compilation.Catalogs));
         string directory = Path.Combine(Path.GetTempPath(), "runic-cpp-v2-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
-            foreach (TextResourceGeneratedOutput output in outputs) File.WriteAllBytes(Path.Combine(directory, output.RelativePath), output.GetUtf8Bytes());
+            foreach (TranslationGeneratedOutput output in outputs) File.WriteAllBytes(Path.Combine(directory, output.RelativePath), output.GetUtf8Bytes());
             File.WriteAllText(Path.Combine(directory, "main.cpp"), """
                 #include "cppv2.translations-v1.hpp"
                 #include <iostream>
@@ -89,12 +89,12 @@ internal static class CppGenerationTests
         const string english = """
             {"schemaVersion":2,"catalog":"cppformat","locale":"en","layer":"base","resources":{"Value":{"$value":{"inputs":{"count":{"type":"int64"}},"selectors":[],"variants":[{"match":{},"value":[{"format":{"input":"count","function":"integer","format":"grouped"}}]}]}}}}
             """;
-        var compilation = RunicTranslations.Compiler.TextResourceCompiler.Compile(
+        var compilation = RunicTranslations.Compiler.TranslationCompiler.Compile(
             [CompilerTests.Source("manifest.json", manifest)], [CompilerTests.Source("en.json", english)]);
         Assert.True(compilation.Success, CompilerTests.DiagnosticsText(compilation.Diagnostics));
         try
         {
-            TextResourceOutputRenderer.RenderCpp(Assert.Single(compilation.Catalogs));
+            TranslationOutputRenderer.RenderCpp(Assert.Single(compilation.Catalogs));
             throw new InvalidOperationException("C++ accepted an unsupported structured format node.");
         }
         catch (NotSupportedException exception)

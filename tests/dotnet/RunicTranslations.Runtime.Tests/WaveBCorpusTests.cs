@@ -136,15 +136,15 @@ internal static class WaveBCorpusTests
         {
             if (item.TryGetProperty("contract", out JsonElement contract))
             {
-                TextResourcePlaceholderDescriptor[] descriptors = contract.EnumerateArray().Select(ParseDescriptor).ToArray();
-                CompiledTextResourceCatalog catalog = new("app", "en", [new CompiledTextResourceDefinition("Message", descriptors)],
-                    [new CompiledTextResourceLocale("en", null, [new CompiledTextResourceValue(0, pattern)])]);
-                Assert.Throws<TextResourceFormatException>(() => new CompiledTextResourceSnapshot(catalog, "en").Format(
-                    new TextResourceKey("app", 0, "Message"), arguments));
+                TranslationPlaceholderDescriptor[] descriptors = contract.EnumerateArray().Select(ParseDescriptor).ToArray();
+                CompiledTranslationCatalog catalog = new("app", "en", [new CompiledTranslationDefinition("Message", descriptors)],
+                    [new CompiledTranslationLocale("en", null, [new CompiledTranslationValue(0, pattern)])]);
+                Assert.Throws<TranslationFormatException>(() => new CompiledTranslationSnapshot(catalog, "en").Format(
+                    new TranslationKey("app", 0, "Message"), arguments));
             }
             else
             {
-                Assert.Throws<TextResourceFormatException>(() => TextPatternFormatter.Format(pattern, arguments, locale));
+                Assert.Throws<TranslationFormatException>(() => TextPatternFormatter.Format(pattern, arguments, locale));
             }
             return;
         }
@@ -178,29 +178,29 @@ internal static class WaveBCorpusTests
         bool integrityAccepts = item.GetProperty("integrity").GetString() == "accept";
         try
         {
-            VerifiedExternalTextResourcePack verified = await TextResourcePackLoader.VerifyAsync(
-                new ExternalTextResourcePack(bytes), PackContract(), integrityVerifier: (content, token) => ValueTask.FromResult(integrityAccepts));
+            VerifiedExternalTranslationPack verified = await TranslationPackLoader.VerifyAsync(
+                new ExternalTranslationPack(bytes), PackContract(), integrityVerifier: (content, token) => ValueTask.FromResult(integrityAccepts));
             Assert.True(accepted, "Rejected corpus pack was accepted: " + item.GetProperty("id").GetString());
             string[] expectedKeys = item.GetProperty("expected").GetProperty("overlayKeys").EnumerateArray().Select(value => value.GetString()!).ToArray();
             Assert.Equal(string.Join("|", expectedKeys), string.Join("|", verified.Messages.Select(message => message.Key.Name)));
         }
-        catch (TextResourcePackException exception)
+        catch (TranslationPackException exception)
         {
             Assert.False(accepted, "Accepted corpus pack was rejected: " + item.GetProperty("id").GetString());
             string expectedReason = item.GetProperty("expected").GetProperty("reason").GetString()!;
-            string actualReason = JsonNamingPolicy.CamelCase.ConvertName(TextResourcePackFailure.GetReason(exception).ToString());
+            string actualReason = JsonNamingPolicy.CamelCase.ConvertName(TranslationPackFailure.GetReason(exception).ToString());
             Assert.Equal(expectedReason, actualReason, "External-pack reason drift for " + item.GetProperty("id").GetString());
         }
     }
 
-    private static TextResourcePackContract PackContract() => new(
+    private static TranslationPackContract PackContract() => new(
         "app", "de", Fingerprint,
         [
-            new TextResourcePackMessageContract(new TextResourceKey("app", 0, "Common.Save")),
-            new TextResourcePackMessageContract(new TextResourceKey("app", 1, "Files.Deleted"),
+            new TranslationPackMessageContract(new TranslationKey("app", 0, "Common.Save")),
+            new TranslationPackMessageContract(new TranslationKey("app", 1, "Files.Deleted"),
                 [
-                    new TextResourcePackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Grouped),
-                    new TextResourcePackArgumentContract("folder", TextArgumentType.String, TextArgumentFormat.None),
+                    new TranslationPackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Grouped),
+                    new TranslationPackArgumentContract("folder", TextArgumentType.String, TextArgumentFormat.None),
                 ]),
         ]);
 
@@ -224,7 +224,7 @@ internal static class WaveBCorpusTests
         };
     }
 
-    private static TextResourcePlaceholderDescriptor ParseDescriptor(JsonElement item) => new(
+    private static TranslationPlaceholderDescriptor ParseDescriptor(JsonElement item) => new(
         item.GetProperty("name").GetString()!,
         Enum.Parse<TextArgumentType>(item.GetProperty("type").GetString()!, ignoreCase: true),
         Enum.Parse<TextArgumentFormat>(item.GetProperty("format").GetString()!, ignoreCase: true));

@@ -7,14 +7,14 @@ namespace RunicTranslations;
 
 /// <summary>Native-AOT-safe JSON metadata for the versioned text-reference wire contract.</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-[JsonSerializable(typeof(TextResourceReference))]
-public partial class TextResourceReferenceJsonContext : JsonSerializerContext
+[JsonSerializable(typeof(TranslationReference))]
+public partial class TranslationReferenceJsonContext : JsonSerializerContext
 {
 }
 
-internal sealed class TextResourceReferenceJsonConverter : JsonConverter<TextResourceReference>
+internal sealed class TranslationReferenceJsonConverter : JsonConverter<TranslationReference>
 {
-    public override TextResourceReference Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override TranslationReference Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType != JsonTokenType.StartObject) throw new JsonException("A text reference must be an object.");
         int? version = null;
@@ -22,7 +22,7 @@ internal sealed class TextResourceReferenceJsonConverter : JsonConverter<TextRes
         string? fingerprint = null;
         string? key = null;
         string? fallback = null;
-        Dictionary<string, TextResourceReferenceArgument>? arguments = null;
+        Dictionary<string, TranslationReferenceArgument>? arguments = null;
         var members = new HashSet<string>(StringComparer.Ordinal);
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
@@ -40,13 +40,13 @@ internal sealed class TextResourceReferenceJsonConverter : JsonConverter<TextRes
                 default: throw new JsonException("Unknown text-reference member '" + member + "'.");
             }
         }
-        if (version != TextResourceTransport.Version) throw new JsonException("Unsupported text-reference version.");
+        if (version != TranslationTransport.Version) throw new JsonException("Unsupported text-reference version.");
         if (catalog is null || fingerprint is null || key is null || arguments is null) throw new JsonException("Text reference is incomplete.");
-        try { return new TextResourceReference(catalog, fingerprint, key, arguments, fallback); }
+        try { return new TranslationReference(catalog, fingerprint, key, arguments, fallback); }
         catch (ArgumentException exception) { throw new JsonException("Text reference is invalid.", exception); }
     }
 
-    public override void Write(Utf8JsonWriter writer, TextResourceReference value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, TranslationReference value, JsonSerializerOptions options)
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(value);
@@ -61,7 +61,7 @@ internal sealed class TextResourceReferenceJsonConverter : JsonConverter<TextRes
         names.Sort(StringComparer.Ordinal);
         for (int index = 0; index < names.Count; index++)
         {
-            TextResourceReferenceArgument argument = value.Arguments[names[index]];
+            TranslationReferenceArgument argument = value.Arguments[names[index]];
             if (argument.Type == TextArgumentType.Bool) writer.WriteBoolean(names[index], argument.Value == "true");
             else writer.WriteString(names[index], argument.Value);
         }
@@ -70,24 +70,24 @@ internal sealed class TextResourceReferenceJsonConverter : JsonConverter<TextRes
         writer.WriteEndObject();
     }
 
-    private static Dictionary<string, TextResourceReferenceArgument> ReadArguments(ref Utf8JsonReader reader)
+    private static Dictionary<string, TranslationReferenceArgument> ReadArguments(ref Utf8JsonReader reader)
     {
         if (reader.TokenType != JsonTokenType.StartObject) throw new JsonException("Text-reference arguments must be an object.");
-        var result = new Dictionary<string, TextResourceReferenceArgument>(StringComparer.Ordinal);
+        var result = new Dictionary<string, TranslationReferenceArgument>(StringComparer.Ordinal);
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
             if (reader.TokenType != JsonTokenType.PropertyName) throw new JsonException();
             string name = reader.GetString()!;
             if (!reader.Read()) throw new JsonException();
-            TextResourceReferenceArgument argument = reader.TokenType switch
+            TranslationReferenceArgument argument = reader.TokenType switch
             {
-                JsonTokenType.String => new TextResourceReferenceArgument(TextArgumentType.String, reader.GetString()!),
-                JsonTokenType.True => new TextResourceReferenceArgument(TextArgumentType.Bool, "true"),
-                JsonTokenType.False => new TextResourceReferenceArgument(TextArgumentType.Bool, "false"),
+                JsonTokenType.String => new TranslationReferenceArgument(TextArgumentType.String, reader.GetString()!),
+                JsonTokenType.True => new TranslationReferenceArgument(TextArgumentType.Bool, "true"),
+                JsonTokenType.False => new TranslationReferenceArgument(TextArgumentType.Bool, "false"),
                 _ => throw new JsonException("Wire arguments must be strings or booleans."),
             };
             if (!result.TryAdd(name, argument)) throw new JsonException("Duplicate text-reference argument.");
-            if (result.Count > TextResourceTransport.MaximumArguments) throw new JsonException("Too many text-reference arguments.");
+            if (result.Count > TranslationTransport.MaximumArguments) throw new JsonException("Too many text-reference arguments.");
         }
         return result;
     }

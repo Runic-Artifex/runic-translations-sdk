@@ -6,12 +6,12 @@ using System.Threading;
 
 namespace RunicTranslations;
 
-internal static class TextResourcePackV2Loader
+internal static class TranslationPackV2Loader
 {
-    internal static VerifiedExternalTextResourcePack Parse(
+    internal static VerifiedExternalTranslationPack Parse(
         ReadOnlyMemory<byte> content,
-        TextResourcePackContract contract,
-        TextResourcePackLimits limits,
+        TranslationPackContract contract,
+        TranslationPackLimits limits,
         CancellationToken cancellationToken)
     {
         try
@@ -24,32 +24,32 @@ internal static class TextResourcePackV2Loader
             });
             Dictionary<string, JsonElement> root = Members(document.RootElement,
                 ["artifactVersion", "messageGrammarVersion", "catalog", "locale", "contractFingerprint", "messages"]);
-            if (Integer(root["artifactVersion"]) != 2) throw Error("The external pack artifact version is unsupported.", TextResourcePackFailureReason.ArtifactVersionMismatch);
+            if (Integer(root["artifactVersion"]) != 2) throw Error("The external pack artifact version is unsupported.", TranslationPackFailureReason.ArtifactVersionMismatch);
             if (Integer(root["messageGrammarVersion"]) != 2 || contract.MessageGrammarVersion != 2)
-                throw Error("The external pack message grammar version is unsupported.", TextResourcePackFailureReason.MessageGrammarVersionMismatch);
+                throw Error("The external pack message grammar version is unsupported.", TranslationPackFailureReason.MessageGrammarVersionMismatch);
             string catalog = String(root["catalog"]);
             string locale = String(root["locale"]);
             string fingerprint = String(root["contractFingerprint"]);
-            if (!string.Equals(catalog, contract.Catalog, StringComparison.Ordinal)) throw Error("The external pack catalog does not match the generated contract.", TextResourcePackFailureReason.CatalogMismatch);
-            if (!string.Equals(locale, contract.Locale, StringComparison.Ordinal)) throw Error("The external pack locale does not match the generated contract.", TextResourcePackFailureReason.LocaleMismatch);
-            if (!string.Equals(fingerprint, contract.ContractFingerprint, StringComparison.Ordinal)) throw Error("The external pack fingerprint does not match the generated contract.", TextResourcePackFailureReason.ContractFingerprintMismatch);
+            if (!string.Equals(catalog, contract.Catalog, StringComparison.Ordinal)) throw Error("The external pack catalog does not match the generated contract.", TranslationPackFailureReason.CatalogMismatch);
+            if (!string.Equals(locale, contract.Locale, StringComparison.Ordinal)) throw Error("The external pack locale does not match the generated contract.", TranslationPackFailureReason.LocaleMismatch);
+            if (!string.Equals(fingerprint, contract.ContractFingerprint, StringComparison.Ordinal)) throw Error("The external pack fingerprint does not match the generated contract.", TranslationPackFailureReason.ContractFingerprintMismatch);
             if (root["messages"].ValueKind != JsonValueKind.Object) throw Error("The external pack messages value must be an object.");
 
-            var messages = new List<VerifiedTextResourcePackMessage>();
+            var messages = new List<VerifiedTranslationPackMessage>();
             var keys = new HashSet<string>(StringComparer.Ordinal);
             foreach (JsonProperty property in root["messages"].EnumerateObject())
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!keys.Add(property.Name)) throw Error("The external pack contains duplicate message key '" + property.Name + "'.");
                 if (messages.Count >= limits.MaximumMessages) throw Limit("The external pack exceeds the configured message limit.");
-                if (!contract.TryGetMessage(property.Name, out TextResourcePackMessageContract messageContract))
-                    throw Error("The external pack contains unknown message key '" + property.Name + "'.", TextResourcePackFailureReason.UnknownKey);
+                if (!contract.TryGetMessage(property.Name, out TranslationPackMessageContract messageContract))
+                    throw Error("The external pack contains unknown message key '" + property.Name + "'.", TranslationPackFailureReason.UnknownKey);
                 messages.Add(ReadMessage(property.Value, messageContract, limits));
             }
             messages.Sort(static (left, right) => string.CompareOrdinal(left.Key.Name, right.Key.Name));
-            return new VerifiedExternalTextResourcePack(catalog, locale, fingerprint, messages.ToArray());
+            return new VerifiedExternalTranslationPack(catalog, locale, fingerprint, messages.ToArray());
         }
-        catch (TextResourcePackException)
+        catch (TranslationPackException)
         {
             throw;
         }
@@ -59,10 +59,10 @@ internal static class TextResourcePackV2Loader
         }
     }
 
-    private static VerifiedTextResourcePackMessage ReadMessage(
+    private static VerifiedTranslationPackMessage ReadMessage(
         JsonElement value,
-        TextResourcePackMessageContract contract,
-        TextResourcePackLimits limits)
+        TranslationPackMessageContract contract,
+        TranslationPackLimits limits)
     {
         Dictionary<string, JsonElement> message = Members(value, ["astVersion", "inputs", "selectors", "variants"]);
         if (Integer(message["astVersion"]) != 2) throw Error("Message '" + contract.Key.Name + "' has an unsupported AST version.");
@@ -71,15 +71,15 @@ internal static class TextResourcePackV2Loader
         CompiledTextMessageVariant[] variants = ReadVariants(message["variants"], contract, selectors, limits);
         CompiledTextMessage compiled;
         try { compiled = new CompiledTextMessage(Array.Empty<CompiledTextMessageNode>(), selectors, variants); }
-        catch (ArgumentException) { throw Error("Message '" + contract.Key.Name + "' contains an invalid normalized AST.", TextResourcePackFailureReason.MalformedPattern); }
-        TextResourcePlaceholderDescriptor[] descriptors = Descriptors(contract.Arguments);
+        catch (ArgumentException) { throw Error("Message '" + contract.Key.Name + "' contains an invalid normalized AST.", TranslationPackFailureReason.MalformedPattern); }
+        TranslationPlaceholderDescriptor[] descriptors = Descriptors(contract.Arguments);
         if (!CompiledTextMessageRuntime.MatchesContract(compiled, descriptors))
-            throw Error("Message '" + contract.Key.Name + "' does not match its generated argument contract.", TextResourcePackFailureReason.ArgumentContractMismatch);
+            throw Error("Message '" + contract.Key.Name + "' does not match its generated argument contract.", TranslationPackFailureReason.ArgumentContractMismatch);
         string compatibility = CompatibilityPattern(variants[^1].NodeArray);
-        return new VerifiedTextResourcePackMessage(contract.Key, compatibility, compiled);
+        return new VerifiedTranslationPackMessage(contract.Key, compatibility, compiled);
     }
 
-    private static void ReadInputs(JsonElement value, TextResourcePackMessageContract contract)
+    private static void ReadInputs(JsonElement value, TranslationPackMessageContract contract)
     {
         if (value.ValueKind != JsonValueKind.Object) throw Error("A message input contract must be an object.");
         var actual = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
@@ -88,7 +88,7 @@ internal static class TextResourcePackV2Loader
         if (actual.Count != contract.Arguments.Count) throw ContractMismatch(contract.Key.Name);
         for (int index = 0; index < contract.Arguments.Count; index++)
         {
-            TextResourcePackArgumentContract expected = contract.Arguments[index];
+            TranslationPackArgumentContract expected = contract.Arguments[index];
             if (!actual.TryGetValue(expected.Name, out JsonElement descriptor)) throw ContractMismatch(contract.Key.Name);
             Dictionary<string, JsonElement> fields = Members(descriptor, ["type", "format"]);
             if (String(fields["type"]) != TypeName(expected.Type) || String(fields["format"]) != FormatName(expected.Format))
@@ -96,7 +96,7 @@ internal static class TextResourcePackV2Loader
         }
     }
 
-    private static CompiledTextMessageSelector[] ReadSelectors(JsonElement value, TextResourcePackMessageContract contract)
+    private static CompiledTextMessageSelector[] ReadSelectors(JsonElement value, TranslationPackMessageContract contract)
     {
         if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() > 16) throw Error("A message selector list is invalid.");
         var selectors = new List<CompiledTextMessageSelector>();
@@ -107,8 +107,8 @@ internal static class TextResourcePackV2Loader
             string name = String(fields["name"]);
             string input = String(fields["input"]);
             string function = String(fields["function"]);
-            TextResourcePackArgumentContract argument = FindArgument(contract, input);
-            if (!TextResourcePackValidation.IsIdentifier(name) || !names.Add(name)) throw Error("A message selector name is invalid or duplicated.");
+            TranslationPackArgumentContract argument = FindArgument(contract, input);
+            if (!TranslationPackValidation.IsIdentifier(name) || !names.Add(name)) throw Error("A message selector name is invalid or duplicated.");
             CompiledTextMessageSelectorKind kind = function switch
             {
                 "literal" => CompiledTextMessageSelectorKind.Literal,
@@ -123,8 +123,8 @@ internal static class TextResourcePackV2Loader
         return selectors.ToArray();
     }
 
-    private static CompiledTextMessageVariant[] ReadVariants(JsonElement value, TextResourcePackMessageContract contract,
-        CompiledTextMessageSelector[] selectors, TextResourcePackLimits limits)
+    private static CompiledTextMessageVariant[] ReadVariants(JsonElement value, TranslationPackMessageContract contract,
+        CompiledTextMessageSelector[] selectors, TranslationPackLimits limits)
     {
         if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() is < 1 or > 256) throw Error("A message variant list is invalid.");
         var variants = new List<CompiledTextMessageVariant>();
@@ -160,8 +160,8 @@ internal static class TextResourcePackV2Loader
         return variants.ToArray();
     }
 
-    private static CompiledTextMessageNode[] ReadNodes(JsonElement value, TextResourcePackMessageContract contract,
-        TextResourcePackLimits limits, int depth, ref int nodeCount, ref int textBytes)
+    private static CompiledTextMessageNode[] ReadNodes(JsonElement value, TranslationPackMessageContract contract,
+        TranslationPackLimits limits, int depth, ref int nodeCount, ref int textBytes)
     {
         if (value.ValueKind != JsonValueKind.Array || depth > 16) throw Error("A message node list is invalid.");
         var nodes = new List<CompiledTextMessageNode>();
@@ -192,7 +192,7 @@ internal static class TextResourcePackV2Loader
                 string input = String(fields["input"]);
                 string function = String(fields["function"]);
                 string formatName = String(fields["format"]);
-                TextResourcePackArgumentContract argument = FindArgument(contract, input);
+                TranslationPackArgumentContract argument = FindArgument(contract, input);
                 if (function == "relativeTime")
                 {
                     string unit = RequiredString(fields, "unit");
@@ -204,7 +204,7 @@ internal static class TextResourcePackV2Loader
                 }
                 else
                 {
-                    if (!FunctionMatches(function, argument.Type) || !TryFormat(formatName, out TextArgumentFormat format) || !TextResourcePackValidation.IsFormatAllowed(argument.Type, format))
+                    if (!FunctionMatches(function, argument.Type) || !TryFormat(formatName, out TextArgumentFormat format) || !TranslationPackValidation.IsFormatAllowed(argument.Type, format))
                         throw ContractMismatch(contract.Key.Name);
                     if (fields.ContainsKey("unit") || fields.ContainsKey("numeric")) throw Error("A scalar format contains relative-time options.");
                     nodes.Add(new CompiledTextMessageNode(CompiledTextMessageNodeKind.Format, input, format));
@@ -214,12 +214,12 @@ internal static class TextResourcePackV2Loader
             {
                 Dictionary<string, JsonElement> fields = Members(item, ["kind", "name", "attributes", "children"]);
                 string name = String(fields["name"]);
-                if (!TextResourcePackValidation.IsIdentifier(name) || fields["attributes"].ValueKind != JsonValueKind.Object) throw Error("A markup node is invalid.");
+                if (!TranslationPackValidation.IsIdentifier(name) || fields["attributes"].ValueKind != JsonValueKind.Object) throw Error("A markup node is invalid.");
                 var attributes = new List<CompiledTextMarkupProperty>();
                 var attributeNames = new HashSet<string>(StringComparer.Ordinal);
                 foreach (JsonProperty attribute in fields["attributes"].EnumerateObject())
                 {
-                    if (!attributeNames.Add(attribute.Name) || !TextResourcePackValidation.IsIdentifier(attribute.Name)) throw Error("A markup property is invalid or duplicated.");
+                    if (!attributeNames.Add(attribute.Name) || !TranslationPackValidation.IsIdentifier(attribute.Name)) throw Error("A markup property is invalid or duplicated.");
                     attributes.Add(new CompiledTextMarkupProperty(attribute.Name, String(attribute.Value)));
                 }
                 attributes.Sort(static (left, right) => string.CompareOrdinal(left.Name, right.Name));
@@ -244,23 +244,23 @@ internal static class TextResourcePackV2Loader
         var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         foreach (JsonProperty property in value.EnumerateObject())
         {
-            if (!allowed.Contains(property.Name)) throw Error("The external pack contains unknown property '" + property.Name + "'.", TextResourcePackFailureReason.UnknownMember);
+            if (!allowed.Contains(property.Name)) throw Error("The external pack contains unknown property '" + property.Name + "'.", TranslationPackFailureReason.UnknownMember);
             if (!result.TryAdd(property.Name, property.Value)) throw Error("The external pack contains duplicate property '" + property.Name + "'.");
         }
         for (int index = 0; index < required.Length; index++) if (!result.ContainsKey(required[index])) throw Error("The external pack is missing required property '" + required[index] + "'.");
         return result;
     }
 
-    private static TextResourcePackArgumentContract FindArgument(TextResourcePackMessageContract contract, string name)
+    private static TranslationPackArgumentContract FindArgument(TranslationPackMessageContract contract, string name)
     {
         for (int index = 0; index < contract.Arguments.Count; index++) if (contract.Arguments[index].Name == name) return contract.Arguments[index];
         throw ContractMismatch(contract.Key.Name);
     }
 
-    private static TextResourcePlaceholderDescriptor[] Descriptors(IReadOnlyList<TextResourcePackArgumentContract> arguments)
+    private static TranslationPlaceholderDescriptor[] Descriptors(IReadOnlyList<TranslationPackArgumentContract> arguments)
     {
-        var result = new TextResourcePlaceholderDescriptor[arguments.Count];
-        for (int index = 0; index < result.Length; index++) result[index] = new TextResourcePlaceholderDescriptor(arguments[index].Name, arguments[index].Type, arguments[index].Format);
+        var result = new TranslationPlaceholderDescriptor[arguments.Count];
+        for (int index = 0; index < result.Length; index++) result[index] = new TranslationPlaceholderDescriptor(arguments[index].Name, arguments[index].Type, arguments[index].Format);
         return result;
     }
 
@@ -321,8 +321,8 @@ internal static class TextResourcePackV2Loader
     private static int Integer(JsonElement value) => value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int result) ? result : throw Error("An external pack integer is invalid.");
     private static string String(JsonElement value) => value.ValueKind == JsonValueKind.String ? value.GetString()! : throw Error("An external pack string is invalid.");
     private static string RequiredString(Dictionary<string, JsonElement> fields, string name) => fields.TryGetValue(name, out JsonElement value) ? String(value) : throw Error("A format node is missing '" + name + "'.");
-    private static TextResourcePackException ContractMismatch(string key) => Error("Message '" + key + "' does not match its generated argument contract.", TextResourcePackFailureReason.ArgumentContractMismatch);
-    private static TextResourcePackException Limit(string message) => Error(message, TextResourcePackFailureReason.LimitExceeded);
-    private static TextResourcePackException Error(string message, TextResourcePackFailureReason reason = TextResourcePackFailureReason.Malformed) =>
-        TextResourcePackFailure.Create(message, reason);
+    private static TranslationPackException ContractMismatch(string key) => Error("Message '" + key + "' does not match its generated argument contract.", TranslationPackFailureReason.ArgumentContractMismatch);
+    private static TranslationPackException Limit(string message) => Error(message, TranslationPackFailureReason.LimitExceeded);
+    private static TranslationPackException Error(string message, TranslationPackFailureReason reason = TranslationPackFailureReason.Malformed) =>
+        TranslationPackFailure.Create(message, reason);
 }

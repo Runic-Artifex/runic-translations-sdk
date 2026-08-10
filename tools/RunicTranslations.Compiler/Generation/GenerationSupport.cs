@@ -11,7 +11,7 @@ internal sealed class ResourceTreeNode
 
     internal string Name { get; }
     internal SortedDictionary<string, ResourceTreeNode> Children { get; } = new SortedDictionary<string, ResourceTreeNode>(StringComparer.Ordinal);
-    internal CompiledTextResource? Resource { get; set; }
+    internal CompiledTranslation? Resource { get; set; }
 }
 
 internal sealed class GenerationWriter
@@ -34,7 +34,7 @@ internal sealed class GenerationWriter
 
 internal sealed class GeneratedCatalogDefinition
 {
-    internal GeneratedCatalogDefinition(int id, CompiledTextResource resource, bool isCanonical)
+    internal GeneratedCatalogDefinition(int id, CompiledTranslation resource, bool isCanonical)
     {
         Id = id;
         Resource = resource;
@@ -42,7 +42,7 @@ internal sealed class GeneratedCatalogDefinition
     }
 
     internal int Id { get; }
-    internal CompiledTextResource Resource { get; }
+    internal CompiledTranslation Resource { get; }
     internal bool IsCanonical { get; }
 }
 
@@ -62,12 +62,12 @@ internal sealed class GeneratedCatalogTable
 
     internal static GeneratedCatalogTable Create(CompiledTextCatalog catalog)
     {
-        IReadOnlyList<CompiledTextResource> canonical = GenerationSupport.OrderedResources(catalog.CanonicalResources);
+        IReadOnlyList<CompiledTranslation> canonical = GenerationSupport.OrderedResources(catalog.CanonicalResources);
         var definitions = new List<GeneratedCatalogDefinition>(canonical.Count);
         var ids = new Dictionary<string, int>(StringComparer.Ordinal);
         for (int i = 0; i < canonical.Count; i++)
         {
-            CompiledTextResource resource = canonical[i];
+            CompiledTranslation resource = canonical[i];
             if (resource.Id != i)
                 throw new InvalidOperationException("Canonical resource IDs are not contiguous ordinal key IDs.");
             definitions.Add(new GeneratedCatalogDefinition(i, resource, true));
@@ -79,10 +79,10 @@ internal sealed class GeneratedCatalogTable
         for (int localeIndex = 0; localeIndex < locales.Count; localeIndex++)
         {
             CompiledTextLocale locale = locales[localeIndex];
-            IReadOnlyList<CompiledTextResource> resources = GenerationSupport.OrderedResources(locale.DirectResources);
+            IReadOnlyList<CompiledTranslation> resources = GenerationSupport.OrderedResources(locale.DirectResources);
             for (int resourceIndex = 0; resourceIndex < resources.Count; resourceIndex++)
             {
-                CompiledTextResource resource = resources[resourceIndex];
+                CompiledTranslation resource = resources[resourceIndex];
                 if (ids.ContainsKey(resource.Key)) continue;
                 ExtraContract existing;
                 if (!extras.TryGetValue(resource.Key, out existing!))
@@ -127,14 +127,14 @@ internal sealed class GeneratedCatalogTable
 
     private sealed class ExtraContract
     {
-        internal ExtraContract(string locale, CompiledTextResource resource)
+        internal ExtraContract(string locale, CompiledTranslation resource)
         {
             Locale = locale;
             Resource = resource;
         }
 
         internal string Locale { get; }
-        internal CompiledTextResource Resource { get; }
+        internal CompiledTranslation Resource { get; }
     }
 }
 
@@ -158,10 +158,10 @@ internal static class GenerationSupport
     internal static ResourceTreeNode BuildTree(CompiledTextCatalog catalog)
     {
         var root = new ResourceTreeNode(string.Empty);
-        IReadOnlyList<CompiledTextResource> resources = OrderedResources(catalog.CanonicalResources);
+        IReadOnlyList<CompiledTranslation> resources = OrderedResources(catalog.CanonicalResources);
         for (int i = 0; i < resources.Count; i++)
         {
-            CompiledTextResource resource = resources[i];
+            CompiledTranslation resource = resources[i];
             string[] segments = resource.Key.Split('.');
             ResourceTreeNode current = root;
             for (int segmentIndex = 0; segmentIndex < segments.Length; segmentIndex++)
@@ -179,9 +179,9 @@ internal static class GenerationSupport
         return root;
     }
 
-    internal static IReadOnlyList<CompiledTextResource> OrderedResources(IReadOnlyList<CompiledTextResource> resources)
+    internal static IReadOnlyList<CompiledTranslation> OrderedResources(IReadOnlyList<CompiledTranslation> resources)
     {
-        var result = new List<CompiledTextResource>(resources.Count);
+        var result = new List<CompiledTranslation>(resources.Count);
         for (int i = 0; i < resources.Count; i++) result.Add(resources[i]);
         result.Sort((left, right) => StringComparer.Ordinal.Compare(left.Key, right.Key));
         return result;
@@ -293,25 +293,25 @@ internal static class GenerationSupport
         return result.ToString();
     }
 
-    internal static string TypeScriptType(TextResourceArgumentType type)
+    internal static string TypeScriptType(TranslationArgumentType type)
     {
         switch (type)
         {
-            case TextResourceArgumentType.Int:
-            case TextResourceArgumentType.Number:
+            case TranslationArgumentType.Int:
+            case TranslationArgumentType.Number:
                 return "number";
-            case TextResourceArgumentType.Boolean:
+            case TranslationArgumentType.Boolean:
                 return "boolean";
             default:
                 return "string";
         }
     }
 
-    internal static string ArgumentTypeName(TextResourceArgumentType type)
+    internal static string ArgumentTypeName(TranslationArgumentType type)
     {
         switch (type)
         {
-            case TextResourceArgumentType.Boolean: return "Bool";
+            case TranslationArgumentType.Boolean: return "Bool";
             default: return type.ToString();
         }
     }
@@ -322,12 +322,12 @@ internal static class GenerationSupport
         return char.ToUpperInvariant(format[0]) + format.Substring(1);
     }
 
-    internal static string JsonArgumentType(TextResourceArgumentType type)
+    internal static string JsonArgumentType(TranslationArgumentType type)
     {
         switch (type)
         {
-            case TextResourceArgumentType.Boolean: return "bool";
-            case TextResourceArgumentType.DateTime: return "datetime";
+            case TranslationArgumentType.Boolean: return "bool";
+            case TranslationArgumentType.DateTime: return "datetime";
             default: return type.ToString().ToLowerInvariant();
         }
     }

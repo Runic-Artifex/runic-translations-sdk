@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace RunicTranslations.Authoring;
 
-public sealed record TextResourceEditorStateEntry(
+public sealed record TranslationEditorStateEntry(
     string Key,
     string Locale,
     string State,
@@ -11,24 +11,24 @@ public sealed record TextResourceEditorStateEntry(
     string? SourceFingerprint,
     IReadOnlyDictionary<string, string> Samples);
 
-public sealed record TextResourceTerminologyEntry(
+public sealed record TranslationTerminologyEntry(
     string Source,
     string Preferred,
     string? Locale,
     string? Note);
 
-public sealed record TextResourceEditorState(
+public sealed record TranslationEditorState(
     string CatalogId,
-    IReadOnlyList<TextResourceEditorStateEntry> Entries,
-    IReadOnlyList<TextResourceTerminologyEntry> Terminology);
+    IReadOnlyList<TranslationEditorStateEntry> Entries,
+    IReadOnlyList<TranslationTerminologyEntry> Terminology);
 
-public sealed record TextResourceEditorStateLoadResult(
+public sealed record TranslationEditorStateLoadResult(
     string Path,
     string? Revision,
-    TextResourceEditorState State,
+    TranslationEditorState State,
     string? Error);
 
-public sealed class TextResourceEditorStateException : Exception
+public sealed class TranslationEditorStateException : Exception
 {
-    public TextResourceEditorStateException(string message) : base(message) { }
+    public TranslationEditorStateException(string message) : base(message) { }
 }

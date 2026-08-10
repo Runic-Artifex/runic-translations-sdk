@@ -21,7 +21,7 @@ internal static class RuntimeContractTests
         Assert.Equal(2, TranslationsCompatibility.MessageGrammarVersion);
         Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion);
 
-        TextResourceKey key = new("app", 7, "Files.Deleted");
+        TranslationKey key = new("app", 7, "Files.Deleted");
         Assert.Equal("app", key.Catalog);
         Assert.Equal(7, key.Id);
         Assert.Equal("Files.Deleted", key.Name);
@@ -52,12 +52,12 @@ internal static class RuntimeContractTests
 
         Assert.True(invalidFormatRejected, "Argument carriers must reject type/format combinations outside the portable registry.");
 
-        TextResourceOptions options = new();
+        TranslationOptions options = new();
         Assert.Equal(UnsupportedLocalePolicy.ParentsThenDefault, options.UnsupportedLocale);
-        Assert.Equal(MissingTextResourcePolicy.Throw, options.MissingKey);
+        Assert.Equal(MissingTranslationPolicy.Throw, options.MissingKey);
 
         byte[] bytes = [1, 2, 3];
-        ExternalTextResourcePack pack = new(bytes);
+        ExternalTranslationPack pack = new(bytes);
         Assert.Equal(3, pack.Content.Length);
         Assert.Equal((byte)1, pack.Content.Span[0]);
     }
@@ -68,7 +68,7 @@ internal static class RuntimeContractTests
             typeof(TranslationsCompatibility).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()
             ?? throw new InvalidOperationException("The runtime target framework attribute is missing.");
         TargetFrameworkAttribute compiler =
-            typeof(CompilerModel.TextResourceCompiler).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()
+            typeof(CompilerModel.TranslationCompiler).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()
             ?? throw new InvalidOperationException("The compiler target framework attribute is missing.");
         Assert.Equal(".NETCoreApp,Version=v10.0", runtime.FrameworkName);
         Assert.Equal(".NETCoreApp,Version=v10.0", compiler.FrameworkName);

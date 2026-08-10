@@ -6,7 +6,7 @@ package uses the canonical Runic Translations identity alongside the repository
 and product.
 
 Every dispatch requires an explicit exact version. The next planned private
-candidate is `0.1.0-preview.4.2`; this is a planning value, not a claim that the
+candidate is `0.1.0-preview.4.3`; this is a planning value, not a claim that the
 candidate has been verified or published. Run the workflow with publication
 disabled first and retain the artifact containing all eight packages and its
 `SHA256SUMS` file.

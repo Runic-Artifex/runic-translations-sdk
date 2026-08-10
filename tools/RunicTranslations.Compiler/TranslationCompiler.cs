@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace RunicTranslations.Compiler;
 
-public static class TextResourceCompiler
+public static class TranslationCompiler
 {
     private static readonly string[] ManifestMembers = { "$schema", "schemaVersion", "catalog", "code", "defaultLocale", "locales", "layers", "validation", "runtime", "outputs" };
     private static readonly string[] DocumentMembers = { "$schema", "schemaVersion", "catalog", "locale", "layer", "resources" };
@@ -34,37 +34,37 @@ public static class TextResourceCompiler
 
     /// <summary>Compiles manifest and resource document sources using default limits.</summary>
     /// <remarks>Inputs and outputs are deterministic and no environment state is consulted.</remarks>
-    public static TextResourceCompilation Compile(
-        IEnumerable<TextResourceSource> manifests,
-        IEnumerable<TextResourceSource> documents,
-        TextResourceCompilerOptions? options = null)
+    public static TranslationCompilation Compile(
+        IEnumerable<TranslationSource> manifests,
+        IEnumerable<TranslationSource> documents,
+        TranslationCompilerOptions? options = null)
         => Compile(manifests, documents, options, CancellationToken.None);
 
     /// <summary>Compiles manifest and resource document sources with cancellation.</summary>
     /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
-    public static TextResourceCompilation Compile(
-        IEnumerable<TextResourceSource> manifests,
-        IEnumerable<TextResourceSource> documents,
+    public static TranslationCompilation Compile(
+        IEnumerable<TranslationSource> manifests,
+        IEnumerable<TranslationSource> documents,
         CancellationToken cancellationToken)
         => Compile(manifests, documents, null, cancellationToken);
 
     /// <summary>Compiles manifest and resource document sources with explicit limits and cancellation.</summary>
     /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
-    public static TextResourceCompilation Compile(
-        IEnumerable<TextResourceSource> manifests,
-        IEnumerable<TextResourceSource> documents,
-        TextResourceCompilerOptions? options,
+    public static TranslationCompilation Compile(
+        IEnumerable<TranslationSource> manifests,
+        IEnumerable<TranslationSource> documents,
+        TranslationCompilerOptions? options,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(manifests);
         ArgumentNullException.ThrowIfNull(documents);
         cancellationToken.ThrowIfCancellationRequested();
-        options ??= new TextResourceCompilerOptions();
+        options ??= new TranslationCompilerOptions();
         var diagnostics = new DiagnosticBag();
-        TextResourceSource[] manifestSources = Materialize(manifests);
-        TextResourceSource[] documentSources = Materialize(documents);
+        TranslationSource[] manifestSources = Materialize(manifests);
+        TranslationSource[] documentSources = Materialize(documents);
         if (RejectDuplicateSourcePaths(manifestSources, documentSources, diagnostics))
-            return new TextResourceCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
+            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
         var manifestModels = new List<ManifestModel>();
         var documentModels = new List<DocumentModel>();
 
@@ -95,7 +95,7 @@ public static class TextResourceCompiler
             ManifestModel manifest = manifestModels[i];
             if (manifest.Id.Length == 0) continue;
             if (!manifestsById.TryAdd(manifest.Id, manifest))
-                diagnostics.Add("RTR0002", TextResourceDiagnosticSeverity.Error,
+                diagnostics.Add("RTR0002", TranslationDiagnosticSeverity.Error,
                     "Catalog '" + manifest.Id + "' has more than one manifest.", manifest.Source, manifest.IdSpan);
         }
         ValidateGeneratedRootIdentities(manifestModels, diagnostics);
@@ -105,7 +105,7 @@ public static class TextResourceCompiler
         {
             DocumentModel document = documentModels[i];
             if (!manifestsById.ContainsKey(document.Catalog))
-                diagnostics.Add("RTR0002", TextResourceDiagnosticSeverity.Error,
+                diagnostics.Add("RTR0002", TranslationDiagnosticSeverity.Error,
                     "Resource document has no matching manifest for catalog '" + document.Catalog + "'.", document.Source, document.CatalogSpan);
             if (!docsByCatalog.TryGetValue(document.Catalog, out List<DocumentModel>? list))
             {
@@ -121,7 +121,7 @@ public static class TextResourceCompiler
             cancellationToken.ThrowIfCancellationRequested();
             if (!docsByCatalog.TryGetValue(pair.Key, out List<DocumentModel>? catalogDocuments) || catalogDocuments.Count == 0)
             {
-                diagnostics.Add("RTR0002", TextResourceDiagnosticSeverity.Error,
+                diagnostics.Add("RTR0002", TranslationDiagnosticSeverity.Error,
                     "Catalog '" + pair.Key + "' has no resource documents.", pair.Value.Source, pair.Value.IdSpan);
                 continue;
             }
@@ -129,13 +129,13 @@ public static class TextResourceCompiler
             if (catalog is not null) catalogs.Add(catalog);
         }
 
-        return new TextResourceCompilation(catalogs.ToArray(), diagnostics.ToSortedArray());
+        return new TranslationCompilation(catalogs.ToArray(), diagnostics.ToSortedArray());
     }
 
-    private static TextResourceSource[] Materialize(IEnumerable<TextResourceSource> sources)
+    private static TranslationSource[] Materialize(IEnumerable<TranslationSource> sources)
     {
-        var result = new List<TextResourceSource>();
-        foreach (TextResourceSource source in sources)
+        var result = new List<TranslationSource>();
+        foreach (TranslationSource source in sources)
         {
             if (source is null) throw new ArgumentException("A source collection contains null.", nameof(sources));
             result.Add(source);
@@ -145,8 +145,8 @@ public static class TextResourceCompiler
     }
 
     private static bool RejectDuplicateSourcePaths(
-        TextResourceSource[] manifests,
-        TextResourceSource[] documents,
+        TranslationSource[] manifests,
+        TranslationSource[] documents,
         DiagnosticBag diagnostics)
     {
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -160,10 +160,10 @@ public static class TextResourceCompiler
 
         for (int i = 0; i < duplicates.Count; i++)
         {
-            TextResourceSource representative = Find(manifests, duplicates[i]) ?? Find(documents, duplicates[i])!;
+            TranslationSource representative = Find(manifests, duplicates[i]) ?? Find(documents, duplicates[i])!;
             diagnostics.Add(
                 "RTR0002",
-                TextResourceDiagnosticSeverity.Error,
+                TranslationDiagnosticSeverity.Error,
                 "Normalized source path '" + duplicates[i] + "' is supplied more than once.",
                 representative,
                 new ByteSpan(0, 0));
@@ -171,7 +171,7 @@ public static class TextResourceCompiler
 
         return duplicates.Count != 0;
 
-        void Count(TextResourceSource[] sources)
+        void Count(TranslationSource[] sources)
         {
             for (int i = 0; i < sources.Length; i++)
             {
@@ -180,7 +180,7 @@ public static class TextResourceCompiler
             }
         }
 
-        static TextResourceSource? Find(TextResourceSource[] sources, string path)
+        static TranslationSource? Find(TranslationSource[] sources, string path)
         {
             for (int i = 0; i < sources.Length; i++)
                 if (string.Equals(sources[i].Path, path, StringComparison.Ordinal)) return sources[i];
@@ -188,12 +188,12 @@ public static class TextResourceCompiler
         }
     }
 
-    private static ManifestModel? ReadManifest(ParsedJson parsed, DiagnosticBag diagnostics, TextResourceCompilerOptions options)
+    private static ManifestModel? ReadManifest(ParsedJson parsed, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
         JsonValue root = parsed.Root!;
         if (root.Kind != JsonKind.Object)
         {
-            diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Catalog manifest root must be an object.", parsed.Source, root.Span);
+            diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Catalog manifest root must be an object.", parsed.Source, root.Span);
             return null;
         }
         ValidateKnownMembers(root, ManifestMembers, parsed.Source, diagnostics);
@@ -209,16 +209,16 @@ public static class TextResourceCompiler
         {
             model.Id = catalog.Value.Text!; model.IdSpan = catalog.Value.Span;
             if (IsWindowsDeviceStem(model.Id))
-                diagnostics.Add("RTR0018", TextResourceDiagnosticSeverity.Error, "Catalog ID '" + model.Id + "' produces a Windows-reserved generated filename stem.", parsed.Source, catalog.Value.Span);
+                diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Catalog ID '" + model.Id + "' produces a Windows-reserved generated filename stem.", parsed.Source, catalog.Value.Span);
             else if (!IsCatalogId(model.Id))
-                diagnostics.Add("RTR0006", TextResourceDiagnosticSeverity.Error, "Catalog ID must use lowercase ASCII letters, digits, dots, or hyphens.", parsed.Source, catalog.Value.Span);
+                diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error, "Catalog ID must use lowercase ASCII letters, digits, dots, or hyphens.", parsed.Source, catalog.Value.Span);
         }
         if (code is not null) ReadCode(code.Value, model, parsed.Source, diagnostics);
         if (defaultLocale is not null)
         {
             model.DefaultLocaleSpan = defaultLocale.Value.Span;
             if (!TryCanonicalizeLocale(defaultLocale.Value.Text!, out string canonical))
-                diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "Invalid default locale '" + defaultLocale.Value.Text + "'.", parsed.Source, defaultLocale.Value.Span);
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Invalid default locale '" + defaultLocale.Value.Text + "'.", parsed.Source, defaultLocale.Value.Span);
             else model.DefaultLocale = canonical;
         }
         if (locales is not null) ReadLocales(locales.Value, model, parsed.Source, diagnostics, options);
@@ -233,30 +233,30 @@ public static class TextResourceCompiler
         return model;
     }
 
-    private static int ValidateSchema(JsonValue root, TextResourceSource source, DiagnosticBag diagnostics)
+    private static int ValidateSchema(JsonValue root, TranslationSource source, DiagnosticBag diagnostics)
     {
         JsonProperty? schemaHint = root.Property("$schema");
         if (schemaHint is not null)
         {
-            diagnostics.Add("RTR0003", TextResourceDiagnosticSeverity.Error,
+            diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error,
                 "No canonical $schema URI is registered; omit $schema for schema version 1.", source, schemaHint.Value.Span);
         }
         JsonProperty? version = root.Property("schemaVersion");
         if (version is null)
         {
-            diagnostics.Add("RTR0003", TextResourceDiagnosticSeverity.Error, "Missing required schemaVersion 1.", source, root.Span);
+            diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error, "Missing required schemaVersion 1.", source, root.Span);
             return 1;
         }
         if (version.Value.Kind != JsonKind.Number ||
             (!string.Equals(version.Value.Text, "1", StringComparison.Ordinal) && !string.Equals(version.Value.Text, "2", StringComparison.Ordinal)))
         {
-            diagnostics.Add("RTR0003", TextResourceDiagnosticSeverity.Error, "Unsupported schemaVersion; expected integer 1 or 2.", source, version.Value.Span);
+            diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error, "Unsupported schemaVersion; expected integer 1 or 2.", source, version.Value.Span);
             return 1;
         }
         return string.Equals(version.Value.Text, "2", StringComparison.Ordinal) ? 2 : 1;
     }
 
-    private static void ReadCode(JsonValue value, ManifestModel model, TextResourceSource source, DiagnosticBag diagnostics)
+    private static void ReadCode(JsonValue value, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics)
     {
         ValidateKnownMembers(value, CodeMembers, source, diagnostics);
         JsonProperty? ns = Required(value, "namespace", JsonKind.String, source, diagnostics);
@@ -265,37 +265,37 @@ public static class TextResourceCompiler
         if (ns is not null)
         {
             model.CodeNamespace = ns.Value.Text!;
-            if (!IsNamespace(model.CodeNamespace)) diagnostics.Add("RTR0006", TextResourceDiagnosticSeverity.Error, "Invalid C# namespace '" + model.CodeNamespace + "'.", source, ns.Value.Span);
+            if (!IsNamespace(model.CodeNamespace)) diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error, "Invalid C# namespace '" + model.CodeNamespace + "'.", source, ns.Value.Span);
         }
         if (className is not null)
         {
             model.ClassName = className.Value.Text!;
             model.ClassNameSpan = className.Value.Span;
             if (IsWindowsDeviceStem(model.ClassName))
-                diagnostics.Add("RTR0018", TextResourceDiagnosticSeverity.Error, "Generated class name '" + model.ClassName + "' produces a Windows-reserved filename stem.", source, className.Value.Span);
+                diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Generated class name '" + model.ClassName + "' produces a Windows-reserved filename stem.", source, className.Value.Span);
             else if (!IsIdentifier(model.ClassName))
-                diagnostics.Add("RTR0006", TextResourceDiagnosticSeverity.Error, "Invalid generated class name '" + model.ClassName + "'.", source, className.Value.Span);
+                diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error, "Invalid generated class name '" + model.ClassName + "'.", source, className.Value.Span);
         }
         if (visibility is not null)
         {
             if (visibility.Value.Kind != JsonKind.String || (visibility.Value.Text != "public" && visibility.Value.Text != "internal"))
-                diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "visibility must be 'public' or 'internal'.", source, visibility.Value.Span);
-            else model.Visibility = visibility.Value.Text == "internal" ? TextResourceVisibility.Internal : TextResourceVisibility.Public;
+                diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "visibility must be 'public' or 'internal'.", source, visibility.Value.Span);
+            else model.Visibility = visibility.Value.Text == "internal" ? TranslationVisibility.Internal : TranslationVisibility.Public;
         }
     }
 
-    private static void ReadLocales(JsonValue value, ManifestModel model, TextResourceSource source, DiagnosticBag diagnostics, TextResourceCompilerOptions options)
+    private static void ReadLocales(JsonValue value, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
-        if (value.Items.Count == 0) diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "locales must not be empty.", source, value.Span);
+        if (value.Items.Count == 0) diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "locales must not be empty.", source, value.Span);
         if (value.Items.Count > options.MaximumLocalesPerCatalog)
-            diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", source, value.Span);
+            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", source, value.Span);
         var tags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < value.Items.Count; i++)
         {
             JsonValue item = value.Items[i];
             if (item.Kind != JsonKind.Object)
             {
-                diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "Each locale declaration must be an object.", source, item.Span); continue;
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Each locale declaration must be an object.", source, item.Span); continue;
             }
             ValidateKnownMembers(item, LocaleMembers, source, diagnostics);
             JsonProperty? tagProperty = Required(item, "tag", JsonKind.String, source, diagnostics);
@@ -303,112 +303,112 @@ public static class TextResourceCompiler
             if (tagProperty is null) continue;
             if (!TryCanonicalizeLocale(tagProperty.Value.Text!, out string tag))
             {
-                diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "Invalid locale tag '" + tagProperty.Value.Text + "'.", source, tagProperty.Value.Span); continue;
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Invalid locale tag '" + tagProperty.Value.Text + "'.", source, tagProperty.Value.Span); continue;
             }
-            if (!tags.Add(tag)) diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "Duplicate locale '" + tag + "'.", source, tagProperty.Value.Span);
+            if (!tags.Add(tag)) diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Duplicate locale '" + tag + "'.", source, tagProperty.Value.Span);
             string? fallback = null;
             ByteSpan fallbackSpan = item.Span;
             if (fallbackProperty is not null)
             {
                 fallbackSpan = fallbackProperty.Value.Span;
                 if (fallbackProperty.Value.Kind != JsonKind.String || !TryCanonicalizeLocale(fallbackProperty.Value.Text!, out fallback))
-                    diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "Invalid fallback locale.", source, fallbackProperty.Value.Span);
+                    diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Invalid fallback locale.", source, fallbackProperty.Value.Span);
             }
             model.Locales.Add(new LocaleModel(tag, fallback, tagProperty.Value.Span, fallbackSpan));
         }
     }
 
-    private static void ReadLayers(JsonValue value, ManifestModel model, TextResourceSource source, DiagnosticBag diagnostics)
+    private static void ReadLayers(JsonValue value, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics)
     {
-        if (value.Items.Count == 0) diagnostics.Add("RTR0005", TextResourceDiagnosticSeverity.Error, "layers must not be empty.", source, value.Span);
+        if (value.Items.Count == 0) diagnostics.Add("RTR0005", TranslationDiagnosticSeverity.Error, "layers must not be empty.", source, value.Span);
         var names = new HashSet<string>(StringComparer.Ordinal);
         var priorities = new HashSet<int>();
         for (int i = 0; i < value.Items.Count; i++)
         {
             JsonValue item = value.Items[i];
-            if (item.Kind != JsonKind.Object) { diagnostics.Add("RTR0005", TextResourceDiagnosticSeverity.Error, "Each layer declaration must be an object.", source, item.Span); continue; }
+            if (item.Kind != JsonKind.Object) { diagnostics.Add("RTR0005", TranslationDiagnosticSeverity.Error, "Each layer declaration must be an object.", source, item.Span); continue; }
             ValidateKnownMembers(item, LayerMembers, source, diagnostics);
             JsonProperty? name = Required(item, "name", JsonKind.String, source, diagnostics);
             JsonProperty? priority = Required(item, "priority", JsonKind.Number, source, diagnostics);
             if (name is null || priority is null) continue;
-            if (!IsCatalogId(name.Value.Text!)) diagnostics.Add("RTR0005", TextResourceDiagnosticSeverity.Error, "Invalid layer name '" + name.Value.Text + "'.", source, name.Value.Span);
+            if (!IsCatalogId(name.Value.Text!)) diagnostics.Add("RTR0005", TranslationDiagnosticSeverity.Error, "Invalid layer name '" + name.Value.Text + "'.", source, name.Value.Span);
             if (!int.TryParse(priority.Value.Text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int priorityValue))
-            { diagnostics.Add("RTR0005", TextResourceDiagnosticSeverity.Error, "Layer priority must be a signed 32-bit integer.", source, priority.Value.Span); continue; }
-            if (!names.Add(name.Value.Text!)) diagnostics.Add("RTR0005", TextResourceDiagnosticSeverity.Error, "Duplicate layer name '" + name.Value.Text + "'.", source, name.Value.Span);
-            if (!priorities.Add(priorityValue)) diagnostics.Add("RTR0005", TextResourceDiagnosticSeverity.Error, "Duplicate layer priority " + priorityValue.ToString(CultureInfo.InvariantCulture) + ".", source, priority.Value.Span);
+            { diagnostics.Add("RTR0005", TranslationDiagnosticSeverity.Error, "Layer priority must be a signed 32-bit integer.", source, priority.Value.Span); continue; }
+            if (!names.Add(name.Value.Text!)) diagnostics.Add("RTR0005", TranslationDiagnosticSeverity.Error, "Duplicate layer name '" + name.Value.Text + "'.", source, name.Value.Span);
+            if (!priorities.Add(priorityValue)) diagnostics.Add("RTR0005", TranslationDiagnosticSeverity.Error, "Duplicate layer priority " + priorityValue.ToString(CultureInfo.InvariantCulture) + ".", source, priority.Value.Span);
             model.Layers.Add(new LayerModel(name.Value.Text!, priorityValue, name.Value.Span, priority.Value.Span));
         }
         model.Layers.Sort((left, right) => left.Priority != right.Priority ? left.Priority.CompareTo(right.Priority) : StringComparer.Ordinal.Compare(left.Name, right.Name));
     }
 
-    private static void ReadValidation(JsonProperty property, ManifestModel model, TextResourceSource source, DiagnosticBag diagnostics)
+    private static void ReadValidation(JsonProperty property, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics)
     {
-        if (property.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "validation must be an object.", source, property.Value.Span); return; }
+        if (property.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "validation must be an object.", source, property.Value.Span); return; }
         ValidateKnownMembers(property.Value, ValidationMembers, source, diagnostics);
         model.Completeness = ReadPolicy(property.Value.Property("translationCompleteness"), model.Completeness, source, diagnostics);
         model.ExtraKeys = ReadPolicy(property.Value.Property("extraLocaleKeys"), model.ExtraKeys, source, diagnostics);
         model.EmptyValues = ReadPolicy(property.Value.Property("emptyValues"), model.EmptyValues, source, diagnostics);
     }
 
-    private static TextResourcePolicy ReadPolicy(JsonProperty? property, TextResourcePolicy defaultValue, TextResourceSource source, DiagnosticBag diagnostics)
+    private static TranslationPolicy ReadPolicy(JsonProperty? property, TranslationPolicy defaultValue, TranslationSource source, DiagnosticBag diagnostics)
     {
         if (property is null) return defaultValue;
-        if (property.Value.Kind != JsonKind.String) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Validation policy must be allow, warning, or error.", source, property.Value.Span); return defaultValue; }
+        if (property.Value.Kind != JsonKind.String) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Validation policy must be allow, warning, or error.", source, property.Value.Span); return defaultValue; }
         switch (property.Value.Text)
         {
-            case "allow": return TextResourcePolicy.Allow;
-            case "warning": return TextResourcePolicy.Warning;
-            case "error": return TextResourcePolicy.Error;
-            default: diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Unknown validation policy '" + property.Value.Text + "'.", source, property.Value.Span); return defaultValue;
+            case "allow": return TranslationPolicy.Allow;
+            case "warning": return TranslationPolicy.Warning;
+            case "error": return TranslationPolicy.Error;
+            default: diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Unknown validation policy '" + property.Value.Text + "'.", source, property.Value.Span); return defaultValue;
         }
     }
 
-    private static void ReadRuntime(JsonProperty property, ManifestModel model, TextResourceSource source, DiagnosticBag diagnostics)
+    private static void ReadRuntime(JsonProperty property, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics)
     {
-        if (property.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "runtime must be an object.", source, property.Value.Span); return; }
+        if (property.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "runtime must be an object.", source, property.Value.Span); return; }
         ValidateKnownMembers(property.Value, RuntimeMembers, source, diagnostics);
         JsonProperty? unsupported = property.Value.Property("unsupportedLocale");
         if (unsupported is not null && unsupported.Value.Kind == JsonKind.String)
         {
             switch (unsupported.Value.Text)
             {
-                case "exact": model.UnsupportedLocale = TextResourceUnsupportedLocalePolicy.Exact; break;
-                case "parentsThenDefault": model.UnsupportedLocale = TextResourceUnsupportedLocalePolicy.ParentsThenDefault; break;
-                case "default": model.UnsupportedLocale = TextResourceUnsupportedLocalePolicy.Default; break;
-                default: diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Unknown unsupportedLocale policy.", source, unsupported.Value.Span); break;
+                case "exact": model.UnsupportedLocale = TranslationUnsupportedLocalePolicy.Exact; break;
+                case "parentsThenDefault": model.UnsupportedLocale = TranslationUnsupportedLocalePolicy.ParentsThenDefault; break;
+                case "default": model.UnsupportedLocale = TranslationUnsupportedLocalePolicy.Default; break;
+                default: diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Unknown unsupportedLocale policy.", source, unsupported.Value.Span); break;
             }
         }
-        else if (unsupported is not null) diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "unsupportedLocale must be a string.", source, unsupported.Value.Span);
+        else if (unsupported is not null) diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "unsupportedLocale must be a string.", source, unsupported.Value.Span);
         JsonProperty? missing = property.Value.Property("missingKey");
         if (missing is not null && missing.Value.Kind == JsonKind.String)
         {
             switch (missing.Value.Text)
             {
-                case "throw": model.MissingKey = TextResourceMissingKeyPolicy.Throw; break;
-                case "returnKey": model.MissingKey = TextResourceMissingKeyPolicy.ReturnKey; break;
-                case "returnMarker": model.MissingKey = TextResourceMissingKeyPolicy.ReturnMarker; break;
-                default: diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Unknown missingKey policy.", source, missing.Value.Span); break;
+                case "throw": model.MissingKey = TranslationMissingKeyPolicy.Throw; break;
+                case "returnKey": model.MissingKey = TranslationMissingKeyPolicy.ReturnKey; break;
+                case "returnMarker": model.MissingKey = TranslationMissingKeyPolicy.ReturnMarker; break;
+                default: diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Unknown missingKey policy.", source, missing.Value.Span); break;
             }
         }
-        else if (missing is not null) diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "missingKey must be a string.", source, missing.Value.Span);
+        else if (missing is not null) diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "missingKey must be a string.", source, missing.Value.Span);
     }
 
-    private static void ValidateOutputs(JsonProperty property, TextResourceSource source, DiagnosticBag diagnostics)
+    private static void ValidateOutputs(JsonProperty property, TranslationSource source, DiagnosticBag diagnostics)
     {
-        if (property.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "outputs must be an object.", source, property.Value.Span); return; }
+        if (property.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "outputs must be an object.", source, property.Value.Span); return; }
         ValidateKnownMembers(property.Value, OutputMembers, source, diagnostics);
         for (int i = 0; i < property.Value.Properties.Count; i++)
         {
             JsonProperty output = property.Value.Properties[i];
-            if (output.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Output configuration must be an object.", source, output.Value.Span); continue; }
+            if (output.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Output configuration must be an object.", source, output.Value.Span); continue; }
             string[] allowed = output.Name == "typescript" ? TypeScriptOutputMembers : TemplateOutputMembers;
             ValidateKnownMembers(output.Value, allowed, source, diagnostics);
             JsonProperty? enabled = output.Value.Property("enabled");
             if (enabled is not null && enabled.Value.Kind != JsonKind.True && enabled.Value.Kind != JsonKind.False)
-                diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "enabled must be boolean.", source, enabled.Value.Span);
+                diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "enabled must be boolean.", source, enabled.Value.Span);
             JsonProperty? module = output.Value.Property("moduleName");
             if (module is not null && module.Value.Kind != JsonKind.String)
-                diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "moduleName must be a string.", source, module.Value.Span);
+                diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "moduleName must be a string.", source, module.Value.Span);
         }
     }
 
@@ -417,16 +417,16 @@ public static class TextResourceCompiler
         var locales = new Dictionary<string, LocaleModel>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < model.Locales.Count; i++) if (!locales.ContainsKey(model.Locales[i].Tag)) locales.Add(model.Locales[i].Tag, model.Locales[i]);
         if (model.DefaultLocale.Length > 0 && !locales.ContainsKey(model.DefaultLocale))
-            diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "defaultLocale is not declared in locales.", model.Source, model.DefaultLocaleSpan);
+            diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "defaultLocale is not declared in locales.", model.Source, model.DefaultLocaleSpan);
         for (int i = 0; i < model.Locales.Count; i++)
         {
             LocaleModel locale = model.Locales[i];
             if (string.Equals(locale.Tag, model.DefaultLocale, StringComparison.OrdinalIgnoreCase) && locale.Fallback is not null)
-                diagnostics.Add("RTR0012", TextResourceDiagnosticSeverity.Error, "The default locale must not declare a fallback.", model.Source, locale.FallbackSpan);
+                diagnostics.Add("RTR0012", TranslationDiagnosticSeverity.Error, "The default locale must not declare a fallback.", model.Source, locale.FallbackSpan);
             if (locale.Fallback is not null && !locales.ContainsKey(locale.Fallback))
-                diagnostics.Add("RTR0012", TextResourceDiagnosticSeverity.Error, "Fallback locale '" + locale.Fallback + "' is not declared.", model.Source, locale.FallbackSpan);
+                diagnostics.Add("RTR0012", TranslationDiagnosticSeverity.Error, "Fallback locale '" + locale.Fallback + "' is not declared.", model.Source, locale.FallbackSpan);
             if (!string.Equals(locale.Tag, model.DefaultLocale, StringComparison.OrdinalIgnoreCase) && locale.Fallback is null)
-                diagnostics.Add("RTR0013", TextResourceDiagnosticSeverity.Error, "Locale '" + locale.Tag + "' has no fallback path to the default locale.", model.Source, locale.Span);
+                diagnostics.Add("RTR0013", TranslationDiagnosticSeverity.Error, "Locale '" + locale.Tag + "' has no fallback path to the default locale.", model.Source, locale.Span);
         }
 
         var fullyChecked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -442,7 +442,7 @@ public static class TextResourceCompiler
                 path.Add(current.Tag); pathItems.Add(current.Tag);
                 if (path.Contains(next.Tag))
                 {
-                    diagnostics.Add("RTR0013", TextResourceDiagnosticSeverity.Error, "Fallback cycle closes at locale '" + next.Tag + "'.", model.Source, current.FallbackSpan);
+                    diagnostics.Add("RTR0013", TranslationDiagnosticSeverity.Error, "Fallback cycle closes at locale '" + next.Tag + "'.", model.Source, current.FallbackSpan);
                     for (int p = 0; p < pathItems.Count; p++) fullyChecked.Add(pathItems[p]);
                     break;
                 }
@@ -452,10 +452,10 @@ public static class TextResourceCompiler
         }
     }
 
-    private static DocumentModel? ReadDocument(ParsedJson parsed, DiagnosticBag diagnostics, TextResourceCompilerOptions options)
+    private static DocumentModel? ReadDocument(ParsedJson parsed, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
         JsonValue root = parsed.Root!;
-        if (root.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Resource document root must be an object.", parsed.Source, root.Span); return null; }
+        if (root.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Resource document root must be an object.", parsed.Source, root.Span); return null; }
         ValidateKnownMembers(root, DocumentMembers, parsed.Source, diagnostics);
         int schemaVersion = ValidateSchema(root, parsed.Source, diagnostics);
         JsonProperty? catalog = Required(root, "catalog", JsonKind.String, parsed.Source, diagnostics);
@@ -476,16 +476,16 @@ public static class TextResourceCompiler
         // uppercase device spelling here so it associates with that manifest
         // and produces one focused RTR0018 instead of a document cascade.
         if (!IsCatalogId(model.Catalog) && !IsWindowsDeviceStem(model.Catalog))
-            diagnostics.Add("RTR0006", TextResourceDiagnosticSeverity.Error, "Catalog ID must use lowercase ASCII letters, digits, dots, or hyphens.", parsed.Source, catalog.Value.Span);
+            diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error, "Catalog ID must use lowercase ASCII letters, digits, dots, or hyphens.", parsed.Source, catalog.Value.Span);
         if (!TryCanonicalizeLocale(locale.Value.Text!, out string canonicalLocale))
-            diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "Invalid locale tag '" + locale.Value.Text + "'.", parsed.Source, locale.Value.Span);
+            diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Invalid locale tag '" + locale.Value.Text + "'.", parsed.Source, locale.Value.Span);
         else model.Locale = canonicalLocale;
-        if (!IsCatalogId(model.Layer)) diagnostics.Add("RTR0005", TextResourceDiagnosticSeverity.Error, "Invalid layer name '" + model.Layer + "'.", parsed.Source, layer.Value.Span);
+        if (!IsCatalogId(model.Layer)) diagnostics.Add("RTR0005", TranslationDiagnosticSeverity.Error, "Invalid layer name '" + model.Layer + "'.", parsed.Source, layer.Value.Span);
         FlattenResources(resources.Value, string.Empty, default, model, diagnostics, options, 0);
         return model;
     }
 
-    private static void FlattenResources(JsonValue group, string prefix, ByteSpan rootSpan, DocumentModel document, DiagnosticBag diagnostics, TextResourceCompilerOptions options, int depth)
+    private static void FlattenResources(JsonValue group, string prefix, ByteSpan rootSpan, DocumentModel document, DiagnosticBag diagnostics, TranslationCompilerOptions options, int depth)
     {
         for (int i = 0; i < group.Properties.Count; i++)
         {
@@ -494,14 +494,14 @@ public static class TextResourceCompiler
             ByteSpan pathSpan = prefix.Length == 0 ? property.NameSpan : rootSpan;
             if (depth + 1 > options.MaximumDepth)
             {
-                diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error, "Resource tree exceeds the configured depth limit.", document.Source, property.NameSpan);
+                diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Resource tree exceeds the configured depth limit.", document.Source, property.NameSpan);
                 document.HadLimitError = true;
                 continue;
             }
             if (!IsIdentifier(property.Name) || property.Name[0] == '$')
             {
                 string id = property.Name.Length > 0 && property.Name[0] == '$' ? "RTR0019" : "RTR0006";
-                diagnostics.Add(id, TextResourceDiagnosticSeverity.Error, "Invalid resource key segment '" + property.Name + "'.", document.Source, property.NameSpan); continue;
+                diagnostics.Add(id, TranslationDiagnosticSeverity.Error, "Invalid resource key segment '" + property.Name + "'.", document.Source, property.NameSpan); continue;
             }
             if (property.Value.Kind == JsonKind.String)
             {
@@ -510,13 +510,13 @@ public static class TextResourceCompiler
             }
             if (property.Value.Kind != JsonKind.Object)
             {
-                diagnostics.Add("RTR0008", TextResourceDiagnosticSeverity.Error, "Resource '" + key + "' must be a string, group, or metadata leaf.", document.Source, property.Value.Span); continue;
+                diagnostics.Add("RTR0008", TranslationDiagnosticSeverity.Error, "Resource '" + key + "' must be a string, group, or metadata leaf.", document.Source, property.Value.Span); continue;
             }
             JsonProperty? value = property.Value.Property("$value");
             bool hasMetadata = HasDollarMember(property.Value);
             if (value is null)
             {
-                if (hasMetadata) diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Metadata leaf '" + key + "' is missing $value.", document.Source, property.Value.Span);
+                if (hasMetadata) diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Metadata leaf '" + key + "' is missing $value.", document.Source, property.Value.Span);
                 else FlattenResources(property.Value, key, pathSpan, document, diagnostics, options, depth + 1);
                 continue;
             }
@@ -524,21 +524,21 @@ public static class TextResourceCompiler
         }
     }
 
-    private static void ReadMetadataLeaf(JsonProperty property, string key, ByteSpan pathSpan, DocumentModel document, DiagnosticBag diagnostics, TextResourceCompilerOptions options)
+    private static void ReadMetadataLeaf(JsonProperty property, string key, ByteSpan pathSpan, DocumentModel document, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
         ValidateKnownMembers(property.Value, LeafMembers, document.Source, diagnostics);
         for (int i = 0; i < property.Value.Properties.Count; i++)
             if (property.Value.Properties[i].Name.Length == 0 || property.Value.Properties[i].Name[0] != '$')
-                diagnostics.Add("RTR0008", TextResourceDiagnosticSeverity.Error, "A metadata leaf cannot also contain child resources.", document.Source, property.Value.Properties[i].NameSpan);
+                diagnostics.Add("RTR0008", TranslationDiagnosticSeverity.Error, "A metadata leaf cannot also contain child resources.", document.Source, property.Value.Properties[i].NameSpan);
         JsonProperty? value = property.Value.Property("$value");
         if (value is null)
         {
-            diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Metadata leaf is missing required member '$value'.", document.Source, property.Value.Span);
+            diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Metadata leaf is missing required member '$value'.", document.Source, property.Value.Span);
             return;
         }
         if (value.Value.Kind != JsonKind.String && !(document.SchemaVersion == 2 && value.Value.Kind == JsonKind.Object))
         {
-            diagnostics.Add("RTR0008", TextResourceDiagnosticSeverity.Error, "$value must be a string or a schema version 2 structured message.", document.Source, value.Value.Span);
+            diagnostics.Add("RTR0008", TranslationDiagnosticSeverity.Error, "$value must be a string or a schema version 2 structured message.", document.Source, value.Value.Span);
             return;
         }
         if (value is null) return;
@@ -553,7 +553,7 @@ public static class TextResourceCompiler
             AddLeaf(document, diagnostics, options, key, property.NameSpan, pathSpan, value.Value.Span, value.Value.Text!, description, since, deprecated, tags, placeholders);
     }
 
-    private static void AddStructuredLeaf(DocumentModel document, DiagnosticBag diagnostics, TextResourceCompilerOptions options,
+    private static void AddStructuredLeaf(DocumentModel document, DiagnosticBag diagnostics, TranslationCompilerOptions options,
         string key, ByteSpan keySpan, ByteSpan pathSpan, JsonValue value, string? description, string? since, string? deprecated, string[] tags)
     {
         ValidateKnownMembers(value, StructuredMessageMembers, document.Source, diagnostics);
@@ -563,7 +563,7 @@ public static class TextResourceCompiler
         if (inputsProperty is null || selectorsProperty is null || variantsProperty is null) return;
 
         PlaceholderModel[] placeholders = ReadPortableInputs(inputsProperty.Value, document.Source, diagnostics, options);
-        var inputTypes = new Dictionary<string, TextResourceArgumentType>(StringComparer.Ordinal);
+        var inputTypes = new Dictionary<string, TranslationArgumentType>(StringComparer.Ordinal);
         for (int index = 0; index < placeholders.Length; index++) inputTypes[placeholders[index].Name] = placeholders[index].Type;
         var declarations = ReadDeclarations(value.Property("declarations"), inputTypes, document.Source, diagnostics);
         var selectors = new List<CompiledMessageSelector>();
@@ -571,21 +571,21 @@ public static class TextResourceCompiler
         for (int index = 0; index < selectorsProperty.Value.Items.Count; index++)
         {
             JsonValue selector = selectorsProperty.Value.Items[index];
-            if (selector.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A selector must be an object.", document.Source, selector.Span); continue; }
+            if (selector.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "A selector must be an object.", document.Source, selector.Span); continue; }
             ValidateKnownMembers(selector, SelectorMembers, document.Source, diagnostics);
             JsonProperty? name = Required(selector, "name", JsonKind.String, document.Source, diagnostics);
             JsonProperty? input = Required(selector, "input", JsonKind.String, document.Source, diagnostics);
             JsonProperty? function = Required(selector, "function", JsonKind.String, document.Source, diagnostics);
             if (name is null || input is null || function is null) continue;
             if (!IsIdentifier(name.Value.Text!) || !selectorNames.Add(name.Value.Text!))
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Selector names must be unique identifiers.", document.Source, name.Value.Span);
-            if (!inputTypes.TryGetValue(input.Value.Text!, out TextResourceArgumentType inputType))
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Selector input '" + input.Value.Text + "' is not declared.", document.Source, input.Value.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Selector names must be unique identifiers.", document.Source, name.Value.Span);
+            if (!inputTypes.TryGetValue(input.Value.Text!, out TranslationArgumentType inputType))
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Selector input '" + input.Value.Text + "' is not declared.", document.Source, input.Value.Span);
             string functionName = function.Value.Text!;
             if (functionName is not ("plural" or "ordinal" or "literal"))
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Unknown selector function '" + functionName + "'.", document.Source, function.Value.Span);
-            if (functionName is "plural" or "ordinal" && inputType is not (TextResourceArgumentType.Int or TextResourceArgumentType.Number))
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Plural selectors require an int64 or decimal input.", document.Source, input.Value.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Unknown selector function '" + functionName + "'.", document.Source, function.Value.Span);
+            if (functionName is "plural" or "ordinal" && inputType is not (TranslationArgumentType.Int or TranslationArgumentType.Number))
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Plural selectors require an int64 or decimal input.", document.Source, input.Value.Span);
             selectors.Add(new CompiledMessageSelector(name.Value.Text!, input.Value.Text!, functionName));
         }
 
@@ -595,13 +595,13 @@ public static class TextResourceCompiler
         for (int index = 0; index < variantsProperty.Value.Items.Count; index++)
         {
             JsonValue variant = variantsProperty.Value.Items[index];
-            if (variant.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A variant must be an object.", document.Source, variant.Span); continue; }
+            if (variant.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "A variant must be an object.", document.Source, variant.Span); continue; }
             ValidateKnownMembers(variant, VariantMembers, document.Source, diagnostics);
             JsonProperty? match = Required(variant, "match", JsonKind.Object, document.Source, diagnostics);
             JsonProperty? pattern = variant.Property("value");
             if (pattern is null || pattern.Value.Kind is not (JsonKind.String or JsonKind.Array))
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Variant value must be a string or structured pattern array.", document.Source, pattern?.Value.Span ?? variant.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Variant value must be a string or structured pattern array.", document.Source, pattern?.Value.Span ?? variant.Span);
                 continue;
             }
             if (match is null || pattern is null) continue;
@@ -610,13 +610,13 @@ public static class TextResourceCompiler
             {
                 JsonProperty item = match.Value.Properties[m];
                 if (!selectorNames.Contains(item.Name) || item.Value.Kind != JsonKind.String || item.Value.Text!.Length == 0)
-                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Variant matches must name every declared selector and use a non-empty string.", document.Source, item.Value.Span);
+                    diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Variant matches must name every declared selector and use a non-empty string.", document.Source, item.Value.Span);
                 else matches[item.Name] = item.Value.Text!;
             }
             if (matches.Count != selectors.Count)
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A variant must match every declared selector.", document.Source, match.Value.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "A variant must match every declared selector.", document.Source, match.Value.Span);
             string signature = string.Join("|", matches);
-            if (!signatures.Add(signature)) diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Duplicate variant match.", document.Source, match.Value.Span);
+            if (!signatures.Add(signature)) diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Duplicate variant match.", document.Source, match.Value.Span);
             bool all = matches.Count == selectors.Count;
             foreach (KeyValuePair<string, string> item in matches) all &= item.Value == "*";
             catchAll |= all;
@@ -624,10 +624,10 @@ public static class TextResourceCompiler
                 ? MessagePatternCompiler.Compile(pattern.Value.Text!, document.Source, pattern.Value.Span, diagnostics, out HashSet<string> used)
                 : CompileStructuredPattern(pattern.Value, inputTypes, declarations, document.Source, diagnostics, out used);
             foreach (string usedName in used) if (!inputTypes.ContainsKey(usedName))
-                diagnostics.Add("RTR0015", TextResourceDiagnosticSeverity.Error, "Input '" + usedName + "' is used but not declared.", document.Source, pattern.Value.Span);
+                diagnostics.Add("RTR0015", TranslationDiagnosticSeverity.Error, "Input '" + usedName + "' is used but not declared.", document.Source, pattern.Value.Span);
             if (compiled is not null) variants.Add(new CompiledMessageVariant(matches, compiled));
         }
-        if (!catchAll) diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A structured message requires an all-'*' catch-all variant.", document.Source, variantsProperty.Value.Span);
+        if (!catchAll) diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "A structured message requires an all-'*' catch-all variant.", document.Source, variantsProperty.Value.Span);
         if (variants.Count == 0) return;
         CompiledMessagePattern message = new(Array.Empty<CompiledMessageNode>(), selectors.ToArray(), variants.ToArray());
         string fallbackPattern = variants[^1].Pattern.Nodes.Count == 0 ? string.Empty : PatternText(variants[^1].Pattern);
@@ -636,8 +636,8 @@ public static class TextResourceCompiler
     }
 
     private static CompiledMessagePattern? CompileStructuredPattern(JsonValue pattern,
-        Dictionary<string, TextResourceArgumentType> inputTypes, Dictionary<string, CompiledMessageFormat> declarations,
-        TextResourceSource source, DiagnosticBag diagnostics,
+        Dictionary<string, TranslationArgumentType> inputTypes, Dictionary<string, CompiledMessageFormat> declarations,
+        TranslationSource source, DiagnosticBag diagnostics,
         out HashSet<string> used)
     {
         used = new HashSet<string>(StringComparer.Ordinal);
@@ -652,7 +652,7 @@ public static class TextResourceCompiler
             }
             if (item.Kind != JsonKind.Object)
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Structured pattern nodes must be strings or objects.", source, item.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Structured pattern nodes must be strings or objects.", source, item.Span);
                 continue;
             }
             JsonProperty? input = item.Property("input");
@@ -662,14 +662,14 @@ public static class TextResourceCompiler
             int nodeMemberCount = (input is null ? 0 : 1) + (format is null ? 0 : 1) + (markup is null ? 0 : 1) + (local is null ? 0 : 1);
             if (nodeMemberCount != 1)
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A structured pattern node must contain exactly one of 'input', 'local', 'format', or 'markup'.", source, item.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "A structured pattern node must contain exactly one of 'input', 'local', 'format', or 'markup'.", source, item.Span);
                 continue;
             }
             if (input is not null)
             {
                 ValidateKnownMembers(item, PatternInputMembers, source, diagnostics);
                 if (input.Value.Kind != JsonKind.String || !inputTypes.ContainsKey(input.Value.Text!))
-                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Pattern input is not declared.", source, input.Value.Span);
+                    diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Pattern input is not declared.", source, input.Value.Span);
                 else { nodes.Add(new CompiledMessageInput(input.Value.Text!)); used.Add(input.Value.Text!); }
                 continue;
             }
@@ -677,7 +677,7 @@ public static class TextResourceCompiler
             {
                 ValidateKnownMembers(item, PatternLocalMembers, source, diagnostics);
                 if (local.Value.Kind != JsonKind.String || !declarations.TryGetValue(local.Value.Text!, out CompiledMessageFormat? declaration))
-                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Pattern local is not declared.", source, local.Value.Span);
+                    diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Pattern local is not declared.", source, local.Value.Span);
                 else
                 {
                     nodes.Add(new CompiledMessageFormat(declaration.Input, declaration.Function, declaration.Format, declaration.Unit, declaration.Numeric));
@@ -690,7 +690,7 @@ public static class TextResourceCompiler
                 ValidateKnownMembers(item, PatternMarkupMembers, source, diagnostics);
                 if (markup.Value.Kind != JsonKind.Object)
                 {
-                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A markup expression must be an object.", source, markup.Value.Span);
+                    diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "A markup expression must be an object.", source, markup.Value.Span);
                     continue;
                 }
                 JsonValue markupExpression = markup.Value;
@@ -700,19 +700,19 @@ public static class TextResourceCompiler
                 JsonProperty? attributes = markupExpression.Property("attributes");
                 if (name is null || children is null || !IsIdentifier(name.Value.Text!))
                 {
-                    diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Markup names must be identifiers.", source, name?.Value.Span ?? markupExpression.Span);
+                    diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Markup names must be identifiers.", source, name?.Value.Span ?? markupExpression.Span);
                     continue;
                 }
                 var compiledAttributes = new SortedDictionary<string, string>(StringComparer.Ordinal);
                 if (attributes is not null)
                 {
                     if (attributes.Value.Kind != JsonKind.Object)
-                        diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Markup attributes must be an object.", source, attributes.Value.Span);
+                        diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Markup attributes must be an object.", source, attributes.Value.Span);
                     else for (int attributeIndex = 0; attributeIndex < attributes.Value.Properties.Count; attributeIndex++)
                     {
                         JsonProperty attribute = attributes.Value.Properties[attributeIndex];
                         if (!IsIdentifier(attribute.Name) || attribute.Value.Kind != JsonKind.String)
-                            diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Markup attributes require identifier names and string values.", source, attribute.Value.Span);
+                            diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Markup attributes require identifier names and string values.", source, attribute.Value.Span);
                         else compiledAttributes[attribute.Name] = attribute.Value.Text!;
                     }
                 }
@@ -724,16 +724,16 @@ public static class TextResourceCompiler
             ValidateKnownMembers(item, PatternFormatMembers, source, diagnostics);
             if (format!.Value.Kind != JsonKind.Object)
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A format expression must be an object.", source, format.Value.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "A format expression must be an object.", source, format.Value.Span);
                 continue;
             }
             JsonValue expression = format.Value;
             ValidateKnownMembers(expression, FormatExpressionMembers, source, diagnostics);
             JsonProperty? expressionInput = Required(expression, "input", JsonKind.String, source, diagnostics);
             JsonProperty? function = Required(expression, "function", JsonKind.String, source, diagnostics);
-            if (expressionInput is null || function is null || !inputTypes.TryGetValue(expressionInput.Value.Text!, out TextResourceArgumentType inputType))
+            if (expressionInput is null || function is null || !inputTypes.TryGetValue(expressionInput.Value.Text!, out TranslationArgumentType inputType))
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Format input is not declared.", source, expression.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Format input is not declared.", source, expression.Span);
                 continue;
             }
             CompiledMessageFormat? compiledFormat = CompileFormatExpression(
@@ -745,13 +745,13 @@ public static class TextResourceCompiler
     }
 
     private static Dictionary<string, CompiledMessageFormat> ReadDeclarations(JsonProperty? property,
-        Dictionary<string, TextResourceArgumentType> inputTypes, TextResourceSource source, DiagnosticBag diagnostics)
+        Dictionary<string, TranslationArgumentType> inputTypes, TranslationSource source, DiagnosticBag diagnostics)
     {
         var result = new Dictionary<string, CompiledMessageFormat>(StringComparer.Ordinal);
         if (property is null) return result;
         if (property.Value.Kind != JsonKind.Array)
         {
-            diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Declarations must be an array.", source, property.Value.Span);
+            diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Declarations must be an array.", source, property.Value.Span);
             return result;
         }
         for (int index = 0; index < property.Value.Items.Count; index++)
@@ -759,7 +759,7 @@ public static class TextResourceCompiler
             JsonValue declaration = property.Value.Items[index];
             if (declaration.Kind != JsonKind.Object)
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "A declaration must be an object.", source, declaration.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "A declaration must be an object.", source, declaration.Span);
                 continue;
             }
             ValidateKnownMembers(declaration, DeclarationMembers, source, diagnostics);
@@ -769,12 +769,12 @@ public static class TextResourceCompiler
             if (name is null || input is null || function is null) continue;
             if (!IsIdentifier(name.Value.Text!) || result.ContainsKey(name.Value.Text!))
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Declaration names must be unique identifiers.", source, name.Value.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Declaration names must be unique identifiers.", source, name.Value.Span);
                 continue;
             }
-            if (!inputTypes.TryGetValue(input.Value.Text!, out TextResourceArgumentType inputType))
+            if (!inputTypes.TryGetValue(input.Value.Text!, out TranslationArgumentType inputType))
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Declaration input is not declared.", source, input.Value.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Declaration input is not declared.", source, input.Value.Span);
                 continue;
             }
             CompiledMessageFormat? compiled = CompileFormatExpression(declaration, input.Value.Text!, function.Value.Text!, inputType, source, diagnostics);
@@ -784,14 +784,14 @@ public static class TextResourceCompiler
     }
 
     private static CompiledMessageFormat? CompileFormatExpression(JsonValue expression, string input, string functionName,
-        TextResourceArgumentType inputType, TextResourceSource source, DiagnosticBag diagnostics)
+        TranslationArgumentType inputType, TranslationSource source, DiagnosticBag diagnostics)
     {
         foreach (string optionName in new[] { "format", "unit", "numeric" })
         {
             JsonProperty? option = expression.Property(optionName);
             if (option is not null && option.Value.Kind != JsonKind.String)
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Format option '" + optionName + "' must be a string.", source, option.Value.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Format option '" + optionName + "' must be a string.", source, option.Value.Span);
                 return null;
             }
         }
@@ -800,69 +800,69 @@ public static class TextResourceCompiler
         {
             string? unit = expression.Property("unit")?.Value.Text;
             string numeric = expression.Property("numeric")?.Value.Text ?? "always";
-            if (inputType is not (TextResourceArgumentType.Int or TextResourceArgumentType.Number) ||
+            if (inputType is not (TranslationArgumentType.Int or TranslationArgumentType.Number) ||
                 unit is not ("second" or "minute" or "hour" or "day" or "week" or "month" or "year") ||
                 numeric is not ("always" or "auto"))
             {
-                diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Relative-time format requires a numeric input, valid unit, and numeric mode.", source, expression.Span);
+                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Relative-time format requires a numeric input, valid unit, and numeric mode.", source, expression.Span);
                 return null;
             }
             return new CompiledMessageFormat(input, functionName, "plain", unit, numeric);
         }
         if (!FunctionMatches(functionName, inputType) || !IsAllowedFormat(inputType, formatName))
         {
-            diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Format function or format is incompatible with its input.", source, expression.Span);
+            diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Format function or format is incompatible with its input.", source, expression.Span);
             return null;
         }
         return new CompiledMessageFormat(input, functionName, formatName, null, null);
     }
 
-    private static bool FunctionMatches(string function, TextResourceArgumentType type) => function switch
+    private static bool FunctionMatches(string function, TranslationArgumentType type) => function switch
     {
-        "string" => type == TextResourceArgumentType.String,
-        "integer" => type == TextResourceArgumentType.Int,
-        "number" => type == TextResourceArgumentType.Number,
-        "date" => type == TextResourceArgumentType.Date,
-        "time" => type == TextResourceArgumentType.Time,
-        "datetime" => type == TextResourceArgumentType.DateTime,
-        "uuid" => type == TextResourceArgumentType.Guid,
+        "string" => type == TranslationArgumentType.String,
+        "integer" => type == TranslationArgumentType.Int,
+        "number" => type == TranslationArgumentType.Number,
+        "date" => type == TranslationArgumentType.Date,
+        "time" => type == TranslationArgumentType.Time,
+        "datetime" => type == TranslationArgumentType.DateTime,
+        "uuid" => type == TranslationArgumentType.Guid,
         _ => false,
     };
 
-    private static string DefaultFormat(TextResourceArgumentType type) => type switch
+    private static string DefaultFormat(TranslationArgumentType type) => type switch
     {
-        TextResourceArgumentType.String => "none",
-        TextResourceArgumentType.Int or TextResourceArgumentType.Number => "plain",
-        TextResourceArgumentType.Boolean => "lower",
-        TextResourceArgumentType.Date or TextResourceArgumentType.Time or TextResourceArgumentType.DateTime => "iso",
-        TextResourceArgumentType.Guid => "d",
+        TranslationArgumentType.String => "none",
+        TranslationArgumentType.Int or TranslationArgumentType.Number => "plain",
+        TranslationArgumentType.Boolean => "lower",
+        TranslationArgumentType.Date or TranslationArgumentType.Time or TranslationArgumentType.DateTime => "iso",
+        TranslationArgumentType.Guid => "d",
         _ => "none",
     };
 
-    private static PlaceholderModel[] ReadPortableInputs(JsonValue value, TextResourceSource source, DiagnosticBag diagnostics, TextResourceCompilerOptions options)
+    private static PlaceholderModel[] ReadPortableInputs(JsonValue value, TranslationSource source, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
         if (value.Properties.Count > options.MaximumPlaceholdersPerValue)
-            diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error, "Input count exceeds the configured limit.", source, value.Span);
+            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Input count exceeds the configured limit.", source, value.Span);
         var result = new List<PlaceholderModel>();
         for (int index = 0; index < value.Properties.Count; index++)
         {
             JsonProperty input = value.Properties[index];
-            if (!IsIdentifier(input.Name) || input.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Invalid input declaration.", source, input.Value.Span); continue; }
+            if (!IsIdentifier(input.Name) || input.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Invalid input declaration.", source, input.Value.Span); continue; }
             ValidateKnownMembers(input.Value, PlaceholderMembers, source, diagnostics);
             JsonProperty? type = Required(input.Value, "type", JsonKind.String, source, diagnostics);
             JsonProperty? format = input.Value.Property("format");
-            if (type is null || !TryPortableArgumentType(type.Value.Text!, out TextResourceArgumentType argumentType, out string defaultFormat))
-            { diagnostics.Add("RTR0030", TextResourceDiagnosticSeverity.Error, "Unknown portable input type.", source, type?.Value.Span ?? input.Value.Span); continue; }
+            if (type is null || !TryPortableArgumentType(type.Value.Text!, out TranslationArgumentType argumentType, out string defaultFormat))
+            { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Unknown portable input type.", source, type?.Value.Span ?? input.Value.Span); continue; }
             string selected = format?.Value.Text ?? defaultFormat;
             if (format is not null && (format.Value.Kind != JsonKind.String || !IsAllowedFormat(argumentType, selected)))
-            { diagnostics.Add("RTR0017", TextResourceDiagnosticSeverity.Error, "Invalid portable input format.", source, format.Value.Span); selected = defaultFormat; }
+            { diagnostics.Add("RTR0017", TranslationDiagnosticSeverity.Error, "Invalid portable input format.", source, format.Value.Span); selected = defaultFormat; }
             result.Add(new PlaceholderModel(input.Name, argumentType, selected, input.NameSpan, type.Value.Span, format?.Value.Span ?? type.Value.Span));
         }
         result.Sort((left, right) => StringComparer.Ordinal.Compare(left.Name, right.Name));
         return result.ToArray();
     }
 
-    private static bool TryPortableArgumentType(string value, out TextResourceArgumentType type, out string format)
+    private static bool TryPortableArgumentType(string value, out TranslationArgumentType type, out string format)
     {
         string mapped = value switch { "int64" => "int", "decimal" => "number", "instant" => "datetime", "uuid" => "guid", _ => value };
         return TryArgumentType(mapped, out type, out format);
@@ -886,11 +886,11 @@ public static class TextResourceCompiler
         }
     }
 
-    private static void AddLeaf(DocumentModel document, DiagnosticBag diagnostics, TextResourceCompilerOptions options, string key, ByteSpan keySpan, ByteSpan pathSpan, ByteSpan valueSpan,
+    private static void AddLeaf(DocumentModel document, DiagnosticBag diagnostics, TranslationCompilerOptions options, string key, ByteSpan keySpan, ByteSpan pathSpan, ByteSpan valueSpan,
         string pattern, string? description, string? since, string? deprecated, string[] tags, PlaceholderModel[] placeholders)
     {
         if (StrictJsonParser.StrictUtf8.GetByteCount(pattern) > options.MaximumValueBytes)
-            diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error, "Resource value exceeds the configured byte limit.", document.Source, valueSpan);
+            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Resource value exceeds the configured byte limit.", document.Source, valueSpan);
         CompiledMessagePattern? message = MessagePatternCompiler.Compile(
             pattern,
             document.Source,
@@ -902,9 +902,9 @@ public static class TextResourceCompiler
             var declared = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < placeholders.Length; i++) declared.Add(placeholders[i].Name);
             foreach (string name in Sorted(patternNames))
-                if (!declared.Contains(name)) diagnostics.Add("RTR0015", TextResourceDiagnosticSeverity.Error, "Placeholder '" + name + "' is used but not declared.", document.Source, valueSpan);
+                if (!declared.Contains(name)) diagnostics.Add("RTR0015", TranslationDiagnosticSeverity.Error, "Placeholder '" + name + "' is used but not declared.", document.Source, valueSpan);
             for (int i = 0; i < placeholders.Length; i++)
-                if (!patternNames.Contains(placeholders[i].Name)) diagnostics.Add("RTR0015", TextResourceDiagnosticSeverity.Error, "Placeholder '" + placeholders[i].Name + "' is declared but not used.", document.Source, placeholders[i].Span);
+                if (!patternNames.Contains(placeholders[i].Name)) diagnostics.Add("RTR0015", TranslationDiagnosticSeverity.Error, "Placeholder '" + placeholders[i].Name + "' is declared but not used.", document.Source, placeholders[i].Span);
         }
         // Keep the invalid leaf in the semantic model so the existing diagnostic
         // pipeline does not manufacture secondary "missing canonical key" errors.
@@ -913,26 +913,26 @@ public static class TextResourceCompiler
         document.Resources.Add(new ResourceModel(key, pattern, message, description, since, deprecated, tags, placeholders, document.Source, keySpan, pathSpan, valueSpan));
     }
 
-    private static PlaceholderModel[] ReadPlaceholders(JsonProperty? property, TextResourceSource source, DiagnosticBag diagnostics, TextResourceCompilerOptions options)
+    private static PlaceholderModel[] ReadPlaceholders(JsonProperty? property, TranslationSource source, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
         if (property is null) return Array.Empty<PlaceholderModel>();
-        if (property.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0015", TextResourceDiagnosticSeverity.Error, "$placeholders must be an object.", source, property.Value.Span); return Array.Empty<PlaceholderModel>(); }
+        if (property.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0015", TranslationDiagnosticSeverity.Error, "$placeholders must be an object.", source, property.Value.Span); return Array.Empty<PlaceholderModel>(); }
         if (property.Value.Properties.Count > options.MaximumPlaceholdersPerValue)
-            diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error, "Placeholder count exceeds the configured limit.", source, property.Value.Span);
+            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Placeholder count exceeds the configured limit.", source, property.Value.Span);
         var result = new List<PlaceholderModel>();
         for (int i = 0; i < property.Value.Properties.Count; i++)
         {
             JsonProperty descriptor = property.Value.Properties[i];
-            if (!IsIdentifier(descriptor.Name)) { diagnostics.Add("RTR0015", TextResourceDiagnosticSeverity.Error, "Invalid placeholder name '" + descriptor.Name + "'.", source, descriptor.NameSpan); continue; }
-            if (descriptor.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0017", TextResourceDiagnosticSeverity.Error, "Placeholder descriptor must be an object.", source, descriptor.Value.Span); continue; }
+            if (!IsIdentifier(descriptor.Name)) { diagnostics.Add("RTR0015", TranslationDiagnosticSeverity.Error, "Invalid placeholder name '" + descriptor.Name + "'.", source, descriptor.NameSpan); continue; }
+            if (descriptor.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0017", TranslationDiagnosticSeverity.Error, "Placeholder descriptor must be an object.", source, descriptor.Value.Span); continue; }
             ValidateKnownMembers(descriptor.Value, PlaceholderMembers, source, diagnostics);
             JsonProperty? type = Required(descriptor.Value, "type", JsonKind.String, source, diagnostics);
             JsonProperty? format = descriptor.Value.Property("format");
             if (type is null) continue;
-            if (!TryArgumentType(type.Value.Text!, out TextResourceArgumentType argumentType, out string defaultFormat))
+            if (!TryArgumentType(type.Value.Text!, out TranslationArgumentType argumentType, out string defaultFormat))
             {
-                diagnostics.Add("RTR0017", TextResourceDiagnosticSeverity.Error, "Unknown placeholder type '" + type.Value.Text + "'.", source, type.Value.Span);
-                result.Add(new PlaceholderModel(descriptor.Name, TextResourceArgumentType.String, "none", descriptor.NameSpan, type.Value.Span, type.Value.Span));
+                diagnostics.Add("RTR0017", TranslationDiagnosticSeverity.Error, "Unknown placeholder type '" + type.Value.Text + "'.", source, type.Value.Span);
+                result.Add(new PlaceholderModel(descriptor.Name, TranslationArgumentType.String, "none", descriptor.NameSpan, type.Value.Span, type.Value.Span));
                 continue;
             }
             string selectedFormat = defaultFormat;
@@ -940,7 +940,7 @@ public static class TextResourceCompiler
             {
                 if (format.Value.Kind != JsonKind.String || !IsAllowedFormat(argumentType, format.Value.Text!))
                 {
-                    diagnostics.Add("RTR0017", TextResourceDiagnosticSeverity.Error, "Invalid format for placeholder type '" + type.Value.Text + "'.", source, format.Value.Span);
+                    diagnostics.Add("RTR0017", TranslationDiagnosticSeverity.Error, "Invalid format for placeholder type '" + type.Value.Text + "'.", source, format.Value.Span);
                     result.Add(new PlaceholderModel(descriptor.Name, argumentType, defaultFormat, descriptor.NameSpan, type.Value.Span, format.Value.Span));
                     continue;
                 }
@@ -953,7 +953,7 @@ public static class TextResourceCompiler
         return result.ToArray();
     }
 
-    private static CompiledTextCatalog? CompileCatalog(ManifestModel manifest, List<DocumentModel> documents, DiagnosticBag diagnostics, TextResourceCompilerOptions options, CancellationToken cancellationToken)
+    private static CompiledTextCatalog? CompileCatalog(ManifestModel manifest, List<DocumentModel> documents, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var localeMap = new Dictionary<string, LocaleModel>(StringComparer.OrdinalIgnoreCase);
@@ -969,27 +969,27 @@ public static class TextResourceCompiler
             DocumentModel document = documents[i];
             if (document.SchemaVersion != manifest.SchemaVersion)
             {
-                diagnostics.Add("RTR0003", TextResourceDiagnosticSeverity.Error,
+                diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error,
                     "Resource document schemaVersion must match its catalog manifest.", document.Source, document.CatalogSpan);
                 continue;
             }
-            if (!localeMap.ContainsKey(document.Locale)) { diagnostics.Add("RTR0004", TextResourceDiagnosticSeverity.Error, "Document locale '" + document.Locale + "' is not declared.", document.Source, document.LocaleSpan); continue; }
-            if (!layerMap.ContainsKey(document.Layer)) { diagnostics.Add("RTR0005", TextResourceDiagnosticSeverity.Error, "Document layer '" + document.Layer + "' is not declared.", document.Source, document.LayerSpan); continue; }
+            if (!localeMap.ContainsKey(document.Locale)) { diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Document locale '" + document.Locale + "' is not declared.", document.Source, document.LocaleSpan); continue; }
+            if (!layerMap.ContainsKey(document.Layer)) { diagnostics.Add("RTR0005", TranslationDiagnosticSeverity.Error, "Document layer '" + document.Layer + "' is not declared.", document.Source, document.LayerSpan); continue; }
             if (!buckets.TryGetValue(document.Locale, out Dictionary<string, Dictionary<string, ResourceModel>>? byLayer)) { byLayer = new Dictionary<string, Dictionary<string, ResourceModel>>(StringComparer.Ordinal); buckets.Add(document.Locale, byLayer); }
             if (!byLayer.TryGetValue(document.Layer, out Dictionary<string, ResourceModel>? resources)) { resources = new Dictionary<string, ResourceModel>(StringComparer.Ordinal); byLayer.Add(document.Layer, resources); }
             for (int r = 0; r < document.Resources.Count; r++)
             {
                 ResourceModel resource = document.Resources[r];
-                if (!resources.TryAdd(resource.Key, resource)) diagnostics.Add("RTR0007", TextResourceDiagnosticSeverity.Error, "Duplicate key '" + resource.Key + "' in locale '" + document.Locale + "' and layer '" + document.Layer + "'.", resource.Source, resource.KeySpan);
+                if (!resources.TryAdd(resource.Key, resource)) diagnostics.Add("RTR0007", TranslationDiagnosticSeverity.Error, "Duplicate key '" + resource.Key + "' in locale '" + document.Locale + "' and layer '" + document.Layer + "'.", resource.Source, resource.KeySpan);
                 foreach (KeyValuePair<string, ResourceModel> existing in allPathKinds)
                     if (IsPathPrefix(existing.Key, resource.Key) || IsPathPrefix(resource.Key, existing.Key))
-                    { diagnostics.Add("RTR0008", TextResourceDiagnosticSeverity.Error, "Resource path '" + resource.Key + "' conflicts with leaf '" + existing.Key + "'.", resource.Source, resource.PathSpan); break; }
+                    { diagnostics.Add("RTR0008", TranslationDiagnosticSeverity.Error, "Resource path '" + resource.Key + "' conflicts with leaf '" + existing.Key + "'.", resource.Source, resource.PathSpan); break; }
                 allPathKinds.TryAdd(resource.Key, resource);
                 ValidateIdentifierCollision(manifest, resource, diagnostics);
             }
         }
         if (allPathKinds.Count > options.MaximumKeysPerCatalog)
-            diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error, "Catalog key count exceeds the configured limit.", manifest.Source, manifest.IdSpan);
+            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Catalog key count exceeds the configured limit.", manifest.Source, manifest.IdSpan);
         ValidateGeneratedTreeCollisions(manifest, allPathKinds, diagnostics);
 
         var directByLocale = new Dictionary<string, Dictionary<string, ResourceModel>>(StringComparer.OrdinalIgnoreCase);
@@ -1016,7 +1016,7 @@ public static class TextResourceCompiler
                 if (string.Equals(documents[i].Locale, manifest.DefaultLocale, StringComparison.OrdinalIgnoreCase) && documents[i].HadLimitError)
                     defaultDocumentHadLimitError = true;
             if (!defaultDocumentHadLimitError)
-                diagnostics.Add("RTR0009", TextResourceDiagnosticSeverity.Error, "The effective default locale defines no canonical keys.", manifest.Source, manifest.DefaultLocaleSpan);
+                diagnostics.Add("RTR0009", TranslationDiagnosticSeverity.Error, "The effective default locale defines no canonical keys.", manifest.Source, manifest.DefaultLocaleSpan);
             return null;
         }
         string[] canonicalKeys = Keys(canonical);
@@ -1030,14 +1030,14 @@ public static class TextResourceCompiler
             foreach (KeyValuePair<string, ResourceModel> pair in SortedPairs(canonical))
             {
                 if (ContainsRelativeTime(pair.Value.Message) && !SupportsRelativeTime(locale.Tag))
-                    diagnostics.Add("RTR0031", TextResourceDiagnosticSeverity.Error,
+                    diagnostics.Add("RTR0031", TranslationDiagnosticSeverity.Error,
                         "The built-in relative-time registry does not support locale '" + locale.Tag + "'.",
                         pair.Value.Source, pair.Value.ValueSpan);
                 for (int selectorIndex = 0; selectorIndex < pair.Value.Message.Selectors.Count; selectorIndex++)
                 {
                     CompiledMessageSelector selector = pair.Value.Message.Selectors[selectorIndex];
                     if (selector.Function is "plural" or "ordinal" && !SupportsBuiltInPlural(locale.Tag, selector.Function == "ordinal"))
-                        diagnostics.Add("RTR0031", TextResourceDiagnosticSeverity.Error,
+                        diagnostics.Add("RTR0031", TranslationDiagnosticSeverity.Error,
                             "The built-in plural registry does not support locale '" + locale.Tag + "' for selector '" + selector.Name + "'.",
                             pair.Value.Source, pair.Value.ValueSpan);
                 }
@@ -1052,7 +1052,7 @@ public static class TextResourceCompiler
                     if (!canonical.ContainsKey(pair.Key)) AddPolicyDiagnostic("RTR0011", manifest.ExtraKeys, "Locale '" + locale.Tag + "' defines non-canonical key '" + pair.Key + "'.", pair.Value.Source, pair.Value.KeySpan, diagnostics);
                 foreach (KeyValuePair<string, ResourceModel> pair in SortedPairs(direct))
                     if (canonical.TryGetValue(pair.Key, out ResourceModel? defaultResource) && !SameContract(defaultResource, pair.Value, out ByteSpan mismatchSpan))
-                        diagnostics.Add("RTR0016", TextResourceDiagnosticSeverity.Error, "Translation placeholder contract for key '" + pair.Key + "' differs from the default locale.", pair.Value.Source, mismatchSpan);
+                        diagnostics.Add("RTR0016", TranslationDiagnosticSeverity.Error, "Translation placeholder contract for key '" + pair.Key + "' differs from the default locale.", pair.Value.Source, mismatchSpan);
             }
             foreach (KeyValuePair<string, ResourceModel> pair in SortedPairs(direct))
                 if (pair.Value.Pattern.Length == 0) AddPolicyDiagnostic("RTR0021", manifest.EmptyValues, "Resource '" + pair.Key + "' has an empty value.", pair.Value.Source, pair.Value.ValueSpan, diagnostics);
@@ -1080,7 +1080,7 @@ public static class TextResourceCompiler
             compiledLocales.Add(new CompiledTextLocale(locale.Tag, locale.Fallback,
                 CompileResources(direct, ids), CompileResources(resolved, ids)));
         }
-        IReadOnlyList<CompiledTextResource> canonicalResources = CompileResources(canonical, ids);
+        IReadOnlyList<CompiledTranslation> canonicalResources = CompileResources(canonical, ids);
         string fingerprint = Fingerprint(manifest.Id, manifest.SchemaVersion, canonicalResources);
         var layers = new List<CompiledTextLayer>();
         for (int i = 0; i < manifest.Layers.Count; i++) layers.Add(new CompiledTextLayer(manifest.Layers[i].Name, manifest.Layers[i].Priority));
@@ -1089,15 +1089,15 @@ public static class TextResourceCompiler
             manifest.SchemaVersion, manifest.SchemaVersion);
     }
 
-    private static CompiledTextResource[] CompileResources(Dictionary<string, ResourceModel> resources, Dictionary<string, int> ids)
+    private static CompiledTranslation[] CompileResources(Dictionary<string, ResourceModel> resources, Dictionary<string, int> ids)
     {
-        var result = new List<CompiledTextResource>();
+        var result = new List<CompiledTranslation>();
         foreach (KeyValuePair<string, ResourceModel> pair in SortedPairs(resources))
         {
             ResourceModel resource = pair.Value;
             var placeholders = new List<CompiledTextPlaceholder>();
             for (int i = 0; i < resource.Placeholders.Length; i++) placeholders.Add(new CompiledTextPlaceholder(resource.Placeholders[i].Name, resource.Placeholders[i].Type, resource.Placeholders[i].Format));
-            result.Add(new CompiledTextResource(ids.TryGetValue(pair.Key, out int id) ? id : -1, pair.Key, resource.Pattern, resource.Description,
+            result.Add(new CompiledTranslation(ids.TryGetValue(pair.Key, out int id) ? id : -1, pair.Key, resource.Pattern, resource.Description,
                 resource.Since, resource.DeprecatedReason, (string[])resource.Tags.Clone(), placeholders.ToArray(), DiagnosticBag.Location(resource.Source, resource.KeySpan), resource.Message));
         }
         return result.ToArray();
@@ -1130,7 +1130,7 @@ public static class TextResourceCompiler
         }
     }
 
-    private static string Fingerprint(string catalog, int messageGrammarVersion, IReadOnlyList<CompiledTextResource> resources)
+    private static string Fingerprint(string catalog, int messageGrammarVersion, IReadOnlyList<CompiledTranslation> resources)
     {
         var builder = new StringBuilder();
         builder.Append("{\"catalog\":").Append(JsonQuote(catalog)).Append(",\"messageGrammarVersion\":")
@@ -1192,10 +1192,10 @@ public static class TextResourceCompiler
     {
         string[] segments = resource.Key.Split('.');
         if (segments.Length > 0 && string.Equals(segments[0], manifest.ClassName, StringComparison.Ordinal))
-            diagnostics.Add("RTR0018", TextResourceDiagnosticSeverity.Error, "Generated identifier '" + segments[0] + "' collides with enclosing class '" + manifest.ClassName + "'.", resource.Source, resource.KeySpan);
+            diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Generated identifier '" + segments[0] + "' collides with enclosing class '" + manifest.ClassName + "'.", resource.Source, resource.KeySpan);
         for (int i = 1; i < segments.Length; i++)
             if (string.Equals(segments[i], segments[i - 1], StringComparison.Ordinal))
-            { diagnostics.Add("RTR0018", TextResourceDiagnosticSeverity.Error, "Generated identifier '" + segments[i] + "' collides with its enclosing type.", resource.Source, resource.KeySpan); break; }
+            { diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Generated identifier '" + segments[i] + "' collides with its enclosing type.", resource.Source, resource.KeySpan); break; }
     }
 
     private static void ValidateGeneratedRootIdentities(
@@ -1226,7 +1226,7 @@ public static class TextResourceCompiler
             {
                 diagnostics.Add(
                     "RTR0018",
-                    TextResourceDiagnosticSeverity.Error,
+                    TranslationDiagnosticSeverity.Error,
                     "Generated type '" + manifest.CodeNamespace + "." + manifest.ClassName +
                     "' for catalog '" + manifest.Id + "' collides with catalog '" + first.Id +
                     "' declared in '" + first.Source.Path + "'.",
@@ -1243,7 +1243,7 @@ public static class TextResourceCompiler
             {
                 diagnostics.Add(
                     "RTR0018",
-                    TextResourceDiagnosticSeverity.Error,
+                    TranslationDiagnosticSeverity.Error,
                     "Generated hint stem '" + manifest.ClassName + "' for catalog '" + manifest.Id +
                     "' collides case-insensitively with stem '" + firstHint.ClassName + "' for catalog '" +
                     firstHint.Id + "' declared in '" + firstHint.Source.Path + "'.",
@@ -1295,7 +1295,7 @@ public static class TextResourceCompiler
             if (!reported.Add(path) || !representatives.TryGetValue(path, out ResourceModel? offender)) return;
             diagnostics.Add(
                 "RTR0018",
-                TextResourceDiagnosticSeverity.Error,
+                TranslationDiagnosticSeverity.Error,
                 "Generated identifier '" + identifier + "' collides with " + target + ".",
                 offender.Source,
                 offender.KeySpan);
@@ -1326,7 +1326,7 @@ public static class TextResourceCompiler
                 {
                     diagnostics.Add(
                         "RTR0016",
-                        TextResourceDiagnosticSeverity.Error,
+                        TranslationDiagnosticSeverity.Error,
                         "Placeholder contract for allowed extra key '" + pair.Key + "' differs between locales.",
                         pair.Value.Source,
                         mismatchSpan);
@@ -1335,10 +1335,10 @@ public static class TextResourceCompiler
         }
     }
 
-    private static void AddPolicyDiagnostic(string id, TextResourcePolicy policy, string message, TextResourceSource source, ByteSpan span, DiagnosticBag diagnostics)
+    private static void AddPolicyDiagnostic(string id, TranslationPolicy policy, string message, TranslationSource source, ByteSpan span, DiagnosticBag diagnostics)
     {
-        if (policy == TextResourcePolicy.Allow) return;
-        diagnostics.Add(id, policy == TextResourcePolicy.Warning ? TextResourceDiagnosticSeverity.Warning : TextResourceDiagnosticSeverity.Error, message, source, span);
+        if (policy == TranslationPolicy.Allow) return;
+        diagnostics.Add(id, policy == TranslationPolicy.Warning ? TranslationDiagnosticSeverity.Warning : TranslationDiagnosticSeverity.Error, message, source, span);
     }
 
     private static bool SameContract(ResourceModel left, ResourceModel right, out ByteSpan mismatchSpan)
@@ -1363,23 +1363,23 @@ public static class TextResourceCompiler
         return true;
     }
 
-    private static string? ReadOptionalString(JsonProperty? property, TextResourceSource source, DiagnosticBag diagnostics)
+    private static string? ReadOptionalString(JsonProperty? property, TranslationSource source, DiagnosticBag diagnostics)
     {
         if (property is null) return null;
-        if (property.Value.Kind != JsonKind.String) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Leaf metadata value must be a string.", source, property.Value.Span); return null; }
+        if (property.Value.Kind != JsonKind.String) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Leaf metadata value must be a string.", source, property.Value.Span); return null; }
         return property.Value.Text;
     }
 
-    private static string[] ReadTags(JsonProperty? property, TextResourceSource source, DiagnosticBag diagnostics)
+    private static string[] ReadTags(JsonProperty? property, TranslationSource source, DiagnosticBag diagnostics)
     {
         if (property is null) return Array.Empty<string>();
-        if (property.Value.Kind != JsonKind.Array) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "$tags must be an array.", source, property.Value.Span); return Array.Empty<string>(); }
+        if (property.Value.Kind != JsonKind.Array) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "$tags must be an array.", source, property.Value.Span); return Array.Empty<string>(); }
         var tags = new List<string>(); var seen = new HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < property.Value.Items.Count; i++)
         {
             JsonValue item = property.Value.Items[i];
-            if (item.Kind != JsonKind.String || item.Text!.Length == 0) diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Tags must be non-empty strings.", source, item.Span);
-            else if (!seen.Add(item.Text)) diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Duplicate tag '" + item.Text + "'.", source, item.Span);
+            if (item.Kind != JsonKind.String || item.Text!.Length == 0) diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Tags must be non-empty strings.", source, item.Span);
+            else if (!seen.Add(item.Text)) diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Duplicate tag '" + item.Text + "'.", source, item.Span);
             else tags.Add(item.Text);
         }
         tags.Sort(StringComparer.Ordinal); return tags.ToArray();
@@ -1391,21 +1391,21 @@ public static class TextResourceCompiler
         return false;
     }
 
-    private static JsonProperty? Required(JsonValue parent, string name, JsonKind kind, TextResourceSource source, DiagnosticBag diagnostics)
+    private static JsonProperty? Required(JsonValue parent, string name, JsonKind kind, TranslationSource source, DiagnosticBag diagnostics)
     {
         JsonProperty? property = parent.Property(name);
-        if (property is null) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Missing required member '" + name + "'.", source, parent.Span); return null; }
-        if (property.Value.Kind != kind) { diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Member '" + name + "' has an invalid value kind.", source, property.Value.Span); return null; }
+        if (property is null) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Missing required member '" + name + "'.", source, parent.Span); return null; }
+        if (property.Value.Kind != kind) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Member '" + name + "' has an invalid value kind.", source, property.Value.Span); return null; }
         return property;
     }
 
-    private static void ValidateKnownMembers(JsonValue value, string[] allowed, TextResourceSource source, DiagnosticBag diagnostics)
+    private static void ValidateKnownMembers(JsonValue value, string[] allowed, TranslationSource source, DiagnosticBag diagnostics)
     {
         for (int i = 0; i < value.Properties.Count; i++)
         {
             bool found = false;
             for (int a = 0; a < allowed.Length; a++) if (value.Properties[i].Name == allowed[a]) { found = true; break; }
-            if (!found) diagnostics.Add("RTR0019", TextResourceDiagnosticSeverity.Error, "Unknown or misplaced member '" + value.Properties[i].Name + "'.", source, value.Properties[i].NameSpan);
+            if (!found) diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Unknown or misplaced member '" + value.Properties[i].Name + "'.", source, value.Properties[i].NameSpan);
         }
     }
 
@@ -1467,53 +1467,53 @@ public static class TextResourceCompiler
     private static bool AllDigits(string value) { for (int i = 0; i < value.Length; i++) if (value[i] < '0' || value[i] > '9') return false; return true; }
     private static bool AllAlphaNumeric(string value) { for (int i = 0; i < value.Length; i++) if (!((value[i] >= 'A' && value[i] <= 'Z') || (value[i] >= 'a' && value[i] <= 'z') || (value[i] >= '0' && value[i] <= '9'))) return false; return true; }
 
-    private static bool TryArgumentType(string value, out TextResourceArgumentType type, out string format)
+    private static bool TryArgumentType(string value, out TranslationArgumentType type, out string format)
     {
         switch (value)
         {
-            case "string": type = TextResourceArgumentType.String; format = "none"; return true;
-            case "int": type = TextResourceArgumentType.Int; format = "plain"; return true;
-            case "number": type = TextResourceArgumentType.Number; format = "plain"; return true;
-            case "bool": type = TextResourceArgumentType.Boolean; format = "lower"; return true;
-            case "date": type = TextResourceArgumentType.Date; format = "medium"; return true;
-            case "time": type = TextResourceArgumentType.Time; format = "short"; return true;
-            case "datetime": type = TextResourceArgumentType.DateTime; format = "medium"; return true;
-            case "guid": type = TextResourceArgumentType.Guid; format = "d"; return true;
-            default: type = TextResourceArgumentType.String; format = "none"; return false;
+            case "string": type = TranslationArgumentType.String; format = "none"; return true;
+            case "int": type = TranslationArgumentType.Int; format = "plain"; return true;
+            case "number": type = TranslationArgumentType.Number; format = "plain"; return true;
+            case "bool": type = TranslationArgumentType.Boolean; format = "lower"; return true;
+            case "date": type = TranslationArgumentType.Date; format = "medium"; return true;
+            case "time": type = TranslationArgumentType.Time; format = "short"; return true;
+            case "datetime": type = TranslationArgumentType.DateTime; format = "medium"; return true;
+            case "guid": type = TranslationArgumentType.Guid; format = "d"; return true;
+            default: type = TranslationArgumentType.String; format = "none"; return false;
         }
     }
 
-    private static bool IsAllowedFormat(TextResourceArgumentType type, string format)
+    private static bool IsAllowedFormat(TranslationArgumentType type, string format)
     {
         switch (type)
         {
-            case TextResourceArgumentType.String: return format == "none";
-            case TextResourceArgumentType.Int: return format == "plain" || format == "grouped";
-            case TextResourceArgumentType.Number:
+            case TranslationArgumentType.String: return format == "none";
+            case TranslationArgumentType.Int: return format == "plain" || format == "grouped";
+            case TranslationArgumentType.Number:
                 if (format == "plain" || format == "grouped") return true;
                 if (format.StartsWith("fixed", StringComparison.Ordinal) && format.Length == 6) return format[5] >= '0' && format[5] <= '6';
                 return format.StartsWith("percent", StringComparison.Ordinal) && format.Length == 8 && format[7] >= '0' && format[7] <= '4';
-            case TextResourceArgumentType.Boolean: return format == "lower";
-            case TextResourceArgumentType.Date: return format == "iso" || format == "short" || format == "medium" || format == "long";
-            case TextResourceArgumentType.Time: return format == "iso" || format == "short" || format == "medium";
-            case TextResourceArgumentType.DateTime: return format == "iso" || format == "short" || format == "medium" || format == "long";
-            case TextResourceArgumentType.Guid: return format == "d" || format == "n";
+            case TranslationArgumentType.Boolean: return format == "lower";
+            case TranslationArgumentType.Date: return format == "iso" || format == "short" || format == "medium" || format == "long";
+            case TranslationArgumentType.Time: return format == "iso" || format == "short" || format == "medium";
+            case TranslationArgumentType.DateTime: return format == "iso" || format == "short" || format == "medium" || format == "long";
+            case TranslationArgumentType.Guid: return format == "d" || format == "n";
             default: return false;
         }
     }
 
-    private static string ArgumentTypeName(TextResourceArgumentType type)
+    private static string ArgumentTypeName(TranslationArgumentType type)
     {
         switch (type)
         {
-            case TextResourceArgumentType.String: return "string";
-            case TextResourceArgumentType.Int: return "int";
-            case TextResourceArgumentType.Number: return "number";
-            case TextResourceArgumentType.Boolean: return "bool";
-            case TextResourceArgumentType.Date: return "date";
-            case TextResourceArgumentType.Time: return "time";
-            case TextResourceArgumentType.DateTime: return "datetime";
-            case TextResourceArgumentType.Guid: return "guid";
+            case TranslationArgumentType.String: return "string";
+            case TranslationArgumentType.Int: return "int";
+            case TranslationArgumentType.Number: return "number";
+            case TranslationArgumentType.Boolean: return "bool";
+            case TranslationArgumentType.Date: return "date";
+            case TranslationArgumentType.Time: return "time";
+            case TranslationArgumentType.DateTime: return "datetime";
+            case TranslationArgumentType.Guid: return "guid";
             default: throw new ArgumentOutOfRangeException(nameof(type));
         }
     }

@@ -21,8 +21,8 @@ internal static class EsmGenerationTests
     private static void DeterministicManifest()
     {
         CompilerModel.CompiledTextCatalog catalog = Catalog();
-        IReadOnlyList<TextResourceGeneratedOutput> first = TextResourceOutputRenderer.RenderEsmModules(catalog);
-        IReadOnlyList<TextResourceGeneratedOutput> second = TextResourceOutputRenderer.RenderEsmModules(catalog);
+        IReadOnlyList<TranslationGeneratedOutput> first = TranslationOutputRenderer.RenderEsmModules(catalog);
+        IReadOnlyList<TranslationGeneratedOutput> second = TranslationOutputRenderer.RenderEsmModules(catalog);
 
         Assert.Equal(12, first.Count);
         Assert.Equal(string.Join('|', first.Select(output => output.RelativePath)), string.Join('|', second.Select(output => output.RelativePath)));
@@ -32,26 +32,26 @@ internal static class EsmGenerationTests
             Assert.True(first[index].GetUtf8Bytes().AsSpan().SequenceEqual(second[index].GetUtf8Bytes()), first[index].RelativePath);
         }
 
-        TextResourceGeneratedOutput manifest = first.Single(output => output.Kind == TextResourceGeneratedOutputKind.WebModuleManifestJson);
+        TranslationGeneratedOutput manifest = first.Single(output => output.Kind == TranslationGeneratedOutputKind.WebModuleManifestJson);
         using JsonDocument json = JsonDocument.Parse(manifest.GetUtf8Bytes());
         JsonElement root = json.RootElement;
         Assert.Equal(1, root.GetProperty("webModuleManifestVersion").GetInt32());
-        Assert.Equal(TextResourceOutputRenderer.EsmAbiVersion, root.GetProperty("esmAbiVersion").GetInt32());
+        Assert.Equal(TranslationOutputRenderer.EsmAbiVersion, root.GetProperty("esmAbiVersion").GetInt32());
         Assert.Equal(first.Count - 1, root.GetProperty("assets").GetArrayLength());
 
-        TextResourceGeneratedOutput message = first.Single(output => output.RelativePath.EndsWith("m$Common$Hello.js", StringComparison.Ordinal));
+        TranslationGeneratedOutput message = first.Single(output => output.RelativePath.EndsWith("m$Common$Hello.js", StringComparison.Ordinal));
         Assert.True(!message.Text.Contains("{{open}}", StringComparison.Ordinal), "Escaped braces leaked past AST normalization.");
         Assert.True(message.Text.Contains("Literal {open}", StringComparison.Ordinal), "Normalized text node was not emitted.");
     }
 
     private static void ExecutesInNode()
     {
-        IReadOnlyList<TextResourceGeneratedOutput> outputs = TextResourceOutputRenderer.RenderEsmModules(Catalog());
+        IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderEsmModules(Catalog());
         string directory = Path.Combine(Path.GetTempPath(), "runic-esm-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
-            foreach (TextResourceGeneratedOutput output in outputs)
+            foreach (TranslationGeneratedOutput output in outputs)
             {
                 string path = Path.Combine(directory, output.RelativePath.Replace('/', Path.DirectorySeparatorChar));
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -174,7 +174,7 @@ internal static class EsmGenerationTests
             }
             """;
 
-        CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation compilation = CompilerModel.TranslationCompiler.Compile(
             [CompilerTests.Source("manifest.json", manifest)],
             [CompilerTests.Source("en.json", english), CompilerTests.Source("de.json", german)]);
         Assert.True(compilation.Success, CompilerTests.DiagnosticsText(compilation.Diagnostics));

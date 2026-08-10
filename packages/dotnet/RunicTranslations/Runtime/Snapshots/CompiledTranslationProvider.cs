@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 namespace RunicTranslations;
 
 /// <summary>Creates a fully composed snapshot for one resolved declared locale.</summary>
-public interface ITextResourceSnapshotFactory
+public interface ITranslationSnapshotFactory
 {
     /// <summary>Creates and validates one immutable snapshot.</summary>
-    ValueTask<ITextResourceSnapshot> CreateSnapshotAsync(
-        CompiledTextResourceCatalog catalog,
+    ValueTask<ITranslationSnapshot> CreateSnapshotAsync(
+        CompiledTranslationCatalog catalog,
         string canonicalLocale,
         ITextValueFormatter valueFormatter,
         CancellationToken cancellationToken);
@@ -19,19 +19,19 @@ public interface ITextResourceSnapshotFactory
 /// <summary>
 /// Resolves requested locales and coalesces concurrent snapshot creation per canonical locale.
 /// </summary>
-public sealed class CompiledTextResourceProvider : ITextResourceProvider
+public sealed class CompiledTranslationProvider : ITranslationProvider
 {
-    private readonly CompiledTextResourceCatalog _catalog;
+    private readonly CompiledTranslationCatalog _catalog;
     private readonly ITextValueFormatter _valueFormatter;
-    private readonly ITextResourceSnapshotFactory _snapshotFactory;
+    private readonly ITranslationSnapshotFactory _snapshotFactory;
     private readonly ConcurrentDictionary<string, LoadEntry> _snapshots =
         new(StringComparer.Ordinal);
 
     /// <summary>Creates a provider over immutable generated catalog data.</summary>
-    public CompiledTextResourceProvider(
-        CompiledTextResourceCatalog catalog,
+    public CompiledTranslationProvider(
+        CompiledTranslationCatalog catalog,
         ITextValueFormatter? valueFormatter = null,
-        ITextResourceSnapshotFactory? snapshotFactory = null)
+        ITranslationSnapshotFactory? snapshotFactory = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _valueFormatter = valueFormatter ?? DefaultTextValueFormatter.Shared;
@@ -39,7 +39,7 @@ public sealed class CompiledTextResourceProvider : ITextResourceProvider
     }
 
     /// <inheritdoc />
-    public ValueTask<ITextResourceSnapshot> GetSnapshotAsync(
+    public ValueTask<ITranslationSnapshot> GetSnapshotAsync(
         string requestedLocale,
         CancellationToken cancellationToken = default)
     {
@@ -57,22 +57,22 @@ public sealed class CompiledTextResourceProvider : ITextResourceProvider
 
             if (entry.TryAddWaiter())
             {
-                Task<ITextResourceSnapshot> task = entry.Task;
-                return new ValueTask<ITextResourceSnapshot>(WaitForCallerAsync(entry, task, cancellationToken));
+                Task<ITranslationSnapshot> task = entry.Task;
+                return new ValueTask<ITranslationSnapshot>(WaitForCallerAsync(entry, task, cancellationToken));
             }
 
             RemoveIfCurrent(canonicalLocale, entry);
         }
     }
 
-    private async Task<ITextResourceSnapshot> CreateSnapshotAsync(
+    private async Task<ITranslationSnapshot> CreateSnapshotAsync(
         LoadEntry entry,
         string canonicalLocale,
         CancellationToken cancellationToken)
     {
         try
         {
-            ITextResourceSnapshot snapshot = await _snapshotFactory.CreateSnapshotAsync(
+            ITranslationSnapshot snapshot = await _snapshotFactory.CreateSnapshotAsync(
                 _catalog,
                 canonicalLocale,
                 _valueFormatter,
@@ -99,9 +99,9 @@ public sealed class CompiledTextResourceProvider : ITextResourceProvider
         }
     }
 
-    private static async Task<ITextResourceSnapshot> WaitForCallerAsync(
+    private static async Task<ITranslationSnapshot> WaitForCallerAsync(
         LoadEntry entry,
-        Task<ITextResourceSnapshot> task,
+        Task<ITranslationSnapshot> task,
         CancellationToken cancellationToken)
     {
         try
@@ -124,21 +124,21 @@ public sealed class CompiledTextResourceProvider : ITextResourceProvider
 
     private sealed class LoadEntry : IDisposable
     {
-        private readonly Lazy<Task<ITextResourceSnapshot>> _task;
+        private readonly Lazy<Task<ITranslationSnapshot>> _task;
         private readonly CancellationTokenSource _loadCancellation = new();
-        private readonly CompiledTextResourceProvider _owner;
+        private readonly CompiledTranslationProvider _owner;
         private readonly string _canonicalLocale;
         private readonly object _gate = new();
         private bool _abandoned;
         private int _waiters;
 
         internal LoadEntry(
-            CompiledTextResourceProvider owner,
+            CompiledTranslationProvider owner,
             string canonicalLocale)
         {
             _owner = owner;
             _canonicalLocale = canonicalLocale;
-            _task = new Lazy<Task<ITextResourceSnapshot>>(
+            _task = new Lazy<Task<ITranslationSnapshot>>(
                 () => ObserveCompletion(owner.CreateSnapshotAsync(
                     this,
                     canonicalLocale,
@@ -146,7 +146,7 @@ public sealed class CompiledTextResourceProvider : ITextResourceProvider
                 LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
-        internal Task<ITextResourceSnapshot> Task => _task.Value;
+        internal Task<ITranslationSnapshot> Task => _task.Value;
 
         internal bool TryAddWaiter()
         {
@@ -162,7 +162,7 @@ public sealed class CompiledTextResourceProvider : ITextResourceProvider
             }
         }
 
-        internal void ReleaseWaiter(Task<ITextResourceSnapshot> task)
+        internal void ReleaseWaiter(Task<ITranslationSnapshot> task)
         {
             bool abandon = false;
             lock (_gate)
@@ -184,7 +184,7 @@ public sealed class CompiledTextResourceProvider : ITextResourceProvider
 
         public void Dispose() => _loadCancellation.Dispose();
 
-        private Task<ITextResourceSnapshot> ObserveCompletion(Task<ITextResourceSnapshot> task)
+        private Task<ITranslationSnapshot> ObserveCompletion(Task<ITranslationSnapshot> task)
         {
             _ = task.ContinueWith(
                 static (_, state) => ((LoadEntry)state!).Dispose(),
@@ -196,18 +196,18 @@ public sealed class CompiledTextResourceProvider : ITextResourceProvider
         }
     }
 
-    private sealed class DefaultSnapshotFactory : ITextResourceSnapshotFactory
+    private sealed class DefaultSnapshotFactory : ITranslationSnapshotFactory
     {
         internal static DefaultSnapshotFactory Instance { get; } = new();
 
-        public ValueTask<ITextResourceSnapshot> CreateSnapshotAsync(
-            CompiledTextResourceCatalog catalog,
+        public ValueTask<ITranslationSnapshot> CreateSnapshotAsync(
+            CompiledTranslationCatalog catalog,
             string canonicalLocale,
             ITextValueFormatter valueFormatter,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ITextResourceSnapshot snapshot = new CompiledTextResourceSnapshot(
+            ITranslationSnapshot snapshot = new CompiledTranslationSnapshot(
                 catalog,
                 canonicalLocale,
                 valueFormatter);

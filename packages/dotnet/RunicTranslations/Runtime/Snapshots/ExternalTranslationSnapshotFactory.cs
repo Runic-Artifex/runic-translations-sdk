@@ -8,32 +8,32 @@ namespace RunicTranslations;
 /// <summary>
 /// Composes fully verified caller-supplied locale packs over immutable compiled fallback data.
 /// </summary>
-public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotFactory
+public sealed class ExternalTranslationSnapshotFactory : ITranslationSnapshotFactory
 {
-    private readonly IExternalTextResourceSource _source;
+    private readonly IExternalTranslationSource _source;
     private readonly string _catalog;
     private readonly string _contractFingerprint;
-    private readonly Func<string, TextResourcePackContract> _contractFactory;
-    private readonly TextResourcePackLimits? _limits;
-    private readonly TextResourcePackIntegrityVerifier? _integrityVerifier;
+    private readonly Func<string, TranslationPackContract> _contractFactory;
+    private readonly TranslationPackLimits? _limits;
+    private readonly TranslationPackIntegrityVerifier? _integrityVerifier;
 
     /// <summary>Creates a generated-contract-bound external pack composition factory.</summary>
-    public ExternalTextResourceSnapshotFactory(
-        IExternalTextResourceSource source,
+    public ExternalTranslationSnapshotFactory(
+        IExternalTranslationSource source,
         string catalog,
         string contractFingerprint,
-        Func<string, TextResourcePackContract> contractFactory,
-        TextResourcePackLimits? limits = null,
-        TextResourcePackIntegrityVerifier? integrityVerifier = null)
+        Func<string, TranslationPackContract> contractFactory,
+        TranslationPackLimits? limits = null,
+        TranslationPackIntegrityVerifier? integrityVerifier = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(contractFactory);
-        if (!TextResourceDataValidation.IsCatalog(catalog))
+        if (!TranslationDataValidation.IsCatalog(catalog))
         {
             throw new ArgumentException("The expected catalog identifier is not canonical.", nameof(catalog));
         }
 
-        if (!TextResourcePackValidation.IsFingerprint(contractFingerprint))
+        if (!TranslationPackValidation.IsFingerprint(contractFingerprint))
         {
             throw new ArgumentException(
                 "The expected contract fingerprint must be lowercase sha256 hexadecimal text.",
@@ -49,8 +49,8 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
     }
 
     /// <inheritdoc />
-    public async ValueTask<ITextResourceSnapshot> CreateSnapshotAsync(
-        CompiledTextResourceCatalog catalog,
+    public async ValueTask<ITranslationSnapshot> CreateSnapshotAsync(
+        CompiledTranslationCatalog catalog,
         string canonicalLocale,
         ITextValueFormatter valueFormatter,
         CancellationToken cancellationToken)
@@ -63,13 +63,13 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
         {
             throw PackError(
                 "The compiled catalog does not match the external pack factory.",
-                TextResourcePackFailureReason.CatalogMismatch);
+                TranslationPackFailureReason.CatalogMismatch);
         }
 
-        TextResourcePackContract contract = CreateContract(canonicalLocale, cancellationToken);
+        TranslationPackContract contract = CreateContract(canonicalLocale, cancellationToken);
         ValidateContract(catalog, canonicalLocale, contract);
 
-        VerifiedExternalTextResourcePack? verified = await TextResourcePackLoader.LoadAsync(
+        VerifiedExternalTranslationPack? verified = await TranslationPackLoader.LoadAsync(
             _source,
             contract,
             _limits,
@@ -79,32 +79,32 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
         cancellationToken.ThrowIfCancellationRequested();
         if (verified is null)
         {
-            return new CompiledTextResourceSnapshot(catalog, canonicalLocale, valueFormatter);
+            return new CompiledTranslationSnapshot(catalog, canonicalLocale, valueFormatter);
         }
 
         ValidateVerifiedIdentity(canonicalLocale, verified);
-        CompiledTextResourceValue[] replacements = CreateReplacements(catalog, verified);
-        return new CompiledTextResourceSnapshot(
+        CompiledTranslationValue[] replacements = CreateReplacements(catalog, verified);
+        return new CompiledTranslationSnapshot(
             catalog,
             canonicalLocale,
             replacements,
             valueFormatter);
     }
 
-    private TextResourcePackContract CreateContract(
+    private TranslationPackContract CreateContract(
         string canonicalLocale,
         CancellationToken cancellationToken)
     {
         try
         {
-            TextResourcePackContract contract = _contractFactory(canonicalLocale);
+            TranslationPackContract contract = _contractFactory(canonicalLocale);
             return contract ?? throw PackError("The generated external pack contract factory returned null.");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (TextResourcePackException)
+        catch (TranslationPackException)
         {
             throw;
         }
@@ -115,45 +115,45 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
     }
 
     private void ValidateContract(
-        CompiledTextResourceCatalog catalog,
+        CompiledTranslationCatalog catalog,
         string canonicalLocale,
-        TextResourcePackContract contract)
+        TranslationPackContract contract)
     {
         if (!string.Equals(contract.Catalog, _catalog, StringComparison.Ordinal))
         {
             throw PackError(
                 "The generated external pack contract catalog is incompatible.",
-                TextResourcePackFailureReason.CatalogMismatch);
+                TranslationPackFailureReason.CatalogMismatch);
         }
 
         if (!string.Equals(contract.Locale, canonicalLocale, StringComparison.Ordinal))
         {
             throw PackError(
                 "The generated external pack contract locale is incompatible.",
-                TextResourcePackFailureReason.LocaleMismatch);
+                TranslationPackFailureReason.LocaleMismatch);
         }
 
         if (!string.Equals(contract.ContractFingerprint, _contractFingerprint, StringComparison.Ordinal))
         {
             throw PackError(
                 "The generated external pack contract fingerprint is incompatible.",
-                TextResourcePackFailureReason.ContractFingerprintMismatch);
+                TranslationPackFailureReason.ContractFingerprintMismatch);
         }
 
-        CompiledTextResourceDefinition[] definitions = catalog.DefinitionArray;
+        CompiledTranslationDefinition[] definitions = catalog.DefinitionArray;
         string?[] resolvedPatterns = catalog.GetResolvedPatterns(canonicalLocale);
         var seen = new bool[definitions.Length];
-        IReadOnlyList<TextResourcePackMessageContract> messages = contract.Messages;
+        IReadOnlyList<TranslationPackMessageContract> messages = contract.Messages;
         for (int i = 0; i < messages.Count; i++)
         {
-            TextResourcePackMessageContract message = messages[i];
+            TranslationPackMessageContract message = messages[i];
             int id = message.Key.Id;
             if (id < 0 || id >= definitions.Length || seen[id])
             {
                 throw PackError("The generated external pack contract contains an invalid key identity.");
             }
 
-            CompiledTextResourceDefinition definition = definitions[id];
+            CompiledTranslationDefinition definition = definitions[id];
             if (!string.Equals(message.Key.Catalog, _catalog, StringComparison.Ordinal) ||
                 !string.Equals(message.Key.Name, definition.Name, StringComparison.Ordinal) ||
                 (!definition.IsCanonical && resolvedPatterns[id] is null) ||
@@ -176,8 +176,8 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
     }
 
     private static bool ArgumentsMatch(
-        TextResourcePlaceholderDescriptor[] expected,
-        IReadOnlyList<TextResourcePackArgumentContract> actual)
+        TranslationPlaceholderDescriptor[] expected,
+        IReadOnlyList<TranslationPackArgumentContract> actual)
     {
         if (expected.Length != actual.Count)
         {
@@ -186,8 +186,8 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
 
         for (int i = 0; i < expected.Length; i++)
         {
-            TextResourcePlaceholderDescriptor descriptor = expected[i];
-            TextResourcePackArgumentContract argument = actual[i];
+            TranslationPlaceholderDescriptor descriptor = expected[i];
+            TranslationPackArgumentContract argument = actual[i];
             if (!string.Equals(descriptor.Name, argument.Name, StringComparison.Ordinal) ||
                 descriptor.Type != argument.Type ||
                 descriptor.Format != argument.Format)
@@ -201,40 +201,40 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
 
     private void ValidateVerifiedIdentity(
         string canonicalLocale,
-        VerifiedExternalTextResourcePack verified)
+        VerifiedExternalTranslationPack verified)
     {
         if (!string.Equals(verified.Catalog, _catalog, StringComparison.Ordinal))
         {
             throw PackError(
                 "The verified external pack catalog changed during composition.",
-                TextResourcePackFailureReason.CatalogMismatch);
+                TranslationPackFailureReason.CatalogMismatch);
         }
 
         if (!string.Equals(verified.Locale, canonicalLocale, StringComparison.Ordinal))
         {
             throw PackError(
                 "The verified external pack locale changed during composition.",
-                TextResourcePackFailureReason.LocaleMismatch);
+                TranslationPackFailureReason.LocaleMismatch);
         }
 
         if (!string.Equals(verified.ContractFingerprint, _contractFingerprint, StringComparison.Ordinal))
         {
             throw PackError(
                 "The verified external pack fingerprint changed during composition.",
-                TextResourcePackFailureReason.ContractFingerprintMismatch);
+                TranslationPackFailureReason.ContractFingerprintMismatch);
         }
     }
 
-    private static CompiledTextResourceValue[] CreateReplacements(
-        CompiledTextResourceCatalog catalog,
-        VerifiedExternalTextResourcePack verified)
+    private static CompiledTranslationValue[] CreateReplacements(
+        CompiledTranslationCatalog catalog,
+        VerifiedExternalTranslationPack verified)
     {
-        IReadOnlyList<VerifiedTextResourcePackMessage> messages = verified.Messages;
-        var replacements = new CompiledTextResourceValue[messages.Count];
-        CompiledTextResourceDefinition[] definitions = catalog.DefinitionArray;
+        IReadOnlyList<VerifiedTranslationPackMessage> messages = verified.Messages;
+        var replacements = new CompiledTranslationValue[messages.Count];
+        CompiledTranslationDefinition[] definitions = catalog.DefinitionArray;
         for (int i = 0; i < messages.Count; i++)
         {
-            VerifiedTextResourcePackMessage message = messages[i];
+            VerifiedTranslationPackMessage message = messages[i];
             int id = message.Key.Id;
             if (id < 0 || id >= definitions.Length ||
                 !string.Equals(message.Key.Catalog, catalog.Catalog, StringComparison.Ordinal) ||
@@ -244,8 +244,8 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
             }
 
             replacements[i] = message.Message is null
-                ? new CompiledTextResourceValue(id, message.Pattern)
-                : new CompiledTextResourceValue(id, message.Pattern, message.Message);
+                ? new CompiledTranslationValue(id, message.Pattern)
+                : new CompiledTranslationValue(id, message.Pattern, message.Message);
         }
 
         Array.Sort(replacements, static (left, right) => left.Id.CompareTo(right.Id));
@@ -260,8 +260,8 @@ public sealed class ExternalTextResourceSnapshotFactory : ITextResourceSnapshotF
         return replacements;
     }
 
-    private static TextResourcePackException PackError(
+    private static TranslationPackException PackError(
         string message,
-        TextResourcePackFailureReason reason = TextResourcePackFailureReason.ArgumentContractMismatch) =>
-        TextResourcePackFailure.Create(message, reason);
+        TranslationPackFailureReason reason = TranslationPackFailureReason.ArgumentContractMismatch) =>
+        TranslationPackFailure.Create(message, reason);
 }

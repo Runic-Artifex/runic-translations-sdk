@@ -4,17 +4,17 @@ using RunicTranslations.Compiler;
 
 namespace RunicTranslations.Authoring;
 
-public sealed record TextResourceProjectLocale(string Tag, string? Fallback = null);
+public sealed record TranslationProjectLocale(string Tag, string? Fallback = null);
 
-public sealed class TextResourceProjectCreationRequest
+public sealed class TranslationProjectCreationRequest
 {
-    public TextResourceProjectCreationRequest(
+    public TranslationProjectCreationRequest(
         string directory,
         string catalogId,
         string defaultLocale,
         string codeNamespace,
         string className,
-        IEnumerable<TextResourceProjectLocale>? additionalLocales = null,
+        IEnumerable<TranslationProjectLocale>? additionalLocales = null,
         string layerName = "base",
         bool generateEsm = true,
         bool includeStarterMessage = true)
@@ -30,8 +30,8 @@ public sealed class TextResourceProjectCreationRequest
         CodeNamespace = codeNamespace;
         ClassName = className;
         AdditionalLocales = additionalLocales is null
-            ? Array.Empty<TextResourceProjectLocale>()
-            : new List<TextResourceProjectLocale>(additionalLocales).ToArray();
+            ? Array.Empty<TranslationProjectLocale>()
+            : new List<TranslationProjectLocale>(additionalLocales).ToArray();
         LayerName = layerName;
         GenerateEsm = generateEsm;
         IncludeStarterMessage = includeStarterMessage;
@@ -42,17 +42,17 @@ public sealed class TextResourceProjectCreationRequest
     public string DefaultLocale { get; }
     public string CodeNamespace { get; }
     public string ClassName { get; }
-    public IReadOnlyList<TextResourceProjectLocale> AdditionalLocales { get; }
+    public IReadOnlyList<TranslationProjectLocale> AdditionalLocales { get; }
     public string LayerName { get; }
     public bool GenerateEsm { get; }
     public bool IncludeStarterMessage { get; }
 }
 
-public sealed class TextResourceProjectFile
+public sealed class TranslationProjectFile
 {
     private readonly byte[] _utf8Bytes;
 
-    internal TextResourceProjectFile(string relativePath, byte[] utf8Bytes)
+    internal TranslationProjectFile(string relativePath, byte[] utf8Bytes)
     {
         RelativePath = relativePath;
         _utf8Bytes = utf8Bytes;
@@ -63,13 +63,13 @@ public sealed class TextResourceProjectFile
     internal byte[] Bytes => _utf8Bytes;
 }
 
-public sealed class TextResourceProjectPlan
+public sealed class TranslationProjectPlan
 {
-    internal TextResourceProjectPlan(
-        TextResourceProjectCreationRequest request,
-        IReadOnlyList<TextResourceProjectLocale> locales,
-        IReadOnlyList<TextResourceProjectFile> files,
-        TextResourceCompilation compilation)
+    internal TranslationProjectPlan(
+        TranslationProjectCreationRequest request,
+        IReadOnlyList<TranslationProjectLocale> locales,
+        IReadOnlyList<TranslationProjectFile> files,
+        TranslationCompilation compilation)
     {
         Request = request;
         Locales = locales;
@@ -77,20 +77,20 @@ public sealed class TextResourceProjectPlan
         Compilation = compilation;
     }
 
-    public TextResourceProjectCreationRequest Request { get; }
-    public IReadOnlyList<TextResourceProjectLocale> Locales { get; }
-    public IReadOnlyList<TextResourceProjectFile> Files { get; }
-    public TextResourceCompilation Compilation { get; }
+    public TranslationProjectCreationRequest Request { get; }
+    public IReadOnlyList<TranslationProjectLocale> Locales { get; }
+    public IReadOnlyList<TranslationProjectFile> Files { get; }
+    public TranslationCompilation Compilation { get; }
 }
 
-public sealed class TextResourceAuthoringException : Exception
+public sealed class TranslationAuthoringException : Exception
 {
-    public TextResourceAuthoringException(string message)
+    public TranslationAuthoringException(string message)
         : base(message)
     {
     }
 
-    internal TextResourceAuthoringException(string message, Exception innerException)
+    internal TranslationAuthoringException(string message, Exception innerException)
         : base(message, innerException)
     {
     }

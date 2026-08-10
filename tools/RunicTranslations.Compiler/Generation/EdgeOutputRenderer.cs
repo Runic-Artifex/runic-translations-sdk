@@ -6,7 +6,7 @@ namespace RunicTranslations.Compiler.Generation;
 
 internal static class EdgeOutputRenderer
 {
-    internal static TextResourceGeneratedOutput RenderLocale(CompiledTextCatalog catalog, string localeTag)
+    internal static TranslationGeneratedOutput RenderLocale(CompiledTextCatalog catalog, string localeTag)
     {
         CompiledTextLocale? locale = null;
         for (int i = 0; i < catalog.Locales.Count; i++)
@@ -21,8 +21,8 @@ internal static class EdgeOutputRenderer
             throw new ArgumentException("Locale '" + localeTag + "' is not a declared canonical locale of catalog '" + catalog.Id + "'.", nameof(localeTag));
 
         int artifactVersion = catalog.MessageGrammarVersion == 1
-            ? TextResourceOutputRenderer.LocaleArtifactVersion
-            : TextResourceOutputRenderer.LocaleArtifactV2Version;
+            ? TranslationOutputRenderer.LocaleArtifactVersion
+            : TranslationOutputRenderer.LocaleArtifactV2Version;
         var json = new StringBuilder();
         json.Append("{\"artifactVersion\":").Append(artifactVersion)
             .Append(",\"messageGrammarVersion\":").Append(catalog.MessageGrammarVersion)
@@ -30,13 +30,13 @@ internal static class EdgeOutputRenderer
             .Append(",\"locale\":").Append(GenerationSupport.JsonString(locale.Tag))
             .Append(",\"contractFingerprint\":").Append(GenerationSupport.JsonString(catalog.Fingerprint))
             .Append(",\"messages\":{");
-        IReadOnlyList<CompiledTextResource> resources = GenerationSupport.OrderedResources(locale.ResolvedResources);
+        IReadOnlyList<CompiledTranslation> resources = GenerationSupport.OrderedResources(locale.ResolvedResources);
         for (int i = 0; i < resources.Count; i++)
         {
             if (i > 0) json.Append(',');
-            CompiledTextResource resource = resources[i];
+            CompiledTranslation resource = resources[i];
             json.Append(GenerationSupport.JsonString(resource.Key)).Append(':');
-            if (artifactVersion == TextResourceOutputRenderer.LocaleArtifactVersion)
+            if (artifactVersion == TranslationOutputRenderer.LocaleArtifactVersion)
             {
                 json.Append("{\"pattern\":").Append(GenerationSupport.JsonString(resource.Pattern)).Append(",\"arguments\":");
                 WriteJsonArguments(json, resource.Placeholders);
@@ -48,14 +48,14 @@ internal static class EdgeOutputRenderer
             json.Append('}');
         }
         json.Append("}}");
-        return new TextResourceGeneratedOutput(
-            TextResourceGeneratedOutputKind.LocaleJson,
+        return new TranslationGeneratedOutput(
+            TranslationGeneratedOutputKind.LocaleJson,
             catalog.Id + "." + locale.Tag + ".locale-v" + artifactVersion + ".json",
             "application/json",
             json.ToString());
     }
 
-    private static void WriteMessageAst(StringBuilder json, CompiledTextResource resource)
+    private static void WriteMessageAst(StringBuilder json, CompiledTranslation resource)
     {
         json.Append("{\"astVersion\":2,\"inputs\":{");
         IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(resource.Placeholders);
@@ -140,19 +140,19 @@ internal static class EdgeOutputRenderer
         json.Append(']');
     }
 
-    internal static TextResourceGeneratedOutput RenderTemplateManifest(CompiledTextCatalog catalog)
+    internal static TranslationGeneratedOutput RenderTemplateManifest(CompiledTextCatalog catalog)
     {
         var json = new StringBuilder();
-        json.Append("{\"manifestVersion\":").Append(TextResourceOutputRenderer.TemplateManifestVersion)
+        json.Append("{\"manifestVersion\":").Append(TranslationOutputRenderer.TemplateManifestVersion)
             .Append(",\"messageGrammarVersion\":").Append(catalog.MessageGrammarVersion)
             .Append(",\"catalog\":").Append(GenerationSupport.JsonString(catalog.Id))
             .Append(",\"contractFingerprint\":").Append(GenerationSupport.JsonString(catalog.Fingerprint))
             .Append(",\"messages\":{");
-        IReadOnlyList<CompiledTextResource> resources = GenerationSupport.OrderedResources(catalog.CanonicalResources);
+        IReadOnlyList<CompiledTranslation> resources = GenerationSupport.OrderedResources(catalog.CanonicalResources);
         for (int i = 0; i < resources.Count; i++)
         {
             if (i > 0) json.Append(',');
-            CompiledTextResource resource = resources[i];
+            CompiledTranslation resource = resources[i];
             json.Append(GenerationSupport.JsonString(resource.Key)).Append(":{\"description\":")
                 .Append(resource.Description is null ? "null" : GenerationSupport.JsonString(resource.Description))
                 .Append(",\"since\":").Append(resource.Since is null ? "null" : GenerationSupport.JsonString(resource.Since))
@@ -164,26 +164,26 @@ internal static class EdgeOutputRenderer
             json.Append('}');
         }
         json.Append("}}");
-        return new TextResourceGeneratedOutput(
-            TextResourceGeneratedOutputKind.TemplateManifestJson,
+        return new TranslationGeneratedOutput(
+            TranslationGeneratedOutputKind.TemplateManifestJson,
             catalog.Id + ".template-manifest-v1.json",
             "application/json",
             json.ToString());
     }
 
-    internal static TextResourceGeneratedOutput RenderTypeScriptContract(CompiledTextCatalog catalog)
+    internal static TranslationGeneratedOutput RenderTypeScriptContract(CompiledTextCatalog catalog)
     {
         var writer = new GenerationWriter();
-        IReadOnlyList<CompiledTextResource> resources = GenerationSupport.OrderedResources(catalog.CanonicalResources);
+        IReadOnlyList<CompiledTranslation> resources = GenerationSupport.OrderedResources(catalog.CanonicalResources);
         string keyType = catalog.ClassName + "Key";
         string argumentsType = catalog.ClassName + "Arguments";
         string keyConstant = LowercaseFirst(catalog.ClassName) + "Keys";
         writer.Line("// <auto-generated />");
-        writer.Line("// Translations TypeScript edge contract version " + TextResourceOutputRenderer.TypeScriptContractVersion + ".");
+        writer.Line("// Translations TypeScript edge contract version " + TranslationOutputRenderer.TypeScriptContractVersion + ".");
         writer.Blank();
-        writer.Line("export declare const textResourceContractVersion: " + TextResourceOutputRenderer.TypeScriptContractVersion + ";");
-        writer.Line("export declare const textResourceCatalog: " + GenerationSupport.JsonString(catalog.Id) + ";");
-        writer.Line("export declare const textResourceContractFingerprint: " + GenerationSupport.JsonString(catalog.Fingerprint) + ";");
+        writer.Line("export declare const translationContractVersion: " + TranslationOutputRenderer.TypeScriptContractVersion + ";");
+        writer.Line("export declare const translationCatalog: " + GenerationSupport.JsonString(catalog.Id) + ";");
+        writer.Line("export declare const translationContractFingerprint: " + GenerationSupport.JsonString(catalog.Fingerprint) + ";");
         writer.Blank();
         writer.Line("export type " + keyType + " =");
         writer.Indent();
@@ -202,7 +202,7 @@ internal static class EdgeOutputRenderer
         writer.Indent();
         for (int i = 0; i < resources.Count; i++)
         {
-            CompiledTextResource resource = resources[i];
+            CompiledTranslation resource = resources[i];
             WriteTypeScriptDocumentation(writer, resource);
             IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(resource.Placeholders);
             if (placeholders.Count == 0)
@@ -223,28 +223,28 @@ internal static class EdgeOutputRenderer
         writer.Unindent();
         writer.Line("}");
         writer.Blank();
-        writer.Line("export type TextResourceArguments<K extends " + keyType + "> = " + argumentsType + "[K];");
-        return new TextResourceGeneratedOutput(
-            TextResourceGeneratedOutputKind.TypeScriptContract,
+        writer.Line("export type TranslationArguments<K extends " + keyType + "> = " + argumentsType + "[K];");
+        return new TranslationGeneratedOutput(
+            TranslationGeneratedOutputKind.TypeScriptContract,
             catalog.Id + ".translations-v1.d.ts",
             "text/typescript",
             writer.ToString());
     }
 
-    internal static TextResourceGeneratedOutput RenderAssetManifest(
+    internal static TranslationGeneratedOutput RenderAssetManifest(
         CompiledTextCatalog catalog,
-        IEnumerable<TextResourceGeneratedOutput> selectedOutputs)
+        IEnumerable<TranslationGeneratedOutput> selectedOutputs)
     {
         ArgumentNullException.ThrowIfNull(selectedOutputs);
 
-        var assets = new List<TextResourceGeneratedOutput>();
-        foreach (TextResourceGeneratedOutput output in selectedOutputs)
+        var assets = new List<TranslationGeneratedOutput>();
+        foreach (TranslationGeneratedOutput output in selectedOutputs)
         {
             if (output is null)
                 throw new ArgumentException("Selected outputs must not contain null.", nameof(selectedOutputs));
-            if (output.Kind is TextResourceGeneratedOutputKind.LocaleJson or
-                TextResourceGeneratedOutputKind.TemplateManifestJson or
-                TextResourceGeneratedOutputKind.TypeScriptContract)
+            if (output.Kind is TranslationGeneratedOutputKind.LocaleJson or
+                TranslationGeneratedOutputKind.TemplateManifestJson or
+                TranslationGeneratedOutputKind.TypeScriptContract)
             {
                 assets.Add(output);
             }
@@ -253,12 +253,12 @@ internal static class EdgeOutputRenderer
         assets.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
         var paths = new HashSet<string>(StringComparer.Ordinal);
         var json = new StringBuilder();
-        json.Append("{\"assetManifestVersion\":").Append(TextResourceOutputRenderer.AssetManifestVersion)
+        json.Append("{\"assetManifestVersion\":").Append(TranslationOutputRenderer.AssetManifestVersion)
             .Append(",\"catalog\":").Append(GenerationSupport.JsonString(catalog.Id))
             .Append(",\"assets\":[");
         for (int index = 0; index < assets.Count; index++)
         {
-            TextResourceGeneratedOutput asset = assets[index];
+            TranslationGeneratedOutput asset = assets[index];
             if (!paths.Add(asset.RelativePath))
                 throw new ArgumentException("Selected outputs contain duplicate relative paths.", nameof(selectedOutputs));
             if (index > 0) json.Append(',');
@@ -267,7 +267,7 @@ internal static class EdgeOutputRenderer
                 .Append(",\"byteLength\":").Append(asset.GetUtf8Bytes().Length)
                 .Append(",\"mediaType\":").Append(GenerationSupport.JsonString(asset.MediaType))
                 .Append(",\"locale\":");
-            if (asset.Kind == TextResourceGeneratedOutputKind.LocaleJson)
+            if (asset.Kind == TranslationGeneratedOutputKind.LocaleJson)
                 json.Append(GenerationSupport.JsonString(LocaleFor(catalog, asset.RelativePath)));
             else
                 json.Append("null");
@@ -275,14 +275,14 @@ internal static class EdgeOutputRenderer
         }
 
         json.Append("]}");
-        return new TextResourceGeneratedOutput(
-            TextResourceGeneratedOutputKind.AssetManifestJson,
+        return new TranslationGeneratedOutput(
+            TranslationGeneratedOutputKind.AssetManifestJson,
             catalog.Id + ".asset-manifest-v1.json",
             "application/json",
             json.ToString());
     }
 
-    private static string BareSha256(TextResourceGeneratedOutput output)
+    private static string BareSha256(TranslationGeneratedOutput output)
     {
         const string Prefix = "sha256:";
         if (!output.Sha256.StartsWith(Prefix, StringComparison.Ordinal) || output.Sha256.Length != Prefix.Length + 64)
@@ -349,7 +349,7 @@ internal static class EdgeOutputRenderer
         }
     }
 
-    private static void WriteTypeScriptDocumentation(GenerationWriter writer, CompiledTextResource resource)
+    private static void WriteTypeScriptDocumentation(GenerationWriter writer, CompiledTranslation resource)
     {
         if (resource.Description is null && resource.DeprecatedReason is null) return;
         writer.Line("/**");

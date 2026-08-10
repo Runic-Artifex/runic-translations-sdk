@@ -39,7 +39,7 @@ internal static class GeneratedConsumerTests
         File.WriteAllText(
             temporary.Resolve("Program.cs"),
             "using RunicTranslations.Examples.Localization;\n" +
-            "RunicTranslations.ITextResourceManager manager = await MinimalTextCatalog.CreateManagerAsync();\n" +
+            "RunicTranslations.ITranslationManager manager = await MinimalTextCatalog.CreateManagerAsync();\n" +
             "var text = new MinimalText(manager);\n" +
             "System.Console.Write(text.Hello);\n",
             new UTF8Encoding(false));

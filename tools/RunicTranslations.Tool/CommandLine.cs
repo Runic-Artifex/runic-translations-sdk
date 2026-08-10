@@ -35,7 +35,7 @@ internal sealed record ToolInvocation(
     IReadOnlyList<string> DocumentPatterns,
     string? OutputPath,
     ToolEmission Emission,
-    TextResourceProjectCreationRequest? ProjectCreation);
+    TranslationProjectCreationRequest? ProjectCreation);
 
 internal static class CommandLine
 {
@@ -190,7 +190,7 @@ internal static class CommandLine
         bool layerSpecified = false;
         bool generateEsm = true;
         bool includeStarter = true;
-        var locales = new List<TextResourceProjectLocale>();
+        var locales = new List<TranslationProjectLocale>();
 
         for (int index = 1; index < arguments.Count; index++)
         {
@@ -237,7 +237,7 @@ internal static class CommandLine
         RequireInitOption(defaultLocale, "--default-locale");
         RequireInitOption(codeNamespace, "--namespace");
         RequireInitOption(className, "--class");
-        var request = new TextResourceProjectCreationRequest(
+        var request = new TranslationProjectCreationRequest(
             directory!,
             catalog!,
             defaultLocale!,
@@ -250,12 +250,12 @@ internal static class CommandLine
         return new ToolInvocation(ToolCommand.Init, null, Array.Empty<string>(), null, ToolEmission.None, request);
     }
 
-    private static TextResourceProjectLocale ParseLocale(string value)
+    private static TranslationProjectLocale ParseLocale(string value)
     {
         int separator = value.IndexOf(':');
         if (separator < 0)
         {
-            return new TextResourceProjectLocale(value);
+            return new TranslationProjectLocale(value);
         }
 
         if (separator == 0 || separator == value.Length - 1 || value.IndexOf(':', separator + 1) >= 0)
@@ -263,7 +263,7 @@ internal static class CommandLine
             throw new ToolUsageException("--locale expects <tag> or <tag>:<fallback>.");
         }
 
-        return new TextResourceProjectLocale(value[..separator], value[(separator + 1)..]);
+        return new TranslationProjectLocale(value[..separator], value[(separator + 1)..]);
     }
 
     private static void RequireInitOption(string? value, string option)

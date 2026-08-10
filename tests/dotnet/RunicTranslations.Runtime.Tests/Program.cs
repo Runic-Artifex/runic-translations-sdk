@@ -10,7 +10,7 @@ internal static class Program
         FormatterTests.Register(runner);
         RuntimeTests.Register(runner);
         CompiledMessageTests.Register(runner);
-        TextResourceReferenceTests.Register(runner);
+        TranslationReferenceTests.Register(runner);
         ExternalPackTests.Register(runner);
         WaveBCorpusTests.Register(runner);
         return await runner.RunAsync().ConfigureAwait(false);

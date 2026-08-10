@@ -548,8 +548,8 @@ internal static class CliIntegrationTests
         Assert.Equal(0, withExtra.ExitCode, withExtra.Combined);
 
         string data = File.ReadAllText(temporary.Resolve("with-extra", "ExtraText.CatalogData.g.cs"), Encoding.UTF8);
-        int canonical = data.IndexOf("CompiledTextResourceDefinition(\"A\"", StringComparison.Ordinal);
-        int extra = data.IndexOf("CompiledTextResourceDefinition(\"Extra.Z\"", StringComparison.Ordinal);
+        int canonical = data.IndexOf("CompiledTranslationDefinition(\"A\"", StringComparison.Ordinal);
+        int extra = data.IndexOf("CompiledTranslationDefinition(\"Extra.Z\"", StringComparison.Ordinal);
         Assert.True(canonical >= 0 && extra > canonical, "Canonical ID 0 was not followed by the data-only extra ID 1.");
         Assert.Contains("}, isCanonical: true)", data[canonical..extra]);
         Assert.Contains("}, isCanonical: false)", data[extra..]);

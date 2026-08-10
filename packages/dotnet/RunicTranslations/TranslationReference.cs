@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 namespace RunicTranslations;
 
 /// <summary>The independently versioned wire contract for backend-originated localizable text.</summary>
-public static class TextResourceTransport
+public static class TranslationTransport
 {
     /// <summary>The current transport writer version.</summary>
     public const int Version = 1;
@@ -21,14 +21,14 @@ public static class TextResourceTransport
     public const int MaximumFallbackLength = 64 * 1024;
 }
 
-/// <summary>A portable, canonical argument carried by a <see cref="TextResourceReference"/>.</summary>
-public readonly record struct TextResourceReferenceArgument
+/// <summary>A portable, canonical argument carried by a <see cref="TranslationReference"/>.</summary>
+public readonly record struct TranslationReferenceArgument
 {
     /// <summary>Creates a typed argument from its canonical invariant wire value.</summary>
-    public TextResourceReferenceArgument(TextArgumentType type, string value)
+    public TranslationReferenceArgument(TextArgumentType type, string value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (value.Length > TextResourceTransport.MaximumArgumentLength)
+        if (value.Length > TranslationTransport.MaximumArgumentLength)
             throw new ArgumentOutOfRangeException(nameof(value), "The canonical argument value is too long.");
         ValidateCanonical(type, value);
         Type = type;
@@ -62,38 +62,38 @@ public readonly record struct TextResourceReferenceArgument
 }
 
 /// <summary>A stable key-and-arguments envelope for localization by another process.</summary>
-[JsonConverter(typeof(TextResourceReferenceJsonConverter))]
-public sealed class TextResourceReference
+[JsonConverter(typeof(TranslationReferenceJsonConverter))]
+public sealed class TranslationReference
 {
-    private readonly Dictionary<string, TextResourceReferenceArgument> _arguments;
-    private readonly ReadOnlyDictionary<string, TextResourceReferenceArgument> _readOnlyArguments;
+    private readonly Dictionary<string, TranslationReferenceArgument> _arguments;
+    private readonly ReadOnlyDictionary<string, TranslationReferenceArgument> _readOnlyArguments;
 
     /// <summary>Creates an immutable version 1 text reference.</summary>
-    public TextResourceReference(
+    public TranslationReference(
         string catalog,
         string contractFingerprint,
         string key,
-        IReadOnlyDictionary<string, TextResourceReferenceArgument>? arguments = null,
+        IReadOnlyDictionary<string, TranslationReferenceArgument>? arguments = null,
         string? fallbackText = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(catalog);
         ArgumentException.ThrowIfNullOrWhiteSpace(contractFingerprint);
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        if (key.Length > TextResourceTransport.MaximumKeyLength) throw new ArgumentOutOfRangeException(nameof(key));
-        if (fallbackText?.Length > TextResourceTransport.MaximumFallbackLength) throw new ArgumentOutOfRangeException(nameof(fallbackText));
+        if (key.Length > TranslationTransport.MaximumKeyLength) throw new ArgumentOutOfRangeException(nameof(key));
+        if (fallbackText?.Length > TranslationTransport.MaximumFallbackLength) throw new ArgumentOutOfRangeException(nameof(fallbackText));
         if (!IsSha256Fingerprint(contractFingerprint))
             throw new ArgumentException("A lowercase sha256: contract fingerprint is required.", nameof(contractFingerprint));
 
         Catalog = catalog;
-        Version = TextResourceTransport.Version;
+        Version = TranslationTransport.Version;
         ContractFingerprint = contractFingerprint;
         Key = key;
         FallbackText = fallbackText;
-        _arguments = new Dictionary<string, TextResourceReferenceArgument>(StringComparer.Ordinal);
-        _readOnlyArguments = new ReadOnlyDictionary<string, TextResourceReferenceArgument>(_arguments);
+        _arguments = new Dictionary<string, TranslationReferenceArgument>(StringComparer.Ordinal);
+        _readOnlyArguments = new ReadOnlyDictionary<string, TranslationReferenceArgument>(_arguments);
         if (arguments is null) return;
-        if (arguments.Count > TextResourceTransport.MaximumArguments) throw new ArgumentOutOfRangeException(nameof(arguments));
-        foreach (KeyValuePair<string, TextResourceReferenceArgument> pair in arguments)
+        if (arguments.Count > TranslationTransport.MaximumArguments) throw new ArgumentOutOfRangeException(nameof(arguments));
+        foreach (KeyValuePair<string, TranslationReferenceArgument> pair in arguments)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(pair.Key);
             if (!_arguments.TryAdd(pair.Key, pair.Value)) throw new ArgumentException("Argument names must be unique.", nameof(arguments));
@@ -109,7 +109,7 @@ public sealed class TextResourceReference
     /// <summary>The stable dotted key, never a process-local integer ID.</summary>
     public string Key { get; }
     /// <summary>The canonical typed arguments.</summary>
-    public IReadOnlyDictionary<string, TextResourceReferenceArgument> Arguments => _readOnlyArguments;
+    public IReadOnlyDictionary<string, TranslationReferenceArgument> Arguments => _readOnlyArguments;
     /// <summary>Optional already-resolved plain text for version skew and inaccessible clients.</summary>
     public string? FallbackText { get; }
 
@@ -117,9 +117,9 @@ public sealed class TextResourceReference
     public void ValidateCatalog(string expectedCatalog, string expectedContractFingerprint)
     {
         if (!string.Equals(Catalog, expectedCatalog, StringComparison.Ordinal))
-            throw new TextResourceContractException($"Text reference catalog '{Catalog}' does not match '{expectedCatalog}'.");
+            throw new TranslationContractException($"Text reference catalog '{Catalog}' does not match '{expectedCatalog}'.");
         if (!string.Equals(ContractFingerprint, expectedContractFingerprint, StringComparison.Ordinal))
-            throw new TextResourceContractException("Text reference contract fingerprint does not match the receiver.");
+            throw new TranslationContractException("Text reference contract fingerprint does not match the receiver.");
     }
 
     private static bool IsSha256Fingerprint(string value)

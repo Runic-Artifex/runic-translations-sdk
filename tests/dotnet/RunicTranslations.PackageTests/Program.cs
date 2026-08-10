@@ -146,7 +146,7 @@ internal static class Program
 
     private static async Task ExerciseRuntimePackageAsync()
     {
-        ITextResourceManager generatedManager = await ConsumerTextCatalog.CreateManagerAsync().ConfigureAwait(false);
+        ITranslationManager generatedManager = await ConsumerTextCatalog.CreateManagerAsync().ConfigureAwait(false);
         var generatedText = new ConsumerText(generatedManager);
         Assert(string.Equals(generatedText.Greeting("Ada"), "Hello Ada", StringComparison.Ordinal),
             "typed generated accessor compiles and formats through the packed runtime");
@@ -155,20 +155,20 @@ internal static class Program
             "{\"artifactVersion\":1,\"messageGrammarVersion\":1,\"catalog\":\"packageconsumer\",\"locale\":\"en\"," +
             "\"contractFingerprint\":\"" + ConsumerTextCatalog.ContractFingerprint + "\",\"messages\":{\"Greeting\":{" +
             "\"pattern\":\"External {name}\",\"arguments\":[{\"name\":\"name\",\"type\":\"string\",\"format\":\"none\"}]}}}");
-        ITextResourceManager generatedExternalManager = await ConsumerTextCatalog.CreateExternalManagerAsync(
+        ITranslationManager generatedExternalManager = await ConsumerTextCatalog.CreateExternalManagerAsync(
             new MemoryPackSource("packageconsumer", "en", generatedPack),
             integrityVerifier: static (content, _) => ValueTask.FromResult(content.Length > 0)).ConfigureAwait(false);
         var generatedExternalText = new ConsumerText(generatedExternalManager);
         Assert(string.Equals(generatedExternalText.Greeting("Ada"), "External Ada", StringComparison.Ordinal),
             "generated external manager composes a verified pack through the shipped snapshot factory");
 
-        CompiledTextResourceCatalog catalog = CreateCatalog();
-        var provider = new CompiledTextResourceProvider(catalog);
-        ITextResourceSnapshot initial = await provider.GetSnapshotAsync("en").ConfigureAwait(false);
-        var manager = new TextResourceManager(provider, initial);
+        CompiledTranslationCatalog catalog = CreateCatalog();
+        var provider = new CompiledTranslationProvider(catalog);
+        ITranslationSnapshot initial = await provider.GetSnapshotAsync("en").ConfigureAwait(false);
+        var manager = new TranslationManager(provider, initial);
 
-        var greeting = new TextResourceKey("app", 0, "greeting");
-        var title = new TextResourceKey("app", 1, "title");
+        var greeting = new TranslationKey("app", 0, "greeting");
+        var title = new TranslationKey("app", 1, "title");
         string formatted = manager.Current.Format(greeting, [new TextArgument("name", "Ada")]);
         Assert(string.Equals(formatted, "Hello Ada", StringComparison.Ordinal), "compiled snapshot formats a typed argument");
 
@@ -184,41 +184,41 @@ internal static class Program
         Assert(transitions == 1, "one successful swap raises one event");
         Assert(string.Equals(manager.Current.Get(title), "Application", StringComparison.Ordinal), "compiled locale fallback resolves default text");
 
-        TextResourcePackContract contract = CreatePackContract();
+        TranslationPackContract contract = CreatePackContract();
         byte[] packBytes = Encoding.UTF8.GetBytes(
             "{\"artifactVersion\":1,\"messageGrammarVersion\":1,\"catalog\":\"app\",\"locale\":\"de\"," +
             "\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"greeting\":{" +
             "\"pattern\":\"Extern {name}\",\"arguments\":[{\"name\":\"name\",\"type\":\"string\",\"format\":\"none\"}]}}}");
-        VerifiedExternalTextResourcePack verified = await TextResourcePackLoader.VerifyAsync(
-            new ExternalTextResourcePack(packBytes),
+        VerifiedExternalTranslationPack verified = await TranslationPackLoader.VerifyAsync(
+            new ExternalTranslationPack(packBytes),
             contract,
             integrityVerifier: static (content, _) => ValueTask.FromResult(content.Length > 0)).ConfigureAwait(false);
         Assert(verified.TryGetPattern(greeting, out string externalPattern), "verified external pack contains the generated key");
         Assert(string.Equals(externalPattern, "Extern {name}", StringComparison.Ordinal), "external pack preserves the verified pattern");
     }
 
-    private static CompiledTextResourceCatalog CreateCatalog() => new(
+    private static CompiledTranslationCatalog CreateCatalog() => new(
         "app",
         "en",
         [
-            new CompiledTextResourceDefinition("greeting",
-                [new TextResourcePlaceholderDescriptor("name", TextArgumentType.String, TextArgumentFormat.None)]),
-            new CompiledTextResourceDefinition("title", Array.Empty<TextResourcePlaceholderDescriptor>()),
+            new CompiledTranslationDefinition("greeting",
+                [new TranslationPlaceholderDescriptor("name", TextArgumentType.String, TextArgumentFormat.None)]),
+            new CompiledTranslationDefinition("title", Array.Empty<TranslationPlaceholderDescriptor>()),
         ],
         [
-            new CompiledTextResourceLocale("de", "en", [new CompiledTextResourceValue(0, "Hallo {name}")]),
-            new CompiledTextResourceLocale("en", null,
-                [new CompiledTextResourceValue(0, "Hello {name}"), new CompiledTextResourceValue(1, "Application")]),
+            new CompiledTranslationLocale("de", "en", [new CompiledTranslationValue(0, "Hallo {name}")]),
+            new CompiledTranslationLocale("en", null,
+                [new CompiledTranslationValue(0, "Hello {name}"), new CompiledTranslationValue(1, "Application")]),
         ]);
 
-    private static TextResourcePackContract CreatePackContract() => new(
+    private static TranslationPackContract CreatePackContract() => new(
         "app",
         "de",
         Fingerprint,
         [
-            new TextResourcePackMessageContract(
-                new TextResourceKey("app", 0, "greeting"),
-                [new TextResourcePackArgumentContract("name", TextArgumentType.String, TextArgumentFormat.None)]),
+            new TranslationPackMessageContract(
+                new TranslationKey("app", 0, "greeting"),
+                [new TranslationPackArgumentContract("name", TextArgumentType.String, TextArgumentFormat.None)]),
         ]);
 
     private static string RequireSingle(string feed, string fileName)
@@ -348,18 +348,18 @@ internal static class Program
         _passed++;
     }
 
-    private sealed class MemoryPackSource(string catalog, string locale, byte[] bytes) : IExternalTextResourceSource
+    private sealed class MemoryPackSource(string catalog, string locale, byte[] bytes) : IExternalTranslationSource
     {
-        public ValueTask<ExternalTextResourcePack?> LoadAsync(
+        public ValueTask<ExternalTranslationPack?> LoadAsync(
             string requestedCatalog,
             string requestedLocale,
             System.Threading.CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ExternalTextResourcePack? pack =
+            ExternalTranslationPack? pack =
                 string.Equals(requestedCatalog, catalog, StringComparison.Ordinal) &&
                 string.Equals(requestedLocale, locale, StringComparison.Ordinal)
-                    ? new ExternalTextResourcePack(bytes)
+                    ? new ExternalTranslationPack(bytes)
                     : null;
             return ValueTask.FromResult(pack);
         }

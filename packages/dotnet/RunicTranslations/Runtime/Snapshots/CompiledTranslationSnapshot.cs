@@ -4,18 +4,18 @@ using System.Collections.Generic;
 namespace RunicTranslations;
 
 /// <summary>An immutable snapshot over validated generated catalog data.</summary>
-public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
+public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
 {
-    private readonly CompiledTextResourceCatalog _catalog;
-    private readonly CompiledTextResourceDefinition[] _definitions;
+    private readonly CompiledTranslationCatalog _catalog;
+    private readonly CompiledTranslationDefinition[] _definitions;
     private readonly string?[] _patterns;
     private readonly CompiledTextMessage?[] _messages;
     private readonly string?[] _noArgumentText;
     private readonly ITextValueFormatter _valueFormatter;
 
     /// <summary>Creates a snapshot for one declared canonical locale.</summary>
-    public CompiledTextResourceSnapshot(
-        CompiledTextResourceCatalog catalog,
+    public CompiledTranslationSnapshot(
+        CompiledTranslationCatalog catalog,
         string canonicalLocale,
         ITextValueFormatter? valueFormatter = null)
     {
@@ -41,10 +41,10 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
     /// <summary>
     /// Creates a snapshot with fully verified replacement patterns layered over compiled fallback values.
     /// </summary>
-    public CompiledTextResourceSnapshot(
-        CompiledTextResourceCatalog catalog,
+    public CompiledTranslationSnapshot(
+        CompiledTranslationCatalog catalog,
         string canonicalLocale,
-        IReadOnlyList<CompiledTextResourceValue> replacementValues,
+        IReadOnlyList<CompiledTranslationValue> replacementValues,
         ITextValueFormatter? valueFormatter = null)
         : this(catalog, canonicalLocale, valueFormatter)
     {
@@ -61,7 +61,7 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
         int previousId = -1;
         for (int i = 0; i < replacementValues.Count; i++)
         {
-            CompiledTextResourceValue value = replacementValues[i];
+            CompiledTranslationValue value = replacementValues[i];
             if (value.Id < 0 || value.Id >= _definitions.Length)
             {
                 throw new ArgumentException("A replacement contains an unknown key identifier.", nameof(replacementValues));
@@ -80,7 +80,7 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
             {
                 message = value.Message ?? CompiledTextMessageRuntime.ParseVersion1(value.Pattern);
             }
-            catch (TextResourceFormatException)
+            catch (TranslationFormatException)
             {
                 throw new ArgumentException(
                     $"Replacement pattern for key '{_definitions[value.Id].Name}' is malformed.",
@@ -110,7 +110,7 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
     public string Locale { get; }
 
     /// <inheritdoc />
-    public bool TryGet(TextResourceKey key, out string pattern)
+    public bool TryGet(TranslationKey key, out string pattern)
     {
         if (TryGetKeyIndex(key, out int index) && _patterns[index] is string resolved)
         {
@@ -123,7 +123,7 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
     }
 
     /// <inheritdoc />
-    public string Get(TextResourceKey key)
+    public string Get(TranslationKey key)
     {
         if (TryGet(key, out string pattern))
         {
@@ -134,7 +134,7 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
     }
 
     /// <inheritdoc />
-    public string Format(TextResourceKey key, ReadOnlySpan<TextArgument> arguments)
+    public string Format(TranslationKey key, ReadOnlySpan<TextArgument> arguments)
     {
         if (!TryGetKeyIndex(key, out int index) || _messages[index] is not CompiledTextMessage message)
         {
@@ -151,18 +151,18 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
     }
 
     /// <inheritdoc />
-    public LocalizedTextContent FormatContent(TextResourceKey key, ReadOnlySpan<TextArgument> arguments)
+    public LocalizedTextContent FormatContent(TranslationKey key, ReadOnlySpan<TextArgument> arguments)
     {
         if (!TryGetKeyIndex(key, out int index) || _messages[index] is not CompiledTextMessage message)
-            throw new TextResourceNotFoundException("Structured text resource was not found.");
-        if (!message.HasMarkup) throw new TextResourceFormatException("The resource does not produce structured content.");
+            throw new TranslationNotFoundException("Structured translation was not found.");
+        if (!message.HasMarkup) throw new TranslationFormatException("The resource does not produce structured content.");
         ValidateArguments(_definitions[index], arguments);
         return CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter);
     }
 
     private static string?[] BuildNoArgumentText(
         CompiledTextMessage?[] messages,
-        CompiledTextResourceDefinition[] definitions)
+        CompiledTranslationDefinition[] definitions)
     {
         var result = new string?[messages.Length];
         for (int i = 0; i < messages.Length; i++)
@@ -178,13 +178,13 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
     }
 
     private static void ValidateArguments(
-        CompiledTextResourceDefinition definition,
+        CompiledTranslationDefinition definition,
         ReadOnlySpan<TextArgument> arguments)
     {
-        TextResourcePlaceholderDescriptor[] expected = definition.PlaceholderArray;
+        TranslationPlaceholderDescriptor[] expected = definition.PlaceholderArray;
         if (arguments.Length != expected.Length)
         {
-            throw new TextResourceFormatException(
+            throw new TranslationFormatException(
                 $"Resource '{definition.Name}' requires {expected.Length} arguments, but {arguments.Length} were supplied.");
         }
 
@@ -194,7 +194,7 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
             int descriptorIndex = FindDescriptor(expected, argument.Name);
             if (descriptorIndex < 0)
             {
-                throw new TextResourceFormatException(
+                throw new TranslationFormatException(
                     $"Resource '{definition.Name}' does not declare argument '{argument.Name ?? "<invalid>"}'.");
             }
 
@@ -202,21 +202,21 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
             {
                 if (string.Equals(arguments[prior].Name, argument.Name, StringComparison.Ordinal))
                 {
-                    throw new TextResourceFormatException(
+                    throw new TranslationFormatException(
                         $"Argument '{argument.Name}' was supplied more than once for resource '{definition.Name}'.");
                 }
             }
 
-            TextResourcePlaceholderDescriptor descriptor = expected[descriptorIndex];
+            TranslationPlaceholderDescriptor descriptor = expected[descriptorIndex];
             if (argument.Type != descriptor.Type || argument.Format != descriptor.Format)
             {
-                throw new TextResourceFormatException(
+                throw new TranslationFormatException(
                     $"Argument '{descriptor.Name}' does not match the compiled type and format for resource '{definition.Name}'.");
             }
         }
     }
 
-    private static int FindDescriptor(TextResourcePlaceholderDescriptor[] descriptors, string? name)
+    private static int FindDescriptor(TranslationPlaceholderDescriptor[] descriptors, string? name)
     {
         if (name is null)
         {
@@ -247,19 +247,19 @@ public sealed class CompiledTextResourceSnapshot : ITextResourceSnapshot
         return -1;
     }
 
-    private bool TryGetKeyIndex(TextResourceKey key, out int index)
+    private bool TryGetKeyIndex(TranslationKey key, out int index)
     {
         return _catalog.TryResolveKey(key, out index);
     }
 
-    private string Missing(TextResourceKey key)
+    private string Missing(TranslationKey key)
     {
         string name = string.IsNullOrEmpty(key.Name) ? "<invalid>" : key.Name;
         return _catalog.MissingKey switch
         {
-            MissingTextResourcePolicy.ReturnKey => name,
-            MissingTextResourcePolicy.ReturnMarker => "⟦" + name + "⟧",
-            _ => throw new TextResourceNotFoundException(
+            MissingTranslationPolicy.ReturnKey => name,
+            MissingTranslationPolicy.ReturnMarker => "⟦" + name + "⟧",
+            _ => throw new TranslationNotFoundException(
                 $"Text resource '{name}' was not found in catalog '{Catalog}' for locale '{Locale}'."),
         };
     }

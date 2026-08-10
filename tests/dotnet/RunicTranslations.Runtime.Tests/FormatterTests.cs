@@ -137,32 +137,32 @@ internal static class FormatterTests
         FormatSingle(new TextArgument("value", value, TextArgumentFormat.N), value.ToString("N"));
     }
 
-    private static void MissingArgument() => Assert.Throws<TextResourceFormatException>(
+    private static void MissingArgument() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("{missing}", [], "en-US"), "was not supplied");
 
-    private static void ExtraArgument() => Assert.Throws<TextResourceFormatException>(
+    private static void ExtraArgument() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("literal", [new TextArgument("extra", "x")], "en-US"), "Unknown argument");
 
-    private static void DuplicateArgument() => Assert.Throws<TextResourceFormatException>(
+    private static void DuplicateArgument() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("{v}", [new TextArgument("v", "a"), new TextArgument("v", "b")], "en-US"), "more than once");
 
-    private static void InvalidOpeningBrace() => Assert.Throws<TextResourceFormatException>(
+    private static void InvalidOpeningBrace() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("bad {", [], "en-US"), "character 4");
 
-    private static void InvalidClosingBrace() => Assert.Throws<TextResourceFormatException>(
+    private static void InvalidClosingBrace() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("bad }", [], "en-US"), "character 4");
 
-    private static void NestedPlaceholder() => Assert.Throws<TextResourceFormatException>(
+    private static void NestedPlaceholder() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("{a{b}", [], "en-US"), "invalid");
 
-    private static void InvalidPlaceholder() => Assert.Throws<TextResourceFormatException>(
+    private static void InvalidPlaceholder() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("{not-valid}", [], "en-US"), "invalid placeholder");
 
     private static void ArgumentBound()
     {
         TextArgument[] args = Enumerable.Range(0, TextPatternFormatter.MaximumArguments + 1)
             .Select(i => new TextArgument("a" + i.ToString(CultureInfo.InvariantCulture), i.ToString(CultureInfo.InvariantCulture))).ToArray();
-        Assert.Throws<TextResourceFormatException>(() => TextPatternFormatter.Format("", args, "en-US"), "exceeds");
+        Assert.Throws<TranslationFormatException>(() => TextPatternFormatter.Format("", args, "en-US"), "exceeds");
     }
 
     private static void ExactArgumentBound()
@@ -173,10 +173,10 @@ internal static class FormatterTests
         Assert.Equal(new string('x', TextPatternFormatter.MaximumArguments), TextPatternFormatter.Format(pattern, args, "en-US"));
     }
 
-    private static void LiteralOutputBound() => Assert.Throws<TextResourceFormatException>(
+    private static void LiteralOutputBound() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("12345", [], "en-US", maximumOutputLength: 4), "output limit");
 
-    private static void SubstitutionOutputBound() => Assert.Throws<TextResourceFormatException>(
+    private static void SubstitutionOutputBound() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("{v}", [new TextArgument("v", "12345")], "en-US", maximumOutputLength: 4), "output limit");
 
     private static void ExactOutputBound() =>
@@ -185,13 +185,13 @@ internal static class FormatterTests
     private static void InvalidOutputBound() => Assert.Throws<ArgumentOutOfRangeException>(
         () => TextPatternFormatter.Format("", [], "en-US", maximumOutputLength: 0));
 
-    private static void InvalidLocale() => Assert.Throws<TextResourceFormatException>(
+    private static void InvalidLocale() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("{v}", [new TextArgument("v", 1L, TextArgumentFormat.Grouped)], "not_a_locale!"), "not available");
 
     private static void InvariantFormatWithoutLocaleData() => Assert.Equal(
         "1", TextPatternFormatter.Format("{v}", [new TextArgument("v", 1L)], "not_a_locale!"));
 
-    private static void NullCustomOutput() => Assert.Throws<TextResourceFormatException>(
+    private static void NullCustomOutput() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("{v}", [new TextArgument("v", "x")], "en-US", new NullFormatter()), "returned null");
 
     private static void ArgumentValidation()
@@ -201,7 +201,7 @@ internal static class FormatterTests
         Assert.Throws<ArgumentOutOfRangeException>(() => _ = new TextArgument("v", true, TextArgumentFormat.Iso));
     }
 
-    private static void DefaultArgument() => Assert.Throws<TextResourceFormatException>(
+    private static void DefaultArgument() => Assert.Throws<TranslationFormatException>(
         () => TextPatternFormatter.Format("literal", [default], "en-US"), "invalid name");
 
     private sealed class NullFormatter : ITextValueFormatter

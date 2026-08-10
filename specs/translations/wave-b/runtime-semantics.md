@@ -2,7 +2,7 @@
 
 ## Snapshot construction
 
-An `ITextResourceSnapshot` is an immutable, thread-safe view of exactly one
+An `ITranslationSnapshot` is an immutable, thread-safe view of exactly one
 catalog and one resolved canonical locale. Construction performs these steps
 before the snapshot becomes observable:
 
@@ -45,7 +45,7 @@ argument set before producing text:
 - argument order is irrelevant to dynamic callers;
 - each required argument occurs exactly once;
 - unknown, duplicate, missing, or incorrectly typed arguments fail with
-  `TextResourceFormatException`;
+  `TranslationFormatException`;
 - generated accessors pass arguments in ordinal placeholder-name order;
 - the resource locale, not current process culture, selects locale-sensitive
   formatting.

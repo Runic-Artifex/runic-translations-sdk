@@ -43,7 +43,7 @@ internal static class GeneratorTestHost
         foreach (string path in trustedAssemblies.Split(Path.PathSeparator))
             if (!IsRuntimeAssembly(path)) yield return MetadataReference.CreateFromFile(path);
         if (runtimeReferenceMode == RuntimeReferenceMode.Matching)
-            yield return MetadataReference.CreateFromFile(typeof(TextResourceKey).Assembly.Location);
+            yield return MetadataReference.CreateFromFile(typeof(TranslationKey).Assembly.Location);
         else if (runtimeReferenceMode == RuntimeReferenceMode.Mismatched)
             yield return MismatchedRuntimeReference(trustedAssemblies);
     }
@@ -106,7 +106,7 @@ internal static class GeneratorTestHost
             {
                 _fileOptions[input.Path] = new DictionaryOptions(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["build_metadata.AdditionalFiles.RunicTextResourceKind"] = input.Kind,
+                    ["build_metadata.AdditionalFiles.RunicTranslationKind"] = input.Kind,
                 });
             }
         }

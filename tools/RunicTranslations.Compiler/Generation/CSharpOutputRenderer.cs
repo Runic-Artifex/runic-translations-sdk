@@ -5,7 +5,7 @@ namespace RunicTranslations.Compiler.Generation;
 
 internal static class CSharpOutputRenderer
 {
-    internal static TextResourceGeneratedOutput RenderKeys(CompiledTextCatalog catalog)
+    internal static TranslationGeneratedOutput RenderKeys(CompiledTextCatalog catalog)
     {
         var writer = StartFile(catalog);
         string visibility = Visibility(catalog);
@@ -17,10 +17,10 @@ internal static class CSharpOutputRenderer
         WriteKeyMembers(writer, catalog, GenerationSupport.BuildTree(catalog));
         writer.Unindent();
         writer.Line("}");
-        return Output(TextResourceGeneratedOutputKind.CSharpKeys, catalog.ClassName + ".Keys.g.cs", writer);
+        return Output(TranslationGeneratedOutputKind.CSharpKeys, catalog.ClassName + ".Keys.g.cs", writer);
     }
 
-    internal static TextResourceGeneratedOutput RenderAccessors(CompiledTextCatalog catalog)
+    internal static TranslationGeneratedOutput RenderAccessors(CompiledTextCatalog catalog)
     {
         var writer = StartFile(catalog);
         string visibility = Visibility(catalog);
@@ -33,11 +33,11 @@ internal static class CSharpOutputRenderer
         writer.Indent();
         if (HasDirectResource(root))
         {
-            writer.Line("private readonly global::RunicTranslations.ITextResourceManager " + rootManagerField + ";");
+            writer.Line("private readonly global::RunicTranslations.ITranslationManager " + rootManagerField + ";");
             writer.Blank();
         }
         writer.Line("/// <summary>Creates accessors over a locale manager.</summary>");
-        writer.Line("public " + className + "(global::RunicTranslations.ITextResourceManager manager)");
+        writer.Line("public " + className + "(global::RunicTranslations.ITranslationManager manager)");
         writer.Line("{");
         writer.Indent();
         writer.Line("if (manager is null) throw new global::System.ArgumentNullException(nameof(manager));");
@@ -52,10 +52,10 @@ internal static class CSharpOutputRenderer
         WriteAccessorMembers(writer, root, catalog.ClassName + "Keys", rootManagerField);
         writer.Unindent();
         writer.Line("}");
-        return Output(TextResourceGeneratedOutputKind.CSharpAccessors, catalog.ClassName + ".Accessors.g.cs", writer);
+        return Output(TranslationGeneratedOutputKind.CSharpAccessors, catalog.ClassName + ".Accessors.g.cs", writer);
     }
 
-    internal static TextResourceGeneratedOutput RenderCatalogData(CompiledTextCatalog catalog)
+    internal static TranslationGeneratedOutput RenderCatalogData(CompiledTextCatalog catalog)
     {
         var writer = StartFile(catalog);
         string className = GenerationSupport.CSharpIdentifier(catalog.ClassName) + "CatalogData";
@@ -66,17 +66,17 @@ internal static class CSharpOutputRenderer
         writer.Indent();
         writer.Line("internal const int GeneratedRuntimeAbiVersion = 1;");
         writer.Blank();
-        writer.Line("internal static global::RunicTranslations.CompiledTextResourceCatalog CreateDefinition()");
+        writer.Line("internal static global::RunicTranslations.CompiledTranslationCatalog CreateDefinition()");
         writer.Line("{");
         writer.Indent();
-        writer.Line("return new global::RunicTranslations.CompiledTextResourceCatalog(");
+        writer.Line("return new global::RunicTranslations.CompiledTranslationCatalog(");
         writer.Indent();
         writer.Line(GenerationSupport.CSharpString(catalog.Id) + ",");
         writer.Line(GenerationSupport.CSharpString(catalog.DefaultLocale) + ",");
         WriteDefinitions(writer, table.Definitions, ",");
         WriteLocales(writer, locales, table, ",");
         writer.Line("global::RunicTranslations.UnsupportedLocalePolicy." + catalog.UnsupportedLocale + ",");
-        writer.Line("global::RunicTranslations.MissingTextResourcePolicy." + catalog.MissingKey + ");");
+        writer.Line("global::RunicTranslations.MissingTranslationPolicy." + catalog.MissingKey + ");");
         writer.Unindent();
         writer.Unindent();
         writer.Line("}");
@@ -84,10 +84,10 @@ internal static class CSharpOutputRenderer
         WritePackContractFactory(writer, catalog, table, locales);
         writer.Unindent();
         writer.Line("}");
-        return Output(TextResourceGeneratedOutputKind.CSharpCatalogData, catalog.ClassName + ".CatalogData.g.cs", writer);
+        return Output(TranslationGeneratedOutputKind.CSharpCatalogData, catalog.ClassName + ".CatalogData.g.cs", writer);
     }
 
-    internal static TextResourceGeneratedOutput RenderRegistration(CompiledTextCatalog catalog)
+    internal static TranslationGeneratedOutput RenderRegistration(CompiledTextCatalog catalog)
     {
         var writer = StartFile(catalog);
         string visibility = Visibility(catalog);
@@ -108,11 +108,11 @@ internal static class CSharpOutputRenderer
         writer.Line("public const int GeneratorVersion = 1;");
         writer.Blank();
         writer.Line("/// <summary>Creates a provider over the compiled, immutable catalog definition.</summary>");
-        writer.Line("public static global::RunicTranslations.ITextResourceProvider CreateProvider(");
+        writer.Line("public static global::RunicTranslations.ITranslationProvider CreateProvider(");
         writer.Indent();
         writer.Line("global::RunicTranslations.ITextValueFormatter? valueFormatter = null,");
-        writer.Line("global::RunicTranslations.ITextResourceSnapshotFactory? snapshotFactory = null,");
-        writer.Line("global::RunicTranslations.TextResourceOptions? options = null)");
+        writer.Line("global::RunicTranslations.ITranslationSnapshotFactory? snapshotFactory = null,");
+        writer.Line("global::RunicTranslations.TranslationOptions? options = null)");
         writer.Unindent();
         writer.Line("{");
         writer.Indent();
@@ -120,64 +120,64 @@ internal static class CSharpOutputRenderer
         writer.Indent();
         writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");");
         writer.Unindent();
-        writer.Line("return new global::RunicTranslations.CompiledTextResourceProvider(" + className + "CatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);");
+        writer.Line("return new global::RunicTranslations.CompiledTranslationProvider(" + className + "CatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);");
         writer.Unindent();
         writer.Line("}");
         writer.Blank();
         writer.Line("/// <summary>Creates a manager after asynchronously resolving its initial immutable snapshot.</summary>");
-        writer.Line("public static async global::System.Threading.Tasks.ValueTask<global::RunicTranslations.ITextResourceManager> CreateManagerAsync(");
+        writer.Line("public static async global::System.Threading.Tasks.ValueTask<global::RunicTranslations.ITranslationManager> CreateManagerAsync(");
         writer.Indent();
         writer.Line("string? initialLocale = null,");
         writer.Line("global::RunicTranslations.ITextValueFormatter? valueFormatter = null,");
-        writer.Line("global::RunicTranslations.ITextResourceSnapshotFactory? snapshotFactory = null,");
+        writer.Line("global::RunicTranslations.ITranslationSnapshotFactory? snapshotFactory = null,");
         writer.Line("global::System.Threading.CancellationToken cancellationToken = default,");
-        writer.Line("global::RunicTranslations.TextResourceOptions? options = null)");
+        writer.Line("global::RunicTranslations.TranslationOptions? options = null)");
         writer.Unindent();
         writer.Line("{");
         writer.Indent();
-        writer.Line("global::RunicTranslations.ITextResourceProvider provider = CreateProvider(valueFormatter, snapshotFactory, options);");
-        writer.Line("global::RunicTranslations.ITextResourceSnapshot snapshot = await provider.GetSnapshotAsync(initialLocale ?? DefaultLocale, cancellationToken).ConfigureAwait(false);");
-        writer.Line("return new global::RunicTranslations.TextResourceManager(provider, snapshot);");
+        writer.Line("global::RunicTranslations.ITranslationProvider provider = CreateProvider(valueFormatter, snapshotFactory, options);");
+        writer.Line("global::RunicTranslations.ITranslationSnapshot snapshot = await provider.GetSnapshotAsync(initialLocale ?? DefaultLocale, cancellationToken).ConfigureAwait(false);");
+        writer.Line("return new global::RunicTranslations.TranslationManager(provider, snapshot);");
         writer.Unindent();
         writer.Line("}");
         writer.Blank();
         writer.Line("/// <summary>Creates a provider that composes verified caller-supplied packs over compiled snapshots.</summary>");
-        writer.Line("public static global::RunicTranslations.ITextResourceProvider CreateExternalProvider(");
+        writer.Line("public static global::RunicTranslations.ITranslationProvider CreateExternalProvider(");
         writer.Indent();
-        writer.Line("global::RunicTranslations.IExternalTextResourceSource externalSource,");
-        writer.Line("global::RunicTranslations.TextResourceOptions? options = null,");
+        writer.Line("global::RunicTranslations.IExternalTranslationSource externalSource,");
+        writer.Line("global::RunicTranslations.TranslationOptions? options = null,");
         writer.Line("global::RunicTranslations.ITextValueFormatter? valueFormatter = null,");
-        writer.Line("global::RunicTranslations.TextResourcePackLimits? limits = null,");
-        writer.Line("global::RunicTranslations.TextResourcePackIntegrityVerifier? integrityVerifier = null)");
+        writer.Line("global::RunicTranslations.TranslationPackLimits? limits = null,");
+        writer.Line("global::RunicTranslations.TranslationPackIntegrityVerifier? integrityVerifier = null)");
         writer.Unindent();
         writer.Line("{");
         writer.Indent();
-        writer.Line("var factory = new global::RunicTranslations.ExternalTextResourceSnapshotFactory(externalSource, CatalogId, ContractFingerprint, CreateExternalPackContract, limits, integrityVerifier);");
+        writer.Line("var factory = new global::RunicTranslations.ExternalTranslationSnapshotFactory(externalSource, CatalogId, ContractFingerprint, CreateExternalPackContract, limits, integrityVerifier);");
         writer.Line("return CreateProvider(valueFormatter, factory, options);");
         writer.Unindent();
         writer.Line("}");
         writer.Blank();
         writer.Line("/// <summary>Creates a manager whose snapshots compose verified caller-supplied packs.</summary>");
-        writer.Line("public static async global::System.Threading.Tasks.ValueTask<global::RunicTranslations.ITextResourceManager> CreateExternalManagerAsync(");
+        writer.Line("public static async global::System.Threading.Tasks.ValueTask<global::RunicTranslations.ITranslationManager> CreateExternalManagerAsync(");
         writer.Indent();
-        writer.Line("global::RunicTranslations.IExternalTextResourceSource externalSource,");
+        writer.Line("global::RunicTranslations.IExternalTranslationSource externalSource,");
         writer.Line("string? initialLocale = null,");
-        writer.Line("global::RunicTranslations.TextResourceOptions? options = null,");
+        writer.Line("global::RunicTranslations.TranslationOptions? options = null,");
         writer.Line("global::RunicTranslations.ITextValueFormatter? valueFormatter = null,");
-        writer.Line("global::RunicTranslations.TextResourcePackLimits? limits = null,");
-        writer.Line("global::RunicTranslations.TextResourcePackIntegrityVerifier? integrityVerifier = null,");
+        writer.Line("global::RunicTranslations.TranslationPackLimits? limits = null,");
+        writer.Line("global::RunicTranslations.TranslationPackIntegrityVerifier? integrityVerifier = null,");
         writer.Line("global::System.Threading.CancellationToken cancellationToken = default)");
         writer.Unindent();
         writer.Line("{");
         writer.Indent();
-        writer.Line("global::RunicTranslations.ITextResourceProvider provider = CreateExternalProvider(externalSource, options, valueFormatter, limits, integrityVerifier);");
-        writer.Line("global::RunicTranslations.ITextResourceSnapshot snapshot = await provider.GetSnapshotAsync(initialLocale ?? DefaultLocale, cancellationToken).ConfigureAwait(false);");
-        writer.Line("return new global::RunicTranslations.TextResourceManager(provider, snapshot);");
+        writer.Line("global::RunicTranslations.ITranslationProvider provider = CreateExternalProvider(externalSource, options, valueFormatter, limits, integrityVerifier);");
+        writer.Line("global::RunicTranslations.ITranslationSnapshot snapshot = await provider.GetSnapshotAsync(initialLocale ?? DefaultLocale, cancellationToken).ConfigureAwait(false);");
+        writer.Line("return new global::RunicTranslations.TranslationManager(provider, snapshot);");
         writer.Unindent();
         writer.Line("}");
         writer.Blank();
         writer.Line("/// <summary>Creates the generated compatibility contract used to verify one declared locale pack.</summary>");
-        writer.Line("public static global::RunicTranslations.TextResourcePackContract CreateExternalPackContract(string locale)");
+        writer.Line("public static global::RunicTranslations.TranslationPackContract CreateExternalPackContract(string locale)");
         writer.Line("{");
         writer.Indent();
         writer.Line("return " + className + "CatalogData.CreateExternalPackContract(locale);");
@@ -185,22 +185,22 @@ internal static class CSharpOutputRenderer
         writer.Line("}");
         writer.Blank();
         writer.Line("/// <summary>Requests and fully verifies an optional caller-owned pack for one declared locale.</summary>");
-        writer.Line("public static global::System.Threading.Tasks.ValueTask<global::RunicTranslations.VerifiedExternalTextResourcePack?> LoadExternalPackAsync(");
+        writer.Line("public static global::System.Threading.Tasks.ValueTask<global::RunicTranslations.VerifiedExternalTranslationPack?> LoadExternalPackAsync(");
         writer.Indent();
-        writer.Line("global::RunicTranslations.IExternalTextResourceSource source,");
+        writer.Line("global::RunicTranslations.IExternalTranslationSource source,");
         writer.Line("string locale,");
-        writer.Line("global::RunicTranslations.TextResourcePackLimits? limits = null,");
-        writer.Line("global::RunicTranslations.TextResourcePackIntegrityVerifier? integrityVerifier = null,");
+        writer.Line("global::RunicTranslations.TranslationPackLimits? limits = null,");
+        writer.Line("global::RunicTranslations.TranslationPackIntegrityVerifier? integrityVerifier = null,");
         writer.Line("global::System.Threading.CancellationToken cancellationToken = default)");
         writer.Unindent();
         writer.Line("{");
         writer.Indent();
-        writer.Line("return global::RunicTranslations.TextResourcePackLoader.LoadAsync(source, CreateExternalPackContract(locale), limits, integrityVerifier, cancellationToken);");
+        writer.Line("return global::RunicTranslations.TranslationPackLoader.LoadAsync(source, CreateExternalPackContract(locale), limits, integrityVerifier, cancellationToken);");
         writer.Unindent();
         writer.Line("}");
         writer.Unindent();
         writer.Line("}");
-        return Output(TextResourceGeneratedOutputKind.CSharpRegistration, catalog.ClassName + ".Registration.g.cs", writer);
+        return Output(TranslationGeneratedOutputKind.CSharpRegistration, catalog.ClassName + ".Registration.g.cs", writer);
     }
 
     private static GenerationWriter StartFile(CompiledTextCatalog catalog)
@@ -214,10 +214,10 @@ internal static class CSharpOutputRenderer
         return writer;
     }
 
-    private static TextResourceGeneratedOutput Output(TextResourceGeneratedOutputKind kind, string path, GenerationWriter writer) =>
-        new TextResourceGeneratedOutput(kind, path, "text/x-csharp", writer.ToString());
+    private static TranslationGeneratedOutput Output(TranslationGeneratedOutputKind kind, string path, GenerationWriter writer) =>
+        new TranslationGeneratedOutput(kind, path, "text/x-csharp", writer.ToString());
 
-    private static string Visibility(CompiledTextCatalog catalog) => catalog.Visibility == TextResourceVisibility.Public ? "public" : "internal";
+    private static string Visibility(CompiledTextCatalog catalog) => catalog.Visibility == TranslationVisibility.Public ? "public" : "internal";
 
     private static void WriteKeyMembers(GenerationWriter writer, CompiledTextCatalog catalog, ResourceTreeNode node)
     {
@@ -225,10 +225,10 @@ internal static class CSharpOutputRenderer
         {
             if (child.Value.Resource is not null)
             {
-                CompiledTextResource resource = child.Value.Resource;
+                CompiledTranslation resource = child.Value.Resource;
                 WriteResourceDocumentation(writer, resource, false);
                 WriteObsolete(writer, resource);
-                writer.Line("public static global::RunicTranslations.TextResourceKey " + GenerationSupport.CSharpIdentifier(child.Key) + " { get; } = new global::RunicTranslations.TextResourceKey(" + GenerationSupport.CSharpString(catalog.Id) + ", " + resource.Id + ", " + GenerationSupport.CSharpString(resource.Key) + ");");
+                writer.Line("public static global::RunicTranslations.TranslationKey " + GenerationSupport.CSharpIdentifier(child.Key) + " { get; } = new global::RunicTranslations.TranslationKey(" + GenerationSupport.CSharpString(catalog.Id) + ", " + resource.Id + ", " + GenerationSupport.CSharpString(resource.Key) + ");");
             }
             else
             {
@@ -271,10 +271,10 @@ internal static class CSharpOutputRenderer
             writer.Indent();
             if (HasDirectResource(child.Value))
             {
-                writer.Line("private readonly global::RunicTranslations.ITextResourceManager " + childManagerField + ";");
+                writer.Line("private readonly global::RunicTranslations.ITranslationManager " + childManagerField + ";");
                 writer.Blank();
             }
-            writer.Line("internal " + identifier + "Group(global::RunicTranslations.ITextResourceManager manager)");
+            writer.Line("internal " + identifier + "Group(global::RunicTranslations.ITranslationManager manager)");
             writer.Line("{");
             writer.Indent();
             if (HasDirectResource(child.Value)) writer.Line(childManagerField + " = manager;");
@@ -294,7 +294,7 @@ internal static class CSharpOutputRenderer
         }
     }
 
-    private static void WriteAccessor(GenerationWriter writer, CompiledTextResource resource, string identifier, string keyPath, string managerField)
+    private static void WriteAccessor(GenerationWriter writer, CompiledTranslation resource, string identifier, string keyPath, string managerField)
     {
         WriteResourceDocumentation(writer, resource, true);
         WriteObsolete(writer, resource);
@@ -322,7 +322,7 @@ internal static class CSharpOutputRenderer
         {
             CompiledTextPlaceholder placeholder = placeholders[i];
             string argument = "new global::RunicTranslations.TextArgument(" + GenerationSupport.CSharpString(placeholder.Name) + ", " + GenerationSupport.CSharpIdentifier(placeholder.Name);
-            if (placeholder.Type != TextResourceArgumentType.String)
+            if (placeholder.Type != TranslationArgumentType.String)
                 argument += ", global::RunicTranslations.TextArgumentFormat." + GenerationSupport.ArgumentFormatName(placeholder.Format);
             writer.Line(argument + "),");
         }
@@ -334,21 +334,21 @@ internal static class CSharpOutputRenderer
 
     private static void WriteDefinitions(GenerationWriter writer, IReadOnlyList<GeneratedCatalogDefinition> definitions, string suffix)
     {
-        writer.Line("new global::RunicTranslations.CompiledTextResourceDefinition[]");
+        writer.Line("new global::RunicTranslations.CompiledTranslationDefinition[]");
         writer.Line("{");
         writer.Indent();
         for (int i = 0; i < definitions.Count; i++)
         {
             GeneratedCatalogDefinition definition = definitions[i];
-            CompiledTextResource resource = definition.Resource;
+            CompiledTranslation resource = definition.Resource;
             IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(resource.Placeholders);
-            writer.Line("new global::RunicTranslations.CompiledTextResourceDefinition(" + GenerationSupport.CSharpString(resource.Key) + ", new global::RunicTranslations.TextResourcePlaceholderDescriptor[]");
+            writer.Line("new global::RunicTranslations.CompiledTranslationDefinition(" + GenerationSupport.CSharpString(resource.Key) + ", new global::RunicTranslations.TranslationPlaceholderDescriptor[]");
             writer.Line("{");
             writer.Indent();
             for (int placeholderIndex = 0; placeholderIndex < placeholders.Count; placeholderIndex++)
             {
                 CompiledTextPlaceholder placeholder = placeholders[placeholderIndex];
-                writer.Line("new global::RunicTranslations.TextResourcePlaceholderDescriptor(" + GenerationSupport.CSharpString(placeholder.Name) + ", global::RunicTranslations.TextArgumentType." + GenerationSupport.ArgumentTypeName(placeholder.Type) + ", global::RunicTranslations.TextArgumentFormat." + GenerationSupport.ArgumentFormatName(placeholder.Format) + "),");
+                writer.Line("new global::RunicTranslations.TranslationPlaceholderDescriptor(" + GenerationSupport.CSharpString(placeholder.Name) + ", global::RunicTranslations.TextArgumentType." + GenerationSupport.ArgumentTypeName(placeholder.Type) + ", global::RunicTranslations.TextArgumentFormat." + GenerationSupport.ArgumentFormatName(placeholder.Format) + "),");
             }
             writer.Unindent();
             writer.Line("}, isCanonical: " + (definition.IsCanonical ? "true" : "false") + "),");
@@ -359,22 +359,22 @@ internal static class CSharpOutputRenderer
 
     private static void WriteLocales(GenerationWriter writer, IReadOnlyList<CompiledTextLocale> locales, GeneratedCatalogTable table, string suffix)
     {
-        writer.Line("new global::RunicTranslations.CompiledTextResourceLocale[]");
+        writer.Line("new global::RunicTranslations.CompiledTranslationLocale[]");
         writer.Line("{");
         writer.Indent();
         for (int i = 0; i < locales.Count; i++)
         {
             CompiledTextLocale locale = locales[i];
-            var resources = new List<CompiledTextResource>(locale.DirectResources.Count);
+            var resources = new List<CompiledTranslation>(locale.DirectResources.Count);
             for (int resourceIndex = 0; resourceIndex < locale.DirectResources.Count; resourceIndex++) resources.Add(locale.DirectResources[resourceIndex]);
             resources.Sort((left, right) => table.GetId(left.Key).CompareTo(table.GetId(right.Key)));
-            writer.Line("new global::RunicTranslations.CompiledTextResourceLocale(" + GenerationSupport.CSharpString(locale.Tag) + ", " + (locale.FallbackTag is null ? "null" : GenerationSupport.CSharpString(locale.FallbackTag)) + ", new global::RunicTranslations.CompiledTextResourceValue[]");
+            writer.Line("new global::RunicTranslations.CompiledTranslationLocale(" + GenerationSupport.CSharpString(locale.Tag) + ", " + (locale.FallbackTag is null ? "null" : GenerationSupport.CSharpString(locale.FallbackTag)) + ", new global::RunicTranslations.CompiledTranslationValue[]");
             writer.Line("{");
             writer.Indent();
             for (int resourceIndex = 0; resourceIndex < resources.Count; resourceIndex++)
             {
-                CompiledTextResource resource = resources[resourceIndex];
-                writer.Line("new global::RunicTranslations.CompiledTextResourceValue(" + table.GetId(resource.Key) + ", " + GenerationSupport.CSharpString(resource.Pattern) + ",");
+                CompiledTranslation resource = resources[resourceIndex];
+                writer.Line("new global::RunicTranslations.CompiledTranslationValue(" + table.GetId(resource.Key) + ", " + GenerationSupport.CSharpString(resource.Pattern) + ",");
                 writer.Indent();
                 WriteCompiledMessage(writer, resource.Message);
                 writer.Unindent();
@@ -501,7 +501,7 @@ internal static class CSharpOutputRenderer
         GeneratedCatalogTable table,
         IReadOnlyList<CompiledTextLocale> locales)
     {
-        writer.Line("internal static global::RunicTranslations.TextResourcePackContract CreateExternalPackContract(string locale)");
+        writer.Line("internal static global::RunicTranslations.TranslationPackContract CreateExternalPackContract(string locale)");
         writer.Line("{");
         writer.Indent();
         writer.Line("if (locale is null) throw new global::System.ArgumentNullException(nameof(locale));");
@@ -535,29 +535,29 @@ internal static class CSharpOutputRenderer
             if (definition.IsCanonical || resolvedNames.Contains(definition.Resource.Key)) selectedDefinitions.Add(definition);
         }
         selectedDefinitions.Sort((left, right) => StringComparer.Ordinal.Compare(left.Resource.Key, right.Resource.Key));
-        writer.Line("return new global::RunicTranslations.TextResourcePackContract(");
+        writer.Line("return new global::RunicTranslations.TranslationPackContract(");
         writer.Indent();
         writer.Line(GenerationSupport.CSharpString(catalog.Id) + ",");
         writer.Line(GenerationSupport.CSharpString(locale.Tag) + ",");
         writer.Line(GenerationSupport.CSharpString(catalog.Fingerprint) + ",");
-        writer.Line("new global::RunicTranslations.TextResourcePackMessageContract[]");
+        writer.Line("new global::RunicTranslations.TranslationPackMessageContract[]");
         writer.Line("{");
         writer.Indent();
         for (int i = 0; i < selectedDefinitions.Count; i++)
         {
             GeneratedCatalogDefinition definition = selectedDefinitions[i];
-            CompiledTextResource resource = definition.Resource;
+            CompiledTranslation resource = definition.Resource;
             IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(resource.Placeholders);
-            writer.Line("new global::RunicTranslations.TextResourcePackMessageContract(");
+            writer.Line("new global::RunicTranslations.TranslationPackMessageContract(");
             writer.Indent();
-            writer.Line("new global::RunicTranslations.TextResourceKey(" + GenerationSupport.CSharpString(catalog.Id) + ", " + definition.Id + ", " + GenerationSupport.CSharpString(resource.Key) + "),");
-            writer.Line("new global::RunicTranslations.TextResourcePackArgumentContract[]");
+            writer.Line("new global::RunicTranslations.TranslationKey(" + GenerationSupport.CSharpString(catalog.Id) + ", " + definition.Id + ", " + GenerationSupport.CSharpString(resource.Key) + "),");
+            writer.Line("new global::RunicTranslations.TranslationPackArgumentContract[]");
             writer.Line("{");
             writer.Indent();
             for (int placeholderIndex = 0; placeholderIndex < placeholders.Count; placeholderIndex++)
             {
                 CompiledTextPlaceholder placeholder = placeholders[placeholderIndex];
-                writer.Line("new global::RunicTranslations.TextResourcePackArgumentContract(" + GenerationSupport.CSharpString(placeholder.Name) + ", global::RunicTranslations.TextArgumentType." + GenerationSupport.ArgumentTypeName(placeholder.Type) + ", global::RunicTranslations.TextArgumentFormat." + GenerationSupport.ArgumentFormatName(placeholder.Format) + "),");
+                writer.Line("new global::RunicTranslations.TranslationPackArgumentContract(" + GenerationSupport.CSharpString(placeholder.Name) + ", global::RunicTranslations.TextArgumentType." + GenerationSupport.ArgumentTypeName(placeholder.Type) + ", global::RunicTranslations.TextArgumentFormat." + GenerationSupport.ArgumentFormatName(placeholder.Format) + "),");
             }
             writer.Unindent();
             writer.Line("}),");
@@ -569,18 +569,18 @@ internal static class CSharpOutputRenderer
         writer.Unindent();
     }
 
-    private static string CSharpParameterType(TextResourceArgumentType type)
+    private static string CSharpParameterType(TranslationArgumentType type)
     {
         switch (type)
         {
-            case TextResourceArgumentType.String: return "string";
-            case TextResourceArgumentType.Int: return "long";
-            case TextResourceArgumentType.Number: return "decimal";
-            case TextResourceArgumentType.Boolean: return "bool";
-            case TextResourceArgumentType.Date: return "global::System.DateOnly";
-            case TextResourceArgumentType.Time: return "global::System.TimeOnly";
-            case TextResourceArgumentType.DateTime: return "global::System.DateTimeOffset";
-            case TextResourceArgumentType.Guid: return "global::System.Guid";
+            case TranslationArgumentType.String: return "string";
+            case TranslationArgumentType.Int: return "long";
+            case TranslationArgumentType.Number: return "decimal";
+            case TranslationArgumentType.Boolean: return "bool";
+            case TranslationArgumentType.Date: return "global::System.DateOnly";
+            case TranslationArgumentType.Time: return "global::System.TimeOnly";
+            case TranslationArgumentType.DateTime: return "global::System.DateTimeOffset";
+            case TranslationArgumentType.Guid: return "global::System.Guid";
             default: throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown translation argument type.");
         }
     }
@@ -594,12 +594,12 @@ internal static class CSharpOutputRenderer
 
     private static string ManagerField(ResourceTreeNode node)
     {
-        string candidate = "__textResourceManager";
+        string candidate = "__translationManager";
         while (node.Children.ContainsKey(candidate)) candidate += "_";
         return candidate;
     }
 
-    private static void WriteResourceDocumentation(GenerationWriter writer, CompiledTextResource resource, bool includeParameters)
+    private static void WriteResourceDocumentation(GenerationWriter writer, CompiledTranslation resource, bool includeParameters)
     {
         string summary = resource.Description ?? "Gets text for the stable key " + resource.Key + ".";
         writer.Line("/// <summary>" + GenerationSupport.XmlDocumentation(summary) + "</summary>");
@@ -613,7 +613,7 @@ internal static class CSharpOutputRenderer
         }
     }
 
-    private static void WriteObsolete(GenerationWriter writer, CompiledTextResource resource)
+    private static void WriteObsolete(GenerationWriter writer, CompiledTranslation resource)
     {
         if (resource.DeprecatedReason is not null)
             writer.Line("[global::System.ObsoleteAttribute(" + GenerationSupport.CSharpString(resource.DeprecatedReason) + ")]");

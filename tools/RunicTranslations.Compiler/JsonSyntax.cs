@@ -59,27 +59,27 @@ internal sealed class JsonValue
 
 internal sealed class ParsedJson
 {
-    internal ParsedJson(TextResourceSource source, JsonValue? root) { Source = source; Root = root; }
-    internal TextResourceSource Source { get; }
+    internal ParsedJson(TranslationSource source, JsonValue? root) { Source = source; Root = root; }
+    internal TranslationSource Source { get; }
     internal JsonValue? Root { get; }
 }
 
 internal sealed class DiagnosticBag
 {
-    private readonly List<TextResourceDiagnostic> _items = new List<TextResourceDiagnostic>();
+    private readonly List<TranslationDiagnostic> _items = new List<TranslationDiagnostic>();
 
-    internal IReadOnlyList<TextResourceDiagnostic> Items => _items;
+    internal IReadOnlyList<TranslationDiagnostic> Items => _items;
     internal int Count => _items.Count;
 
-    internal void Add(string id, TextResourceDiagnosticSeverity severity, string message, TextResourceSource source, ByteSpan span)
+    internal void Add(string id, TranslationDiagnosticSeverity severity, string message, TranslationSource source, ByteSpan span)
     {
-        _items.Add(new TextResourceDiagnostic(id, severity, message, Location(source, span)));
+        _items.Add(new TranslationDiagnostic(id, severity, message, Location(source, span)));
     }
 
-    internal void Add(string id, TextResourceDiagnosticSeverity severity, string message, TextSourceLocation location)
-        => _items.Add(new TextResourceDiagnostic(id, severity, message, location));
+    internal void Add(string id, TranslationDiagnosticSeverity severity, string message, TextSourceLocation location)
+        => _items.Add(new TranslationDiagnostic(id, severity, message, location));
 
-    internal TextResourceDiagnostic[] ToSortedArray()
+    internal TranslationDiagnostic[] ToSortedArray()
     {
         _items.Sort((left, right) =>
         {
@@ -93,7 +93,7 @@ internal sealed class DiagnosticBag
         return _items.ToArray();
     }
 
-    internal static TextSourceLocation Location(TextResourceSource source, ByteSpan span)
+    internal static TextSourceLocation Location(TranslationSource source, ByteSpan span)
     {
         byte[] bytes = source.Bytes;
         int start = Math.Max(0, Math.Min(span.Start, bytes.Length));
@@ -122,7 +122,7 @@ internal sealed class DiagnosticBag
 internal sealed class StrictJsonParser
 {
     internal static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
-    private readonly TextResourceSource _source;
+    private readonly TranslationSource _source;
     private readonly byte[] _bytes;
     private readonly DiagnosticBag _diagnostics;
     private readonly int _maximumDepth;
@@ -130,7 +130,7 @@ internal sealed class StrictJsonParser
     private int _position;
     private bool _failed;
 
-    private StrictJsonParser(TextResourceSource source, DiagnosticBag diagnostics, int maximumDepth, CancellationToken cancellationToken)
+    private StrictJsonParser(TranslationSource source, DiagnosticBag diagnostics, int maximumDepth, CancellationToken cancellationToken)
     {
         _source = source;
         _bytes = source.Bytes;
@@ -139,11 +139,11 @@ internal sealed class StrictJsonParser
         _cancellationToken = cancellationToken;
     }
 
-    internal static ParsedJson Parse(TextResourceSource source, DiagnosticBag diagnostics, TextResourceCompilerOptions options, CancellationToken cancellationToken)
+    internal static ParsedJson Parse(TranslationSource source, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken)
     {
         if (source.Bytes.Length > options.MaximumDocumentBytes)
         {
-            diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error,
+            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error,
                 "Document exceeds the configured byte limit.", source, new ByteSpan(0, source.Bytes.Length));
             return new ParsedJson(source, null);
         }
@@ -151,7 +151,7 @@ internal sealed class StrictJsonParser
         try { StrictUtf8.GetCharCount(source.Bytes); }
         catch (DecoderFallbackException)
         {
-            diagnostics.Add("RTR0001", TextResourceDiagnosticSeverity.Error,
+            diagnostics.Add("RTR0001", TranslationDiagnosticSeverity.Error,
                 "Source is not valid UTF-8.", source, InvalidUtf8Span(source.Bytes));
             return new ParsedJson(source, null);
         }
@@ -178,7 +178,7 @@ internal sealed class StrictJsonParser
         _cancellationToken.ThrowIfCancellationRequested();
         if (depth > _maximumDepth)
         {
-            _diagnostics.Add("RTR0022", TextResourceDiagnosticSeverity.Error,
+            _diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error,
                 "JSON nesting exceeds the configured depth limit.", _source, new ByteSpan(_position, 1));
             _failed = true;
             return null;
@@ -221,7 +221,7 @@ internal sealed class StrictJsonParser
             var nameSpan = new ByteSpan(nameStart, _position - nameStart);
             if (!names.Add(name))
             {
-                _diagnostics.Add("RTR0001", TextResourceDiagnosticSeverity.Error,
+                _diagnostics.Add("RTR0001", TranslationDiagnosticSeverity.Error,
                     "Duplicate JSON property '" + name + "'.", _source, nameSpan);
                 _failed = true;
                 return null;
@@ -419,7 +419,7 @@ internal sealed class StrictJsonParser
 
     private void Fail(string message, ByteSpan span)
     {
-        if (!_failed) _diagnostics.Add("RTR0001", TextResourceDiagnosticSeverity.Error, message, _source, span);
+        if (!_failed) _diagnostics.Add("RTR0001", TranslationDiagnosticSeverity.Error, message, _source, span);
         _failed = true;
     }
 

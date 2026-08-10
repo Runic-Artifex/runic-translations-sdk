@@ -5,7 +5,7 @@ using System.Text;
 namespace RunicTranslations.Compiler.Generation;
 
 /// <summary>Identifies one independently rendered compiler output.</summary>
-public enum TextResourceGeneratedOutputKind
+public enum TranslationGeneratedOutputKind
 {
     /// <summary>Strongly typed key declarations.</summary>
     CSharpKeys,
@@ -50,11 +50,11 @@ public enum TextResourceGeneratedOutputKind
 }
 
 /// <summary>A deterministic, UTF-8 compiler output for exactly one concern.</summary>
-public sealed class TextResourceGeneratedOutput
+public sealed class TranslationGeneratedOutput
 {
     private readonly byte[] _utf8Bytes;
 
-    internal TextResourceGeneratedOutput(TextResourceGeneratedOutputKind kind, string relativePath, string mediaType, string text)
+    internal TranslationGeneratedOutput(TranslationGeneratedOutputKind kind, string relativePath, string mediaType, string text)
     {
         Kind = kind;
         RelativePath = relativePath ?? throw new ArgumentNullException(nameof(relativePath));
@@ -67,7 +67,7 @@ public sealed class TextResourceGeneratedOutput
     }
 
     /// <summary>The concern represented by this output.</summary>
-    public TextResourceGeneratedOutputKind Kind { get; }
+    public TranslationGeneratedOutputKind Kind { get; }
 
     /// <summary>A normalized, relative suggested output path.</summary>
     public string RelativePath { get; }

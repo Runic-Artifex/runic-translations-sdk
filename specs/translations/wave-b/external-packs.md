@@ -2,7 +2,7 @@
 
 External packs are optional, caller-supplied, untrusted UTF-8 bytes. The runtime
 does not open a path, URI, socket, embedded resource, or assembly to discover
-them. `IExternalTextResourceSource` is the only acquisition boundary.
+them. `IExternalTranslationSource` is the only acquisition boundary.
 
 Version 1 packs use `external-pack-v1.schema.json`, which is deliberately the
 same six-field payload as `locale-artifact-v1.schema.json`:
@@ -50,7 +50,7 @@ JSON Schema `maxLength` counts characters and therefore does not replace the
 decoded UTF-8 byte check.
 
 Malformed, incompatible, over-limit, integrity-rejected, cancelled, or otherwise
-failed packs throw `TextResourcePackException` at the pack boundary (with
+failed packs throw `TranslationPackException` at the pack boundary (with
 cancellation preserved as cancellation where applicable). They never enter the
 successful cache, never partially overlay compiled data, never replace the
 active snapshot, and never raise a locale-changed notification.

@@ -7,11 +7,11 @@ using RunicTranslations.Compiler;
 
 namespace RunicTranslations.Authoring;
 
-public static class TextResourceProjectScaffolder
+public static class TranslationProjectScaffolder
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
-    public static TextResourceProjectPlan Render(TextResourceProjectCreationRequest request)
+    public static TranslationProjectPlan Render(TranslationProjectCreationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         string catalogId = RequireValue(request.CatalogId, "catalog ID");
@@ -20,7 +20,7 @@ public static class TextResourceProjectScaffolder
         string layerName = RequireValue(request.LayerName, "layer name");
         string defaultLocale = CanonicalizeLocale(RequireValue(request.DefaultLocale, "default locale"));
 
-        var locales = new List<TextResourceProjectLocale>
+        var locales = new List<TranslationProjectLocale>
         {
             new(defaultLocale),
         };
@@ -31,23 +31,23 @@ public static class TextResourceProjectScaffolder
 
         for (int index = 0; index < request.AdditionalLocales.Count; index++)
         {
-            TextResourceProjectLocale locale = request.AdditionalLocales[index]
-                ?? throw new TextResourceAuthoringException("An additional locale entry is null.");
+            TranslationProjectLocale locale = request.AdditionalLocales[index]
+                ?? throw new TranslationAuthoringException("An additional locale entry is null.");
             string tag = CanonicalizeLocale(RequireValue(locale.Tag, "locale tag"));
             string fallback = locale.Fallback is null
                 ? defaultLocale
                 : CanonicalizeLocale(RequireValue(locale.Fallback, $"fallback for locale '{tag}'"));
             if (!knownLocales.Add(tag))
             {
-                throw new TextResourceAuthoringException($"Locale '{tag}' is declared more than once.");
+                throw new TranslationAuthoringException($"Locale '{tag}' is declared more than once.");
             }
 
             if (tag == fallback)
             {
-                throw new TextResourceAuthoringException($"Locale '{tag}' cannot fall back to itself.");
+                throw new TranslationAuthoringException($"Locale '{tag}' cannot fall back to itself.");
             }
 
-            locales.Add(new TextResourceProjectLocale(tag, fallback));
+            locales.Add(new TranslationProjectLocale(tag, fallback));
         }
 
         for (int index = 1; index < locales.Count; index++)
@@ -55,13 +55,13 @@ public static class TextResourceProjectScaffolder
             string fallback = locales[index].Fallback!;
             if (!knownLocales.Contains(fallback))
             {
-                throw new TextResourceAuthoringException(
+                throw new TranslationAuthoringException(
                     $"Fallback locale '{fallback}' for '{locales[index].Tag}' is not declared by the project.");
             }
         }
 
         RejectFallbackCycles(locales);
-        TextResourceProjectCreationRequest canonicalRequest = new(
+        TranslationProjectCreationRequest canonicalRequest = new(
             request.Directory,
             catalogId,
             defaultLocale,
@@ -72,30 +72,30 @@ public static class TextResourceProjectScaffolder
             request.GenerateEsm,
             request.IncludeStarterMessage);
 
-        var files = new List<TextResourceProjectFile>(locales.Count + 1)
+        var files = new List<TranslationProjectFile>(locales.Count + 1)
         {
             new($"{catalogId}.catalog.json", RenderManifest(canonicalRequest, locales)),
         };
         for (int index = 0; index < locales.Count; index++)
         {
-            files.Add(new TextResourceProjectFile(
+            files.Add(new TranslationProjectFile(
                 $"{catalogId}.{locales[index].Tag}.json",
                 RenderDocument(canonicalRequest, locales[index].Tag)));
         }
 
         files.Sort((left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
-        TextResourceCompilation compilation = Compile(files);
+        TranslationCompilation compilation = Compile(files);
         if (!compilation.Success)
         {
-            throw new TextResourceAuthoringException(FormatDiagnostics(compilation.Diagnostics));
+            throw new TranslationAuthoringException(FormatDiagnostics(compilation.Diagnostics));
         }
 
-        return new TextResourceProjectPlan(canonicalRequest, locales.ToArray(), files.ToArray(), compilation);
+        return new TranslationProjectPlan(canonicalRequest, locales.ToArray(), files.ToArray(), compilation);
     }
 
     private static byte[] RenderManifest(
-        TextResourceProjectCreationRequest request,
-        List<TextResourceProjectLocale> locales) => RenderJson(writer =>
+        TranslationProjectCreationRequest request,
+        List<TranslationProjectLocale> locales) => RenderJson(writer =>
     {
         writer.WriteStartObject();
         writer.WriteNumber("schemaVersion", 2);
@@ -148,7 +148,7 @@ public static class TextResourceProjectScaffolder
         writer.WriteEndObject();
     });
 
-    private static byte[] RenderDocument(TextResourceProjectCreationRequest request, string locale) => RenderJson(writer =>
+    private static byte[] RenderDocument(TranslationProjectCreationRequest request, string locale) => RenderJson(writer =>
     {
         writer.WriteStartObject();
         writer.WriteNumber("schemaVersion", 2);
@@ -182,14 +182,14 @@ public static class TextResourceProjectScaffolder
         return result;
     }
 
-    private static TextResourceCompilation Compile(List<TextResourceProjectFile> files)
+    private static TranslationCompilation Compile(List<TranslationProjectFile> files)
     {
-        var manifests = new List<TextResourceSource>(1);
-        var documents = new List<TextResourceSource>(files.Count - 1);
+        var manifests = new List<TranslationSource>(1);
+        var documents = new List<TranslationSource>(files.Count - 1);
         for (int index = 0; index < files.Count; index++)
         {
-            TextResourceProjectFile file = files[index];
-            var source = new TextResourceSource(file.RelativePath, file.Bytes);
+            TranslationProjectFile file = files[index];
+            var source = new TranslationSource(file.RelativePath, file.Bytes);
             if (file.RelativePath.EndsWith(".catalog.json", StringComparison.Ordinal))
             {
                 manifests.Add(source);
@@ -200,16 +200,16 @@ public static class TextResourceProjectScaffolder
             }
         }
 
-        return TextResourceCompiler.Compile(manifests, documents);
+        return TranslationCompiler.Compile(manifests, documents);
     }
 
-    private static string FormatDiagnostics(IReadOnlyList<TextResourceDiagnostic> diagnostics)
+    private static string FormatDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics)
     {
         var result = new StringBuilder("The proposed translation project is invalid:");
         for (int index = 0; index < diagnostics.Count; index++)
         {
-            TextResourceDiagnostic diagnostic = diagnostics[index];
-            if (diagnostic.Severity != TextResourceDiagnosticSeverity.Error)
+            TranslationDiagnostic diagnostic = diagnostics[index];
+            if (diagnostic.Severity != TranslationDiagnosticSeverity.Error)
             {
                 continue;
             }
@@ -229,7 +229,7 @@ public static class TextResourceProjectScaffolder
         return result.ToString();
     }
 
-    private static void RejectFallbackCycles(List<TextResourceProjectLocale> locales)
+    private static void RejectFallbackCycles(List<TranslationProjectLocale> locales)
     {
         var fallbacks = new Dictionary<string, string>(StringComparer.Ordinal);
         for (int index = 0; index < locales.Count; index++)
@@ -248,7 +248,7 @@ public static class TextResourceProjectScaffolder
             {
                 if (!visited.Add(current))
                 {
-                    throw new TextResourceAuthoringException(
+                    throw new TranslationAuthoringException(
                         $"Locale fallback relationships contain a cycle through '{current}'.");
                 }
 
@@ -261,7 +261,7 @@ public static class TextResourceProjectScaffolder
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new TextResourceAuthoringException($"The {name} is required.");
+            throw new TranslationAuthoringException($"The {name} is required.");
         }
 
         return value.Trim();
@@ -313,7 +313,7 @@ public static class TextResourceProjectScaffolder
         return result.ToString();
     }
 
-    private static TextResourceAuthoringException InvalidLocale(string value) =>
+    private static TranslationAuthoringException InvalidLocale(string value) =>
         new($"Locale tag '{value}' is not a valid portable BCP-47 tag.");
 
     private static bool AllLetters(string value)

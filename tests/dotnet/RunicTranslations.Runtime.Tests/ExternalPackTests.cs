@@ -53,12 +53,12 @@ internal static class ExternalPackTests
 
     private static async Task VerifiesVersion2()
     {
-        TextResourcePackContract contract = new(
+        TranslationPackContract contract = new(
             "app", "en-US", Fingerprint,
-            [new TextResourcePackMessageContract(new TextResourceKey("app", 0, "Summary"),
+            [new TranslationPackMessageContract(new TranslationKey("app", 0, "Summary"),
                 [
-                    new TextResourcePackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Plain),
-                    new TextResourcePackArgumentContract("owner", TextArgumentType.String, TextArgumentFormat.None),
+                    new TranslationPackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Plain),
+                    new TranslationPackArgumentContract("owner", TextArgumentType.String, TextArgumentFormat.None),
                 ])],
             messageGrammarVersion: 2);
         const string message = """
@@ -70,39 +70,39 @@ internal static class ExternalPackTests
              ]}
             """;
         string json = "{\"artifactVersion\":2,\"messageGrammarVersion\":2,\"catalog\":\"app\",\"locale\":\"en-US\",\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"Summary\":" + message + "}}";
-        VerifiedExternalTextResourcePack verified = await Verify(json, contract);
+        VerifiedExternalTranslationPack verified = await Verify(json, contract);
         Assert.True(verified.Messages[0].Message is not null, "The v2 AST was not retained after verification.");
-        var catalog = new CompiledTextResourceCatalog("app", "en-US",
-            [new CompiledTextResourceDefinition("Summary", [
-                new TextResourcePlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain),
-                new TextResourcePlaceholderDescriptor("owner", TextArgumentType.String, TextArgumentFormat.None),
-            ])], [new CompiledTextResourceLocale("en-US", null, [new CompiledTextResourceValue(0, "fallback {count} {owner}")])]);
-        var snapshot = new CompiledTextResourceSnapshot(catalog, "en-US",
-            [new CompiledTextResourceValue(0, verified.Messages[0].Pattern, verified.Messages[0].Message!)]);
-        Assert.Equal("one admin", snapshot.Format(new TextResourceKey("app", 0, "Summary"),
+        var catalog = new CompiledTranslationCatalog("app", "en-US",
+            [new CompiledTranslationDefinition("Summary", [
+                new TranslationPlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain),
+                new TranslationPlaceholderDescriptor("owner", TextArgumentType.String, TextArgumentFormat.None),
+            ])], [new CompiledTranslationLocale("en-US", null, [new CompiledTranslationValue(0, "fallback {count} {owner}")])]);
+        var snapshot = new CompiledTranslationSnapshot(catalog, "en-US",
+            [new CompiledTranslationValue(0, verified.Messages[0].Pattern, verified.Messages[0].Message!)]);
+        Assert.Equal("one admin", snapshot.Format(new TranslationKey("app", 0, "Summary"),
             [new TextArgument("count", 1), new TextArgument("owner", "admin")]));
-        Assert.Equal("2 items for guest", snapshot.Format(new TextResourceKey("app", 0, "Summary"),
+        Assert.Equal("2 items for guest", snapshot.Format(new TranslationKey("app", 0, "Summary"),
             [new TextArgument("count", 2), new TextArgument("owner", "guest")]));
-        await Assert.ThrowsAsync<TextResourcePackException>(() => Verify(json.Replace("\"kind\":\"input\"", "\"kind\":\"script\"", StringComparison.Ordinal), contract));
+        await Assert.ThrowsAsync<TranslationPackException>(() => Verify(json.Replace("\"kind\":\"input\"", "\"kind\":\"script\"", StringComparison.Ordinal), contract));
     }
 
     private static async Task VerifiesValid()
     {
-        TextResourcePackContract contract = CreateContract();
-        VerifiedExternalTextResourcePack verified = await Verify(ValidJson(), contract);
+        TranslationPackContract contract = CreateContract();
+        VerifiedExternalTranslationPack verified = await Verify(ValidJson(), contract);
         Assert.Equal("app", verified.Catalog);
         Assert.Equal("en-US", verified.Locale);
         Assert.Equal(Fingerprint, verified.ContractFingerprint);
         Assert.Equal(2, verified.Messages.Count);
-        Assert.True(verified.TryGetPattern(new TextResourceKey("app", 0, "alpha.greeting"), out string greeting), "Known key was absent.");
+        Assert.True(verified.TryGetPattern(new TranslationKey("app", 0, "alpha.greeting"), out string greeting), "Known key was absent.");
         Assert.Equal("Hello {name}", greeting);
-        Assert.False(verified.TryGetPattern(new TextResourceKey("app", 9, "missing.key"), out _), "Unknown key was accepted.");
+        Assert.False(verified.TryGetPattern(new TranslationKey("app", 9, "missing.key"), out _), "Unknown key was accepted.");
     }
 
     private static async Task AcceptsSubsetAndSorts()
     {
         string json = Root("\"beta.count\":" + CountMessage() + ",\"alpha.greeting\":" + GreetingMessage());
-        VerifiedExternalTextResourcePack verified = await Verify(json, CreateContract());
+        VerifiedExternalTranslationPack verified = await Verify(json, CreateContract());
         Assert.Equal("alpha.greeting", verified.Messages[0].Key.Name);
         Assert.Equal("beta.count", verified.Messages[1].Key.Name);
 
@@ -115,35 +115,35 @@ internal static class ExternalPackTests
     {
         string json = "{\"messages\":{\"alpha.greeting\":{\"arguments\":[{\"format\":\"none\",\"type\":\"string\",\"name\":\"name\"}],\"pattern\":\"Hello {name}\"}}," +
             "\"contractFingerprint\":\"" + Fingerprint + "\",\"locale\":\"en-US\",\"catalog\":\"app\",\"messageGrammarVersion\":1,\"artifactVersion\":1}";
-        VerifiedExternalTextResourcePack verified = await Verify(json, CreateContract());
+        VerifiedExternalTranslationPack verified = await Verify(json, CreateContract());
         Assert.Equal(1, verified.Messages.Count);
     }
 
-    private static Task<TextResourcePackException> RejectMutation(string oldValue, string newValue, string expected) =>
-        Assert.ThrowsAsync<TextResourcePackException>(() => Verify(ValidJson().Replace(oldValue, newValue, StringComparison.Ordinal), CreateContract()), expected);
+    private static Task<TranslationPackException> RejectMutation(string oldValue, string newValue, string expected) =>
+        Assert.ThrowsAsync<TranslationPackException>(() => Verify(ValidJson().Replace(oldValue, newValue, StringComparison.Ordinal), CreateContract()), expected);
 
-    private static Task UnknownRootMember() => Assert.ThrowsAsync<TextResourcePackException>(
+    private static Task UnknownRootMember() => Assert.ThrowsAsync<TranslationPackException>(
         () => Verify(ValidJson().Replace("{\"artifactVersion\"", "{\"unknown\":1,\"artifactVersion\"", StringComparison.Ordinal), CreateContract()), "unknown property");
 
-    private static Task DuplicateRootMember() => Assert.ThrowsAsync<TextResourcePackException>(
+    private static Task DuplicateRootMember() => Assert.ThrowsAsync<TranslationPackException>(
         () => Verify(ValidJson().Replace("{\"artifactVersion\":1", "{\"artifactVersion\":1,\"artifactVersion\":1", StringComparison.Ordinal), CreateContract()), "duplicate property");
 
-    private static Task UnknownMessage() => Assert.ThrowsAsync<TextResourcePackException>(
+    private static Task UnknownMessage() => Assert.ThrowsAsync<TranslationPackException>(
         () => Verify(Root("\"unknown.key\":" + GreetingMessage()), CreateContract()), "unknown message key");
 
-    private static Task DuplicateMessage() => Assert.ThrowsAsync<TextResourcePackException>(
+    private static Task DuplicateMessage() => Assert.ThrowsAsync<TranslationPackException>(
         () => Verify(Root("\"alpha.greeting\":" + GreetingMessage() + ",\"alpha.greeting\":" + GreetingMessage()), CreateContract()), "duplicate message key");
 
-    private static Task DescriptorMismatch() => Assert.ThrowsAsync<TextResourcePackException>(
+    private static Task DescriptorMismatch() => Assert.ThrowsAsync<TranslationPackException>(
         () => Verify(ValidJson().Replace("\"type\":\"string\"", "\"type\":\"guid\"", StringComparison.Ordinal), CreateContract()), "argument contract");
 
-    private static Task PlaceholderMismatch() => Assert.ThrowsAsync<TextResourcePackException>(
+    private static Task PlaceholderMismatch() => Assert.ThrowsAsync<TranslationPackException>(
         () => Verify(ValidJson().Replace("Hello {name}", "Hello {other}", StringComparison.Ordinal), CreateContract()), "pattern");
 
-    private static Task MalformedPattern() => Assert.ThrowsAsync<TextResourcePackException>(
+    private static Task MalformedPattern() => Assert.ThrowsAsync<TranslationPackException>(
         () => Verify(ValidJson().Replace("Hello {name}", "Hello {name", StringComparison.Ordinal), CreateContract()), "pattern");
 
-    private static Task MalformedJson() => Assert.ThrowsAsync<TextResourcePackException>(
+    private static Task MalformedJson() => Assert.ThrowsAsync<TranslationPackException>(
         () => Verify("{", CreateContract()), "incomplete");
 
     private static async Task InvalidUtf8()
@@ -151,66 +151,66 @@ internal static class ExternalPackTests
         byte[] bytes = Encoding.UTF8.GetBytes(ValidJson());
         int valueIndex = Array.IndexOf(bytes, (byte)'H');
         bytes[valueIndex] = 0xff;
-        await Assert.ThrowsAsync<TextResourcePackException>(
-            async () => await TextResourcePackLoader.VerifyAsync(new ExternalTextResourcePack(bytes), CreateContract()), "invalid UTF-8");
+        await Assert.ThrowsAsync<TranslationPackException>(
+            async () => await TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(bytes), CreateContract()), "invalid UTF-8");
     }
 
-    private static Task TrailingContent() => Assert.ThrowsAsync<TextResourcePackException>(
+    private static Task TrailingContent() => Assert.ThrowsAsync<TranslationPackException>(
         () => Verify(ValidJson() + "{}", CreateContract()), "after the root");
 
     private static async Task DocumentLimit()
     {
         byte[] bytes = Encoding.UTF8.GetBytes(ValidJson());
-        TextResourcePackLimits limits = new(bytes.Length - 1, 64, 50_000, 64 * 1024, 32);
-        TextResourcePackException exception = await Assert.ThrowsAsync<TextResourcePackException>(
-            async () => await TextResourcePackLoader.VerifyAsync(new ExternalTextResourcePack(bytes), CreateContract(), limits), "document limit");
-        Assert.Equal(TextResourcePackFailureReason.LimitExceeded, TextResourcePackFailure.GetReason(exception));
+        TranslationPackLimits limits = new(bytes.Length - 1, 64, 50_000, 64 * 1024, 32);
+        TranslationPackException exception = await Assert.ThrowsAsync<TranslationPackException>(
+            async () => await TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(bytes), CreateContract(), limits), "document limit");
+        Assert.Equal(TranslationPackFailureReason.LimitExceeded, TranslationPackFailure.GetReason(exception));
     }
 
     private static async Task DepthLimit()
     {
-        TextResourcePackLimits limits = new(8 * 1024 * 1024, 2, 50_000, 64 * 1024, 32);
-        TextResourcePackException exception = await Assert.ThrowsAsync<TextResourcePackException>(
-            async () => await TextResourcePackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(), limits), "depth limit");
-        Assert.Equal(TextResourcePackFailureReason.LimitExceeded, TextResourcePackFailure.GetReason(exception));
+        TranslationPackLimits limits = new(8 * 1024 * 1024, 2, 50_000, 64 * 1024, 32);
+        TranslationPackException exception = await Assert.ThrowsAsync<TranslationPackException>(
+            async () => await TranslationPackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(), limits), "depth limit");
+        Assert.Equal(TranslationPackFailureReason.LimitExceeded, TranslationPackFailure.GetReason(exception));
     }
 
     private static async Task MessageLimit()
     {
-        TextResourcePackLimits limits = new(8 * 1024 * 1024, 64, 1, 64 * 1024, 32);
-        TextResourcePackException exception = await Assert.ThrowsAsync<TextResourcePackException>(
-            async () => await TextResourcePackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(), limits), "message limit");
-        Assert.Equal(TextResourcePackFailureReason.LimitExceeded, TextResourcePackFailure.GetReason(exception));
+        TranslationPackLimits limits = new(8 * 1024 * 1024, 64, 1, 64 * 1024, 32);
+        TranslationPackException exception = await Assert.ThrowsAsync<TranslationPackException>(
+            async () => await TranslationPackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(), limits), "message limit");
+        Assert.Equal(TranslationPackFailureReason.LimitExceeded, TranslationPackFailure.GetReason(exception));
     }
 
     private static async Task PatternLimit()
     {
-        TextResourcePackLimits limits = new(8 * 1024 * 1024, 64, 50_000, 5, 32);
-        TextResourcePackException exception = await Assert.ThrowsAsync<TextResourcePackException>(
-            async () => await TextResourcePackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(), limits), "pattern limit");
-        Assert.Equal(TextResourcePackFailureReason.LimitExceeded, TextResourcePackFailure.GetReason(exception));
+        TranslationPackLimits limits = new(8 * 1024 * 1024, 64, 50_000, 5, 32);
+        TranslationPackException exception = await Assert.ThrowsAsync<TranslationPackException>(
+            async () => await TranslationPackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(), limits), "pattern limit");
+        Assert.Equal(TranslationPackFailureReason.LimitExceeded, TranslationPackFailure.GetReason(exception));
     }
 
     private static async Task ArgumentLimit()
     {
-        TextResourcePackContract contract = CreateTwoArgumentContract();
+        TranslationPackContract contract = CreateTwoArgumentContract();
         string message = "{\"pattern\":\"{a} {b}\",\"arguments\":[{\"name\":\"a\",\"type\":\"string\",\"format\":\"none\"},{\"name\":\"b\",\"type\":\"string\",\"format\":\"none\"}]}";
-        TextResourcePackLimits limits = new(8 * 1024 * 1024, 64, 50_000, 64 * 1024, 1);
-        TextResourcePackException exception = await Assert.ThrowsAsync<TextResourcePackException>(
-            async () => await TextResourcePackLoader.VerifyAsync(Pack(Root("\"alpha.greeting\":" + message)), contract, limits), "argument limit");
-        Assert.Equal(TextResourcePackFailureReason.LimitExceeded, TextResourcePackFailure.GetReason(exception));
+        TranslationPackLimits limits = new(8 * 1024 * 1024, 64, 50_000, 64 * 1024, 1);
+        TranslationPackException exception = await Assert.ThrowsAsync<TranslationPackException>(
+            async () => await TranslationPackLoader.VerifyAsync(Pack(Root("\"alpha.greeting\":" + message)), contract, limits), "argument limit");
+        Assert.Equal(TranslationPackFailureReason.LimitExceeded, TranslationPackFailure.GetReason(exception));
     }
 
     private static void LimitValidation()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new TextResourcePackLimits(0, 1, 1, 1, 1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new TextResourcePackLimits(TextResourcePackLimits.DefaultMaximumDocumentBytes + 1, 1, 1, 1, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new TranslationPackLimits(0, 1, 1, 1, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new TranslationPackLimits(TranslationPackLimits.DefaultMaximumDocumentBytes + 1, 1, 1, 1, 1));
     }
 
     private static async Task IntegrityVerifier()
     {
         int calls = 0;
-        VerifiedExternalTextResourcePack verified = await TextResourcePackLoader.VerifyAsync(
+        VerifiedExternalTranslationPack verified = await TranslationPackLoader.VerifyAsync(
             Pack(ValidJson()), CreateContract(), integrityVerifier: (content, token) =>
             {
                 calls++;
@@ -222,14 +222,14 @@ internal static class ExternalPackTests
         Assert.Equal(2, verified.Messages.Count);
     }
 
-    private static async Task IntegrityRejected() => await Assert.ThrowsAsync<TextResourcePackException>(
-        async () => await TextResourcePackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(),
+    private static async Task IntegrityRejected() => await Assert.ThrowsAsync<TranslationPackException>(
+        async () => await TranslationPackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(),
             integrityVerifier: static (content, token) => ValueTask.FromResult(false)), "integrity policy");
 
     private static async Task IntegrityException()
     {
-        TextResourcePackException exception = await Assert.ThrowsAsync<TextResourcePackException>(
-            async () => await TextResourcePackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(),
+        TranslationPackException exception = await Assert.ThrowsAsync<TranslationPackException>(
+            async () => await TranslationPackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(),
                 integrityVerifier: static (content, token) => throw new InvalidOperationException("secret")), "verification failed");
         Assert.False(exception.Message.Contains("secret", StringComparison.Ordinal), "Verifier detail leaked.");
     }
@@ -239,39 +239,39 @@ internal static class ExternalPackTests
         using CancellationTokenSource source = new();
         source.Cancel();
         OperationCanceledException exception = await Assert.ThrowsAsync<OperationCanceledException>(
-            async () => await TextResourcePackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(), cancellationToken: source.Token));
-        Assert.Equal(TextResourcePackFailureReason.Cancelled, TextResourcePackFailure.GetReason((Exception)exception));
+            async () => await TranslationPackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(), cancellationToken: source.Token));
+        Assert.Equal(TranslationPackFailureReason.Cancelled, TranslationPackFailure.GetReason((Exception)exception));
     }
 
     private static void ContractImmutability()
     {
-        TextResourcePackArgumentContract[] arguments = [new("name", TextArgumentType.String, TextArgumentFormat.None)];
-        TextResourcePackMessageContract message = new(new TextResourceKey("app", 0, "alpha.greeting"), arguments);
+        TranslationPackArgumentContract[] arguments = [new("name", TextArgumentType.String, TextArgumentFormat.None)];
+        TranslationPackMessageContract message = new(new TranslationKey("app", 0, "alpha.greeting"), arguments);
         arguments[0] = new("other", TextArgumentType.String, TextArgumentFormat.None);
         Assert.Equal("name", message.Arguments[0].Name);
 
-        TextResourcePackMessageContract[] messages = [message];
-        TextResourcePackContract contract = new("app", "en-US", Fingerprint, messages);
-        messages[0] = new(new TextResourceKey("app", 1, "beta.count"));
+        TranslationPackMessageContract[] messages = [message];
+        TranslationPackContract contract = new("app", "en-US", Fingerprint, messages);
+        messages[0] = new(new TranslationKey("app", 1, "beta.count"));
         Assert.Equal("alpha.greeting", contract.Messages[0].Key.Name);
     }
 
     private static void ContractValidation()
     {
-        TextResourcePackMessageContract a = new(new TextResourceKey("app", 0, "alpha.greeting"));
-        TextResourcePackMessageContract b = new(new TextResourceKey("app", 1, "beta.count"));
-        Assert.Throws<ArgumentException>(() => _ = new TextResourcePackContract("app", "en-US", Fingerprint, [b, a]));
-        Assert.Throws<ArgumentException>(() => _ = new TextResourcePackContract("app", "EN-us", Fingerprint, [a]));
-        Assert.Throws<ArgumentException>(() => _ = new TextResourcePackContract("app", "en-US", "bad", [a]));
-        Assert.Throws<ArgumentException>(() => _ = new TextResourcePackMessageContract(
-            new TextResourceKey("app", 0, "alpha.greeting"),
+        TranslationPackMessageContract a = new(new TranslationKey("app", 0, "alpha.greeting"));
+        TranslationPackMessageContract b = new(new TranslationKey("app", 1, "beta.count"));
+        Assert.Throws<ArgumentException>(() => _ = new TranslationPackContract("app", "en-US", Fingerprint, [b, a]));
+        Assert.Throws<ArgumentException>(() => _ = new TranslationPackContract("app", "EN-us", Fingerprint, [a]));
+        Assert.Throws<ArgumentException>(() => _ = new TranslationPackContract("app", "en-US", "bad", [a]));
+        Assert.Throws<ArgumentException>(() => _ = new TranslationPackMessageContract(
+            new TranslationKey("app", 0, "alpha.greeting"),
             [new("z", TextArgumentType.String, TextArgumentFormat.None), new("a", TextArgumentType.String, TextArgumentFormat.None)]));
     }
 
     private static async Task SourceLoads()
     {
         SourceProbe source = new(Pack(ValidJson()));
-        VerifiedExternalTextResourcePack? verified = await TextResourcePackLoader.LoadAsync(source, CreateContract());
+        VerifiedExternalTranslationPack? verified = await TranslationPackLoader.LoadAsync(source, CreateContract());
         Assert.True(verified is not null, "Available pack was not loaded.");
         Assert.Equal("app", source.Catalog);
         Assert.Equal("en-US", source.Locale);
@@ -281,14 +281,14 @@ internal static class ExternalPackTests
     private static async Task SourceReturnsNull()
     {
         SourceProbe source = new(null);
-        VerifiedExternalTextResourcePack? verified = await TextResourcePackLoader.LoadAsync(source, CreateContract());
+        VerifiedExternalTranslationPack? verified = await TranslationPackLoader.LoadAsync(source, CreateContract());
         Assert.True(verified is null, "Null source result did not remain null.");
     }
 
     private static async Task SourceFailure()
     {
-        TextResourcePackException exception = await Assert.ThrowsAsync<TextResourcePackException>(
-            async () => await TextResourcePackLoader.LoadAsync(new ThrowingSource(), CreateContract()), "source failed");
+        TranslationPackException exception = await Assert.ThrowsAsync<TranslationPackException>(
+            async () => await TranslationPackLoader.LoadAsync(new ThrowingSource(), CreateContract()), "source failed");
         Assert.False(exception.Message.Contains("secret", StringComparison.Ordinal), "Source exception details leaked.");
     }
 
@@ -297,15 +297,15 @@ internal static class ExternalPackTests
         using CancellationTokenSource source = new();
         source.Cancel();
         await Assert.ThrowsAsync<OperationCanceledException>(
-            async () => await TextResourcePackLoader.LoadAsync(new SourceProbe(Pack(ValidJson())), CreateContract(), cancellationToken: source.Token));
+            async () => await TranslationPackLoader.LoadAsync(new SourceProbe(Pack(ValidJson())), CreateContract(), cancellationToken: source.Token));
     }
 
     private static async Task IntegrityToctouIsolation()
     {
         byte[] callerBytes = Encoding.UTF8.GetBytes(ValidJson());
         int mutationIndex = Array.IndexOf(callerBytes, (byte)'H');
-        VerifiedExternalTextResourcePack verified = await TextResourcePackLoader.VerifyAsync(
-            new ExternalTextResourcePack(callerBytes), CreateContract(), integrityVerifier: (content, token) =>
+        VerifiedExternalTranslationPack verified = await TranslationPackLoader.VerifyAsync(
+            new ExternalTranslationPack(callerBytes), CreateContract(), integrityVerifier: (content, token) =>
             {
                 Assert.True(MemoryMarshal.TryGetArray(content, out ArraySegment<byte> loaderBytes),
                     "Loader verification image was not array-backed.");
@@ -314,7 +314,7 @@ internal static class ExternalPackTests
                 callerBytes[mutationIndex] = (byte)'J';
                 return ValueTask.FromResult(true);
             });
-        Assert.True(verified.TryGetPattern(new TextResourceKey("app", 0, "alpha.greeting"), out string pattern),
+        Assert.True(verified.TryGetPattern(new TranslationKey("app", 0, "alpha.greeting"), out string pattern),
             "Verified greeting was missing.");
         Assert.Equal("Hello {name}", pattern);
     }
@@ -323,85 +323,85 @@ internal static class ExternalPackTests
     {
         await AssertReason(
             () => Verify(ValidJson().Replace("\"artifactVersion\":1", "\"artifactVersion\":2", StringComparison.Ordinal), CreateContract()),
-            TextResourcePackFailureReason.ArtifactVersionMismatch);
+            TranslationPackFailureReason.ArtifactVersionMismatch);
         await AssertReason(
             () => Verify(ValidJson().Replace("\"messageGrammarVersion\":1", "\"messageGrammarVersion\":2", StringComparison.Ordinal), CreateContract()),
-            TextResourcePackFailureReason.MessageGrammarVersionMismatch);
+            TranslationPackFailureReason.MessageGrammarVersionMismatch);
         await AssertReason(
             () => Verify(ValidJson().Replace("\"catalog\":\"app\"", "\"catalog\":\"other\"", StringComparison.Ordinal), CreateContract()),
-            TextResourcePackFailureReason.CatalogMismatch);
+            TranslationPackFailureReason.CatalogMismatch);
         await AssertReason(
             () => Verify(ValidJson().Replace("\"locale\":\"en-US\"", "\"locale\":\"de-DE\"", StringComparison.Ordinal), CreateContract()),
-            TextResourcePackFailureReason.LocaleMismatch);
+            TranslationPackFailureReason.LocaleMismatch);
         await AssertReason(
             () => Verify(ValidJson().Replace(Fingerprint, "sha256:1111111111111111111111111111111111111111111111111111111111111111", StringComparison.Ordinal), CreateContract()),
-            TextResourcePackFailureReason.ContractFingerprintMismatch);
+            TranslationPackFailureReason.ContractFingerprintMismatch);
 
         byte[] bytes = Encoding.UTF8.GetBytes(ValidJson());
-        TextResourcePackLimits limits = new(bytes.Length - 1, 64, 50_000, 64 * 1024, 32);
+        TranslationPackLimits limits = new(bytes.Length - 1, 64, 50_000, 64 * 1024, 32);
         await AssertReason(
-            async () => await TextResourcePackLoader.VerifyAsync(new ExternalTextResourcePack(bytes), CreateContract(), limits),
-            TextResourcePackFailureReason.LimitExceeded);
-        await AssertReason(() => Verify("{", CreateContract()), TextResourcePackFailureReason.Malformed);
+            async () => await TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(bytes), CreateContract(), limits),
+            TranslationPackFailureReason.LimitExceeded);
+        await AssertReason(() => Verify("{", CreateContract()), TranslationPackFailureReason.Malformed);
         await AssertReason(
             () => Verify(Root("\"unknown.key\":" + GreetingMessage()), CreateContract()),
-            TextResourcePackFailureReason.UnknownKey);
+            TranslationPackFailureReason.UnknownKey);
         await AssertReason(
             () => Verify(ValidJson().Replace("\"type\":\"string\"", "\"type\":\"guid\"", StringComparison.Ordinal), CreateContract()),
-            TextResourcePackFailureReason.ArgumentContractMismatch);
+            TranslationPackFailureReason.ArgumentContractMismatch);
         await AssertReason(
             () => Verify(ValidJson().Replace("Hello {name}", "Hello {other}", StringComparison.Ordinal), CreateContract()),
-            TextResourcePackFailureReason.MalformedPattern);
+            TranslationPackFailureReason.MalformedPattern);
         await AssertReason(
             () => Verify(ValidJson().Replace("{\"artifactVersion\"", "{\"sourceUri\":\"redacted\",\"artifactVersion\"", StringComparison.Ordinal), CreateContract()),
-            TextResourcePackFailureReason.UnknownMember);
+            TranslationPackFailureReason.UnknownMember);
         await AssertReason(
-            async () => await TextResourcePackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(),
+            async () => await TranslationPackLoader.VerifyAsync(Pack(ValidJson()), CreateContract(),
                 integrityVerifier: static (content, token) => ValueTask.FromResult(false)),
-            TextResourcePackFailureReason.IntegrityRejected);
+            TranslationPackFailureReason.IntegrityRejected);
         await AssertReason(
-            async () => await TextResourcePackLoader.LoadAsync(new ThrowingSource(), CreateContract()),
-            TextResourcePackFailureReason.SourceFailure);
+            async () => await TranslationPackLoader.LoadAsync(new ThrowingSource(), CreateContract()),
+            TranslationPackFailureReason.SourceFailure);
 
-        Assert.Equal(TextResourcePackFailureReason.Unknown,
-            TextResourcePackFailure.GetReason(new TextResourcePackException("legacy")));
-        Assert.Equal(TextResourcePackFailureReason.Cancelled,
-            TextResourcePackFailure.GetReason((Exception)new OperationCanceledException()));
-        Assert.Equal(TextResourcePackFailureReason.Unknown,
-            TextResourcePackFailure.GetReason((Exception)new InvalidOperationException()));
-        Assert.Throws<ArgumentNullException>(() => TextResourcePackFailure.GetReason(null!));
-        Assert.Throws<ArgumentNullException>(() => TextResourcePackFailure.GetDiagnosticId(null!));
+        Assert.Equal(TranslationPackFailureReason.Unknown,
+            TranslationPackFailure.GetReason(new TranslationPackException("legacy")));
+        Assert.Equal(TranslationPackFailureReason.Cancelled,
+            TranslationPackFailure.GetReason((Exception)new OperationCanceledException()));
+        Assert.Equal(TranslationPackFailureReason.Unknown,
+            TranslationPackFailure.GetReason((Exception)new InvalidOperationException()));
+        Assert.Throws<ArgumentNullException>(() => TranslationPackFailure.GetReason(null!));
+        Assert.Throws<ArgumentNullException>(() => TranslationPackFailure.GetDiagnosticId(null!));
     }
 
-    private static async Task AssertReason(Func<Task> action, TextResourcePackFailureReason expected)
+    private static async Task AssertReason(Func<Task> action, TranslationPackFailureReason expected)
     {
-        TextResourcePackException exception = await Assert.ThrowsAsync<TextResourcePackException>(action);
-        Assert.Equal(expected, TextResourcePackFailure.GetReason(exception));
-        Assert.Equal("RTR0023", TextResourcePackFailure.DiagnosticId);
-        Assert.Equal(TextResourcePackFailure.DiagnosticId, TextResourcePackFailure.GetDiagnosticId(exception));
+        TranslationPackException exception = await Assert.ThrowsAsync<TranslationPackException>(action);
+        Assert.Equal(expected, TranslationPackFailure.GetReason(exception));
+        Assert.Equal("RTR0023", TranslationPackFailure.DiagnosticId);
+        Assert.Equal(TranslationPackFailure.DiagnosticId, TranslationPackFailure.GetDiagnosticId(exception));
     }
 
-    private static TextResourcePackContract CreateContract() => new(
+    private static TranslationPackContract CreateContract() => new(
         "app", "en-US", Fingerprint,
         [
-            new TextResourcePackMessageContract(new TextResourceKey("app", 0, "alpha.greeting"),
-                [new TextResourcePackArgumentContract("name", TextArgumentType.String, TextArgumentFormat.None)]),
-            new TextResourcePackMessageContract(new TextResourceKey("app", 1, "beta.count"),
-                [new TextResourcePackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Grouped)]),
+            new TranslationPackMessageContract(new TranslationKey("app", 0, "alpha.greeting"),
+                [new TranslationPackArgumentContract("name", TextArgumentType.String, TextArgumentFormat.None)]),
+            new TranslationPackMessageContract(new TranslationKey("app", 1, "beta.count"),
+                [new TranslationPackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Grouped)]),
         ]);
 
-    private static TextResourcePackContract CreateTwoArgumentContract() => new(
+    private static TranslationPackContract CreateTwoArgumentContract() => new(
         "app", "en-US", Fingerprint,
-        [new TextResourcePackMessageContract(new TextResourceKey("app", 0, "alpha.greeting"),
+        [new TranslationPackMessageContract(new TranslationKey("app", 0, "alpha.greeting"),
             [
-                new TextResourcePackArgumentContract("a", TextArgumentType.String, TextArgumentFormat.None),
-                new TextResourcePackArgumentContract("b", TextArgumentType.String, TextArgumentFormat.None),
+                new TranslationPackArgumentContract("a", TextArgumentType.String, TextArgumentFormat.None),
+                new TranslationPackArgumentContract("b", TextArgumentType.String, TextArgumentFormat.None),
             ])]);
 
-    private static Task<VerifiedExternalTextResourcePack> Verify(string json, TextResourcePackContract contract) =>
-        TextResourcePackLoader.VerifyAsync(Pack(json), contract).AsTask();
+    private static Task<VerifiedExternalTranslationPack> Verify(string json, TranslationPackContract contract) =>
+        TranslationPackLoader.VerifyAsync(Pack(json), contract).AsTask();
 
-    private static ExternalTextResourcePack Pack(string json) => new(Encoding.UTF8.GetBytes(json));
+    private static ExternalTranslationPack Pack(string json) => new(Encoding.UTF8.GetBytes(json));
 
     private static string ValidJson() => Root("\"alpha.greeting\":" + GreetingMessage() + ",\"beta.count\":" + CountMessage());
 
@@ -411,14 +411,14 @@ internal static class ExternalPackTests
 
     private static string CountMessage() => "{\"pattern\":\"Count: {count}\",\"arguments\":[{\"name\":\"count\",\"type\":\"int\",\"format\":\"grouped\"}]}";
 
-    private sealed class SourceProbe : IExternalTextResourceSource
+    private sealed class SourceProbe : IExternalTranslationSource
     {
-        private readonly ExternalTextResourcePack? _pack;
-        internal SourceProbe(ExternalTextResourcePack? pack) => _pack = pack;
+        private readonly ExternalTranslationPack? _pack;
+        internal SourceProbe(ExternalTranslationPack? pack) => _pack = pack;
         internal string? Catalog;
         internal string? Locale;
         internal int Calls;
-        public ValueTask<ExternalTextResourcePack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken)
+        public ValueTask<ExternalTranslationPack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Calls++;
@@ -428,9 +428,9 @@ internal static class ExternalPackTests
         }
     }
 
-    private sealed class ThrowingSource : IExternalTextResourceSource
+    private sealed class ThrowingSource : IExternalTranslationSource
     {
-        public ValueTask<ExternalTextResourcePack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken) =>
-            ValueTask.FromException<ExternalTextResourcePack?>(new InvalidOperationException("secret"));
+        public ValueTask<ExternalTranslationPack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken) =>
+            ValueTask.FromException<ExternalTranslationPack?>(new InvalidOperationException("secret"));
     }
 }

@@ -1,6 +1,6 @@
 namespace RunicTranslations.Authoring;
 
-public sealed record TextResourceAddLocaleRequest(
+public sealed record TranslationAddLocaleRequest(
     string Root,
     string CatalogId,
     string Locale,
@@ -8,35 +8,35 @@ public sealed record TextResourceAddLocaleRequest(
     string Layer,
     string CopyFromLocale);
 
-public sealed record TextResourceRemoveLocaleRequest(
+public sealed record TranslationRemoveLocaleRequest(
     string Root,
     string CatalogId,
     string Locale,
     string? ReplacementFallback);
 
-public sealed record TextResourceSetFallbackRequest(
+public sealed record TranslationSetFallbackRequest(
     string Root,
     string CatalogId,
     string Locale,
     string? Fallback);
 
-public sealed record TextResourceCreateKeyRequest(
+public sealed record TranslationCreateKeyRequest(
     string Root,
     string CatalogId,
     string Key,
     string InitialValue,
     string Layer);
 
-public enum TextResourceKeyMutationKind
+public enum TranslationKeyMutationKind
 {
     RenameOrMove,
     Delete,
     Duplicate,
 }
 
-public sealed record TextResourceKeyMutationRequest(
+public sealed record TranslationKeyMutationRequest(
     string Root,
     string CatalogId,
-    TextResourceKeyMutationKind Kind,
+    TranslationKeyMutationKind Kind,
     string SourceKey,
     string? TargetKey);

@@ -8,25 +8,25 @@ using RunicTranslations.Compiler;
 
 namespace RunicTranslations.Authoring;
 
-public static class TextResourceWorkspaceDiscovery
+public static class TranslationWorkspaceDiscovery
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
-    public static TextResourceWorkspaceDiscoveryResult Discover(
+    public static TranslationWorkspaceDiscoveryResult Discover(
         string root,
-        TextResourceWorkspaceDiscoveryOptions? options = null,
+        TranslationWorkspaceDiscoveryOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
-        options ??= new TextResourceWorkspaceDiscoveryOptions();
+        options ??= new TranslationWorkspaceDiscoveryOptions();
         string fullRoot = Path.GetFullPath(root);
         if (!Directory.Exists(fullRoot))
-            throw new TextResourceAuthoringException($"Workspace '{fullRoot}' does not exist.");
+            throw new TranslationAuthoringException($"Workspace '{fullRoot}' does not exist.");
         if (IsReparsePoint(fullRoot))
-            throw new TextResourceAuthoringException($"Workspace root '{fullRoot}' is a symbolic link or reparse point.");
+            throw new TranslationAuthoringException($"Workspace root '{fullRoot}' is a symbolic link or reparse point.");
 
-        var files = new List<TextResourceWorkspaceFile>();
-        var diagnostics = new List<TextResourceAuthoringDiagnostic>();
+        var files = new List<TranslationWorkspaceFile>();
+        var diagnostics = new List<TranslationAuthoringDiagnostic>();
         var pending = new Stack<(string Path, int Depth)>();
         pending.Push((fullRoot, 0));
         int entryCount = 0;
@@ -43,7 +43,7 @@ public static class TextResourceWorkspaceDiscovery
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                diagnostics.Add(Diagnostic("RTRA0004", TextResourceAuthoringDiagnosticSeverity.Error,
+                diagnostics.Add(Diagnostic("RTRA0004", TranslationAuthoringDiagnosticSeverity.Error,
                     $"Directory could not be read: {exception.Message}", Relative(fullRoot, directory)));
                 continue;
             }
@@ -55,7 +55,7 @@ public static class TextResourceWorkspaceDiscovery
                 string entry = entries[index];
                 entryCount++;
                 if (entryCount > options.MaximumEntries)
-                    throw new TextResourceAuthoringException($"Workspace exceeds the {options.MaximumEntries}-entry discovery limit.");
+                    throw new TranslationAuthoringException($"Workspace exceeds the {options.MaximumEntries}-entry discovery limit.");
 
                 FileAttributes attributes;
                 try
@@ -64,7 +64,7 @@ public static class TextResourceWorkspaceDiscovery
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
-                    diagnostics.Add(Diagnostic("RTRA0004", TextResourceAuthoringDiagnosticSeverity.Error,
+                    diagnostics.Add(Diagnostic("RTRA0004", TranslationAuthoringDiagnosticSeverity.Error,
                         $"Entry could not be inspected: {exception.Message}", Relative(fullRoot, entry)));
                     continue;
                 }
@@ -72,7 +72,7 @@ public static class TextResourceWorkspaceDiscovery
                 string relativePath = Relative(fullRoot, entry);
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
                 {
-                    diagnostics.Add(Diagnostic("RTRA0003", TextResourceAuthoringDiagnosticSeverity.Error,
+                    diagnostics.Add(Diagnostic("RTRA0003", TranslationAuthoringDiagnosticSeverity.Error,
                         "Symbolic links and reparse points are not traversed.", relativePath));
                     continue;
                 }
@@ -82,7 +82,7 @@ public static class TextResourceWorkspaceDiscovery
                     if (IsIgnoredDirectory(Path.GetFileName(entry))) continue;
                     if (depth == options.MaximumDepth)
                     {
-                        diagnostics.Add(Diagnostic("RTRA0002", TextResourceAuthoringDiagnosticSeverity.Warning,
+                        diagnostics.Add(Diagnostic("RTRA0002", TranslationAuthoringDiagnosticSeverity.Warning,
                             $"Directory depth exceeds the configured limit of {options.MaximumDepth}.", relativePath));
                         continue;
                     }
@@ -93,17 +93,17 @@ public static class TextResourceWorkspaceDiscovery
 
                 if (!entry.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
                 if (files.Count == options.MaximumJsonFiles)
-                    throw new TextResourceAuthoringException($"Workspace exceeds the {options.MaximumJsonFiles}-JSON-file discovery limit.");
+                    throw new TranslationAuthoringException($"Workspace exceeds the {options.MaximumJsonFiles}-JSON-file discovery limit.");
 
                 long length = new FileInfo(entry).Length;
                 if (length > options.MaximumFileBytes)
                 {
-                    diagnostics.Add(Diagnostic("RTRA0001", TextResourceAuthoringDiagnosticSeverity.Error,
+                    diagnostics.Add(Diagnostic("RTRA0001", TranslationAuthoringDiagnosticSeverity.Error,
                         $"JSON file exceeds the {options.MaximumFileBytes}-byte limit.", relativePath));
                     continue;
                 }
                 if (totalBytes + length > options.MaximumTotalBytes)
-                    throw new TextResourceAuthoringException($"Workspace JSON exceeds the {options.MaximumTotalBytes}-byte total limit.");
+                    throw new TranslationAuthoringException($"Workspace JSON exceeds the {options.MaximumTotalBytes}-byte total limit.");
 
                 byte[] bytes;
                 try
@@ -113,7 +113,7 @@ public static class TextResourceWorkspaceDiscovery
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or DecoderFallbackException)
                 {
-                    diagnostics.Add(Diagnostic("RTRA0005", TextResourceAuthoringDiagnosticSeverity.Error,
+                    diagnostics.Add(Diagnostic("RTRA0005", TranslationAuthoringDiagnosticSeverity.Error,
                         $"JSON file is not readable strict UTF-8: {exception.Message}", relativePath));
                     continue;
                 }
@@ -125,59 +125,59 @@ public static class TextResourceWorkspaceDiscovery
 
         files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
         diagnostics.Sort(CompareDiagnostics);
-        TextResourceDiscoveredCatalog[] catalogs = CompileCatalogs(files);
-        return new TextResourceWorkspaceDiscoveryResult(fullRoot, files.ToArray(), catalogs, diagnostics.ToArray());
+        TranslationDiscoveredCatalog[] catalogs = CompileCatalogs(files);
+        return new TranslationWorkspaceDiscoveryResult(fullRoot, files.ToArray(), catalogs, diagnostics.ToArray());
     }
 
-    private static TextResourceWorkspaceFile Classify(
+    private static TranslationWorkspaceFile Classify(
         string path,
         byte[] bytes,
-        List<TextResourceAuthoringDiagnostic> diagnostics)
+        List<TranslationAuthoringDiagnostic> diagnostics)
     {
         try
         {
             using JsonDocument document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 64 });
             JsonElement root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
-                return new TextResourceWorkspaceFile(path, TextResourceWorkspaceFileKind.OtherJson, null, null, null, bytes);
+                return new TranslationWorkspaceFile(path, TranslationWorkspaceFileKind.OtherJson, null, null, null, bytes);
 
             string? catalog = StringProperty(root, "catalog");
             if (root.TryGetProperty("defaultLocale", out _) && root.TryGetProperty("locales", out _) && root.TryGetProperty("layers", out _))
-                return new TextResourceWorkspaceFile(path, TextResourceWorkspaceFileKind.CatalogManifest, catalog, null, null, bytes);
+                return new TranslationWorkspaceFile(path, TranslationWorkspaceFileKind.CatalogManifest, catalog, null, null, bytes);
             if (root.TryGetProperty("locale", out _) && root.TryGetProperty("layer", out _) && root.TryGetProperty("resources", out _))
-                return new TextResourceWorkspaceFile(
+                return new TranslationWorkspaceFile(
                     path,
-                    TextResourceWorkspaceFileKind.ResourceDocument,
+                    TranslationWorkspaceFileKind.ResourceDocument,
                     catalog,
                     StringProperty(root, "locale"),
                     StringProperty(root, "layer"),
                     bytes);
-            return new TextResourceWorkspaceFile(path, TextResourceWorkspaceFileKind.OtherJson, catalog, null, null, bytes);
+            return new TranslationWorkspaceFile(path, TranslationWorkspaceFileKind.OtherJson, catalog, null, null, bytes);
         }
         catch (JsonException exception)
         {
-            diagnostics.Add(Diagnostic("RTRA0006", TextResourceAuthoringDiagnosticSeverity.Error,
+            diagnostics.Add(Diagnostic("RTRA0006", TranslationAuthoringDiagnosticSeverity.Error,
                 $"Malformed JSON: {exception.Message}", path));
-            return new TextResourceWorkspaceFile(path, TextResourceWorkspaceFileKind.MalformedJson, null, null, null, bytes);
+            return new TranslationWorkspaceFile(path, TranslationWorkspaceFileKind.MalformedJson, null, null, null, bytes);
         }
     }
 
-    private static TextResourceDiscoveredCatalog[] CompileCatalogs(List<TextResourceWorkspaceFile> files)
+    private static TranslationDiscoveredCatalog[] CompileCatalogs(List<TranslationWorkspaceFile> files)
     {
-        var manifests = new Dictionary<string, List<TextResourceWorkspaceFile>>(StringComparer.Ordinal);
-        var documents = new Dictionary<string, List<TextResourceWorkspaceFile>>(StringComparer.Ordinal);
+        var manifests = new Dictionary<string, List<TranslationWorkspaceFile>>(StringComparer.Ordinal);
+        var documents = new Dictionary<string, List<TranslationWorkspaceFile>>(StringComparer.Ordinal);
         for (int index = 0; index < files.Count; index++)
         {
-            TextResourceWorkspaceFile file = files[index];
+            TranslationWorkspaceFile file = files[index];
             if (file.CatalogId is null) continue;
-            Dictionary<string, List<TextResourceWorkspaceFile>> target = file.Kind switch
+            Dictionary<string, List<TranslationWorkspaceFile>> target = file.Kind switch
             {
-                TextResourceWorkspaceFileKind.CatalogManifest => manifests,
-                TextResourceWorkspaceFileKind.ResourceDocument => documents,
+                TranslationWorkspaceFileKind.CatalogManifest => manifests,
+                TranslationWorkspaceFileKind.ResourceDocument => documents,
                 _ => null!,
             };
             if (target is null) continue;
-            if (!target.TryGetValue(file.CatalogId, out List<TextResourceWorkspaceFile>? group))
+            if (!target.TryGetValue(file.CatalogId, out List<TranslationWorkspaceFile>? group))
             {
                 group = [];
                 target.Add(file.CatalogId, group);
@@ -185,15 +185,15 @@ public static class TextResourceWorkspaceDiscovery
             group.Add(file);
         }
 
-        var result = new List<TextResourceDiscoveredCatalog>(manifests.Count);
-        foreach (KeyValuePair<string, List<TextResourceWorkspaceFile>> pair in manifests)
+        var result = new List<TranslationDiscoveredCatalog>(manifests.Count);
+        foreach (KeyValuePair<string, List<TranslationWorkspaceFile>> pair in manifests)
         {
-            documents.TryGetValue(pair.Key, out List<TextResourceWorkspaceFile>? catalogDocuments);
+            documents.TryGetValue(pair.Key, out List<TranslationWorkspaceFile>? catalogDocuments);
             catalogDocuments ??= [];
-            TextResourceCompilation compilation = TextResourceCompiler.Compile(
+            TranslationCompilation compilation = TranslationCompiler.Compile(
                 Sources(pair.Value),
                 Sources(catalogDocuments));
-            result.Add(new TextResourceDiscoveredCatalog(
+            result.Add(new TranslationDiscoveredCatalog(
                 pair.Key,
                 Paths(pair.Value),
                 Paths(catalogDocuments),
@@ -203,15 +203,15 @@ public static class TextResourceWorkspaceDiscovery
         return result.ToArray();
     }
 
-    private static TextResourceSource[] Sources(List<TextResourceWorkspaceFile> files)
+    private static TranslationSource[] Sources(List<TranslationWorkspaceFile> files)
     {
-        var result = new TextResourceSource[files.Count];
+        var result = new TranslationSource[files.Count];
         for (int index = 0; index < files.Count; index++)
-            result[index] = new TextResourceSource(files[index].RelativePath, files[index].Bytes);
+            result[index] = new TranslationSource(files[index].RelativePath, files[index].Bytes);
         return result;
     }
 
-    private static string[] Paths(List<TextResourceWorkspaceFile> files)
+    private static string[] Paths(List<TranslationWorkspaceFile> files)
     {
         var result = new string[files.Count];
         for (int index = 0; index < files.Count; index++) result[index] = files[index].RelativePath;
@@ -227,12 +227,12 @@ public static class TextResourceWorkspaceDiscovery
     private static bool IsIgnoredDirectory(string name) => name is ".git" or ".hg" or ".svn" or "bin" or "obj" or "node_modules" or "artifacts";
     private static bool IsReparsePoint(string path) => (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
     private static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');
-    private static TextResourceAuthoringDiagnostic Diagnostic(
+    private static TranslationAuthoringDiagnostic Diagnostic(
         string id,
-        TextResourceAuthoringDiagnosticSeverity severity,
+        TranslationAuthoringDiagnosticSeverity severity,
         string message,
         string path) => new(id, severity, message, path);
-    private static int CompareDiagnostics(TextResourceAuthoringDiagnostic left, TextResourceAuthoringDiagnostic right)
+    private static int CompareDiagnostics(TranslationAuthoringDiagnostic left, TranslationAuthoringDiagnostic right)
     {
         int path = StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath);
         return path != 0 ? path : StringComparer.Ordinal.Compare(left.Id, right.Id);

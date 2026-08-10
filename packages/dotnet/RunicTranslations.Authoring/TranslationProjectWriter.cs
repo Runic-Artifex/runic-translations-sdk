@@ -3,21 +3,21 @@ using System.IO;
 
 namespace RunicTranslations.Authoring;
 
-public static class TextResourceProjectWriter
+public static class TranslationProjectWriter
 {
-    public static string Create(TextResourceProjectPlan plan)
+    public static string Create(TranslationProjectPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
         string target = Path.GetFullPath(plan.Request.Directory);
         if (Directory.Exists(target) || File.Exists(target))
         {
-            throw new TextResourceAuthoringException($"Target path '{target}' already exists; no files were written.");
+            throw new TranslationAuthoringException($"Target path '{target}' already exists; no files were written.");
         }
 
         string? parent = Path.GetDirectoryName(target);
         if (parent is null)
         {
-            throw new TextResourceAuthoringException($"Target path '{target}' has no parent directory.");
+            throw new TranslationAuthoringException($"Target path '{target}' has no parent directory.");
         }
 
         RejectReparsePoints(parent);
@@ -30,7 +30,7 @@ public static class TextResourceProjectWriter
         {
             for (int index = 0; index < plan.Files.Count; index++)
             {
-                TextResourceProjectFile file = plan.Files[index];
+                TranslationProjectFile file = plan.Files[index];
                 string destination = ResolveContainedPath(staging, file.RelativePath);
                 string? destinationParent = Path.GetDirectoryName(destination);
                 if (destinationParent is not null)
@@ -55,7 +55,7 @@ public static class TextResourceProjectWriter
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             TryDeleteStaging(staging);
-            throw new TextResourceAuthoringException(
+            throw new TranslationAuthoringException(
                 $"Could not create translation project at '{target}'; no project was committed.",
                 exception);
         }
@@ -70,7 +70,7 @@ public static class TextResourceProjectWriter
     {
         if (Path.IsPathRooted(relativePath))
         {
-            throw new TextResourceAuthoringException($"Project file path '{relativePath}' must be relative.");
+            throw new TranslationAuthoringException($"Project file path '{relativePath}' must be relative.");
         }
 
         string destination = Path.GetFullPath(relativePath.Replace('/', Path.DirectorySeparatorChar), root);
@@ -79,7 +79,7 @@ public static class TextResourceProjectWriter
             : root + Path.DirectorySeparatorChar;
         if (!destination.StartsWith(rootPrefix, PathComparison))
         {
-            throw new TextResourceAuthoringException($"Project file path '{relativePath}' escapes the target directory.");
+            throw new TranslationAuthoringException($"Project file path '{relativePath}' escapes the target directory.");
         }
 
         return destination;
@@ -95,7 +95,7 @@ public static class TextResourceProjectWriter
 
         if (current is not null && (current.Attributes & FileAttributes.ReparsePoint) != 0)
         {
-            throw new TextResourceAuthoringException(
+            throw new TranslationAuthoringException(
                 $"Target parent '{current.FullName}' is a symbolic link or reparse point.");
         }
     }

@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <TextResourceCatalog Include="Resources\__CATALOG__.catalog.json" />
-    <TextResourceDocument Include="Resources\__CATALOG__.__DEFAULT_LOCALE__.json" />
+    <TranslationCatalog Include="Resources\__CATALOG__.catalog.json" />
+    <TranslationDocument Include="Resources\__CATALOG__.__DEFAULT_LOCALE__.json" />
   </ItemGroup>
 </Project>

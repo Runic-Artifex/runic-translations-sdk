@@ -134,11 +134,11 @@ internal static class GeneratorTests
             new TestInput("C:/repo/Resources/app.textcatalog.json", "Catalog", Catalog),
             new TestInput("C:/repo/Resources/en.texts.json", "Document", Document));
         ImmutableDictionary<string, ImmutableArray<IncrementalGeneratorRunStep>> steps = run.SingleResult.TrackedSteps;
-        Assert.True(steps.ContainsKey("TextResourceInputs"), "input tracking step missing");
-        Assert.True(steps.ContainsKey("TextResourceCompilation"), "compilation tracking step missing");
+        Assert.True(steps.ContainsKey("TranslationInputs"), "input tracking step missing");
+        Assert.True(steps.ContainsKey("TranslationCompilation"), "compilation tracking step missing");
         GeneratorDriver rerunDriver = run.Driver.RunGenerators(run.InputCompilation);
         GeneratorRunResult rerun = rerunDriver.GetRunResult().Results.Single();
-        ImmutableArray<IncrementalGeneratorRunStep> inputSteps = rerun.TrackedSteps["TextResourceInputs"];
+        ImmutableArray<IncrementalGeneratorRunStep> inputSteps = rerun.TrackedSteps["TranslationInputs"];
         Assert.True(
             inputSteps.SelectMany(static step => step.Outputs).All(static output => output.Reason == IncrementalStepRunReason.Cached),
             "unchanged additional inputs were not cached");

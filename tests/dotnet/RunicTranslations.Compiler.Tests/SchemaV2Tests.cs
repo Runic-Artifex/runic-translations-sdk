@@ -27,17 +27,17 @@ internal static class SchemaV2Tests
         const string document = """
             { "schemaVersion":2, "catalog":"empty", "locale":"de", "layer":"base", "resources":{} }
             """;
-        TextResourceCompilation compilation = RunicTranslations.Compiler.TextResourceCompiler.Compile(
+        TranslationCompilation compilation = RunicTranslations.Compiler.TranslationCompiler.Compile(
             [CompilerTests.Source("manifest.json", manifest)],
             [CompilerTests.Source("de.json", document)]);
         Assert.True(compilation.Success, CompilerTests.DiagnosticsText(compilation.Diagnostics));
         CompiledTextCatalog catalog = Assert.Single(compilation.Catalogs);
         Assert.Equal(0, catalog.CanonicalResources.Count);
-        Assert.True(TextResourceOutputRenderer.RenderCSharpKeys(catalog).Text.Length > 0, "Empty catalog did not produce C# keys.");
-        Assert.True(TextResourceOutputRenderer.RenderCSharpAccessors(catalog).Text.Length > 0, "Empty catalog did not produce C# accessors.");
-        Assert.True(TextResourceOutputRenderer.RenderCSharpCatalogData(catalog).Text.Length > 0, "Empty catalog did not produce C# data.");
-        Assert.True(TextResourceOutputRenderer.RenderCSharpRegistration(catalog).Text.Length > 0, "Empty catalog did not produce C# registration.");
-        Assert.True(TextResourceOutputRenderer.RenderEsmModules(catalog).Count > 0, "Empty catalog did not produce its ESM runtime surface.");
+        Assert.True(TranslationOutputRenderer.RenderCSharpKeys(catalog).Text.Length > 0, "Empty catalog did not produce C# keys.");
+        Assert.True(TranslationOutputRenderer.RenderCSharpAccessors(catalog).Text.Length > 0, "Empty catalog did not produce C# accessors.");
+        Assert.True(TranslationOutputRenderer.RenderCSharpCatalogData(catalog).Text.Length > 0, "Empty catalog did not produce C# data.");
+        Assert.True(TranslationOutputRenderer.RenderCSharpRegistration(catalog).Text.Length > 0, "Empty catalog did not produce C# registration.");
+        Assert.True(TranslationOutputRenderer.RenderEsmModules(catalog).Count > 0, "Empty catalog did not produce its ESM runtime surface.");
         CompileGeneratedCSharp(catalog);
     }
 
@@ -62,7 +62,7 @@ internal static class SchemaV2Tests
               "inputs":{"value":{"type":"int64"}},"selectors":[{"name":"category","input":"value","function":"ordinal"}],
               "variants":[{"match":{"category":"one"},"value":"one"},{"match":{"category":"two"},"value":"two"},{"match":{"category":"few"},"value":"few"},{"match":{"category":"*"},"value":"other"}]}}}}
             """;
-        var compilation = RunicTranslations.Compiler.TextResourceCompiler.Compile(
+        var compilation = RunicTranslations.Compiler.TranslationCompiler.Compile(
             [CompilerTests.Source("cardinal-manifest.json", cardinalManifest), CompilerTests.Source("ordinal-manifest.json", ordinalManifest)],
             [CompilerTests.Source("cardinal-en.json", cardinal), CompilerTests.Source("ordinal-en.json", ordinal)]);
         Assert.True(compilation.Success, CompilerTests.DiagnosticsText(compilation.Diagnostics));
@@ -71,7 +71,7 @@ internal static class SchemaV2Tests
         try
         {
             foreach (CompiledTextCatalog catalog in compilation.Catalogs)
-                foreach (TextResourceGeneratedOutput output in TextResourceOutputRenderer.RenderEsmModules(catalog))
+                foreach (TranslationGeneratedOutput output in TranslationOutputRenderer.RenderEsmModules(catalog))
                 {
                     string path = Path.Combine(directory, output.RelativePath.Replace('/', Path.DirectorySeparatorChar));
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -126,29 +126,29 @@ internal static class SchemaV2Tests
               } } }
             } }
             """;
-        var compilation = RunicTranslations.Compiler.TextResourceCompiler.Compile(
+        var compilation = RunicTranslations.Compiler.TranslationCompiler.Compile(
             [CompilerTests.Source("manifest.json", manifest)], [CompilerTests.Source("en.json", english)]);
         Assert.True(compilation.Success, CompilerTests.DiagnosticsText(compilation.Diagnostics));
         CompiledTextCatalog catalog = Assert.Single(compilation.Catalogs);
-        TextResourceGeneratedOutput accessors = TextResourceOutputRenderer.RenderCSharpAccessors(catalog);
-        TextResourceGeneratedOutput data = TextResourceOutputRenderer.RenderCSharpCatalogData(catalog);
+        TranslationGeneratedOutput accessors = TranslationOutputRenderer.RenderCSharpAccessors(catalog);
+        TranslationGeneratedOutput data = TranslationOutputRenderer.RenderCSharpCatalogData(catalog);
         Assert.True(accessors.Text.Contains("LocalizedTextContent", StringComparison.Ordinal), "Structured C# accessor did not expose the safe result type.");
         Assert.True(data.Text.Contains("CompiledTextMessageNodeKind.RelativeTime", StringComparison.Ordinal), "C# data omitted relative-time AST.");
         Assert.True(data.Text.Contains("CompiledTextMessageNodeKind.MarkupStart", StringComparison.Ordinal), "C# data omitted markup AST.");
         CompileGeneratedCSharp(catalog);
 
-        IReadOnlyList<TextResourceGeneratedOutput> esm = TextResourceOutputRenderer.RenderEsmModules(catalog);
+        IReadOnlyList<TranslationGeneratedOutput> esm = TranslationOutputRenderer.RenderEsmModules(catalog);
         string directory = Path.Combine(Path.GetTempPath(), "runic-v2-features-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
-            foreach (TextResourceGeneratedOutput output in esm)
+            foreach (TranslationGeneratedOutput output in esm)
             {
                 string path = Path.Combine(directory, output.RelativePath.Replace('/', Path.DirectorySeparatorChar));
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllBytes(path, output.GetUtf8Bytes());
             }
-            TextResourceGeneratedOutput localeArtifact = TextResourceOutputRenderer.RenderLocaleJson(catalog, "en");
+            TranslationGeneratedOutput localeArtifact = TranslationOutputRenderer.RenderLocaleJson(catalog, "en");
             Assert.True(localeArtifact.RelativePath.EndsWith("locale-v2.json", StringComparison.Ordinal), "Schema v2 was emitted as a v1 locale artifact.");
             File.WriteAllBytes(Path.Combine(directory, "artifact.json"), localeArtifact.GetUtf8Bytes());
             string script = Path.Combine(directory, "test.mjs");
@@ -191,12 +191,12 @@ internal static class SchemaV2Tests
         Directory.CreateDirectory(directory);
         try
         {
-            foreach (TextResourceGeneratedOutput output in new[]
+            foreach (TranslationGeneratedOutput output in new[]
             {
-                TextResourceOutputRenderer.RenderCSharpKeys(catalog),
-                TextResourceOutputRenderer.RenderCSharpAccessors(catalog),
-                TextResourceOutputRenderer.RenderCSharpCatalogData(catalog),
-                TextResourceOutputRenderer.RenderCSharpRegistration(catalog),
+                TranslationOutputRenderer.RenderCSharpKeys(catalog),
+                TranslationOutputRenderer.RenderCSharpAccessors(catalog),
+                TranslationOutputRenderer.RenderCSharpCatalogData(catalog),
+                TranslationOutputRenderer.RenderCSharpRegistration(catalog),
             }) File.WriteAllBytes(Path.Combine(directory, output.RelativePath), output.GetUtf8Bytes());
             string runtimeProject = Path.Combine(RepositoryPaths.RepositoryRoot, "dotnet", "src", "RunicTranslations", "RunicTranslations.csproj");
             string project = Path.Combine(directory, "Generated.csproj");
@@ -224,17 +224,17 @@ internal static class SchemaV2Tests
         var catalog = Assert.Single(compilation.Catalogs);
         Assert.Equal(2, catalog.SchemaVersion);
         Assert.Equal(2, catalog.MessageGrammarVersion);
-        TextResourceGeneratedOutput accessors = TextResourceOutputRenderer.RenderCSharpAccessors(catalog);
-        TextResourceGeneratedOutput catalogData = TextResourceOutputRenderer.RenderCSharpCatalogData(catalog);
+        TranslationGeneratedOutput accessors = TranslationOutputRenderer.RenderCSharpAccessors(catalog);
+        TranslationGeneratedOutput catalogData = TranslationOutputRenderer.RenderCSharpCatalogData(catalog);
         Assert.True(catalogData.Text.Contains("CompiledTextMessageSelectorKind.CardinalPlural", StringComparison.Ordinal), "C# catalog data did not carry the v2 selector AST.");
         Assert.True(!accessors.Text.Contains("TextPatternFormatter.Format", StringComparison.Ordinal), "Generated accessors still parse selected pattern strings.");
 
-        IReadOnlyList<TextResourceGeneratedOutput> esm = TextResourceOutputRenderer.RenderEsmModules(catalog);
+        IReadOnlyList<TranslationGeneratedOutput> esm = TranslationOutputRenderer.RenderEsmModules(catalog);
         string directory = Path.Combine(Path.GetTempPath(), "runic-v2-esm-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
-            foreach (TextResourceGeneratedOutput output in esm)
+            foreach (TranslationGeneratedOutput output in esm)
             {
                 string path = Path.Combine(directory, output.RelativePath.Replace('/', Path.DirectorySeparatorChar));
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -265,7 +265,7 @@ internal static class SchemaV2Tests
         Assert.True(found, CompilerTests.DiagnosticsText(compilation.Diagnostics));
     }
 
-    private static RunicTranslations.Compiler.TextResourceCompilation Compile(bool includeCatchAll)
+    private static RunicTranslations.Compiler.TranslationCompilation Compile(bool includeCatchAll)
     {
         const string manifest = """
             { "schemaVersion": 2, "catalog": "v2", "code": { "namespace": "Tests", "className": "V2Text" },
@@ -276,7 +276,7 @@ internal static class SchemaV2Tests
         string otherDe = includeCatchAll ? ", { " + "\"match\":{\"quantity\":\"*\"},\"value\":\"{count} Dateien\"}" : string.Empty;
         string english = "{\"schemaVersion\":2,\"catalog\":\"v2\",\"locale\":\"en\",\"layer\":\"base\",\"resources\":{\"Files\":{\"Deleted\":{\"$value\":{\"inputs\":{\"count\":{\"type\":\"int64\"}},\"selectors\":[{\"name\":\"quantity\",\"input\":\"count\",\"function\":\"plural\"}],\"variants\":[{\"match\":{\"quantity\":\"one\"},\"value\":\"One file\"}" + otherEn + "]}}}}}";
         string german = "{\"schemaVersion\":2,\"catalog\":\"v2\",\"locale\":\"de\",\"layer\":\"base\",\"resources\":{\"Files\":{\"Deleted\":{\"$value\":{\"inputs\":{\"count\":{\"type\":\"int64\"}},\"selectors\":[{\"name\":\"quantity\",\"input\":\"count\",\"function\":\"plural\"}],\"variants\":[{\"match\":{\"quantity\":\"one\"},\"value\":\"Eine Datei\"}" + otherDe + "]}}}}}";
-        return RunicTranslations.Compiler.TextResourceCompiler.Compile(
+        return RunicTranslations.Compiler.TranslationCompiler.Compile(
             [CompilerTests.Source("manifest.json", manifest)],
             [CompilerTests.Source("en.json", english), CompilerTests.Source("de.json", german)]);
     }

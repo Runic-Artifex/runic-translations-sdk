@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace RunicTranslations.Compiler.Generation;
 
 /// <summary>Pure deterministic renderers over the canonical compiled translation IR.</summary>
-public static class TextResourceOutputRenderer
+public static class TranslationOutputRenderer
 {
     /// <summary>The writer version of locale JSON artifacts and external packs.</summary>
     public const int LocaleArtifactVersion = 1;
@@ -27,48 +27,48 @@ public static class TextResourceOutputRenderer
     public const int CppAbiVersion = 1;
 
     /// <summary>Renders the strongly typed key hierarchy.</summary>
-    public static TextResourceGeneratedOutput RenderCSharpKeys(CompiledTextCatalog catalog) =>
+    public static TranslationGeneratedOutput RenderCSharpKeys(CompiledTextCatalog catalog) =>
         CSharpOutputRenderer.RenderKeys(RequireCatalog(catalog));
 
     /// <summary>Renders strongly typed accessors that read the manager's current snapshot on every call.</summary>
-    public static TextResourceGeneratedOutput RenderCSharpAccessors(CompiledTextCatalog catalog) =>
+    public static TranslationGeneratedOutput RenderCSharpAccessors(CompiledTextCatalog catalog) =>
         CSharpOutputRenderer.RenderAccessors(RequireCatalog(catalog));
 
     /// <summary>Renders reflection-free arrays and descriptors consumed by the generated provider.</summary>
-    public static TextResourceGeneratedOutput RenderCSharpCatalogData(CompiledTextCatalog catalog) =>
+    public static TranslationGeneratedOutput RenderCSharpCatalogData(CompiledTextCatalog catalog) =>
         CSharpOutputRenderer.RenderCatalogData(RequireCatalog(catalog));
 
     /// <summary>Renders the application-facing, reflection-free provider and manager factory.</summary>
-    public static TextResourceGeneratedOutput RenderCSharpRegistration(CompiledTextCatalog catalog) =>
+    public static TranslationGeneratedOutput RenderCSharpRegistration(CompiledTextCatalog catalog) =>
         CSharpOutputRenderer.RenderRegistration(RequireCatalog(catalog));
 
     /// <summary>Renders one declared locale as canonical compact JSON using resolved fallback values.</summary>
-    public static TextResourceGeneratedOutput RenderLocaleJson(CompiledTextCatalog catalog, string locale)
+    public static TranslationGeneratedOutput RenderLocaleJson(CompiledTextCatalog catalog, string locale)
     {
         ArgumentNullException.ThrowIfNull(locale);
         return EdgeOutputRenderer.RenderLocale(RequireCatalog(catalog), locale);
     }
 
     /// <summary>Renders the value-free, versioned template compiler edge manifest.</summary>
-    public static TextResourceGeneratedOutput RenderTemplateManifestJson(CompiledTextCatalog catalog) =>
+    public static TranslationGeneratedOutput RenderTemplateManifestJson(CompiledTextCatalog catalog) =>
         EdgeOutputRenderer.RenderTemplateManifest(RequireCatalog(catalog));
 
     /// <summary>Renders the versioned TypeScript key and argument contract without a runtime implementation.</summary>
-    public static TextResourceGeneratedOutput RenderTypeScriptContract(CompiledTextCatalog catalog) =>
+    public static TranslationGeneratedOutput RenderTypeScriptContract(CompiledTextCatalog catalog) =>
         EdgeOutputRenderer.RenderTypeScriptContract(RequireCatalog(catalog));
 
     /// <summary>Renders the versioned host inventory for selected non-C# outputs of one catalog.</summary>
-    public static TextResourceGeneratedOutput RenderAssetManifestJson(
+    public static TranslationGeneratedOutput RenderAssetManifestJson(
         CompiledTextCatalog catalog,
-        IEnumerable<TextResourceGeneratedOutput> selectedOutputs) =>
+        IEnumerable<TranslationGeneratedOutput> selectedOutputs) =>
         EdgeOutputRenderer.RenderAssetManifest(RequireCatalog(catalog), selectedOutputs);
 
     /// <summary>Renders deterministic, independently tree-shakable ESM message modules and their manifest.</summary>
-    public static IReadOnlyList<TextResourceGeneratedOutput> RenderEsmModules(CompiledTextCatalog catalog) =>
+    public static IReadOnlyList<TranslationGeneratedOutput> RenderEsmModules(CompiledTextCatalog catalog) =>
         EsmOutputRenderer.Render(RequireCatalog(catalog));
 
     /// <summary>Renders an experimental dependency-free C++20 header/source pair.</summary>
-    public static IReadOnlyList<TextResourceGeneratedOutput> RenderCpp(CompiledTextCatalog catalog) =>
+    public static IReadOnlyList<TranslationGeneratedOutput> RenderCpp(CompiledTextCatalog catalog) =>
         CppOutputRenderer.Render(RequireCatalog(catalog));
 
     private static CompiledTextCatalog RequireCatalog(CompiledTextCatalog catalog) =>

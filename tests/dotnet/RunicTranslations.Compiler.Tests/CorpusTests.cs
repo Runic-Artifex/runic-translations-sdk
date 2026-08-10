@@ -43,7 +43,7 @@ internal static class CorpusTests
 
     private static void ExecuteCase(CorpusCase testCase)
     {
-        CompilerModel.TextResourceCompilation compilation = Compile(testCase, reverseDocuments: false);
+        CompilerModel.TranslationCompilation compilation = Compile(testCase, reverseDocuments: false);
         Assert.Equal(testCase.Valid, compilation.Success,
             "Unexpected success state.\n" + CompilerTests.DiagnosticsText(compilation.Diagnostics));
         AssertDiagnostics(testCase.ExpectedDiagnostics, compilation.Diagnostics, testCase.Id);
@@ -95,7 +95,7 @@ internal static class CorpusTests
 
         if (testCase.PlaceholderOrder is not null)
         {
-            CompilerModel.CompiledTextResource resource = FindResource(catalog.CanonicalResources, "All");
+            CompilerModel.CompiledTranslation resource = FindResource(catalog.CanonicalResources, "All");
             string[] names = new string[resource.Placeholders.Count];
             for (int i = 0; i < names.Length; i++)
             {
@@ -130,8 +130,8 @@ internal static class CorpusTests
                 continue;
             }
 
-            CompilerModel.TextResourceCompilation normal = Compile(testCase, reverseDocuments: false);
-            CompilerModel.TextResourceCompilation reversed = Compile(testCase, reverseDocuments: true);
+            CompilerModel.TranslationCompilation normal = Compile(testCase, reverseDocuments: false);
+            CompilerModel.TranslationCompilation reversed = Compile(testCase, reverseDocuments: true);
             Assert.True(normal.Success, CompilerTests.DiagnosticsText(normal.Diagnostics));
             Assert.True(reversed.Success, CompilerTests.DiagnosticsText(reversed.Diagnostics));
             string fingerprint = Assert.Single(normal.Catalogs).Fingerprint;
@@ -161,13 +161,13 @@ internal static class CorpusTests
                 continue;
             }
 
-            CompilerModel.TextResourceCompilation compilation = Compile(testCase, reverseDocuments: false);
+            CompilerModel.TranslationCompilation compilation = Compile(testCase, reverseDocuments: false);
             int count = Math.Min(testCase.ExpectedDiagnostics.Count, compilation.Diagnostics.Count);
             attributable += testCase.ExpectedDiagnostics.Count;
             for (int i = 0; i < count; i++)
             {
                 ExpectedDiagnostic expected = testCase.ExpectedDiagnostics[i];
-                CompilerModel.TextResourceDiagnostic actual = compilation.Diagnostics[i];
+                CompilerModel.TranslationDiagnostic actual = compilation.Diagnostics[i];
                 if (string.Equals(expected.Path, actual.Location.Path, StringComparison.Ordinal) &&
                     expected.Line == actual.Location.Line && expected.Column == actual.Location.Column &&
                     expected.EndLine == actual.Location.EndLine && expected.EndColumn == actual.Location.EndColumn)
@@ -193,31 +193,31 @@ internal static class CorpusTests
 
     private static void AssertStrictJsonFailure(string path, byte[] bytes, int line, int column)
     {
-        CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
-            [new CompilerModel.TextResourceSource(path, bytes)],
-            Array.Empty<CompilerModel.TextResourceSource>());
+        CompilerModel.TranslationCompilation compilation = CompilerModel.TranslationCompiler.Compile(
+            [new CompilerModel.TranslationSource(path, bytes)],
+            Array.Empty<CompilerModel.TranslationSource>());
         Assert.True(compilation.Diagnostics.Count != 0, path + " unexpectedly produced no diagnostics.");
-        CompilerModel.TextResourceDiagnostic diagnostic = compilation.Diagnostics[0];
+        CompilerModel.TranslationDiagnostic diagnostic = compilation.Diagnostics[0];
         Assert.Equal("RTR0001", diagnostic.Id);
-        Assert.Equal(CompilerModel.TextResourceDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal(CompilerModel.TranslationDiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal(path, diagnostic.Location.Path);
         Assert.Equal(line, diagnostic.Location.Line);
         Assert.Equal(column, diagnostic.Location.Column);
-        foreach (CompilerModel.TextResourceDiagnostic item in compilation.Diagnostics)
+        foreach (CompilerModel.TranslationDiagnostic item in compilation.Diagnostics)
         {
             Assert.True(item.Id != "RTR0099", path + " was incorrectly reported as an internal compiler failure.");
         }
     }
 
-    private static CompilerModel.TextResourceCompilation Compile(CorpusCase testCase, bool reverseDocuments)
+    private static CompilerModel.TranslationCompilation Compile(CorpusCase testCase, bool reverseDocuments)
     {
-        List<CompilerModel.TextResourceSource> manifests = new();
+        List<CompilerModel.TranslationSource> manifests = new();
         if (testCase.Manifest is not null)
         {
             manifests.Add(ReadCorpusSource(testCase.Manifest));
         }
 
-        List<CompilerModel.TextResourceSource> documents = new();
+        List<CompilerModel.TranslationSource> documents = new();
         foreach (string path in testCase.Documents)
         {
             documents.Add(ReadCorpusSource(path));
@@ -228,19 +228,19 @@ internal static class CorpusTests
             documents.Reverse();
         }
 
-        return CompilerModel.TextResourceCompiler.Compile(manifests, documents);
+        return CompilerModel.TranslationCompiler.Compile(manifests, documents);
     }
 
-    private static CompilerModel.TextResourceSource ReadCorpusSource(string path)
+    private static CompilerModel.TranslationSource ReadCorpusSource(string path)
     {
         string absolutePath = RepositoryPaths.Resolve(
             "spec", "corpus", path.Replace('/', Path.DirectorySeparatorChar));
-        return new CompilerModel.TextResourceSource(path, File.ReadAllBytes(absolutePath));
+        return new CompilerModel.TranslationSource(path, File.ReadAllBytes(absolutePath));
     }
 
     private static void AssertDiagnostics(
         IReadOnlyList<ExpectedDiagnostic> expected,
-        IReadOnlyList<CompilerModel.TextResourceDiagnostic> actual,
+        IReadOnlyList<CompilerModel.TranslationDiagnostic> actual,
         string caseId)
     {
         Assert.Equal(expected.Count, actual.Count,
@@ -248,12 +248,12 @@ internal static class CorpusTests
         for (int i = 0; i < expected.Count; i++)
         {
             ExpectedDiagnostic expectedItem = expected[i];
-            CompilerModel.TextResourceDiagnostic actualItem = actual[i];
+            CompilerModel.TranslationDiagnostic actualItem = actual[i];
             string context = caseId + " diagnostic " + i;
             Assert.Equal(expectedItem.Id, actualItem.Id, context);
-            CompilerModel.TextResourceDiagnosticSeverity severity = expectedItem.Severity == "warning"
-                ? CompilerModel.TextResourceDiagnosticSeverity.Warning
-                : CompilerModel.TextResourceDiagnosticSeverity.Error;
+            CompilerModel.TranslationDiagnosticSeverity severity = expectedItem.Severity == "warning"
+                ? CompilerModel.TranslationDiagnosticSeverity.Warning
+                : CompilerModel.TranslationDiagnosticSeverity.Error;
             Assert.Equal(severity, actualItem.Severity, context + " severity");
             Assert.Equal(expectedItem.Path, actualItem.Location.Path, context + " path");
             Assert.Equal(expectedItem.Line, actualItem.Location.Line, context + " line");
@@ -368,11 +368,11 @@ internal static class CorpusTests
         throw new InvalidOperationException("Locale not found: " + tag);
     }
 
-    private static CompilerModel.CompiledTextResource FindResource(
-        IReadOnlyList<CompilerModel.CompiledTextResource> resources,
+    private static CompilerModel.CompiledTranslation FindResource(
+        IReadOnlyList<CompilerModel.CompiledTranslation> resources,
         string key)
     {
-        foreach (CompilerModel.CompiledTextResource resource in resources)
+        foreach (CompilerModel.CompiledTranslation resource in resources)
         {
             if (string.Equals(resource.Key, key, StringComparison.Ordinal)) return resource;
         }
@@ -394,7 +394,7 @@ internal static class CorpusTests
         return result;
     }
 
-    private static string[] ResourceKeys(IReadOnlyList<CompilerModel.CompiledTextResource> resources)
+    private static string[] ResourceKeys(IReadOnlyList<CompilerModel.CompiledTranslation> resources)
     {
         string[] result = new string[resources.Count];
         for (int i = 0; i < result.Length; i++) result[i] = resources[i].Key;

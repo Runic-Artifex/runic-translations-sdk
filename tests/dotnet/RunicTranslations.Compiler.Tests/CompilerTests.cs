@@ -28,7 +28,7 @@ internal static class CompilerTests
 
     private static void MergeAndFallback()
     {
-        CompilerModel.TextResourceCompilation compilation = CompileCase("valid", "merge");
+        CompilerModel.TranslationCompilation compilation = CompileCase("valid", "merge");
         Assert.True(compilation.Success, DiagnosticsText(compilation.Diagnostics));
         CompilerModel.CompiledTextCatalog catalog = Assert.Single(compilation.Catalogs);
 
@@ -57,10 +57,10 @@ internal static class CompilerTests
 
     private static void PatternContracts()
     {
-        CompilerModel.TextResourceCompilation compilation = CompileCase("valid", "patterns");
+        CompilerModel.TranslationCompilation compilation = CompileCase("valid", "patterns");
         Assert.True(compilation.Success, DiagnosticsText(compilation.Diagnostics));
         CompilerModel.CompiledTextCatalog catalog = Assert.Single(compilation.Catalogs);
-        CompilerModel.CompiledTextResource resource = Find(catalog.CanonicalResources, "All");
+        CompilerModel.CompiledTranslation resource = Find(catalog.CanonicalResources, "All");
 
         Assert.Equal("{text}|{count}|{amount}|{enabled}|{day}|{clock}|{instant}|{id}|{text}", resource.Pattern);
         Assert.Equal("1.0", resource.Since);
@@ -72,9 +72,9 @@ internal static class CompilerTests
         Assert.Equal("percent4", FindPlaceholder(resource, "amount").Format);
         Assert.Equal("grouped", FindPlaceholder(resource, "count").Format);
         Assert.Equal("n", FindPlaceholder(resource, "id").Format);
-        Assert.Equal(CompilerModel.TextResourceArgumentType.Guid, FindPlaceholder(resource, "id").Type);
+        Assert.Equal(CompilerModel.TranslationArgumentType.Guid, FindPlaceholder(resource, "id").Type);
 
-        CompilerModel.CompiledTextResource escaped = Find(catalog.CanonicalResources, "Escapes");
+        CompilerModel.CompiledTranslation escaped = Find(catalog.CanonicalResources, "Escapes");
         Assert.Equal("Literal {{open}} and repeated text", escaped.Pattern);
         Assert.Equal(0, escaped.Placeholders.Count);
     }
@@ -84,12 +84,12 @@ internal static class CompilerTests
         const string manifest = "{\n  \"schemaVersion\": 1,\n  \"catalog\": \"app\",\n  \"code\": { \"namespace\": \"Tests\", \"className\": \"Text\" },\n  \"defaultLocale\": \"en\",\n  \"locales\": [{ \"tag\": \"en\" }],\n  \"layers\": [{ \"name\": \"base\", \"priority\": 0 }]\n}";
         const string malformed = "{\n  \"schemaVersion\": 1,\n  \"catalog\": \"app\",\n  \"locale\": \"en\",\n  \"layer\": \"base\",\n  \"resources\": {\n    \"Bad\": \"unmatched {\"\n  }\n}";
 
-        CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation compilation = CompilerModel.TranslationCompiler.Compile(
             [Source(".\\fixtures\\manifest.json", manifest)],
             [Source("./fixtures\\bad.json", malformed)]);
-        CompilerModel.TextResourceDiagnostic diagnostic = Assert.Single(compilation.Diagnostics);
+        CompilerModel.TranslationDiagnostic diagnostic = Assert.Single(compilation.Diagnostics);
         Assert.Equal("RTR0014", diagnostic.Id);
-        Assert.Equal(CompilerModel.TextResourceDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal(CompilerModel.TranslationDiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal("fixtures/bad.json", diagnostic.Location.Path);
         Assert.Equal(7, diagnostic.Location.Line);
         Assert.Equal(12, diagnostic.Location.Column);
@@ -106,12 +106,12 @@ internal static class CompilerTests
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("tr-TR");
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("tr-TR");
-            CompilerModel.TextResourceCompilation first = CompileCase("valid", "determinism-a", reverseDocuments: false);
+            CompilerModel.TranslationCompilation first = CompileCase("valid", "determinism-a", reverseDocuments: false);
 
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
             CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("de-DE");
-            CompilerModel.TextResourceCompilation reordered = CompileCase("valid", "determinism-a", reverseDocuments: true);
-            CompilerModel.TextResourceCompilation repartitioned = CompileCase("valid", "determinism-b", reverseDocuments: true);
+            CompilerModel.TranslationCompilation reordered = CompileCase("valid", "determinism-a", reverseDocuments: true);
+            CompilerModel.TranslationCompilation repartitioned = CompileCase("valid", "determinism-b", reverseDocuments: true);
 
             Assert.True(first.Success, DiagnosticsText(first.Diagnostics));
             Assert.True(reordered.Success, DiagnosticsText(reordered.Diagnostics));
@@ -133,18 +133,18 @@ internal static class CompilerTests
 
     private static void ConfiguredLimits()
     {
-        CompilerModel.TextResourceCompilerOptions limits = new(
+        CompilerModel.TranslationCompilerOptions limits = new(
             maximumDocumentBytes: 12,
             maximumDepth: 2,
             maximumKeysPerCatalog: 1,
             maximumValueBytes: 4,
             maximumPlaceholdersPerValue: 1,
             maximumLocalesPerCatalog: 1);
-        CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation compilation = CompilerModel.TranslationCompiler.Compile(
             [Source("too-large.json", "{\"schemaVersion\":1}")],
-            Array.Empty<CompilerModel.TextResourceSource>(),
+            Array.Empty<CompilerModel.TranslationSource>(),
             limits);
-        CompilerModel.TextResourceDiagnostic diagnostic = Assert.Single(compilation.Diagnostics);
+        CompilerModel.TranslationDiagnostic diagnostic = Assert.Single(compilation.Diagnostics);
         Assert.Equal("RTR0022", diagnostic.Id);
         Assert.Equal("too-large.json", diagnostic.Location.Path);
         Assert.True(!compilation.Success, "Limit diagnostics must fail compilation.");
@@ -163,14 +163,14 @@ internal static class CompilerTests
               "layers": [{ "name": "base", "priority": 0 }]
             }
             """;
-        CompilerModel.TextResourceSource[] forward =
+        CompilerModel.TranslationSource[] forward =
         [
             Source(@".\same\b.json", "not JSON"),
             Source("same/a.json", "{}"),
             Source(@".\same\a.json", "[1, 2, 3]"),
             Source("same/b.json", "{\"schemaVersion\":1}"),
         ];
-        CompilerModel.TextResourceSource[] reversed =
+        CompilerModel.TranslationSource[] reversed =
         [
             forward[3],
             forward[2],
@@ -178,16 +178,16 @@ internal static class CompilerTests
             forward[0],
         ];
 
-        CompilerModel.TextResourceCompilation first = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation first = CompilerModel.TranslationCompiler.Compile(
             [Source("manifest.json", manifest)], forward);
-        CompilerModel.TextResourceCompilation second = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation second = CompilerModel.TranslationCompiler.Compile(
             [Source("manifest.json", manifest)], reversed);
 
         Assert.Equal(DiagnosticSnapshot(first.Diagnostics), DiagnosticSnapshot(second.Diagnostics));
         Assert.Equal(2, first.Diagnostics.Count, DiagnosticsText(first.Diagnostics));
         Assert.Equal("same/a.json", first.Diagnostics[0].Location.Path);
         Assert.Equal("same/b.json", first.Diagnostics[1].Location.Path);
-        foreach (CompilerModel.TextResourceDiagnostic diagnostic in first.Diagnostics)
+        foreach (CompilerModel.TranslationDiagnostic diagnostic in first.Diagnostics)
         {
             Assert.Equal("RTR0002", diagnostic.Id);
             Assert.Equal(0, diagnostic.Location.StartByte);
@@ -197,10 +197,10 @@ internal static class CompilerTests
         }
     }
 
-    private static string DiagnosticSnapshot(IReadOnlyList<CompilerModel.TextResourceDiagnostic> diagnostics)
+    private static string DiagnosticSnapshot(IReadOnlyList<CompilerModel.TranslationDiagnostic> diagnostics)
     {
         StringBuilder builder = new();
-        foreach (CompilerModel.TextResourceDiagnostic diagnostic in diagnostics)
+        foreach (CompilerModel.TranslationDiagnostic diagnostic in diagnostics)
         {
             builder.Append(diagnostic.Id).Append('|').Append(diagnostic.Severity).Append('|')
                 .Append(diagnostic.Message).Append('|').Append(diagnostic.Location.Path).Append('|')
@@ -241,15 +241,15 @@ internal static class CompilerTests
             { "schemaVersion": 1, "catalog": "beta", "locale": "en", "layer": "base", "resources": { "Value": "Beta" } }
             """;
 
-        CompilerModel.TextResourceCompilation first = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation first = CompilerModel.TranslationCompiler.Compile(
             [Source("catalogs/a.manifest.json", firstManifest), Source("catalogs/z.manifest.json", secondManifest)],
             [Source("catalogs/a.texts.json", firstDocument), Source("catalogs/z.texts.json", secondDocument)]);
-        CompilerModel.TextResourceCompilation reversed = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation reversed = CompilerModel.TranslationCompiler.Compile(
             [Source("catalogs/z.manifest.json", secondManifest), Source("catalogs/a.manifest.json", firstManifest)],
             [Source("catalogs/z.texts.json", secondDocument), Source("catalogs/a.texts.json", firstDocument)]);
 
         Assert.Equal(DiagnosticSnapshot(first.Diagnostics), DiagnosticSnapshot(reversed.Diagnostics));
-        CompilerModel.TextResourceDiagnostic diagnostic = Assert.Single(first.Diagnostics);
+        CompilerModel.TranslationDiagnostic diagnostic = Assert.Single(first.Diagnostics);
         Assert.Equal("RTR0018", diagnostic.Id);
         Assert.Equal("catalogs/z.manifest.json", diagnostic.Location.Path);
         int expectedStart = secondManifest.IndexOf("\"SharedText\"", StringComparison.Ordinal);
@@ -291,15 +291,15 @@ internal static class CompilerTests
             { "schemaVersion": 1, "catalog": "beta-hint", "locale": "en", "layer": "base", "resources": { "Value": "Beta" } }
             """;
 
-        CompilerModel.TextResourceCompilation first = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation first = CompilerModel.TranslationCompiler.Compile(
             [Source("hints/a.manifest.json", firstManifest), Source("hints/z.manifest.json", secondManifest)],
             [Source("hints/a.texts.json", firstDocument), Source("hints/z.texts.json", secondDocument)]);
-        CompilerModel.TextResourceCompilation reversed = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation reversed = CompilerModel.TranslationCompiler.Compile(
             [Source("hints/z.manifest.json", secondManifest), Source("hints/a.manifest.json", firstManifest)],
             [Source("hints/z.texts.json", secondDocument), Source("hints/a.texts.json", firstDocument)]);
 
         Assert.Equal(DiagnosticSnapshot(first.Diagnostics), DiagnosticSnapshot(reversed.Diagnostics));
-        CompilerModel.TextResourceDiagnostic diagnostic = Assert.Single(first.Diagnostics);
+        CompilerModel.TranslationDiagnostic diagnostic = Assert.Single(first.Diagnostics);
         Assert.Equal("RTR0018", diagnostic.Id);
         Assert.Equal("hints/z.manifest.json", diagnostic.Location.Path);
         Assert.Equal(secondManifest.IndexOf("\"foo\"", StringComparison.Ordinal), diagnostic.Location.StartByte);
@@ -361,10 +361,10 @@ internal static class CompilerTests
 
         static void AssertDeviceStem(string path, string manifest, string document, string expectedToken)
         {
-            CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
+            CompilerModel.TranslationCompilation compilation = CompilerModel.TranslationCompiler.Compile(
                 [Source(path, manifest)],
                 [Source(path.Replace("manifest", "texts", StringComparison.Ordinal), document)]);
-            CompilerModel.TextResourceDiagnostic diagnostic = Assert.Single(compilation.Diagnostics);
+            CompilerModel.TranslationDiagnostic diagnostic = Assert.Single(compilation.Diagnostics);
             Assert.Equal("RTR0018", diagnostic.Id);
             Assert.Equal(path, diagnostic.Location.Path);
             Assert.Equal(manifest.IndexOf(expectedToken, StringComparison.Ordinal), diagnostic.Location.StartByte);
@@ -379,9 +379,9 @@ internal static class CompilerTests
         bool canceled = false;
         try
         {
-            CompilerModel.TextResourceCompiler.Compile(
+            CompilerModel.TranslationCompiler.Compile(
                 [Source("manifest.json", "{\"schemaVersion\":1}")],
-                Array.Empty<CompilerModel.TextResourceSource>(),
+                Array.Empty<CompilerModel.TranslationSource>(),
                 source.Token);
         }
         catch (OperationCanceledException exception) when (exception.CancellationToken == source.Token)
@@ -418,7 +418,7 @@ internal static class CompilerTests
             }
             """;
 
-        CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation compilation = CompilerModel.TranslationCompiler.Compile(
             [Source("collision.manifest.json", manifest)],
             [Source("collision.en.json", document)]);
         Assert.Equal(2, CountDiagnostics(compilation, "RTR0018"), DiagnosticsText(compilation.Diagnostics));
@@ -451,17 +451,17 @@ internal static class CompilerTests
             { "schemaVersion": 1, "catalog": "extras", "locale": "fr", "layer": "base", "resources": { "Extra": { "$value": "{value}", "$placeholders": { "value": { "type": "string" } } } } }
             """;
 
-        CompilerModel.TextResourceCompilation compilation = CompilerModel.TextResourceCompiler.Compile(
+        CompilerModel.TranslationCompilation compilation = CompilerModel.TranslationCompiler.Compile(
             [Source("extras.manifest.json", manifest)],
             [Source("extras.en.json", english), Source("extras.de.json", german), Source("extras.fr.json", french)]);
         Assert.Equal(1, CountDiagnostics(compilation, "RTR0016"), DiagnosticsText(compilation.Diagnostics));
         Assert.True(!compilation.Success, "Divergent allowed-extra contracts must fail before generation.");
     }
 
-    private static int CountDiagnostics(CompilerModel.TextResourceCompilation compilation, string id)
+    private static int CountDiagnostics(CompilerModel.TranslationCompilation compilation, string id)
     {
         int count = 0;
-        foreach (CompilerModel.TextResourceDiagnostic diagnostic in compilation.Diagnostics)
+        foreach (CompilerModel.TranslationDiagnostic diagnostic in compilation.Diagnostics)
         {
             if (string.Equals(diagnostic.Id, id, StringComparison.Ordinal)) count++;
         }
@@ -469,14 +469,14 @@ internal static class CompilerTests
         return count;
     }
 
-    internal static CompilerModel.TextResourceCompilation CompileCase(
+    internal static CompilerModel.TranslationCompilation CompileCase(
         string category,
         string caseName,
         bool reverseDocuments = false)
     {
         string directory = RepositoryPaths.Resolve("spec", "corpus", category, caseName);
         string manifestPath = Path.Combine(directory, "manifest.json");
-        List<CompilerModel.TextResourceSource> manifests = new();
+        List<CompilerModel.TranslationSource> manifests = new();
         if (File.Exists(manifestPath))
         {
             manifests.Add(ReadSource(manifestPath));
@@ -484,7 +484,7 @@ internal static class CompilerTests
 
         string[] documentPaths = Directory.GetFiles(directory, "*.json", SearchOption.TopDirectoryOnly);
         Array.Sort(documentPaths, StringComparer.Ordinal);
-        List<CompilerModel.TextResourceSource> documents = new();
+        List<CompilerModel.TranslationSource> documents = new();
         foreach (string path in documentPaths)
         {
             if (!string.Equals(path, manifestPath, StringComparison.OrdinalIgnoreCase))
@@ -498,24 +498,24 @@ internal static class CompilerTests
             documents.Reverse();
         }
 
-        return CompilerModel.TextResourceCompiler.Compile(manifests, documents);
+        return CompilerModel.TranslationCompiler.Compile(manifests, documents);
     }
 
-    internal static CompilerModel.TextResourceSource ReadSource(string absolutePath)
+    internal static CompilerModel.TranslationSource ReadSource(string absolutePath)
     {
         string path = Path.GetRelativePath(
             RepositoryPaths.Resolve("spec", "corpus"),
             absolutePath).Replace('\\', '/');
-        return new CompilerModel.TextResourceSource(path, File.ReadAllBytes(absolutePath));
+        return new CompilerModel.TranslationSource(path, File.ReadAllBytes(absolutePath));
     }
 
-    internal static CompilerModel.TextResourceSource Source(string path, string json) =>
+    internal static CompilerModel.TranslationSource Source(string path, string json) =>
         new(path, Encoding.UTF8.GetBytes(json));
 
-    internal static string DiagnosticsText(IReadOnlyList<CompilerModel.TextResourceDiagnostic> diagnostics)
+    internal static string DiagnosticsText(IReadOnlyList<CompilerModel.TranslationDiagnostic> diagnostics)
     {
         StringBuilder builder = new();
-        foreach (CompilerModel.TextResourceDiagnostic diagnostic in diagnostics)
+        foreach (CompilerModel.TranslationDiagnostic diagnostic in diagnostics)
         {
             builder.Append(diagnostic.Id).Append(' ').Append(diagnostic.Severity).Append(' ')
                 .Append(diagnostic.Location).Append(' ').AppendLine(diagnostic.Message);
@@ -524,11 +524,11 @@ internal static class CompilerTests
         return builder.ToString();
     }
 
-    private static CompilerModel.CompiledTextResource Find(
-        IReadOnlyList<CompilerModel.CompiledTextResource> resources,
+    private static CompilerModel.CompiledTranslation Find(
+        IReadOnlyList<CompilerModel.CompiledTranslation> resources,
         string key)
     {
-        foreach (CompilerModel.CompiledTextResource resource in resources)
+        foreach (CompilerModel.CompiledTranslation resource in resources)
         {
             if (string.Equals(resource.Key, key, StringComparison.Ordinal))
             {
@@ -553,7 +553,7 @@ internal static class CompilerTests
     }
 
     private static CompilerModel.CompiledTextPlaceholder FindPlaceholder(
-        CompilerModel.CompiledTextResource resource,
+        CompilerModel.CompiledTranslation resource,
         string name)
     {
         foreach (CompilerModel.CompiledTextPlaceholder placeholder in resource.Placeholders)
@@ -567,7 +567,7 @@ internal static class CompilerTests
         throw new InvalidOperationException($"Placeholder '{name}' was not found.");
     }
 
-    private static string[] Keys(IReadOnlyList<CompilerModel.CompiledTextResource> resources)
+    private static string[] Keys(IReadOnlyList<CompilerModel.CompiledTranslation> resources)
     {
         string[] keys = new string[resources.Count];
         for (int i = 0; i < resources.Count; i++)

@@ -14,9 +14,9 @@ public enum UnsupportedLocalePolicy
 }
 
 /// <summary>Behavior when a key is absent after fallback.</summary>
-public enum MissingTextResourcePolicy
+public enum MissingTranslationPolicy
 {
-    /// <summary>Throw <see cref="TextResourceNotFoundException"/>.</summary>
+    /// <summary>Throw <see cref="TranslationNotFoundException"/>.</summary>
     Throw,
     /// <summary>Return the stable dotted key.</summary>
     ReturnKey,
@@ -25,46 +25,46 @@ public enum MissingTextResourcePolicy
 }
 
 /// <summary>Runtime options consumed by generated providers and managers.</summary>
-public sealed class TextResourceOptions
+public sealed class TranslationOptions
 {
     /// <summary>Gets or sets unsupported-locale behavior.</summary>
     public UnsupportedLocalePolicy UnsupportedLocale { get; set; } = UnsupportedLocalePolicy.ParentsThenDefault;
     /// <summary>Gets or sets missing-key behavior.</summary>
-    public MissingTextResourcePolicy MissingKey { get; set; } = MissingTextResourcePolicy.Throw;
+    public MissingTranslationPolicy MissingKey { get; set; } = MissingTranslationPolicy.Throw;
 }
 
 /// <summary>Thrown when a resource cannot be resolved under the missing-key policy.</summary>
-public sealed class TextResourceNotFoundException : Exception
+public sealed class TranslationNotFoundException : Exception
 {
     /// <summary>Creates the exception.</summary>
-    public TextResourceNotFoundException(string message) : base(message) { }
+    public TranslationNotFoundException(string message) : base(message) { }
     /// <summary>Creates the exception with an inner cause.</summary>
-    public TextResourceNotFoundException(string message, Exception innerException) : base(message, innerException) { }
+    public TranslationNotFoundException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>Thrown when runtime arguments do not match a compiled message contract.</summary>
-public sealed class TextResourceFormatException : FormatException
+public sealed class TranslationFormatException : FormatException
 {
     /// <summary>Creates the exception.</summary>
-    public TextResourceFormatException(string message) : base(message) { }
+    public TranslationFormatException(string message) : base(message) { }
     /// <summary>Creates the exception with an inner cause.</summary>
-    public TextResourceFormatException(string message, Exception innerException) : base(message, innerException) { }
+    public TranslationFormatException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>Thrown when an external pack is malformed, incompatible, or rejected.</summary>
-public sealed class TextResourcePackException : Exception
+public sealed class TranslationPackException : Exception
 {
     /// <summary>Creates the exception.</summary>
-    public TextResourcePackException(string message) : base(message) { }
+    public TranslationPackException(string message) : base(message) { }
     /// <summary>Creates the exception with an inner cause.</summary>
-    public TextResourcePackException(string message, Exception innerException) : base(message, innerException) { }
+    public TranslationPackException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>Thrown when a transported text reference is incompatible with the receiver.</summary>
-public sealed class TextResourceContractException : Exception
+public sealed class TranslationContractException : Exception
 {
     /// <summary>Creates the exception.</summary>
-    public TextResourceContractException(string message) : base(message) { }
+    public TranslationContractException(string message) : base(message) { }
     /// <summary>Creates the exception with an inner cause.</summary>
-    public TextResourceContractException(string message, Exception innerException) : base(message, innerException) { }
+    public TranslationContractException(string message, Exception innerException) : base(message, innerException) { }
 }

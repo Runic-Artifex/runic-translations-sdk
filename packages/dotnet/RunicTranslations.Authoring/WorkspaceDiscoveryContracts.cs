@@ -4,7 +4,7 @@ using RunicTranslations.Compiler;
 
 namespace RunicTranslations.Authoring;
 
-public enum TextResourceWorkspaceFileKind
+public enum TranslationWorkspaceFileKind
 {
     CatalogManifest,
     ResourceDocument,
@@ -12,15 +12,15 @@ public enum TextResourceWorkspaceFileKind
     OtherJson,
 }
 
-public enum TextResourceAuthoringDiagnosticSeverity
+public enum TranslationAuthoringDiagnosticSeverity
 {
     Warning,
     Error,
 }
 
-public sealed class TextResourceWorkspaceDiscoveryOptions
+public sealed class TranslationWorkspaceDiscoveryOptions
 {
-    public TextResourceWorkspaceDiscoveryOptions(
+    public TranslationWorkspaceDiscoveryOptions(
         int maximumDepth = 16,
         int maximumEntries = 8_192,
         int maximumJsonFiles = 512,
@@ -46,13 +46,13 @@ public sealed class TextResourceWorkspaceDiscoveryOptions
     public long MaximumTotalBytes { get; }
 }
 
-public sealed class TextResourceWorkspaceFile
+public sealed class TranslationWorkspaceFile
 {
     private readonly byte[] _utf8Bytes;
 
-    internal TextResourceWorkspaceFile(
+    internal TranslationWorkspaceFile(
         string relativePath,
-        TextResourceWorkspaceFileKind kind,
+        TranslationWorkspaceFileKind kind,
         string? catalogId,
         string? locale,
         string? layer,
@@ -67,7 +67,7 @@ public sealed class TextResourceWorkspaceFile
     }
 
     public string RelativePath { get; }
-    public TextResourceWorkspaceFileKind Kind { get; }
+    public TranslationWorkspaceFileKind Kind { get; }
     public string? CatalogId { get; }
     public string? Locale { get; }
     public string? Layer { get; }
@@ -75,19 +75,19 @@ public sealed class TextResourceWorkspaceFile
     internal byte[] Bytes => _utf8Bytes;
 }
 
-public sealed record TextResourceAuthoringDiagnostic(
+public sealed record TranslationAuthoringDiagnostic(
     string Id,
-    TextResourceAuthoringDiagnosticSeverity Severity,
+    TranslationAuthoringDiagnosticSeverity Severity,
     string Message,
     string RelativePath);
 
-public sealed class TextResourceDiscoveredCatalog
+public sealed class TranslationDiscoveredCatalog
 {
-    internal TextResourceDiscoveredCatalog(
+    internal TranslationDiscoveredCatalog(
         string id,
         IReadOnlyList<string> manifestPaths,
         IReadOnlyList<string> documentPaths,
-        TextResourceCompilation compilation)
+        TranslationCompilation compilation)
     {
         Id = id;
         ManifestPaths = manifestPaths;
@@ -98,16 +98,16 @@ public sealed class TextResourceDiscoveredCatalog
     public string Id { get; }
     public IReadOnlyList<string> ManifestPaths { get; }
     public IReadOnlyList<string> DocumentPaths { get; }
-    public TextResourceCompilation Compilation { get; }
+    public TranslationCompilation Compilation { get; }
 }
 
-public sealed class TextResourceWorkspaceDiscoveryResult
+public sealed class TranslationWorkspaceDiscoveryResult
 {
-    internal TextResourceWorkspaceDiscoveryResult(
+    internal TranslationWorkspaceDiscoveryResult(
         string root,
-        IReadOnlyList<TextResourceWorkspaceFile> files,
-        IReadOnlyList<TextResourceDiscoveredCatalog> catalogs,
-        IReadOnlyList<TextResourceAuthoringDiagnostic> diagnostics)
+        IReadOnlyList<TranslationWorkspaceFile> files,
+        IReadOnlyList<TranslationDiscoveredCatalog> catalogs,
+        IReadOnlyList<TranslationAuthoringDiagnostic> diagnostics)
     {
         Root = root;
         Files = files;
@@ -116,7 +116,7 @@ public sealed class TextResourceWorkspaceDiscoveryResult
     }
 
     public string Root { get; }
-    public IReadOnlyList<TextResourceWorkspaceFile> Files { get; }
-    public IReadOnlyList<TextResourceDiscoveredCatalog> Catalogs { get; }
-    public IReadOnlyList<TextResourceAuthoringDiagnostic> Diagnostics { get; }
+    public IReadOnlyList<TranslationWorkspaceFile> Files { get; }
+    public IReadOnlyList<TranslationDiscoveredCatalog> Catalogs { get; }
+    public IReadOnlyList<TranslationAuthoringDiagnostic> Diagnostics { get; }
 }

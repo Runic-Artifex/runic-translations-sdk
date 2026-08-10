@@ -105,7 +105,7 @@ internal static class MessagePatternCompiler
 {
     internal static CompiledMessagePattern? Compile(
         string pattern,
-        TextResourceSource source,
+        TranslationSource source,
         ByteSpan span,
         DiagnosticBag diagnostics,
         out HashSet<string> names)
@@ -131,7 +131,7 @@ internal static class MessagePatternCompiler
                 {
                     diagnostics.Add(
                         "RTR0014",
-                        TextResourceDiagnosticSeverity.Error,
+                        TranslationDiagnosticSeverity.Error,
                         "Message pattern contains an unmatched '{'.",
                         source,
                         span);
@@ -143,7 +143,7 @@ internal static class MessagePatternCompiler
                 {
                     diagnostics.Add(
                         "RTR0014",
-                        TextResourceDiagnosticSeverity.Error,
+                        TranslationDiagnosticSeverity.Error,
                         "Message pattern contains an invalid placeholder.",
                         source,
                         span);
@@ -168,7 +168,7 @@ internal static class MessagePatternCompiler
 
                 diagnostics.Add(
                     "RTR0014",
-                    TextResourceDiagnosticSeverity.Error,
+                    TranslationDiagnosticSeverity.Error,
                     "Message pattern contains an unmatched '}'.",
                     source,
                     span);

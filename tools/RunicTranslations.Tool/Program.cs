@@ -35,7 +35,7 @@ internal static class Program
             WriteUsage(Console.Error);
             return InvocationFailure;
         }
-        catch (TextResourceAuthoringException exception)
+        catch (TranslationAuthoringException exception)
         {
             WriteToolError(exception.Message);
             return InvocationFailure;
@@ -70,14 +70,14 @@ internal static class Program
 
         if (invocation.Command == ToolCommand.Init)
         {
-            TextResourceProjectPlan plan = TextResourceProjectScaffolder.Render(invocation.ProjectCreation!);
-            string target = TextResourceProjectWriter.Create(plan);
+            TranslationProjectPlan plan = TranslationProjectScaffolder.Render(invocation.ProjectCreation!);
+            string target = TranslationProjectWriter.Create(plan);
             Console.Out.WriteLine($"created {plan.Files.Count} translation file(s) in {target}.");
             return Success;
         }
 
         CompilerInputs inputs = InputFiles.Read(invocation.CatalogPath!, invocation.DocumentPatterns);
-        TextResourceCompilation compilation = TextResourceCompiler.Compile(
+        TranslationCompilation compilation = TranslationCompiler.Compile(
             [inputs.Catalog],
             inputs.Documents);
         WriteDiagnostics(compilation.Diagnostics);
@@ -115,14 +115,14 @@ internal static class Program
         return Success;
     }
 
-    private static void WriteDiagnostics(IReadOnlyList<TextResourceDiagnostic> diagnostics)
+    private static void WriteDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics)
     {
         for (int index = 0; index < diagnostics.Count; index++)
         {
-            TextResourceDiagnostic diagnostic = diagnostics[index];
+            TranslationDiagnostic diagnostic = diagnostics[index];
             TextSourceLocation location = diagnostic.Location;
             string path = location.Path.Replace('\\', '/');
-            string severity = diagnostic.Severity == TextResourceDiagnosticSeverity.Error ? "error" : "warning";
+            string severity = diagnostic.Severity == TranslationDiagnosticSeverity.Error ? "error" : "warning";
             Console.Error.WriteLine(
                 $"{path}({location.Line},{location.Column},{location.EndLine},{location.EndColumn}): {severity} {diagnostic.Id}: {diagnostic.Message}");
         }

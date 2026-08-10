@@ -4,8 +4,8 @@ This package supplies dependency-free MSBuild integration for Runic Translations
 
 ```xml
 <ItemGroup>
-  <TextResourceCatalog Include="Resources/Text/app.textcatalog.json" />
-  <TextResourceDocument Include="Resources/Text/*.texts.json" />
+  <TranslationCatalog Include="Resources/Text/app.textcatalog.json" />
+  <TranslationDocument Include="Resources/Text/*.texts.json" />
 </ItemGroup>
 
 <PropertyGroup>
@@ -14,7 +14,7 @@ This package supplies dependency-free MSBuild integration for Runic Translations
 </PropertyGroup>
 ```
 
-`AdditionalFiles` receive `RunicTextResourceKind` metadata with the value `Catalog` or `Document`. Artifact generation is opt-in: set one or more of `TranslationsEmitJson`, `TranslationsEmitTypeScript`, `TranslationsEmitTemplateManifest`, `TranslationsEmitEsm`, or experimental `TranslationsEmitCpp` to select exact output groups. JSON/template/TypeScript-contract selections use `{catalog}.asset-manifest-v1.json`; nested ESM output uses its own `web-module-manifest-v1.json`. `TranslationsGenerateOnBuild=true` with no individual emit property selects JSON, TypeScript, template, and ESM. C++ remains explicit. This package never adds generated C# files to compilation; C# generation belongs to the generator surface.
+`AdditionalFiles` receive `RunicTranslationKind` metadata with the value `Catalog` or `Document`. Artifact generation is opt-in: set one or more of `TranslationsEmitJson`, `TranslationsEmitTypeScript`, `TranslationsEmitTemplateManifest`, `TranslationsEmitEsm`, or experimental `TranslationsEmitCpp` to select exact output groups. JSON/template/TypeScript-contract selections use `{catalog}.asset-manifest-v1.json`; nested ESM output uses its own `web-module-manifest-v1.json`. `TranslationsGenerateOnBuild=true` with no individual emit property selects JSON, TypeScript, template, and ESM. C++ remains explicit. This package never adds generated C# files to compilation; C# generation belongs to the generator surface.
 
 Generated files default to `$(IntermediateOutputPath)translations` and are exposed as `@(TranslationsGeneratedFile)`. An override through `TranslationsOutputPath` or the compatibility alias `TranslationsWebOutputPath` must still resolve beneath `IntermediateOutputPath`; an unsafe path fails with `RTR0020`. `dotnet clean` removes only files recorded in the validated owned-output inventory plus private build bookkeeping. Unrelated files survive, and the output directory is removed only when empty.
 

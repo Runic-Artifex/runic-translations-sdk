@@ -27,7 +27,7 @@ internal static class Program
             (Assembly Assembly, string ProjectDirectory)[] targets =
             {
                 (typeof(TranslationsCompatibility).Assembly, "RunicTranslations"),
-                (typeof(Compiler.TextResourceCompiler).Assembly, "RunicTranslations.Compiler"),
+                (typeof(Compiler.TranslationCompiler).Assembly, "RunicTranslations.Compiler"),
                 (LoadGeneratorAssembly(root), "RunicTranslations.Generator"),
             };
             int totalTypes = 0;

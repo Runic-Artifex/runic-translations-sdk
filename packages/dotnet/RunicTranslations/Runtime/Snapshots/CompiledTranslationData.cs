@@ -4,26 +4,26 @@ using System.Collections.Generic;
 namespace RunicTranslations;
 
 /// <summary>Describes one closed placeholder contract in a compiled resource.</summary>
-public readonly record struct TextResourcePlaceholderDescriptor(
+public readonly record struct TranslationPlaceholderDescriptor(
     string Name,
     TextArgumentType Type,
     TextArgumentFormat Format);
 
 /// <summary>Describes one canonical resource key and its placeholder contract.</summary>
-public sealed class CompiledTextResourceDefinition
+public sealed class CompiledTranslationDefinition
 {
-    private readonly TextResourcePlaceholderDescriptor[] _placeholders;
+    private readonly TranslationPlaceholderDescriptor[] _placeholders;
 
     /// <summary>Creates a compiled resource definition.</summary>
-    public CompiledTextResourceDefinition(
+    public CompiledTranslationDefinition(
         string name,
-        IReadOnlyList<TextResourcePlaceholderDescriptor> placeholders,
+        IReadOnlyList<TranslationPlaceholderDescriptor> placeholders,
         bool isCanonical = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(placeholders);
 
-        if (!TextResourceDataValidation.IsResourceName(name))
+        if (!TranslationDataValidation.IsResourceName(name))
         {
             throw new ArgumentException(
                 "Resource names must be dot-separated ASCII identifiers.",
@@ -35,12 +35,12 @@ public sealed class CompiledTextResourceDefinition
             throw new ArgumentException("A resource cannot declare more than 32 placeholders.", nameof(placeholders));
         }
 
-        _placeholders = new TextResourcePlaceholderDescriptor[placeholders.Count];
+        _placeholders = new TranslationPlaceholderDescriptor[placeholders.Count];
         string? previous = null;
         for (int i = 0; i < placeholders.Count; i++)
         {
-            TextResourcePlaceholderDescriptor descriptor = placeholders[i];
-            if (!TextResourceDataValidation.IsIdentifier(descriptor.Name))
+            TranslationPlaceholderDescriptor descriptor = placeholders[i];
+            if (!TranslationDataValidation.IsIdentifier(descriptor.Name))
             {
                 throw new ArgumentException(
                     "Placeholder names must match [A-Za-z_][A-Za-z0-9_]*.",
@@ -54,7 +54,7 @@ public sealed class CompiledTextResourceDefinition
                     nameof(placeholders));
             }
 
-            if (!TextResourceDataValidation.IsAllowedFormat(descriptor.Type, descriptor.Format))
+            if (!TranslationDataValidation.IsAllowedFormat(descriptor.Type, descriptor.Format))
             {
                 throw new ArgumentException(
                     $"Placeholder '{descriptor.Name}' has an incompatible type and format.",
@@ -79,17 +79,17 @@ public sealed class CompiledTextResourceDefinition
     public bool IsCanonical { get; }
 
     /// <summary>The ordinal-ordered placeholder contracts.</summary>
-    public ReadOnlyMemory<TextResourcePlaceholderDescriptor> Placeholders =>
-        (TextResourcePlaceholderDescriptor[])_placeholders.Clone();
+    public ReadOnlyMemory<TranslationPlaceholderDescriptor> Placeholders =>
+        (TranslationPlaceholderDescriptor[])_placeholders.Clone();
 
-    internal TextResourcePlaceholderDescriptor[] PlaceholderArray => _placeholders;
+    internal TranslationPlaceholderDescriptor[] PlaceholderArray => _placeholders;
 }
 
 /// <summary>Associates one canonical key identifier with a compatibility pattern and optional precompiled AST.</summary>
-public readonly record struct CompiledTextResourceValue(int Id, string Pattern)
+public readonly record struct CompiledTranslationValue(int Id, string Pattern)
 {
     /// <summary>Creates generated data that bypasses runtime pattern parsing.</summary>
-    public CompiledTextResourceValue(int id, string pattern, CompiledTextMessage message)
+    public CompiledTranslationValue(int id, string pattern, CompiledTextMessage message)
         : this(id, pattern)
     {
         Message = message ?? throw new ArgumentNullException(nameof(message));
@@ -100,15 +100,15 @@ public readonly record struct CompiledTextResourceValue(int Id, string Pattern)
 }
 
 /// <summary>Contains the direct compiled values and fallback edge for one declared locale.</summary>
-public sealed class CompiledTextResourceLocale
+public sealed class CompiledTranslationLocale
 {
-    private readonly CompiledTextResourceValue[] _values;
+    private readonly CompiledTranslationValue[] _values;
 
     /// <summary>Creates immutable compiled locale data.</summary>
-    public CompiledTextResourceLocale(
+    public CompiledTranslationLocale(
         string locale,
         string? fallbackLocale,
-        IReadOnlyList<CompiledTextResourceValue> values)
+        IReadOnlyList<CompiledTranslationValue> values)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(locale);
         ArgumentNullException.ThrowIfNull(values);
@@ -126,11 +126,11 @@ public sealed class CompiledTextResourceLocale
             throw new ArgumentException("The fallback locale must be a canonical BCP 47 tag.", nameof(fallbackLocale));
         }
 
-        _values = new CompiledTextResourceValue[values.Count];
+        _values = new CompiledTranslationValue[values.Count];
         int previousId = -1;
         for (int i = 0; i < values.Count; i++)
         {
-            CompiledTextResourceValue value = values[i];
+            CompiledTranslationValue value = values[i];
             if (value.Id < 0)
             {
                 throw new ArgumentException("Compiled value identifiers cannot be negative.", nameof(values));
@@ -159,13 +159,13 @@ public sealed class CompiledTextResourceLocale
     public string? FallbackLocale { get; }
 
     /// <summary>The direct values ordered by ascending canonical key identifier.</summary>
-    public ReadOnlyMemory<CompiledTextResourceValue> Values =>
-        (CompiledTextResourceValue[])_values.Clone();
+    public ReadOnlyMemory<CompiledTranslationValue> Values =>
+        (CompiledTranslationValue[])_values.Clone();
 
-    internal CompiledTextResourceValue[] ValueArray => _values;
+    internal CompiledTranslationValue[] ValueArray => _values;
 }
 
-internal static class TextResourceDataValidation
+internal static class TranslationDataValidation
 {
     internal static bool IsCatalog(string value)
     {
@@ -238,7 +238,7 @@ internal static class TextResourceDataValidation
 
     internal static bool PatternMatches(
         string pattern,
-        TextResourcePlaceholderDescriptor[] descriptors)
+        TranslationPlaceholderDescriptor[] descriptors)
     {
         var used = new bool[descriptors.Length];
         for (int position = 0; position < pattern.Length; position++)
@@ -290,7 +290,7 @@ internal static class TextResourceDataValidation
         return true;
     }
 
-    private static int FindDescriptor(TextResourcePlaceholderDescriptor[] descriptors, string name)
+    private static int FindDescriptor(TranslationPlaceholderDescriptor[] descriptors, string name)
     {
         int low = 0;
         int high = descriptors.Length - 1;

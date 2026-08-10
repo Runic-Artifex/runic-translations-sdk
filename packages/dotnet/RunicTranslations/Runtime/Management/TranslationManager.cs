@@ -8,7 +8,7 @@ namespace RunicTranslations;
 
 /// <summary>
 /// Atomically activates immutable locale snapshots supplied by an
-/// <see cref="ITextResourceProvider"/>.
+/// <see cref="ITranslationProvider"/>.
 /// </summary>
 /// <remarks>
 /// Concurrent requests for the same locale share one provider operation. A
@@ -19,22 +19,22 @@ namespace RunicTranslations;
     "Design",
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "The transition semaphore never exposes its wait handle, and disposing it would race active callers.")]
-public sealed class TextResourceManager : ITextResourceManager
+public sealed class TranslationManager : ITranslationManager
 {
     private readonly object _pendingGate = new();
     private readonly Dictionary<string, PendingSwitch> _pendingSwitches =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly ITextResourceProvider _provider;
+    private readonly ITranslationProvider _provider;
     private readonly string _catalog;
     private readonly SemaphoreSlim _transitionGate = new(1, 1);
-    private ITextResourceSnapshot _current;
+    private ITranslationSnapshot _current;
 
     /// <summary>Creates a manager with an already validated initial snapshot.</summary>
     /// <param name="provider">The provider used to build replacement snapshots.</param>
     /// <param name="initialSnapshot">The snapshot that is immediately available as <see cref="Current"/>.</param>
-    public TextResourceManager(
-        ITextResourceProvider provider,
-        ITextResourceSnapshot initialSnapshot)
+    public TranslationManager(
+        ITranslationProvider provider,
+        ITranslationSnapshot initialSnapshot)
     {
         ArgumentNullException.ThrowIfNull(provider);
         ArgumentNullException.ThrowIfNull(initialSnapshot);
@@ -50,10 +50,10 @@ public sealed class TextResourceManager : ITextResourceManager
     public string CurrentLocale => Current.Locale;
 
     /// <inheritdoc />
-    public ITextResourceSnapshot Current => Volatile.Read(ref _current);
+    public ITranslationSnapshot Current => Volatile.Read(ref _current);
 
     /// <inheritdoc />
-    public event EventHandler<TextResourceLocaleChangedEventArgs>? LocaleChanged;
+    public event EventHandler<TranslationLocaleChangedEventArgs>? LocaleChanged;
 
     /// <inheritdoc />
     public ValueTask SetLocaleAsync(
@@ -99,7 +99,7 @@ public sealed class TextResourceManager : ITextResourceManager
     {
         try
         {
-            TextResourceLocaleChangedEventArgs? notification = null;
+            TranslationLocaleChangedEventArgs? notification = null;
             await _transitionGate.WaitAsync(pending.CancellationToken).ConfigureAwait(false);
             try
             {
@@ -108,7 +108,7 @@ public sealed class TextResourceManager : ITextResourceManager
                     return;
                 }
 
-                ITextResourceSnapshot? replacement = await _provider
+                ITranslationSnapshot? replacement = await _provider
                     .GetSnapshotAsync(pending.Locale, pending.CancellationToken)
                     .ConfigureAwait(false);
 
@@ -124,15 +124,15 @@ public sealed class TextResourceManager : ITextResourceManager
                             pending.CancellationToken);
                     }
 
-                    ITextResourceSnapshot current = Current;
+                    ITranslationSnapshot current = Current;
                     if (!string.Equals(
                         current.Locale,
                         replacement.Locale,
                         StringComparison.Ordinal))
                     {
-                        ITextResourceSnapshot previous =
+                        ITranslationSnapshot previous =
                             Interlocked.Exchange(ref _current, replacement);
-                        notification = new TextResourceLocaleChangedEventArgs(previous, replacement);
+                        notification = new TranslationLocaleChangedEventArgs(previous, replacement);
                     }
                 }
             }
@@ -258,9 +258,9 @@ public sealed class TextResourceManager : ITextResourceManager
         }
     }
 
-    private void NotifyLocaleChanged(TextResourceLocaleChangedEventArgs notification)
+    private void NotifyLocaleChanged(TranslationLocaleChangedEventArgs notification)
     {
-        EventHandler<TextResourceLocaleChangedEventArgs>? handlers = LocaleChanged;
+        EventHandler<TranslationLocaleChangedEventArgs>? handlers = LocaleChanged;
         if (handlers is null)
         {
             return;
@@ -270,7 +270,7 @@ public sealed class TextResourceManager : ITextResourceManager
         {
             try
             {
-                ((EventHandler<TextResourceLocaleChangedEventArgs>)registeredHandler)(this, notification);
+                ((EventHandler<TranslationLocaleChangedEventArgs>)registeredHandler)(this, notification);
             }
             catch (Exception)
             {
@@ -301,7 +301,7 @@ public sealed class TextResourceManager : ITextResourceManager
         }
     }
 
-    private static void ValidateInitialSnapshot(ITextResourceSnapshot snapshot)
+    private static void ValidateInitialSnapshot(ITranslationSnapshot snapshot)
     {
         if (string.IsNullOrWhiteSpace(snapshot.Catalog))
         {
@@ -320,24 +320,24 @@ public sealed class TextResourceManager : ITextResourceManager
     }
 
     private void ValidateReplacementSnapshot(
-        [NotNull] ITextResourceSnapshot? snapshot)
+        [NotNull] ITranslationSnapshot? snapshot)
     {
         if (snapshot is null)
         {
-            throw new InvalidOperationException("The text resource provider returned a null snapshot.");
+            throw new InvalidOperationException("The translation provider returned a null snapshot.");
         }
 
         if (!string.Equals(snapshot.Catalog, _catalog, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "The text resource provider returned a snapshot for a different catalog.");
+                "The translation provider returned a snapshot for a different catalog.");
         }
 
         if (!LocaleTag.TryCanonicalize(snapshot.Locale, out string canonicalLocale) ||
             !string.Equals(snapshot.Locale, canonicalLocale, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                "The text resource provider returned a snapshot without a canonical locale.");
+                "The translation provider returned a snapshot without a canonical locale.");
         }
     }
 
