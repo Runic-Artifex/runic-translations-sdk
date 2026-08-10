@@ -6,8 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="CsWebUi" Version="2.5.0-beta.4.4" />
-    <PackageVersion Include="RunicTranslations.Authoring" Version="0.1.0-preview.4.1" />
-    <PackageVersion Include="RunicTranslations.Build" Version="0.1.0-preview.4.1" />
-    <PackageVersion Include="RunicTranslations.Compiler" Version="0.1.0-preview.4.1" />
+    <PackageVersion Include="RunicTranslations.Authoring" Version="0.1.0-preview.4.2" />
+    <PackageVersion Include="RunicTranslations.Build" Version="0.1.0-preview.4.2" />
+    <PackageVersion Include="RunicTranslations.Compiler" Version="0.1.0-preview.4.2" />
   </ItemGroup>
 </Project>
