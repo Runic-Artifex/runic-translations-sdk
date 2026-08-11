@@ -49,7 +49,7 @@ or a .NET template.
 
 The first vertical already provides:
 
-- a C# and CsWebUi host;
+- a C# and CS-WebUI host;
 - a static SvelteKit and Svelte 5 frontend;
 - compiler-backed diagnostics;
 - one- and multi-locale workspace loading;
@@ -77,7 +77,7 @@ packaging now complete the planned customer-preview product.
 
 Project creation and mutation must not live separately in the CLI and editor.
 Introduce a shared .NET authoring layer that depends on the compiler but not on
-CsWebUi, Svelte, Vite, or any application framework.
+CS-WebUI, Svelte, Vite, or any application framework.
 
 ```mermaid
 flowchart TD
@@ -109,7 +109,7 @@ Responsibilities:
 - validate proposed changes with `RunicTranslations.Compiler`;
 - create and commit bounded multi-file transactions;
 - expose diagnostics and edit locations as data-transfer records suitable for
-  the CLI and CsWebUi bridge.
+  the CLI and CS-WebUI bridge.
 
 The compiler remains deterministic and environment-independent. File discovery,
 project creation, recent-project storage, drafts, and transactions stay out of
@@ -232,11 +232,11 @@ The application must support these entry paths:
 - a native folder-picker abstraction selected by an implementation spike;
 - direct project creation from the welcome screen.
 
-The folder picker must not weaken path containment. If CsWebUi cannot provide a
+The folder picker must not weaken path containment. If CS-WebUI cannot provide a
 portable native picker, use a small isolated host abstraction rather than exposing
 browser file handles or implementing platform-specific code in the Svelte app.
 
-Implementation decision: CsWebUi does not expose a portable folder picker. The
+Implementation decision: CS-WebUI does not expose a portable folder picker. The
 editor therefore uses an isolated C# host adapter for the Windows folder dialog,
 macOS `choose folder`, and Zenity on Linux. When the Linux desktop does not ship
 Zenity, the same screen keeps a typed-path fallback. Every returned path still
@@ -568,7 +568,7 @@ Windows signing and Apple notarization credentials are available.
 ### Native integration tests
 
 - Host/bridge contract tests without a browser.
-- CsWebUi browser smoke tests for load, edit, validate, save, conflict, and close.
+- CS-WebUI browser smoke tests for load, edit, validate, save, conflict, and close.
 - Packaged-artifact startup tests against a temporary workspace.
 - Crash/restart recovery using a deliberately interrupted transaction journal.
 

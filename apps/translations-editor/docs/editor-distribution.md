@@ -1,6 +1,6 @@
 # Editor distribution
 
-Runic Translations Editor preview builds are self-contained archives for `linux-x64`, `win-x64`, and `osx-arm64`. Each archive contains the .NET runtime, native CsWebUi/WebUI assets, the static SvelteKit application, launchers, an example workspace, the license, third-party notices, a per-file manifest, and a sibling SHA-256 checksum. Customer machines need no SDK, Node.js installation, package-registry authentication, or separate runtime.
+Runic Translations Editor preview builds are self-contained archives for `linux-x64`, `win-x64`, and `osx-arm64`. Each archive contains the .NET runtime, native CS-WebUI/WebUI assets, the static SvelteKit application, launchers, an example workspace, the license, third-party notices, a per-file manifest, and a sibling SHA-256 checksum. Customer machines need no SDK, Node.js installation, package-registry authentication, or separate runtime.
 
 `eng/package-editor.ps1` performs a matching-OS publish, creates the archive, verifies its sibling checksum, extracts it into a clean temporary directory, verifies every file against `package-manifest.json`, runs headless compiler validation, starts the public launcher, and runs the complete editor smoke workflow. Tests therefore exercise the artifact a customer downloads, not only the publish staging directory. The executable and manifest both carry the exact version, `preview` update channel, source commit, and runtime identifier supplied by CI.
 

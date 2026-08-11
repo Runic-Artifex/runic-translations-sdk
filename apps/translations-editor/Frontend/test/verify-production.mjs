@@ -3,7 +3,7 @@ import { extname } from "node:path";
 
 const build = new URL("../build/", import.meta.url);
 const index = await readFile(new URL("index.html", build), "utf8");
-if (!index.includes('src="webui.js"')) throw new Error("The production shell omitted the CsWebUi bridge.");
+if (!index.includes('src="webui.js"')) throw new Error("The production shell omitted the CS-WebUI bridge.");
 if (!index.includes("/_app/immutable/")) throw new Error("The SvelteKit client entry was not emitted.");
 
 const scripts = [];
@@ -16,7 +16,7 @@ if (bundled.includes("node:fs") || bundled.includes("RunicTranslations.Compiler.
   throw new Error("Server/compiler implementation details leaked into the browser bundle.");
 }
 
-console.log(`PASS: static SvelteKit client contains the CsWebUi bridge and generated Runic ESM (${scripts.length} scripts).`);
+console.log(`PASS: static SvelteKit client contains the CS-WebUI bridge and generated Runic ESM (${scripts.length} scripts).`);
 
 async function collect(directory, result) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
