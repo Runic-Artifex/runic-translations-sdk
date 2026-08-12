@@ -64,7 +64,7 @@ No JavaScript parser interprets Runic authoring syntax.
 ```ts
 import { m } from "virtual:runic-translations/app";
 
-document.querySelector("#app")!.textContent = m.ApplicationName();
+document.querySelector("#app")!.textContent = m["Application.Name"]();
 ```
 
 Use exact dotted keys through bracket access:

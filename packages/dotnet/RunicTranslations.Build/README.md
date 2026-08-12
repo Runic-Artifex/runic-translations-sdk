@@ -1,25 +1,71 @@
 # RunicTranslations.Build
 
-This package supplies dependency-free MSBuild integration for Runic Translations. It contains no MSBuild task assembly and takes no `Microsoft.Build` package dependency. Instead, its targets map explicitly declared catalog and document items to Roslyn `AdditionalFiles` and invoke the separately installed `runic-translations` tool for non-C# artifacts.
+Connect Runic Translations catalogs to MSBuild with simple project items. The package feeds classified inputs to the C# generator and can invoke a pinned local tool to produce JSON, TypeScript, ESM, template manifests, or the experimental C++20 output.
+
+## Install
+
+```bash
+dotnet add package RunicTranslations.Build --version <VERSION>
+dotnet new tool-manifest
+dotnet tool install RunicTranslations.Tool --version <VERSION>
+```
+
+Replace `<VERSION>` with the current preview shown on NuGet. The package targets .NET 10 and contains only MSBuild props and targets: it ships no task assembly and takes no `Microsoft.Build` package dependency. Keep it, `RunicTranslations.Tool`, `RunicTranslations.Generator`, and `RunicTranslations` on the same exact version.
+
+## Configure a project
 
 ```xml
 <ItemGroup>
-  <TranslationCatalog Include="Resources/Text/app.textcatalog.json" />
-  <TranslationDocument Include="Resources/Text/*.texts.json" />
+  <TranslationCatalog Include="Resources/app.catalog.json" />
+  <TranslationDocument Include="Resources/app.en.json" />
+  <TranslationDocument Include="Resources/app.de.json" />
 </ItemGroup>
 
 <PropertyGroup>
-  <TranslationsEmitTypeScript>true</TranslationsEmitTypeScript>
   <TranslationsEmitEsm>true</TranslationsEmitEsm>
 </PropertyGroup>
 ```
 
-`AdditionalFiles` receive `RunicTranslationKind` metadata with the value `Catalog` or `Document`. Artifact generation is opt-in: set one or more of `TranslationsEmitJson`, `TranslationsEmitTypeScript`, `TranslationsEmitTemplateManifest`, `TranslationsEmitEsm`, or experimental `TranslationsEmitCpp` to select exact output groups. JSON/template/TypeScript-contract selections use `{catalog}.asset-manifest-v1.json`; nested ESM output uses its own `web-module-manifest-v1.json`. `TranslationsGenerateOnBuild=true` with no individual emit property selects JSON, TypeScript, template, and ESM. C++ remains explicit. This package never adds generated C# files to compilation; C# generation belongs to the generator surface.
+```bash
+dotnet tool restore
+dotnet build
+```
 
-Generated files default to `$(IntermediateOutputPath)translations` and are exposed as `@(TranslationsGeneratedFile)`. An override through `TranslationsOutputPath` or the compatibility alias `TranslationsWebOutputPath` must still resolve beneath `IntermediateOutputPath`; an unsafe path fails with `RTR0020`. `dotnet clean` removes only files recorded in the validated owned-output inventory plus private build bookkeeping. Unrelated files survive, and the output directory is removed only when empty.
+Catalogs and documents become Roslyn `AdditionalFiles` with `RunicTranslationKind` metadata for `RunicTranslations.Generator`. ESM output defaults to `obj/<configuration>/<target-framework>/translations/app.esm/`; consume its `web-module-manifest-v1.json` with the Vite adapter.
 
-The default launcher is `dotnet tool run runic-translations`, which deliberately requires a locally installed, version-pinned tool manifest entry. Install the `runic-translations` tool at the same version as this package before enabling generation. Set `TranslationsToolCommand` only for a different pinned launcher or a package test, and use `TranslationsToolAdditionalArguments` for additional CLI options. Add the launcher or its version manifest to `@(TranslationsToolInput)` when it does not use the project-local `.config/dotnet-tools.json`; changes then invalidate incremental generation.
+## Select generated artifacts
 
-The current build target accepts exactly one catalog and one or more documents, matching the frozen CLI surface. It writes a private UTF-8 response file under the owned intermediate directory, so large document sets do not expand the shell command line. Inputs, generation settings, the response file, an output inventory, and a private stamp file are declared to MSBuild so an unchanged build skips generation while changed or missing declared files regenerate.
+Set one or more of these properties to `true`:
 
-The CLI first writes the complete selected set into a contained private staging directory. Successful per-file moves replace current names, then prior inventoried names that are no longer selected are removed. This prevents flag changes from leaving stale TypeScript, JSON, or template artifacts while preserving unrelated consumer files. Byte-level verification, including extra-file detection, remains available through `runic-translations verify`.
+| Property | Output |
+|---|---|
+| `TranslationsEmitJson` | Compiled locale JSON |
+| `TranslationsEmitTypeScript` | TypeScript contract |
+| `TranslationsEmitTemplateManifest` | Template manifest |
+| `TranslationsEmitEsm` | Tree-shakable ESM modules and declarations |
+| `TranslationsEmitCpp` | Experimental C++20 output |
+
+`TranslationsGenerateOnBuild=true` with no individual selection emits JSON, TypeScript, template, and ESM groups; C++ remains explicit. Generated C# is never written to disk by this package—it belongs to the source generator.
+
+Choose this package when MSBuild owns input classification or non-C# artifact generation. Use `RunicTranslations.Generator` alone if you only want C# and prefer to declare `AdditionalFiles` yourself. Use the CLI directly when generation is owned by Vite, CI, or another host.
+
+## Important build behavior
+
+- The current target accepts exactly one catalog and one or more documents.
+- The default launcher is the project-local `dotnet tool run runic-translations --`; restore the committed tool manifest before building.
+- Output must resolve beneath `IntermediateOutputPath`. Unsafe paths fail with `RTR0020`.
+- Incremental generation tracks inputs, settings, the tool manifest, declared outputs, and an owned-output inventory.
+- Clean and changed-output reconciliation remove only validated files owned by the integration; unrelated files are preserved.
+- Generated files are exposed as `@(TranslationsGeneratedFile)` and default beneath `$(IntermediateOutputPath)translations`.
+
+## Compatibility and status
+
+This package is a public preview for .NET 10. Preview targets and properties may change with documented migrations. Use the same release across the package family and regenerate outputs when upgrading.
+
+- [Complete project template](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/templates/RunicTranslations.Templates/templates/project)
+- [Vite quick start](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/quickstart-vite.md)
+- [ESM backend](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/esm.md)
+- [Compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md)
+- [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
+
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations/blob/main/LICENSE).

@@ -31,6 +31,21 @@
     "url": "git+https://github.com/Runic-Artifex/runic-translations.git",
     "directory": "web"
   },
+  "homepage": "https://github.com/Runic-Artifex/runic-translations/tree/main/web#readme",
+  "bugs": {
+    "url": "https://github.com/Runic-Artifex/runic-translations/issues"
+  },
+  "keywords": [
+    "runic-artifex",
+    "localization",
+    "i18n",
+    "translations",
+    "vite",
+    "sveltekit",
+    "esm",
+    "tree-shaking",
+    "hmr"
+  ],
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public"
