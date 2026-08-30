@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "catalog": "editor",
   "code": {
-    "namespace": "RunicTranslations.Editor.Generated",
+    "namespace": "Runic.Translations.Editor.Generated",
     "className": "EditorText"
   },
   "defaultLocale": "en",
@@ -19,7 +19,7 @@
     "emptyValues": "error"
   },
   "runtime": {
-    "unsupportedLocale": "parentsThenDefault",
+    "unsupportedLocale": "exact",
     "missingKey": "returnMarker"
   }
 }

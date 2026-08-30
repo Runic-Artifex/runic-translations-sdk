@@ -1,0 +1,77 @@
+{
+  "$id": "runic.translations.editor/1/PreviewProject",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "PreviewProject"
+      ],
+      "type": "string"
+    },
+    "request": {
+      "additionalProperties": false,
+      "properties": {
+        "additionalLocales": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "fallback": {
+                "type": "string"
+              },
+              "tag": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tag"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "catalogId": {
+          "type": "string"
+        },
+        "className": {
+          "type": "string"
+        },
+        "codeNamespace": {
+          "type": "string"
+        },
+        "defaultLocale": {
+          "type": "string"
+        },
+        "directory": {
+          "type": "string"
+        },
+        "generateEsm": {
+          "type": "boolean"
+        },
+        "includeStarterMessage": {
+          "type": "boolean"
+        },
+        "layerName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "directory",
+        "catalogId",
+        "defaultLocale",
+        "additionalLocales",
+        "codeNamespace",
+        "className",
+        "layerName",
+        "generateEsm",
+        "includeStarterMessage"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "request"
+  ],
+  "type": "object"
+}

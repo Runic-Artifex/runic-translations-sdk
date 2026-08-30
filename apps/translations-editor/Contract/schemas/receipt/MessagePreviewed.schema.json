@@ -1,0 +1,91 @@
+{
+  "$defs": {
+    "Int": {
+      "description": "an integer",
+      "title": "int",
+      "type": "integer"
+    }
+  },
+  "$id": "runic.translations.editor/1/MessagePreviewed",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "MessagePreviewed"
+      ],
+      "type": "string"
+    },
+    "preview": {
+      "additionalProperties": false,
+      "properties": {
+        "astJson": {
+          "type": "string"
+        },
+        "diagnostics": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "column": {
+                "$ref": "#/$defs/Int"
+              },
+              "endColumn": {
+                "$ref": "#/$defs/Int"
+              },
+              "endLine": {
+                "$ref": "#/$defs/Int"
+              },
+              "id": {
+                "type": "string"
+              },
+              "line": {
+                "$ref": "#/$defs/Int"
+              },
+              "message": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "severity",
+              "message",
+              "path",
+              "line",
+              "column",
+              "endLine",
+              "endColumn"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "success",
+        "diagnostics"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "preview"
+  ],
+  "type": "object"
+}

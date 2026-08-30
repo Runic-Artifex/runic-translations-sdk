@@ -1,0 +1,25 @@
+{
+  "$id": "runic.translations.editor/1/OperationCancelled",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "OperationCancelled"
+      ],
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "retryable": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "_tag",
+    "message",
+    "retryable"
+  ],
+  "type": "object"
+}

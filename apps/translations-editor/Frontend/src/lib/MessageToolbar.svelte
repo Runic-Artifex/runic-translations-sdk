@@ -10,6 +10,7 @@
   import { buttonVariants } from "$lib/components/ui/button/index.js";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
   import * as InputGroup from "$lib/components/ui/input-group/index.js";
+  import { getUiText } from "$lib/ui-text";
 
   let {
     query = $bindable(),
@@ -27,11 +28,13 @@
     filterLabel: string;
   } = $props();
 
+  const ui = getUiText();
+
   let selectedOption = $derived(options.find((option) => option.value === filter) ?? options[0]);
 </script>
 
 <div class="px-2 pb-2">
-  <label class="sr-only" for="message-search">Search messages</label>
+  <label class="sr-only" for="message-search">{ui.text("Ui.MessageToolbar.SearchMessages")}</label>
   <InputGroup.Root>
     <InputGroup.Input id="message-search" bind:ref={inputRef} bind:value={query} type="search" {placeholder} />
     <InputGroup.Addon>

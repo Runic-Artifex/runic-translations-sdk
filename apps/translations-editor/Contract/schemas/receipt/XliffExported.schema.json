@@ -1,0 +1,99 @@
+{
+  "$defs": {
+    "Int": {
+      "description": "an integer",
+      "title": "int",
+      "type": "integer"
+    }
+  },
+  "$id": "runic.translations.editor/1/XliffExported",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "XliffExported"
+      ],
+      "type": "string"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "catalogId": {
+          "type": "string"
+        },
+        "documents": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "byteCount": {
+                "$ref": "#/$defs/Int"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "locale",
+              "byteCount"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "losses": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "semanticLoss": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "code",
+              "location",
+              "message",
+              "semanticLoss"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "lossless": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ok",
+        "documents",
+        "losses",
+        "lossless"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "result"
+  ],
+  "type": "object"
+}

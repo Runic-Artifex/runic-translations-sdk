@@ -15,12 +15,15 @@
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import type { EditorReviewState } from "$lib/contracts";
   import type { QualityIssue, TranslationSuggestion } from "$lib/review-model";
+  import { getUiText } from "$lib/ui-text";
+
+  const ui = getUiText();
 
   const states: { value: EditorReviewState; label: string }[] = [
-    { value: "draft", label: "Draft" },
-    { value: "translated", label: "Translated" },
-    { value: "needs-review", label: "Needs review" },
-    { value: "approved", label: "Approved" },
+    { value: "draft", label: ui.text("Ui.Workflow.Draft") },
+    { value: "translated", label: ui.text("Ui.Workflow.Translated") },
+    { value: "needs-review", label: ui.text("Ui.Workflow.NeedsReview") },
+    { value: "approved", label: ui.text("Ui.Workflow.Approved") },
   ];
 
   let {
@@ -68,11 +71,11 @@
     <Card.Header class="p-0">
       <Collapsible.Trigger class="flex min-h-12 w-full items-center gap-2 rounded-2xl px-4 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <ListChecksIcon class="size-4 shrink-0" aria-hidden="true" />
-        <span class="font-medium">Workflow</span>
+        <span class="font-medium">{ui.text("Ui.Workflow.Title")}</span>
         <Badge variant="secondary">{stateLabel}</Badge>
-        {#if stale}<Badge variant="destructive">Source changed</Badge>{/if}
+        {#if stale}<Badge variant="destructive">{ui.text("Ui.Workflow.SourceChanged")}</Badge>{/if}
         <span class="ml-auto hidden min-w-0 truncate text-xs text-muted-foreground sm:block">
-          {dirty ? "Unsaved workflow changes" : message}
+          {dirty ? ui.text("Ui.Workflow.UnsavedChanges") : message}
         </span>
         <ChevronDownIcon class="size-4 shrink-0 transition-transform group-data-[state=open]/workflow:rotate-180" aria-hidden="true" />
       </Collapsible.Trigger>
@@ -83,19 +86,20 @@
         <div class="grid content-start gap-4">
           <div class="flex flex-wrap items-end gap-2">
       <Field.Field class="gap-1">
-        <Field.Label for="workflow-status">Status</Field.Label>
+        <Field.Label for="workflow-status">{ui.text("Ui.Workflow.Status")}</Field.Label>
         <Select.Root
           type="single"
           value={reviewState}
           disabled={disabled}
           onValueChange={(value) => {
+            if (disabled) return;
             onstatechange(value as EditorReviewState);
           }}
         >
           <Select.Trigger id="workflow-status" size="sm" class="min-w-36">{stateLabel}</Select.Trigger>
           <Select.Content>
             <Select.Group>
-              <Select.Label>Workflow status</Select.Label>
+              <Select.Label>{ui.text("Ui.Workflow.Status")}</Select.Label>
               {#each states as option (option.value)}
                 <Select.Item value={option.value} label={option.label}>{option.label}</Select.Item>
               {/each}
@@ -103,38 +107,39 @@
           </Select.Content>
         </Select.Root>
       </Field.Field>
-      <Button variant="outline" size="sm" onclick={onterminology}>
+      <Button variant="outline" size="sm" {disabled} onclick={() => { if (!disabled) onterminology(); }}>
         <BookOpenIcon data-icon="inline-start" />
-        Terminology · {terminologyCount}
+        {ui.text("Ui.Workflow.Terminology")} · {terminologyCount}
       </Button>
-      <Button variant="outline" size="sm" onclick={onreport}>
+      <Button variant="outline" size="sm" {disabled} onclick={() => { if (!disabled) onreport(); }}>
         <ClipboardListIcon data-icon="inline-start" />
-        Quality report · {qualityCount}
+        {ui.text("Ui.Workflow.QualityReport")} · {qualityCount}
       </Button>
           </div>
 
           <Field.Field>
-            <Field.Label for="review-note">Translator / reviewer note</Field.Label>
+            <Field.Label for="review-note">{ui.text("Ui.Workflow.ReviewerNote")}</Field.Label>
             <Textarea
               id="review-note"
               class="min-h-20 resize-y"
               value={note}
-              placeholder="Optional context for the next reviewer…"
-              oninput={(event) => onnotechange(event.currentTarget.value)}
+              placeholder={ui.text("Ui.Workflow.ReviewerNotePlaceholder")}
+              {disabled}
+              oninput={(event) => { if (!disabled) onnotechange(event.currentTarget.value); }}
             />
           </Field.Field>
         </div>
 
-        <section class="flex flex-col gap-2" aria-label="Quality checks">
-          <strong class="text-sm font-medium">Quality checks</strong>
+        <section class="flex flex-col gap-2" aria-label={ui.text("Ui.Workflow.QualityChecks")}>
+          <strong class="text-sm font-medium">{ui.text("Ui.Workflow.QualityChecks")}</strong>
           {#if qualityIssues.length === 0}
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <CheckCircle2Icon class="text-primary" />
-              No issues found
+              {ui.text("Ui.Workflow.NoIssues")}
             </div>
           {:else}
             {#each qualityIssues as issue (`${issue.kind}:${issue.message}`)}
-              <Button variant="outline" size="xs" class="h-auto justify-start whitespace-normal" onclick={onqualityfilter}>
+              <Button variant="outline" size="xs" class="h-auto justify-start whitespace-normal" {disabled} onclick={() => { if (!disabled) onqualityfilter(); }}>
                 <TriangleAlertIcon class="text-primary" data-icon="inline-start" />
                 <span class="text-left">{issue.message}</span>
               </Button>
@@ -145,7 +150,8 @@
 
       {#if suggestions.length > 0}
         <Card.Footer class="flex-col items-stretch gap-2 border-t py-3">
-          <strong class="flex items-center gap-2 text-sm font-medium"><SparklesIcon />Local translation memory</strong>
+          <strong class="flex items-center gap-2 text-sm font-medium"><SparklesIcon />{ui.text("Ui.Workflow.LocalTranslationMemory")}</strong>
+          <p class="text-xs text-muted-foreground">{ui.text("Ui.Workflow.SuggestionsPrivacy")}</p>
           <div class="grid gap-1.5">
             {#each suggestions as suggestion (suggestion.key)}
               <Button
@@ -153,7 +159,8 @@
                 size="sm"
                 class="h-auto justify-start whitespace-normal"
                 title={suggestion.source}
-                onclick={() => onsuggestion(suggestion.translation)}
+                {disabled}
+                onclick={() => { if (!disabled) onsuggestion(suggestion.translation); }}
               >
                 <Badge variant="secondary">{Math.round(suggestion.score * 100)}%</Badge>
                 <span class="text-left"><code>{suggestion.key}</code> · {suggestion.translation}</span>
@@ -161,6 +168,8 @@
             {/each}
           </div>
         </Card.Footer>
+      {:else}
+        <Card.Footer class="border-t py-3 text-xs text-muted-foreground">{ui.text("Ui.Workflow.EmptySuggestionsPrivacy")}</Card.Footer>
       {/if}
     </Collapsible.Content>
   </Card.Root>

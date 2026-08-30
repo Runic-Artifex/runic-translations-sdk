@@ -1,28 +1,41 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import {
-    m$App$Advanced,
-    m$App$All,
-    m$App$DefaultLocale,
-    m$App$Diagnostics,
-    m$App$Eyebrow,
-    m$App$Invalid,
-    m$App$Missing,
-    m$App$NoResults,
-    m$App$NoSelection,
-    m$App$Raw,
-    m$App$Reload,
-    m$App$Save,
-    m$App$Saved,
-    m$App$Saving,
-    m$App$Search,
-    m$App$Simple,
-    m$App$Structured,
-    m$App$Title,
-    m$App$Unsaved,
-    m$App$Valid,
-    m$App$Workspace,
-  } from "virtual:runic-translations/editor";
+  import { m } from "virtual:runic-translations/editor";
+
+  // ESM ABI v2 exposes messages as a namespace with catalog-key bindings.
+  const m$App$Advanced = m["App.Advanced"];
+  const m$App$All = m["App.All"];
+  const m$App$AddMessage = m["App.AddMessage"];
+  const m$App$ApproveTranslations = m["App.ApproveTranslations"];
+  const m$App$DefaultLocale = m["App.DefaultLocale"];
+  const m$App$Diagnostics = m["App.Diagnostics"];
+  const m$App$Eyebrow = m["App.Eyebrow"];
+  const m$App$Invalid = m["App.Invalid"];
+  const m$App$Missing = m["App.Missing"];
+  const m$App$MissingTranslation = m["App.MissingTranslation"];
+  const m$App$MarkForReview = m["App.MarkForReview"];
+  const m$App$MessageBulkActions = m["App.MessageBulkActions"];
+  const m$App$MessageFilters = m["App.MessageFilters"];
+  const m$App$Messages = m["App.Messages"];
+  const m$App$NoResults = m["App.NoResults"];
+  const m$App$NoMatchingMessages = m["App.NoMatchingMessages"];
+  const m$App$NoSelection = m["App.NoSelection"];
+  const m$App$Raw = m["App.Raw"];
+  const m$App$Reload = m["App.Reload"];
+  const m$App$Review = m["App.Review"];
+  const m$App$Save = m["App.Save"];
+  const m$App$Saved = m["App.Saved"];
+  const m$App$Saving = m["App.Saving"];
+  const m$App$Search = m["App.Search"];
+  const m$App$Simple = m["App.Simple"];
+  const m$App$Structured = m["App.Structured"];
+  const m$App$Stale = m["App.Stale"];
+  const m$App$Title = m["App.Title"];
+  const m$App$Unsaved = m["App.Unsaved"];
+  const m$App$Translated = m["App.Translated"];
+  const m$App$Valid = m["App.Valid"];
+  const m$App$Workspace = m["App.Workspace"];
+  const m$App$VisibleMessages = m["App.VisibleMessages"];
   import type {
     EditorAbout,
     EditorDiagnostic,
@@ -32,9 +45,13 @@
     EditorMutationRequest,
     EditorProjectCreationRequest,
     EditorProjectPlan,
+    EditorReviewFileResult,
     EditorReviewEntry,
+    EditorReviewImportPreview,
     EditorReviewState,
     EditorTerminologyEntry,
+    EditorXliffExportResult,
+    EditorXliffImportPreview,
     ValidationResult,
     WorkspaceSnapshot,
   } from "$lib/contracts";
@@ -46,8 +63,14 @@
     type ThemePalette,
   } from "$lib/appearance";
   import AppDialog from "$lib/AppDialog.svelte";
+  import ArtifactPreviewPanel from "$lib/ArtifactPreviewPanel.svelte";
+  import CommandPalette from "$lib/CommandPalette.svelte";
+  import { buildEditorCommandPalette } from "$lib/command-palette";
   import { createEditorBridge } from "$lib/editor-bridge";
+  import { createUiText, setUiText } from "$lib/ui-text";
+  import { editorShortcut } from "$lib/editor-keyboard";
   import EditorModeSwitcher, { type EditorMode } from "$lib/EditorModeSwitcher.svelte";
+  import InterchangeDialog from "$lib/InterchangeDialog.svelte";
   import EditorSettingsFooter from "$lib/EditorSettingsFooter.svelte";
   import EditorSidebarHeader from "$lib/EditorSidebarHeader.svelte";
   import EditorToolbar from "$lib/EditorToolbar.svelte";
@@ -77,6 +100,16 @@
   import type { MessageArtifact } from "$lib/message-composer";
   import { executeMessagePreview } from "$lib/message-preview.js";
   import {
+    clearLocalEditorState,
+    configureLocalEditorState,
+    getLocalEditorState,
+    inspectLocalEditorState,
+    loadLocalEditorState,
+    removeLocalEditorState,
+    setLocalEditorState,
+    type LocalStateSummary,
+  } from "$lib/local-state";
+  import {
     buildRows,
     coverage,
     formatJson,
@@ -85,8 +118,10 @@
     type ResourceValue,
     type TranslationRow,
   } from "$lib/resource-model";
+  import { createMessageSearchIndex } from "$lib/message-search";
   import {
     effectiveReviewState,
+    bidiIssues,
     isStale,
     qualityIssues,
     qualityReportCsv,
@@ -95,6 +130,12 @@
     sourceFingerprint,
     translationSuggestions,
   } from "$lib/review-model";
+  import {
+    readUiSimulation,
+    saveUiSimulation,
+    simulatePreviewResult,
+    type UiDirection,
+  } from "$lib/simulation";
 
   type ProjectLocaleDraft = { id: number; tag: string; fallback: string };
   type StoredDraft = { content: string; baseRevision: string };
@@ -104,8 +145,10 @@
   type PreviewNode = Extract<MessagePreviewResult, { kind: "content" }>["nodes"][number];
 
   const bridge = createEditorBridge();
+  configureLocalEditorState(bridge);
   let snapshot = $state.raw<WorkspaceSnapshot>();
   let drafts = $state<Record<string, string>>({});
+  let draftGenerations = $state<Record<string, number>>({});
   let selectedKey = $state("");
   let selectedLocale = $state("");
   let selectedDocumentPath = $state("");
@@ -114,6 +157,8 @@
   let mode = $state<EditorMode>("translation");
   let editorText = $state("");
   let uiLocale = $state("en");
+  const ui = createUiText(() => uiLocale);
+  setUiText(ui);
   let themeMode = $state<ThemeMode>("dark");
   let themePalette = $state<ThemePalette>("runic");
   let loading = $state(true);
@@ -144,6 +189,7 @@
   let openingWorkspace = $state(false);
   let pickingWorkspace = $state(false);
   let openDialogOpen = $state(false);
+  let commandPaletteOpen = $state(false);
   let repairDocument = $state.raw<EditorDocument>();
   let repairText = $state("");
   let repairBusy = $state(false);
@@ -167,7 +213,11 @@
   let mutationPreview = $state.raw<EditorMutationPreview>();
   let mutationError = $state<string>();
   let mutationBusy = $state(false);
+  let mutationIrreversibleConfirmed = $state(false);
   let recoveryBusy = $state(false);
+  let recoveryReloadRequired = $state(false);
+  let recoveryReloadMessage = $state<string>();
+  let historyBusy = $state(false);
   let previewBusy = $state(false);
   let previewError = $state<string>();
   let previewAst = $state.raw<MessageArtifact>();
@@ -181,7 +231,6 @@
   let reviewDirty = $state(false);
   let reviewSaving = $state(false);
   let reviewMessage = $state<string>();
-  let rowLimit = $state(300);
   let terminologyDialogOpen = $state(false);
   let termSource = $state("");
   let termPreferred = $state("");
@@ -193,11 +242,42 @@
   let aboutBusy = $state(false);
   let diagnosticBusy = $state(false);
   let diagnosticMessage = $state<string>();
+  let diagnosticBundlePath = $state<string>();
+  let localStateSummary = $state.raw<LocalStateSummary>();
+  let localStateMessage = $state<string>();
   let languagesOpen = $state(true);
   let messagesOpen = $state(true);
+  let pseudoLocalization = $state(false);
+  let uiDirection = $state<UiDirection>("ltr");
+  let artifactPreviewOpen = $state(false);
+  let interchangeOpen = $state(false);
+  let interchangeBusy = $state(false);
+  let xliffDirectory = $state("");
+  let xliffImportPath = $state("");
+  let reviewExportPath = $state("");
+  let reviewImportPath = $state("");
+  let xliffExport = $state.raw<EditorXliffExportResult>();
+  let xliffPreview = $state.raw<EditorXliffImportPreview>();
+  let reviewExport = $state.raw<EditorReviewFileResult>();
+  let reviewPreview = $state.raw<EditorReviewImportPreview>();
 
   let labels = $derived(labelsFor(uiLocale));
+  $effect(() => {
+    document.documentElement.lang = uiLocale;
+    document.documentElement.dir = uiDirection;
+  });
+  let hasUnsavedRepair = $derived(repairDocument !== undefined && repairText !== repairDocument.content);
+  let hasUnsavedWork = $derived(reviewDirty || hasUnsavedRepair || Object.keys(drafts).length > 0);
+  let historyBlocked = $derived(
+    historyBusy || loading || saving || reviewSaving || validationBusy || mutationBusy || recoveryBusy ||
+    previewBusy || projectBusy || openingWorkspace || pickingWorkspace || repairBusy || diagnosticBusy || aboutBusy || interchangeBusy ||
+    hasUnsavedWork || mutationDialogOpen || projectDialogOpen || openDialogOpen ||
+    comparedExternalChange !== undefined || repairDocument !== undefined || terminologyDialogOpen || reportDialogOpen || aboutDialogOpen,
+  );
+  let editorMutationBlocked = $derived(historyBusy || saving || reviewSaving || loading || recoveryBusy || openingWorkspace);
+  let reviewMutationBlocked = $derived(editorMutationBlocked || reviewSaving);
   let rows = $derived(buildRows(snapshot, drafts));
+  let messageSearch = $derived(createMessageSearchIndex(rows));
   let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
     const state = coverage(rows, locale.tag);
     return {
@@ -218,17 +298,30 @@
     reviewEntries,
     terminology,
   ));
-  let qualityKeySet = $derived(new Set(localeQuality.map((issue) => issue.key)));
+  let localeQualityFindings = $derived.by(() => {
+    const bidi = bidiIssues(
+      rows.map((row) => ({
+        key: row.key,
+        locale: selectedLocale,
+        text: preview(row.cells[selectedLocale]?.entry),
+      })),
+      uiDirection,
+    );
+    if (bidi.length === 0) return localeQuality;
+    return [...localeQuality, ...bidi].sort((left, right) =>
+      left.key.localeCompare(right.key) || left.kind.localeCompare(right.kind));
+  });
+  let qualityKeySet = $derived(new Set(localeQualityFindings.map((issue) => issue.key)));
   let filterOptions = $derived([
     { value: "all" as const, label: labels.all, count: rows.length },
     { value: "missing" as const, label: labels.missing, count: rows.filter((row) => row.cells[selectedLocale]?.entry === undefined).length },
     { value: "structured" as const, label: labels.structured, count: rows.filter((row) => row.structured).length },
-    { value: "needs-review" as const, label: "Review", count: rows.filter((row) => effectiveReviewState(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[selectedLocale]?.entry !== undefined) === "needs-review").length },
-    { value: "stale" as const, label: "Stale", count: rows.filter((row) => isStale(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value)).length },
-    { value: "quality" as const, label: "Quality", count: qualityKeySet.size },
+    { value: "needs-review" as const, label: labels.review, count: rows.filter((row) => effectiveReviewState(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[selectedLocale]?.entry !== undefined) === "needs-review").length },
+    { value: "stale" as const, label: labels.stale, count: rows.filter((row) => isStale(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value)).length },
+    { value: "quality" as const, label: ui.text("Ui.Page.Quality.Title"), count: qualityKeySet.size },
   ]);
   let visibleRows = $derived.by(() => {
-    const normalized = query.trim().toLocaleLowerCase();
+    const searchMatches = messageSearch.matchingRows(query);
     return rows.filter((row) => {
       const cell = row.cells[selectedLocale];
       if (filter === "missing" && cell?.entry !== undefined) return false;
@@ -237,18 +330,13 @@
       if (filter === "needs-review" && effectiveReviewState(review, cell?.entry !== undefined) !== "needs-review") return false;
       if (filter === "stale" && !isStale(review, row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value)) return false;
       if (filter === "quality" && !qualityKeySet.has(row.key)) return false;
-      if (normalized.length === 0) return true;
-      const searchable = [
-        row.key,
-        row.description ?? "",
-        ...row.tags,
-        ...Object.values(row.cells).map((candidate) => preview(candidate.entry)),
-      ].join("\n").toLocaleLowerCase();
-      return searchable.includes(normalized);
+      return searchMatches.has(row);
     });
   });
-  let renderedRows = $derived(visibleRows.slice(0, rowLimit));
-  let messageListItems = $derived.by((): MessageListItem[] => renderedRows.map((row) => {
+  let simulatedPreviewResult = $derived(
+    previewResult === undefined ? undefined : simulatePreviewResult(previewResult, { pseudoLocalization }),
+  );
+  let messageListItems = $derived.by((): MessageListItem[] => visibleRows.map((row) => {
     const cell = row.cells[selectedLocale];
     const rowReview = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
     return {
@@ -268,7 +356,7 @@
   let currentReview = $derived(reviewIndex.get(reviewIdentity(selectedKey, selectedLocale)));
   let currentReviewState = $derived(effectiveReviewState(currentReview, currentCell?.entry !== undefined));
   let currentIsStale = $derived(isStale(currentReview, currentSourceValue));
-  let currentQuality = $derived(localeQuality.filter((issue) => issue.key === selectedKey));
+  let currentQuality = $derived(localeQualityFindings.filter((issue) => issue.key === selectedKey));
   let memorySuggestions = $derived(translationSuggestions(
     rows,
     snapshot?.catalog?.defaultLocale ?? "",
@@ -292,21 +380,93 @@
   let malformedDocuments = $derived(
     snapshot?.documents.filter((document) => document.isMalformed) ?? [],
   );
+  let paletteCommands = $derived.by(() =>
+    buildEditorCommandPalette(
+      {
+        reloadWorkspace: () => void loadWorkspace(true),
+        openWorkspaceDialog: showOpenWorkspaceDialog,
+        createProject: openProjectWizard,
+        openInterchange: () => interchangeOpen = true,
+        saveDocument: () => void save(),
+        undo: () => void undoHistory(),
+        redo: () => void redoHistory(),
+        focusMessageSearch: () => searchInput?.focus(),
+        saveReview: () => void saveReview(),
+        discardReview,
+        setMessageReviewState: setCurrentReviewState,
+        markVisibleMessages: markVisible,
+        openTerminology: () => terminologyDialogOpen = true,
+        openQualityReport: () => reportDialogOpen = true,
+        showAbout: () => void showAbout(),
+        createDiagnosticBundle: () => void createDiagnosticBundle(),
+        setEditorMode: chooseMode,
+        selectLocale,
+        setUiLocale: (locale) => uiLocale = locale,
+        setThemeMode: changeThemeMode,
+        toggleLanguagesSection: () => languagesOpen = !languagesOpen,
+        toggleMessagesSection: () => messagesOpen = !messagesOpen,
+        togglePseudoLocalization,
+        toggleUiDirection,
+        toggleArtifactPreview,
+      },
+      {
+        locales: localeSummaries.map((locale) => ({ tag: locale.tag, name: locale.name })),
+        selectedLocale,
+        editorMode: mode,
+        uiLocale,
+        themeMode,
+        workspaceReady: snapshot !== undefined,
+        searchAvailable: searchInput !== null,
+        documentDirty: isDirty && !editorMutationBlocked,
+        canUndo: snapshot?.history?.canUndo === true && !historyBlocked,
+        canRedo: snapshot?.history?.canRedo === true && !historyBlocked,
+        reviewEditable: selectedRow !== undefined && !reviewMutationBlocked &&
+          snapshot?.review?.error === undefined,
+        reviewDirty,
+        reviewError: snapshot?.review?.error !== undefined,
+        pseudoLocalization,
+        uiDirection,
+        artifactPreviewOpen,
+      },
+    ));
 
   onMount(() => {
-    const appearance = readAppearance();
+    let disposed = false;
+    const appearance = readAppearance(getLocalEditorState);
     themeMode = appearance.mode;
     themePalette = appearance.palette;
     applyAppearance(themeMode, themePalette);
+    const simulation = readUiSimulation(getLocalEditorState);
+    pseudoLocalization = simulation.pseudoLocalization;
+    uiDirection = simulation.direction;
     const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
     const updateSystemTheme = (): void => {
       if (themeMode === "system") applyAppearance(themeMode, themePalette);
     };
     colorScheme.addEventListener("change", updateSystemTheme);
-    recentProjects = readRecentProjects();
-    void loadWorkspace(false);
+    void (async () => {
+      try {
+        const nativeStateRecovered = await loadLocalEditorState();
+        if (disposed) return;
+        const loadedAppearance = readAppearance(getLocalEditorState);
+        themeMode = loadedAppearance.mode;
+        themePalette = loadedAppearance.palette;
+        applyAppearance(themeMode, themePalette);
+        const loadedSimulation = readUiSimulation(getLocalEditorState);
+        pseudoLocalization = loadedSimulation.pseudoLocalization;
+        uiDirection = loadedSimulation.direction;
+        recentProjects = readRecentProjects();
+        if (nativeStateRecovered) {
+          operationMessage = "Recovered from an unreadable local editor-state record; saved preferences and recovery drafts were reset.";
+        }
+      } catch (error) {
+        clientError = `The per-user editor state could not be loaded. ${errorMessage(error)}`;
+      }
+      if (!disposed) await loadWorkspace(false);
+    })();
     const interval = window.setInterval(() => void checkExternalChanges(), 2_000);
     return () => {
+      disposed = true;
       colorScheme.removeEventListener("change", updateSystemTheme);
       window.clearInterval(interval);
     };
@@ -314,12 +474,26 @@
 
   function changeThemeMode(mode: ThemeMode): void {
     themeMode = mode;
-    saveAppearance(themeMode, themePalette);
+    saveAppearance(themeMode, themePalette, setLocalEditorState);
   }
 
   function changeThemePalette(palette: ThemePalette): void {
     themePalette = palette;
-    saveAppearance(themeMode, themePalette);
+    saveAppearance(themeMode, themePalette, setLocalEditorState);
+  }
+
+  function togglePseudoLocalization(): void {
+    pseudoLocalization = !pseudoLocalization;
+    saveUiSimulation(pseudoLocalization, uiDirection, setLocalEditorState);
+  }
+
+  function toggleUiDirection(): void {
+    uiDirection = uiDirection === "rtl" ? "ltr" : "rtl";
+    saveUiSimulation(pseudoLocalization, uiDirection, setLocalEditorState);
+  }
+
+  function toggleArtifactPreview(): void {
+    artifactPreviewOpen = !artifactPreviewOpen;
   }
 
   async function checkExternalChanges(): Promise<void> {
@@ -339,14 +513,18 @@
   }
 
   async function loadWorkspace(confirmDiscard: boolean): Promise<void> {
-    if (confirmDiscard && Object.keys(drafts).length > 0 && !confirm("Discard all unsaved changes?")) return;
-    if (confirmDiscard) clearStoredDrafts(snapshot);
+    if (hasUnsavedWork) {
+      if (!confirmDiscard || !confirmDiscardUnsavedWork("reload the workspace")) return;
+      discardUnsavedWork();
+    }
     loading = true;
     operationMessage = undefined;
     clientError = undefined;
     try {
       const next = await bridge.load();
       installSnapshot(next, true);
+      recoveryReloadRequired = false;
+      recoveryReloadMessage = undefined;
       externalChanges = [];
       externalFileChanges = [];
     } catch (error) {
@@ -360,9 +538,10 @@
     snapshot = next;
     if (resetSelection) {
       drafts = {};
+      draftGenerations = {};
       recoveredDrafts = readStoredDrafts(next);
     }
-    if (resetSelection || !reviewDirty) installReview(next);
+    if (!reviewDirty) installReview(next);
     validation = undefined;
     const nextRows = buildRows(next, {});
     if (resetSelection || !nextRows.some((row) => row.key === selectedKey)) {
@@ -383,6 +562,42 @@
     reviewMessage = next.review?.error;
   }
 
+  function confirmDiscardUnsavedWork(action: string): boolean {
+    if (!hasUnsavedWork) return true;
+    return confirm(`Discard unsaved document drafts, repair text, and workflow/terminology changes to ${action}?`);
+  }
+
+  function discardUnsavedWork(): void {
+    clearStoredDrafts(snapshot);
+    drafts = {};
+    draftGenerations = {};
+    if (snapshot !== undefined) installReview(snapshot);
+    if (hasUnsavedRepair) {
+      repairDocument = undefined;
+      repairText = "";
+      repairMessage = undefined;
+    }
+  }
+
+  function confirmDiscardNonDocumentWork(action: string): boolean {
+    if (!reviewDirty && !hasUnsavedRepair) return true;
+    if (!confirm(`Discard unsaved repair text and workflow/terminology changes to ${action}?`)) return false;
+    if (snapshot !== undefined) installReview(snapshot);
+    if (hasUnsavedRepair) {
+      repairDocument = undefined;
+      repairText = "";
+      repairMessage = undefined;
+    }
+    return true;
+  }
+
+  function closeRepair(): void {
+    if (hasUnsavedRepair && !confirm("Discard unsaved repair text?")) return;
+    repairDocument = undefined;
+    repairText = "";
+    repairMessage = undefined;
+  }
+
   function selectRow(row: TranslationRow): void {
     const nextKey = row.key;
     validation = undefined;
@@ -401,6 +616,7 @@
   }
 
   function chooseMode(nextMode: EditorMode): void {
+    if (editorMutationBlocked) return;
     mode = nextMode;
     clientError = undefined;
     configureEditor(nextMode);
@@ -432,6 +648,7 @@
   }
 
   function edit(value: string): void {
+    if (editorMutationBlocked) return;
     if (mode !== "raw") {
       editResourceValue(value);
       return;
@@ -445,7 +662,7 @@
       return;
     }
     try {
-      drafts[document.path] = value;
+      setDraft(document.path, value);
       persistDrafts();
       scheduleValidation(document.path, value);
     } catch (error) {
@@ -455,6 +672,7 @@
   }
 
   function editResourceValue(resourceValue: ResourceValue): void {
+    if (editorMutationBlocked) return;
     editorText = typeof resourceValue === "string" ? resourceValue : JSON.stringify(resourceValue, null, 2);
     clientError = undefined;
     operationMessage = undefined;
@@ -471,7 +689,7 @@
         resourceValue,
         sourceEntry,
       );
-      drafts[document.path] = content;
+      setDraft(document.path, content);
       persistDrafts();
       scheduleValidation(document.path, content);
       schedulePreview(document.path, content);
@@ -521,6 +739,7 @@
     locale: string,
     patch: Partial<EditorReviewEntry>,
   ): void {
+    if (reviewMutationBlocked) return;
     const identity = reviewIdentity(key, locale);
     const index = reviewEntries.findIndex((entry) => reviewIdentity(entry.key, entry.locale) === identity);
     const row = rows.find((candidate) => candidate.key === key);
@@ -553,6 +772,7 @@
   }
 
   function markVisible(state: EditorReviewState): void {
+    if (reviewMutationBlocked) return;
     let next = [...reviewEntries];
     const byIdentity = reviewMap(next);
     for (const row of visibleRows) {
@@ -577,7 +797,7 @@
   }
 
   async function saveReview(): Promise<void> {
-    if (!reviewDirty || reviewSaving || snapshot?.review?.error !== undefined) return;
+    if (!reviewDirty || reviewSaving || historyBusy || snapshot?.review?.error !== undefined) return;
     reviewSaving = true;
     reviewMessage = undefined;
     try {
@@ -596,6 +816,7 @@
       reviewDirty = false;
       reviewMessage = "Workflow sidecar saved";
       if (snapshot !== undefined) snapshot.review = result.review;
+      if (snapshot !== undefined) snapshot.history = result.history;
     } catch (error) {
       reviewMessage = errorMessage(error);
     } finally {
@@ -608,6 +829,7 @@
   }
 
   function addTerm(): void {
+    if (reviewMutationBlocked) return;
     if (termSource.trim() === "" || termPreferred.trim() === "") return;
     terminology = [...terminology, {
       source: termSource.trim(),
@@ -623,13 +845,17 @@
   }
 
   function removeTerm(index: number): void {
+    if (reviewMutationBlocked) return;
     terminology = terminology.filter((_, candidate) => candidate !== index);
     reviewDirty = true;
   }
 
   async function showAbout(): Promise<void> {
+    if (historyBusy) return;
     aboutDialogOpen = true;
     diagnosticMessage = undefined;
+    localStateSummary = inspectLocalEditorState();
+    localStateMessage = undefined;
     if (aboutInfo !== undefined || aboutBusy) return;
     aboutBusy = true;
     try {
@@ -641,19 +867,159 @@
     }
   }
 
+  async function clearLocalState(): Promise<void> {
+    const summary = localStateSummary ?? inspectLocalEditorState();
+    if (summary.entries === 0) return;
+    if (!confirm("Remove the editor's saved preferences, recent-project list, and crash-recovery drafts from this user profile? Workspace files and currently open in-memory work will not be changed.")) return;
+    const removed = await clearLocalEditorState();
+    recentProjects = [];
+    recoveredDrafts = {};
+    localStateSummary = inspectLocalEditorState();
+    localStateMessage = removed === 1
+      ? "Removed 1 local editor-state entry."
+      : `Removed ${removed} local editor-state entries.`;
+  }
+
   async function createDiagnosticBundle(): Promise<void> {
-    if (diagnosticBusy) return;
+    if (diagnosticBusy || historyBusy) return;
     diagnosticBusy = true;
     diagnosticMessage = undefined;
     try {
       const result = await bridge.createDiagnosticBundle();
+      diagnosticBundlePath = result.ok ? result.path : undefined;
       diagnosticMessage = result.ok
-        ? `Sanitized diagnostics saved to ${result.path ?? "the temporary diagnostics directory"}.`
+        ? "Sanitized diagnostics were saved in this user's application-data directory."
         : result.message ?? "The diagnostic bundle could not be created.";
     } catch (error) {
       diagnosticMessage = errorMessage(error);
     } finally {
       diagnosticBusy = false;
+    }
+  }
+
+  async function revealDiagnosticBundle(): Promise<void> {
+    if (diagnosticBundlePath === undefined || diagnosticBusy) return;
+    diagnosticBusy = true;
+    try {
+      const result = await bridge.revealDiagnosticBundle(diagnosticBundlePath);
+      diagnosticMessage = result.ok ? "Opened the diagnostic bundle location." : result.message ?? "The diagnostic bundle location could not be opened.";
+    } catch (error) {
+      diagnosticMessage = errorMessage(error);
+    } finally {
+      diagnosticBusy = false;
+    }
+  }
+
+  async function copyDiagnosticBundlePath(): Promise<void> {
+    if (diagnosticBundlePath === undefined) return;
+    try {
+      await navigator.clipboard.writeText(diagnosticBundlePath);
+      diagnosticMessage = "Copied the diagnostic bundle path.";
+    } catch {
+      diagnosticMessage = "The diagnostic bundle path could not be copied. Select it below and copy it manually.";
+    }
+  }
+
+  async function deleteDiagnosticBundle(): Promise<void> {
+    if (diagnosticBundlePath === undefined || diagnosticBusy) return;
+    if (!confirm("Delete this sanitized diagnostic bundle? This does not affect workspace files or editor state.")) return;
+    diagnosticBusy = true;
+    try {
+      const result = await bridge.deleteDiagnosticBundle(diagnosticBundlePath);
+      if (result.ok) diagnosticBundlePath = undefined;
+      diagnosticMessage = result.ok ? "Deleted the diagnostic bundle." : result.message ?? "The diagnostic bundle could not be deleted.";
+    } catch (error) {
+      diagnosticMessage = errorMessage(error);
+    } finally {
+      diagnosticBusy = false;
+    }
+  }
+
+  async function exportXliff(): Promise<void> {
+    if (interchangeBusy) return;
+    interchangeBusy = true;
+    try {
+      xliffExport = await bridge.exportXliff(xliffDirectory.trim() || undefined);
+    } catch (error) {
+      xliffExport = { ok: false, message: errorMessage(error), documents: [], losses: [], lossless: false };
+    } finally {
+      interchangeBusy = false;
+    }
+  }
+
+  async function previewXliffImport(): Promise<void> {
+    if (interchangeBusy || xliffImportPath.trim() === "") return;
+    interchangeBusy = true;
+    try {
+      xliffPreview = await bridge.previewXliffImport(xliffImportPath.trim());
+    } catch (error) {
+      xliffPreview = {
+        ok: false, message: errorMessage(error), requiresIrreversibleConfirmation: false,
+        changes: [], addedCount: 0, changedCount: 0, removedCount: 0, unchangedCount: 0,
+        reviewUpdateCount: 0, changesOverflowed: false, refusals: [],
+      };
+    } finally {
+      interchangeBusy = false;
+    }
+  }
+
+  async function applyXliffImport(): Promise<void> {
+    if (interchangeBusy || xliffPreview?.confirmationToken === undefined || !confirmDiscardUnsavedWork("apply this XLIFF import")) return;
+    interchangeBusy = true;
+    try {
+      const result = await bridge.applyXliffImport(xliffPreview.confirmationToken);
+      operationMessage = result.message ?? (result.ok ? "XLIFF import applied." : "The XLIFF import could not be applied.");
+      if (result.snapshot !== undefined) installSnapshot(result.snapshot, true);
+      if (result.ok) xliffPreview = undefined;
+    } catch (error) {
+      operationMessage = errorMessage(error);
+    } finally {
+      interchangeBusy = false;
+    }
+  }
+
+  async function exportReviewJson(): Promise<void> {
+    if (interchangeBusy) return;
+    interchangeBusy = true;
+    try {
+      reviewExport = await bridge.exportReviewJson(reviewExportPath.trim() || undefined);
+    } catch (error) {
+      reviewExport = { ok: false, message: errorMessage(error), entryCount: 0 };
+    } finally {
+      interchangeBusy = false;
+    }
+  }
+
+  async function previewReviewJsonImport(): Promise<void> {
+    if (interchangeBusy || reviewImportPath.trim() === "") return;
+    interchangeBusy = true;
+    try {
+      reviewPreview = await bridge.previewReviewJsonImport(reviewImportPath.trim());
+    } catch (error) {
+      reviewPreview = {
+        ok: false, message: errorMessage(error), requiresIrreversibleConfirmation: false,
+        changes: [], addedCount: 0, changedCount: 0, removedCount: 0, changesOverflowed: false, refusals: [],
+      };
+    } finally {
+      interchangeBusy = false;
+    }
+  }
+
+  async function applyReviewJsonImport(): Promise<void> {
+    if (interchangeBusy || reviewPreview?.confirmationToken === undefined || !confirmDiscardUnsavedWork("apply this review import")) return;
+    interchangeBusy = true;
+    try {
+      const result = await bridge.applyReviewJsonImport(reviewPreview.confirmationToken);
+      operationMessage = result.message ?? (result.ok ? "Review import applied." : "The review import could not be applied.");
+      if (result.ok && result.review !== undefined && snapshot !== undefined) {
+        snapshot = { ...snapshot, review: result.review, history: result.history ?? snapshot.history };
+        installReview(snapshot);
+        reviewPreview = undefined;
+      }
+    } catch (error) {
+      operationMessage = errorMessage(error);
+    } finally {
+      interchangeBusy = false;
     }
   }
 
@@ -684,6 +1050,7 @@
   }
 
   function formatRaw(): void {
+    if (editorMutationBlocked) return;
     if (mode !== "raw") return;
     try {
       const formatted = formatJson(editorText);
@@ -713,7 +1080,8 @@
   async function save(): Promise<void> {
     const document = currentDocument;
     const content = currentContent;
-    if (document === undefined || content === undefined || !isDirty || saving) return;
+    if (document === undefined || content === undefined || !isDirty || saving || historyBusy) return;
+    const generation = draftGenerations[document.path] ?? 0;
     saving = true;
     operationMessage = undefined;
     clientError = undefined;
@@ -722,20 +1090,29 @@
       validation = checked;
       if (!checked.success) return;
       const result = await bridge.save(document.path, content, document.revision);
-      if (!result.ok || result.snapshot === undefined) {
+      if (!result.ok) {
         if (result.validation !== undefined) validation = result.validation;
         clientError = result.message ?? `Save failed (${result.kind}).`;
         return;
       }
+      if (result.snapshot === undefined) {
+        await reloadAfterSave(document.path, content, generation, result.message ?? labels.saved);
+        return;
+      }
       const key = selectedKey;
       const locale = selectedLocale;
-      delete drafts[document.path];
-      persistDrafts();
       installSnapshot(result.snapshot, false);
+      if (!hasNewerDraft(document.path, content, generation)) {
+        delete drafts[document.path];
+        delete draftGenerations[document.path];
+        persistDrafts();
+      }
       selectedKey = key;
       selectedLocale = locale;
       configureEditor();
-      operationMessage = labels.saved;
+      operationMessage = hasNewerDraft(document.path, content, generation)
+        ? "Saved the earlier draft; your newer edit is still open."
+        : labels.saved;
     } catch (error) {
       clientError = errorMessage(error);
     } finally {
@@ -743,15 +1120,85 @@
     }
   }
 
+  async function reloadAfterSave(path: string, content: string, generation: number, message: string): Promise<void> {
+    const next = await bridge.load();
+    const newer = hasNewerDraft(path, content, generation);
+    installSnapshot(next, false);
+    if (!newer) {
+      delete drafts[path];
+      delete draftGenerations[path];
+      persistDrafts();
+    }
+    configureEditor();
+    operationMessage = newer ? "Saved the earlier draft; your newer edit is still open." : message;
+  }
+
   function handleKeyboard(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "s") {
-      event.preventDefault();
-      void save();
+    const shortcut = editorShortcut(event, isTextEditingTarget(event.target));
+    if (shortcut === undefined) return;
+    event.preventDefault();
+    if (shortcut === "undo") void undoHistory();
+    else if (shortcut === "redo") void redoHistory();
+    else if (shortcut === "save") void save();
+    else if (shortcut === "toggle-command-search") commandPaletteOpen = !commandPaletteOpen;
+    else if (shortcut === "toggle-pseudo-localization") togglePseudoLocalization();
+    else if (shortcut === "toggle-right-to-left") toggleUiDirection();
+    else toggleArtifactPreview();
+  }
+
+  async function undoHistory(): Promise<void> {
+    if (historyBlocked) return;
+    historyBusy = true;
+    clientError = undefined;
+    try {
+      const result = await bridge.undo();
+      if (!result.ok) {
+        if (snapshot !== undefined && result.history !== undefined) snapshot.history = result.history;
+        clientError = result.message ?? "The saved change could not be undone.";
+        return;
+      }
+      if (result.snapshot === undefined) {
+        await loadWorkspace(false);
+        operationMessage = result.message ?? "Saved change undone";
+        return;
+      }
+      installSnapshot(result.snapshot, false);
+      operationMessage = "Saved change undone";
+    } catch (error) {
+      clientError = errorMessage(error);
+    } finally {
+      historyBusy = false;
     }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "k") {
-      event.preventDefault();
-      searchInput?.focus();
+  }
+
+  async function redoHistory(): Promise<void> {
+    if (historyBlocked) return;
+    historyBusy = true;
+    clientError = undefined;
+    try {
+      const result = await bridge.redo();
+      if (!result.ok) {
+        if (snapshot !== undefined && result.history !== undefined) snapshot.history = result.history;
+        clientError = result.message ?? "The saved change could not be redone.";
+        return;
+      }
+      if (result.snapshot === undefined) {
+        await loadWorkspace(false);
+        operationMessage = result.message ?? "Saved change redone";
+        return;
+      }
+      installSnapshot(result.snapshot, false);
+      operationMessage = "Saved change redone";
+    } catch (error) {
+      clientError = errorMessage(error);
+    } finally {
+      historyBusy = false;
     }
+  }
+
+  function isTextEditingTarget(target: EventTarget | null): boolean {
+    return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.isContentEditable);
   }
 
   function selectDiagnostic(diagnostic: EditorDiagnostic): void {
@@ -765,7 +1212,7 @@
   }
 
   function protectDraft(event: BeforeUnloadEvent): void {
-    if (Object.keys(drafts).length === 0) return;
+    if (!hasUnsavedWork) return;
     event.preventDefault();
   }
 
@@ -782,6 +1229,7 @@
   }
 
   function openProjectWizard(): void {
+    if (historyBusy) return;
     projectStep = 1;
     projectDirectory = "";
     projectCatalog = "product";
@@ -852,6 +1300,7 @@
   }
 
   async function advanceProjectWizard(): Promise<void> {
+    if (historyBusy) return;
     if (!validateProjectStep()) return;
     if (projectStep < 3) {
       projectStep += 1;
@@ -874,7 +1323,9 @@
   }
 
   async function createProject(): Promise<void> {
-    if (projectPlan?.ok !== true || projectBusy) return;
+    if (projectPlan?.ok !== true || projectBusy || historyBusy) return;
+    if (!confirmDiscardUnsavedWork("create a new project")) return;
+    if (hasUnsavedWork) discardUnsavedWork();
     projectBusy = true;
     projectError = undefined;
     try {
@@ -894,9 +1345,9 @@
   }
 
   async function openWorkspace(catalogId?: string, directoryOverride?: string): Promise<void> {
-    if (openingWorkspace) return;
-    if (Object.keys(drafts).length > 0 && !confirm("Discard all unsaved changes?")) return;
-    clearStoredDrafts(snapshot);
+    if (openingWorkspace || historyBusy) return;
+    if (!confirmDiscardUnsavedWork("open another workspace")) return;
+    if (hasUnsavedWork) discardUnsavedWork();
     const directory = directoryOverride ?? (catalogId === undefined ? openDirectory.trim() : snapshot?.root ?? "");
     if (directory === "") {
       clientError = "Enter a workspace directory.";
@@ -923,7 +1374,7 @@
   }
 
   async function pickWorkspace(): Promise<void> {
-    if (pickingWorkspace || openingWorkspace) return;
+    if (pickingWorkspace || openingWorkspace || historyBusy) return;
     pickingWorkspace = true;
     clientError = undefined;
     try {
@@ -941,6 +1392,7 @@
   }
 
   function showOpenWorkspaceDialog(): void {
+    if (historyBusy) return;
     const current = snapshot;
     if (current === undefined) return;
     openDirectory = current.root;
@@ -948,11 +1400,11 @@
   }
 
   function prepareMutation(kind: MutationKind): boolean {
+    if (historyBusy) return false;
     const current = snapshot;
     if (current?.catalog === undefined) return false;
-    if (Object.keys(drafts).length > 0 && !confirm("Structural changes require a clean workspace. Discard unsaved drafts?")) return false;
-    drafts = {};
-    clearStoredDrafts(current);
+    if (!confirmDiscardUnsavedWork("make this structural workspace change")) return false;
+    if (hasUnsavedWork) discardUnsavedWork();
     mutationKind = kind;
     const firstNonDefault = current.catalog.locales.find((locale) => locale.tag !== current.catalog?.defaultLocale)?.tag ?? "";
     mutationLocale = kind === "remove-locale" || kind === "set-fallback"
@@ -968,6 +1420,7 @@
     mutationPreview = undefined;
     mutationError = undefined;
     mutationBusy = false;
+    mutationIrreversibleConfirmed = false;
     mutationDialogOpen = true;
     return true;
   }
@@ -983,12 +1436,14 @@
       sourceKey: mutationSourceKey.trim() || undefined,
       targetKey: mutationTargetKey.trim() || undefined,
       initialValue: mutationInitialValue,
+      confirmationToken: mutationIrreversibleConfirmed ? mutationPreview?.confirmationToken : undefined,
     };
   }
 
   function invalidateMutationPreview(): void {
     mutationPreview = undefined;
     mutationError = undefined;
+    mutationIrreversibleConfirmed = false;
   }
 
   function changeMutationKind(value: string): void {
@@ -1003,7 +1458,7 @@
   }
 
   async function previewMutation(): Promise<void> {
-    if (mutationBusy) return;
+    if (mutationBusy || historyBusy) return;
     mutationBusy = true;
     mutationError = undefined;
     try {
@@ -1018,14 +1473,21 @@
   }
 
   async function applyMutation(): Promise<void> {
-    if (mutationBusy || mutationPreview?.ok !== true) return;
+    if (mutationBusy || historyBusy || mutationPreview?.ok !== true ||
+      (mutationPreview.requiresIrreversibleConfirmation && !mutationIrreversibleConfirmed)) return;
     mutationBusy = true;
     mutationError = undefined;
     try {
       const result = await bridge.applyMutation(mutationRequest());
-      if (!result.ok || result.snapshot === undefined) {
+      if (!result.ok) {
         mutationError = result.message ?? "The workspace change could not be committed.";
         mutationPreview = undefined;
+        return;
+      }
+      if (result.snapshot === undefined) {
+        await loadWorkspace(false);
+        operationMessage = result.message ?? "Workspace updated";
+        mutationDialogOpen = false;
         return;
       }
       const preferredKey = mutationKind === "rename-key" || mutationKind === "duplicate-key"
@@ -1045,16 +1507,26 @@
   }
 
   async function recoverTransaction(mode: "complete" | "rollback"): Promise<void> {
-    if (recoveryBusy) return;
+    if (recoveryBusy || historyBusy) return;
     recoveryBusy = true;
     clientError = undefined;
     try {
       const result = await bridge.recoverTransaction(mode);
-      if (!result.ok || result.snapshot === undefined) {
+      if (!result.ok) {
         clientError = result.message ?? "Workspace recovery failed.";
         return;
       }
+      if (result.snapshot === undefined) {
+        openDirectory = snapshot?.root ?? openDirectory;
+        snapshot = undefined;
+        recoveryReloadRequired = true;
+        recoveryReloadMessage = result.message ?? "Recovery completed; reload the workspace to refresh it.";
+        await loadWorkspace(false);
+        return;
+      }
       installSnapshot(result.snapshot, true);
+      recoveryReloadRequired = false;
+      recoveryReloadMessage = undefined;
       operationMessage = mode === "complete" ? "Interrupted change completed" : "Interrupted change rolled back";
     } catch (error) {
       clientError = errorMessage(error);
@@ -1080,7 +1552,8 @@
 
   async function applyExternalMerge(): Promise<void> {
     const change = comparedExternalChange;
-    if (change === undefined) return;
+    if (change === undefined || historyBusy) return;
+    if (!confirmDiscardNonDocumentWork("reload the external file and keep the merged document draft")) return;
     const retainedDrafts = { ...drafts, [change.path]: mergedExternalText };
     loading = true;
     clientError = undefined;
@@ -1125,12 +1598,21 @@
       const document = current.documents.find((candidate) => candidate.path === path);
       if (document !== undefined) stored[path] = { content, baseRevision: document.revision };
     }
-    localStorage.setItem(draftStorageKey(current), JSON.stringify({ version: 1, documents: stored }));
+    setLocalEditorState(draftStorageKey(current), JSON.stringify({ version: 1, documents: stored }));
+  }
+
+  function setDraft(path: string, content: string): void {
+    drafts[path] = content;
+    draftGenerations[path] = (draftGenerations[path] ?? 0) + 1;
+  }
+
+  function hasNewerDraft(path: string, content: string, generation: number): boolean {
+    return draftGenerations[path] !== generation || drafts[path] !== content;
   }
 
   function readStoredDrafts(value: WorkspaceSnapshot): Record<string, StoredDraft> {
     try {
-      const raw = localStorage.getItem(draftStorageKey(value));
+      const raw = getLocalEditorState(draftStorageKey(value));
       if (raw === null) return {};
       const parsed = JSON.parse(raw) as { version?: unknown; documents?: unknown };
       if (parsed.version !== 1 || typeof parsed.documents !== "object" || parsed.documents === null) return {};
@@ -1148,12 +1630,12 @@
   }
 
   function clearStoredDrafts(value: WorkspaceSnapshot | undefined): void {
-    if (value !== undefined) localStorage.removeItem(draftStorageKey(value));
+    if (value !== undefined) removeLocalEditorState(draftStorageKey(value));
   }
 
   function readRecentProjects(): RecentProject[] {
     try {
-      const value = JSON.parse(localStorage.getItem("runic-translations:recent:1") ?? "[]") as unknown;
+      const value = JSON.parse(getLocalEditorState("runic-translations:recent:1") ?? "[]") as unknown;
       if (!Array.isArray(value)) return [];
       return value.filter((item): item is RecentProject =>
         typeof item === "object" && item !== null &&
@@ -1170,10 +1652,11 @@
     if (catalogId === undefined) return;
     const entry = { root: value.root, catalogId, openedAt: new Date().toISOString() };
     recentProjects = [entry, ...recentProjects.filter((item) => item.root !== entry.root || item.catalogId !== catalogId)].slice(0, 8);
-    localStorage.setItem("runic-translations:recent:1", JSON.stringify(recentProjects));
+    setLocalEditorState("runic-translations:recent:1", JSON.stringify(recentProjects));
   }
 
   function beginRepair(document: EditorDocument): void {
+    if (hasUnsavedRepair && !confirm("Discard unsaved repair text and open another document?")) return;
     repairDocument = document;
     repairText = document.content;
     repairMessage = undefined;
@@ -1181,7 +1664,7 @@
 
   async function saveRepair(): Promise<void> {
     const document = repairDocument;
-    if (document === undefined || repairBusy) return;
+    if (document === undefined || repairBusy || historyBusy) return;
     repairBusy = true;
     repairMessage = undefined;
     try {
@@ -1191,12 +1674,17 @@
         return;
       }
       const result = await bridge.save(document.path, repairText, document.revision);
-      if (!result.ok || result.snapshot === undefined) {
+      if (!result.ok) {
         repairMessage = result.message ?? "The repaired document could not be saved.";
         return;
       }
+      if (result.snapshot === undefined) {
+        await reloadAfterSave(document.path, repairText, draftGenerations[document.path] ?? 0, result.message ?? labels.saved);
+        repairDocument = undefined;
+        return;
+      }
       repairDocument = undefined;
-      installSnapshot(result.snapshot, true);
+      installSnapshot(result.snapshot, false);
     } catch (error) {
       repairMessage = errorMessage(error);
     } finally {
@@ -1206,13 +1694,13 @@
 
   function mutationTitle(kind: MutationKind): string {
     return {
-      "add-locale": "Add a language",
-      "remove-locale": "Remove a language",
-      "set-fallback": "Change fallback relationships",
-      "create-key": "Add a message",
-      "rename-key": "Rename or move a message",
-      "duplicate-key": "Duplicate a message",
-      "delete-key": "Delete a message",
+      "add-locale": ui.text("Ui.Page.Mutation.AddLanguage"),
+      "remove-locale": ui.text("Ui.Page.Mutation.RemoveLanguage"),
+      "set-fallback": ui.text("Ui.Page.Mutation.ChangeFallbackRelationships"),
+      "create-key": labels.addMessage,
+      "rename-key": ui.text("Ui.Page.Mutation.RenameMoveMessage"),
+      "duplicate-key": ui.text("Ui.Page.Mutation.DuplicateMessage"),
+      "delete-key": ui.text("Ui.Page.Mutation.DeleteMessage"),
     }[kind];
   }
 
@@ -1240,13 +1728,25 @@
       defaultLocale: m$App$DefaultLocale(options),
       workspace: m$App$Workspace(options),
       diagnostics: m$App$Diagnostics(options),
+      messages: m$App$Messages(options),
+      messageBulkActions: m$App$MessageBulkActions(options),
+      visibleMessages: m$App$VisibleMessages(options),
+      markForReview: m$App$MarkForReview(options),
+      approveTranslations: m$App$ApproveTranslations(options),
+      addMessage: m$App$AddMessage(options),
+      noMatchingMessages: m$App$NoMatchingMessages(options),
+      missingTranslation: m$App$MissingTranslation(options),
+      translated: m$App$Translated(options),
+      stale: m$App$Stale(options),
+      review: m$App$Review(options),
+      messageFilters: m$App$MessageFilters(options),
     };
   }
 </script>
 
 <svelte:head>
-  <title>Runic Translations Editor</title>
-  <meta name="description" content="A focused desktop editor for Runic Translations workspaces" />
+  <title>{labels.title}</title>
+    <meta name="description" content={ui.text("Ui.Page.MetaDescription")} />
 </svelte:head>
 <svelte:window onkeydown={handleKeyboard} onbeforeunload={protectDraft} />
 
@@ -1269,15 +1769,15 @@
 {#if externalChanges.length > 0}
   <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-4xl">
     <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
-      <Alert.Title>Files changed outside the editor</Alert.Title>
+      <Alert.Title>{ui.text("Ui.Page.ExternalChanges.Title")}</Alert.Title>
       <Alert.Description class="min-w-0">
         <p class="truncate font-mono text-xs">{externalChanges.join(", ")}</p>
-        <p>{Object.keys(drafts).length > 0 ? "Your local drafts are still intact." : "Reload to read the latest versions."}</p>
+        <p>{hasUnsavedWork ? ui.text("Ui.Page.ExternalChanges.UnsavedIntact") : ui.text("Ui.Page.ExternalChanges.ReloadLatest")}</p>
       </Alert.Description>
       <Alert.Action class="static col-span-full mt-2 flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" size="xs" onclick={() => { externalChanges = []; externalFileChanges = []; }}>Keep current view</Button>
-        <Button variant="outline" size="xs" onclick={reviewExternalChanges}>Compare / merge</Button>
-        <Button size="xs" onclick={() => void loadWorkspace(true)}>Reload files</Button>
+        <Button variant="ghost" size="xs" onclick={() => { externalChanges = []; externalFileChanges = []; }}>{ui.text("Ui.Page.KeepCurrentView")}</Button>
+        <Button variant="outline" size="xs" onclick={reviewExternalChanges}>{ui.text("Ui.Page.ExternalChanges.CompareMerge")}</Button>
+        <Button size="xs" onclick={() => void loadWorkspace(true)}>{ui.text("Ui.Page.ExternalChanges.ReloadFiles")}</Button>
       </Alert.Action>
     </Alert.Root>
   </div>
@@ -1286,15 +1786,15 @@
 {#if Object.keys(recoveredDrafts).length > 0}
   <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-2xl">
     <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
-      <Alert.Title>Unsaved work was recovered</Alert.Title>
+      <Alert.Title>{ui.text("Ui.Page.RecoveredDrafts.Title")}</Alert.Title>
       <Alert.Description>
         {Object.keys(recoveredDrafts).length === 1
-          ? "One document draft was found in local application storage."
-          : `${Object.keys(recoveredDrafts).length} document drafts were found in local application storage.`}
+          ? ui.text("Ui.Page.RecoveredDrafts.One")
+          : `${Object.keys(recoveredDrafts).length} ${ui.text("Ui.Page.RecoveredDrafts.Many")}`}
       </Alert.Description>
       <Alert.Action class="static col-span-full mt-2 flex flex-col gap-2 min-[360px]:flex-row min-[360px]:justify-end">
-        <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>Discard</Button>
-        <Button size="xs" onclick={recoverSavedDrafts}>Restore drafts</Button>
+        <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>{ui.text("Ui.Page.Discard")}</Button>
+        <Button size="xs" onclick={recoverSavedDrafts}>{ui.text("Ui.Page.RecoveredDrafts.Restore")}</Button>
       </Alert.Action>
     </Alert.Root>
   </div>
@@ -1304,28 +1804,28 @@
   <AppDialog
     open
     title={comparedExternalChange.path}
-    description="Compare the editor base with the current file, then keep or merge the change."
+    description={ui.text("Ui.Page.ExternalCompare.Description")}
     class="sm:max-w-6xl"
     bodyClass="grid gap-4"
     onopenchange={(open) => { if (!open) comparedExternalChange = undefined; }}
   >
     <div class="grid gap-4 lg:grid-cols-2">
       <Field.Field>
-        <Field.Label for="external-editor-base">Editor base</Field.Label>
-        <Textarea id="external-editor-base" class="min-h-64 font-mono text-xs" readonly value={snapshot?.documents.find((document) => document.path === comparedExternalChange?.path)?.content ?? "File was not previously loaded."} />
+        <Field.Label for="external-editor-base">{ui.text("Ui.Page.ExternalCompare.EditorBase")}</Field.Label>
+        <Textarea id="external-editor-base" class="min-h-64 font-mono text-xs" readonly value={snapshot?.documents.find((document) => document.path === comparedExternalChange?.path)?.content ?? ui.text("Ui.Page.ExternalCompare.NotPreviouslyLoaded")} />
       </Field.Field>
       <Field.Field>
-        <Field.Label for="external-current-disk">Current disk</Field.Label>
-        <Textarea id="external-current-disk" class="min-h-64 font-mono text-xs" readonly value={comparedExternalChange.content ?? "File was deleted externally."} />
+        <Field.Label for="external-current-disk">{ui.text("Ui.Page.ExternalCompare.CurrentDisk")}</Field.Label>
+        <Textarea id="external-current-disk" class="min-h-64 font-mono text-xs" readonly value={comparedExternalChange.content ?? ui.text("Ui.Page.ExternalCompare.DeletedExternally")} />
       </Field.Field>
     </div>
     <Field.Field>
-      <Field.Label for="external-merged-draft">Merged draft</Field.Label>
+      <Field.Label for="external-merged-draft">{ui.text("Ui.Page.ExternalCompare.MergedDraft")}</Field.Label>
       <Textarea id="external-merged-draft" class="min-h-64 font-mono text-xs" bind:value={mergedExternalText} spellcheck={false} />
     </Field.Field>
     {#snippet footer()}
-      <Button variant="outline" onclick={() => comparedExternalChange = undefined}>Keep current view</Button>
-      <Button onclick={() => void applyExternalMerge()}>Reload base and keep merged draft</Button>
+      <Button variant="outline" onclick={() => comparedExternalChange = undefined}>{ui.text("Ui.Page.KeepCurrentView")}</Button>
+      <Button onclick={() => void applyExternalMerge()}>{ui.text("Ui.Page.ExternalCompare.ReloadKeepMerged")}</Button>
     {/snippet}
   </AppDialog>
 {/if}
@@ -1340,42 +1840,45 @@
   <main class="fatal-shell">
     <div class="mark" aria-hidden="true"><span></span></div>
     <p class="eyebrow">{labels.eyebrow}</p>
-    <h1>Could not open this translation workspace</h1>
-    <p>{clientError ?? "No Runic Translations catalog was found."}</p>
-    <button class="primary" onclick={() => void loadWorkspace(false)}>{labels.reload}</button>
+    <h1>{recoveryReloadRequired ? ui.text("Ui.Page.Fatal.RecoveryReloadRequired") : ui.text("Ui.Page.Fatal.CouldNotOpen")}</h1>
+    <p>{recoveryReloadRequired ? recoveryReloadMessage ?? ui.text("Ui.Page.Fatal.RecoveryRefresh") : clientError ?? ui.text("Ui.Page.Fatal.NoCatalog")}</p>
+    <div class="recovery-actions">
+      <button class="primary" onclick={() => void loadWorkspace(false)}>{labels.reload}</button>
+      {#if recoveryReloadRequired}<button class="secondary" onclick={() => openDialogOpen = true}>{ui.text("Ui.Page.Fatal.OpenAnotherWorkspace")}</button>{/if}
+    </div>
   </main>
 {:else if snapshot.pendingTransaction !== undefined}
   <main class="recovery-shell">
     <div class="mark" aria-hidden="true"><span></span></div>
-    <p class="eyebrow">Workspace recovery</p>
-    <h1>An interrupted change needs your decision</h1>
-    <p>The recovery journal for <strong>{snapshot.pendingTransaction.catalogId}</strong> lists {snapshot.pendingTransaction.paths.length} affected {snapshot.pendingTransaction.paths.length === 1 ? "file" : "files"}. No further editing is allowed until it is resolved.</p>
+    <p class="eyebrow">{ui.text("Ui.Page.Recovery.Eyebrow")}</p>
+    <h1>{ui.text("Ui.Page.Recovery.Title")}</h1>
+    <p>{ui.text("Ui.Page.Recovery.JournalFor")} <strong>{snapshot.pendingTransaction.catalogId}</strong> {ui.text("Ui.Page.Recovery.Lists")} {snapshot.pendingTransaction.paths.length} {snapshot.pendingTransaction.paths.length === 1 ? ui.text("Ui.Page.File") : ui.text("Ui.Page.Files")}. {ui.text("Ui.Page.Recovery.NoFurtherEditing")}</p>
     <div class="recovery-paths">
       {#each snapshot.pendingTransaction.paths as path (path)}<code>{path}</code>{/each}
     </div>
     {#if clientError}<p class="project-error" aria-live="polite">{clientError}</p>{/if}
     <div class="recovery-actions">
-      <button class="secondary" disabled={recoveryBusy} onclick={() => void recoverTransaction("rollback")}>Restore files from before the change</button>
-      <button class="primary" disabled={recoveryBusy} onclick={() => void recoverTransaction("complete")}>{recoveryBusy ? "Recovering…" : "Complete the planned change"}</button>
+      <button class="secondary" disabled={recoveryBusy} onclick={() => void recoverTransaction("rollback")}>{ui.text("Ui.Page.Recovery.RestoreBefore")}</button>
+      <button class="primary" disabled={recoveryBusy} onclick={() => void recoverTransaction("complete")}>{recoveryBusy ? ui.text("Ui.Page.Recovery.Recovering") : ui.text("Ui.Page.Recovery.Complete")}</button>
     </div>
-    <small>Both choices use the bounded local journal. The journal is removed only after recovery succeeds.</small>
+    <small>{ui.text("Ui.Page.Recovery.JournalNote")}</small>
   </main>
 {:else if snapshot.catalog === undefined}
   <main class="welcome-shell">
     <header class="welcome-brand">
       <div class="mark small" aria-hidden="true"><span></span></div>
       <div><p class="eyebrow">{labels.eyebrow}</p><h1>{labels.title}</h1></div>
-      <select aria-label="Interface language" value={uiLocale} onchange={(event) => uiLocale = event.currentTarget.value}>
+      <select aria-label={ui.text("Ui.Page.InterfaceLanguage")} value={uiLocale} onchange={(event) => uiLocale = event.currentTarget.value}>
         <option value="en">EN</option><option value="de">DE</option>
       </select>
     </header>
     <section class="welcome-content">
       <div class="welcome-heading">
-        <p class="eyebrow">Workspace onboarding</p>
-        <h2>{snapshot.catalogs.length > 1 ? "Choose a translation catalog" : "Open a translation project"}</h2>
+        <p class="eyebrow">{ui.text("Ui.Page.Welcome.Eyebrow")}</p>
+        <h2>{snapshot.catalogs.length > 1 ? ui.text("Ui.Page.Welcome.ChooseCatalog") : ui.text("Ui.Page.Welcome.OpenProject")}</h2>
         <p>{snapshot.catalogs.length > 1
-          ? `We found ${snapshot.catalogs.length} catalogs below this workspace boundary.`
-          : "Open an existing workspace or create a compiler-valid project from scratch."}</p>
+          ? `${ui.text("Ui.Page.Welcome.Found")} ${snapshot.catalogs.length} ${ui.text("Ui.Page.Welcome.CatalogsBelow")}`
+          : ui.text("Ui.Page.Welcome.OpenOrCreate")}</p>
       </div>
 
       {#if snapshot.catalogs.length > 0}
@@ -1384,29 +1887,29 @@
             <button class="catalog-choice" onclick={() => void openWorkspace(catalog.id)} disabled={openingWorkspace}>
               <span class={{ "status-dot": true, warning: !catalog.success }}></span>
               <span><strong>{catalog.id}</strong><small>{catalog.manifestPaths.join(", ")}</small></span>
-              <span class="catalog-metrics">{catalog.localeCount} locales<br />{catalog.messageCount} messages</span>
-              <span class={catalog.errorCount > 0 ? "health error" : "health"}>{catalog.errorCount > 0 ? `${catalog.errorCount} errors` : "Healthy"}</span>
+              <span class="catalog-metrics">{catalog.localeCount} {ui.text("Ui.Page.Locales")}<br />{catalog.messageCount} {ui.text("Ui.Page.Messages")}</span>
+              <span class={catalog.errorCount > 0 ? "health error" : "health"}>{catalog.errorCount > 0 ? `${catalog.errorCount} ${ui.text("Ui.Page.Errors")}` : ui.text("Ui.Page.Healthy")}</span>
             </button>
           {/each}
         </div>
       {/if}
 
       <div class="open-workspace-card">
-        <label for="open-directory">Workspace directory</label>
+        <label for="open-directory">{ui.text("Ui.Page.WorkspaceDirectory")}</label>
         <div><input id="open-directory" bind:value={openDirectory} placeholder="/projects/customer-app" autocomplete="off" />
-          <button class="secondary" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? "Choosing…" : "Browse…"}</button>
-          <button class="primary" disabled={openingWorkspace} onclick={() => void openWorkspace()}>{openingWorkspace ? "Opening…" : "Open"}</button></div>
-        <small>Traversal stays inside this boundary and ignores links, dependencies, and generated output.</small>
+          <button class="secondary" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? ui.text("Ui.Page.Choosing") : ui.text("Ui.Page.Browse")}</button>
+          <button class="primary" disabled={openingWorkspace} onclick={() => void openWorkspace()}>{openingWorkspace ? ui.text("Ui.Page.Opening") : ui.text("Ui.Page.Open")}</button></div>
+        <small>{ui.text("Ui.Page.Welcome.TraversalNote")}</small>
       </div>
 
       <div class="welcome-actions">
-        <button class="secondary" onclick={openProjectWizard}>＋ Create new project</button>
-        <button class="secondary" onclick={() => void loadWorkspace(false)}>↻ Scan {snapshot.root}</button>
+        <button class="secondary" onclick={openProjectWizard}>＋ {ui.text("Ui.Page.Welcome.CreateProject")}</button>
+        <button class="secondary" onclick={() => void loadWorkspace(true)}>↻ {ui.text("Ui.Page.Welcome.Scan")} {snapshot.root}</button>
       </div>
 
       {#if recentProjects.length > 0}
         <section class="recent-projects">
-          <header><strong>Recent projects</strong><span>Stored only in your local application profile</span></header>
+          <header><strong>{ui.text("Ui.Page.Welcome.RecentProjects")}</strong><span>{ui.text("Ui.Page.Welcome.StoredLocalProfile")}</span></header>
           {#each recentProjects as project (`${project.root}\n${project.catalogId}`)}
             <button onclick={() => void openWorkspace(project.catalogId, project.root)} disabled={openingWorkspace}>
               <span><strong>{project.catalogId}</strong><code>{project.root}</code></span>
@@ -1418,9 +1921,9 @@
 
       {#if malformedDocuments.length > 0}
         <section class="repair-list">
-          <header><div><strong>Repair malformed JSON</strong><span>{malformedDocuments.length} files need attention</span></div></header>
+          <header><div><strong>{ui.text("Ui.Page.Welcome.RepairMalformedJson")}</strong><span>{malformedDocuments.length} {ui.text("Ui.Page.Welcome.FilesNeedAttention")}</span></div></header>
           {#each malformedDocuments as document (document.path)}
-            <button onclick={() => beginRepair(document)}><span>!</span><code>{document.path}</code><small>Open repair editor →</small></button>
+            <button onclick={() => beginRepair(document)}><span>!</span><code>{document.path}</code><small>{ui.text("Ui.Page.Welcome.OpenRepairEditor")} →</small></button>
           {/each}
         </section>
       {/if}
@@ -1468,16 +1971,29 @@
             items={messageListItems}
             {selectedKey}
             visibleCount={visibleRows.length}
-            remainingCount={visibleRows.length - renderedRows.length}
+            reviewActionsDisabled={reviewMutationBlocked}
             noResultsLabel={labels.noResults}
+            labels={{
+              messages: labels.messages,
+              bulkActions: labels.messageBulkActions,
+              visibleMessages: labels.visibleMessages,
+              markForReview: labels.markForReview,
+              approveTranslations: labels.approveTranslations,
+              addMessage: labels.addMessage,
+              noMatchingMessages: labels.noMatchingMessages,
+              missingTranslation: labels.missingTranslation,
+              translated: labels.translated,
+              structured: labels.structured,
+              stale: labels.stale,
+              review: labels.review,
+            }}
             onselect={(key) => {
-              const row = renderedRows.find((candidate) => candidate.key === key);
+              const row = visibleRows.find((candidate) => candidate.key === key);
               if (row !== undefined) selectRow(row);
             }}
             onadd={() => prepareMutation("create-key")}
             onmarkreview={() => markVisible("needs-review")}
             onapprove={() => markVisible("approved")}
-            onloadmore={() => rowLimit += 300}
             bind:open={messagesOpen}
           >
             {#snippet toolbar()}
@@ -1487,7 +2003,7 @@
                 bind:inputRef={searchInput}
                 placeholder={labels.search}
                 options={filterOptions}
-                filterLabel="Message filters"
+                filterLabel={labels.messageFilters}
               />
             {/snippet}
           </MessageList>
@@ -1498,9 +2014,13 @@
         locale={uiLocale}
         {themeMode}
         {themePalette}
+        {pseudoLocalization}
+        {uiDirection}
         onlocalechange={(locale) => uiLocale = locale}
         onthememodechange={changeThemeMode}
         onthemepalettechange={changeThemePalette}
+        ontogglepseudo={togglePseudoLocalization}
+        ontoggledirection={toggleUiDirection}
         onabout={() => void showAbout()}
       />
       <Sidebar.Rail />
@@ -1517,10 +2037,21 @@
         savingLabel={labels.saving}
         saveState={isDirty ? labels.unsaved : operationMessage ?? labels.saved}
         {isDirty}
+        canUndo={snapshot.history?.canUndo === true && !historyBlocked}
+        canRedo={snapshot.history?.canRedo === true && !historyBlocked}
+        {historyBusy}
+        undoLabel={snapshot.history?.undoLabel}
+        redoLabel={snapshot.history?.redoLabel}
         ondiscardreview={discardReview}
         onsavereview={() => void saveReview()}
         onsave={() => void save()}
+        onundo={() => void undoHistory()}
+        onredo={() => void redoHistory()}
       />
+
+      <div class="flex justify-end border-b px-4 py-2">
+        <Button variant="outline" size="sm" disabled={loading || interchangeBusy} onclick={() => interchangeOpen = true}>{ui.text("Ui.Page.Interchange")}…</Button>
+      </div>
 
       {#if selectedRow === undefined}
         <Empty.Root>
@@ -1529,17 +2060,17 @@
               <MessageSquareTextIcon aria-hidden="true" />
             </Empty.Media>
             <Empty.Title class="font-serif font-medium">{labels.noSelection}</Empty.Title>
-            <Empty.Description>Choose a message from the sidebar to review or edit its translation.</Empty.Description>
+            <Empty.Description>{ui.text("Ui.Page.EmptySelection.Description")}</Empty.Description>
           </Empty.Header>
         </Empty.Root>
       {:else}
-        <div class="editor-content">
+        <div class="editor-content" lang={selectedLocale} dir={uiDirection}>
           <MessageHeading
             messageKey={selectedRow.key}
             description={selectedRow.description}
             tags={selectedRow.tags}
             locale={selectedLocale}
-            layer={currentDocument?.layer ?? "no document"}
+            layer={currentDocument?.layer ?? ui.text("Ui.Page.NoDocument")}
             inheritedFrom={currentCell?.inheritedFrom}
             onrename={() => prepareMutation("rename-key")}
             onduplicate={() => prepareMutation("duplicate-key")}
@@ -1549,11 +2080,11 @@
           <ReviewWorkflow
             state={currentReviewState}
             dirty={reviewDirty}
-            message={reviewMessage ?? "Project notes"}
-            disabled={snapshot.review?.error !== undefined}
+            message={reviewMessage ?? ui.text("Ui.Page.ProjectNotes")}
+            disabled={snapshot.review?.error !== undefined || reviewMutationBlocked}
             stale={currentIsStale}
             terminologyCount={terminology.length}
-            qualityCount={localeQuality.length}
+            qualityCount={localeQualityFindings.length}
             note={currentReview?.note ?? ""}
             qualityIssues={currentQuality}
             suggestions={memorySuggestions}
@@ -1575,11 +2106,12 @@
           <TranslationEditor
             {mode}
             locale={selectedLocale}
-            label={mode === "translation" ? localeName(selectedLocale) : currentDocument?.path ?? "Resource document"}
+            label={mode === "translation" ? localeName(selectedLocale) : currentDocument?.path ?? ui.text("Ui.Page.ResourceDocument")}
             value={editorText}
             resourceValue={currentCell?.entry?.value ?? selectedRow.cells[snapshot.catalog.defaultLocale]?.entry?.value}
             missing={currentCell?.entry === undefined}
             invalid={clientError !== undefined || validation?.success === false}
+            disabled={editorMutationBlocked}
             onresourcechange={editResourceValue}
             onrawchange={edit}
             onformatraw={formatRaw}
@@ -1588,8 +2120,8 @@
           {#if mode === "translation"}
             <section class="message-preview" aria-live="polite">
               <header>
-                <div><strong>Preview</strong><span>Uses the same rules as the generated application message</span></div>
-                <span class="preview-state">{previewBusy ? "Compiling…" : previewAst === undefined ? "Unavailable" : selectedLocale}</span>
+                <div><strong>{ui.text("Ui.Page.Preview.Title")}</strong><span>{ui.text("Ui.Page.Preview.Description")}</span></div>
+                <span class="preview-state">{previewBusy ? ui.text("Ui.Page.Preview.Compiling") : previewAst === undefined ? ui.text("Ui.Page.Preview.Unavailable") : selectedLocale}</span>
               </header>
               {#if previewAst !== undefined && Object.keys(previewAst.inputs).length > 0}
                 <div class="sample-inputs">
@@ -1600,19 +2132,29 @@
               {/if}
               <div class="preview-canvas">
                 {#if previewBusy}
-                  <span class="preview-placeholder">Compiling the current draft…</span>
+                  <span class="preview-placeholder">{ui.text("Ui.Page.Preview.CompilingDraft")}</span>
                 {:else if previewError}
                   <span class="preview-error">{previewError}</span>
-                {:else if previewResult?.kind === "text"}
-                  <p>{previewResult.value}</p>
-                {:else if previewResult?.kind === "content"}
-                  <div class="safe-content">{@render previewNodes(previewResult.nodes)}</div>
+                {:else if simulatedPreviewResult?.kind === "text"}
+                  <p>{simulatedPreviewResult.value}</p>
+                {:else if simulatedPreviewResult?.kind === "content"}
+                  <div class="safe-content">{@render previewNodes(simulatedPreviewResult.nodes)}</div>
                 {:else}
-                  <span class="preview-placeholder">Edit the message to build a preview.</span>
+                  <span class="preview-placeholder">{ui.text("Ui.Page.Preview.EditToBuild")}</span>
                 {/if}
               </div>
-              <p class="safe-note">Semantic markup is displayed as a data tree. Names and attributes are never interpreted as trusted HTML.</p>
+              <p class="safe-note">{ui.text("Ui.Page.Preview.SafeMarkup")}{pseudoLocalization ? ` ${ui.text("Ui.Page.Preview.PseudoActive")}` : ""}{uiDirection === "rtl" ? ` ${ui.text("Ui.Page.Preview.RtlActive")}` : ""}</p>
             </section>
+
+            <ArtifactPreviewPanel
+              open={artifactPreviewOpen}
+              baseResult={previewResult}
+              simulatedResult={simulatedPreviewResult}
+              {pseudoLocalization}
+              direction={uiDirection}
+              busy={previewBusy}
+              onclose={() => artifactPreviewOpen = false}
+            />
           {/if}
 
           <ValidationPanel
@@ -1636,22 +2178,22 @@
 {#if aboutDialogOpen}
   <AppDialog
     open
-    title={aboutInfo?.product ?? "Runic Translations Editor"}
-    description="Application information and privacy-safe diagnostics."
+    title={aboutInfo?.product ?? ui.text("Ui.Page.About.Product")}
+    description={ui.text("Ui.Page.About.Description")}
     onopenchange={(open) => aboutDialogOpen = open}
   >
     <div class="grid gap-4">
       {#if aboutBusy}
-        <div class="flex items-center gap-2 text-muted-foreground"><Spinner />Reading application information…</div>
+        <div class="flex items-center gap-2 text-muted-foreground"><Spinner />{ui.text("Ui.Page.About.Reading")}</div>
       {:else if aboutInfo !== undefined}
         <dl class="grid overflow-hidden rounded-xl border">
           {#each [
-            ["Version", aboutInfo.version],
-            ["Update channel", aboutInfo.updateChannel],
-            ["Source revision", aboutInfo.commit ?? "development build"],
-            ["Runtime", aboutInfo.runtime],
-            ["Runtime identifier", aboutInfo.runtimeIdentifier],
-            ["System", `${aboutInfo.operatingSystem} · ${aboutInfo.architecture}`],
+            [ui.text("Ui.Page.About.Version"), aboutInfo.version],
+            [ui.text("Ui.Page.About.UpdateChannel"), aboutInfo.updateChannel],
+            [ui.text("Ui.Page.About.SourceRevision"), aboutInfo.commit ?? ui.text("Ui.Page.About.DevelopmentBuild")],
+            [ui.text("Ui.Page.About.Runtime"), aboutInfo.runtime],
+            [ui.text("Ui.Page.About.RuntimeIdentifier"), aboutInfo.runtimeIdentifier],
+            [ui.text("Ui.Page.About.System"), `${aboutInfo.operatingSystem} · ${aboutInfo.architecture}`],
           ] as item (item[0])}
             <div class="grid gap-1 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[9rem_1fr] sm:gap-4">
               <dt class="text-muted-foreground">{item[0]}</dt><dd class="m-0 overflow-wrap-anywhere font-mono text-xs">{item[1]}</dd>
@@ -1660,17 +2202,40 @@
         </dl>
       {/if}
       <Alert.Root>
-        <Alert.Title>Sanitized diagnostic bundle</Alert.Title>
-        <Alert.Description>The zip contains version/runtime information, catalog counts, and grouped diagnostic IDs. It excludes workspace paths, file names, messages, source JSON, and translations.</Alert.Description>
+        <Alert.Title>{ui.text("Ui.Page.About.DiagnosticBundleTitle")}</Alert.Title>
+        <Alert.Description>{ui.text("Ui.Page.About.DiagnosticBundleDescription")}</Alert.Description>
         {#if diagnosticMessage}<p class="text-sm text-primary" aria-live="polite">{diagnosticMessage}</p>{/if}
       </Alert.Root>
-      <p class="text-sm text-muted-foreground">Runic Translations is MIT licensed. The packaged application includes <code>LICENSE.txt</code> and <code>THIRD-PARTY-NOTICES.md</code>.</p>
+      {#if diagnosticBundlePath !== undefined}
+        <section class="grid gap-2 rounded-xl border p-4" aria-labelledby="diagnostic-bundle-actions-title">
+          <h3 id="diagnostic-bundle-actions-title" class="font-medium">{ui.text("Ui.Page.About.DiagnosticBundle")}</h3>
+          <Input aria-label={ui.text("Ui.Page.About.DiagnosticBundlePath")} readonly value={diagnosticBundlePath} class="font-mono text-xs" />
+          <div class="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" disabled={diagnosticBusy} onclick={() => void revealDiagnosticBundle()}>{ui.text("Ui.Page.About.RevealLocation")}</Button>
+            <Button variant="outline" size="sm" onclick={() => void copyDiagnosticBundlePath()}>{ui.text("Ui.Page.About.CopyPath")}</Button>
+            <Button variant="destructive" size="sm" disabled={diagnosticBusy} onclick={() => void deleteDiagnosticBundle()}>{ui.text("Ui.Page.About.DeleteBundle")}</Button>
+          </div>
+          <p class="text-xs text-muted-foreground">{ui.text("Ui.Page.About.BundleNoUpload")}</p>
+        </section>
+      {/if}
+      <section class="grid gap-3 rounded-xl border p-4" aria-labelledby="local-state-title">
+        <div class="grid gap-1 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4">
+          <div><h3 id="local-state-title" class="font-medium">{ui.text("Ui.Page.About.LocalState")}</h3><p class="text-sm text-muted-foreground">{ui.text("Ui.Page.About.LocalStateDescription")}</p></div>
+          <Button variant="outline" size="sm" disabled={(localStateSummary?.entries ?? 0) === 0} onclick={clearLocalState}>{ui.text("Ui.Page.About.ClearLocalState")}</Button>
+        </div>
+        {#if localStateSummary !== undefined}
+          <p class="text-sm text-muted-foreground">{localStateSummary.entries} {ui.text("Ui.Page.About.Entries")} · {localStateSummary.bytes.toLocaleString()} {ui.text("Ui.Page.About.Bytes")} · {localStateSummary.preferenceEntries} {ui.text("Ui.Page.About.Preferences")} · {localStateSummary.recentProjectEntries} {ui.text("Ui.Page.About.RecentProjectRecords")} · {localStateSummary.draftEntries} {ui.text("Ui.Page.About.RecoveryDraftRecords")}{localStateSummary.recovered ? ` · ${ui.text("Ui.Page.About.RecoveredUnreadable")}` : ""}</p>
+        {/if}
+        <p class="text-xs text-muted-foreground">{ui.text("Ui.Page.About.ClearLocalStateNote")}</p>
+        {#if localStateMessage}<p class="text-sm text-primary" aria-live="polite">{localStateMessage}</p>{/if}
+      </section>
+      <p class="text-sm text-muted-foreground">{ui.text("Ui.Page.About.LicenseNote")}</p>
     </div>
     {#snippet footer()}
-      <Button variant="outline" onclick={() => aboutDialogOpen = false}>Close</Button>
+      <Button variant="outline" onclick={() => aboutDialogOpen = false}>{ui.text("Ui.Page.Close")}</Button>
       <Button disabled={diagnosticBusy || aboutBusy} onclick={() => void createDiagnosticBundle()}>
         {#if diagnosticBusy}<Spinner data-icon="inline-start" />{/if}
-        {diagnosticBusy ? "Creating bundle…" : "Create diagnostic bundle"}
+        {diagnosticBusy ? ui.text("Ui.Page.About.CreatingBundle") : ui.text("Ui.Page.About.CreateBundle")}
       </Button>
     {/snippet}
   </AppDialog>
@@ -1679,18 +2244,19 @@
 {#if terminologyDialogOpen}
   <AppDialog
     open
-    title="Project terminology"
-    description="Terms stay in the optional versioned sidecar and are checked locally. Nothing is sent to a service."
+    title={ui.text("Ui.Page.Terminology.Title")}
+    description={ui.text("Ui.Page.Terminology.Description")}
     class="sm:max-w-4xl"
     onopenchange={(open) => terminologyDialogOpen = open}
   >
+    <div inert={reviewMutationBlocked} aria-disabled={reviewMutationBlocked} class:opacity-60={reviewMutationBlocked}>
     <Field.FieldGroup class="grid gap-3 sm:grid-cols-2">
-      <Field.Field><Field.Label for="term-source">Source term</Field.Label><Input id="term-source" bind:value={termSource} placeholder="Save" /></Field.Field>
-      <Field.Field><Field.Label for="term-preferred">Preferred translation</Field.Label><Input id="term-preferred" bind:value={termPreferred} placeholder="Speichern" /></Field.Field>
-      <Field.Field><Field.Label for="term-locale">Locale</Field.Label><Input id="term-locale" bind:value={termLocale} placeholder="Optional, e.g. de" /></Field.Field>
-      <Field.Field><Field.Label for="term-note">Note</Field.Label><Input id="term-note" bind:value={termNote} placeholder="Optional usage guidance" /></Field.Field>
-      <Button class="justify-self-start sm:col-span-2" variant="outline" disabled={termSource.trim() === "" || termPreferred.trim() === ""} onclick={addTerm}>
-        <PlusIcon data-icon="inline-start" />Add term
+      <Field.Field><Field.Label for="term-source">{ui.text("Ui.Page.Terminology.SourceTerm")}</Field.Label><Input id="term-source" bind:value={termSource} placeholder={ui.text("Ui.Page.Terminology.SourcePlaceholder")} /></Field.Field>
+      <Field.Field><Field.Label for="term-preferred">{ui.text("Ui.Page.Terminology.Preferred")}</Field.Label><Input id="term-preferred" bind:value={termPreferred} placeholder={ui.text("Ui.Page.Terminology.PreferredPlaceholder")} /></Field.Field>
+      <Field.Field><Field.Label for="term-locale">{ui.text("Ui.Page.Terminology.Locale")}</Field.Label><Input id="term-locale" bind:value={termLocale} placeholder={ui.text("Ui.Page.Terminology.LocalePlaceholder")} /></Field.Field>
+      <Field.Field><Field.Label for="term-note">{ui.text("Ui.Page.Terminology.Note")}</Field.Label><Input id="term-note" bind:value={termNote} placeholder={ui.text("Ui.Page.Terminology.NotePlaceholder")} /></Field.Field>
+      <Button class="justify-self-start sm:col-span-2" variant="outline" disabled={reviewMutationBlocked || termSource.trim() === "" || termPreferred.trim() === ""} onclick={addTerm}>
+        <PlusIcon data-icon="inline-start" />{ui.text("Ui.Page.Terminology.AddTerm")}
       </Button>
     </Field.FieldGroup>
     <div class="mt-5 grid overflow-hidden rounded-xl border">
@@ -1698,18 +2264,19 @@
         <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-4 py-3 last:border-b-0">
           <div class="min-w-0">
             <div class="flex min-w-0 flex-wrap items-center gap-2"><strong>{term.source}</strong><span class="text-muted-foreground">→</span><strong>{term.preferred}</strong>{#if term.locale}<Badge variant="outline">{term.locale}</Badge>{/if}</div>
-            <p class="truncate text-xs text-muted-foreground">{term.note ?? "No note"}</p>
+            <p class="truncate text-xs text-muted-foreground">{term.note ?? ui.text("Ui.Page.Terminology.NoNote")}</p>
           </div>
-          <Button variant="ghost" size="icon-xs" aria-label={"Remove term " + term.source} onclick={() => removeTerm(index)}><Trash2Icon /></Button>
+          <Button variant="ghost" size="icon-xs" aria-label={`${ui.text("Ui.Page.Terminology.RemoveTerm")} ${term.source}`} onclick={() => removeTerm(index)}><Trash2Icon /></Button>
         </div>
       {:else}
-        <p class="p-6 text-center text-sm text-muted-foreground">No terminology entries yet.</p>
+        <p class="p-6 text-center text-sm text-muted-foreground">{ui.text("Ui.Page.Terminology.Empty")}</p>
       {/each}
     </div>
+    </div>
     {#snippet footer()}
-      <Button variant="outline" onclick={() => terminologyDialogOpen = false}>Done</Button>
-      <Button disabled={!reviewDirty || reviewSaving} onclick={() => void saveReview()}>
-        {#if reviewSaving}<Spinner data-icon="inline-start" />{/if}Save workflow
+      <Button variant="outline" onclick={() => terminologyDialogOpen = false}>{ui.text("Ui.Page.Done")}</Button>
+      <Button disabled={!reviewDirty || reviewMutationBlocked} onclick={() => void saveReview()}>
+        {#if reviewSaving}<Spinner data-icon="inline-start" />{/if}{ui.text("Ui.Page.Terminology.SaveWorkflow")}
       </Button>
     {/snippet}
   </AppDialog>
@@ -1718,30 +2285,49 @@
 {#if reportDialogOpen}
   <AppDialog
     open
-    title={`${selectedLocale} quality report`}
-    description={`${localeQuality.length} findings across ${qualityKeySet.size} messages. CSV is ordered by key and finding kind.`}
+    title={`${selectedLocale} ${ui.text("Ui.Page.Quality.Report")}`}
+    description={`${localeQualityFindings.length} ${ui.text("Ui.Page.Quality.FindingsAcross")} ${qualityKeySet.size} ${ui.text("Ui.Page.Messages")}. ${ui.text("Ui.Page.Quality.CsvOrder")}`}
     class="sm:max-w-4xl"
     onopenchange={(open) => reportDialogOpen = open}
   >
-    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label="Quality report CSV" readonly value={qualityReportCsv(localeQuality)} />
-    {#snippet footer()}<Button variant="outline" onclick={() => reportDialogOpen = false}>Close</Button>{/snippet}
+    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("Ui.Page.Quality.CsvAriaLabel")} readonly value={qualityReportCsv(localeQualityFindings)} />
+    {#snippet footer()}<Button variant="outline" onclick={() => reportDialogOpen = false}>{ui.text("Ui.Page.Close")}</Button>{/snippet}
   </AppDialog>
 {/if}
+
+<InterchangeDialog
+  bind:open={interchangeOpen}
+  busy={interchangeBusy}
+  bind:xliffDirectory
+  bind:xliffImportPath
+  bind:reviewPath={reviewExportPath}
+  bind:reviewImportPath
+  {xliffExport}
+  {xliffPreview}
+  {reviewExport}
+  {reviewPreview}
+  onexportxliff={() => void exportXliff()}
+  onpreviewxliff={() => void previewXliffImport()}
+  onapplyxliff={() => void applyXliffImport()}
+  onexportreview={() => void exportReviewJson()}
+  onpreviewreview={() => void previewReviewJsonImport()}
+  onapplyreview={() => void applyReviewJsonImport()}
+/>
 
 {#if repairDocument !== undefined}
   <AppDialog
     open
     title={repairDocument.path}
-    description="Edit the raw JSON below. The canonical compiler must accept it before it can replace the file."
+    description={ui.text("Ui.Page.Repair.Description")}
     class="sm:max-w-4xl"
     showCloseButton={!repairBusy}
-    onopenchange={(open) => { if (!open && !repairBusy) repairDocument = undefined; }}
+    onopenchange={(open) => { if (!open && !repairBusy) closeRepair(); }}
   >
-    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label="Malformed JSON document" bind:value={repairText} spellcheck={false} />
-    {#if repairMessage}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>Repair failed</Alert.Title><Alert.Description>{repairMessage}</Alert.Description></Alert.Root>{/if}
+    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("Ui.Page.Repair.DocumentAriaLabel")} bind:value={repairText} spellcheck={false} disabled={repairBusy || editorMutationBlocked} />
+    {#if repairMessage}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("Ui.Page.Repair.Failed")}</Alert.Title><Alert.Description>{repairMessage}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
-      <Button variant="outline" disabled={repairBusy} onclick={() => repairDocument = undefined}>Cancel</Button>
-      <Button disabled={repairBusy} onclick={() => void saveRepair()}>{#if repairBusy}<Spinner data-icon="inline-start" />{/if}{repairBusy ? "Validating…" : "Validate and save"}</Button>
+      <Button variant="outline" disabled={repairBusy} onclick={closeRepair}>{ui.text("Ui.Page.Cancel")}</Button>
+      <Button disabled={repairBusy} onclick={() => void saveRepair()}>{#if repairBusy}<Spinner data-icon="inline-start" />{/if}{repairBusy ? ui.text("Ui.Page.Validating") : ui.text("Ui.Page.Repair.ValidateSave")}</Button>
     {/snippet}
   </AppDialog>
 {/if}
@@ -1749,22 +2335,22 @@
 {#if openDialogOpen}
   <AppDialog
     open
-    title="Open translation project"
-    description="Catalogs are discovered below this workspace boundary. You will choose one if several are found."
+    title={ui.text("Ui.Page.OpenProject.Title")}
+    description={ui.text("Ui.Page.OpenProject.Description")}
     showCloseButton={!openingWorkspace && !pickingWorkspace}
     onopenchange={(open) => { if (!openingWorkspace && !pickingWorkspace) openDialogOpen = open; }}
   >
     <Field.Field>
-      <Field.Label for="dialog-open-directory">Workspace directory</Field.Label>
+      <Field.Label for="dialog-open-directory">{ui.text("Ui.Page.WorkspaceDirectory")}</Field.Label>
       <div class="flex flex-col gap-2 sm:flex-row">
         <Input id="dialog-open-directory" class="min-w-0 flex-1" bind:value={openDirectory} autocomplete="off" />
-        <Button variant="outline" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? "Choosing…" : "Browse…"}</Button>
+        <Button variant="outline" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? ui.text("Ui.Page.Choosing") : ui.text("Ui.Page.Browse")}</Button>
       </div>
     </Field.Field>
-    {#if clientError}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>Could not open workspace</Alert.Title><Alert.Description>{clientError}</Alert.Description></Alert.Root>{/if}
+    {#if clientError}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("Ui.Page.Fatal.CouldNotOpen")}</Alert.Title><Alert.Description>{clientError}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
-      <Button variant="outline" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>Cancel</Button>
-      <Button disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{#if openingWorkspace}<Spinner data-icon="inline-start" />{/if}{openingWorkspace ? "Opening…" : "Open workspace"}</Button>
+      <Button variant="outline" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>{ui.text("Ui.Page.Cancel")}</Button>
+      <Button disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{#if openingWorkspace}<Spinner data-icon="inline-start" />{/if}{openingWorkspace ? ui.text("Ui.Page.Opening") : ui.text("Ui.Page.OpenProject.Action")}</Button>
     {/snippet}
   </AppDialog>
 {/if}
@@ -1773,7 +2359,7 @@
   <AppDialog
     open
     title={mutationTitle(mutationKind)}
-    description="Compiler-backed workspace change. Review the affected files before committing."
+    description={ui.text("Ui.Page.Mutation.Description")}
     class="sm:max-w-3xl"
     showCloseButton={!mutationBusy}
     onopenchange={(open) => { if (!mutationBusy) mutationDialogOpen = open; }}
@@ -1781,13 +2367,13 @@
     <Field.FieldGroup class="gap-4">
       {#if mutationKind === "add-locale" || mutationKind === "remove-locale" || mutationKind === "set-fallback"}
         <Field.Field>
-          <Field.Label for="language-operation">Language operation</Field.Label>
+          <Field.Label for="language-operation">{ui.text("Ui.Page.Mutation.LanguageOperation")}</Field.Label>
           <Select.Root type="single" value={mutationKind} onValueChange={changeMutationKind}>
             <Select.Trigger id="language-operation" class="w-full">{mutationTitle(mutationKind)}</Select.Trigger>
-            <Select.Content><Select.Group><Select.Label>Language operation</Select.Label>
-              <Select.Item value="add-locale" label="Add a language">Add a language</Select.Item>
-              <Select.Item value="remove-locale" label="Remove a language">Remove a language</Select.Item>
-              <Select.Item value="set-fallback" label="Change a fallback">Change a fallback</Select.Item>
+            <Select.Content><Select.Group><Select.Label>{ui.text("Ui.Page.Mutation.LanguageOperation")}</Select.Label>
+              <Select.Item value="add-locale" label={ui.text("Ui.Page.Mutation.AddLanguage")}>{ui.text("Ui.Page.Mutation.AddLanguage")}</Select.Item>
+              <Select.Item value="remove-locale" label={ui.text("Ui.Page.Mutation.RemoveLanguage")}>{ui.text("Ui.Page.Mutation.RemoveLanguage")}</Select.Item>
+              <Select.Item value="set-fallback" label={ui.text("Ui.Page.Mutation.ChangeFallback")}>{ui.text("Ui.Page.Mutation.ChangeFallback")}</Select.Item>
             </Select.Group></Select.Content>
           </Select.Root>
         </Field.Field>
@@ -1795,21 +2381,21 @@
 
       {#if mutationKind === "add-locale"}
         <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="mutation-locale">New locale tag</Field.Label><Input id="mutation-locale" bind:value={mutationLocale} oninput={invalidateMutationPreview} placeholder="fr-FR" autocomplete="off" /></Field.Field>
-          <Field.Field><Field.Label for="mutation-fallback">Fallback</Field.Label>
+          <Field.Field><Field.Label for="mutation-locale">{ui.text("Ui.Page.Mutation.NewLocaleTag")}</Field.Label><Input id="mutation-locale" bind:value={mutationLocale} oninput={invalidateMutationPreview} placeholder="fr-FR" autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="mutation-fallback">{ui.text("Ui.Page.Mutation.Fallback")}</Field.Label>
             <Select.Root type="single" value={mutationFallback} onValueChange={(value) => { mutationFallback = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="mutation-fallback" class="w-full">{mutationFallback} · {localeName(mutationFallback)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
-          <Field.Field><Field.Label for="mutation-copy-from">Copy starter values from</Field.Label>
+          <Field.Field><Field.Label for="mutation-copy-from">{ui.text("Ui.Page.Mutation.CopyStarterValues")}</Field.Label>
             <Select.Root type="single" value={mutationCopyFrom} onValueChange={(value) => { mutationCopyFrom = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="mutation-copy-from" class="w-full">{mutationCopyFrom} · {localeName(mutationCopyFrom)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
-            <Field.Description>Copied text keeps the new catalog compiler-valid and can then be translated.</Field.Description>
+            <Field.Description>{ui.text("Ui.Page.Mutation.CopyStarterValuesDescription")}</Field.Description>
           </Field.Field>
-          <Field.Field><Field.Label for="mutation-layer">Layer</Field.Label>
+          <Field.Field><Field.Label for="mutation-layer">{ui.text("Ui.Page.Mutation.Layer")}</Field.Label>
             <Select.Root type="single" value={mutationLayer} onValueChange={(value) => { mutationLayer = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="mutation-layer" class="w-full">{mutationLayer}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.layers as layer (layer.name)}<Select.Item value={layer.name} label={layer.name}>{layer.name}</Select.Item>{/each}</Select.Group></Select.Content>
@@ -1818,65 +2404,76 @@
         </div>
       {:else if mutationKind === "remove-locale"}
         <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="remove-locale">Language to remove</Field.Label>
+          <Field.Field><Field.Label for="remove-locale">{ui.text("Ui.Page.Mutation.LanguageToRemove")}</Field.Label>
             <Select.Root type="single" value={mutationLocale} onValueChange={(value) => { mutationLocale = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="remove-locale" class="w-full">{mutationLocale} · {localeName(mutationLocale)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
-          <Field.Field><Field.Label for="replacement-fallback">Redirect dependent fallbacks to</Field.Label>
+          <Field.Field><Field.Label for="replacement-fallback">{ui.text("Ui.Page.Mutation.RedirectFallbacks")}</Field.Label>
             <Select.Root type="single" value={mutationReplacementFallback} onValueChange={(value) => { mutationReplacementFallback = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="replacement-fallback" class="w-full">{mutationReplacementFallback}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={locale.tag}>{locale.tag}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
         </div>
-        <Alert.Root variant="destructive"><Alert.Title>Files will be deleted</Alert.Title><Alert.Description>All resource documents for this locale will be deleted after the preview is confirmed.</Alert.Description></Alert.Root>
+        <Alert.Root variant="destructive"><Alert.Title>{ui.text("Ui.Page.Mutation.FilesDeleted")}</Alert.Title><Alert.Description>{ui.text("Ui.Page.Mutation.FilesDeletedDescription")}</Alert.Description></Alert.Root>
       {:else if mutationKind === "set-fallback"}
         <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="fallback-locale">Language</Field.Label>
+          <Field.Field><Field.Label for="fallback-locale">{ui.text("Ui.Page.Mutation.Language")}</Field.Label>
             <Select.Root type="single" value={mutationLocale} onValueChange={(value) => { mutationLocale = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="fallback-locale" class="w-full">{mutationLocale} · {localeName(mutationLocale)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
-          <Field.Field><Field.Label for="fallback-target">Fallback</Field.Label>
+          <Field.Field><Field.Label for="fallback-target">{ui.text("Ui.Page.Mutation.Fallback")}</Field.Label>
             <Select.Root type="single" value={mutationFallback} onValueChange={(value) => { mutationFallback = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="fallback-target" class="w-full">{mutationFallback} · {localeName(mutationFallback)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
         </div>
-        <div class="flex flex-wrap gap-2">{#each snapshot.catalog.locales as locale (locale.tag)}<Badge variant="outline"><strong>{locale.tag}</strong>{locale.tag === mutationLocale ? ` → ${mutationFallback}` : locale.fallback ? ` → ${locale.fallback}` : " · source"}</Badge>{/each}</div>
+        <div class="flex flex-wrap gap-2">{#each snapshot.catalog.locales as locale (locale.tag)}<Badge variant="outline"><strong>{locale.tag}</strong>{locale.tag === mutationLocale ? ` → ${mutationFallback}` : locale.fallback ? ` → ${locale.fallback}` : ` · ${ui.text("Ui.Page.ProjectWizard.Source")}`}</Badge>{/each}</div>
       {:else if mutationKind === "create-key"}
-        <Field.Field><Field.Label for="mutation-target-key">Message key</Field.Label><Input id="mutation-target-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} placeholder="Checkout.Actions.Pay" autocomplete="off" /><Field.Description>Use dots to organize messages into groups.</Field.Description></Field.Field>
-        <Field.Field><Field.Label for="mutation-initial-value">Initial text</Field.Label><Textarea id="mutation-initial-value" class="min-h-28" bind:value={mutationInitialValue} oninput={invalidateMutationPreview} placeholder="Pay now" /><Field.Description>The initial value is added to every language so strict projects stay valid.</Field.Description></Field.Field>
-        <Field.Field><Field.Label for="message-layer">Layer</Field.Label>
+        <Field.Field><Field.Label for="mutation-target-key">{ui.text("Ui.Page.Mutation.MessageKey")}</Field.Label><Input id="mutation-target-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} placeholder="Checkout.Actions.Pay" autocomplete="off" /><Field.Description>{ui.text("Ui.Page.Mutation.MessageKeyDescription")}</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="mutation-initial-value">{ui.text("Ui.Page.Mutation.InitialText")}</Field.Label><Textarea id="mutation-initial-value" class="min-h-28" bind:value={mutationInitialValue} oninput={invalidateMutationPreview} placeholder={ui.text("Ui.Page.Mutation.InitialTextPlaceholder")} /><Field.Description>{ui.text("Ui.Page.Mutation.InitialTextDescription")}</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="message-layer">{ui.text("Ui.Page.Mutation.Layer")}</Field.Label>
           <Select.Root type="single" value={mutationLayer} onValueChange={(value) => { mutationLayer = value; invalidateMutationPreview(); }}><Select.Trigger id="message-layer" class="w-full">{mutationLayer}</Select.Trigger><Select.Content><Select.Group>{#each snapshot.catalog.layers as layer (layer.name)}<Select.Item value={layer.name} label={layer.name}>{layer.name}</Select.Item>{/each}</Select.Group></Select.Content></Select.Root>
         </Field.Field>
       {:else if mutationKind === "rename-key" || mutationKind === "duplicate-key"}
-        <Field.Field><Field.Label for="mutation-source-key">Existing key</Field.Label><Input id="mutation-source-key" value={mutationSourceKey} readonly /></Field.Field>
-        <Field.Field><Field.Label for="mutation-new-key">{mutationKind === "rename-key" ? "New key or group path" : "Duplicate key"}</Field.Label><Input id="mutation-new-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} autocomplete="off" /><Field.Description>The change is applied across every locale and layer where the source message exists.</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="mutation-source-key">{ui.text("Ui.Page.Mutation.ExistingKey")}</Field.Label><Input id="mutation-source-key" value={mutationSourceKey} readonly /></Field.Field>
+        <Field.Field><Field.Label for="mutation-new-key">{mutationKind === "rename-key" ? ui.text("Ui.Page.Mutation.NewKeyGroupPath") : ui.text("Ui.Page.Mutation.DuplicateKey")}</Field.Label><Input id="mutation-new-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} autocomplete="off" /><Field.Description>{ui.text("Ui.Page.Mutation.RenameDescription")}</Field.Description></Field.Field>
       {:else}
-        <Alert.Root variant="destructive"><Alert.Title>Delete {mutationSourceKey}?</Alert.Title><Alert.Description>The message will be removed from every locale and layer. The preview below lists every file that will change.</Alert.Description></Alert.Root>
+        <Alert.Root variant="destructive"><Alert.Title>{ui.text("Ui.Page.Mutation.Delete")} {mutationSourceKey}?</Alert.Title><Alert.Description>{ui.text("Ui.Page.Mutation.DeleteDescription")}</Alert.Description></Alert.Root>
       {/if}
     </Field.FieldGroup>
 
-    {#if mutationError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>Change is not valid</Alert.Title><Alert.Description>{mutationError}</Alert.Description></Alert.Root>{/if}
+    {#if mutationError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("Ui.Page.Mutation.Invalid")}</Alert.Title><Alert.Description>{mutationError}</Alert.Description></Alert.Root>{/if}
     {#if mutationPreview?.ok}
-      <section class="mt-5 overflow-hidden rounded-xl border" aria-label="Operation preview">
-        <header class="flex items-center justify-between gap-3 border-b px-4 py-3"><strong>Operation preview</strong><Badge variant="secondary">{mutationPreview.files.length} affected {mutationPreview.files.length === 1 ? "file" : "files"}</Badge></header>
+      <section class="mt-5 overflow-hidden rounded-xl border" aria-label={ui.text("Ui.Page.Mutation.OperationPreview")}>
+        <header class="flex items-center justify-between gap-3 border-b px-4 py-3"><strong>{ui.text("Ui.Page.Mutation.OperationPreview")}</strong><Badge variant="secondary">{mutationPreview.files.length} {ui.text("Ui.Page.Mutation.Affected")} {mutationPreview.files.length === 1 ? ui.text("Ui.Page.File") : ui.text("Ui.Page.Files")}</Badge></header>
         {#each mutationPreview.files as file (file.path)}
           <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"><Badge variant={file.kind === "delete" ? "destructive" : file.kind === "create" ? "default" : "secondary"}>{file.kind}</Badge><code class="truncate text-xs">{file.path}</code><small class="col-start-2 text-muted-foreground sm:col-start-auto">{file.beforeBytes.toLocaleString()} → {file.afterBytes.toLocaleString()} bytes</small></div>
         {/each}
       </section>
+      {#if mutationPreview.requiresIrreversibleConfirmation}
+        <Field.Field class="mt-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+          <div class="flex items-start gap-3">
+            <Checkbox id="confirm-irreversible" bind:checked={mutationIrreversibleConfirmed} />
+            <div class="grid gap-1.5 leading-none">
+              <Field.Label for="confirm-irreversible">{ui.text("Ui.Page.Mutation.IrreversibleConfirm")}</Field.Label>
+              <Field.Description>{ui.text("Ui.Page.Mutation.IrreversibleDescription")}</Field.Description>
+            </div>
+          </div>
+        </Field.Field>
+      {/if}
     {/if}
     {#snippet footer()}
-      <Button variant="outline" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>Cancel</Button>
+      <Button variant="outline" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>{ui.text("Ui.Page.Cancel")}</Button>
       {#if mutationPreview?.ok}
-        <Button variant={mutationKind === "remove-locale" || mutationKind === "delete-key" ? "destructive" : "default"} disabled={mutationBusy} onclick={() => void applyMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? "Committing…" : "Commit change"}</Button>
+        <Button variant={mutationKind === "remove-locale" || mutationKind === "delete-key" ? "destructive" : "default"} disabled={mutationBusy || (mutationPreview.requiresIrreversibleConfirmation && !mutationIrreversibleConfirmed)} onclick={() => void applyMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? ui.text("Ui.Page.Mutation.Committing") : ui.text("Ui.Page.Mutation.Commit")}</Button>
       {:else}
-        <Button disabled={mutationBusy} onclick={() => void previewMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? "Checking…" : "Preview change"}</Button>
+        <Button disabled={mutationBusy} onclick={() => void previewMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? ui.text("Ui.Page.Mutation.Checking") : ui.text("Ui.Page.Mutation.Preview")}</Button>
       {/if}
     {/snippet}
   </AppDialog>
@@ -1885,14 +2482,14 @@
 {#if projectDialogOpen}
   <AppDialog
     open
-    title="New translation project"
-    description="Create compiler-valid translations without overwriting an existing directory."
+    title={ui.text("Ui.Page.ProjectWizard.Title")}
+    description={ui.text("Ui.Page.ProjectWizard.Description")}
     class="sm:max-w-3xl"
     showCloseButton={!projectBusy}
     onopenchange={(open) => { if (!open && !projectBusy) closeProjectWizard(); }}
   >
-    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Project creation steps">
-      {#each ["Project", "Languages", "Settings", "Review"] as title, index (title)}
+    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={ui.text("Ui.Page.ProjectWizard.StepsAriaLabel")}>
+      {#each [ui.text("Ui.Page.ProjectWizard.StepProject"), ui.text("Ui.Page.ProjectWizard.StepLanguages"), ui.text("Ui.Page.ProjectWizard.StepSettings"), ui.text("Ui.Page.ProjectWizard.StepReview")] as title, index (title)}
         <li class="flex items-center gap-2 text-sm" aria-current={projectStep === index + 1 ? "step" : undefined}>
           <Badge variant={projectStep === index + 1 ? "default" : projectStep > index + 1 ? "secondary" : "outline"}>{projectStep > index + 1 ? "✓" : index + 1}</Badge>
           <span class={projectStep === index + 1 ? "font-medium" : "text-muted-foreground"}>{title}</span>
@@ -1901,61 +2498,63 @@
     </ol>
 
     {#if projectStep === 1}
-      <div class="mb-5"><h3 class="font-medium">Where should the translations live?</h3><p class="text-sm text-muted-foreground">The editor creates a new directory and never overwrites an existing one.</p></div>
+      <div class="mb-5"><h3 class="font-medium">{ui.text("Ui.Page.ProjectWizard.WhereLive")}</h3><p class="text-sm text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.NoOverwrite")}</p></div>
       <Field.FieldGroup>
-        <Field.Field><Field.Label for="project-directory">New project directory</Field.Label><Input id="project-directory" bind:value={projectDirectory} placeholder="/projects/customer-app/Resources" autocomplete="off" /><Field.Description>Enter an absolute path or a path relative to the editor process.</Field.Description></Field.Field>
-        <Field.Field><Field.Label for="project-catalog">Catalog ID</Field.Label><Input id="project-catalog" bind:value={projectCatalog} placeholder="product" autocomplete="off" /><Field.Description>Lowercase letters, numbers, dots, and hyphens.</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="project-directory">{ui.text("Ui.Page.ProjectWizard.NewDirectory")}</Field.Label><Input id="project-directory" bind:value={projectDirectory} placeholder="/projects/customer-app/Resources" autocomplete="off" /><Field.Description>{ui.text("Ui.Page.ProjectWizard.DirectoryDescription")}</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="project-catalog">{ui.text("Ui.Page.ProjectWizard.CatalogId")}</Field.Label><Input id="project-catalog" bind:value={projectCatalog} placeholder="product" autocomplete="off" /><Field.Description>{ui.text("Ui.Page.ProjectWizard.CatalogIdDescription")}</Field.Description></Field.Field>
       </Field.FieldGroup>
     {:else if projectStep === 2}
-      <div class="mb-5"><h3 class="font-medium">Which languages does this project use?</h3><p class="text-sm text-muted-foreground">One language is fully supported. Add translations now or later.</p></div>
+      <div class="mb-5"><h3 class="font-medium">{ui.text("Ui.Page.ProjectWizard.WhichLanguages")}</h3><p class="text-sm text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.LanguageDescription")}</p></div>
       <div class="grid gap-3">
         <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_auto]">
-          <Field.Field><Field.Label for="project-default-locale">Source/default language</Field.Label><Input id="project-default-locale" bind:value={projectDefaultLocale} placeholder="de" autocomplete="off" /></Field.Field>
-          <Badge variant="secondary" class="mb-2">Canonical source</Badge>
+          <Field.Field><Field.Label for="project-default-locale">{ui.text("Ui.Page.ProjectWizard.SourceDefault")}</Field.Label><Input id="project-default-locale" bind:value={projectDefaultLocale} placeholder="de" autocomplete="off" /></Field.Field>
+          <Badge variant="secondary" class="mb-2">{ui.text("Ui.Page.ProjectWizard.CanonicalSource")}</Badge>
         </div>
         {#each projectLocales as locale (locale.id)}
           <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_1fr_auto]">
-            <Field.Field><Field.Label for={`project-locale-${locale.id}`}>Additional language</Field.Label><Input id={`project-locale-${locale.id}`} bind:value={locale.tag} placeholder="en" autocomplete="off" /></Field.Field>
-            <Field.Field><Field.Label for={`project-fallback-${locale.id}`}>Fallback</Field.Label>
+            <Field.Field><Field.Label for={`project-locale-${locale.id}`}>{ui.text("Ui.Page.ProjectWizard.AdditionalLanguage")}</Field.Label><Input id={`project-locale-${locale.id}`} bind:value={locale.tag} placeholder="en" autocomplete="off" /></Field.Field>
+            <Field.Field><Field.Label for={`project-fallback-${locale.id}`}>{ui.text("Ui.Page.Mutation.Fallback")}</Field.Label>
               <Select.Root type="single" value={locale.fallback} onValueChange={(value) => locale.fallback = value}>
-                <Select.Trigger id={`project-fallback-${locale.id}`} class="w-full">{locale.fallback || `Default (${projectDefaultLocale || "source"})`}</Select.Trigger>
-                <Select.Content><Select.Group><Select.Item value="" label={`Default (${projectDefaultLocale || "source"})`}>Default ({projectDefaultLocale || "source"})</Select.Item>{#each projectLocales.filter((candidate) => candidate.id !== locale.id && candidate.tag.trim() !== "") as candidate (candidate.id)}<Select.Item value={candidate.tag} label={candidate.tag}>{candidate.tag}</Select.Item>{/each}</Select.Group></Select.Content>
+                <Select.Trigger id={`project-fallback-${locale.id}`} class="w-full">{locale.fallback || `${ui.text("Ui.Page.ProjectWizard.Default")} (${projectDefaultLocale || ui.text("Ui.Page.ProjectWizard.Source")})`}</Select.Trigger>
+                <Select.Content><Select.Group><Select.Item value="" label={`${ui.text("Ui.Page.ProjectWizard.Default")} (${projectDefaultLocale || ui.text("Ui.Page.ProjectWizard.Source")})`}>{ui.text("Ui.Page.ProjectWizard.Default")} ({projectDefaultLocale || ui.text("Ui.Page.ProjectWizard.Source")})</Select.Item>{#each projectLocales.filter((candidate) => candidate.id !== locale.id && candidate.tag.trim() !== "") as candidate (candidate.id)}<Select.Item value={candidate.tag} label={candidate.tag}>{candidate.tag}</Select.Item>{/each}</Select.Group></Select.Content>
               </Select.Root>
             </Field.Field>
-            <Button variant="ghost" size="icon-sm" aria-label={`Remove locale ${locale.tag || "row"}`} onclick={() => removeProjectLocale(locale.id)}><Trash2Icon /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label={`${ui.text("Ui.Page.ProjectWizard.RemoveLocale")} ${locale.tag || ui.text("Ui.Page.ProjectWizard.Row")}`} onclick={() => removeProjectLocale(locale.id)}><Trash2Icon /></Button>
           </div>
         {/each}
-        <Button variant="outline" class="justify-self-start" onclick={addProjectLocale}><PlusIcon data-icon="inline-start" />Add another language</Button>
+        <Button variant="outline" class="justify-self-start" onclick={addProjectLocale}><PlusIcon data-icon="inline-start" />{ui.text("Ui.Page.ProjectWizard.AddLanguage")}</Button>
       </div>
     {:else if projectStep === 3}
-      <div class="mb-5"><h3 class="font-medium">Generated API and output</h3><p class="text-sm text-muted-foreground">These defaults work for most .NET and ESM consumers.</p></div>
+      <div class="mb-5"><h3 class="font-medium">{ui.text("Ui.Page.ProjectWizard.GeneratedApi")}</h3><p class="text-sm text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.GeneratedApiDescription")}</p></div>
       <Field.FieldGroup>
         <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="project-namespace">Code namespace</Field.Label><Input id="project-namespace" bind:value={projectNamespace} autocomplete="off" /></Field.Field>
-          <Field.Field><Field.Label for="project-class">Generated class</Field.Label><Input id="project-class" bind:value={projectClassName} autocomplete="off" /></Field.Field>
-          <Field.Field><Field.Label for="project-layer">Initial layer</Field.Label><Input id="project-layer" bind:value={projectLayer} autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="project-namespace">{ui.text("Ui.Page.ProjectWizard.CodeNamespace")}</Field.Label><Input id="project-namespace" bind:value={projectNamespace} autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="project-class">{ui.text("Ui.Page.ProjectWizard.GeneratedClass")}</Field.Label><Input id="project-class" bind:value={projectClassName} autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="project-layer">{ui.text("Ui.Page.ProjectWizard.InitialLayer")}</Field.Label><Input id="project-layer" bind:value={projectLayer} autocomplete="off" /></Field.Field>
         </div>
-        <Field.Field orientation="horizontal"><Checkbox id="project-esm" bind:checked={projectGenerateEsm} /><Field.Content><Field.Label for="project-esm">Enable ESM output</Field.Label><Field.Description>Generate tree-shakeable modules for TypeScript and browser applications.</Field.Description></Field.Content></Field.Field>
-        <Field.Field orientation="horizontal"><Checkbox id="project-starter" bind:checked={projectIncludeStarter} /><Field.Content><Field.Label for="project-starter">Add a starter message</Field.Label><Field.Description>Create <code>Application.Name</code> in every language.</Field.Description></Field.Content></Field.Field>
+        <Field.Field orientation="horizontal"><Checkbox id="project-esm" bind:checked={projectGenerateEsm} /><Field.Content><Field.Label for="project-esm">{ui.text("Ui.Page.ProjectWizard.EnableEsm")}</Field.Label><Field.Description>{ui.text("Ui.Page.ProjectWizard.EnableEsmDescription")}</Field.Description></Field.Content></Field.Field>
+        <Field.Field orientation="horizontal"><Checkbox id="project-starter" bind:checked={projectIncludeStarter} /><Field.Content><Field.Label for="project-starter">{ui.text("Ui.Page.ProjectWizard.AddStarter")}</Field.Label><Field.Description>{ui.text("Ui.Page.ProjectWizard.AddStarterDescription")}</Field.Description></Field.Content></Field.Field>
       </Field.FieldGroup>
     {:else if projectStep === 4 && projectPlan !== undefined}
-      <Alert.Root><Alert.Title>Ready to create {projectPlan.catalogId}</Alert.Title><Alert.Description>{projectPlan.locales.length} {projectPlan.locales.length === 1 ? "language" : "languages"} · {projectPlan.files.length} files · compiler validated</Alert.Description></Alert.Root>
-      <dl class="mt-4 grid gap-3 rounded-xl border p-4"><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">Directory</dt><dd class="m-0 truncate font-mono text-xs">{projectPlan.directory}</dd></div><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">Languages</dt><dd class="m-0 font-medium">{projectPlan.locales.map((locale) => locale.tag).join(", ")}</dd></div></dl>
-      <section class="mt-4 overflow-hidden rounded-xl border" aria-label="Files to create"><h4 class="border-b px-4 py-3 font-medium">Files to create</h4>{#each projectPlan.files as file (file)}<div class="border-b px-4 py-3 last:border-b-0"><code class="text-xs">{file}</code></div>{/each}</section>
+      <Alert.Root><Alert.Title>{ui.text("Ui.Page.ProjectWizard.ReadyCreate")} {projectPlan.catalogId}</Alert.Title><Alert.Description>{projectPlan.locales.length} {projectPlan.locales.length === 1 ? ui.text("Ui.Page.ProjectWizard.Language") : ui.text("Ui.Page.ProjectWizard.Languages")} · {projectPlan.files.length} {ui.text("Ui.Page.Files")} · {ui.text("Ui.Page.ProjectWizard.CompilerValidated")}</Alert.Description></Alert.Root>
+      <dl class="mt-4 grid gap-3 rounded-xl border p-4"><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.Directory")}</dt><dd class="m-0 truncate font-mono text-xs">{projectPlan.directory}</dd></div><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.Languages")}</dt><dd class="m-0 font-medium">{projectPlan.locales.map((locale) => locale.tag).join(", ")}</dd></div></dl>
+      <section class="mt-4 overflow-hidden rounded-xl border" aria-label={ui.text("Ui.Page.ProjectWizard.FilesToCreate")}><h4 class="border-b px-4 py-3 font-medium">{ui.text("Ui.Page.ProjectWizard.FilesToCreate")}</h4>{#each projectPlan.files as file (file)}<div class="border-b px-4 py-3 last:border-b-0"><code class="text-xs">{file}</code></div>{/each}</section>
     {/if}
 
-    {#if projectError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>Project is not valid</Alert.Title><Alert.Description>{projectError}</Alert.Description></Alert.Root>{/if}
+    {#if projectError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("Ui.Page.ProjectWizard.Invalid")}</Alert.Title><Alert.Description>{projectError}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
-      <Button variant="outline" disabled={projectBusy} onclick={closeProjectWizard}>Cancel</Button>
-      {#if projectStep > 1}<Button variant="ghost" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>Back</Button>{/if}
+      <Button variant="outline" disabled={projectBusy} onclick={closeProjectWizard}>{ui.text("Ui.Page.Cancel")}</Button>
+      {#if projectStep > 1}<Button variant="ghost" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>{ui.text("Ui.Page.Back")}</Button>{/if}
       {#if projectStep < 4}
-        <Button disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? "Validating…" : "Continue"}</Button>
+        <Button disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("Ui.Page.Validating") : ui.text("Ui.Page.Continue")}</Button>
       {:else}
-        <Button disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? "Creating…" : "Create project"}</Button>
+        <Button disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("Ui.Page.Creating") : ui.text("Ui.Page.ProjectWizard.CreateProject")}</Button>
       {/if}
     {/snippet}
   </AppDialog>
 {/if}
+
+<CommandPalette open={commandPaletteOpen} commands={paletteCommands} onopenchange={(open) => commandPaletteOpen = open} />
 
 <style>
   :global(*) { box-sizing: border-box; }

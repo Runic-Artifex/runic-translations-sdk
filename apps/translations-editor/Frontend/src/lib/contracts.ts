@@ -57,6 +57,7 @@ export interface WorkspaceSnapshot {
   success: boolean;
   pendingTransaction?: EditorPendingTransaction;
   review?: EditorReviewSnapshot;
+  history?: EditorHistoryState;
 }
 
 export interface EditorPendingTransaction {
@@ -100,6 +101,14 @@ export interface EditorReviewOperationResult {
   ok: boolean;
   message?: string;
   review?: EditorReviewSnapshot;
+  history?: EditorHistoryState;
+}
+
+export interface EditorHistoryState {
+  canUndo: boolean;
+  canRedo: boolean;
+  undoLabel?: string;
+  redoLabel?: string;
 }
 
 export interface EditorAbout {
@@ -117,6 +126,26 @@ export interface EditorDiagnosticBundleResult {
   ok: boolean;
   path?: string;
   message?: string;
+}
+
+export interface EditorDiagnosticBundleActionResult {
+  ok: boolean;
+  message?: string;
+}
+
+export interface EditorLocalStateEntry {
+  key: string;
+  value: string;
+}
+
+export interface EditorLocalStateSnapshot {
+  entries: EditorLocalStateEntry[];
+  recovered: boolean;
+}
+
+export interface EditorLocalStateClearResult {
+  removedEntries: number;
+  recovered: boolean;
 }
 
 export interface ValidationResult {
@@ -137,6 +166,7 @@ export interface EditorOperationResult {
   message?: string;
   snapshot?: WorkspaceSnapshot;
   validation?: ValidationResult;
+  history?: EditorHistoryState;
 }
 
 export interface EditorProjectLocaleRequest {
@@ -200,6 +230,7 @@ export interface EditorMutationRequest {
   sourceKey?: string;
   targetKey?: string;
   initialValue?: string;
+  confirmationToken?: string;
 }
 
 export interface EditorMutationFile {
@@ -213,4 +244,94 @@ export interface EditorMutationPreview {
   ok: boolean;
   message?: string;
   files: EditorMutationFile[];
+  requiresIrreversibleConfirmation: boolean;
+  confirmationToken?: string;
+}
+
+export interface EditorInterchangeLoss {
+  code: string;
+  location: string;
+  message: string;
+  semanticLoss: boolean;
+}
+
+export interface EditorInterchangeRefusal {
+  code: string;
+  message: string;
+}
+
+export interface EditorInterchangeFile {
+  path: string;
+  locale: string;
+  byteCount: number;
+}
+
+export interface EditorXliffExportResult {
+  ok: boolean;
+  message?: string;
+  catalogId?: string;
+  documents: EditorInterchangeFile[];
+  losses: EditorInterchangeLoss[];
+  lossless: boolean;
+}
+
+export interface EditorReviewFileResult {
+  ok: boolean;
+  message?: string;
+  path?: string;
+  entryCount: number;
+}
+
+export type EditorKeyChangeKind = "added" | "changed" | "removed" | "state-change";
+
+export interface EditorKeyChange {
+  key: string;
+  kind: EditorKeyChangeKind;
+  before?: string;
+  after?: string;
+  stateBefore?: string;
+  stateAfter?: string;
+}
+
+export interface EditorXliffImportPreview {
+  ok: boolean;
+  message?: string;
+  requiresIrreversibleConfirmation: boolean;
+  confirmationToken?: string;
+  catalogId?: string;
+  sourceLocale?: string;
+  targetLocale?: string;
+  layer?: string;
+  changes: EditorKeyChange[];
+  addedCount: number;
+  changedCount: number;
+  removedCount: number;
+  unchangedCount: number;
+  reviewUpdateCount: number;
+  changesOverflowed: boolean;
+  refusals: EditorInterchangeRefusal[];
+}
+
+export type EditorReviewChangeKind = "added" | "changed" | "removed";
+
+export interface EditorReviewChange {
+  key: string;
+  locale: string;
+  kind: EditorReviewChangeKind;
+  stateBefore?: string;
+  stateAfter?: string;
+}
+
+export interface EditorReviewImportPreview {
+  ok: boolean;
+  message?: string;
+  requiresIrreversibleConfirmation: boolean;
+  confirmationToken?: string;
+  catalogId?: string;
+  changes: EditorReviewChange[];
+  addedCount: number;
+  changedCount: number;
+  removedCount: number;
+  changesOverflowed: boolean;
+  refusals: EditorInterchangeRefusal[];
 }

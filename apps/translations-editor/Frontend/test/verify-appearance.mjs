@@ -28,6 +28,8 @@ globalThis.document = {
 };
 
 globalThis.matchMedia = () => ({ matches: systemDark });
+const read = (key) => stored.get(key) ?? null;
+const write = (key, value) => stored.set(key, String(value));
 
 const {
   applyAppearance,
@@ -37,13 +39,13 @@ const {
   themePalettes,
 } = await import("../src/lib/appearance.ts");
 
-assert.deepEqual(readAppearance(), { mode: "dark", palette: "runic" });
+assert.deepEqual(readAppearance(read), { mode: "dark", palette: "runic" });
 
 for (const palette of themePalettes) {
   for (const mode of themeModes) {
     systemDark = false;
-    saveAppearance(mode, palette);
-    assert.deepEqual(readAppearance(), { mode, palette });
+    saveAppearance(mode, palette, write);
+    assert.deepEqual(readAppearance(read), { mode, palette });
     assert.equal(document.documentElement.dataset.theme, palette);
     assert.equal(document.documentElement.style.colorScheme, mode === "dark" ? "dark" : "light");
     assert.equal(document.documentElement.classList.contains("dark"), mode === "dark");
@@ -59,7 +61,7 @@ for (const palette of themePalettes) {
 
 stored.set("runic-translations.theme-mode", "sepia");
 stored.set("runic-translations.theme-palette", "unknown");
-assert.deepEqual(readAppearance(), { mode: "dark", palette: "runic" });
+assert.deepEqual(readAppearance(read), { mode: "dark", palette: "runic" });
 
 const css = await readFile(new URL("../src/routes/layout.css", import.meta.url), "utf8");
 const requiredTokens = [

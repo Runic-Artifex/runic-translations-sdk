@@ -1,0 +1,256 @@
+name: Prepare coordinated Runic candidates
+description: Build the exact coordinated Runic NuGet candidates required to verify the editor without publication.
+
+inputs:
+  translations-revision:
+    description: Immutable Runic Translations revision to package.
+    required: true
+  command-line-revision:
+    description: Immutable Runic Command Line revision required by Runic Translations.
+    required: true
+  assets-revision:
+    description: Immutable Runic Assets revision required by the editor.
+    required: true
+  desktop-revision:
+    description: Immutable Runic Desktop revision required by the editor.
+    required: true
+  toolkit-revision:
+    description: Immutable Runic Toolkit revision required by the editor.
+    required: true
+  svelte-revision:
+    description: Immutable Runic Svelte revision required by the editor frontend.
+    required: true
+  vite-revision:
+    description: Immutable Runic Vite revision required by the editor frontend.
+    required: true
+  package-version:
+    description: Coordinated candidate package version.
+    required: true
+
+outputs:
+  config-file:
+    description: Temporary NuGet configuration that maps coordinated packages to the exact local feed.
+    value: ${{ steps.pack.outputs.config-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check out coordinated Runic Command Line source
+      uses: actions/checkout@v7
+      with:
+        repository: Runic-Artifex/runic-command-line
+        ref: ${{ inputs.command-line-revision }}
+        path: .runic-ci/runic-command-line
+        fetch-depth: 1
+
+    - name: Check out coordinated Runic Translations source
+      uses: actions/checkout@v7
+      with:
+        repository: Runic-Artifex/runic-translations
+        ref: ${{ inputs.translations-revision }}
+        path: .runic-ci/runic-translations
+        fetch-depth: 1
+
+    - name: Check out coordinated Runic Assets source
+      uses: actions/checkout@v7
+      with:
+        repository: Runic-Artifex/runic-assets
+        ref: ${{ inputs.assets-revision }}
+        path: .runic-ci/runic-assets
+        fetch-depth: 1
+
+    - name: Check out coordinated Runic Desktop source
+      uses: actions/checkout@v7
+      with:
+        repository: Runic-Artifex/runic-desktop
+        ref: ${{ inputs.desktop-revision }}
+        path: .runic-ci/runic-desktop
+        fetch-depth: 1
+
+    - name: Check out coordinated Runic Toolkit source
+      uses: actions/checkout@v7
+      with:
+        repository: Runic-Artifex/runic-toolkit
+        ref: ${{ inputs.toolkit-revision }}
+        path: .runic-ci/runic-toolkit
+        fetch-depth: 1
+
+    - name: Check out coordinated Runic Svelte source
+      uses: actions/checkout@v7
+      with:
+        repository: Runic-Artifex/runic-svelte
+        ref: ${{ inputs.svelte-revision }}
+        path: .runic-ci/runic-svelte
+        fetch-depth: 1
+
+    - name: Check out coordinated Runic Vite source
+      uses: actions/checkout@v7
+      with:
+        repository: Runic-Artifex/runic-vite
+        ref: ${{ inputs.vite-revision }}
+        path: .runic-ci/runic-vite
+        fetch-depth: 1
+
+    - id: pack
+      name: Pack exact local NuGet candidates
+      shell: bash
+      run: |
+        set -euo pipefail
+        workspace="$GITHUB_WORKSPACE"
+        command_line_root="$workspace/.runic-ci/runic-command-line"
+        translations_root="$workspace/.runic-ci/runic-translations"
+        assets_root="$workspace/.runic-ci/runic-assets"
+        desktop_root="$workspace/.runic-ci/runic-desktop"
+        toolkit_root="$workspace/.runic-ci/runic-toolkit"
+        svelte_root="$workspace/.runic-ci/runic-svelte"
+        vite_root="$workspace/.runic-ci/runic-vite"
+        feed="$RUNNER_TEMP/runic-editor-coordinated-nuget"
+        assets_feed="$RUNNER_TEMP/runic-editor-assets-nuget"
+        config="$RUNNER_TEMP/runic-editor-coordinated-nuget.config"
+        npm_feed="$RUNNER_TEMP/runic-editor-coordinated-npm"
+        frontend_candidate="$RUNNER_TEMP/runic-editor-frontend-candidate"
+        version="${{ inputs.package-version }}"
+
+        test "$(git -C "$command_line_root" rev-parse HEAD)" = "${{ inputs.command-line-revision }}"
+        test "$(git -C "$translations_root" rev-parse HEAD)" = "${{ inputs.translations-revision }}"
+        test "$(git -C "$assets_root" rev-parse HEAD)" = "${{ inputs.assets-revision }}"
+        test "$(git -C "$desktop_root" rev-parse HEAD)" = "${{ inputs.desktop-revision }}"
+        test "$(git -C "$toolkit_root" rev-parse HEAD)" = "${{ inputs.toolkit-revision }}"
+        test "$(git -C "$svelte_root" rev-parse HEAD)" = "${{ inputs.svelte-revision }}"
+        test "$(git -C "$vite_root" rev-parse HEAD)" = "${{ inputs.vite-revision }}"
+        rm -rf "$feed"
+        rm -rf "$assets_feed"
+        rm -rf "$npm_feed"
+        mkdir -p "$feed" "$npm_feed"
+
+        cat > "$config" <<EOF
+        <?xml version="1.0" encoding="utf-8"?>
+        <configuration>
+          <packageSources>
+            <clear />
+            <add key="exact-local" value="$feed" />
+            <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
+          </packageSources>
+          <packageSourceMapping>
+            <packageSource key="exact-local">
+              <package pattern="Runic.Application" />
+              <package pattern="Runic.Application.*" />
+              <package pattern="Runic.Assets" />
+              <package pattern="Runic.Assets.*" />
+              <package pattern="Runic.CommandLine" />
+              <package pattern="Runic.CommandLine.*" />
+              <package pattern="Runic.Desktop" />
+              <package pattern="Runic.Translations" />
+              <package pattern="Runic.Translations.*" />
+              <package pattern="dotnet-runic-translations" />
+            </packageSource>
+            <packageSource key="nuget.org">
+              <package pattern="*" />
+            </packageSource>
+          </packageSourceMapping>
+        </configuration>
+        EOF
+
+        dotnet restore "$command_line_root/Runic.CommandLine.slnx" --configfile "$config"
+        "$command_line_root/eng/pack.sh" "$version" "$feed"
+        dotnet restore "$desktop_root/src/Runic.Desktop/Runic.Desktop.csproj" --configfile "$config"
+        dotnet pack "$desktop_root/src/Runic.Desktop/Runic.Desktop.csproj" --configuration Release --no-restore --output "$feed" -p:PackageVersion="$version"
+        dotnet restore "$assets_root/Runic.Assets.slnx" --configfile "$config"
+        for project in Runic.Assets Runic.Assets.AspNetCore Runic.Assets.Desktop; do
+          dotnet pack "$assets_root/src/$project/$project.csproj" --configuration Release --no-restore \
+            -p:PackageVersion="$version" \
+            -p:RepositoryCommit="${{ inputs.assets-revision }}" \
+            -p:ContinuousIntegrationBuild=true \
+            -p:RunicAssetsBuildMode=Verification \
+            --output "$feed"
+        done
+        dotnet restore "$translations_root/Runic.Translations.slnx" --configfile "$config" --force-evaluate -p:RunicCommandLineVersion="$version"
+        RunicCommandLineVersion="$version" "$translations_root/eng/pack.sh" "$version" "$feed"
+        dotnet restore "$toolkit_root/RunicToolkit.slnx" --configfile "$config" \
+          -p:RunicToolkitBuildMode=Verification \
+          -p:RunicToolkitFrontendBuild=false \
+          -p:RunicToolkitFrontendInstall=false \
+          -p:RunicVerificationFeed="$feed"
+        for project in \
+          Runic.Application \
+          Runic.Application.Hosting \
+          Runic.Application.Desktop \
+          Runic.Application.Bridge; do
+          dotnet pack "$toolkit_root/src/$project/$project.csproj" --configuration Release --no-restore \
+            -p:PackageVersion="$version" \
+            -p:Version="$version" \
+            -p:RunicToolkitBuildMode=Verification \
+            -p:RunicToolkitFrontendBuild=false \
+            -p:RunicToolkitFrontendInstall=false \
+            -p:RunicVerificationFeed="$feed" \
+            --output "$feed"
+        done
+
+        for package in \
+          "Runic.Application.$version.nupkg" \
+          "Runic.Application.Bridge.$version.nupkg" \
+          "Runic.Application.Desktop.$version.nupkg" \
+          "Runic.Application.Hosting.$version.nupkg" \
+          "Runic.Assets.$version.nupkg" \
+          "Runic.Assets.AspNetCore.$version.nupkg" \
+          "Runic.Assets.Desktop.$version.nupkg" \
+          "Runic.CommandLine.$version.nupkg" \
+          "Runic.Desktop.$version.nupkg" \
+          "Runic.Translations.$version.nupkg" \
+          "Runic.Translations.Tooling.$version.nupkg" \
+          "Runic.Translations.Build.$version.nupkg" \
+          "dotnet-runic-translations.$version.nupkg"; do
+          test -f "$feed/$package"
+        done
+
+        npm --prefix "$toolkit_root" ci --ignore-scripts --no-audit --no-fund
+        npm --prefix "$toolkit_root" run build --workspace @runic-artifex/application-bridge
+        npm --prefix "$toolkit_root" pack --workspace @runic-artifex/application-bridge --ignore-scripts --pack-destination "$npm_feed"
+        npm --prefix "$desktop_root" ci --ignore-scripts --no-audit --no-fund
+        npm --prefix "$desktop_root" run build --workspace @runic-artifex/desktop
+        npm --prefix "$desktop_root" pack --workspace @runic-artifex/desktop --ignore-scripts --pack-destination "$npm_feed"
+        npm --prefix "$svelte_root" ci --ignore-scripts --no-audit --no-fund
+        npm --prefix "$svelte_root" run build --workspace @runic-artifex/svelte
+        npm --prefix "$svelte_root" pack --workspace @runic-artifex/svelte --ignore-scripts --pack-destination "$npm_feed"
+        npm --prefix "$svelte_root" run build --workspace @runic-artifex/sveltekit
+        npm --prefix "$svelte_root" pack --workspace @runic-artifex/sveltekit --ignore-scripts --pack-destination "$npm_feed"
+        npm --prefix "$vite_root" ci --ignore-scripts --no-audit --no-fund
+        (cd "$vite_root" && npm run build && npm pack --ignore-scripts --pack-destination "$npm_feed")
+        npm --prefix "$translations_root/web" ci --ignore-scripts --no-audit --no-fund
+        (cd "$translations_root/web" && npm run build && npm pack --ignore-scripts --pack-destination "$npm_feed")
+        rm -rf "$frontend_candidate"
+        cp -a "$workspace/Frontend/." "$frontend_candidate"
+        rm -rf "$frontend_candidate/node_modules" "$frontend_candidate/package-lock.json"
+        node --input-type=module - "$frontend_candidate/package.json" "$npm_feed" <<'NODE'
+        import { existsSync, readFileSync, writeFileSync } from "node:fs";
+        import { join } from "node:path";
+
+        const [packagePath, feed] = process.argv.slice(2);
+        const manifest = JSON.parse(readFileSync(packagePath, "utf8"));
+        const archives = {
+          "@runic-artifex/application-bridge": "runic-artifex-application-bridge-${{ inputs.package-version }}.tgz",
+          "@runic-artifex/desktop": "runic-artifex-desktop-${{ inputs.package-version }}.tgz",
+          "@runic-artifex/svelte": "runic-artifex-svelte-${{ inputs.package-version }}.tgz",
+          "@runic-artifex/sveltekit": "runic-artifex-sveltekit-${{ inputs.package-version }}.tgz",
+          "@runic-artifex/vite-plugin-runic": "runic-artifex-vite-plugin-runic-${{ inputs.package-version }}.tgz",
+          "@runic-artifex/vite-plugin-runic-translations": "runic-artifex-vite-plugin-runic-translations-${{ inputs.package-version }}.tgz",
+        };
+        for (const [identity, filename] of Object.entries(archives)) {
+          const archive = join(feed, filename);
+          if (!existsSync(archive)) throw new Error(`Missing exact local npm candidate '${identity}'.`);
+          const dependencyGroup = [manifest.dependencies, manifest.devDependencies]
+            .find(candidate => candidate && Object.hasOwn(candidate, identity));
+          if (!dependencyGroup) throw new Error(`The editor frontend does not declare '${identity}'.`);
+          dependencyGroup[identity] = `file:${archive}`;
+        }
+        writeFileSync(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
+        NODE
+        npm --prefix "$frontend_candidate" install \
+          --ignore-scripts \
+          --no-audit \
+          --no-fund
+        cp -a "$frontend_candidate/node_modules" "$workspace/Frontend/"
+
+        printf 'RUNIC_EDITOR_NUGET_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
+        printf 'RUNIC_EDITOR_FRONTEND_CANDIDATES=1\n' >> "$GITHUB_ENV"
+        printf 'config-file=%s\n' "$config" >> "$GITHUB_OUTPUT"

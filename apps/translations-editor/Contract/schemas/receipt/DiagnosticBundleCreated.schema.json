@@ -1,0 +1,36 @@
+{
+  "$id": "runic.translations.editor/1/DiagnosticBundleCreated",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "DiagnosticBundleCreated"
+      ],
+      "type": "string"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "result"
+  ],
+  "type": "object"
+}

@@ -1,8 +1,8 @@
 @echo off
 setlocal
 if "%~1"=="" (
-  "%~dp0RunicTranslations.Editor.exe" edit "%CD%"
+  "%~dp0Runic.Translations.Editor.exe" edit "%CD%"
 ) else (
-  "%~dp0RunicTranslations.Editor.exe" %*
+  "%~dp0Runic.Translations.Editor.exe" %*
 )
 exit /b %ERRORLEVEL%

@@ -1,0 +1,33 @@
+{
+  "$id": "runic.translations.editor/1/PreviewMessage",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "PreviewMessage"
+      ],
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "key": {
+      "type": "string"
+    },
+    "locale": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_tag",
+    "path",
+    "content",
+    "locale",
+    "key"
+  ],
+  "type": "object"
+}

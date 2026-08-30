@@ -1,4 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
+import { runic } from "@runic-artifex/vite-plugin-runic";
 import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
@@ -12,6 +13,9 @@ if (manifest === undefined || manifest.length === 0) {
 export default defineConfig({
   plugins: [
     tailwindcss(),
+    runic({
+      contract: { identity: "runic.translations.editor", version: "1" },
+    }),
     runicTranslations({
       manifest,
       sourceFiles: [

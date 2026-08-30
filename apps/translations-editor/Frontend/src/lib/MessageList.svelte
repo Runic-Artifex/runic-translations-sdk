@@ -15,26 +15,21 @@
     children: MessageTreeNode[];
   }
 
-  function buildTree(items: MessageListItem[]): MessageTreeNode[] {
-    const roots: MessageTreeNode[] = [];
-    for (const item of items) {
-      const segments = item.key.split(".").filter(Boolean);
-      const safeSegments = segments.length === 0 ? [item.key] : segments;
-      let siblings = roots;
-      let path = "";
-      for (const segment of safeSegments) {
-        path = path === "" ? segment : `${path}.${segment}`;
-        let node = siblings.find((candidate) => candidate.segment === segment);
-        if (node === undefined) {
-          node = { segment, path, children: [] };
-          siblings.push(node);
-        }
-        siblings = node.children;
-        if (path === item.key) node.item = item;
-      }
-    }
-    return roots;
+  export interface MessageListLabels {
+    messages: string;
+    bulkActions: string;
+    visibleMessages: string;
+    markForReview: string;
+    approveTranslations: string;
+    addMessage: string;
+    noMatchingMessages: string;
+    missingTranslation: string;
+    translated: string;
+    structured: string;
+    stale: string;
+    review: string;
   }
+
 </script>
 
 <script lang="ts">
@@ -53,45 +48,54 @@
   import { cn } from "$lib/utils.js";
   import type { Snippet } from "svelte";
   import { onMount } from "svelte";
-  import MessageTreeNodeView from "./MessageTreeNode.svelte";
+  import { getLocalEditorState, setLocalEditorState, subscribeLocalEditorState } from "./local-state";
+  import { messageVirtualRowHeight, virtualMessageTree, virtualMessageWindow } from "./message-virtualization";
 
   let {
     items,
     selectedKey,
     visibleCount,
-    remainingCount,
+    reviewActionsDisabled = false,
     noResultsLabel,
+    labels,
     toolbar,
     onselect,
     onadd,
     onmarkreview,
     onapprove,
-    onloadmore,
     open = $bindable(true),
   }: {
     items: MessageListItem[];
     selectedKey: string;
     visibleCount: number;
-    remainingCount: number;
+    reviewActionsDisabled?: boolean;
     noResultsLabel: string;
+    labels: MessageListLabels;
     toolbar: Snippet;
     onselect: (key: string) => void;
     onadd: () => void;
     onmarkreview: () => void;
     onapprove: () => void;
-    onloadmore: () => void;
     open?: boolean;
   } = $props();
 
   const sidebar = Sidebar.useSidebar();
-  let tree = $derived(buildTree(items));
+  let scrollTop = $state(0);
+  let viewportHeight = $state(0);
+  let tree = $derived(virtualMessageTree(items));
+  let window = $derived(virtualMessageWindow(tree.length, scrollTop, viewportHeight));
+  let renderedRows = $derived(tree.slice(window.start, window.end));
 
   onMount(() => {
-    open = localStorage.getItem("runic.sidebar.messages") !== "closed";
+    const refresh = (): void => {
+      open = getLocalEditorState("runic.sidebar.messages") !== "closed";
+    };
+    refresh();
+    return subscribeLocalEditorState(refresh);
   });
 
   function persistOpen(value: boolean): void {
-    localStorage.setItem("runic.sidebar.messages", value ? "open" : "closed");
+    setLocalEditorState("runic.sidebar.messages", value ? "open" : "closed");
   }
 
   function selectMessage(key: string): void {
@@ -106,10 +110,10 @@
 </script>
 
 <Collapsible.Root bind:open onOpenChange={persistOpen} class={cn("group/messages", open && "min-h-0 flex flex-1 flex-col")}>
-  <Sidebar.Group class={cn("py-1", open && "min-h-0 flex-1")} aria-label="Messages">
+  <Sidebar.Group class={cn("py-1", open && "min-h-0 flex-1")} aria-label={labels.messages}>
     <Sidebar.GroupLabel class="justify-between">
       <Collapsible.Trigger class="flex min-w-0 flex-1 items-center gap-2 text-left">
-        <span>Messages</span>
+        <span>{labels.messages}</span>
         <Badge variant="secondary">{visibleCount}</Badge>
         <ChevronDownIcon class="ml-auto transition-transform group-data-[state=open]/messages:rotate-180" />
       </Collapsible.Trigger>
@@ -117,26 +121,26 @@
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
             class={buttonVariants({ variant: "ghost", size: "icon-xs" })}
-            aria-label="Message bulk actions"
-            title="Message bulk actions"
+            aria-label={labels.bulkActions}
+            title={labels.bulkActions}
           >
             <MoreHorizontalIcon />
           </DropdownMenu.Trigger>
           <DropdownMenu.Content align="end" class="w-64">
-            <DropdownMenu.Label>Visible messages</DropdownMenu.Label>
+            <DropdownMenu.Label>{labels.visibleMessages}</DropdownMenu.Label>
             <DropdownMenu.Group>
-              <DropdownMenu.Item disabled={visibleCount === 0} onclick={onmarkreview}>
+              <DropdownMenu.Item disabled={reviewActionsDisabled || visibleCount === 0} onclick={onmarkreview}>
                 <ListChecksIcon />
-                Mark for review
+                {labels.markForReview}
               </DropdownMenu.Item>
-              <DropdownMenu.Item disabled={visibleCount === 0} onclick={onapprove}>
+              <DropdownMenu.Item disabled={reviewActionsDisabled || visibleCount === 0} onclick={onapprove}>
                 <CheckCheckIcon />
-                Approve translations
+                {labels.approveTranslations}
               </DropdownMenu.Item>
             </DropdownMenu.Group>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
-        <Button variant="ghost" size="icon-xs" aria-label="Add message" title="Add message" onclick={addMessage}>
+        <Button variant="ghost" size="icon-xs" aria-label={labels.addMessage} title={labels.addMessage} onclick={addMessage}>
           <PlusIcon />
         </Button>
       </div>
@@ -145,27 +149,50 @@
     <Collapsible.Content class="min-h-0 flex-1 overflow-hidden">
       {@render toolbar()}
       <Sidebar.GroupContent class="min-h-0 flex-1">
-        <nav class="min-h-0 flex-1 overflow-y-auto pb-3" aria-label="Translation messages">
+        <nav
+          class="min-h-0 flex-1 overflow-y-auto pb-3"
+          aria-label={labels.messages}
+          bind:clientHeight={viewportHeight}
+          onscroll={(event) => scrollTop = event.currentTarget.scrollTop}
+        >
           {#if items.length === 0}
             <Empty.Root class="p-6">
               <Empty.Header>
                 <Empty.Media variant="icon"><MessageSquareOffIcon /></Empty.Media>
-                <Empty.Title>No matching messages</Empty.Title>
+                <Empty.Title>{labels.noMatchingMessages}</Empty.Title>
                 <Empty.Description>{noResultsLabel}</Empty.Description>
               </Empty.Header>
             </Empty.Root>
           {:else}
-            <Sidebar.Menu aria-label="Message namespaces" class="px-2">
-              {#each tree as node (node.path)}
-                <MessageTreeNodeView {node} {selectedKey} onselect={selectMessage} />
+            <div class="relative px-2" style:height={`${tree.length * messageVirtualRowHeight}px`}>
+              <div class="absolute inset-x-2" style:transform={`translateY(${window.offset}px)`}>
+              {#each renderedRows as row (row.key)}
+                {#if row.kind === "branch"}
+                  <div
+                    class="flex h-8 items-center gap-2 truncate px-2 text-xs font-medium text-muted-foreground"
+                    aria-label={row.label}
+                    style:padding-inline-start={`${(row.depth - 1) * 1.25 + 0.5}rem`}
+                  >
+                    <span class="truncate">{row.label}</span><Badge variant="secondary" class="ml-auto">{row.messageCount}</Badge>
+                  </div>
+                {:else if row.item !== undefined}
+                  <button
+                    class={cn("flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring", selectedKey === row.item.key && "bg-sidebar-accent")}
+                    aria-label={`${row.item.key}: ${row.item.preview}`}
+                    title={`${row.item.key}\n${row.item.preview}`}
+                    style:padding-inline-start={`${(row.depth - 1) * 1.25 + 0.5}rem`}
+                    onclick={() => selectMessage(row.item!.key)}
+                  >
+                    <Badge variant={row.item.missing ? "outline" : row.item.structured ? "default" : "secondary"} class="size-2 shrink-0 p-0" aria-label={row.item.missing ? labels.missingTranslation : row.item.structured ? labels.structured : labels.translated}></Badge>
+                    <span class="truncate font-mono">{row.label}</span>
+                    {#if row.item.stale || row.item.needsReview || row.item.structured}
+                      <span class="ml-auto text-xs text-muted-foreground">{row.item.stale ? labels.stale : row.item.needsReview ? labels.review : labels.structured}</span>
+                    {/if}
+                  </button>
+                {/if}
               {/each}
-            </Sidebar.Menu>
-          {/if}
-
-          {#if remainingCount > 0}
-            <Button variant="outline" size="xs" class="mx-2 mt-2 w-[calc(100%_-_1rem)]" onclick={onloadmore}>
-              Show 300 more · {remainingCount} remaining
-            </Button>
+              </div>
+            </div>
           {/if}
         </nav>
       </Sidebar.GroupContent>

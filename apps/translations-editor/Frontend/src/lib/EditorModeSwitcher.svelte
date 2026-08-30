@@ -4,6 +4,7 @@
 
 <script lang="ts">
   import * as ToggleGroup from "$lib/components/ui/toggle-group/index.js";
+  import { getUiText } from "$lib/ui-text";
 
   let {
     mode,
@@ -16,6 +17,8 @@
     rawLabel: string;
     onchange: (mode: EditorMode) => void;
   } = $props();
+
+  const ui = getUiText();
 
   let options: { value: EditorMode; label: string }[] = $derived([
     { value: "translation", label: simpleLabel },
@@ -31,7 +34,7 @@
     spacing={1}
     value={mode}
     class="grid w-full grid-cols-2 sm:flex sm:w-auto"
-    aria-label="Editing mode"
+    aria-label={ui.text("Ui.EditorMode.EditingMode")}
     onValueChange={(value) => {
       if (value !== "") onchange(value as EditorMode);
     }}

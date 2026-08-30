@@ -1,0 +1,111 @@
+{
+  "$id": "runic.translations.editor/1/SaveReview",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "SaveReview"
+      ],
+      "type": "string"
+    },
+    "request": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "samples": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "sourceFingerprint": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "draft",
+                  "translated",
+                  "needs-review",
+                  "approved"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "locale",
+              "state",
+              "samples"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "expectedRevision": {
+          "type": "string"
+        },
+        "terminology": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "locale": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "preferred": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source",
+              "preferred"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries",
+        "terminology"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "request"
+  ],
+  "type": "object"
+}

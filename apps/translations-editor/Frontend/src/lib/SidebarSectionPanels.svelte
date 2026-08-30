@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount, type Snippet } from "svelte";
+	import { getLocalEditorState, setLocalEditorState, subscribeLocalEditorState } from "./local-state";
+	import { getUiText } from "$lib/ui-text";
 
 	const storageKey = "runic.sidebar.languages-share";
 	const defaultShare = 0.5;
@@ -21,6 +23,7 @@
 	let container = $state<HTMLDivElement>();
 	let languagesShare = $state(defaultShare);
 	let resizing = $state(false);
+	const ui = getUiText();
 
 	let layout = $derived(
 		languagesOpen && messagesOpen
@@ -33,8 +36,12 @@
 	);
 
 	onMount(() => {
-		const stored = Number.parseFloat(localStorage.getItem(storageKey) ?? "");
-		if (Number.isFinite(stored)) languagesShare = clampShare(stored);
+		const refresh = (): void => {
+			const stored = Number.parseFloat(getLocalEditorState(storageKey) ?? "");
+			if (Number.isFinite(stored)) languagesShare = clampShare(stored);
+		};
+		refresh();
+		return subscribeLocalEditorState(refresh);
 	});
 
 	function clampShare(value: number): number {
@@ -86,7 +93,7 @@
 	}
 
 	function persistShare(): void {
-		localStorage.setItem(storageKey, languagesShare.toFixed(3));
+		setLocalEditorState(storageKey, languagesShare.toFixed(3));
 	}
 </script>
 
@@ -96,7 +103,7 @@
 	style:--languages-size={`${languagesShare}fr`}
 	style:--messages-size={`${1 - languagesShare}fr`}
 >
-	<section class="sidebar-section-panel languages-panel" aria-label="Languages panel">
+	<section class="sidebar-section-panel languages-panel" aria-label={ui.text("Ui.SidebarPanels.LanguagesPanel")}>
 		{@render languages()}
 	</section>
 
@@ -105,13 +112,13 @@
 			class="section-resizer"
 			role="slider"
 			tabindex="0"
-			aria-label="Resize Languages and Messages"
+			aria-label={ui.text("Ui.SidebarPanels.Resize")}
 			aria-orientation="vertical"
 			aria-valuemin={minimumShare * 100}
 			aria-valuemax={(1 - minimumShare) * 100}
 			aria-valuenow={Math.round(languagesShare * 100)}
-			aria-valuetext={`Languages ${Math.round(languagesShare * 100)}%, Messages ${Math.round((1 - languagesShare) * 100)}%`}
-			title="Drag to resize · Double-click to reset"
+			aria-valuetext={`${ui.text("Ui.SidebarPanels.Languages")} ${Math.round(languagesShare * 100)}%, ${ui.text("Ui.SidebarPanels.Messages")} ${Math.round((1 - languagesShare) * 100)}%`}
+			title={ui.text("Ui.SidebarPanels.ResizeTitle")}
 			onpointerdown={beginResize}
 			onpointermove={continueResize}
 			onpointerup={finishResize}
@@ -121,7 +128,7 @@
 		></div>
 	{/if}
 
-	<section class="sidebar-section-panel messages-panel" aria-label="Messages panel">
+	<section class="sidebar-section-panel messages-panel" aria-label={ui.text("Ui.SidebarPanels.MessagesPanel")}>
 		{@render messages()}
 	</section>
 </div>

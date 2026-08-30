@@ -7,10 +7,9 @@ export type ThemePalette = typeof themePalettes[number];
 const modeKey = "runic-translations.theme-mode";
 const paletteKey = "runic-translations.theme-palette";
 
-export function readAppearance(): { mode: ThemeMode; palette: ThemePalette } {
-  if (typeof localStorage === "undefined") return { mode: "dark", palette: "runic" };
-  const storedMode = localStorage.getItem(modeKey);
-  const storedPalette = localStorage.getItem(paletteKey);
+export function readAppearance(read: (key: string) => string | null = () => null): { mode: ThemeMode; palette: ThemePalette } {
+  const storedMode = read(modeKey);
+  const storedPalette = read(paletteKey);
   return {
     mode: isThemeMode(storedMode) ? storedMode : "dark",
     palette: isThemePalette(storedPalette) ? storedPalette : "runic",
@@ -25,11 +24,13 @@ export function applyAppearance(mode: ThemeMode, palette: ThemePalette): void {
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
 }
 
-export function saveAppearance(mode: ThemeMode, palette: ThemePalette): void {
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(modeKey, mode);
-    localStorage.setItem(paletteKey, palette);
-  }
+export function saveAppearance(
+  mode: ThemeMode,
+  palette: ThemePalette,
+  write: (key: string, value: string) => void = () => undefined,
+): void {
+  write(modeKey, mode);
+  write(paletteKey, palette);
   applyAppearance(mode, palette);
 }
 

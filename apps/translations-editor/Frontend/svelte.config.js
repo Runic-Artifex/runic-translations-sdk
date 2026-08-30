@@ -1,9 +1,10 @@
-import adapter from "@sveltejs/adapter-static";
+import { runicToolkitAdapter } from "@runic-artifex/sveltekit";
 
 /** @type {import("@sveltejs/kit").Config} */
 const config = {
   kit: {
-    adapter: adapter({ fallback: "index.html" }),
+    adapter: runicToolkitAdapter({ mode: "spa", desktop: true, fallback: "index.html" }),
+    router: { type: "hash" },
   },
 };
 

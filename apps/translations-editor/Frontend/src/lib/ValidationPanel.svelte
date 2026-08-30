@@ -7,6 +7,7 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import { Spinner } from "$lib/components/ui/spinner/index.js";
   import type { EditorDiagnostic } from "$lib/contracts";
+  import { getUiText } from "$lib/ui-text";
 
   interface Props {
     busy: boolean;
@@ -34,6 +35,8 @@
     onselect,
   }: Props = $props();
 
+  const ui = getUiText();
+
   let invalid = $derived(errorCount > 0 || clientError !== undefined);
 </script>
 
@@ -45,7 +48,7 @@
   <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
     <div class="flex min-w-0 items-center gap-3">
       {#if busy}
-        <Spinner class="size-5 shrink-0 text-primary" aria-label="Validating" />
+        <Spinner class="size-5 shrink-0 text-primary" aria-label={ui.text("Ui.Validation.Validating")} />
       {:else if invalid}
         <AlertCircleIcon class="size-5 shrink-0" aria-hidden="true" />
       {:else}
@@ -53,14 +56,14 @@
       {/if}
       <div class="min-w-0">
         <Alert.Title class="text-xs font-semibold">
-          {busy ? "Validating with the Runic compiler…" : invalid ? invalidLabel : validLabel}
+          {busy ? ui.text("Ui.Validation.ValidatingWithCompiler") : invalid ? invalidLabel : validLabel}
         </Alert.Title>
         <Alert.Description class="text-xs">
-          {diagnosticsLabel} · {errorCount} errors · {warningCount} warnings
+          {diagnosticsLabel} · {errorCount} {ui.text("Ui.Validation.Errors")} · {warningCount} {ui.text("Ui.Validation.Warnings")}
         </Alert.Description>
       </div>
     </div>
-    <Badge variant="outline" class="font-mono text-[0.65rem]">compiler · schema v{schemaVersion}</Badge>
+    <Badge variant="outline" class="font-mono text-[0.65rem]">{ui.text("Ui.Validation.Compiler")} · {ui.text("Ui.Validation.Schema")} v{schemaVersion}</Badge>
   </header>
 
   {#if clientError}

@@ -2,8 +2,8 @@
   "version": 1,
   "isRoot": true,
   "tools": {
-    "runictranslations.tool": {
-      "version": "0.1.0-preview.4.3",
+    "dotnet-runic-translations": {
+      "version": "1.0.0-preview.1",
       "commands": [
         "runic-translations"
       ]

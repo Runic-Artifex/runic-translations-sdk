@@ -7,4 +7,4 @@ if [ "$#" -eq 0 ]; then
     set -- edit "$PWD"
 fi
 
-exec "$launcher_root/RunicTranslations.Editor" "$@"
+exec "$launcher_root/Runic.Translations.Editor" "$@"

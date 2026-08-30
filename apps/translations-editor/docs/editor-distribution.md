@@ -1,49 +1,71 @@
 # Editor distribution
 
-Runic Translations Editor preview builds are self-contained archives for `linux-x64`, `win-x64`, and `osx-arm64`. Each archive contains the .NET runtime, native CS-WebUI/WebUI assets, the static SvelteKit application, launchers, an example workspace, the license, third-party notices, a per-file manifest, and a sibling SHA-256 checksum. Customer machines need no SDK, Node.js installation, package-registry authentication, or separate runtime.
+Runic Translations Editor release candidates are self-contained archives for `linux-x64`, `win-x64`, and `osx-arm64`. Each archive contains the .NET runtime, Runic Desktop presentation host, required native WebView assets, the static SvelteKit application, launchers, an example workspace, the license, third-party notices, a per-file manifest, and a sibling SHA-256 checksum. Customer machines need no SDK, Node.js installation, package-registry authentication, or separate runtime.
 
-`eng/package-editor.ps1` performs a matching-OS publish, creates the archive, verifies its sibling checksum, extracts it into a clean temporary directory, verifies every file against `package-manifest.json`, runs headless compiler validation, starts the public launcher, and runs the complete editor smoke workflow. Tests therefore exercise the artifact a customer downloads, not only the publish staging directory. The executable and manifest both carry the exact version, `preview` update channel, source commit, and runtime identifier supplied by CI.
+`eng/package-editor.ps1` performs a matching-OS publish twice, fixes archive order and timestamps, compares the exact archive digests, verifies the sibling checksum, extracts into a clean temporary directory, verifies every file against `package-manifest.json`, and runs executable plus public-launcher headless validation and the complete editor smoke workflow. Tests therefore exercise the artifact a customer downloads, not only the publish staging directory. The executable and manifest both carry the exact version, channel, source commit, and runtime identifier supplied by CI.
+
+Every candidate also has a closed `release-staging` directory. It contains the
+release manifest and checksum set, copied package manifest, SPDX 2.3 artifact
+SBOM with its exact .NET/npm dependency and license inventory, provenance, and
+an upstream-attestation receipt template. The staging verifier rejects path
+traversal, links, unbounded paths, more than 10,000 payload files, payload files
+over 512 MiB, aggregate content over 2 GiB, duplicate checksums, and any
+unlisted file. Before any future, separately authorized publication decision,
+the release-set verifier requires exactly one Linux x64, Windows x64, and macOS
+arm64 archive, all from one source revision and tree. It then emits the exact
+central evidence artifact `distribution/Runic.Translations.Editor-<version>.zip`,
+independently recreates it from the same verified platform snapshots, and rejects
+any byte difference. It also emits a receipt template whose artifact path matches
+the organization collector.
 
 ## Download, trust, and updates
 
-Preview artifacts are published on [GitHub Releases](https://github.com/Runic-Artifex/runic-translations-editor/releases). The release page displays `PREVIEW-NOTICE.md`, and the same notice is included in every archive. Download exactly one platform archive and its file with the same name plus `.sha256`.
+No editor archive has been published yet. Unsigned preview workflow outputs are retained only as CI candidates and are not public downloads. A future public release will display `PREVIEW-NOTICE.md`, provide one platform archive and its same-named `.sha256` file, and bind its exact upstream GitHub attestation receipt into the organization release-evidence bundle.
 
 On Linux:
 
 ```bash
-sha256sum -c RunicTranslations.Editor-0.1.0-preview.N-linux-x64.tar.gz.sha256
-tar -xzf RunicTranslations.Editor-0.1.0-preview.N-linux-x64.tar.gz
-./RunicTranslations.Editor/runic-translations-editor edit /path/to/workspace
+sha256sum -c Runic.Translations.Editor-1.0.0-preview.N-linux-x64.tar.gz.sha256
+tar -xzf Runic.Translations.Editor-1.0.0-preview.N-linux-x64.tar.gz
+./Runic.Translations.Editor/runic-translations-editor edit /path/to/workspace
 ```
 
 On macOS:
 
 ```bash
-shasum -a 256 RunicTranslations.Editor-0.1.0-preview.N-osx-arm64.tar.gz
+shasum -a 256 Runic.Translations.Editor-1.0.0-preview.N-osx-arm64.tar.gz
 # Compare the printed digest with the first field in the sibling .sha256 file.
-tar -xzf RunicTranslations.Editor-0.1.0-preview.N-osx-arm64.tar.gz
-./RunicTranslations.Editor/runic-translations-editor edit /path/to/workspace
+tar -xzf Runic.Translations.Editor-1.0.0-preview.N-osx-arm64.tar.gz
+./Runic.Translations.Editor/runic-translations-editor edit /path/to/workspace
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$actual = (Get-FileHash .\RunicTranslations.Editor-0.1.0-preview.N-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-$expected = (Get-Content .\RunicTranslations.Editor-0.1.0-preview.N-win-x64.zip.sha256).Split(' ')[0]
+$actual = (Get-FileHash .\Runic.Translations.Editor-1.0.0-preview.N-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content .\Runic.Translations.Editor-1.0.0-preview.N-win-x64.zip.sha256).Split(' ')[0]
 if ($actual -ne $expected) { throw 'Checksum mismatch' }
-Expand-Archive .\RunicTranslations.Editor-0.1.0-preview.N-win-x64.zip
-.\RunicTranslations.Editor\runic-translations-editor.cmd edit C:\path\to\workspace
+Expand-Archive .\Runic.Translations.Editor-1.0.0-preview.N-win-x64.zip
+.\Runic.Translations.Editor\runic-translations-editor.cmd edit C:\path\to\workspace
 ```
 
 The launcher accepts `edit [workspace]` and `validate [workspace]`; without arguments it edits the current directory. For a multi-catalog directory, add `--catalog <id>`.
 
 ## Release boundary
 
-This repository is the only publisher of editor archives and editor GitHub releases. The [Runic Translations](https://github.com/Runic-Artifex/runic-translations) repository publishes the compiler/runtime/tool packages consumed here, but does not package or release this application.
+This repository is the only authority for editor archives and editor GitHub releases. The [Runic Translations](https://github.com/Runic-Artifex/runic-translations) repository publishes the compiler/runtime/tool packages consumed here, but does not package or release this application.
 
-Preview archives are unsigned evaluation builds and update by replacing the complete extracted application. The editor performs no update request and never changes itself. Stable releases remain disabled until Windows code-signing and Apple Developer ID/notarization credentials, protected release approval, post-signing startup tests, and build-provenance attestations are available.
+Preview archives, if considered after 1.0, are unsigned evaluation builds and
+update only by manually replacing the complete extracted application. The editor
+performs no update request and never changes itself. Through 1.0 there is no
+certificate acquisition, code signing, notarization, signed update metadata, or
+signing-oriented staging descriptor. The preview workflow cannot create
+releases, and any publication decision remains separately authorized.
 
-Windows may show an unknown-publisher warning. macOS Gatekeeper may prevent an unsigned application from starting under the machine's policy. The preview does not ask users to suppress those controls; use a source build or wait for a signed release when policy forbids unsigned software.
+Windows may show an unknown-publisher warning. macOS Gatekeeper may prevent an
+unsigned application from starting under the machine's policy. The preview does
+not ask users to suppress those controls; use a source build when policy
+forbids unsigned software.
 
 ## Validation and reviewable diffs
 
@@ -63,6 +85,12 @@ Before declaring the public preview ready, maintainers must run the bounded [tra
 
 ## Diagnostics and privacy
 
-The About dialog reports product version, update channel, source revision, runtime identifier, operating system, and architecture. Diagnostic bundles include application/runtime identity, catalog/schema metadata, counts, compiler success, editor-state availability, diagnostic severity counts, and notices.
+The About dialog reports product version, update channel, source revision, runtime identifier, operating system, and architecture. Diagnostic bundles include application/runtime identity, catalog/schema metadata, counts, compiler success, editor-state availability, diagnostic severity counts, and notices. They contain at most three entries, 256 diagnostic groups, 1 MiB per copied legal notice, and 2 MiB after compression. Creation errors are generic so filesystem details are not exposed.
 
 They exclude workspace roots, relative file paths, diagnostic messages, JSON source, translation text, review notes, sample arguments, and recent-project history. Nothing is uploaded automatically.
+
+## Per-user local state
+
+The packaged browser or WebView profile stores no durable editor state. Preferences, recent-project metadata, and crash-recovery drafts are held in one native per-user application-data record, independently of the browser origin or profile. It contains no account, telemetry, machine-translation provider, or background synchronization state: providers are unavailable in this preview and therefore cannot receive customer text or request consent. **About & diagnostics** offers a privacy-bounded inventory (entry counts and byte totals only) and a **Clear local state** action. Clearing removes only this editor’s application-owned records; it never changes workspace files and deliberately leaves work already open in the current window in memory.
+
+Diagnostic ZIPs use the same per-user application-data root rather than a temporary directory. The About dialog exposes their path and explicit **Reveal location**, **Copy path**, and **Delete bundle** controls. The application never uploads a bundle; sharing it remains a separate user action.

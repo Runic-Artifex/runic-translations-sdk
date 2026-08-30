@@ -6,7 +6,7 @@ import type {
 import type { ResourceValue, TranslationRow } from "./resource-model";
 
 export interface QualityIssue {
-  kind: "missing" | "identical" | "whitespace" | "terminology" | "stale";
+  kind: "missing" | "identical" | "whitespace" | "terminology" | "stale" | "bidi";
   key: string;
   locale: string;
   message: string;
@@ -93,6 +93,35 @@ export function qualityIssues(
   }
   return result.sort((left, right) =>
     left.key.localeCompare(right.key) || left.kind.localeCompare(right.kind));
+}
+
+// Bidi/mixed-direction findings: invisible bidirectional control characters
+// are flagged in both directions; mixed strong-direction runs are flagged when
+// the RTL simulation is active because that is where they visually break.
+const bidiControlPattern = /[\u{061C}\u{200E}\u{200F}\u{202A}-\u{202E}\u{2066}-\u{2069}]/u;
+const strongLtrPattern = /[A-Za-z\u{00C0}-\u{024F}]/u;
+const strongRtlPattern = /[\u{0590}-\u{08FF}\u{FB1D}-\u{FDFF}\u{FE70}-\u{FEFF}]/u;
+
+export function bidiIssues(
+  entries: ReadonlyArray<{ key: string; locale: string; text: string }>,
+  context: "ltr" | "rtl",
+): QualityIssue[] {
+  const result: QualityIssue[] = [];
+  for (const entry of entries) {
+    const hasControls = bidiControlPattern.test(entry.text);
+    const mixedRuns = strongLtrPattern.test(entry.text) && strongRtlPattern.test(entry.text);
+    if (!hasControls && !(context === "rtl" && mixedRuns)) continue;
+    result.push({
+      kind: "bidi",
+      key: entry.key,
+      locale: entry.locale,
+      message: hasControls
+        ? "Translation contains invisible bidirectional control characters."
+        : "Translation mixes left-to-right and right-to-left runs; verify it under right-to-left simulation.",
+    });
+  }
+  return result.sort((left, right) =>
+    left.key.localeCompare(right.key) || left.message.localeCompare(right.message));
 }
 
 export function translationSuggestions(

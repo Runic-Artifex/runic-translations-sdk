@@ -1,0 +1,165 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RunicTranslationsSourceRoot Condition="Exists('../runic-translations/dotnet/src/Runic.Translations.Build/build/Runic.Translations.Build.props')">$(MSBuildProjectDirectory)/../runic-translations</RunicTranslationsSourceRoot>
+  </PropertyGroup>
+  <Import Project="$(RunicTranslationsSourceRoot)/dotnet/src/Runic.Translations.Build/build/Runic.Translations.Build.props"
+          Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Runic.Translations.Editor</AssemblyName>
+    <RootNamespace>Runic.Translations.Editor</RootNamespace>
+    <Product>Runic Translations Editor</Product>
+    <Title>Runic Translations Editor</Title>
+    <Description>A focused desktop editor for Runic Translations workspaces.</Description>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TranslationsEmitEsm>true</TranslationsEmitEsm>
+    <TranslationsToolCommand>dotnet tool run runic-translations --</TranslationsToolCommand>
+    <TranslationsToolCommand Condition="'$(RunicTranslationsSourceRoot)' != ''">dotnet run --project &quot;$(RunicTranslationsSourceRoot)/dotnet/tools/dotnet-runic-translations/dotnet-runic-translations.csproj&quot; --configuration Release --</TranslationsToolCommand>
+    <TranslationsRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TranslationsRuntimePath>
+    <TranslationsOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</TranslationsOutputPath>
+    <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
+    <!-- The frontend build is packed and embedded as a Runic Assets archive;
+         Runic Desktop serves it through a request-scoped content handler. -->
+    <RunicAssetsDist>$(MSBuildProjectDirectory)/Frontend/build</RunicAssetsDist>
+    <RunicAssetsEntryPoint>index.html</RunicAssetsEntryPoint>
+    <!-- The editor hosts its own generated Runic.CommandLine catalog beside the one
+         published inside Runic.Translations.Tooling; the identical well-known
+         generated type name is expected and the locally generated catalog wins. -->
+    <NoWarn>$(NoWarn);CS0436</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="RunicUpdateChannel" Value="$(RunicEditorUpdateChannel)" />
+    <AssemblyMetadata Include="RepositoryCommit" Value="$(SourceRevisionId)" Condition="'$(SourceRevisionId)' != ''" />
+  </ItemGroup>
+
+  <!-- Hosted-browser fixtures are compiled only for the disposable E2E host.
+       Release and package builds have no route or environment switch for them. -->
+  <ItemGroup>
+    <Compile Remove="tests/HostedBrowserE2E/EditorHostedE2EFixtures.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RunicEditorHostedE2E)' == 'true'">
+    <Compile Include="tests/HostedBrowserE2E/EditorHostedE2EFixtures.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../runic-toolkit/src/Runic.Application.Desktop/Runic.Application.Desktop.csproj"
+                      Condition="Exists('../runic-toolkit/src/Runic.Application.Desktop/Runic.Application.Desktop.csproj')" />
+    <ProjectReference Include="../runic-toolkit/src/Runic.Application.Hosting/Runic.Application.Hosting.csproj"
+                      Condition="Exists('../runic-toolkit/src/Runic.Application.Hosting/Runic.Application.Hosting.csproj')" />
+    <ProjectReference Include="../runic-toolkit/src/Runic.Application.Bridge/Runic.Application.Bridge.csproj"
+                      Condition="Exists('../runic-toolkit/src/Runic.Application.Bridge/Runic.Application.Bridge.csproj')" />
+    <ProjectReference Include="../runic-toolkit/src/Runic.Application.Bridge.Generators/Runic.Application.Bridge.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      Condition="Exists('../runic-toolkit/src/Runic.Application.Bridge.Generators/Runic.Application.Bridge.Generators.csproj')" />
+    <ProjectReference Include="../runic-assets/src/Runic.Assets.Desktop/Runic.Assets.Desktop.csproj"
+                      Condition="Exists('../runic-assets/src/Runic.Assets.Desktop/Runic.Assets.Desktop.csproj')" />
+    <ProjectReference Include="../runic-assets/src/Runic.Assets.AspNetCore/Runic.Assets.AspNetCore.csproj"
+                      Condition="Exists('../runic-assets/src/Runic.Assets.AspNetCore/Runic.Assets.AspNetCore.csproj')" />
+    <PackageReference Include="Runic.Application.Bridge"
+                      Condition="!Exists('../runic-toolkit/src/Runic.Application.Bridge/Runic.Application.Bridge.csproj')" />
+    <PackageReference Include="Runic.Application.Desktop"
+                      Condition="!Exists('../runic-toolkit/src/Runic.Application.Desktop/Runic.Application.Desktop.csproj')" />
+    <PackageReference Include="Runic.Application.Hosting"
+                      Condition="!Exists('../runic-toolkit/src/Runic.Application.Hosting/Runic.Application.Hosting.csproj')" />
+    <!-- The base package owns the archive build/embed targets even when the
+         runtime adapters are supplied by sibling project references. -->
+    <ProjectReference Include="../runic-assets/src/Runic.Assets/Runic.Assets.csproj"
+                      Condition="Exists('../runic-assets/src/Runic.Assets/Runic.Assets.csproj')" />
+    <PackageReference Include="Runic.Assets"
+                      Condition="!Exists('../runic-assets/src/Runic.Assets/Runic.Assets.csproj')" />
+    <PackageReference Include="Runic.Assets.AspNetCore"
+                      Condition="!Exists('../runic-assets/src/Runic.Assets.AspNetCore/Runic.Assets.AspNetCore.csproj')" />
+    <PackageReference Include="Runic.Assets.Desktop"
+                      Condition="!Exists('../runic-assets/src/Runic.Assets.Desktop/Runic.Assets.Desktop.csproj')" />
+    <ProjectReference Include="../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj"
+                      Condition="Exists('../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj')" />
+    <ProjectReference Include="../runic-command-line/src/Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj"
+                      Condition="Exists('../runic-command-line/src/Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj')"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <PackageReference Include="Runic.CommandLine"
+                      Condition="!Exists('../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj')" />
+    <ProjectReference Include="../runic-translations/dotnet/src/Runic.Translations/Runic.Translations.csproj"
+                      Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+    <ProjectReference Include="../runic-translations/dotnet/src/Runic.Translations.Compiler/Runic.Translations.Compiler.csproj"
+                      Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+    <ProjectReference Include="../runic-translations/dotnet/src/Runic.Translations.Authoring/Runic.Translations.Authoring.csproj"
+                      Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+    <ProjectReference Include="../runic-translations/dotnet/src/Runic.Translations.Tooling/Runic.Translations.Tooling.csproj"
+                      Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+    <ProjectReference Include="../runic-translations/dotnet/src/Runic.Translations.Generator/Runic.Translations.Generator.csproj"
+                      Condition="'$(RunicTranslationsSourceRoot)' != ''"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <Analyzer Include="$(RunicTranslationsSourceRoot)/dotnet/src/Runic.Translations.Compiler/bin/$(Configuration)/net10.0/Runic.Translations.Compiler.dll"
+              Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+    <PackageReference Include="Runic.Translations" Condition="'$(RunicTranslationsSourceRoot)' == ''" />
+    <PackageReference Include="Runic.Translations.Tooling" Condition="'$(RunicTranslationsSourceRoot)' == ''" />
+    <PackageReference Include="Runic.Translations.Build" PrivateAssets="all" Condition="'$(RunicTranslationsSourceRoot)' == ''" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The generated Application Bridge contract: the manifest carries its own
+         canonical fingerprint, and each schema is checksum-verified at compile
+         time by Runic.Application.Bridge.Generators. -->
+    <AdditionalFiles Include="Contract/bridge.manifest.json" />
+    <AdditionalFiles Include="Contract/schemas/**/*.schema.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TranslationCatalog Include="EditorResources/editor.catalog.json" />
+    <TranslationDocument Include="EditorResources/editor.en.json" />
+    <TranslationDocument Include="EditorResources/editor.de.json" />
+    <EditorFrontendInput Include="Frontend/package.json;Frontend/package-lock.json;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/*.json" />
+    <None Update="ExampleWorkspace/**/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Include="LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="PREVIEW-NOTICE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="eng/launchers/runic-translations-editor" Link="runic-translations-editor" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="eng/launchers/runic-translations-editor.cmd" Link="runic-translations-editor.cmd" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Generated ESM artifacts persist across builds, but the generator target only
+       registers them in @(FileWrites) when it actually runs. On an up-to-date rebuild
+       IncrementalClean would otherwise classify them as orphaned obj/ writes and delete
+       them, breaking the frontend build that consumes the manifest. -->
+  <Target Name="KeepGeneratedTranslationsOutOfIncrementalClean"
+          BeforeTargets="_CleanGetCurrentAndPriorFileWrites"
+          Condition="'$(TranslationsOutputPath)' != '' and Exists('$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json')">
+    <ItemGroup>
+      <_ExistingTranslationsArtifacts Include="$(TranslationsOutputPath)/editor.esm/**/*" />
+      <FileWrites Include="@(_ExistingTranslationsArtifacts)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- The Runic Assets pack/embed targets consume Frontend/build during the
+       resource-preparation phase, so the frontend build must run immediately
+       before packing on both build and publish. -->
+  <Target Name="BuildTranslationsEditorFrontend"
+          BeforeTargets="RunicAssetsPackFileSystem"
+          DependsOnTargets="RunicTranslationsGenerateTranslationArtifacts"
+          Inputs="@(EditorFrontendInput);$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json"
+          Outputs="Frontend/build/index.html">
+    <Exec WorkingDirectory="Frontend"
+          Command="npm ci --ignore-scripts --no-audit --no-fund"
+          Condition="'$(RUNIC_EDITOR_FRONTEND_CANDIDATES)' != '1'" />
+    <Exec WorkingDirectory="Frontend"
+          Command="npm run build"
+          EnvironmentVariables="RUNIC_TRANSLATIONS_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json" />
+  </Target>
+
+  <Import Project="../runic-assets/src/Runic.Assets/buildTransitive/Runic.Assets.targets"
+          Condition="Exists('../runic-assets/src/Runic.Assets/buildTransitive/Runic.Assets.targets')" />
+
+  <Import Project="$(RunicTranslationsSourceRoot)/dotnet/src/Runic.Translations.Build/build/Runic.Translations.Build.targets"
+          Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+</Project>

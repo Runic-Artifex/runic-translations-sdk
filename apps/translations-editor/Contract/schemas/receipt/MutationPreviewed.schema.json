@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "Int": {
+      "description": "an integer",
+      "title": "int",
+      "type": "integer"
+    }
+  },
+  "$id": "runic.translations.editor/1/MutationPreviewed",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "MutationPreviewed"
+      ],
+      "type": "string"
+    },
+    "preview": {
+      "additionalProperties": false,
+      "properties": {
+        "confirmationToken": {
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "afterBytes": {
+                "$ref": "#/$defs/Int"
+              },
+              "beforeBytes": {
+                "$ref": "#/$defs/Int"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "kind",
+              "beforeBytes",
+              "afterBytes"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "message": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "requiresIrreversibleConfirmation": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ok",
+        "files",
+        "requiresIrreversibleConfirmation"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "preview"
+  ],
+  "type": "object"
+}

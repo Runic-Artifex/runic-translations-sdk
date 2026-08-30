@@ -11,28 +11,40 @@
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
   import type { ThemeMode, ThemePalette } from "$lib/appearance";
+  import type { UiDirection } from "$lib/simulation";
+  import { getUiText } from "$lib/ui-text";
 
   let {
     locale,
     themeMode,
     themePalette,
+    pseudoLocalization,
+    uiDirection,
     onlocalechange,
     onthememodechange,
     onthemepalettechange,
+    ontogglepseudo,
+    ontoggledirection,
     onabout,
   }: {
     locale: string;
     themeMode: ThemeMode;
     themePalette: ThemePalette;
+    pseudoLocalization: boolean;
+    uiDirection: UiDirection;
     onlocalechange: (locale: string) => void;
     onthememodechange: (mode: ThemeMode) => void;
     onthemepalettechange: (palette: ThemePalette) => void;
+    ontogglepseudo: () => void;
+    ontoggledirection: () => void;
     onabout: () => void;
   } = $props();
 
-  const modeNames: Record<ThemeMode, string> = { system: "System", light: "Light", dark: "Dark" };
-  const paletteNames: Record<ThemePalette, string> = { runic: "Runic Gold", moss: "Moss", fjord: "Fjord", ember: "Ember" };
-  let localeName = $derived(locale === "de" ? "Deutsch" : "English");
+  const ui = getUiText();
+
+  const modeNames: Record<ThemeMode, string> = { system: ui.text("Ui.Settings.System"), light: ui.text("Ui.Settings.Light"), dark: ui.text("Ui.Settings.Dark") };
+  const paletteNames: Record<ThemePalette, string> = { runic: ui.text("Ui.Settings.RunicGold"), moss: ui.text("Ui.Settings.Moss"), fjord: ui.text("Ui.Settings.Fjord"), ember: ui.text("Ui.Settings.Ember") };
+  let localeName = $derived(locale === "de" ? ui.text("Ui.Settings.German") : ui.text("Ui.Settings.English"));
   let appearanceName = $derived(`${paletteNames[themePalette]} · ${modeNames[themeMode]}`);
 </script>
 
@@ -42,12 +54,12 @@
       <DropdownMenu.Root>
         <DropdownMenu.Trigger>
           {#snippet child({ props })}
-            <Sidebar.MenuButton {...props} size="lg" aria-label={`Editor settings, ${appearanceName}, interface language ${localeName}`} tooltipContent="Editor settings">
+            <Sidebar.MenuButton {...props} size="lg" aria-label={`${ui.text("Ui.Settings.EditorSettings")}, ${appearanceName}, ${ui.text("Ui.Settings.InterfaceLanguage")} ${localeName}`} tooltipContent={ui.text("Ui.Settings.EditorSettings")}>
               <Badge variant="outline" class="size-8 shrink-0 justify-center p-0">
                 <Settings2Icon aria-hidden="true" />
               </Badge>
               <span class="grid min-w-0 flex-1 text-left text-sm leading-tight">
-                <span class="truncate font-medium">Editor settings</span>
+                <span class="truncate font-medium">{ui.text("Ui.Settings.EditorSettings")}</span>
                 <span class="truncate text-xs text-muted-foreground">{appearanceName} · {localeName}</span>
               </span>
               <ChevronsUpDownIcon class="ml-auto" aria-hidden="true" />
@@ -55,36 +67,49 @@
           {/snippet}
         </DropdownMenu.Trigger>
         <DropdownMenu.Content class="w-(--bits-dropdown-menu-anchor-width) min-w-64" align="start" side="top">
-          <DropdownMenu.Label>Appearance</DropdownMenu.Label>
+          <DropdownMenu.Label>{ui.text("Ui.Settings.Appearance")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={themeMode} onValueChange={(value) => onthememodechange(value as ThemeMode)}>
-            <DropdownMenu.RadioItem value="system"><MonitorIcon />System</DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem value="light"><SunIcon />Light</DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem value="dark"><MoonIcon />Dark</DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="system"><MonitorIcon />{ui.text("Ui.Settings.System")}</DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="light"><SunIcon />{ui.text("Ui.Settings.Light")}</DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="dark"><MoonIcon />{ui.text("Ui.Settings.Dark")}</DropdownMenu.RadioItem>
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator />
-          <DropdownMenu.Label>Color theme</DropdownMenu.Label>
+          <DropdownMenu.Label>{ui.text("Ui.Settings.ColorTheme")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={themePalette} onValueChange={(value) => onthemepalettechange(value as ThemePalette)}>
-            <DropdownMenu.RadioItem value="runic"><PaletteIcon />Runic Gold</DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem value="moss"><PaletteIcon />Moss</DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem value="fjord"><PaletteIcon />Fjord</DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem value="ember"><PaletteIcon />Ember</DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="runic"><PaletteIcon />{ui.text("Ui.Settings.RunicGold")}</DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="moss"><PaletteIcon />{ui.text("Ui.Settings.Moss")}</DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="fjord"><PaletteIcon />{ui.text("Ui.Settings.Fjord")}</DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="ember"><PaletteIcon />{ui.text("Ui.Settings.Ember")}</DropdownMenu.RadioItem>
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator />
-          <DropdownMenu.Label>Interface language</DropdownMenu.Label>
+          <DropdownMenu.Label>{ui.text("Ui.Settings.LocalizationSimulation")}</DropdownMenu.Label>
+          <DropdownMenu.CheckboxItem checked={pseudoLocalization} onCheckedChange={() => ontogglepseudo()}>
+            <LanguagesIcon />
+            {ui.text("Ui.Settings.PseudoLocalization")}
+          </DropdownMenu.CheckboxItem>
+          <DropdownMenu.CheckboxItem
+            checked={uiDirection === "rtl"}
+            onCheckedChange={() => ontoggledirection()}
+          >
+            <LanguagesIcon />
+            {ui.text("Ui.Settings.RightToLeft")}
+          </DropdownMenu.CheckboxItem>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Label>{ui.text("Ui.Settings.InterfaceLanguage")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={locale} onValueChange={onlocalechange}>
             <DropdownMenu.RadioItem value="en">
               <LanguagesIcon />
-              English
+              {ui.text("Ui.Settings.English")}
             </DropdownMenu.RadioItem>
             <DropdownMenu.RadioItem value="de">
               <LanguagesIcon />
-              Deutsch
+              {ui.text("Ui.Settings.German")}
             </DropdownMenu.RadioItem>
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator />
           <DropdownMenu.Item onclick={onabout}>
             <InfoIcon />
-            About &amp; diagnostics
+            {ui.text("Ui.Settings.AboutDiagnostics")}
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Root>

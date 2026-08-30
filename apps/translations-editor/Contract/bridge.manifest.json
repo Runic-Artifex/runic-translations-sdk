@@ -1,0 +1,781 @@
+{
+  "commands": [
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "AboutLoaded",
+      "startsOperation": false,
+      "tag": "About"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "MutationApplied",
+      "startsOperation": false,
+      "tag": "ApplyMutation"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "ReviewJsonImportApplied",
+      "startsOperation": false,
+      "tag": "ApplyReviewJsonImport"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "XliffImportApplied",
+      "startsOperation": false,
+      "tag": "ApplyXliffImport"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "ExternalChangesChecked",
+      "startsOperation": false,
+      "tag": "CheckExternalChanges"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "LocalStateCleared",
+      "startsOperation": false,
+      "tag": "ClearLocalState"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "DiagnosticBundleCreated",
+      "startsOperation": false,
+      "tag": "CreateDiagnosticBundle"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "ProjectCreated",
+      "startsOperation": false,
+      "tag": "CreateProject"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "DiagnosticBundleDeleted",
+      "startsOperation": false,
+      "tag": "DeleteDiagnosticBundle"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "ReviewJsonExported",
+      "startsOperation": false,
+      "tag": "ExportReviewJson"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "XliffExported",
+      "startsOperation": false,
+      "tag": "ExportXliff"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "ApplicationInitialized",
+      "startsOperation": false,
+      "tag": "InitializeApplication"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "LocalStateLoaded",
+      "startsOperation": false,
+      "tag": "LoadLocalState"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "WorkspaceLoaded",
+      "startsOperation": false,
+      "tag": "LoadWorkspace"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "WorkspaceOpened",
+      "startsOperation": false,
+      "tag": "OpenWorkspace"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "WorkspacePicked",
+      "startsOperation": false,
+      "tag": "PickWorkspace"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "MessagePreviewed",
+      "startsOperation": false,
+      "tag": "PreviewMessage"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "MutationPreviewed",
+      "startsOperation": false,
+      "tag": "PreviewMutation"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "ProjectPreviewed",
+      "startsOperation": false,
+      "tag": "PreviewProject"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "ReviewJsonImportPreviewed",
+      "startsOperation": false,
+      "tag": "PreviewReviewJsonImport"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "XliffImportPreviewed",
+      "startsOperation": false,
+      "tag": "PreviewXliffImport"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "TransactionRecovered",
+      "startsOperation": false,
+      "tag": "RecoverTransaction"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "RedoApplied",
+      "startsOperation": false,
+      "tag": "Redo"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "DiagnosticBundleRevealed",
+      "startsOperation": false,
+      "tag": "RevealDiagnosticBundle"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "DocumentSaved",
+      "startsOperation": false,
+      "tag": "SaveDocument"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "LocalStateSaved",
+      "startsOperation": false,
+      "tag": "SaveLocalState"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "ReviewSaved",
+      "startsOperation": false,
+      "tag": "SaveReview"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "UndoApplied",
+      "startsOperation": false,
+      "tag": "Undo"
+    },
+    {
+      "advancesRevision": false,
+      "cancellable": false,
+      "receipt": "DocumentValidated",
+      "startsOperation": false,
+      "tag": "ValidateDocument"
+    }
+  ],
+  "contractFingerprint": "bb519a1ca7355a0c40897f32dca99495107729dc1f88bb71cbb054f18859f6fd",
+  "csharp": {
+    "contractName": "Editor",
+    "namespace": "Runic.Translations.Editor.Contract"
+  },
+  "envelope": {
+    "client": {
+      "fields": [
+        "protocol",
+        "version",
+        "contractFingerprint",
+        "connectionEpoch",
+        "kind",
+        "commandId",
+        "sessionId",
+        "expectedRevision",
+        "payload"
+      ],
+      "kinds": [
+        "initialize",
+        "dispatch",
+        "cancelOperation",
+        "uiReady",
+        "uiRendered"
+      ]
+    },
+    "host": {
+      "fields": [
+        "protocol",
+        "version",
+        "contractFingerprint",
+        "connectionEpoch",
+        "kind",
+        "sessionId",
+        "sequence",
+        "revision",
+        "commandId",
+        "operationId",
+        "payload"
+      ],
+      "kinds": [
+        "snapshot",
+        "receipt",
+        "event",
+        "error"
+      ]
+    }
+  },
+  "errors": [
+    "CommandRejected",
+    "OperationCancelled",
+    "OperationFailed",
+    "OperationTimedOut",
+    "ProtocolDecodeError",
+    "ProtocolVersionMismatch",
+    "StaleRevision",
+    "TransportClosed",
+    "TransportUnavailable"
+  ],
+  "events": [],
+  "generatorFormatVersion": 1,
+  "limits": {
+    "maxCollectionItems": 4096,
+    "maxDepth": 32,
+    "maxFrameBytes": 262144,
+    "maxPendingCommands": 64,
+    "maxStringBytes": 65536
+  },
+  "protocol": {
+    "identity": "runic.translations.editor",
+    "version": 1
+  },
+  "receipts": [
+    "AboutLoaded",
+    "ApplicationInitialized",
+    "DiagnosticBundleCreated",
+    "DiagnosticBundleDeleted",
+    "DiagnosticBundleRevealed",
+    "DocumentSaved",
+    "DocumentValidated",
+    "ExternalChangesChecked",
+    "LocalStateCleared",
+    "LocalStateLoaded",
+    "LocalStateSaved",
+    "MessagePreviewed",
+    "MutationApplied",
+    "MutationPreviewed",
+    "ProjectCreated",
+    "ProjectPreviewed",
+    "RedoApplied",
+    "ReviewJsonExported",
+    "ReviewJsonImportApplied",
+    "ReviewJsonImportPreviewed",
+    "ReviewSaved",
+    "TransactionRecovered",
+    "UndoApplied",
+    "WorkspaceLoaded",
+    "WorkspaceOpened",
+    "WorkspacePicked",
+    "XliffExported",
+    "XliffImportApplied",
+    "XliffImportPreviewed"
+  ],
+  "schemas": [
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/About.schema.json",
+      "kind": "command",
+      "name": "About",
+      "sha256": "1c7538504575f94d918524658f2fc38852670b3c5b327ad2ee77a58d799ccd52"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/AboutLoaded.schema.json",
+      "kind": "receipt",
+      "name": "AboutLoaded",
+      "sha256": "3a0b3e307e96ec67cda901d8b3f38ba8d3ebd8bee3d3c6bc2bb5249ca4d70ae4"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/ApplicationInitialized.schema.json",
+      "kind": "receipt",
+      "name": "ApplicationInitialized",
+      "sha256": "81114720558d3ee3153dd4434a0ec61351d88944e5207b4840bbb7a1b676e5eb"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/ApplyMutation.schema.json",
+      "kind": "command",
+      "name": "ApplyMutation",
+      "sha256": "a88d256d78bd97e51ed38eacacd3c2900ed5dc22e29da37630141891120c4a10"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/ApplyReviewJsonImport.schema.json",
+      "kind": "command",
+      "name": "ApplyReviewJsonImport",
+      "sha256": "bd5737b377152e94ade5bb0e7e532a1caaab970c5b295ccae79eb49823f912e9"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/ApplyXliffImport.schema.json",
+      "kind": "command",
+      "name": "ApplyXliffImport",
+      "sha256": "0931540ca19da70f0110a2be154322e98c2db085aeaf6dbcecc09b2331062b77"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/CheckExternalChanges.schema.json",
+      "kind": "command",
+      "name": "CheckExternalChanges",
+      "sha256": "a2e6d2558a1b85e40ad572fc838e26b44053a480ead92b1a667eecee71435a93"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/ClearLocalState.schema.json",
+      "kind": "command",
+      "name": "ClearLocalState",
+      "sha256": "a647bd631734af2547c6d9be95d310b6be8ce8dce6efa5dd1e731285fadb4852"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/error/CommandRejected.schema.json",
+      "kind": "error",
+      "name": "CommandRejected",
+      "sha256": "c8d095bba74b731c88a716a01859cb780e7acff0e2e691a05b28a41ef756b5c1"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/CreateDiagnosticBundle.schema.json",
+      "kind": "command",
+      "name": "CreateDiagnosticBundle",
+      "sha256": "7e80c0893fbcff2460e56e680736f7822552fe09d4b3c5b301682c7dfdd302be"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/CreateProject.schema.json",
+      "kind": "command",
+      "name": "CreateProject",
+      "sha256": "18164c1ea05581212985fa35c8a9b0006ea7aad0a49d412499b557f713d7a28d"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/DeleteDiagnosticBundle.schema.json",
+      "kind": "command",
+      "name": "DeleteDiagnosticBundle",
+      "sha256": "96a5c5c4c499fe32174b381c4449c3090c586b0b6eeba8218c791b298f3131a6"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/DiagnosticBundleCreated.schema.json",
+      "kind": "receipt",
+      "name": "DiagnosticBundleCreated",
+      "sha256": "895d354d824d2d929b3cb2e8b04d0fd3e87502ea137b657702d9445f53d851bf"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/DiagnosticBundleDeleted.schema.json",
+      "kind": "receipt",
+      "name": "DiagnosticBundleDeleted",
+      "sha256": "96a52dda9743cc792ec238698bb91dc51e77b5f70b5677e95264140ec491993c"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/DiagnosticBundleRevealed.schema.json",
+      "kind": "receipt",
+      "name": "DiagnosticBundleRevealed",
+      "sha256": "590addfcb984f0e748f0cc2df38012945969e83c4d20c0cb72fce1aa725a5140"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/DocumentSaved.schema.json",
+      "kind": "receipt",
+      "name": "DocumentSaved",
+      "sha256": "746a44b547556b46d5a328b723e6c1ed1a41188ffe54bbbf16db6e888e2d9816"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/DocumentValidated.schema.json",
+      "kind": "receipt",
+      "name": "DocumentValidated",
+      "sha256": "7350386f2fdc59d9dfb783c0bd1ba0cd567108ce71f8bd4dd5d49d36532a5500"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/ExportReviewJson.schema.json",
+      "kind": "command",
+      "name": "ExportReviewJson",
+      "sha256": "ec0620532990175899bed7c56811641f9321a340f9cbf6a1c5b3fe099e091ce8"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/ExportXliff.schema.json",
+      "kind": "command",
+      "name": "ExportXliff",
+      "sha256": "0f7c27e34bb6fa744556e0b822596a3a093faaff7d6bd88a681c0c9480e12f3a"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/ExternalChangesChecked.schema.json",
+      "kind": "receipt",
+      "name": "ExternalChangesChecked",
+      "sha256": "02f34ee8328ef9fa0f55cb3b66180458bafa275dea7b594b975ddfddc798f64e"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/InitializeApplication.schema.json",
+      "kind": "command",
+      "name": "InitializeApplication",
+      "sha256": "15f1aac59f76e3e01f28c1ecd2f8765b3f833936484660745ef7e66f70fce0e0"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/LoadLocalState.schema.json",
+      "kind": "command",
+      "name": "LoadLocalState",
+      "sha256": "31cebb6f0b9bc08a3375129da0a76cd020ee09470999ca1f90d7c3c03853e8f3"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/LoadWorkspace.schema.json",
+      "kind": "command",
+      "name": "LoadWorkspace",
+      "sha256": "2926d128301559730e0aa99fed252bf77e10d9737c09d96383fc3849f93a1bc9"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/LocalStateCleared.schema.json",
+      "kind": "receipt",
+      "name": "LocalStateCleared",
+      "sha256": "d7f53b18c2de54c20096148b0af78bbb411c48b1807083db6a4afcbbd0eaf346"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/LocalStateLoaded.schema.json",
+      "kind": "receipt",
+      "name": "LocalStateLoaded",
+      "sha256": "d2438d5e2b8753da22efe874a3ba0f46b4ceb9188807e85853a2ba46ba8fc8fd"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/LocalStateSaved.schema.json",
+      "kind": "receipt",
+      "name": "LocalStateSaved",
+      "sha256": "fe2dce2ac40453af0ff55620bfb4b28b05b65cc2d10098f6cf679df05df8d2f5"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/MessagePreviewed.schema.json",
+      "kind": "receipt",
+      "name": "MessagePreviewed",
+      "sha256": "d05722466678bffd353f2872b74f67523579a4ea465e097c589cc4695f525f9c"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/MutationApplied.schema.json",
+      "kind": "receipt",
+      "name": "MutationApplied",
+      "sha256": "a17f579c52bba97f67e6d6b5c08364297d9852e47891cf1b935f5fff990d9aef"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/MutationPreviewed.schema.json",
+      "kind": "receipt",
+      "name": "MutationPreviewed",
+      "sha256": "ea2c12e2ab02515a2cdf7de5490beb6b710553bce1eff583412770df2611692a"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/OpenWorkspace.schema.json",
+      "kind": "command",
+      "name": "OpenWorkspace",
+      "sha256": "89cd10149b22107f79e30027c4d2060b0dd62046fa57b8dc91d3c4539a980abc"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/error/OperationCancelled.schema.json",
+      "kind": "error",
+      "name": "OperationCancelled",
+      "sha256": "a62e80116d7c04cbef6dccabc5a0d1553c894784c544e686562eec6443cb57f3"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/error/OperationFailed.schema.json",
+      "kind": "error",
+      "name": "OperationFailed",
+      "sha256": "b74dd696291c127cc852e0dc5f415afd342cadf53aa20bb120c04a47e1e92395"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/error/OperationTimedOut.schema.json",
+      "kind": "error",
+      "name": "OperationTimedOut",
+      "sha256": "7ed9956e6658f56bda0a91541f2dc9256e5e681551a302a9461d5fef54d789d6"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/PickWorkspace.schema.json",
+      "kind": "command",
+      "name": "PickWorkspace",
+      "sha256": "8beda01481d359e917d3ee24738a66c5503030c6c3fbf65c31488dde832735e2"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/PreviewMessage.schema.json",
+      "kind": "command",
+      "name": "PreviewMessage",
+      "sha256": "f8faded7b550c1ec90c1ebdd0735e84091c3748ef5941892bfb1dfda10c4ba4d"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/PreviewMutation.schema.json",
+      "kind": "command",
+      "name": "PreviewMutation",
+      "sha256": "929a1f111865f52a2b9071b5be8925658306f0e3e69bd8c47e1a95eaf1d10eee"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/PreviewProject.schema.json",
+      "kind": "command",
+      "name": "PreviewProject",
+      "sha256": "293ef4e45a14bc1fcfb1af4dd70c87b9f7f9bcc4eea426f97c6dd33acbb73242"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/PreviewReviewJsonImport.schema.json",
+      "kind": "command",
+      "name": "PreviewReviewJsonImport",
+      "sha256": "a8d340d1772b7258db1360765ed95ae847ba4eaaf4367d82339805952c10c3f2"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/PreviewXliffImport.schema.json",
+      "kind": "command",
+      "name": "PreviewXliffImport",
+      "sha256": "dde07db8234b6d134beee8d0ee0a9a77b9a7794599c255e3d545c35f4f1ab7a3"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/ProjectCreated.schema.json",
+      "kind": "receipt",
+      "name": "ProjectCreated",
+      "sha256": "f816b885f544009004257f17f44a0c5c0ff9a113afe66e4f1013bdb649f709df"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/ProjectPreviewed.schema.json",
+      "kind": "receipt",
+      "name": "ProjectPreviewed",
+      "sha256": "984f8889febef13ecd6e246f05778205ad63d5e267d43fc239b3c1d71f78855b"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/error/ProtocolDecodeError.schema.json",
+      "kind": "error",
+      "name": "ProtocolDecodeError",
+      "sha256": "06455c7d6ac0b7403fef6d3bfc83d76b310ef31898d267109fc7067b5d9031c4"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/error/ProtocolVersionMismatch.schema.json",
+      "kind": "error",
+      "name": "ProtocolVersionMismatch",
+      "sha256": "c7508ad4b6d48d12edd2a8db44fe66a276cc1e19db66015adcba51353fad15ed"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/RecoverTransaction.schema.json",
+      "kind": "command",
+      "name": "RecoverTransaction",
+      "sha256": "5b8c6fc0e7c322241e4e1287874cfe2c9dcf6e60b45ee03a506a8c600494c3e8"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/Redo.schema.json",
+      "kind": "command",
+      "name": "Redo",
+      "sha256": "37d9ebea5b343144350f4dab6f2f8abea051b28a232c35253b683cc60e651383"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/RedoApplied.schema.json",
+      "kind": "receipt",
+      "name": "RedoApplied",
+      "sha256": "19b841d7ae8f6fae5f66d83c1d78086e6478d63cdd4d93780c873f05bf138c4a"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/RevealDiagnosticBundle.schema.json",
+      "kind": "command",
+      "name": "RevealDiagnosticBundle",
+      "sha256": "df33e179085060bed6adb48edcdbea1f3e1c47e220a2839405add762c528b63c"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/ReviewJsonExported.schema.json",
+      "kind": "receipt",
+      "name": "ReviewJsonExported",
+      "sha256": "b0f31b681969a237105a5d1d95f45ba825abc149971b661e4ae8a934cb7f258d"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/ReviewJsonImportApplied.schema.json",
+      "kind": "receipt",
+      "name": "ReviewJsonImportApplied",
+      "sha256": "da22a82647b7bcf6ce53c8dd86905a547afb258bc548b747aab6ead1384e2332"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/ReviewJsonImportPreviewed.schema.json",
+      "kind": "receipt",
+      "name": "ReviewJsonImportPreviewed",
+      "sha256": "f77be17f30502657bdcbbdbda3a61c2299e06180fedb0e253117536f1f7f6211"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/ReviewSaved.schema.json",
+      "kind": "receipt",
+      "name": "ReviewSaved",
+      "sha256": "bb8fc0ee186703272e11758c4a668ff72c988b9921e7088f7bf25efac1da821c"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/SaveDocument.schema.json",
+      "kind": "command",
+      "name": "SaveDocument",
+      "sha256": "f599cbe8e06d04cc6b7d1a477a87d580e82d8d3e56592f4a797f9beac0b9f654"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/SaveLocalState.schema.json",
+      "kind": "command",
+      "name": "SaveLocalState",
+      "sha256": "06209ffbda2a6f09b2830250165c61951cd1496730fcf18456d858cb2886ce59"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/SaveReview.schema.json",
+      "kind": "command",
+      "name": "SaveReview",
+      "sha256": "10164ed7efc35e38b77083c5627fc4dae8316214de6154f99c7f1be6a3b00b94"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/error/StaleRevision.schema.json",
+      "kind": "error",
+      "name": "StaleRevision",
+      "sha256": "c0e366e01f314a71cc61fa33461369188b2c1320a7ca480b6769900c934b1b8b"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/TransactionRecovered.schema.json",
+      "kind": "receipt",
+      "name": "TransactionRecovered",
+      "sha256": "8a8c2fcd253a76c96c95e00b4d2be63e897c937649c3a2c803963fed6bc2c96d"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/error/TransportClosed.schema.json",
+      "kind": "error",
+      "name": "TransportClosed",
+      "sha256": "b6cade0d76eea84f301ccb7593362df1b3ca0aed75dead2c7970c0fa8e914268"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/error/TransportUnavailable.schema.json",
+      "kind": "error",
+      "name": "TransportUnavailable",
+      "sha256": "5ef6bf43f1965dd91d642199b0faa511c9746a8561bb11da7cfebd87e34f090f"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/Undo.schema.json",
+      "kind": "command",
+      "name": "Undo",
+      "sha256": "012ccce4948916673dc196779cda185cebbe7f4ea5486deaf89a6102a9558df1"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/UndoApplied.schema.json",
+      "kind": "receipt",
+      "name": "UndoApplied",
+      "sha256": "b1b90c39941dc5ab8a4a05e745cf03a475c096cdf11f209a9c550008f4b36de6"
+    },
+    {
+      "direction": "client-to-host",
+      "file": "schemas/command/ValidateDocument.schema.json",
+      "kind": "command",
+      "name": "ValidateDocument",
+      "sha256": "d2629fcee8927021c3ea8f67236b7dbc06eb9dbc2714431d8ac7dd9dc03c2736"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/WorkspaceLoaded.schema.json",
+      "kind": "receipt",
+      "name": "WorkspaceLoaded",
+      "sha256": "18661fc27fa9697ef5d300c9692fc396853702c2271c7113c8d8f99ca293eea5"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/WorkspaceOpened.schema.json",
+      "kind": "receipt",
+      "name": "WorkspaceOpened",
+      "sha256": "c1ac0b607cd5e8456d63b9c599277a4af4b62963990759db89a64cc366a46fcb"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/WorkspacePicked.schema.json",
+      "kind": "receipt",
+      "name": "WorkspacePicked",
+      "sha256": "67210afa494f79bde916b30bc6db18dcca9d6c7b39b94802bcbe4515e21529dc"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/XliffExported.schema.json",
+      "kind": "receipt",
+      "name": "XliffExported",
+      "sha256": "c65888b30cd91ca5f111a203c2d31d1e2f716e7d385fec18c8055b07a71c0177"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/XliffImportApplied.schema.json",
+      "kind": "receipt",
+      "name": "XliffImportApplied",
+      "sha256": "a70895e887b05be967fbed47deaf6b57e0f35711006b0b2fa18c42a384c30e37"
+    },
+    {
+      "direction": "host-to-client",
+      "file": "schemas/receipt/XliffImportPreviewed.schema.json",
+      "kind": "receipt",
+      "name": "XliffImportPreviewed",
+      "sha256": "2fafab303698d6d9d3be28698a49ebe0b4a6bb5b144ded0d737947490762e8ab"
+    }
+  ]
+}
