@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(RunicTranslationsGeneratorTargetFramework)</TargetFramework>
+    <AssemblyName>Runic.Translations.Tooling</AssemblyName>
+    <RootNamespace>Runic.Translations.Tooling</RootNamespace>
+    <PackageId>Runic.Translations.Tooling</PackageId>
+    <Description>Preview compiler, deterministic source migration, interchange, and transactional authoring facade for Runic Translations.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);BundleToolingAssemblies</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+  <Target Name="BundleToolingAssemblies" DependsOnTargets="ResolveProjectReferences">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Authoring.dll" PackagePath="lib/$(TargetFramework)" />
+      <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Compiler.dll" PackagePath="lib/$(TargetFramework)" />
+    </ItemGroup>
+  </Target>
+  <ItemGroup>
+    <ProjectReference Include="../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj"
+                      Condition="Exists('../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj')" />
+    <ProjectReference Include="../../../../runic-command-line/src/Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj"
+                      Condition="Exists('../../../../runic-command-line/src/Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj')"
+                      PrivateAssets="all"
+                      ReferenceOutputAssembly="false"
+                      OutputItemType="Analyzer" />
+    <PackageReference Include="Runic.CommandLine"
+                      Condition="!Exists('../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj')" />
+    <ProjectReference Include="..\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" PrivateAssets="all" />
+    <None Include="..\..\..\spec\schemas\resources-v3.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\..\spec\schemas\message-ast-v3.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\..\spec\schemas\locale-pack-v2.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\..\spec\schemas\locale-artifact-v2.schema.json" Pack="true" PackagePath="schemas" />
+    <None Update="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
+  </ItemGroup>
+</Project>

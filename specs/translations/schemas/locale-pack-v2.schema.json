@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/locale-pack-v2.schema.json",
+  "title": "Runic Translations bytes-first locale pack v2",
+  "$ref": "locale-artifact-v2.schema.json"
+}

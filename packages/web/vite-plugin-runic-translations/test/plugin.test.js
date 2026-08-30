@@ -1,23 +1,34 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { build } from "vite";
 import { runicTranslations } from "../index.js";
 
 const execFileAsync = promisify(execFile);
+const fingerprint = `sha256:${"a".repeat(64)}`;
+
+async function writeGeneratedManifest(path, document) {
+  const root = dirname(path);
+  const assets = await Promise.all(document.assets.map(async asset => {
+    const content = await readFile(join(root, asset.path));
+    return { ...asset, sha256: createHash("sha256").update(content).digest("hex"), byteLength: content.byteLength, mediaType: asset.mediaType ?? "text/javascript" };
+  }));
+  await writeFile(path, JSON.stringify({ ...document, contractFingerprint: fingerprint, assets }));
+}
 
 test("resolves generated entrypoints and declares watch inputs", async () => {
   const root = await mkdtemp(join(tmpdir(), "runic-vite-"));
   const generated = join(root, "app.esm");
   await mkdir(generated);
   await writeFile(join(generated, "messages.js"), "export const value = 1;\n");
-  await writeFile(join(generated, "runtime.js"), "export const locale = 'en';\n");
+  await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\nexport const locale = 'en';\n`);
   const manifest = join(generated, "web-module-manifest-v1.json");
-  await writeFile(manifest, JSON.stringify({
+  await writeGeneratedManifest(manifest, {
     webModuleManifestVersion: 1,
     esmAbiVersion: 2,
     catalog: "app",
@@ -26,7 +37,7 @@ test("resolves generated entrypoints and declares watch inputs", async () => {
       { path: "messages.js" },
       { path: "runtime.js" },
     ],
-  }));
+  });
   const source = join(root, "en.json");
   await writeFile(source, "{}");
   const plugin = runicTranslations({ manifest, sourceFiles: [source] });
@@ -47,11 +58,35 @@ test("rejects manifest paths that escape the generated root", async () => {
     webModuleManifestVersion: 1,
     esmAbiVersion: 2,
     catalog: "app",
+    contractFingerprint: fingerprint,
     entrypoints: { messages: "../messages.js", runtime: "runtime.js" },
-    assets: [],
+    assets: [{ path: "../messages.js", sha256: "a".repeat(64), byteLength: 0, mediaType: "text/javascript" }],
   }));
   const plugin = runicTranslations({ manifest });
   await assert.rejects(() => plugin.resolveId("virtual:runic-translations/app"), /escapes/);
+});
+
+test("rejects stale assets and forged generated manifest fingerprints", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-integrity-"));
+  try {
+    const generated = join(root, "app.esm");
+    await mkdir(generated);
+    await writeFile(join(generated, "messages.js"), "export const m = {};\n");
+    await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\n`);
+    const manifest = join(generated, "web-module-manifest-v1.json");
+    const document = { webModuleManifestVersion: 1, esmAbiVersion: 2, catalog: "app", entrypoints: { messages: "messages.js", runtime: "runtime.js" }, assets: [{ path: "messages.js" }, { path: "runtime.js" }] };
+    await writeGeneratedManifest(manifest, document);
+    await writeFile(join(generated, "messages.js"), "export const m = { stale: true };\n");
+    await assert.rejects(() => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }), /integrity/);
+    await writeFile(join(generated, "messages.js"), "export const m = {};\n");
+    await writeGeneratedManifest(manifest, document);
+    const forged = JSON.parse(await readFile(manifest, "utf8"));
+    forged.contractFingerprint = `sha256:${"0".repeat(64)}`;
+    await writeFile(manifest, JSON.stringify(forged));
+    await assert.rejects(() => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }), /fingerprint/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("runs the pinned compiler workflow before loading generated modules", async () => {
@@ -60,11 +95,11 @@ test("runs the pinned compiler workflow before loading generated modules", async
     const generated = join(root, "generated", "app.esm");
     await mkdir(generated, { recursive: true });
     await writeFile(join(generated, "messages.js"), "export const m = {};\n");
-    await writeFile(join(generated, "runtime.js"), "export const locale = 'en';\n");
+    await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\nexport const locale = 'en';\n`);
     await writeFile(join(generated, "transport.js"), "export const version = 1;\n");
     await writeFile(join(generated, "dynamic.js"), "export const version = 2;\n");
     const manifest = join(generated, "web-module-manifest-v1.json");
-    await writeFile(manifest, JSON.stringify({
+    await writeGeneratedManifest(manifest, {
       webModuleManifestVersion: 1,
       esmAbiVersion: 2,
       catalog: "app",
@@ -72,7 +107,7 @@ test("runs the pinned compiler workflow before loading generated modules", async
       assets: [
         { path: "messages.js" }, { path: "runtime.js" }, { path: "transport.js" }, { path: "dynamic.js" },
       ],
-    }));
+    });
     const catalog = join(root, "app.catalog.json");
     const document = join(root, "app.en.json");
     const calls = join(root, "compiler-calls.txt");
@@ -121,10 +156,10 @@ test("Vite production build tree-shakes unrelated generated messages", async () 
     await writeFile(join(messages, "unused.js"), "export const internalUnused = () => 'UNRELATED_MESSAGE_SENTINEL';\n");
     await writeFile(join(messages, "_index.js"), "export { internalUsed as used } from './used.js';\nexport { internalUnused as unused } from './unused.js';\n");
     await writeFile(join(generated, "messages.js"), "export * as m from './messages/_index.js';\n");
-    await writeFile(join(generated, "runtime.js"), "export const locale = 'en';\n");
+    await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\nexport const locale = 'en';\n`);
     await writeFile(join(generated, "transport.js"), "export const version = 1;\n");
     const manifest = join(generated, "web-module-manifest-v1.json");
-    await writeFile(manifest, JSON.stringify({
+    await writeGeneratedManifest(manifest, {
       webModuleManifestVersion: 1,
       esmAbiVersion: 2,
       catalog: "app",
@@ -133,7 +168,7 @@ test("Vite production build tree-shakes unrelated generated messages", async () 
         { path: "messages.js" }, { path: "messages/_index.js" }, { path: "messages/used.js" }, { path: "messages/unused.js" },
         { path: "runtime.js" }, { path: "transport.js" },
       ],
-    }));
+    });
     const entry = join(root, "main.js");
     await writeFile(entry, "import { m } from 'virtual:runic-translations/app'; export const result = m.used();\n");
     const outDir = join(root, "dist");
@@ -156,15 +191,16 @@ test("source changes invalidate every loaded Runic virtual module for HMR", asyn
   try {
     const generated = join(root, "app.esm");
     await mkdir(generated);
-    for (const name of ["messages.js", "runtime.js", "transport.js", "dynamic.js"])
+    for (const name of ["messages.js", "transport.js", "dynamic.js"])
       await writeFile(join(generated, name), "export {};\n");
+    await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\n`);
     const manifest = join(generated, "web-module-manifest-v1.json");
-    await writeFile(manifest, JSON.stringify({
+    await writeGeneratedManifest(manifest, {
       webModuleManifestVersion: 1, catalog: "app",
       esmAbiVersion: 2,
       entrypoints: { messages: "messages.js", runtime: "runtime.js", types: "messages.d.ts" },
       assets: [{ path: "messages.js" }, { path: "runtime.js" }, { path: "transport.js" }, { path: "dynamic.js" }],
-    }));
+    });
     const source = join(root, "en.json");
     await writeFile(source, "{}\n");
     const plugin = runicTranslations({ manifest, sourceFiles: [source] });
@@ -187,5 +223,5 @@ test("published package inventory contains only declared runtime files", async (
   const packageRoot = new URL("..", import.meta.url);
   const { stdout } = await execFileAsync("npm", ["pack", "--dry-run", "--json"], { cwd: packageRoot });
   const files = JSON.parse(stdout)[0].files.map(file => file.path).sort();
-  assert.deepEqual(files, ["README.md", "index.d.ts", "index.js", "package.json"]);
+  assert.deepEqual(files, ["README.md", "dist/index.d.ts", "dist/index.js", "package.json"]);
 });

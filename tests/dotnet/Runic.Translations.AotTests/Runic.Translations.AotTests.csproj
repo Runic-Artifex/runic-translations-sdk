@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Runic.Translations.AotTests</AssemblyName>
+    <RootNamespace>Runic.Translations.AotTests</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestoreAdditionalProjectSources Condition="'$(TranslationsPackageFeed)' != ''">$(TranslationsPackageFeed)</RestoreAdditionalProjectSources>
+    <!-- Packages under test change on every source commit. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Runic.Translations" Version="1.0.0-preview.1" />
+    <PackageReference Include="Runic.Translations.Tooling" Version="1.0.0-preview.1" />
+  </ItemGroup>
+</Project>

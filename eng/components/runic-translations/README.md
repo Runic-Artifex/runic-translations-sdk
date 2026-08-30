@@ -11,7 +11,7 @@ It is UI-framework independent, works with NativeAOT, and can feed .NET applicat
 The project template is the shortest complete path through the toolchain:
 
 ```bash
-dotnet new install RunicTranslations.Templates::<VERSION>
+dotnet new install Runic.Translations.Templates::<VERSION>
 dotnet new runic-translations-project \
   --name Example.Translations \
   --catalog app \
@@ -27,7 +27,7 @@ This creates a schema-v2 catalog and locale document under `Resources/`. The sou
 
 ```csharp
 using Example.Translations;
-using RunicTranslations;
+using Runic.Translations;
 
 ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
 var text = new AppText(manager);
@@ -52,16 +52,14 @@ Runic Translations is currently a public preview. Replace `<VERSION>` below with
 
 | Package | Install | Choose it when you need |
 |---|---|---|
-| [`RunicTranslations`](https://www.nuget.org/packages/RunicTranslations) | `dotnet add package RunicTranslations --version <VERSION>` | NativeAOT-compatible runtime snapshots, formatting, fallback, and locale switching |
-| [`RunicTranslations.Generator`](https://www.nuget.org/packages/RunicTranslations.Generator) | `dotnet add package RunicTranslations.Generator --version <VERSION>` | Strongly typed C# keys, accessors, catalog data, and registration |
-| [`RunicTranslations.Build`](https://www.nuget.org/packages/RunicTranslations.Build) | `dotnet add package RunicTranslations.Build --version <VERSION>` | MSBuild input mapping and opt-in JSON, TypeScript, ESM, template, or C++ artifacts |
-| [`RunicTranslations.Tool`](https://www.nuget.org/packages/RunicTranslations.Tool) | `dotnet tool install RunicTranslations.Tool --version <VERSION>` | Local initialization, validation, generation, verification, import, schema, and analysis commands |
-| [`RunicTranslations.Templates`](https://www.nuget.org/packages/RunicTranslations.Templates) | `dotnet new install RunicTranslations.Templates::<VERSION>` | Ready-to-build .NET project or catalog item scaffolding |
-| [`RunicTranslations.Compiler`](https://www.nuget.org/packages/RunicTranslations.Compiler) | `dotnet add package RunicTranslations.Compiler --version <VERSION>` | Direct compiler and renderer integration in custom tooling |
-| [`RunicTranslations.Authoring`](https://www.nuget.org/packages/RunicTranslations.Authoring) | `dotnet add package RunicTranslations.Authoring --version <VERSION>` | Safe workspace discovery, project creation, mutation, and editor state |
+| [`Runic.Translations`](https://www.nuget.org/packages/Runic.Translations) | `dotnet add package Runic.Translations --version <VERSION>` | NativeAOT-compatible runtime snapshots, formatting, fallback, and locale switching |
+| [`Runic.Translations.Build`](https://www.nuget.org/packages/Runic.Translations.Build) | `dotnet add package Runic.Translations.Build --version <VERSION>` | Strongly typed C# APIs, MSBuild input mapping, and opt-in JSON, TypeScript, ESM, template, or C++ artifacts |
+| [`dotnet-runic-translations`](https://www.nuget.org/packages/dotnet-runic-translations) | `dotnet tool install dotnet-runic-translations --version <VERSION>` | Local initialization, validation, generation, verification, import, schema, and analysis commands |
+| [`Runic.Translations.Templates`](https://www.nuget.org/packages/Runic.Translations.Templates) | `dotnet new install Runic.Translations.Templates::<VERSION>` | Ready-to-build .NET project or catalog item scaffolding |
+| [`Runic.Translations.Tooling`](https://www.nuget.org/packages/Runic.Translations.Tooling) | `dotnet add package Runic.Translations.Tooling --version <VERSION>` | Compiler facade, deterministic v2-to-v3 source migration, XLIFF interchange, and transactional authoring |
 | [`@runic-artifex/vite-plugin-runic-translations`](https://www.npmjs.com/package/@runic-artifex/vite-plugin-runic-translations) | `npm install --save-dev @runic-artifex/vite-plugin-runic-translations@<VERSION>` | Vite virtual modules, watch integration, and HMR over generated ESM |
 
-Most .NET applications use the runtime, generator, and build packages together. Vite applications additionally use the local tool and Vite adapter. Choose the compiler or authoring packages only when building tooling rather than consuming generated translations.
+Most .NET applications use the runtime and build packages together. Vite applications additionally use the local tool and Vite adapter. Choose Tooling only when building tooling rather than consuming generated translations.
 
 ## Compatibility and safety
 
@@ -81,6 +79,7 @@ Read the [compatibility policy](https://github.com/Runic-Artifex/runic-translati
 - [JSON and inlang importing](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/importing.md)
 - [VS Code schema setup](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/vscode.md)
 - [Translation reference transport](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/transport.md)
+- [Runic Desktop integration](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/runic-desktop.md)
 - [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-editor)
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
 

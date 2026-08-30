@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(RunicTranslationsGeneratorTargetFramework)</TargetFramework>
+    <AssemblyName>Runic.Translations.Generator</AssemblyName>
+    <RootNamespace>Runic.Translations.Generator</RootNamespace>
+    <Description>Incremental C# source generator for Runic Translations.</Description>
+    <IsPackable>false</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CentralPackageVersionOverrideEnabled>true</CentralPackageVersionOverrideEnabled>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <!-- The repository deliberately requires a .NET 10 compiler host for every artifact. -->
+    <NoWarn>$(NoWarn);RS1041</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
+    <ProjectReference Include="..\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

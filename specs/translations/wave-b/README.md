@@ -32,5 +32,5 @@ These schemas deliberately have no custom `$id`. A canonical schema URI remains
 blocked until the registry owns and publishes a domain. The standard draft URI
 declares the JSON Schema dialect only.
 
-All public identities use `RunicTranslations.*`. Retired planning names
+All public identities use `Runic.Translations.*`. Retired planning names
 are not compatibility aliases.

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "catalog": "app",
   "code": {
-    "namespace": "RunicTranslations.Examples.Localization",
+    "namespace": "Runic.Translations.Examples.Localization",
     "className": "AppText",
     "visibility": "public"
   },

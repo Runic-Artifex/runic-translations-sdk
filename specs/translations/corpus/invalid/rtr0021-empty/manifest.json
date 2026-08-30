@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalog": "empty",
-  "code": { "namespace": "RunicTranslations.Examples.Localization", "className": "EmptyText" },
+  "code": { "namespace": "Runic.Translations.Examples.Localization", "className": "EmptyText" },
   "defaultLocale": "en",
   "locales": [{ "tag": "en" }],
   "layers": [{ "name": "base", "priority": 0 }],

@@ -46,7 +46,7 @@ if (manifest.gitHead !== repositoryCommit) {
 if (manifest.publishConfig?.registry !== "https://registry.npmjs.org" || manifest.publishConfig?.access !== "public") {
   throw new Error(`${expectedName} is not staged for public npm publication.`);
 }
-for (const entry of ["package/README.md", "package/index.js", "package/index.d.ts"]) {
+for (const entry of ["package/README.md", "package/dist/index.js", "package/dist/index.d.ts"]) {
   if (!entries.has(entry)) throw new Error(`${expectedName} does not include ${entry.replace("package/", "")}.`);
 }
 

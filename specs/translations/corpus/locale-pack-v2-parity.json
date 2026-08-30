@@ -1,0 +1,53 @@
+{
+  "corpusVersion": 1,
+  "contract": "locale-pack-v2",
+  "limits": {
+    "maximumDocumentBytes": 8388608,
+    "maximumDepth": 64,
+    "maximumMessages": 50000,
+    "maximumPatternBytes": 65536,
+    "maximumArgumentsPerMessage": 32
+  },
+  "rejections": [
+    { "mutation": "artifactVersion", "id": "RTR0023/artifact-version-mismatch" },
+    { "mutation": "messageGrammarVersion", "id": "RTR0023/message-grammar-version-mismatch" },
+    { "mutation": "catalog", "id": "RTR0023/catalog-mismatch" },
+    { "mutation": "locale", "id": "RTR0023/locale-mismatch" },
+    { "mutation": "contractFingerprint", "id": "RTR0023/contract-fingerprint-mismatch" },
+    { "mutation": "integrity", "id": "RTR0023/integrity-rejected" },
+    { "mutation": "duplicateProperty", "id": "RTR0023/malformed" },
+    { "mutation": "unknownRootMember", "id": "RTR0023/unknown-member" },
+    { "mutation": "inheritedContractName", "id": "RTR0023/unknown-key" },
+    { "mutation": "oversized", "id": "RTR0023/limit-exceeded" },
+    { "mutation": "invalidUtf8", "id": "RTR0023/malformed" }
+  ],
+  "astParity": [
+    { "mutation": "descriptorDrift", "id": "RTR0023/argument-contract-mismatch" },
+    { "mutation": "formatDescriptorDrift", "id": "RTR0023/argument-contract-mismatch" },
+    { "mutation": "unknownMessageMember", "id": "RTR0023/unknown-member" },
+    { "mutation": "unknownInput", "id": "RTR0023/argument-contract-mismatch" },
+    { "mutation": "selectorShape", "id": "RTR0023/malformed-pattern" },
+    { "mutation": "selectorLimit", "id": "RTR0023/limit-exceeded" },
+    { "mutation": "variantShape", "id": "RTR0023/malformed-pattern" },
+    { "mutation": "variantLimit", "id": "RTR0023/limit-exceeded" },
+    { "mutation": "nodeShape", "id": "RTR0023/malformed-pattern" },
+    { "mutation": "nodeLimit", "id": "RTR0023/limit-exceeded" },
+    { "mutation": "textLimit", "id": "RTR0023/limit-exceeded" },
+    { "mutation": "markupDepth", "id": "RTR0023/limit-exceeded" },
+    { "mutation": "argumentLimit", "id": "RTR0023/limit-exceeded" }
+  ],
+  "rejectionParity": [
+    { "id": "accepted-baseline", "expected": "accepted", "template": "{\"artifactVersion\":%VERSION%,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":{\"Parity.Message\":{\"astVersion\":2,\"inputs\":{\"name\":{\"type\":\"string\",\"format\":\"none\"}},\"selectors\":[{\"name\":\"who\",\"input\":\"name\",\"function\":\"literal\"}],\"variants\":[{\"matches\":{\"who\":\"*\"},\"nodes\":[{\"kind\":\"text\",\"value\":\"Hello \"},{\"kind\":\"input\",\"input\":\"name\"}]}]}}}" },
+    { "id": "truncated-header", "expected": "RTR0023/malformed", "template": "{\"artifactVersion\":%VERSION%,\"messag" },
+    { "id": "truncated-payload", "expected": "RTR0023/malformed", "template": "{\"artifactVersion\":%VERSION%,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":{\"Parity.Message\":{\"astVersion\":2,\"inputs\":{\"name\":{\"type\":\"string\",\"format\":\"none\"}},\"selectors\":[{\"name\":\"who\",\"input\":\"name\",\"function\":\"literal\"}],\"variants\":[{\"matches\":{\"who\":\"*\"},\"nodes\":[{\"kind\":\"text\",\"value\":\"Hello \"},{\"kind\":\"input\",\"input\":\"name\"}]}]}}}", "truncateFromEnd": 3 },
+    { "id": "oversized-document", "expected": "RTR0023/limit-exceeded", "template": "{\"artifactVersion\":%VERSION%,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":{\"Parity.Message\":{\"astVersion\":2,\"inputs\":{\"name\":{\"type\":\"string\",\"format\":\"none\"}},\"selectors\":[{\"name\":\"who\",\"input\":\"name\",\"function\":\"literal\"}],\"variants\":[{\"matches\":{\"who\":\"*\"},\"nodes\":[{\"kind\":\"text\",\"value\":\"Hello \"},{\"kind\":\"input\",\"input\":\"name\"}]}]}}}", "padTo": 8388609 },
+    { "id": "depth-over-limit", "expected": "RTR0023/limit-exceeded", "template": "{\"artifactVersion\":%VERSION%,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[" },
+    { "id": "unknown-root-member", "expected": "RTR0023/unknown-member", "template": "{\"artifactVersion\":%VERSION%,\"future\":true,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":{\"Parity.Message\":{\"astVersion\":2,\"inputs\":{\"name\":{\"type\":\"string\",\"format\":\"none\"}},\"selectors\":[{\"name\":\"who\",\"input\":\"name\",\"function\":\"literal\"}],\"variants\":[{\"matches\":{\"who\":\"*\"},\"nodes\":[{\"kind\":\"text\",\"value\":\"Hello \"},{\"kind\":\"input\",\"input\":\"name\"}]}]}}}" },
+    { "id": "unsupported-artifact-version", "expected": "RTR0023/artifact-version-mismatch", "template": "{\"artifactVersion\":%BAD_VERSION%,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":{}}" },
+    { "id": "unsupported-message-grammar-version", "expected": "RTR0023/message-grammar-version-mismatch", "template": "{\"artifactVersion\":%VERSION%,\"messageGrammarVersion\":%BAD_GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":{\"Parity.Message\":{\"astVersion\":2,\"inputs\":{\"name\":{\"type\":\"string\",\"format\":\"none\"}},\"selectors\":[{\"name\":\"who\",\"input\":\"name\",\"function\":\"literal\"}],\"variants\":[{\"matches\":{\"who\":\"*\"},\"nodes\":[{\"kind\":\"text\",\"value\":\"Hello \"},{\"kind\":\"input\",\"input\":\"name\"}]}]}}}" },
+    { "id": "contract-fingerprint-mismatch", "expected": "RTR0023/contract-fingerprint-mismatch", "template": "{\"artifactVersion\":%VERSION%,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%OTHER_FINGERPRINT%\",\"messages\":{\"Parity.Message\":{\"astVersion\":2,\"inputs\":{\"name\":{\"type\":\"string\",\"format\":\"none\"}},\"selectors\":[{\"name\":\"who\",\"input\":\"name\",\"function\":\"literal\"}],\"variants\":[{\"matches\":{\"who\":\"*\"},\"nodes\":[{\"kind\":\"text\",\"value\":\"Hello \"},{\"kind\":\"input\",\"input\":\"name\"}]}]}}}" },
+    { "id": "catalog-mismatch", "expected": "RTR0023/catalog-mismatch", "template": "{\"artifactVersion\":%VERSION%,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%OTHER_CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":{\"Parity.Message\":{\"astVersion\":2,\"inputs\":{\"name\":{\"type\":\"string\",\"format\":\"none\"}},\"selectors\":[{\"name\":\"who\",\"input\":\"name\",\"function\":\"literal\"}],\"variants\":[{\"matches\":{\"who\":\"*\"},\"nodes\":[{\"kind\":\"text\",\"value\":\"Hello \"},{\"kind\":\"input\",\"input\":\"name\"}]}]}}}" },
+    { "id": "expected-locale-mismatch", "expected": "RTR0023/locale-mismatch", "template": "{\"artifactVersion\":%VERSION%,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":{\"Parity.Message\":{\"astVersion\":2,\"inputs\":{\"name\":{\"type\":\"string\",\"format\":\"none\"}},\"selectors\":[{\"name\":\"who\",\"input\":\"name\",\"function\":\"literal\"}],\"variants\":[{\"matches\":{\"who\":\"*\"},\"nodes\":[{\"kind\":\"text\",\"value\":\"Hello \"},{\"kind\":\"input\",\"input\":\"name\"}]}]}}}", "expectedLocale": "%OTHER_LOCALE%" },
+    { "id": "integrity-verifier-rejected", "expected": "RTR0023/integrity-rejected", "template": "{\"artifactVersion\":%VERSION%,\"messageGrammarVersion\":%GRAMMAR%,\"catalog\":\"%CATALOG%\",\"locale\":\"%LOCALE%\",\"contractFingerprint\":\"%FINGERPRINT%\",\"messages\":{\"Parity.Message\":{\"astVersion\":2,\"inputs\":{\"name\":{\"type\":\"string\",\"format\":\"none\"}},\"selectors\":[{\"name\":\"who\",\"input\":\"name\",\"function\":\"literal\"}],\"variants\":[{\"matches\":{\"who\":\"*\"},\"nodes\":[{\"kind\":\"text\",\"value\":\"Hello \"},{\"kind\":\"input\",\"input\":\"name\"}]}]}}}", "verifier": "reject" }
+  ]
+}

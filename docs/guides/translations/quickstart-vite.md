@@ -7,7 +7,7 @@ watching, HMR, and production bundling part of the normal Vite lifecycle.
 
 ```bash
 dotnet new tool-manifest
-dotnet tool install RunicTranslations.Tool --version <VERSION>
+dotnet tool install dotnet-runic-translations --version <VERSION>
 npm install --save-dev @runic-artifex/vite-plugin-runic-translations@<VERSION>
 ```
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalog": "deep",
-  "code": { "namespace": "RunicTranslations.Examples.Localization", "className": "DeepText" },
+  "code": { "namespace": "Runic.Translations.Examples.Localization", "className": "DeepText" },
   "defaultLocale": "en",
   "locales": [{ "tag": "en" }],
   "layers": [{ "name": "base", "priority": 0 }]
