@@ -9,7 +9,7 @@ credential-gated as specified by E6.
 
 ## Outcome
 
-Turn the current `RunicTranslations.Editor` application into the customer-facing
+Turn the current `Runic.Translations.Editor` application into the customer-facing
 application for creating, editing, validating, reviewing, and maintaining Runic
 Translations projects.
 
@@ -94,7 +94,7 @@ flowchart TD
     F --> K
 ```
 
-Create `RunicTranslations.Authoring` as a non-UI assembly in this repository.
+Create `Runic.Translations.Authoring` as a non-UI assembly in this repository.
 Initially it is an implementation dependency shipped inside the CLI and editor,
 not a promised public extensibility API. It can become a supported package after
 the editor and CLI have exercised the contracts.
@@ -106,7 +106,7 @@ Responsibilities:
 - create new projects and locale documents;
 - create, rename, move, and delete resource keys;
 - mutate messages without discarding unknown formatting or canonical metadata;
-- validate proposed changes with `RunicTranslations.Compiler`;
+- validate proposed changes with `Runic.Translations.Compiler`;
 - create and commit bounded multi-file transactions;
 - expose diagnostics and edit locations as data-transfer records suitable for
   the CLI and CS-WebUI bridge.
@@ -178,7 +178,7 @@ directly in source-editing mode.
 
 ### .NET templates
 
-Add a `RunicTranslations.Templates` template pack with two templates:
+Add a `Runic.Translations.Templates` template pack with two templates:
 
 1. `runic-translations` — an item-style template that adds a minimal resource
    folder to an existing .NET project.
@@ -189,7 +189,7 @@ Add a `RunicTranslations.Templates` template pack with two templates:
 Example:
 
 ```bash
-dotnet new install RunicTranslations.Templates
+dotnet new install Runic.Translations.Templates
 dotnet new runic-translations \
   --output Resources \
   --catalog product \
@@ -413,11 +413,11 @@ Status: complete.
 
 Deliverables:
 
-- `RunicTranslations.Authoring` project and test suite;
+- `Runic.Translations.Authoring` project and test suite;
 - canonical project creation request and renderer;
 - `runic-translations init`;
 - editor New Project wizard;
-- `RunicTranslations.Templates` with minimal item and standalone templates;
+- `Runic.Translations.Templates` with minimal item and standalone templates;
 - package-consumer tests for CLI, editor, and both templates.
 
 Acceptance:

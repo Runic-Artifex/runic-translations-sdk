@@ -1,0 +1,29 @@
+{
+  "$id": "runic.translations.editor/1/SaveDocument",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "SaveDocument"
+      ],
+      "type": "string"
+    },
+    "content": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_tag",
+    "path",
+    "content",
+    "revision"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,66 @@
+{
+  "$id": "runic.translations.editor/1/PreviewMutation",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "PreviewMutation"
+      ],
+      "type": "string"
+    },
+    "request": {
+      "additionalProperties": false,
+      "properties": {
+        "confirmationToken": {
+          "type": "string"
+        },
+        "copyFromLocale": {
+          "type": "string"
+        },
+        "fallback": {
+          "type": "string"
+        },
+        "initialValue": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "add-locale",
+            "remove-locale",
+            "set-fallback",
+            "create-key",
+            "rename-key",
+            "duplicate-key",
+            "delete-key"
+          ],
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "string"
+        },
+        "replacementFallback": {
+          "type": "string"
+        },
+        "sourceKey": {
+          "type": "string"
+        },
+        "targetKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "request"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,195 @@
+name: Public release
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/public-release.yml
+      - .github/workflows/preview-release.yml
+      - eng/package-editor.ps1
+      - eng/verify-editor-package.ps1
+      - eng/write-editor-release-staging.ps1
+      - eng/verify-editor-release-staging.ps1
+      - eng/rehearse-editor-update-manifest.ps1
+      - eng/verify-editor-release-set.ps1
+      - eng/create-editor-release-bundle.ps1
+      - eng/verify-editor-release-contract.ps1
+      - eng/sign-editor-windows.ps1
+      - eng/sign-editor-macos.ps1
+      - EditorDiagnostics.cs
+      - EditorSmokeTest.cs
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact SemVer editor version
+        required: true
+        type: string
+      publish_public:
+        description: Request public stable publication after external signing and protected approval
+        required: true
+        default: false
+        type: boolean
+      confirmation:
+        description: Type PUBLISH PUBLIC to request protected stable publication
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  attestations: write
+  id-token: write
+
+concurrency:
+  group: public-release-${{ inputs.version || github.sha }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  EDITOR_VERSION: ${{ inputs.version || '0.0.0-pr-validation' }}
+  GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+  NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+  RUNIC_TRANSLATIONS_REVISION: 233b1f08e86210a5320c52d1cb0ad6535f2182e0
+  RUNIC_COMMAND_LINE_REVISION: beadc31d91746a2cb005207ac1161cf579e128e5
+  RUNIC_ASSETS_REVISION: e9affd725903077339c5df5a23c44f898121c0b5
+  RUNIC_DESKTOP_REVISION: a0d1432e9a7b8dcf3d6311fcbdf4e824bc0d479f
+  RUNIC_TOOLKIT_REVISION: 0046557bb3b4ae2f1f8ebc54655d108db50f5db3
+  RUNIC_SVELTE_REVISION: 39af8c08bb8cf1168789093bdfb575f420a51f39
+  RUNIC_VITE_REVISION: a5f94c90948e20324e8d4f168763d4f858dd1b10
+  RUNIC_PACKAGE_VERSION: 1.0.0-preview.1
+
+jobs:
+  validate-request:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate release boundary
+        shell: bash
+        env:
+          PUBLISH_PUBLIC: ${{ inputs.publish_public }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$EDITOR_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+          if [[ "$PUBLISH_PUBLIC" == "true" && "$CONFIRMATION" != "PUBLISH PUBLIC" ]]; then
+            echo "Public publication requires the exact confirmation PUBLISH PUBLIC." >&2
+            exit 1
+          fi
+
+  package:
+    needs: validate-request
+    name: Stage stable ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            rid: linux-x64
+          - os: windows-2025
+            rid: win-x64
+          - os: macos-15
+            rid: osx-arm64
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json
+      - name: Prepare exact local dependencies for PR staging
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/prepare-pr-translation-feed
+        with:
+          translations-revision: ${{ env.RUNIC_TRANSLATIONS_REVISION }}
+          command-line-revision: ${{ env.RUNIC_COMMAND_LINE_REVISION }}
+          assets-revision: ${{ env.RUNIC_ASSETS_REVISION }}
+          desktop-revision: ${{ env.RUNIC_DESKTOP_REVISION }}
+          toolkit-revision: ${{ env.RUNIC_TOOLKIT_REVISION }}
+          svelte-revision: ${{ env.RUNIC_SVELTE_REVISION }}
+          vite-revision: ${{ env.RUNIC_VITE_REVISION }}
+          package-version: ${{ env.RUNIC_PACKAGE_VERSION }}
+      - name: Run source verification
+        if: runner.os == 'Linux'
+        run: ./verify.sh
+      - name: Build, extract, start, and stage the stable candidate
+        shell: pwsh
+        env:
+          EDITOR_RID: ${{ matrix.rid }}
+          EDITOR_OUTPUT: ${{ runner.temp }}/editor-package
+        run: |
+          $tree = git rev-parse "$env:GITHUB_SHA^{tree}"
+          ./eng/package-editor.ps1 -RuntimeIdentifier $env:EDITOR_RID -OutputDirectory $env:EDITOR_OUTPUT -Version $env:EDITOR_VERSION -RepositoryCommit $env:GITHUB_SHA -RepositoryTree $tree -ReleaseChannel stable
+      - name: Attest the staged archive
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            ${{ runner.temp }}/editor-package/Runic.Translations.Editor-*.tar.gz
+            ${{ runner.temp }}/editor-package/Runic.Translations.Editor-*.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: runic-translations-editor-stable-${{ matrix.rid }}
+          path: ${{ runner.temp }}/editor-package/
+          if-no-files-found: error
+          retention-days: 14
+
+  protected-publication-request:
+    if: ${{ inputs.publish_public && inputs.confirmation == 'PUBLISH PUBLIC' && github.ref == 'refs/heads/main' }}
+    needs: release-bundle
+    runs-on: ubuntu-24.04
+    environment: public-release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: runic-translations-editor-release-bundle-${{ env.EDITOR_VERSION }}
+          path: ${{ runner.temp }}/editor-artifacts
+      - name: Verify the evidence bundle layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$RUNNER_TEMP/editor-artifacts/distribution/Runic.Translations.Editor-$EDITOR_VERSION.zip"
+          test -f "$RUNNER_TEMP/editor-artifacts/release-evidence-input/upstream-receipts/Runic.Translations.Editor-$EDITOR_VERSION.receipt.template.json"
+      - name: Refuse unsigned publication
+        shell: bash
+        run: |
+          echo "Stable editor publication remains blocked until the external Windows signing, Apple notarization, and signed update-manifest ceremony supplies verified artifacts." >&2
+          exit 1
+
+  release-bundle:
+    needs: package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: runic-translations-editor-stable-*
+          path: ${{ runner.temp }}/editor-artifacts
+          merge-multiple: false
+      - name: Verify and bundle the central distribution artifact
+        shell: pwsh
+        run: >-
+          ./eng/create-editor-release-bundle.ps1
+          -ArtifactsDirectory ${{ runner.temp }}/editor-artifacts
+          -OutputDirectory ${{ runner.temp }}/release-bundle
+          -Version ${{ env.EDITOR_VERSION }}
+          -Channel stable
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ runner.temp }}/release-bundle/distribution/Runic.Translations.Editor-${{ env.EDITOR_VERSION }}.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: runic-translations-editor-release-bundle-${{ env.EDITOR_VERSION }}
+          path: ${{ runner.temp }}/release-bundle/
+          if-no-files-found: error
+
+# The protected job is intentionally fail-closed. It establishes the sole public
+# release boundary without treating an unsigned candidate as publishable.

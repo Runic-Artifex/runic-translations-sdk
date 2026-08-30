@@ -1,0 +1,33 @@
+{
+  "$id": "runic.translations.editor/1/OpenWorkspace",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "OpenWorkspace"
+      ],
+      "type": "string"
+    },
+    "request": {
+      "additionalProperties": false,
+      "properties": {
+        "catalogId": {
+          "type": "string"
+        },
+        "directory": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "directory"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "request"
+  ],
+  "type": "object"
+}

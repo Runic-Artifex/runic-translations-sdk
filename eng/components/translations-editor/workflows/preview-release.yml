@@ -1,23 +1,50 @@
-name: Editor previews
+name: Editor preview candidates
 
 on:
-  push:
-    tags: ["v*"]
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/preview-release.yml
+      - eng/package-editor.ps1
+      - eng/verify-editor-package.ps1
+      - eng/write-editor-release-staging.ps1
+      - eng/verify-editor-release-staging.ps1
+      - eng/rehearse-editor-update-manifest.ps1
+      - eng/verify-editor-release-contract.ps1
+      - eng/verify-editor-release-set.ps1
+      - eng/create-editor-release-bundle.ps1
+      - eng/sign-editor-windows.ps1
+      - eng/sign-editor-macos.ps1
   workflow_dispatch:
+    inputs:
+      version:
+        description: Exact SemVer preview version
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: read
   packages: read
+  attestations: write
+  id-token: write
 
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
   GITHUB_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
   NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-
+  RUNIC_TRANSLATIONS_REVISION: 233b1f08e86210a5320c52d1cb0ad6535f2182e0
+  RUNIC_COMMAND_LINE_REVISION: beadc31d91746a2cb005207ac1161cf579e128e5
+  RUNIC_ASSETS_REVISION: e9affd725903077339c5df5a23c44f898121c0b5
+  RUNIC_DESKTOP_REVISION: a0d1432e9a7b8dcf3d6311fcbdf4e824bc0d479f
+  RUNIC_TOOLKIT_REVISION: 0046557bb3b4ae2f1f8ebc54655d108db50f5db3
+  RUNIC_SVELTE_REVISION: 39af8c08bb8cf1168789093bdfb575f420a51f39
+  RUNIC_VITE_REVISION: a5f94c90948e20324e8d4f168763d4f858dd1b10
+  RUNIC_PACKAGE_VERSION: 1.0.0-preview.1
+  EDITOR_VERSION: ${{ inputs.version || format('1.0.0-preview.{0}.{1}', github.run_number, github.run_attempt) }}
 jobs:
   package:
-    name: Package ${{ matrix.rid }}
+    name: Stage preview ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -42,40 +69,35 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: Frontend/package-lock.json
-      - name: Build, package, and start the editor
+      - uses: ./.github/actions/prepare-pr-translation-feed
+        with:
+          translations-revision: ${{ env.RUNIC_TRANSLATIONS_REVISION }}
+          command-line-revision: ${{ env.RUNIC_COMMAND_LINE_REVISION }}
+          assets-revision: ${{ env.RUNIC_ASSETS_REVISION }}
+          desktop-revision: ${{ env.RUNIC_DESKTOP_REVISION }}
+          toolkit-revision: ${{ env.RUNIC_TOOLKIT_REVISION }}
+          svelte-revision: ${{ env.RUNIC_SVELTE_REVISION }}
+          vite-revision: ${{ env.RUNIC_VITE_REVISION }}
+          package-version: ${{ env.RUNIC_PACKAGE_VERSION }}
+      - name: Build and verify an unsigned preview candidate
         shell: pwsh
         env:
           EDITOR_RID: ${{ matrix.rid }}
           EDITOR_OUTPUT: ${{ runner.temp }}/editor-package
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME.TrimStart("v") } else { "0.1.0-preview.$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT" }
-          ./eng/package-editor.ps1 -RuntimeIdentifier $env:EDITOR_RID -OutputDirectory $env:EDITOR_OUTPUT -Version $version -RepositoryCommit $env:GITHUB_SHA
+          $tree = git rev-parse "$env:GITHUB_SHA^{tree}"
+          ./eng/package-editor.ps1 -RuntimeIdentifier $env:EDITOR_RID -OutputDirectory $env:EDITOR_OUTPUT -Version $env:EDITOR_VERSION -RepositoryCommit $env:GITHUB_SHA -RepositoryTree $tree -ReleaseChannel preview
+      - name: Attest the archive candidate
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            ${{ runner.temp }}/editor-package/Runic.Translations.Editor-*.tar.gz
+            ${{ runner.temp }}/editor-package/Runic.Translations.Editor-*.zip
       - uses: actions/upload-artifact@v7
         with:
-          name: RunicTranslations.Editor-${{ matrix.rid }}
-          path: ${{ runner.temp }}/editor-package/*
+          name: runic-translations-editor-preview-${{ matrix.rid }}
+          path: ${{ runner.temp }}/editor-package/
           if-no-files-found: error
           retention-days: 14
 
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: package
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v7
-        with:
-          path: artifacts
-          merge-multiple: true
-      - name: Verify the complete release set
-        working-directory: artifacts
-        run: |
-          test "$(find . -maxdepth 1 -type f -name '*-linux-x64.tar.gz' | wc -l)" -eq 1
-          test "$(find . -maxdepth 1 -type f -name '*-win-x64.zip' | wc -l)" -eq 1
-          test "$(find . -maxdepth 1 -type f -name '*-osx-arm64.tar.gz' | wc -l)" -eq 1
-          test "$(find . -maxdepth 1 -type f -name '*.sha256' | wc -l)" -eq 3
-          sha256sum --check *.sha256
-      - name: Publish preview release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/* --verify-tag --prerelease --notes-file PREVIEW-NOTICE.md --title "Runic Translations Editor $GITHUB_REF_NAME"
+# Preview candidates are unsigned and are never published from this workflow.

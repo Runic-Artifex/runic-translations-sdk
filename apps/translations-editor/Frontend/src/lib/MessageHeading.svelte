@@ -4,6 +4,7 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
+  import { getUiText } from "$lib/ui-text";
 
   let {
     messageKey,
@@ -26,6 +27,8 @@
     onduplicate: () => void;
     ondelete: () => void;
   } = $props();
+
+  const ui = getUiText();
 </script>
 
 <header class="mx-auto mb-6 flex max-w-[1000px] flex-col items-start justify-between gap-4 xl:flex-row xl:gap-8">
@@ -48,20 +51,20 @@
     <div class="flex flex-wrap gap-1.5 xl:justify-end">
       <Badge variant="outline">{locale}</Badge>
       <Badge variant="outline">{layer}</Badge>
-      {#if inheritedFrom}<Badge variant="secondary">falls back to {inheritedFrom}</Badge>{/if}
+      {#if inheritedFrom}<Badge variant="secondary">{ui.text("Ui.MessageHeading.FallsBackTo")} {inheritedFrom}</Badge>{/if}
     </div>
     <div class="flex gap-1.5">
-      <Button variant="outline" size="xs" aria-label="Rename" title="Rename or move this message" onclick={onrename}>
+      <Button variant="outline" size="xs" aria-label={ui.text("Ui.MessageHeading.Rename")} title={ui.text("Ui.MessageHeading.RenameTitle")} onclick={onrename}>
         <PencilIcon data-icon="inline-start" />
-        <span class="hidden min-[360px]:inline">Rename</span>
+        <span class="hidden min-[360px]:inline">{ui.text("Ui.MessageHeading.Rename")}</span>
       </Button>
-      <Button variant="outline" size="xs" aria-label="Duplicate" title="Duplicate this message" onclick={onduplicate}>
+      <Button variant="outline" size="xs" aria-label={ui.text("Ui.MessageHeading.Duplicate")} title={ui.text("Ui.MessageHeading.DuplicateTitle")} onclick={onduplicate}>
         <CopyIcon data-icon="inline-start" />
-        <span class="hidden min-[360px]:inline">Duplicate</span>
+        <span class="hidden min-[360px]:inline">{ui.text("Ui.MessageHeading.Duplicate")}</span>
       </Button>
-      <Button variant="destructive" size="xs" aria-label="Delete" title="Delete this message" onclick={ondelete}>
+      <Button variant="destructive" size="xs" aria-label={ui.text("Ui.MessageHeading.Delete")} title={ui.text("Ui.MessageHeading.DeleteTitle")} onclick={ondelete}>
         <Trash2Icon data-icon="inline-start" />
-        <span class="hidden min-[360px]:inline">Delete</span>
+        <span class="hidden min-[360px]:inline">{ui.text("Ui.MessageHeading.Delete")}</span>
       </Button>
     </div>
   </div>

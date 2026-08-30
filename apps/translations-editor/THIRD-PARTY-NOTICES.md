@@ -6,7 +6,7 @@ components. Versions are fixed by `Directory.Packages.props` and
 
 | Component | Copyright / project | License |
 |---|---|---|
-| CsWebUi and CsWebUi.Native | Copyright (c) 2026 Viktor Jannicke; https://github.com/Runic-Artifex/cs-webui | MIT |
+| Runic Desktop | Copyright (c) 2026 Viktor Jannicke; https://github.com/Runic-Artifex/runic-desktop | MIT |
 | WebUI native library | Copyright (c) 2020-2026 Hassan Draga and contributors; https://github.com/webui-dev/webui | MIT |
 | Svelte | Copyright (c) 2016-2025 Svelte contributors; https://github.com/sveltejs/svelte | MIT |
 | SvelteKit and adapter-static | Copyright (c) 2020 SvelteKit contributors; https://github.com/sveltejs/kit | MIT |

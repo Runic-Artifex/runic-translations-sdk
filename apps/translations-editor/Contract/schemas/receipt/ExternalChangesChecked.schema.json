@@ -1,0 +1,63 @@
+{
+  "$id": "runic.translations.editor/1/ExternalChangesChecked",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "ExternalChangesChecked"
+      ],
+      "type": "string"
+    },
+    "changes": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "content": {
+                "type": "string"
+              },
+              "exists": {
+                "type": "boolean"
+              },
+              "path": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "exists"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "overflowed": {
+          "type": "boolean"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "overflowed",
+        "paths",
+        "changes"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "changes"
+  ],
+  "type": "object"
+}

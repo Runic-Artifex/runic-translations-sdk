@@ -16,6 +16,7 @@
   import { Badge } from "$lib/components/ui/badge/index.js";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
+  import { getUiText } from "$lib/ui-text";
 
   let {
     catalogId,
@@ -42,6 +43,8 @@
     onnewproject: () => void;
     onopenrecent: (project: RecentProjectItem) => void;
   } = $props();
+
+  const ui = getUiText();
 </script>
 
 <Sidebar.Header class="border-b border-sidebar-border p-2 pr-12 md:pr-2">
@@ -54,7 +57,7 @@
               {...props}
               size="lg"
               class="h-auto min-h-16 py-2"
-              aria-label={`Project ${catalogId}`}
+              aria-label={`${ui.text("Ui.Project.Label")} ${catalogId}`}
               tooltipContent={catalogId}
             >
               {#if success}
@@ -71,7 +74,7 @@
               <span class="grid min-w-0 flex-1 text-left leading-tight">
                 <span class="truncate font-semibold">{catalogId}</span>
                 <span class="truncate text-xs text-muted-foreground">
-                  {localeCount} {localeCount === 1 ? "locale" : "locales"} · schema v{schemaVersion}
+                  {localeCount} {localeCount === 1 ? ui.text("Ui.Project.Locale") : ui.text("Ui.Project.Locales")} · {ui.text("Ui.Project.Schema")} v{schemaVersion}
                 </span>
               </span>
               <ChevronsUpDownIcon class="ml-auto" aria-hidden="true" />
@@ -80,14 +83,14 @@
         </DropdownMenu.Trigger>
         <DropdownMenu.Content class="w-(--bits-dropdown-menu-anchor-width) min-w-72" align="start">
           <DropdownMenu.Label class="grid gap-1">
-            <span>Current project</span>
+            <span>{ui.text("Ui.Project.Current")}</span>
             <span class="truncate font-mono text-xs font-normal text-muted-foreground" title={root}>{root}</span>
           </DropdownMenu.Label>
 
           {#if recentProjects.length > 0}
             <DropdownMenu.Separator />
             <DropdownMenu.Group>
-              <DropdownMenu.Label>Recent projects</DropdownMenu.Label>
+              <DropdownMenu.Label>{ui.text("Ui.Project.Recent")}</DropdownMenu.Label>
               {#each recentProjects.slice(0, 5) as project (`${project.root}\n${project.catalogId}`)}
                 <DropdownMenu.Item onclick={() => onopenrecent(project)}>
                   <LanguagesIcon />
@@ -108,11 +111,11 @@
             </DropdownMenu.Item>
             <DropdownMenu.Item onclick={onopenworkspace}>
               <FolderOpenIcon />
-              Open workspace
+              {ui.text("Ui.Project.OpenWorkspace")}
             </DropdownMenu.Item>
             <DropdownMenu.Item onclick={onnewproject}>
               <PlusIcon />
-              New project
+              {ui.text("Ui.Project.New")}
             </DropdownMenu.Item>
           </DropdownMenu.Group>
         </DropdownMenu.Content>

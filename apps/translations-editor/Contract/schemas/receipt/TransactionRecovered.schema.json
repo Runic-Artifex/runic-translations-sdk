@@ -1,0 +1,475 @@
+{
+  "$defs": {
+    "Int": {
+      "description": "an integer",
+      "title": "int",
+      "type": "integer"
+    }
+  },
+  "$id": "runic.translations.editor/1/TransactionRecovered",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "TransactionRecovered"
+      ],
+      "type": "string"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "history": {
+          "additionalProperties": false,
+          "properties": {
+            "canRedo": {
+              "type": "boolean"
+            },
+            "canUndo": {
+              "type": "boolean"
+            },
+            "redoLabel": {
+              "type": "string"
+            },
+            "undoLabel": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "canUndo",
+            "canRedo"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "snapshot": {
+          "additionalProperties": false,
+          "properties": {
+            "catalog": {
+              "additionalProperties": false,
+              "properties": {
+                "defaultLocale": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "layers": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "priority": {
+                        "$ref": "#/$defs/Int"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "priority"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "locales": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "fallback": {
+                        "type": "string"
+                      },
+                      "tag": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "tag"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "schemaVersion": {
+                  "$ref": "#/$defs/Int"
+                }
+              },
+              "required": [
+                "id",
+                "schemaVersion",
+                "defaultLocale",
+                "locales",
+                "layers"
+              ],
+              "type": "object"
+            },
+            "catalogs": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "documentCount": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "errorCount": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "localeCount": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "manifestPaths": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "messageCount": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "warningCount": {
+                    "$ref": "#/$defs/Int"
+                  }
+                },
+                "required": [
+                  "id",
+                  "manifestPaths",
+                  "documentCount",
+                  "localeCount",
+                  "messageCount",
+                  "errorCount",
+                  "warningCount",
+                  "success"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "diagnostics": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "column": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "endColumn": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "endLine": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "severity": {
+                    "enum": [
+                      "error",
+                      "warning"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "severity",
+                  "message",
+                  "path",
+                  "line",
+                  "column",
+                  "endLine",
+                  "endColumn"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "documents": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "isMalformed": {
+                    "type": "boolean"
+                  },
+                  "isManifest": {
+                    "type": "boolean"
+                  },
+                  "layer": {
+                    "type": "string"
+                  },
+                  "locale": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "revision": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "content",
+                  "revision",
+                  "isManifest",
+                  "isMalformed"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "history": {
+              "additionalProperties": false,
+              "properties": {
+                "canRedo": {
+                  "type": "boolean"
+                },
+                "canUndo": {
+                  "type": "boolean"
+                },
+                "redoLabel": {
+                  "type": "string"
+                },
+                "undoLabel": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "canUndo",
+                "canRedo"
+              ],
+              "type": "object"
+            },
+            "pendingTransaction": {
+              "additionalProperties": false,
+              "properties": {
+                "catalogId": {
+                  "type": "string"
+                },
+                "paths": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "catalogId",
+                "paths"
+              ],
+              "type": "object"
+            },
+            "review": {
+              "additionalProperties": false,
+              "properties": {
+                "entries": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "locale": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "type": "string"
+                      },
+                      "samples": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "value"
+                          ],
+                          "type": "object"
+                        },
+                        "type": "array"
+                      },
+                      "sourceFingerprint": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "enum": [
+                          "draft",
+                          "translated",
+                          "needs-review",
+                          "approved"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "locale",
+                      "state",
+                      "samples"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "string"
+                },
+                "terminology": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "locale": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "type": "string"
+                      },
+                      "preferred": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "preferred"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "path",
+                "entries",
+                "terminology"
+              ],
+              "type": "object"
+            },
+            "root": {
+              "type": "string"
+            },
+            "success": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "root",
+            "catalogs",
+            "documents",
+            "diagnostics",
+            "success"
+          ],
+          "type": "object"
+        },
+        "validation": {
+          "additionalProperties": false,
+          "properties": {
+            "diagnostics": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "column": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "endColumn": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "endLine": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "$ref": "#/$defs/Int"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "severity": {
+                    "enum": [
+                      "error",
+                      "warning"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "severity",
+                  "message",
+                  "path",
+                  "line",
+                  "column",
+                  "endLine",
+                  "endColumn"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "success": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "success",
+            "diagnostics"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "ok",
+        "kind"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "_tag",
+    "result"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,21 @@
+{
+  "$id": "runic.translations.editor/1/PreviewReviewJsonImport",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "properties": {
+    "_tag": {
+      "enum": [
+        "PreviewReviewJsonImport"
+      ],
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "_tag",
+    "path"
+  ],
+  "type": "object"
+}

@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace RunicTranslations.Editor;
+namespace Runic.Translations.Editor;
 
 internal static class EditorWorkspacePicker
 {

@@ -272,6 +272,63 @@
 	--sidebar-ring: oklch(0.64 0.13 50);
 }
 
+@media (forced-colors: active) {
+	:root {
+		color-scheme: light dark;
+		--background: Canvas;
+		--foreground: CanvasText;
+		--card: Canvas;
+		--card-foreground: CanvasText;
+		--popover: Canvas;
+		--popover-foreground: CanvasText;
+		--primary: Highlight;
+		--primary-foreground: HighlightText;
+		--secondary: Canvas;
+		--secondary-foreground: CanvasText;
+		--muted: Canvas;
+		--muted-foreground: CanvasText;
+		--accent: Highlight;
+		--accent-foreground: HighlightText;
+		--border: CanvasText;
+		--input: CanvasText;
+		--ring: Highlight;
+		--sidebar: Canvas;
+		--sidebar-foreground: CanvasText;
+		--sidebar-primary: Highlight;
+		--sidebar-primary-foreground: HighlightText;
+		--sidebar-accent: Highlight;
+		--sidebar-accent-foreground: HighlightText;
+		--sidebar-border: CanvasText;
+		--sidebar-ring: Highlight;
+	}
+
+	:focus-visible {
+		outline: 2px solid Highlight;
+		outline-offset: 2px;
+	}
+}
+
+@media (prefers-contrast: more) {
+	:root {
+		--border: var(--foreground);
+		--input: var(--foreground);
+		--ring: var(--foreground);
+		--sidebar-border: var(--sidebar-foreground);
+		--sidebar-ring: var(--sidebar-foreground);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
 @theme inline {
 	--font-sans: 'Inter Variable', sans-serif;
 	--color-sidebar-ring: var(--sidebar-ring);

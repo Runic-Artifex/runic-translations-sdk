@@ -1,0 +1,224 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Runic Translations Editor hosted-web bridge e2e</title>
+<style>
+  body { font-family: monospace; margin: 1rem; }
+  li { margin: 0.2rem 0; }
+  [data-state="pending"]::after { content: " ..."; }
+  [data-state="pass"]::before { content: "ok - "; }
+  [data-state="fail"]::before { content: "FAIL - "; }
+</style>
+<body data-result="pending" data-error="" data-stage="idle">
+  <h1>Runic Translations Editor hosted-web bridge e2e</h1>
+  <output id="catalog">connecting</output>
+  <ul id="stages"></ul>
+  <output id="summary"></output>
+  <script>
+    "use strict";
+    // Wire constants mirror Contract/bridge.manifest.json for the editor contract.
+    const protocol = "runic.translations.editor";
+    const version = 1;
+    const fingerprint = "bb519a1ca7355a0c40897f32dca99495107729dc1f88bb71cbb054f18859f6fd";
+
+    const body = document.body;
+    const catalogOut = document.querySelector("#catalog");
+    const stages = document.querySelector("#stages");
+    const summary = document.querySelector("#summary");
+    let socket;
+    let revision = 0;
+    let sessionId;
+
+    const fail = (message) => {
+      body.dataset.result = "fail";
+      body.dataset.error = message;
+      summary.textContent = message;
+    };
+
+    const stage = (name) => {
+      const item = document.createElement("li");
+      item.dataset.stage = name;
+      item.dataset.state = "pending";
+      item.textContent = name;
+      stages.appendChild(item);
+      body.dataset.stage = name;
+      return (text, extra = {}) => {
+        item.dataset.state = extra.ok === false ? "fail" : "pass";
+        item.textContent = `${name}: ${text}`;
+        if (extra.ok === false) fail(`${name} failed: ${text}`);
+      };
+    };
+
+    const frame = (kind, payload, extra = {}) => ({
+      protocol, version, contractFingerprint: fingerprint,
+      connectionEpoch: 0, kind, commandId: crypto.randomUUID(), payload, ...extra,
+    });
+    const dispatch = (payload) =>
+      frame("dispatch", payload, sessionId ? { sessionId, expectedRevision: revision } : {});
+
+    // Host frames carry no receipt _tag discriminator; correlate strictly by the
+    // echoed commandId and assert on structural payload fields per stage.
+    let reader = null;
+    const pump = (event) => {
+      if (!reader) return;
+      const bytes = event.data instanceof ArrayBuffer ? new Uint8Array(event.data)
+        : new Uint8Array(event.data.buffer, event.data.offset, event.data.length);
+      const pending = reader;
+      reader = null;
+      try {
+        const envelope = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+        if (envelope.protocol !== protocol || envelope.version !== version || envelope.contractFingerprint !== fingerprint) {
+          pending.reject(new Error(`Incompatible bridge envelope: ${JSON.stringify(envelope).slice(0, 120)}`));
+          return;
+        }
+        revision = envelope.revision ?? revision;
+        sessionId = envelope.sessionId ?? sessionId;
+        if (envelope.kind === "error") {
+          pending.reject(new Error(`Bridge error ${envelope.payload?.code ?? "?"}: ${envelope.payload?.message ?? ""}`));
+          return;
+        }
+        pending.resolve(envelope);
+      } catch (error) {
+        pending.reject(error);
+      }
+    };
+
+    const receiveEnvelope = () => new Promise((resolve, reject) => { reader = { resolve, reject }; });
+
+    const send = async (message) => {
+      const received = receiveEnvelope();
+      socket.send(new TextEncoder().encode(JSON.stringify(message)));
+      const envelope = await received;
+      if (envelope.kind !== "snapshot" && envelope.commandId !== message.commandId) {
+        throw new Error(`Received a response for command ${envelope.commandId} while waiting for ${message.commandId}.`);
+      }
+      return envelope;
+    };
+
+    const expectReceipt = async (payload) => {
+      const message = dispatch(payload);
+      const envelope = await send(message);
+      if (envelope.kind !== "receipt" || !envelope.payload) {
+        throw new Error(`Expected a receipt for ${payload._tag}, received kind=${envelope.kind} payload=${JSON.stringify(envelope.payload ?? null).slice(0, 160)}`);
+      }
+      return envelope.payload;
+    };
+
+    const run = async () => {
+      socket = new WebSocket(`ws://${location.host}/bridge`);
+      socket.binaryType = "arraybuffer";
+      socket.addEventListener("message", pump);
+      await new Promise((resolve, reject) => {
+        socket.addEventListener("open", resolve, { once: true });
+        socket.addEventListener("error", () => reject(new Error("The bridge WebSocket connection failed.")), { once: true });
+      });
+
+      // 1. Initialize handshake.
+      let done = stage("initialize-handshake");
+      const snapshotFrame = await send(frame("initialize", { _tag: "InitializeApplication" }));
+      if (snapshotFrame.kind !== "snapshot") {
+        throw new Error(`Expected an initialization snapshot, received kind=${snapshotFrame.kind}.`);
+      }
+      // Some transports flatten the receipt value into the payload; accept both.
+      const initializedSnapshot = snapshotFrame.payload?.snapshot ?? snapshotFrame.payload;
+      const catalogId = initializedSnapshot?.catalog?.id;
+      if (!catalogId || !sessionId) throw new Error("The initialization snapshot lacked a catalog id or session id.");
+      catalogOut.textContent = `catalog ${catalogId}`;
+      done(catalogId);
+
+      // 2. Load the workspace catalog.
+      done = stage("load-catalog");
+      const loadedEnvelope = await send(dispatch({ _tag: "LoadWorkspace" }));
+      if (loadedEnvelope.kind !== "receipt") throw new Error(`LoadWorkspace did not return a receipt (kind=${loadedEnvelope.kind}).`);
+      const loadedSnapshot = loadedEnvelope.payload?.snapshot ?? loadedEnvelope.payload;
+      const documents = loadedSnapshot?.documents ?? [];
+      if (!(documents.length >= 3)) throw new Error(`The workspace loaded only ${documents.length} document(s).`);
+      done(`${documents.length} documents`);
+
+      // 3. Open and save a message edit: create one key via preview+apply
+      //    (mirroring the UI's irreversible-change confirmation flow), then
+      //    persist an explicit buffer edit.
+      done = stage("apply-message-edit");
+      const mutationRequest = {
+        kind: "create-key",
+        layer: "base",
+        targetKey: "Hosted.Web.E2e",
+        initialValue: "Edited over the WebSocket bridge",
+      };
+      const previewPayload = await expectReceipt({ _tag: "PreviewMutation", request: mutationRequest });
+      const previewResult = previewPayload.preview ?? previewPayload;
+      if (previewResult.ok !== true) throw new Error(previewResult.message ?? "The mutation preview was rejected.");
+      const confirmedRequest = previewResult.requiresIrreversibleConfirmation === true
+        ? { ...mutationRequest, confirmationToken: previewResult.confirmationToken }
+        : mutationRequest;
+      const appliedPayload = await expectReceipt({ _tag: "ApplyMutation", request: confirmedRequest });
+      const appliedResult = appliedPayload.result ?? appliedPayload;
+      if (appliedResult.ok !== true) throw new Error(appliedResult.message ?? "The key mutation was rejected.");
+      const appliedSnapshot = appliedResult.snapshot ?? {};
+      // create-key nests namespace segments, so match the leaf name as written.
+      if (!appliedSnapshot.documents?.some((document) => document.content.includes('"E2e"'))) {
+        throw new Error("The mutation snapshot did not contain the created key.");
+      }
+      done("key created");
+
+      done = stage("save-document");
+      const mutated = appliedResult.snapshot.documents.find((document) => document.path === "product.de.json")
+        ?? appliedResult.snapshot.documents[0];
+      const savedPayload = await expectReceipt({
+        _tag: "SaveDocument",
+        path: mutated.path,
+        content: `${mutated.content}\n`,
+        revision: mutated.revision,
+      });
+      const savedResult = savedPayload.result ?? savedPayload;
+      if (savedResult.ok !== true) throw new Error(savedResult.message ?? "The document save was rejected.");
+      done(mutated.path);
+
+      // 4. Review-state transition.
+      done = stage("review-transition");
+      const reviewedPayload = await expectReceipt({
+        _tag: "SaveReview",
+        request: {
+          entries: [{
+            key: "Hosted.Web.E2e",
+            locale: "de",
+            state: "approved",
+            note: "Approved from the hosted-browser e2e.",
+            samples: [{ key: "count", value: "1" }],
+          }],
+          terminology: [],
+        },
+      });
+      const reviewedResult = reviewedPayload.result ?? reviewedPayload;
+      if (reviewedResult.ok !== true) throw new Error(reviewedResult.message ?? "The review state was not saved.");
+      if (reviewedResult.review?.entries?.some((entry) => entry.key === "Hosted.Web.E2e" && entry.state === "approved") !== true) {
+        throw new Error("The saved review did not record the approved entry.");
+      }
+      done("approved");
+
+      // 5. Validate the edited document.
+      done = stage("validate-document");
+      const current = savedResult.snapshot?.documents.find((document) => document.path === mutated.path)
+        ?? savedResult.snapshot?.documents[0];
+      if (!current) throw new Error("The post-save snapshot lost the edited document.");
+      const validatedPayload = await expectReceipt({
+        _tag: "ValidateDocument",
+        path: current.path,
+        content: current.content,
+      });
+      const validatedResult = validatedPayload.result ?? validatedPayload;
+      if (validatedResult.success !== true) {
+        throw new Error(`Validation failed: ${(validatedResult.diagnostics ?? []).map((d) => d.message).join("; ")}`);
+      }
+      done(current.path);
+
+      body.dataset.result = "pass";
+      summary.textContent = `hosted bridge workflow complete (${stages.children.length} stages)`;
+      socket.close(1000, "done");
+    };
+
+    run().catch((error) => {
+      try { socket?.close(); } catch (_) { /* ignore */ }
+      fail(error instanceof Error ? error.message : String(error));
+    });
+  </script>
+</body>
