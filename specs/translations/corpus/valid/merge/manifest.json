@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "catalog": "merge",
   "code": {
-    "namespace": "RunicTranslations.Examples.Localization",
+    "namespace": "Runic.Translations.Examples.Localization",
     "className": "MergeText",
     "visibility": "internal"
   },

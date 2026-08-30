@@ -28,6 +28,7 @@
               powershell
               clang
               nodejs_24
+              p7zip
               zlib
             ];
 

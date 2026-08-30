@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "identity": "RunicTranslations.WaveC.AssetManifest",
+  "identity": "Runic.Translations.WaveC.AssetManifest",
   "assetManifestVersion": 1,
   "schema": "../../schemas/asset-manifest-v1.schema.json",
   "cases": [

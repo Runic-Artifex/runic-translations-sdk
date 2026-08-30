@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalog": "empty-warning",
-  "code": { "namespace": "RunicTranslations.Examples.Localization", "className": "EmptyWarningText" },
+  "code": { "namespace": "Runic.Translations.Examples.Localization", "className": "EmptyWarningText" },
   "defaultLocale": "en",
   "locales": [{ "tag": "en" }],
   "layers": [{ "name": "base", "priority": 0 }],

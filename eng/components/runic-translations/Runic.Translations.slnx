@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="dotnet/src/Runic.Translations/Runic.Translations.csproj" />
+    <Project Path="dotnet/src/Runic.Translations.Authoring/Runic.Translations.Authoring.csproj" />
+    <Project Path="dotnet/src/Runic.Translations.Compiler/Runic.Translations.Compiler.csproj" />
+    <Project Path="dotnet/src/Runic.Translations.Tooling/Runic.Translations.Tooling.csproj" />
+    <Project Path="dotnet/src/Runic.Translations.Generator/Runic.Translations.Generator.csproj" />
+    <Project Path="dotnet/src/Runic.Translations.Build/Runic.Translations.Build.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="dotnet/tools/dotnet-runic-translations/dotnet-runic-translations.csproj" />
+  </Folder>
+  <Folder Name="/templates/">
+    <Project Path="dotnet/templates/Runic.Translations.Templates/Runic.Translations.Templates.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="dotnet/tests/Runic.Translations.ApiTests/Runic.Translations.ApiTests.csproj" />
+    <Project Path="dotnet/tests/Runic.Translations.Authoring.Tests/Runic.Translations.Authoring.Tests.csproj" />
+    <Project Path="dotnet/tests/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj" />
+    <Project Path="dotnet/tests/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj" />
+    <Project Path="dotnet/tests/Runic.Translations.Generator.Tests/Runic.Translations.Generator.Tests.csproj" />
+    <Project Path="dotnet/tests/Runic.Translations.Runtime.Tests/Runic.Translations.Runtime.Tests.csproj" />
+    <Project Path="dotnet/tests/Runic.Translations.Tooling.Tests/Runic.Translations.Tooling.Tests.csproj" />
+  </Folder>
+</Solution>

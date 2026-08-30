@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "catalog": "group-collision",
   "code": {
-    "namespace": "RunicTranslations.Corpus",
+    "namespace": "Runic.Translations.Corpus",
     "className": "CollisionText"
   },
   "defaultLocale": "en",

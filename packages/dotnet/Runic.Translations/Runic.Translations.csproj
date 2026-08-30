@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(RunicTranslationsCompatibilityTargetFramework)</TargetFramework>
+    <AssemblyName>Runic.Translations</AssemblyName>
+    <RootNamespace>Runic.Translations</RootNamespace>
+    <RunicTranslationsShippingProject>true</RunicTranslationsShippingProject>
+    <Description>Runtime contracts for compiled Runic Translations.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- These identifiers are fixed by the portable v1 source/runtime contract. -->
+    <NoWarn>$(NoWarn);CA1716;CA1720</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
+  </ItemGroup>
+</Project>

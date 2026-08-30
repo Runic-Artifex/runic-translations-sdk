@@ -2,7 +2,7 @@
   "$schema": "https://example.invalid/translations/catalog-v1.schema.json",
   "schemaVersion": 1,
   "catalog": "app",
-  "code": { "namespace": "RunicTranslations.Examples.Localization", "className": "AppText" },
+  "code": { "namespace": "Runic.Translations.Examples.Localization", "className": "AppText" },
   "defaultLocale": "en",
   "locales": [{ "tag": "en" }],
   "layers": [{ "name": "base", "priority": 0 }]

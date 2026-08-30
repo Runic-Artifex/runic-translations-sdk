@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(RunicTranslationsGeneratorTargetFramework)</TargetFramework>
+    <AssemblyName>Runic.Translations.Build</AssemblyName>
+    <RootNamespace>Runic.Translations.Build</RootNamespace>
+    <PackageId>Runic.Translations.Build</PackageId>
+    <Description>Deterministic MSBuild integration for Runic.Translations translation artifacts.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);BundleTranslationAnalyzers</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\Runic.Translations.Generator\Runic.Translations.Generator.csproj" PrivateAssets="all" />
+    <None Update="README.md" Pack="true" PackagePath="\" />
+    <None Update="build\Runic.Translations.Build.props"
+          Pack="true"
+          PackagePath="build\Runic.Translations.Build.props" />
+    <None Update="build\Runic.Translations.Build.targets"
+          Pack="true"
+          PackagePath="build\Runic.Translations.Build.targets" />
+  </ItemGroup>
+
+  <Target Name="BundleTranslationAnalyzers" DependsOnTargets="ResolveProjectReferences">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Generator.dll"
+                              PackagePath="analyzers/dotnet/cs" />
+      <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Compiler.dll"
+                              PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+</Project>

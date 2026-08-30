@@ -1,21 +1,25 @@
 {
   "name": "@runic-artifex/vite-plugin-runic-translations",
-  "version": "0.1.0-preview.3.2",
+  "version": "1.0.0-preview.1",
   "description": "Vite integration for compiling Runic Translations catalogs into application resources",
   "type": "module",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": ">=24.18.0"
+  },
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "import": "./index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "files": [
-    "index.js",
-    "index.d.ts",
+    "dist",
     "README.md"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "build": "node build.mjs",
+    "test": "npm run build && node --test test/*.test.js"
   },
   "peerDependencies": {
     "vite": ">=6 <9"

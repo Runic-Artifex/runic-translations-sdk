@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>dotnet-runic-translations</AssemblyName>
+    <RootNamespace>Runic.Translations.Tool</RootNamespace>
+    <PackageId>dotnet-runic-translations</PackageId>
+    <Description>Deterministic validation and generation tool for Runic Translations.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>runic-translations</ToolCommandName>
+    <RunicTranslationsShippingProject>true</RunicTranslationsShippingProject>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj"
+                      Condition="Exists('../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj')" />
+    <PackageReference Include="Runic.CommandLine"
+                      Condition="!Exists('../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj')" />
+    <ProjectReference Include="..\..\src\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />
+    <ProjectReference Include="..\..\src\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" />
+    <ProjectReference Include="..\..\src\Runic.Translations.Tooling\Runic.Translations.Tooling.csproj" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\catalog-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.catalog-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\resources-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.resources-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\locale-artifact-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-artifact-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\locale-artifact-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-artifact-v2.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\external-pack-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.external-pack-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\template-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.template-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\asset-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.asset-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\web-module-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.web-module-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\catalog-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.catalog-v2.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\resources-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.resources-v2.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\message-ast-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.message-ast-v2.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\resources-v3.schema.json" LogicalName="Runic.Translations.Tool.Schemas.resources-v3.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\message-ast-v3.schema.json" LogicalName="Runic.Translations.Tool.Schemas.message-ast-v3.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\locale-pack-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-pack-v2.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\editor-state-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.editor-state-v1.schema.json" />
+    <EmbeddedResource Include="..\..\..\spec\schemas\capabilities-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.capabilities-v1.schema.json" />
+    <None Update="README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
+  </ItemGroup>
+</Project>

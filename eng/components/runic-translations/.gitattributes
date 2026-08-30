@@ -11,6 +11,7 @@
 *.mjs text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+*.xsd binary
 .* text eol=lf
 *.ps1 text eol=crlf
 *.png binary

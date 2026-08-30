@@ -1,7 +1,7 @@
 # Runic Translations contracts
 
 This directory freezes the TR0–TR1 language-neutral contracts for
-`RunicTranslations`. Together, these contracts form the portable protocol
+`Runic.Translations`. Together, these contracts form the portable protocol
 family `runic.translations/1`. The standalone planning document remains the source
 for product intent; ADR 0001 and ADR 0005 replace its retired product and
 diagnostic identities.
@@ -10,11 +10,11 @@ diagnostic identities.
 
 | Contract | Current writer version |
 |---|---:|
-| Catalog manifest schema | 1 and 2 |
-| Resource document schema | 1 and 2 |
-| Message grammar | 1 and 2 |
-| Normalized message AST | 2 |
-| Resolved locale artifact | 1 (grammar 1) and 2 (grammar 2) |
+| Catalog manifest schema | 1 and 2 (v3 manifest deferred) |
+| Resource document schema | 3 preview writer; 1 and 2 readers/migration inputs |
+| Message grammar | 1 and 2 execution grammar; v3 MF2 subset parser deferred |
+| Normalized message AST | 2 execution AST; 3 MF2-subset interchange AST |
+| Resolved locale artifact | 1 (grammar 1) and locale-pack-v2 (grammar 2) |
 | Runtime/generated-code ABI | 1 |
 | ESM ABI | 2 |
 | Transport contract | 1 |
@@ -73,3 +73,8 @@ The machine-readable [corpus](corpus/README.md) is the executable compatibility
 contract. Schema validation alone is intentionally insufficient for normalized
 uniqueness, BCP 47 canonicalization, fallback graphs, cross-file merge rules,
 pattern/descriptor parity, compiler limits, and generated identifier collisions.
+
+Schema v3 is specified in [`../docs/schema-v3.md`](../docs/schema-v3.md). It is
+a closed `runic-mf2-subset/1` interchange boundary, not a declaration of full
+MessageFormat 2 or XLIFF conformance. `locale-pack-v2` is documented in
+[`../docs/locale-pack-v2.md`](../docs/locale-pack-v2.md).

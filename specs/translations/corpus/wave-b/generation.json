@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "identity": "RunicTranslations.Generation.Conformance",
+  "identity": "Runic.Translations.Generation.Conformance",
   "cases": [
     {
       "id": "canonical-locale-artifact-bytes",

@@ -1,0 +1,28 @@
+<Project>
+  <PropertyGroup>
+    <!-- Artifact generation is opt-in. Mapping declared inputs to AdditionalFiles is always enabled. -->
+    <TranslationsGenerateOnBuild Condition="'$(TranslationsGenerateOnBuild)' == ''">false</TranslationsGenerateOnBuild>
+    <TranslationsEmitJson Condition="'$(TranslationsEmitJson)' == ''">false</TranslationsEmitJson>
+    <TranslationsEmitTypeScript Condition="'$(TranslationsEmitTypeScript)' == ''">false</TranslationsEmitTypeScript>
+    <TranslationsEmitTemplateManifest Condition="'$(TranslationsEmitTemplateManifest)' == ''">false</TranslationsEmitTemplateManifest>
+    <TranslationsEmitEsm Condition="'$(TranslationsEmitEsm)' == ''">false</TranslationsEmitEsm>
+    <TranslationsEmitCpp Condition="'$(TranslationsEmitCpp)' == ''">false</TranslationsEmitCpp>
+
+    <!-- Keep the launcher replaceable for local tools, pinned tool manifests, and package tests. -->
+    <TranslationsToolCommand Condition="'$(TranslationsToolCommand)' == ''">dotnet tool run runic-translations --</TranslationsToolCommand>
+    <TranslationsToolAdditionalArguments Condition="'$(TranslationsToolAdditionalArguments)' == ''"></TranslationsToolAdditionalArguments>
+
+    <RunicTranslationsBuildPropsImported>true</RunicTranslationsBuildPropsImported>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\.config\dotnet-tools.json')">
+    <TranslationsToolInput Include="$(MSBuildProjectDirectory)\.config\dotnet-tools.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Analyzer Include="$(MSBuildThisFileDirectory)..\analyzers\dotnet\cs\Runic.Translations.Compiler.dll"
+              Condition="Exists('$(MSBuildThisFileDirectory)..\analyzers\dotnet\cs\Runic.Translations.Compiler.dll')" />
+    <Analyzer Include="$(MSBuildThisFileDirectory)..\analyzers\dotnet\cs\Runic.Translations.Generator.dll"
+              Condition="Exists('$(MSBuildThisFileDirectory)..\analyzers\dotnet\cs\Runic.Translations.Generator.dll')" />
+  </ItemGroup>
+</Project>

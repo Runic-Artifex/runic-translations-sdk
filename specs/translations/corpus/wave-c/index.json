@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "identity": "RunicTranslations.WaveC.Conformance",
+  "identity": "Runic.Translations.WaveC.Conformance",
   "suites": [
     {
       "id": "asset-manifest",

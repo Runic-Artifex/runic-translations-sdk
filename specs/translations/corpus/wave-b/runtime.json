@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "identity": "RunicTranslations.Runtime.Conformance",
+  "identity": "Runic.Translations.Runtime.Conformance",
   "cases": [
     {
       "id": "fallback-is-per-key",

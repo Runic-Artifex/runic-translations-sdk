@@ -28,6 +28,16 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Check out pinned Runic Command Line dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          dependency_root="$GITHUB_WORKSPACE/../runic-command-line"
+          git init "$dependency_root"
+          git -C "$dependency_root" remote add origin https://github.com/Runic-Artifex/runic-command-line.git
+          git -C "$dependency_root" fetch --no-tags --depth=1 origin beadc31d91746a2cb005207ac1161cf579e128e5
+          git -C "$dependency_root" checkout --detach FETCH_HEAD
+          test "$(git -C "$dependency_root" rev-parse HEAD)" = "beadc31d91746a2cb005207ac1161cf579e128e5"
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v6
         with:
