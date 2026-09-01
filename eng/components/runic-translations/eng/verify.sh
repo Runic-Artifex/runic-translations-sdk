@@ -86,7 +86,6 @@ dotnet restore "$package_consumer" \
 tool_root="$artifacts_root/tool"
 dotnet tool install dotnet-runic-translations --version "$package_version" \
   --tool-path "$tool_root" \
-  --add-source "$package_feed" \
   "${restore_options[@]}"
 "$tool_root/runic-translations" --help >/dev/null
 "$tool_root/runic-translations" help >/dev/null
