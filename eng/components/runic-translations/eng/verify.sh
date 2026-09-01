@@ -4,31 +4,25 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 artifacts_root="$repository_root/artifacts/verification"
 package_feed="$artifacts_root/packages"
-command_line_feed="$artifacts_root/runic-command-line"
-package_version="1.0.0-preview.1"
-command_line_version="1.0.0-preview.1"
+package_version="${RUNIC_PACKAGE_VERSION:-1.0.0-preview.1}"
+command_line_version="${RunicCommandLineVersion:-1.0.0-preview.1}"
 configuration="Release"
 runtime_identifier="$(dotnet --info | awk '/ RID:/{print $2; exit}')"
+restore_options=()
+if [[ -n "${NUGET_CONFIG_FILE:-}" ]]; then
+  restore_options+=(--configfile "$NUGET_CONFIG_FILE")
+fi
 
 rm -rf "$artifacts_root"
-mkdir -p "$package_feed" "$command_line_feed"
+mkdir -p "$package_feed"
 
-command_line_root="$repository_root/../runic-command-line"
-if [[ ! -d "$command_line_root/.git" ]] || [[ "$(git -C "$command_line_root" rev-parse HEAD)" != "beadc31d91746a2cb005207ac1161cf579e128e5" ]]; then
-  echo "Verification requires ../runic-command-line at committed revision beadc31d91746a2cb005207ac1161cf579e128e5." >&2
-  exit 2
-fi
-dotnet build "$command_line_root/Runic.CommandLine.slnx" -c Release -t:Rebuild -m:1
-"$command_line_root/eng/pack.sh" "$command_line_version" "$command_line_feed"
-
-npm --prefix "$repository_root/web" ci
+(cd "$repository_root/web" && bun install --frozen-lockfile)
 node "$repository_root/eng/generate-cldr.mjs" --check
 node "$repository_root/eng/render-capabilities.mjs" --check
 
-export NUGET_PACKAGES="$artifacts_root/nuget-build"
 dotnet restore "$repository_root/Runic.Translations.slnx" --force-evaluate \
-  -p:RestoreAdditionalProjectSources="$command_line_feed" \
-  -p:RunicCommandLineVersion="$command_line_version"
+  -p:RunicCommandLineVersion="$command_line_version" \
+  "${restore_options[@]}"
 dotnet build "$repository_root/Runic.Translations.slnx" -c "$configuration" --no-restore -t:Rebuild \
   -p:RunicTranslationsBuildMode=Verification \
   -p:RunicCommandLineVersion="$command_line_version"
@@ -86,13 +80,13 @@ mkdir -p "$DOTNET_CLI_HOME"
 
 package_consumer="$repository_root/dotnet/tests/Runic.Translations.PackageTests/Runic.Translations.PackageTests.csproj"
 dotnet restore "$package_consumer" \
+  "${restore_options[@]}" \
   -p:TranslationsPackageFeed="$package_feed" \
-  -p:RunicCommandLinePackageFeed="$command_line_feed"
+  -p:TranslationsPackageVersion="$package_version"
 tool_root="$artifacts_root/tool"
 dotnet tool install dotnet-runic-translations --version "$package_version" \
   --tool-path "$tool_root" \
-  --add-source "$package_feed" \
-  --add-source "$command_line_feed"
+  "${restore_options[@]}"
 "$tool_root/runic-translations" --help >/dev/null
 "$tool_root/runic-translations" help >/dev/null
 
@@ -199,9 +193,9 @@ verify_parser_compatibility "$tool_root/runic-translations" managed
 tool_aot_root="$artifacts_root/tool-aot"
 tool_project="$repository_root/dotnet/tools/dotnet-runic-translations/dotnet-runic-translations.csproj"
 dotnet restore "$tool_project" -r "$runtime_identifier" \
-  -p:RestoreAdditionalProjectSources="$command_line_feed" \
   -p:RunicCommandLineVersion="$command_line_version" \
-  -p:PublishAot=true -p:PublishTrimmed=true -p:TrimMode=full
+  -p:PublishAot=true -p:PublishTrimmed=true -p:TrimMode=full \
+  "${restore_options[@]}"
 dotnet publish "$tool_project" -c "$configuration" -r "$runtime_identifier" --self-contained true --no-restore \
   -p:RunicCommandLineVersion="$command_line_version" \
   -p:PublishAot=true -p:PublishTrimmed=true -p:TrimMode=full \
@@ -271,24 +265,30 @@ dotnet new runic-translations-project \
 cmp "$template_root/item/product.catalog.json" "$template_root/project/Resources/product.catalog.json"
 cmp "$template_root/item/product.de.json" "$template_root/project/Resources/product.de.json"
 template_project="$template_root/project/Customer.Product.Text.csproj"
-dotnet restore "$template_project" -p:RestoreAdditionalProjectSources="$package_feed"
+dotnet restore "$template_project" \
+  -p:RestoreAdditionalProjectSources="$package_feed" \
+  "${restore_options[@]}"
 dotnet build "$template_project" -c "$configuration" --no-restore \
   -p:TranslationsToolCommand="$tool_root/runic-translations" \
   -p:RunicTranslationsBuildMode=Verification
 test -f "$template_root/project/obj/$configuration/net10.0/translations/product.esm/messages.js"
 
 dotnet run --project "$package_consumer" -c "$configuration" --no-restore \
+  -p:TranslationsPackageVersion="$package_version" \
   -p:TranslationsGenerateOnBuild=true \
   -p:TranslationsToolCommand="$tool_root/runic-translations" \
   -- --feed "$package_feed"
 
 aot_consumer="$repository_root/dotnet/tests/Runic.Translations.AotTests/Runic.Translations.AotTests.csproj"
 dotnet restore "$aot_consumer" -r "$runtime_identifier" \
+  "${restore_options[@]}" \
   -p:TranslationsPackageFeed="$package_feed" \
+  -p:TranslationsPackageVersion="$package_version" \
   -p:PublishAot=true \
   -p:PublishTrimmed=true \
   -p:TrimMode=full
 dotnet publish "$aot_consumer" -c "$configuration" -r "$runtime_identifier" --self-contained true --no-restore \
+  -p:TranslationsPackageVersion="$package_version" \
   -p:PublishAot=true \
   -p:PublishTrimmed=true \
   -p:TrimMode=full \
@@ -296,5 +296,5 @@ dotnet publish "$aot_consumer" -c "$configuration" -r "$runtime_identifier" --se
   -p:PublishDir="$artifacts_root/aot/"
 "$artifacts_root/aot/Runic.Translations.AotTests"
 
-npm --prefix "$repository_root/web" test
+(cd "$repository_root/web" && bun run test)
 echo "Runic Translations verification passed."

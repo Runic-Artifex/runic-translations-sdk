@@ -22,6 +22,8 @@ internal static class Program
     private const string Fingerprint = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string RepositoryUrl = "https://github.com/Runic-Artifex/runic-translations";
     private static readonly Guid SourceLinkKind = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
+    private static readonly string PackageVersion =
+        Environment.GetEnvironmentVariable("RUNIC_PACKAGE_VERSION") ?? "1.0.0-preview.1";
     private static int _passed;
 
     public static async Task<int> Main(string[] args)
@@ -65,11 +67,11 @@ internal static class Program
     private static void InspectPackages(string feed)
     {
         AssertExactFeedContents(feed);
-        string runtime = RequireSingle(feed, "Runic.Translations.1.0.0-preview.1.nupkg");
-        string tooling = RequireSingle(feed, "Runic.Translations.Tooling.1.0.0-preview.1.nupkg");
-        string build = RequireSingle(feed, "Runic.Translations.Build.1.0.0-preview.1.nupkg");
-        string tool = RequireSingle(feed, "dotnet-runic-translations.1.0.0-preview.1.nupkg");
-        string templates = RequireSingle(feed, "Runic.Translations.Templates.1.0.0-preview.1.nupkg");
+        string runtime = RequireSingle(feed, $"Runic.Translations.{PackageVersion}.nupkg");
+        string tooling = RequireSingle(feed, $"Runic.Translations.Tooling.{PackageVersion}.nupkg");
+        string build = RequireSingle(feed, $"Runic.Translations.Build.{PackageVersion}.nupkg");
+        string tool = RequireSingle(feed, $"dotnet-runic-translations.{PackageVersion}.nupkg");
+        string templates = RequireSingle(feed, $"Runic.Translations.Templates.{PackageVersion}.nupkg");
 
         AssertPackageShape(runtime,
             "Runic.Translations.nuspec",
@@ -248,11 +250,11 @@ internal static class Program
             .ToArray();
         string[] approved =
         [
-            "Runic.Translations.Tooling.1.0.0-preview.1.nupkg",
-            "Runic.Translations.1.0.0-preview.1.nupkg",
-            "Runic.Translations.Build.1.0.0-preview.1.nupkg",
-            "Runic.Translations.Templates.1.0.0-preview.1.nupkg",
-            "dotnet-runic-translations.1.0.0-preview.1.nupkg",
+            $"Runic.Translations.Tooling.{PackageVersion}.nupkg",
+            $"Runic.Translations.{PackageVersion}.nupkg",
+            $"Runic.Translations.Build.{PackageVersion}.nupkg",
+            $"Runic.Translations.Templates.{PackageVersion}.nupkg",
+            $"dotnet-runic-translations.{PackageVersion}.nupkg",
         ];
         Assert(actual.SequenceEqual(approved.OrderBy(name => name, StringComparer.Ordinal), StringComparer.Ordinal),
             "feed contains exactly the approved package set");

@@ -4,9 +4,18 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - .github/actions/setup-bun/action.yml
+      - .github/actions/setup-dotnet/action.yml
       - .github/workflows/public-release.yml
       - Directory.Build.props
+      - Directory.Packages.props
+      - eng/NuGet.ci.config
+      - eng/download-github-npm.mjs
+      - eng/download-github-nuget.sh
       - eng/pack.sh
+      - eng/prepare-web-package.mjs
+      - eng/prepare-web-package.test.mjs
+      - eng/publish-github-npm.mjs
       - eng/publish-public-npm.sh
       - eng/publish-public-nuget.sh
       - eng/validate-public-npm.mjs
@@ -17,6 +26,11 @@ on:
       version:
         description: Exact SemVer package version
         required: true
+        type: string
+      runic_command_line_version:
+        description: Published Runic.CommandLine version to depend on
+        required: true
+        default: 1.0.0
         type: string
       publish_public:
         description: Publish the verified artifacts to nuget.org and npmjs.org
@@ -35,6 +49,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: public-release-${{ inputs.version || github.sha }}
@@ -43,13 +58,19 @@ concurrency:
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
+  NUGET_CONFIG_FILE: ${{ github.workspace }}/eng/NuGet.ci.config
   PACKAGE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '0.0.0-pr-validation' }}
+  RunicCommandLineVersion: ${{ github.event_name == 'workflow_dispatch' && inputs.runic_command_line_version || '1.0.0-ci.sha5d6a9aa6be25e196' }}
+  NuGetPackageSourceCredentials_github: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
 
 jobs:
   package:
     name: Verify public artifacts
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Validate request
         shell: bash
@@ -71,32 +92,13 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Check out pinned Runic Command Line dependency
-        shell: bash
-        run: |
-          set -euo pipefail
-          dependency_root="$GITHUB_WORKSPACE/../runic-command-line"
-          git init "$dependency_root"
-          git -C "$dependency_root" remote add origin https://github.com/Runic-Artifex/runic-command-line.git
-          git -C "$dependency_root" fetch --no-tags --depth=1 origin beadc31d91746a2cb005207ac1161cf579e128e5
-          git -C "$dependency_root" checkout --detach FETCH_HEAD
-          test "$(git -C "$dependency_root" rev-parse HEAD)" = "beadc31d91746a2cb005207ac1161cf579e128e5"
-
-      - name: Install .NET SDK
-        uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
-
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.18.0
-          cache: npm
-          cache-dependency-path: web/package-lock.json
+      - uses: ./.github/actions/setup-dotnet
+      - uses: ./.github/actions/setup-bun
 
       - name: Run verification pipeline
-        run: ./eng/verify.sh
+        run: RUNIC_PACKAGE_VERSION="$PACKAGE_VERSION" ./eng/verify.sh
 
       - name: Ensure verification is reproducible
         run: git diff --exit-code
@@ -104,14 +106,10 @@ jobs:
       - name: Create packages
         run: |
           mkdir -p "$RUNNER_TEMP/packages"
-          ./eng/pack.sh "$PACKAGE_VERSION" "$RUNNER_TEMP/packages"
-          npm version "$PACKAGE_VERSION" --no-git-tag-version --allow-same-version --prefix web
-          npm pkg set \
-            "gitHead=$GITHUB_SHA" \
-            "publishConfig.registry=https://registry.npmjs.org" \
-            "publishConfig.access=public" \
-            --prefix web
-          npm pack "$GITHUB_WORKSPACE/web" --pack-destination "$RUNNER_TEMP/packages"
+          cp artifacts/verification/packages/*.nupkg "$RUNNER_TEMP/packages/"
+          node eng/prepare-web-package.mjs \
+            "$PACKAGE_VERSION" "$GITHUB_SHA" public "$RunicCommandLineVersion"
+          (cd web && bun pm pack --destination "$RUNNER_TEMP/packages" --quiet)
 
       - name: Validate public package contract
         uses: Runic-Artifex/.github/.github/actions/validate-release-artifacts@main
@@ -130,17 +128,22 @@ jobs:
           "$RUNNER_TEMP/packages"
           "$GITHUB_SHA"
 
-      - name: Record package digests
-        working-directory: ${{ runner.temp }}/packages
-        run: sha256sum ./*.nupkg ./*.tgz > SHA256SUMS
-
-      - name: Upload release candidate
-        uses: actions/upload-artifact@v7
-        with:
-          name: runic-translations-${{ env.PACKAGE_VERSION }}
-          path: ${{ runner.temp }}/packages/
-          if-no-files-found: error
-          retention-days: 14
+      - name: Stage exact packages in GitHub Packages
+        if: ${{ inputs.publish_public && inputs.confirmation == 'PUBLISH PUBLIC' && github.ref == 'refs/heads/main' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          NPM_CONFIG_TOKEN: ${{ github.token }}
+        run: |
+          for package in "$RUNNER_TEMP"/packages/*.nupkg; do
+            dotnet nuget push "$package" \
+              --source "https://nuget.pkg.github.com/Runic-Artifex/index.json" \
+              --api-key "$GITHUB_TOKEN" \
+              --skip-duplicate
+          done
+          node eng/publish-github-npm.mjs \
+            "$RUNNER_TEMP/packages/runic-artifex-vite-plugin-runic-translations-$PACKAGE_VERSION.tgz" \
+            release-staging
 
   publish:
     name: Publish to nuget.org and npmjs.org
@@ -152,6 +155,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: read
     steps:
       - name: Check out release plumbing
         uses: actions/checkout@v7
@@ -168,15 +172,30 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: "@runic-artifex"
 
-      - name: Download release candidate
-        uses: actions/download-artifact@v8
-        with:
-          name: runic-translations-${{ env.PACKAGE_VERSION }}
-          path: ${{ runner.temp }}/packages
+      - name: Download exact staged packages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          ./eng/download-github-nuget.sh "$PACKAGE_VERSION" "$RUNNER_TEMP/packages"
+          node eng/download-github-npm.mjs "$RUNNER_TEMP/packages" "$PACKAGE_VERSION"
 
-      - name: Verify package digests
-        working-directory: ${{ runner.temp }}/packages
-        run: sha256sum --check SHA256SUMS
+      - name: Validate exact staged package contract
+        uses: Runic-Artifex/.github/.github/actions/validate-release-artifacts@main
+        with:
+          version: ${{ env.PACKAGE_VERSION }}
+          artifact-directory: ${{ runner.temp }}/packages
+          repository-url: https://github.com/Runic-Artifex/runic-translations
+          repository-commit: ${{ github.sha }}
+          expected-nuget-count: "5"
+          expected-npm-count: "1"
+
+      - name: Validate exact staged npm package contract
+        run: >-
+          node ./eng/validate-public-npm.mjs
+          "$PACKAGE_VERSION"
+          "$RUNNER_TEMP/packages"
+          "$GITHUB_SHA"
 
       - name: Preflight npm publication state
         run: ./eng/publish-public-npm.sh "$RUNNER_TEMP/packages" "$PACKAGE_VERSION" --preflight-only
