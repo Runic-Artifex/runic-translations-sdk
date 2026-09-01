@@ -296,5 +296,5 @@ dotnet publish "$aot_consumer" -c "$configuration" -r "$runtime_identifier" --se
   -p:PublishDir="$artifacts_root/aot/"
 "$artifacts_root/aot/Runic.Translations.AotTests"
 
-(cd "$repository_root/web" && bun test)
+(cd "$repository_root/web" && bun run test)
 echo "Runic Translations verification passed."
