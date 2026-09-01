@@ -11,6 +11,7 @@
     <ToolCommandName>runic-translations</ToolCommandName>
     <RunicTranslationsShippingProject>true</RunicTranslationsShippingProject>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CopyDocumentationFilesFromPackages>true</CopyDocumentationFilesFromPackages>
   </PropertyGroup>
 
   <ItemGroup>
