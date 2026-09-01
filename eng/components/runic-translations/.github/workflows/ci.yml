@@ -65,6 +65,8 @@ jobs:
           repository-commit: ${{ github.sha }}
           expected-nuget-count: "5"
           expected-npm-count: "1"
+          npm-registry: https://npm.pkg.github.com
+          npm-access: restricted
 
       - name: Publish candidates to GitHub Packages
         if: github.event_name == 'push'
@@ -100,3 +102,5 @@ jobs:
           repository-commit: ${{ github.sha }}
           expected-nuget-count: "5"
           expected-npm-count: "1"
+          npm-registry: https://npm.pkg.github.com
+          npm-access: restricted
