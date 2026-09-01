@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const registry = "https://npm.pkg.github.com";
@@ -42,7 +43,9 @@ if (existing) {
   }
   console.log(`reused: ${packageManifest.name}@${packageManifest.version}`);
 } else {
-  const result = spawnSync("bun", ["publish", tarball, "--registry", registry, "--tag", tag, "--access", "restricted"], {
+  const resolvedTarball = path.resolve(tarball);
+  const result = spawnSync("bun", ["publish", `./${path.basename(resolvedTarball)}`, "--registry", registry, "--tag", tag, "--access", "restricted"], {
+    cwd: path.dirname(resolvedTarball),
     encoding: "utf8",
     env: { ...process.env, NODE_AUTH_TOKEN: token },
   });
