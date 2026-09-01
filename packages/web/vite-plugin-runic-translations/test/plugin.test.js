@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -221,7 +221,18 @@ test("source changes invalidate every loaded Runic virtual module for HMR", asyn
 
 test("published package inventory contains only declared runtime files", async () => {
   const packageRoot = new URL("..", import.meta.url);
-  const { stdout } = await execFileAsync("npm", ["pack", "--dry-run", "--json"], { cwd: packageRoot });
-  const files = JSON.parse(stdout)[0].files.map(file => file.path).sort();
-  assert.deepEqual(files, ["README.md", "dist/index.d.ts", "dist/index.js", "package.json"]);
+  const output = await mkdtemp(join(tmpdir(), "runic-vite-package-"));
+  try {
+    await execFileAsync("bun", ["pm", "pack", "--destination", output, "--quiet"], { cwd: packageRoot });
+    const archives = (await readdir(output)).filter(file => file.endsWith(".tgz"));
+    assert.equal(archives.length, 1);
+    const { stdout } = await execFileAsync("tar", ["-tzf", join(output, archives[0])]);
+    const files = stdout.split("\n")
+      .filter(file => file.startsWith("package/") && !file.endsWith("/"))
+      .map(file => file.slice("package/".length))
+      .sort();
+    assert.deepEqual(files, ["README.md", "dist/index.d.ts", "dist/index.js", "package.json"]);
+  } finally {
+    await rm(output, { recursive: true, force: true });
+  }
 });
