@@ -42,7 +42,7 @@ if (existing) {
   }
   console.log(`reused: ${packageManifest.name}@${packageManifest.version}`);
 } else {
-  const result = spawnSync("bun", ["publish", "--registry", registry, "--tag", tag, "--access", "restricted", tarball], {
+  const result = spawnSync("bun", ["publish", tarball, "--registry", registry, "--tag", tag, "--access", "restricted"], {
     encoding: "utf8",
     env: { ...process.env, NODE_AUTH_TOKEN: token },
   });
