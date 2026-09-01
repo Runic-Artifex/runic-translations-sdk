@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -44,11 +45,18 @@ if (existing) {
   console.log(`reused: ${packageManifest.name}@${packageManifest.version}`);
 } else {
   const resolvedTarball = path.resolve(tarball);
-  const result = spawnSync("bun", ["publish", `./${path.basename(resolvedTarball)}`, "--registry", registry, "--tag", tag, "--access", "restricted"], {
-    cwd: path.dirname(resolvedTarball),
-    encoding: "utf8",
-    env: { ...process.env, NODE_AUTH_TOKEN: token },
-  });
-  if (result.status !== 0) throw new Error(`publish failed: ${result.stdout}${result.stderr}`);
+  const authDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "runic-npm-auth-"));
+  const userConfig = path.join(authDirectory, ".npmrc");
+  fs.writeFileSync(userConfig, `//npm.pkg.github.com/:_authToken=${token}\n`, { mode: 0o600 });
+  try {
+    // Bun 1.4.0 ignores tarball arguments here; npm uploads the exact Bun-built archive without repacking it.
+    const result = spawnSync("npm", ["publish", resolvedTarball, "--registry", registry, "--tag", tag, "--access", "restricted"], {
+      encoding: "utf8",
+      env: { ...process.env, NPM_CONFIG_USERCONFIG: userConfig },
+    });
+    if (result.status !== 0) throw new Error(`publish failed: ${result.stdout}${result.stderr}`);
+  } finally {
+    fs.rmSync(authDirectory, { recursive: true, force: true });
+  }
   console.log(`published: ${packageManifest.name}@${packageManifest.version}`);
 }
