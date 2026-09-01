@@ -2,13 +2,15 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - "**"
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -17,32 +19,84 @@ concurrency:
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
+  NUGET_CONFIG_FILE: ${{ github.workspace }}/eng/NuGet.ci.config
+  RunicCommandLineVersion: 1.0.0-ci.sha5d6a9aa6be25e196
+  NuGetPackageSourceCredentials_github: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
 
 jobs:
   verify:
     name: Verify
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Check out source
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Check out pinned Runic Command Line dependency
-        shell: bash
-        run: |
-          set -euo pipefail
-          dependency_root="$GITHUB_WORKSPACE/../runic-command-line"
-          git init "$dependency_root"
-          git -C "$dependency_root" remote add origin https://github.com/Runic-Artifex/runic-command-line.git
-          git -C "$dependency_root" fetch --no-tags --depth=1 origin beadc31d91746a2cb005207ac1161cf579e128e5
-          git -C "$dependency_root" checkout --detach FETCH_HEAD
-          test "$(git -C "$dependency_root" rev-parse HEAD)" = "beadc31d91746a2cb005207ac1161cf579e128e5"
-      - name: Install .NET SDK
-        uses: actions/setup-dotnet@v6
-        with:
-          global-json-file: global.json
+          persist-credentials: false
+      - uses: ./.github/actions/setup-dotnet
+      - uses: ./.github/actions/setup-bun
+      - name: Derive immutable candidate version
+        run: echo "PACKAGE_VERSION=1.0.0-ci.sha${GITHUB_SHA:0:16}" >> "$GITHUB_ENV"
       - name: Run verification pipeline
-        run: ./eng/verify.sh
+        run: RUNIC_PACKAGE_VERSION="$PACKAGE_VERSION" ./eng/verify.sh
       - name: Ensure verification is reproducible
         run: git diff --exit-code
+
+      - name: Assemble immutable candidate set
+        run: |
+          mkdir -p "$RUNNER_TEMP/packages"
+          cp artifacts/verification/packages/*.nupkg "$RUNNER_TEMP/packages/"
+          node eng/prepare-web-package.mjs \
+            "$PACKAGE_VERSION" "$GITHUB_SHA" github "$RunicCommandLineVersion"
+          (cd web && bun pm pack --destination "$RUNNER_TEMP/packages" --quiet)
+          sha256sum "$RUNNER_TEMP"/packages/*
+
+      - name: Validate candidate contract
+        uses: Runic-Artifex/.github/.github/actions/validate-release-artifacts@main
+        with:
+          version: ${{ env.PACKAGE_VERSION }}
+          artifact-directory: ${{ runner.temp }}/packages
+          repository-url: https://github.com/Runic-Artifex/runic-translations
+          repository-commit: ${{ github.sha }}
+          expected-nuget-count: "5"
+          expected-npm-count: "1"
+
+      - name: Publish candidates to GitHub Packages
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          NPM_CONFIG_TOKEN: ${{ github.token }}
+        run: |
+          for package in "$RUNNER_TEMP"/packages/*.nupkg; do
+            dotnet nuget push "$package" \
+              --source "https://nuget.pkg.github.com/Runic-Artifex/index.json" \
+              --api-key "$GITHUB_TOKEN" \
+              --skip-duplicate
+          done
+          node eng/publish-github-npm.mjs "$RUNNER_TEMP/packages/runic-artifex-vite-plugin-runic-translations-$PACKAGE_VERSION.tgz"
+
+      - name: Download exact candidates from GitHub Packages
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          ./eng/download-github-nuget.sh "$PACKAGE_VERSION" "$RUNNER_TEMP/registry-packages"
+          node eng/download-github-npm.mjs "$RUNNER_TEMP/registry-packages" "$PACKAGE_VERSION"
+
+      - name: Validate exact registry candidates
+        if: github.event_name == 'push'
+        uses: Runic-Artifex/.github/.github/actions/validate-release-artifacts@main
+        with:
+          version: ${{ env.PACKAGE_VERSION }}
+          artifact-directory: ${{ runner.temp }}/registry-packages
+          repository-url: https://github.com/Runic-Artifex/runic-translations
+          repository-commit: ${{ github.sha }}
+          expected-nuget-count: "5"
+          expected-npm-count: "1"
