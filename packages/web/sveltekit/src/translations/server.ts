@@ -15,6 +15,8 @@ export interface RunicLocaleHandleOptions<Locale extends string> {
   readonly localsKey?: string;
   readonly applicationLocale?: (event: RequestEvent) => string | null | undefined | Promise<string | null | undefined>;
   readonly setLocale?: (event: RequestEvent, locale: Locale) => void;
+  /** Generated `runWithLocale` from the catalog's server entrypoint. */
+  readonly runWithLocale?: <Result>(locale: Locale, operation: () => Result) => Result;
   /** Token placed in app.html, for example `<html lang="%runic.locale%">`. */
   readonly htmlLanguageToken?: string | false;
 }
@@ -65,9 +67,10 @@ export function createRunicLocaleHandle<Locale extends string>(
       }
     }
 
-    return resolve(event, htmlLanguageToken === false ? undefined : {
+    const render = () => resolve(event, htmlLanguageToken === false ? undefined : {
       transformPageChunk: ({ html }) => html.replaceAll(htmlLanguageToken, escapeHtmlAttribute(resolution.locale)),
     });
+    return options.runWithLocale ? options.runWithLocale(resolution.locale, render) : render();
   };
 }
 

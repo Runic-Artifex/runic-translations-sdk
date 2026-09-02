@@ -153,6 +153,20 @@ describe("Runic SvelteKit request integration", () => {
     expect(localeFromLocals(english.locals, routing)).toBe("en");
     expect(localeFromLocals(german.locals, routing)).toBe("de");
   });
+
+  test("runs rendering in the generated request-local locale context", async () => {
+    const { event } = requestEvent("/de/setup");
+    let activeLocale: "en" | "de" = "en";
+    const handle = createRunicLocaleHandle(routing, {
+      htmlLanguageToken: false,
+      runWithLocale(locale, operation) {
+        activeLocale = locale;
+        return operation();
+      },
+    });
+    const response = await handle({ event, resolve: async () => new Response(activeLocale) });
+    expect(await response.text()).toBe("de");
+  });
 });
 
 // Compile-time assurance that the factory result is directly assignable to SvelteKit's hook type.
