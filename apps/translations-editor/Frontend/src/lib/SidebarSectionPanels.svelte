@@ -103,7 +103,7 @@
 	style:--languages-size={`${languagesShare}fr`}
 	style:--messages-size={`${1 - languagesShare}fr`}
 >
-	<section class="sidebar-section-panel languages-panel" aria-label={ui.text("Ui.SidebarPanels.LanguagesPanel")}>
+	<section class="sidebar-section-panel languages-panel" aria-label={ui.text("ui_sidebar_panels_languages_panel")}>
 		{@render languages()}
 	</section>
 
@@ -112,13 +112,13 @@
 			class="section-resizer"
 			role="slider"
 			tabindex="0"
-			aria-label={ui.text("Ui.SidebarPanels.Resize")}
+			aria-label={ui.text("ui_sidebar_panels_resize")}
 			aria-orientation="vertical"
 			aria-valuemin={minimumShare * 100}
 			aria-valuemax={(1 - minimumShare) * 100}
 			aria-valuenow={Math.round(languagesShare * 100)}
-			aria-valuetext={`${ui.text("Ui.SidebarPanels.Languages")} ${Math.round(languagesShare * 100)}%, ${ui.text("Ui.SidebarPanels.Messages")} ${Math.round((1 - languagesShare) * 100)}%`}
-			title={ui.text("Ui.SidebarPanels.ResizeTitle")}
+			aria-valuetext={`${ui.text("ui_sidebar_panels_languages")} ${Math.round(languagesShare * 100)}%, ${ui.text("ui_sidebar_panels_messages")} ${Math.round((1 - languagesShare) * 100)}%`}
+			title={ui.text("ui_sidebar_panels_resize_title")}
 			onpointerdown={beginResize}
 			onpointermove={continueResize}
 			onpointerup={finishResize}
@@ -128,7 +128,7 @@
 		></div>
 	{/if}
 
-	<section class="sidebar-section-panel messages-panel" aria-label={ui.text("Ui.SidebarPanels.MessagesPanel")}>
+	<section class="sidebar-section-panel messages-panel" aria-label={ui.text("ui_sidebar_panels_messages_panel")}>
 		{@render messages()}
 	</section>
 </div>

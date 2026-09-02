@@ -29,14 +29,14 @@ internal static class Program
         Runic Translations Editor
 
         Usage:
-          runic-translations-editor [edit] [<workspace>] [--workspace <path>] [--catalog <id>] [--webview] [--smoke-test] [--native-shell-canary]
-          runic-translations-editor validate [<workspace>] [--workspace <path>] [--catalog <id>]
-          runic-translations-editor diagnostics [<workspace>] [--workspace <path>] [--catalog <id>]
-          runic-translations-editor export [<workspace>] --format xliff --output <directory> [--workspace <path>] [--catalog <id>]
-          runic-translations-editor export [<workspace>] --format review --output <path> [--workspace <path>] [--catalog <id>]
-          runic-translations-editor report [<workspace>] --format xliff|review --source <path> [--workspace <path>] [--catalog <id>]
-          runic-translations-editor import [<workspace>] --format xliff|review --source <path> --apply [--workspace <path>] [--catalog <id>]
-          runic-translations-editor serve [<workspace>] [--workspace <path>] [--catalog <id>]
+          runic-translations-editor [edit] [<workspace>] [--workspace <path>] [--webview] [--smoke-test] [--native-shell-canary]
+          runic-translations-editor validate [<workspace>] [--workspace <path>]
+          runic-translations-editor diagnostics [<workspace>] [--workspace <path>]
+          runic-translations-editor export [<workspace>] --format xliff --output <directory> [--workspace <path>]
+          runic-translations-editor export [<workspace>] --format review --output <path> [--workspace <path>]
+          runic-translations-editor report [<workspace>] --format xliff|review --source <path> [--workspace <path>]
+          runic-translations-editor import [<workspace>] --format xliff|review --source <path> --apply [--workspace <path>]
+          runic-translations-editor serve [<workspace>] [--workspace <path>]
           runic-translations-editor help | --help | -h
           runic-translations-editor --version
 
@@ -214,9 +214,9 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
         if (request.Command == "validate")
             return await ValidateWorkspaceAsync(request, workspacePath).ConfigureAwait(false);
         if (request.Command == "diagnostics")
-            return await CreateDiagnosticBundleAsync(workspacePath, request.Catalog).ConfigureAwait(false);
+            return await CreateDiagnosticBundleAsync(workspacePath).ConfigureAwait(false);
         if (request.Command == "serve")
-            return await ServeHostedWebAsync(ResolveHostedWorkspace(request), request.Catalog).ConfigureAwait(false);
+            return await ServeHostedWebAsync(ResolveHostedWorkspace(request)).ConfigureAwait(false);
         if (request.Command == "export")
             return await ExportInterchangeAsync(workspacePath, request).ConfigureAwait(false);
         if (request.Command == "report")
@@ -233,10 +233,10 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
             return await RunNativeShellCanaryAsync(workspacePath).ConfigureAwait(false);
         if (request.Validate)
             return await ValidateWorkspaceAsync(request, workspacePath).ConfigureAwait(false);
-        return await OpenEditorAsync(workspacePath, request.Catalog, request.Webview).ConfigureAwait(false);
+        return await OpenEditorAsync(workspacePath, request.Webview).ConfigureAwait(false);
     }
 
-    // Legacy default rules preserved: an explicit edit or validate verb (or --validate)
+    // Default workspace rules: an explicit edit or validate verb (or --validate)
     // defaults to the current directory; a bare invocation and verb-less option-only
     // forms open the packaged example.
     private string ResolveWorkspace(EditorCommandRequest request)
@@ -292,14 +292,13 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
 
     private async Task<CommandOutcome<EditorCommandResult>> OpenEditorAsync(
         string workspacePath,
-        string? catalogId,
         bool useWebView)
     {
         if (!EditorDesktopHost.PackagedUiEmbedded)
             return CommandOutcome.Failure<EditorCommandResult>(
                 CommandExitCategory.Unavailable,
                 new CommandFault("REDIT0004", "The packaged web UI was not embedded into this editor build."));
-        using var session = new EditorSession(workspacePath, catalogId);
+        using var session = new EditorSession(workspacePath);
         await using ApplicationHost application = RunicApplication.CreateBuilder(launchArguments)
             .UseHost(new EditorDesktopHost(session, workspacePath, useWebView))
             .Build();
@@ -311,15 +310,13 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
     // (EditorSession -> EditorBridgeHandler -> generated dispatcher -> bridge
     // session) attached to the toolkit's ASP.NET Core WebSocket transport. No
     // native window is created on this path.
-    private static async Task<CommandOutcome<EditorCommandResult>> ServeHostedWebAsync(
-        string workspacePath,
-        string? catalogId)
+    private static async Task<CommandOutcome<EditorCommandResult>> ServeHostedWebAsync(string workspacePath)
     {
         if (!EditorDesktopHost.PackagedUiEmbedded)
             return CommandOutcome.Failure<EditorCommandResult>(
                 CommandExitCategory.Unavailable,
                 new CommandFault("REDIT0004", "The packaged web UI was not embedded into this editor build."));
-        using var session = new EditorSession(workspacePath, catalogId);
+        using var session = new EditorSession(workspacePath);
         var allowedOrigins = new HashSet<string>(StringComparer.Ordinal);
         await using var transport = new ApplicationBridgeWebSocketTransport(
             new ApplicationBridgeSession(new EditorBridgeDispatcher(new EditorBridgeHandler(session))),
@@ -332,10 +329,9 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
 
     private static async Task<CommandOutcome<EditorCommandResult>> ValidateWorkspaceAsync(EditorCommandRequest request, string workspacePath)
     {
-        string? catalogId = request.Catalog;
         try
         {
-            using var workspace = new EditorWorkspace(workspacePath, catalogId);
+            using var workspace = new EditorWorkspace(workspacePath);
             WorkspaceSnapshot snapshot = await workspace.LoadAsync().ConfigureAwait(false);
             bool machineOutput = request.OutputMode == CommandOutputMode.Json;
             List<CommandDiagnostic> commandDiagnostics = new(snapshot.Diagnostics.Count);
@@ -358,14 +354,6 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
                 {
                     Console.WriteLine(line);
                 }
-            }
-
-            if (snapshot.Catalog is null && snapshot.Catalogs.Count > 1)
-            {
-                Console.Error.WriteLine("The workspace contains multiple catalogs. Select one with --catalog <id>:");
-                foreach (EditorCatalogSummary catalog in snapshot.Catalogs.OrderBy(static value => value.Id, StringComparer.Ordinal))
-                    Console.Error.WriteLine($"  {catalog.Id}");
-                return MultipleCatalogs(commandDiagnostics);
             }
 
             if (!snapshot.Success)
@@ -396,11 +384,11 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
         }
     }
 
-    private static async Task<CommandOutcome<EditorCommandResult>> CreateDiagnosticBundleAsync(string workspacePath, string? catalogId)
+    private static async Task<CommandOutcome<EditorCommandResult>> CreateDiagnosticBundleAsync(string workspacePath)
     {
         try
         {
-            using var session = new EditorSession(workspacePath, catalogId);
+            using var session = new EditorSession(workspacePath);
             EditorDiagnosticBundleResult bundle = await session.CreateDiagnosticBundleAsync().ConfigureAwait(false);
             return bundle.Ok && bundle.Path is not null
                 ? CommandOutcome.Success(new EditorCommandResult($"Diagnostic bundle created: {bundle.Path}", Diagnostics: bundle))
@@ -415,12 +403,6 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
                 new CommandFault("REDIT0003", "The workspace could not be opened for diagnostics."));
         }
     }
-
-    private static CommandOutcome<EditorCommandResult> MultipleCatalogs(IReadOnlyList<CommandDiagnostic> diagnostics) =>
-        CommandOutcome.Failure<EditorCommandResult>(
-            CommandExitCategory.Validation,
-            new CommandFault("REDIT0002", "The workspace contains multiple catalogs; select one with --catalog."),
-            diagnostics);
 
     private static CommandOutcome<EditorCommandResult> ValidationFailed(IReadOnlyList<CommandDiagnostic> diagnostics) =>
         CommandOutcome.Failure<EditorCommandResult>(
@@ -439,7 +421,7 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
 
         try
         {
-            using var session = new EditorSession(workspacePath, request.Catalog);
+            using var session = new EditorSession(workspacePath);
             if (format == "xliff")
             {
                 EditorXliffExportResult export = await session.ExportXliffAsync(request.Output).ConfigureAwait(false);
@@ -472,7 +454,7 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
 
         try
         {
-            using var session = new EditorSession(workspacePath, request.Catalog);
+            using var session = new EditorSession(workspacePath);
             if (format == "xliff")
             {
                 EditorXliffImportPlan report = await session.PreviewXliffImportAsync(request.Source).ConfigureAwait(false);
@@ -507,7 +489,7 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
 
         try
         {
-            using var session = new EditorSession(workspacePath, request.Catalog);
+            using var session = new EditorSession(workspacePath);
             if (format == "xliff")
             {
                 EditorXliffImportPlan report = await session.PreviewXliffImportAsync(request.Source).ConfigureAwait(false);

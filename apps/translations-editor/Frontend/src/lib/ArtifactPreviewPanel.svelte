@@ -30,9 +30,9 @@
   const ui = getUiText();
 
   const simulationLabel = $derived(
-    [pseudoLocalization ? ui.text("Ui.ArtifactPreview.PseudoLocalization") : null, direction === "rtl" ? ui.text("Ui.ArtifactPreview.Rtl") : null]
+    [pseudoLocalization ? ui.text("ui_artifact_preview_pseudo_localization") : null, direction === "rtl" ? ui.text("ui_artifact_preview_rtl") : null]
       .filter((part) => part !== null)
-      .join(" · ") || ui.text("Ui.ArtifactPreview.NoSimulation"),
+      .join(" · ") || ui.text("ui_artifact_preview_no_simulation"),
   );
 </script>
 
@@ -53,51 +53,51 @@
 {/snippet}
 
 {#if open}
-  <section class="artifact-preview" aria-label={ui.text("Ui.ArtifactPreview.AriaLabel")}>
+  <section class="artifact-preview" aria-label={ui.text("ui_artifact_preview_aria_label")}>
     <header>
       <div>
-        <strong>{ui.text("Ui.ArtifactPreview.Title")}</strong>
-        <span>{ui.text("Ui.ArtifactPreview.Description")}</span>
+        <strong>{ui.text("ui_artifact_preview_title")}</strong>
+        <span>{ui.text("ui_artifact_preview_description")}</span>
       </div>
-      <button class="artifact-close" onclick={onclose} aria-label={ui.text("Ui.ArtifactPreview.Close")}>×</button>
+      <button class="artifact-close" onclick={onclose} aria-label={ui.text("ui_artifact_preview_close")}>×</button>
     </header>
     <div class="artifact-columns">
       <div class="artifact-column">
         <div class="artifact-column-header">
-          <Badge variant="outline">{ui.text("Ui.ArtifactPreview.AsGenerated")}</Badge>
-          <small dir="ltr">{ui.text("Ui.ArtifactPreview.Untransformed")}</small>
+          <Badge variant="outline">{ui.text("ui_artifact_preview_as_generated")}</Badge>
+          <small dir="ltr">{ui.text("ui_artifact_preview_untransformed")}</small>
         </div>
         <div class="artifact-canvas" dir="ltr">
           {#if busy}
-            <span class="artifact-placeholder">{ui.text("Ui.ArtifactPreview.Compiling")}</span>
+            <span class="artifact-placeholder">{ui.text("ui_artifact_preview_compiling")}</span>
           {:else if baseResult?.kind === "text"}
             <p>{baseResult.value}</p>
           {:else if baseResult?.kind === "content"}
             {@render artifactNodes(baseResult.nodes)}
           {:else}
-            <span class="artifact-placeholder">{ui.text("Ui.ArtifactPreview.EditToPreview")}</span>
+            <span class="artifact-placeholder">{ui.text("ui_artifact_preview_edit_to_preview")}</span>
           {/if}
         </div>
       </div>
       <div class="artifact-column">
         <div class="artifact-column-header">
-          <Badge variant="secondary">{ui.text("Ui.ArtifactPreview.Simulated")}</Badge>
+          <Badge variant="secondary">{ui.text("ui_artifact_preview_simulated")}</Badge>
           <small>{simulationLabel}</small>
         </div>
         <div class="artifact-canvas simulated" dir={direction}>
           {#if busy}
-            <span class="artifact-placeholder">{ui.text("Ui.ArtifactPreview.Compiling")}</span>
+            <span class="artifact-placeholder">{ui.text("ui_artifact_preview_compiling")}</span>
           {:else if simulatedResult?.kind === "text"}
             <p>{simulatedResult.value}</p>
           {:else if simulatedResult?.kind === "content"}
             {@render artifactNodes(simulatedResult.nodes)}
           {:else}
-            <span class="artifact-placeholder">{ui.text("Ui.ArtifactPreview.EditToPreview")}</span>
+            <span class="artifact-placeholder">{ui.text("ui_artifact_preview_edit_to_preview")}</span>
           {/if}
         </div>
       </div>
     </div>
-    <p class="artifact-note">{ui.text("Ui.ArtifactPreview.Note")}</p>
+    <p class="artifact-note">{ui.text("ui_artifact_preview_note")}</p>
   </section>
 {/if}
 

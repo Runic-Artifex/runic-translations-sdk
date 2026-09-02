@@ -1,0 +1,1 @@
+Export portable XLIFF 2.1 or review JSON, then preview every import before it can change the workspace. Export paths stay inside the open workspace; import paths may be absolute or workspace-relative.

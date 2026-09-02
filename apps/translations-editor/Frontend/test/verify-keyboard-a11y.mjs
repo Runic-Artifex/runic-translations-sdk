@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { compile } from "svelte/compiler";
 import ts from "typescript";
+import { readUiMessages } from "./ui-messages.mjs";
 
 const keyboard = await loadModule(new URL("../src/lib/editor-keyboard.ts", import.meta.url));
 for (const [event, textEditingTarget, expected] of [
@@ -27,8 +28,8 @@ const componentEntries = await Promise.all([
   "MessageToolbar.svelte",
 ].map(async (name) => [name, await readFile(new URL(`../src/lib/${name}`, import.meta.url), "utf8")]));
 const [english, german] = await Promise.all([
-  readCatalog("../../EditorResources/editor.en.json"),
-  readCatalog("../../EditorResources/editor.de.json"),
+  readUiMessages("en"),
+  readUiMessages("de"),
 ]);
 const sources = Object.fromEntries([
   ...componentEntries,
@@ -46,25 +47,25 @@ assert.match(commandPalette, /bind:ref=\{searchInput\}/, "The command-search inp
 assert.match(commandPalette, /onOpenAutoFocus=\{focusSearch\}/, "Opening the command palette does not own its focus route.");
 assert.match(commandPalette, /function focusSearch[\s\S]*searchInput\?\.focus\(\)/,
   "Opening the command palette does not focus command search.");
-assert.match(commandPalette, /aria-label=\{ui\.text\("Ui\.CommandPalette\.SearchAriaLabel"\)\}/,
+assert.match(commandPalette, /aria-label=\{ui\.text\("ui_command_palette_search_aria_label"\)\}/,
   "The command-search input is not named through the UI catalog.");
-assert.equal(english.resources.Ui.CommandPalette.SearchAriaLabel, "Search commands",
+assert.equal(english.ui_command_palette_search_aria_label, "Search commands",
   "The English command-search accessibility label changed unexpectedly.");
-assert.equal(german.resources.Ui.CommandPalette.SearchAriaLabel, "Befehle suchen",
+assert.equal(german.ui_command_palette_search_aria_label, "Befehle suchen",
   "The German command-search accessibility label is missing or incorrect.");
 assert.match(commandPalette, /role="listbox"[\s\S]*aria-activedescendant=/,
   "Command search does not expose its active result to assistive technology.");
 assert.match(commandPalette, /role="option"[\s\S]*aria-selected=/,
   "Command results do not expose selected state.");
-assertOrder(commandPalette, 'aria-label={ui.text("Ui.CommandPalette.SearchAriaLabel")}', 'role="listbox"',
+assertOrder(commandPalette, 'aria-label={ui.text("ui_command_palette_search_aria_label")}', 'role="listbox"',
   "Command-search focus order no longer reaches results after its search field.");
 
 const toolbar = sources["MessageToolbar.svelte"];
-assert.match(toolbar, /<label class="sr-only" for="message-search">\{ui\.text\("Ui\.MessageToolbar\.SearchMessages"\)\}<\/label>/,
+assert.match(toolbar, /<label class="sr-only" for="message-search">\{ui\.text\("ui_message_toolbar_search_messages"\)\}<\/label>/,
   "Message search is not named through the UI catalog.");
-assert.equal(english.resources.Ui.MessageToolbar.SearchMessages, "Search messages",
+assert.equal(english.ui_message_toolbar_search_messages, "Search messages",
   "The English message-search label changed unexpectedly.");
-assert.equal(german.resources.Ui.MessageToolbar.SearchMessages, "Nachrichten suchen",
+assert.equal(german.ui_message_toolbar_search_messages, "Nachrichten suchen",
   "The German message-search label is missing or incorrect.");
 assert.match(toolbar, /id="message-search"/, "Message search label is not bound to its input.");
 assert.match(toolbar, /aria-label=\{`\$\{filterLabel\}:/, "Message filter trigger is unnamed.");
@@ -75,16 +76,16 @@ const messages = sources["MessageList.svelte"];
 assert.match(messages, /<nav[\s\S]*aria-label=\{labels\.messages\}/, "Message navigation has no catalog-backed landmark name.");
 assert.match(messages, /aria-label=\{labels\.bulkActions\}/, "Message bulk actions are unnamed.");
 assert.match(messages, /aria-label=\{labels\.addMessage\}/, "Add-message control is unnamed.");
-for (const key of ["Messages", "MessageBulkActions", "AddMessage"]) {
-  assert.equal(typeof english.resources.App[key], "string", `English catalog omits App.${key}.`);
-  assert.equal(typeof german.resources.App[key], "string", `German catalog omits App.${key}.`);
+for (const key of ["app_messages", "app_message_bulk_actions", "app_add_message"]) {
+  assert.equal(typeof english[key], "string", `English project omits ${key}.`);
+  assert.equal(typeof german[key], "string", `German project omits ${key}.`);
 }
 
 const editorToolbar = sources["EditorToolbar.svelte"];
-for (const key of ["UndoSavedChange", "RedoSavedChange"]) {
-  assert.match(editorToolbar, new RegExp(`aria-label=\\{[^}]*Ui\\.Toolbar\\.${key}`), `${key} is unnamed.`);
-  assert.equal(typeof english.resources.Ui.Toolbar[key], "string", `English catalog omits Ui.Toolbar.${key}.`);
-  assert.equal(typeof german.resources.Ui.Toolbar[key], "string", `German catalog omits Ui.Toolbar.${key}.`);
+for (const key of ["ui_toolbar_undo_saved_change", "ui_toolbar_redo_saved_change"]) {
+  assert.match(editorToolbar, new RegExp(`aria-label=\\{[^}]*${key}`), `${key} is unnamed.`);
+  assert.equal(typeof english[key], "string", `English project omits ${key}.`);
+  assert.equal(typeof german[key], "string", `German project omits ${key}.`);
 }
 assert.match(editorToolbar, /aria-label=\{saving \? savingLabel/, "Save control is unnamed.");
 assertOrder(editorToolbar, "Undo2Icon", "Redo2Icon", "SaveIcon",
@@ -93,14 +94,14 @@ assertOrder(editorToolbar, "Undo2Icon", "Redo2Icon", "SaveIcon",
 const page = sources["+page.svelte"];
 assert.match(page, /<svelte:window onkeydown=\{handleKeyboard\}/,
   "Owned keyboard dispatch is not installed on the Editor window.");
-assert.match(page, /<main class="recovery-shell">[\s\S]*<h1>\{ui\.text\("Ui\.Page\.Recovery\.Title"\)\}<\/h1>/,
+assert.match(page, /<main class="recovery-shell">[\s\S]*<h1>\{ui\.text\("ui_page_recovery_title"\)\}<\/h1>/,
   "Recovery view has no named primary heading.");
-assertOrder(page, 'ui.text("Ui.Page.Recovery.RestoreBefore")', 'ui.text("Ui.Page.Recovery.Complete")',
+assertOrder(page, 'ui.text("ui_page_recovery_restore_before")', 'ui.text("ui_page_recovery_complete")',
   "Recovery focus order must offer rollback before complete.");
 assert.match(page, /<section class="grid gap-3 rounded-xl border p-4" aria-labelledby="local-state-title">/,
   "The user-owned local state has no inspectable, named privacy boundary.");
-assert.match(page, /ui\.text\("Ui\.Page\.About\.ClearLocalState"\)/, "The user-owned local state cannot be cleared.");
-assert.match(page, /ui\.text\("Ui\.Page\.About\.LocalStateDescription"\)/, "The local-state inspector does not state its privacy boundary.");
+assert.match(page, /ui\.text\("ui_page_about_clear_local_state"\)/, "The user-owned local state cannot be cleared.");
+assert.match(page, /ui\.text\("ui_page_about_local_state_description"\)/, "The local-state inspector does not state its privacy boundary.");
 
 const css = await readFile(new URL("../src/routes/layout.css", import.meta.url), "utf8");
 const forcedColors = cssBlock(css, "@media (forced-colors: active)");
@@ -125,10 +126,6 @@ async function loadModule(url) {
     fileName: url.pathname,
   });
   return import(`data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`);
-}
-
-async function readCatalog(path) {
-  return JSON.parse(await readFile(new URL(path, import.meta.url), "utf8"));
 }
 
 function key(value, modifiers = {}) {

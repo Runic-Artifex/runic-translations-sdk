@@ -1,0 +1,1 @@
+Terms stay in the optional versioned sidecar and are checked locally. Nothing is sent to a service.

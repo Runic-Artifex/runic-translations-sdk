@@ -20,10 +20,10 @@
   const ui = getUiText();
 
   const states: { value: EditorReviewState; label: string }[] = [
-    { value: "draft", label: ui.text("Ui.Workflow.Draft") },
-    { value: "translated", label: ui.text("Ui.Workflow.Translated") },
-    { value: "needs-review", label: ui.text("Ui.Workflow.NeedsReview") },
-    { value: "approved", label: ui.text("Ui.Workflow.Approved") },
+    { value: "draft", label: ui.text("ui_workflow_draft") },
+    { value: "translated", label: ui.text("ui_workflow_translated") },
+    { value: "needs-review", label: ui.text("ui_workflow_needs_review") },
+    { value: "approved", label: ui.text("ui_workflow_approved") },
   ];
 
   let {
@@ -71,11 +71,11 @@
     <Card.Header class="p-0">
       <Collapsible.Trigger class="flex min-h-12 w-full items-center gap-2 rounded-2xl px-4 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <ListChecksIcon class="size-4 shrink-0" aria-hidden="true" />
-        <span class="font-medium">{ui.text("Ui.Workflow.Title")}</span>
+        <span class="font-medium">{ui.text("ui_workflow_title")}</span>
         <Badge variant="secondary">{stateLabel}</Badge>
-        {#if stale}<Badge variant="destructive">{ui.text("Ui.Workflow.SourceChanged")}</Badge>{/if}
+        {#if stale}<Badge variant="destructive">{ui.text("ui_workflow_source_changed")}</Badge>{/if}
         <span class="ml-auto hidden min-w-0 truncate text-xs text-muted-foreground sm:block">
-          {dirty ? ui.text("Ui.Workflow.UnsavedChanges") : message}
+          {dirty ? ui.text("ui_workflow_unsaved_changes") : message}
         </span>
         <ChevronDownIcon class="size-4 shrink-0 transition-transform group-data-[state=open]/workflow:rotate-180" aria-hidden="true" />
       </Collapsible.Trigger>
@@ -86,7 +86,7 @@
         <div class="grid content-start gap-4">
           <div class="flex flex-wrap items-end gap-2">
       <Field.Field class="gap-1">
-        <Field.Label for="workflow-status">{ui.text("Ui.Workflow.Status")}</Field.Label>
+        <Field.Label for="workflow-status">{ui.text("ui_workflow_status")}</Field.Label>
         <Select.Root
           type="single"
           value={reviewState}
@@ -99,7 +99,7 @@
           <Select.Trigger id="workflow-status" size="sm" class="min-w-36">{stateLabel}</Select.Trigger>
           <Select.Content>
             <Select.Group>
-              <Select.Label>{ui.text("Ui.Workflow.Status")}</Select.Label>
+              <Select.Label>{ui.text("ui_workflow_status")}</Select.Label>
               {#each states as option (option.value)}
                 <Select.Item value={option.value} label={option.label}>{option.label}</Select.Item>
               {/each}
@@ -109,33 +109,33 @@
       </Field.Field>
       <Button variant="outline" size="sm" {disabled} onclick={() => { if (!disabled) onterminology(); }}>
         <BookOpenIcon data-icon="inline-start" />
-        {ui.text("Ui.Workflow.Terminology")} · {terminologyCount}
+        {ui.text("ui_workflow_terminology")} · {terminologyCount}
       </Button>
       <Button variant="outline" size="sm" {disabled} onclick={() => { if (!disabled) onreport(); }}>
         <ClipboardListIcon data-icon="inline-start" />
-        {ui.text("Ui.Workflow.QualityReport")} · {qualityCount}
+        {ui.text("ui_workflow_quality_report")} · {qualityCount}
       </Button>
           </div>
 
           <Field.Field>
-            <Field.Label for="review-note">{ui.text("Ui.Workflow.ReviewerNote")}</Field.Label>
+            <Field.Label for="review-note">{ui.text("ui_workflow_reviewer_note")}</Field.Label>
             <Textarea
               id="review-note"
               class="min-h-20 resize-y"
               value={note}
-              placeholder={ui.text("Ui.Workflow.ReviewerNotePlaceholder")}
+              placeholder={ui.text("ui_workflow_reviewer_note_placeholder")}
               {disabled}
               oninput={(event) => { if (!disabled) onnotechange(event.currentTarget.value); }}
             />
           </Field.Field>
         </div>
 
-        <section class="flex flex-col gap-2" aria-label={ui.text("Ui.Workflow.QualityChecks")}>
-          <strong class="text-sm font-medium">{ui.text("Ui.Workflow.QualityChecks")}</strong>
+        <section class="flex flex-col gap-2" aria-label={ui.text("ui_workflow_quality_checks")}>
+          <strong class="text-sm font-medium">{ui.text("ui_workflow_quality_checks")}</strong>
           {#if qualityIssues.length === 0}
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
               <CheckCircle2Icon class="text-primary" />
-              {ui.text("Ui.Workflow.NoIssues")}
+              {ui.text("ui_workflow_no_issues")}
             </div>
           {:else}
             {#each qualityIssues as issue (`${issue.kind}:${issue.message}`)}
@@ -150,8 +150,8 @@
 
       {#if suggestions.length > 0}
         <Card.Footer class="flex-col items-stretch gap-2 border-t py-3">
-          <strong class="flex items-center gap-2 text-sm font-medium"><SparklesIcon />{ui.text("Ui.Workflow.LocalTranslationMemory")}</strong>
-          <p class="text-xs text-muted-foreground">{ui.text("Ui.Workflow.SuggestionsPrivacy")}</p>
+          <strong class="flex items-center gap-2 text-sm font-medium"><SparklesIcon />{ui.text("ui_workflow_local_translation_memory")}</strong>
+          <p class="text-xs text-muted-foreground">{ui.text("ui_workflow_suggestions_privacy")}</p>
           <div class="grid gap-1.5">
             {#each suggestions as suggestion (suggestion.key)}
               <Button
@@ -169,7 +169,7 @@
           </div>
         </Card.Footer>
       {:else}
-        <Card.Footer class="border-t py-3 text-xs text-muted-foreground">{ui.text("Ui.Workflow.EmptySuggestionsPrivacy")}</Card.Footer>
+        <Card.Footer class="border-t py-3 text-xs text-muted-foreground">{ui.text("ui_workflow_empty_suggestions_privacy")}</Card.Footer>
       {/if}
     </Collapsible.Content>
   </Card.Root>

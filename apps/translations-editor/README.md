@@ -2,7 +2,7 @@
 
 # Runic Translations Editor
 
-Translate and review a Runic Translations workspace in a purpose-built desktop editor instead of hand-editing JSON. Browse locale coverage, search messages, edit structured variants and variables, preview changes, manage review state, and resolve compiler feedback in one place.
+Translate and review the same MessageFormat 2 project that application builds consume. Browse locale coverage, search messages, edit patterns and variables, preview changes, manage review state, and resolve compiler feedback in one place while keeping ordinary `.mf2` files readable in Git and any text editor.
 
 Runic Translations Editor is a companion to [Runic Translations](https://github.com/Runic-Artifex/runic-translations). The editor manages workspaces; the compiler, schema, runtime, CLI, and language integrations are published by the main project.
 
@@ -47,7 +47,13 @@ Expand-Archive $archive
 .\Runic.Translations.Editor\runic-translations-editor.cmd edit C:\path\to\workspace
 ```
 
-On first launch, open the directory containing the catalog manifest and locale documents, choose the catalog when prompted, work through the editor diagnostics, and save only after they are resolved. Try the included [example workspace](https://github.com/Runic-Artifex/runic-translations-editor/tree/main/ExampleWorkspace) with `edit ExampleWorkspace` from the extracted application directory. Run `edit` without a workspace to open the current directory.
+On first launch, open the directory containing `translations/runic.json` (or the
+`translations` directory itself). The editor discovers locale directories and
+their `.mf2` messages through the same compiler path as MSBuild and Vite. Work
+through diagnostics and save only after they are resolved. Try the included
+[example workspace](https://github.com/Runic-Artifex/runic-translations-editor/tree/main/ExampleWorkspace)
+with `edit ExampleWorkspace` from the extracted application directory. Run
+`edit` without a workspace to open the current directory.
 
 Future preview builds are evaluation builds: they will be neither code-signed nor notarized, update only when you manually download, verify, and replace the extracted application, and make no update requests or changes to themselves. The preview workflow produces review-only candidates and cannot create a public release. Windows may show an unknown-publisher warning and macOS Gatekeeper may block launch under local policy. See the [preview notice](https://github.com/Runic-Artifex/runic-translations-editor/blob/main/PREVIEW-NOTICE.md) and [distribution policy](https://github.com/Runic-Artifex/runic-translations-editor/blob/main/docs/editor-distribution.md) for the trust boundary and supported delivery details.
 
@@ -57,14 +63,13 @@ Once a preview is published, use its packaged launcher to run the same compiler-
 
 ```bash
 ./runic-translations-editor validate /path/to/workspace
-./runic-translations-editor validate /path/to/workspace --catalog catalog-id
 ```
 
-On Windows, replace the launcher with `runic-translations-editor.cmd`. The command returns `0` for a valid selected catalog, `1` for compiler diagnostics, no catalog, or an ambiguous multi-catalog workspace, and `2` when validation cannot start. Pass `--catalog <id>` whenever the directory contains more than one catalog.
+On Windows, replace the launcher with `runic-translations-editor.cmd`. The command returns `0` for a valid Runic project, `1` for compiler diagnostics or a missing project, and `2` when validation cannot start. A workspace has one conventional `runic.json` project source.
 
 ## Headless interchange
 
-Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an import's reviewable diff and refusals without changing the workspace. An import is applied only when `--apply` is explicit; it previews and consumes the confirmation within one process, so no confirmation token is persisted or reusable.
+Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an import's reviewable diff and refusals without changing the workspace. An XLIFF import updates the target locale's conventional MF2 message files. An import is applied only when `--apply` is explicit; it previews and consumes the confirmation within one process, so no confirmation token is persisted or reusable.
 
 ```bash
 ./runic-translations-editor export /path/to/workspace --format xliff --output .runic-translations/export
@@ -83,7 +88,10 @@ Run `diagnostics <workspace>` to create the existing privacy-bounded diagnostic 
 
 ## What it supports
 
-The editor creates schema-v2 projects; discovers, repairs, and edits catalogs and locale documents; manages locale graphs, keys, structured messages, and review metadata; and keeps diagnostics privacy-bounded. It validates drafts before atomic replacement, warns on external changes, and keeps equivalent editor operations deterministic from the same starting files. The editor intentionally preserves a translator's direct-document formatting rather than reformatting every JSON file.
+The editor opens conventional `runic.json` projects, validates and saves their
+MF2 messages, watches external changes, and previews through the canonical
+compiler model. Diagnostics remain privacy-bounded and writes use revision
+checks plus atomic replacement.
 
 Machine-translation providers and signed stable distribution are not available yet. For diagnostic-bundle contents, recovery behavior, and detailed determinism guarantees, see the [editor distribution documentation](https://github.com/Runic-Artifex/runic-translations-editor/blob/main/docs/editor-distribution.md).
 

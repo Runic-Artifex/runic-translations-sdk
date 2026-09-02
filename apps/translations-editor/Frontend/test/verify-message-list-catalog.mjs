@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { parse } from "svelte/compiler";
+import { readUiMessages } from "./ui-messages.mjs";
 
 const source = await readFile(new URL("../src/lib/MessageList.svelte", import.meta.url), "utf8");
 const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
-const english = JSON.parse(await readFile(new URL("../../EditorResources/editor.en.json", import.meta.url), "utf8"));
-const german = JSON.parse(await readFile(new URL("../../EditorResources/editor.de.json", import.meta.url), "utf8"));
+const [english, german] = await Promise.all([readUiMessages("en"), readUiMessages("de")]);
 const required = [
-  "Messages", "MessageBulkActions", "VisibleMessages", "MarkForReview", "ApproveTranslations",
-  "AddMessage", "NoMatchingMessages", "MissingTranslation", "Translated", "Structured", "Stale", "Review",
+  "app_messages", "app_message_bulk_actions", "app_visible_messages", "app_mark_for_review", "app_approve_translations",
+  "app_add_message", "app_no_matching_messages", "app_missing_translation", "app_translated", "app_structured", "app_stale", "app_review",
 ];
 for (const key of required) {
-  assert.equal(typeof english.resources.App[key], "string", `English catalog omits App.${key}.`);
-  assert.equal(typeof german.resources.App[key], "string", `German catalog omits App.${key}.`);
-  assert.match(page, new RegExp(`m\\$App\\$${key}\\(options\\)`), `The page does not resolve App.${key} from the catalog.`);
+  assert.equal(typeof english[key], "string", `English project omits ${key}.`);
+  assert.equal(typeof german[key], "string", `German project omits ${key}.`);
+  assert.match(page, new RegExp(`m\\.${key}\\(options\\)`), `The page does not call generated message ${key}.`);
 }
 
 const literalText = [];

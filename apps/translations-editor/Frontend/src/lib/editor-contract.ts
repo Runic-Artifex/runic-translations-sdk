@@ -191,8 +191,6 @@ const EditorProjectCreationRequest = Schema.Struct({
   additionalLocales: Schema.Array(EditorProjectLocaleRequest),
   codeNamespace: Schema.String,
   className: Schema.String,
-  layerName: Schema.String,
-  generateEsm: Schema.Boolean,
   includeStarterMessage: Schema.Boolean,
 });
 
@@ -243,7 +241,6 @@ const EditorMutationRequest = Schema.Struct({
   locale: Schema.optional(Schema.String),
   fallback: Schema.optional(Schema.String),
   replacementFallback: Schema.optional(Schema.String),
-  layer: Schema.optional(Schema.String),
   copyFromLocale: Schema.optional(Schema.String),
   sourceKey: Schema.optional(Schema.String),
   targetKey: Schema.optional(Schema.String),
@@ -430,7 +427,7 @@ export const EditorEvent = Schema.TaggedStruct("EditorNoEvents", {});
 export const EditorContract = defineApplicationContract({
   identity: "runic.translations.editor",
   version: 1,
-  fingerprint: "bb519a1ca7355a0c40897f32dca99495107729dc1f88bb71cbb054f18859f6fd",
+  fingerprint: "45e9039e5f53ab97d6c57556a7001b97db527625a4f520592a2cb032c279d439",
   command: EditorCommand,
   receipt: EditorReceipt,
   event: EditorEvent,

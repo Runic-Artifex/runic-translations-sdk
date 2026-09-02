@@ -10,30 +10,30 @@ import type {
 } from "./contracts";
 import { sourceMessageToArtifact, toStructuredMessage } from "./message-composer";
 
-const manifest = document("product.catalog.json", undefined, undefined, {
-  schemaVersion: 2,
+const manifest = document("runic.json", undefined, undefined, {
+  $schema: "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
+  schemaVersion: 1,
   catalog: "customer-product",
-  code: { namespace: "Customer.Product", className: "ProductText", visibility: "public" },
-  defaultLocale: "de",
-  locales: [{ tag: "de" }, { tag: "en", fallback: "de" }, { tag: "fr", fallback: "de" }],
-  layers: [{ name: "base", priority: 0 }],
+  code: { namespace: "Customer.Product", className: "ProductText" },
+  baseLocale: "de",
+  locales: ["de", "en", "fr"],
   validation: { translationCompleteness: "warning", extraLocaleKeys: "error", emptyValues: "error" },
 });
 manifest.isManifest = true;
 
 let snapshot: WorkspaceSnapshot = {
-  root: "/mock/customer-product/Resources",
+  root: "/mock/customer-product/translations",
   catalog: {
     id: "customer-product",
-    schemaVersion: 2,
+    schemaVersion: 1,
     defaultLocale: "de",
     locales: [{ tag: "de" }, { tag: "en", fallback: "de" }, { tag: "fr", fallback: "de" }],
     layers: [{ name: "base", priority: 0 }],
   },
   catalogs: [{
     id: "customer-product",
-    manifestPaths: ["product.catalog.json"],
-    documentCount: 3,
+    manifestPaths: ["runic.json"],
+    documentCount: 12,
     localeCount: 3,
     messageCount: 4,
     errorCount: 0,
@@ -42,15 +42,18 @@ let snapshot: WorkspaceSnapshot = {
   }],
   documents: [
     manifest,
-    document("product.de.json", "de", "base", resources("Speichern", "Abbrechen", "Willkommen zurück, {name}")),
-    document("product.en.json", "en", "base", resources("Save", "Cancel", "Welcome back, {name}")),
-    document("product.fr.json", "fr", "base", {
-      schemaVersion: 2,
-      catalog: "customer-product",
-      locale: "fr",
-      layer: "base",
-      resources: { Common: { Save: "Enregistrer" } },
-    }),
+    mf2Document("de/common_save.mf2", "de", "Speichern"),
+    mf2Document("de/common_cancel.mf2", "de", "Abbrechen"),
+    mf2Document("de/dashboard_welcome.mf2", "de", ".input {$name :string}\nWillkommen zurück, {$name}"),
+    mf2Document("de/files_selected.mf2", "de", ".input {$count :integer select=plural}\n.match $count\none {{Eine Datei ausgewählt}}\n* {{{$count} Dateien ausgewählt}}"),
+    mf2Document("en/common_save.mf2", "en", "Save"),
+    mf2Document("en/common_cancel.mf2", "en", "Cancel"),
+    mf2Document("en/dashboard_welcome.mf2", "en", ".input {$name :string}\nWelcome back, {$name}"),
+    mf2Document("en/files_selected.mf2", "en", ".input {$count :integer select=plural}\n.match $count\none {{One file selected}}\n* {{{$count} files selected}}"),
+    mf2Document("fr/common_save.mf2", "fr", "Enregistrer"),
+    mf2Document("fr/common_cancel.mf2", "fr", "Annuler"),
+    mf2Document("fr/dashboard_welcome.mf2", "fr", ".input {$name :string}\nBienvenue, {$name}"),
+    mf2Document("fr/files_selected.mf2", "fr", ".input {$count :integer select=plural}\n.match $count\none {{Un fichier sélectionné}}\n* {{{$count} fichiers sélectionnés}}"),
   ],
   diagnostics: [],
   success: true,
@@ -58,8 +61,8 @@ let snapshot: WorkspaceSnapshot = {
     path: ".runic-translations/customer-product.editor-state.json",
     revision: "mock-review-1",
     entries: [
-      { key: "Common.Save", locale: "de", state: "approved", sourceFingerprint: "outdated", samples: {} },
-      { key: "Dashboard.Welcome", locale: "en", state: "needs-review", note: "Check the tone.", samples: { name: "Ada" } },
+      { key: "common_save", locale: "de", state: "approved", sourceFingerprint: "outdated", samples: {} },
+      { key: "dashboard_welcome", locale: "en", state: "needs-review", note: "Check the tone.", samples: { name: "Ada" } },
     ],
     terminology: [{ source: "Save", preferred: "Speichern", locale: "de", note: "Use for action buttons." }],
   },
@@ -176,10 +179,11 @@ function syncMockManifest(): void {
   const catalog = snapshot.catalog;
   const manifest = snapshot.documents.find((document) => document.isManifest);
   if (catalog === undefined || manifest === undefined) return;
-  const root = resourceRoot(manifest);
-  root.defaultLocale = catalog.defaultLocale;
-  root.locales = catalog.locales;
-  root.layers = catalog.layers;
+  const root = JSON.parse(manifest.content) as Record<string, unknown>;
+  root.baseLocale = catalog.defaultLocale;
+  root.locales = catalog.locales.map((locale) => locale.fallback !== undefined && locale.fallback !== catalog.defaultLocale
+    ? { tag: locale.tag, fallback: locale.fallback }
+    : locale.tag);
   manifest.content = JSON.stringify(root, null, 2) + "\n";
   manifest.revision = crypto.randomUUID();
   const summary = snapshot.catalogs.find((candidate) => candidate.id === catalog.id);
@@ -191,14 +195,15 @@ function syncMockManifest(): void {
 
 function applyMockMutation(request: { kind: string; locale?: string; fallback?: string; replacementFallback?: string; copyFromLocale?: string; sourceKey?: string; targetKey?: string; initialValue?: string; layer?: string }): void {
   if (request.kind === "add-locale" && request.locale !== undefined && snapshot.catalog !== undefined) {
-    const source = snapshot.documents.find((document) => document.locale === (request.copyFromLocale ?? snapshot.catalog?.defaultLocale) && document.layer === request.layer);
-    if (source !== undefined) {
-      const root = resourceRoot(source);
-      root.locale = request.locale;
-      const added = document(`product.${request.locale}.json`, request.locale, request.layer, root);
-      snapshot.documents = [...snapshot.documents, added];
-      snapshot.catalog.locales = [...snapshot.catalog.locales, { tag: request.locale, fallback: request.fallback }];
-    }
+    const sourceLocale = request.copyFromLocale ?? snapshot.catalog.defaultLocale;
+    const source = snapshot.documents.filter((document) => document.locale === sourceLocale && document.path.endsWith(".mf2"));
+    const added = source.map((document) => mf2Document(
+      `${request.locale}/${document.path.slice(document.path.lastIndexOf("/") + 1)}`,
+      request.locale!,
+      document.content,
+    ));
+    snapshot.documents = [...snapshot.documents, ...added];
+    snapshot.catalog.locales = [...snapshot.catalog.locales, { tag: request.locale, fallback: request.fallback }];
     return;
   }
   if (request.kind === "remove-locale" && request.locale !== undefined && snapshot.catalog !== undefined) {
@@ -213,58 +218,34 @@ function applyMockMutation(request: { kind: string; locale?: string; fallback?: 
       locale.tag === request.locale ? { ...locale, fallback: request.fallback } : locale);
     return;
   }
-  const resources = snapshot.documents.filter((document) => !document.isManifest &&
-    (request.layer === undefined || document.layer === request.layer));
   if (request.kind === "create-key" && request.targetKey !== undefined) {
-    for (const document of resources) setResource(document, request.targetKey, request.initialValue ?? "");
+    const locales = snapshot.catalog?.locales ?? [];
+    snapshot.documents = [
+      ...snapshot.documents,
+      ...locales.map((locale) => mf2Document(`${locale.tag}/${request.targetKey}.mf2`, locale.tag, request.initialValue ?? "")),
+    ];
     return;
   }
   if (request.sourceKey === undefined) return;
-  for (const document of resources) {
-    const value = getResource(document, request.sourceKey);
-    if (value === undefined) continue;
-    if (request.kind !== "duplicate-key") deleteResource(document, request.sourceKey);
-    if (request.kind !== "delete-key" && request.targetKey !== undefined) setResource(document, request.targetKey, value);
+  const suffix = `/${request.sourceKey}.mf2`;
+  const matching = snapshot.documents.filter((document) => document.path.endsWith(suffix));
+  if (request.kind === "delete-key") {
+    snapshot.documents = snapshot.documents.filter((document) => !matching.includes(document));
+    return;
   }
-}
-
-function resourceRoot(document: EditorDocument): Record<string, unknown> {
-  return JSON.parse(document.content) as Record<string, unknown>;
-}
-
-function getResource(document: EditorDocument, key: string): unknown {
-  let current: unknown = resourceRoot(document).resources;
-  for (const segment of key.split(".")) {
-    if (typeof current !== "object" || current === null || !(segment in current)) return undefined;
-    current = (current as Record<string, unknown>)[segment];
+  if (request.targetKey === undefined) return;
+  if (request.kind === "duplicate-key") {
+    snapshot.documents = [...snapshot.documents, ...matching.map((document) => mf2Document(
+      `${document.locale}/${request.targetKey}.mf2`,
+      document.locale!,
+      document.content,
+    ))];
+    return;
   }
-  return structuredClone(current);
-}
-
-function setResource(document: EditorDocument, key: string, value: unknown): void {
-  const root = resourceRoot(document);
-  let current = root.resources as Record<string, unknown>;
-  const segments = key.split(".");
-  for (const segment of segments.slice(0, -1)) {
-    current = (current[segment] ??= {}) as Record<string, unknown>;
+  for (const document of matching) {
+    document.path = `${document.locale}/${request.targetKey}.mf2`;
+    document.revision = crypto.randomUUID();
   }
-  current[segments.at(-1)!] = structuredClone(value);
-  document.content = JSON.stringify(root, null, 2) + "\n";
-  document.revision = crypto.randomUUID();
-}
-
-function deleteResource(document: EditorDocument, key: string): void {
-  const root = resourceRoot(document);
-  let current = root.resources as Record<string, unknown>;
-  const segments = key.split(".");
-  for (const segment of segments.slice(0, -1)) {
-    const next = current[segment];
-    if (typeof next !== "object" || next === null) return;
-    current = next as Record<string, unknown>;
-  }
-  delete current[segments.at(-1)!];
-  document.content = JSON.stringify(root, null, 2) + "\n";
-  document.revision = crypto.randomUUID();
 }
 
 async function load(): Promise<WorkspaceSnapshot> {
@@ -276,13 +257,13 @@ async function checkExternalChanges() {
 }
 
 async function pickWorkspace() {
-  return { ok: true, cancelled: false, directory: "/mock/multi-catalog" };
+  return { ok: true, cancelled: false, directory: "/mock/project" };
 }
 
 async function previewMutation(request: MockMutationRequest) {
   const path = request.kind.includes("locale") || request.kind === "set-fallback"
-    ? "product.catalog.json"
-    : "product.de.json";
+    ? "runic.json"
+    : `de/${request.sourceKey ?? request.targetKey ?? "message"}.mf2`;
   const requiresIrreversibleConfirmation = true;
   const confirmationToken = crypto.randomUUID();
   destructiveConfirmation = {
@@ -356,6 +337,12 @@ async function redo() {
 }
 
 async function validate(path: string, content: string) {
+  if (path.endsWith(".mf2")) {
+    return { success: content.trim().length > 0, diagnostics: content.trim().length > 0 ? [] : [{
+      id: "MF2-EMPTY", severity: "error", message: "An MF2 message cannot be empty.", path,
+      line: 1, column: 1, endLine: 1, endColumn: 1,
+    }] };
+  }
   try {
     JSON.parse(content);
     return { success: true, diagnostics: [] };
@@ -378,11 +365,12 @@ async function validate(path: string, content: string) {
 
 async function previewMessage(path: string, content: string, locale: string, key: string) {
   try {
-    const root = JSON.parse(content) as Record<string, unknown>;
-    let value: unknown = root.resources;
-    for (const segment of key.split(".")) value = (value as Record<string, unknown>)[segment];
-    if (typeof value === "object" && value !== null && "$value" in value) {
-      value = (value as Record<string, unknown>).$value;
+    let value: unknown = content;
+    if (!path.endsWith(".mf2")) {
+      const root = JSON.parse(content) as Record<string, unknown>;
+      value = root.resources;
+      for (const segment of key.split(".")) value = (value as Record<string, unknown>)[segment];
+      if (typeof value === "object" && value !== null && "$value" in value) value = (value as Record<string, unknown>).$value;
     }
     const artifact = sourceMessageToArtifact(toStructuredMessage(value as string | Record<string, unknown>));
     return { success: true, locale, astJson: JSON.stringify(artifact), diagnostics: [] };
@@ -471,8 +459,8 @@ async function previewXliffImport(path: string) {
     ok: true, catalogId: snapshot.catalog?.id, sourceLocale: "de", targetLocale: "en", layer: "base",
     requiresIrreversibleConfirmation: true, confirmationToken: token,
     changes: [
-      { key: "Dashboard.Welcome", kind: "changed", before: "Welcome back, {name}", after: "Welcome again, {name}" },
-      { key: "Common.Save", kind: "state-change", stateBefore: "draft", stateAfter: "needs-review" },
+      { key: "dashboard_welcome", kind: "changed", before: "Welcome back, {$name}", after: "Welcome again, {$name}" },
+      { key: "common_save", kind: "state-change", stateBefore: "draft", stateAfter: "needs-review" },
     ],
     addedCount: 0, changedCount: 1, removedCount: 0, unchangedCount: 3, reviewUpdateCount: 1,
     changesOverflowed: false, refusals: [],
@@ -485,10 +473,11 @@ async function applyXliffImport(confirmationToken: string) {
     return { ok: false, kind: "irreversible-confirmation", message: "Preview this import again to obtain a valid confirmation token.", history: snapshot.history };
   }
   preparedXliffImport = undefined;
-  const document = snapshot.documents.find((candidate) => candidate.locale === "en" && candidate.layer === "base");
+  const document = snapshot.documents.find((candidate) => candidate.path === "en/dashboard_welcome.mf2");
   if (document !== undefined) {
     const before = structuredClone(document);
-    setResource(document, "Dashboard.Welcome", "Welcome again, {name}");
+    document.content = ".input {$name :string}\nWelcome again, {$name}\n";
+    document.revision = crypto.randomUUID();
     recordDocumentHistory(before, document);
   }
   return { ok: true, kind: "imported", snapshot: structuredClone(snapshot), history: snapshot.history };
@@ -559,8 +548,8 @@ async function previewProject(request: EditorProjectCreationRequest) {
     catalogId: request.catalogId,
     locales,
     files: [
-      `${request.catalogId}.catalog.json`,
-      ...locales.map((locale) => `${request.catalogId}.${locale.tag}.json`),
+      "runic.json",
+      ...(request.includeStarterMessage ? locales.map((locale) => `${locale.tag}/application_title.mf2`) : []),
     ].sort(),
   };
 }
@@ -568,29 +557,30 @@ async function previewProject(request: EditorProjectCreationRequest) {
 async function createProject(request: EditorProjectCreationRequest) {
   const locales = projectLocales(request);
   const manifestValue = {
-    schemaVersion: 2,
+    $schema: "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
+    schemaVersion: 1,
     catalog: request.catalogId,
-    code: { namespace: request.codeNamespace, className: request.className, visibility: "public" },
-    defaultLocale: request.defaultLocale,
-    locales,
-    layers: [{ name: request.layerName, priority: 0 }],
-    validation: { translationCompleteness: "error", extraLocaleKeys: "error", emptyValues: "error" },
+    code: { namespace: request.codeNamespace, className: request.className },
+    baseLocale: request.defaultLocale,
+    locales: locales.map((locale) => "fallback" in locale && locale.fallback && locale.fallback !== request.defaultLocale
+      ? { tag: locale.tag, fallback: locale.fallback }
+      : locale.tag),
   };
-  const nextManifest = document(`${request.catalogId}.catalog.json`, undefined, undefined, manifestValue);
+  const nextManifest = document("runic.json", undefined, undefined, manifestValue);
   nextManifest.isManifest = true;
   snapshot = {
     root: request.directory,
     catalog: {
       id: request.catalogId,
-      schemaVersion: 2,
+      schemaVersion: 1,
       defaultLocale: request.defaultLocale,
       locales,
-      layers: [{ name: request.layerName, priority: 0 }],
+      layers: [{ name: "base", priority: 0 }],
     },
     catalogs: [{
       id: request.catalogId,
-      manifestPaths: [`${request.catalogId}.catalog.json`],
-      documentCount: locales.length,
+      manifestPaths: ["runic.json"],
+      documentCount: request.includeStarterMessage ? locales.length : 0,
       localeCount: locales.length,
       messageCount: request.includeStarterMessage ? 1 : 0,
       errorCount: 0,
@@ -599,20 +589,15 @@ async function createProject(request: EditorProjectCreationRequest) {
     }],
     documents: [
       nextManifest,
-      ...locales.map((locale) => document(
-        `${request.catalogId}.${locale.tag}.json`,
-        locale.tag,
-        request.layerName,
-        {
-          schemaVersion: 2,
-          catalog: request.catalogId,
-          locale: locale.tag,
-          layer: request.layerName,
-          resources: request.includeStarterMessage
-            ? { Application: { Name: request.className } }
-            : {},
-        },
-      )),
+      ...(request.includeStarterMessage ? locales.map((locale) => ({
+        path: `${locale.tag}/application_title.mf2`,
+        locale: locale.tag,
+        layer: "base",
+        isManifest: false,
+        isMalformed: false,
+        revision: `mock-${locale.tag}-application-title`,
+        content: `${request.className}\n`,
+      })) : []),
     ],
     diagnostics: [],
     success: true,
@@ -629,8 +614,8 @@ async function openWorkspace(request: { readonly directory: string; readonly cat
     choice.root = request.directory;
     choice.catalog = undefined;
     choice.catalogs = [
-      { id: "storefront", manifestPaths: ["storefront/catalog.json"], documentCount: 2, localeCount: 2, messageCount: 18, errorCount: 0, warningCount: 0, success: true },
-      { id: "backoffice", manifestPaths: ["admin/catalog.json"], documentCount: 1, localeCount: 1, messageCount: 9, errorCount: 1, warningCount: 0, success: false },
+      { id: "storefront", manifestPaths: ["storefront/runic.json"], documentCount: 36, localeCount: 2, messageCount: 18, errorCount: 0, warningCount: 0, success: true },
+      { id: "backoffice", manifestPaths: ["admin/runic.json"], documentCount: 9, localeCount: 1, messageCount: 9, errorCount: 1, warningCount: 0, success: false },
     ];
     snapshot = choice;
     clearHistory();
@@ -644,7 +629,7 @@ async function openWorkspace(request: { readonly directory: string; readonly cat
     const catalogId = request.catalogId;
     opened.catalog = {
       ...(opened.catalog ?? {
-        schemaVersion: 2,
+        schemaVersion: 1,
         defaultLocale: "en",
         locales: [{ tag: "en" }],
         layers: [{ name: "base", priority: 0 }],
@@ -848,34 +833,14 @@ function document(
   };
 }
 
-function resources(save: string, cancel: string, welcome: string): Record<string, unknown> {
+function mf2Document(path: string, locale: string, content: string): EditorDocument {
   return {
-    schemaVersion: 2,
-    catalog: "customer-product",
-    locale: save === "Speichern" ? "de" : "en",
+    path,
+    locale,
     layer: "base",
-    resources: {
-      Common: { Save: save, Cancel: cancel },
-      Dashboard: {
-        Welcome: {
-          $value: welcome,
-          $description: "Greeting on the dashboard",
-          $tags: ["dashboard", "customer-facing"],
-          $placeholders: { name: { type: "string" } },
-        },
-      },
-      Files: {
-        Selected: {
-          $value: {
-            inputs: { count: { type: "int64" } },
-            selectors: [{ name: "quantity", input: "count", function: "plural" }],
-            variants: [
-              { match: { quantity: "one" }, value: save === "Speichern" ? "Eine Datei ausgewählt" : "One file selected" },
-              { match: { quantity: "*" }, value: save === "Speichern" ? "{count} Dateien ausgewählt" : "{count} files selected" },
-            ],
-          },
-        },
-      },
-    },
+    isManifest: false,
+    isMalformed: false,
+    revision: `mock-${path}`,
+    content: content.endsWith("\n") ? content : `${content}\n`,
   };
 }

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
+  "schemaVersion": 1,
+  "catalog": "editor",
+  "code": {
+    "namespace": "Runic.Translations.Editor.Generated",
+    "className": "EditorText"
+  },
+  "baseLocale": "en",
+  "locales": [
+    "en",
+    {
+      "tag": "de",
+      "fallback": "en"
+    }
+  ]
+}

@@ -51,20 +51,20 @@
     <div class="flex flex-wrap gap-1.5 xl:justify-end">
       <Badge variant="outline">{locale}</Badge>
       <Badge variant="outline">{layer}</Badge>
-      {#if inheritedFrom}<Badge variant="secondary">{ui.text("Ui.MessageHeading.FallsBackTo")} {inheritedFrom}</Badge>{/if}
+      {#if inheritedFrom}<Badge variant="secondary">{ui.text("ui_message_heading_falls_back_to")} {inheritedFrom}</Badge>{/if}
     </div>
     <div class="flex gap-1.5">
-      <Button variant="outline" size="xs" aria-label={ui.text("Ui.MessageHeading.Rename")} title={ui.text("Ui.MessageHeading.RenameTitle")} onclick={onrename}>
+      <Button variant="outline" size="xs" aria-label={ui.text("ui_message_heading_rename")} title={ui.text("ui_message_heading_rename_title")} onclick={onrename}>
         <PencilIcon data-icon="inline-start" />
-        <span class="hidden min-[360px]:inline">{ui.text("Ui.MessageHeading.Rename")}</span>
+        <span class="hidden min-[360px]:inline">{ui.text("ui_message_heading_rename")}</span>
       </Button>
-      <Button variant="outline" size="xs" aria-label={ui.text("Ui.MessageHeading.Duplicate")} title={ui.text("Ui.MessageHeading.DuplicateTitle")} onclick={onduplicate}>
+      <Button variant="outline" size="xs" aria-label={ui.text("ui_message_heading_duplicate")} title={ui.text("ui_message_heading_duplicate_title")} onclick={onduplicate}>
         <CopyIcon data-icon="inline-start" />
-        <span class="hidden min-[360px]:inline">{ui.text("Ui.MessageHeading.Duplicate")}</span>
+        <span class="hidden min-[360px]:inline">{ui.text("ui_message_heading_duplicate")}</span>
       </Button>
-      <Button variant="destructive" size="xs" aria-label={ui.text("Ui.MessageHeading.Delete")} title={ui.text("Ui.MessageHeading.DeleteTitle")} onclick={ondelete}>
+      <Button variant="destructive" size="xs" aria-label={ui.text("ui_message_heading_delete")} title={ui.text("ui_message_heading_delete_title")} onclick={ondelete}>
         <Trash2Icon data-icon="inline-start" />
-        <span class="hidden min-[360px]:inline">{ui.text("Ui.MessageHeading.Delete")}</span>
+        <span class="hidden min-[360px]:inline">{ui.text("ui_message_heading_delete")}</span>
       </Button>
     </div>
   </div>

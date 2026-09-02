@@ -1,0 +1,1 @@
+Beide Spalten durchlaufen dieselbe compiler-normalisierte AST-Pipeline; Markup bleibt semantische Daten und wird niemals als HTML interpretiert.

@@ -49,7 +49,7 @@ Expand-Archive .\Runic.Translations.Editor-1.0.0-preview.N-win-x64.zip
 .\Runic.Translations.Editor\runic-translations-editor.cmd edit C:\path\to\workspace
 ```
 
-The launcher accepts `edit [workspace]` and `validate [workspace]`; without arguments it edits the current directory. For a multi-catalog directory, add `--catalog <id>`.
+The launcher accepts `edit [workspace]` and `validate [workspace]`; without arguments it edits the current directory. The workspace contains one conventional `runic.json` translation project.
 
 ## Release boundary
 
@@ -72,14 +72,14 @@ forbids unsigned software.
 The supported CI invocation from an extracted archive is:
 
 ```bash
-./runic-translations-editor validate /path/to/workspace --catalog optional-catalog-id
+./runic-translations-editor validate /path/to/workspace
 ```
 
 On Windows, use `runic-translations-editor.cmd` with the same arguments. This command constructs the same `EditorWorkspace` and calls the same compiler-backed load path as the editor UI. A save is separately validated against the same compiler with its in-memory draft substituted before atomic replacement. There is no weaker editor-only schema or validator.
 
 Editor smoke tests apply identical key and review operations to two clean workspace copies and require byte-identical outputs. They also require structural changes to touch only the expected locale documents and review metadata to appear in one separate editor-state sidecar. Local `./verify.sh` snapshots the Git diff and status before generation and fails if verification introduces an unreviewed tracked or untracked change.
 
-The editor intentionally preserves a translator's formatting for direct document saves. Determinism means the same starting bytes and editor operation produce the same ending bytes; it does not mean every manually edited JSON document is reformatted.
+The editor intentionally preserves a translator's MF2 formatting for direct document saves. Determinism means the same starting bytes and editor operation produce the same ending bytes; it does not mean every manually edited message is reformatted.
 
 Before declaring the public preview ready, maintainers must run the bounded [translator usability test](translator-usability-test.md) and post its anonymized results to the release issue. Automated smoke tests do not substitute for that human gate.
 

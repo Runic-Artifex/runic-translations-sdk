@@ -34,7 +34,7 @@
 </script>
 
 <div class="px-2 pb-2">
-  <label class="sr-only" for="message-search">{ui.text("Ui.MessageToolbar.SearchMessages")}</label>
+  <label class="sr-only" for="message-search">{ui.text("ui_message_toolbar_search_messages")}</label>
   <InputGroup.Root>
     <InputGroup.Input id="message-search" bind:ref={inputRef} bind:value={query} type="search" {placeholder} />
     <InputGroup.Addon>

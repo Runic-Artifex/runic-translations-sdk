@@ -50,7 +50,7 @@
         {label}
       </Field.Label>
       <span class="shrink-0 text-[0.65rem] tabular-nums text-muted-foreground">
-        {value.length.toLocaleString()} {ui.text("Ui.TranslationEditor.Characters")}
+        {value.length.toLocaleString()} {ui.text("ui_translation_editor_characters")}
       </span>
     </div>
 
@@ -63,7 +63,7 @@
         id="translation-value"
         class="field-sizing-fixed min-h-96 resize-y bg-card/70 px-5 py-4 font-mono text-xs leading-7 shadow-inner"
         value={value}
-        placeholder={missing ? ui.text("Ui.TranslationEditor.AddTranslation") : undefined}
+        placeholder={missing ? ui.text("ui_translation_editor_add_translation") : undefined}
         spellcheck={false}
         lang={locale}
         dir={localeDirection(locale)}
@@ -72,10 +72,10 @@
         oninput={(event) => onrawchange(event.currentTarget.value)}
       />
       <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
-        <Field.Description class="text-xs">{ui.text("Ui.TranslationEditor.RawChangeDescription")}</Field.Description>
+        <Field.Description class="text-xs">{ui.text("ui_translation_editor_raw_change_description")}</Field.Description>
         <Button variant="ghost" size="xs" {disabled} onclick={onformatraw}>
           <WandSparklesIcon data-icon="inline-start" />
-          {ui.text("Ui.TranslationEditor.FormatJson")}
+          {ui.text("ui_translation_editor_format_json")}
         </Button>
       </div>
     {/if}

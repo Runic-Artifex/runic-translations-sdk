@@ -158,7 +158,7 @@ try {
         -p:RunicEditorUpdateChannel=$ReleaseChannel
     if ($LASTEXITCODE -ne 0) { throw "Self-contained editor publish failed." }
 
-    foreach ($required in @("ExampleWorkspace/product.catalog.json", "LICENSE.txt", "THIRD-PARTY-NOTICES.md", "PREVIEW-NOTICE.md", "runic-translations-editor", "runic-translations-editor.cmd")) {
+    foreach ($required in @("ExampleWorkspace/runic.json", "ExampleWorkspace/en/common_save.mf2", "LICENSE.txt", "THIRD-PARTY-NOTICES.md", "PREVIEW-NOTICE.md", "runic-translations-editor", "runic-translations-editor.cmd")) {
         if (-not (Test-Path (Join-Path $publishRoot $required))) { throw "Published editor omitted '$required'." }
     }
     $executableName = if ($IsWindows) { "Runic.Translations.Editor.exe" } else { "Runic.Translations.Editor" }

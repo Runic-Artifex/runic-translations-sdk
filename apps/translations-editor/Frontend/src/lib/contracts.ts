@@ -181,8 +181,6 @@ export interface EditorProjectCreationRequest {
   additionalLocales: EditorProjectLocaleRequest[];
   codeNamespace: string;
   className: string;
-  layerName: string;
-  generateEsm: boolean;
   includeStarterMessage: boolean;
 }
 
@@ -225,7 +223,6 @@ export interface EditorMutationRequest {
   locale?: string;
   fallback?: string;
   replacementFallback?: string;
-  layer?: string;
   copyFromLocale?: string;
   sourceKey?: string;
   targetKey?: string;
