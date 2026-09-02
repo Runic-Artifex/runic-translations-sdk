@@ -14,6 +14,7 @@ internal static class BuildIntegrationTests
         runner.Add("build props and targets expose stable import sentinels", ImportsExposeSentinels);
         runner.Add("build maps declared items to AdditionalFiles metadata", ItemsMapToAdditionalFiles);
         runner.Add("build target declares incremental Inputs and Outputs", TargetDeclaresInputsAndOutputs);
+        runner.Add("build discovers one conventional MF2 translation project", ConventionalProjectIsDiscovered);
         runner.Add("build generates only below the isolated intermediate root", GenerationIsIsolated);
         runner.Add("build generation is incremental and input-sensitive", GenerationIsIncremental);
         runner.Add("build regenerates an artifact missing despite a current stamp", MissingArtifactInvalidatesStamp);
@@ -40,8 +41,8 @@ internal static class BuildIntegrationTests
         ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Consumer.csproj", "/nologo", "/t:DumpTranslationItems", "/v:minimal");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string dump = File.ReadAllText(temporary.Resolve("dump.txt"), Encoding.UTF8).Replace('\\', '/');
-        Assert.Contains("manifest|Catalog", dump);
-        Assert.Contains("en|Document", dump);
+        Assert.Contains("runic|Project", dump);
+        Assert.Contains("Hello|Mf2", dump);
     }
 
     private static void TargetDeclaresInputsAndOutputs()
@@ -58,8 +59,8 @@ internal static class BuildIntegrationTests
             .Single(element => string.Equals((string?)element.Attribute("Name"), "_RunicTranslationsGenerateTranslationArtifactsCore", StringComparison.Ordinal));
         string inputs = (string?)target.Attribute("Inputs") ?? string.Empty;
         string outputs = (string?)target.Attribute("Outputs") ?? string.Empty;
-        Assert.Contains("@(TranslationCatalog)", inputs);
-        Assert.Contains("@(TranslationDocument)", inputs);
+        Assert.Contains("@(TranslationProject)", inputs);
+        Assert.Contains("@(TranslationMf2)", inputs);
         Assert.Contains("$(MSBuildProjectFullPath)", inputs);
         Assert.Equal("$(TranslationsOutputStamp)", outputs);
     }
@@ -67,8 +68,8 @@ internal static class BuildIntegrationTests
     private static void GenerationIsIsolated()
     {
         using TemporaryDirectory temporary = CreateConsumer(generationEnabled: true);
-        byte[] catalogBefore = File.ReadAllBytes(temporary.Resolve("Resources", "manifest.json"));
-        byte[] documentBefore = File.ReadAllBytes(temporary.Resolve("Resources", "en.json"));
+        byte[] catalogBefore = File.ReadAllBytes(temporary.Resolve("translations", "runic.json"));
+        byte[] documentBefore = File.ReadAllBytes(temporary.Resolve("translations", "en", "Hello.mf2"));
 
         ProcessResult result = Build(temporary);
 
@@ -77,12 +78,61 @@ internal static class BuildIntegrationTests
         string intermediate = Path.GetFullPath(temporary.Resolve("artifacts", "obj")) + Path.DirectorySeparatorChar;
         Assert.True(Path.GetFullPath(output).StartsWith(intermediate, PathComparison), $"Generated output escaped the isolated intermediate root: {output}");
         Assert.Equal(
-            "minimal.asset-manifest-v1.json|minimal.en.locale-v1.json|minimal.esm/dynamic.d.ts|minimal.esm/dynamic.js|minimal.esm/messages.d.ts|minimal.esm/messages.js|minimal.esm/messages/_index.js|minimal.esm/messages/m$Hello.js|minimal.esm/runtime.d.ts|minimal.esm/runtime.js|minimal.esm/transport.d.ts|minimal.esm/transport.js|minimal.esm/web-module-manifest-v1.json|minimal.template-manifest-v1.json|minimal.translations-v1.d.ts",
+            "minimal.asset-manifest-v1.json|minimal.en.locale-v2.json|minimal.esm/dynamic.d.ts|minimal.esm/dynamic.js|minimal.esm/messages.d.ts|minimal.esm/messages.js|minimal.esm/messages/_index.js|minimal.esm/messages/m$Hello.js|minimal.esm/runtime.d.ts|minimal.esm/runtime.js|minimal.esm/server.d.ts|minimal.esm/server.js|minimal.esm/transport.d.ts|minimal.esm/transport.js|minimal.esm/web-module-manifest-v1.json|minimal.template-manifest-v1.json|minimal.translations-v1.d.ts",
             string.Join('|', GeneratedArtifacts(output)));
-        Assert.True(catalogBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("Resources", "manifest.json"))), "Build changed the catalog source.");
-        Assert.True(documentBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("Resources", "en.json"))), "Build changed the document source.");
+        Assert.True(catalogBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("translations", "runic.json"))), "Build changed the project source.");
+        Assert.True(documentBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("translations", "en", "Hello.mf2"))), "Build changed the MF2 source.");
         Assert.False(Directory.EnumerateFiles(temporary.Path, "*.g.cs", SearchOption.TopDirectoryOnly).Any(), "Build wrote generated C# beside project sources.");
-        Assert.False(Directory.Exists(temporary.Resolve("Resources", "generated")), "Build wrote under the source resource directory.");
+        Assert.False(Directory.Exists(temporary.Resolve("translations", "generated")), "Build wrote under the source translation directory.");
+    }
+
+    private static void ConventionalProjectIsDiscovered()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations", "en"));
+        Directory.CreateDirectory(temporary.Resolve("translations", "de"));
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), """
+            { "schemaVersion": 1, "catalog": "app", "code": { "namespace": "Example", "className": "AppText" }, "baseLocale": "en", "locales": ["en", "de"] }
+            """, new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "en", "application_title.mf2"), "Application title\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "de", "application_title.mf2"), "Anwendungstitel\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("Program.cs"), "internal static class Program { private static void Main() { _ = typeof(Example.AppText); } }\n", new UTF8Encoding(false));
+        string props = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Build", "build", "Runic.Translations.Build.props"));
+        string targets = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets"));
+        string runtimeProject = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations", "Runic.Translations.csproj"));
+        string compilerProject = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Compiler", "Runic.Translations.Compiler.csproj"));
+        string generatorProject = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Generator", "Runic.Translations.Generator.csproj"));
+        string compilerAssembly = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Compiler", "bin", "$(Configuration)", "net10.0", "Runic.Translations.Compiler.dll"));
+        string tool = $"dotnet &quot;{XmlPath(RepositoryPaths.ToolAssembly)}&quot;";
+        string project = $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Import Project="{{props}}" />
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <IntermediateOutputPath>artifacts/obj/$(Configuration)/</IntermediateOutputPath>
+                <BaseOutputPath>artifacts/bin/</BaseOutputPath>
+                <RestorePackagesPath>{{XmlPath(RepositoryPaths.Resolve(".packages"))}}</RestorePackagesPath>
+                <TranslationsGenerateOnBuild>true</TranslationsGenerateOnBuild>
+                <TranslationsToolCommand>{{tool}}</TranslationsToolCommand>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{runtimeProject}}" />
+                <ProjectReference Include="{{compilerProject}}" />
+                <ProjectReference Include="{{generatorProject}}" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+                <Analyzer Include="{{compilerAssembly}}" />
+              </ItemGroup>
+              <Import Project="{{targets}}" />
+            </Project>
+            """;
+        File.WriteAllText(temporary.Resolve("Consumer.csproj"), project, new UTF8Encoding(false));
+
+        ProcessResult result = Build(temporary);
+
+        Assert.Equal(0, result.ExitCode, result.Combined);
+        Assert.True(Directory.EnumerateFiles(temporary.Resolve("artifacts", "obj"), "app.esm", SearchOption.AllDirectories).Any() ||
+            Directory.EnumerateFiles(temporary.Resolve("artifacts", "obj"), "messages.js", SearchOption.AllDirectories).Any(),
+            "Conventional project did not generate ESM artifacts.");
     }
 
     private static void GenerationIsIncremental()
@@ -99,7 +149,7 @@ internal static class BuildIntegrationTests
         Assert.Equal(firstWrite, File.GetLastWriteTimeUtc(stamp), "An unchanged build reran generation");
 
         Thread.Sleep(1_200);
-        string document = temporary.Resolve("Resources", "en.json");
+        string document = temporary.Resolve("translations", "en", "Hello.mf2");
         File.SetLastWriteTimeUtc(document, DateTime.UtcNow);
         ProcessResult third = Build(temporary, noRestore: true);
         Assert.Equal(0, third.ExitCode, third.Combined);
@@ -184,7 +234,7 @@ internal static class BuildIntegrationTests
         ProcessResult first = Build(temporary);
         Assert.Equal(0, first.ExitCode, first.Combined);
         string output = FindGeneratedDirectory(temporary);
-        Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v1.json")), "All emission omitted JSON.");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v2.json")), "All emission omitted JSON.");
         Assert.True(File.Exists(Path.Combine(output, "minimal.asset-manifest-v1.json")), "All emission omitted the asset manifest.");
         Assert.True(File.Exists(Path.Combine(output, "minimal.template-manifest-v1.json")), "All emission omitted template manifest.");
         Assert.True(File.Exists(Path.Combine(output, "minimal.translations-v1.d.ts")), "All emission omitted TypeScript.");
@@ -199,18 +249,18 @@ internal static class BuildIntegrationTests
         File.WriteAllText(projectPath, project, new UTF8Encoding(false));
         ProcessResult second = Build(temporary, noRestore: true);
         Assert.Equal(0, second.ExitCode, second.Combined);
-        Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v1.json")), "JSON-only reconciliation removed JSON.");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v2.json")), "JSON-only reconciliation removed JSON.");
         Assert.True(File.Exists(Path.Combine(output, "minimal.asset-manifest-v1.json")), "JSON-only reconciliation removed the asset manifest.");
         Assert.False(File.Exists(Path.Combine(output, "minimal.template-manifest-v1.json")), "JSON-only reconciliation retained the prior template manifest.");
         Assert.False(File.Exists(Path.Combine(output, "minimal.translations-v1.d.ts")), "JSON-only reconciliation retained the prior TypeScript contract.");
         Assert.True(File.Exists(sentinel), "Reconciliation deleted an uninventoried consumer file.");
 
         string exposure = File.ReadAllText(temporary.Resolve("artifacts", "generated-items.txt"), Encoding.UTF8).Trim();
-        Assert.Equal("minimal.asset-manifest-v1.json|minimal.en.locale-v1.json", exposure, "Generated item exposure included private state or an unrelated file");
+        Assert.Equal("minimal.asset-manifest-v1.json|minimal.en.locale-v2.json", exposure, "Generated item exposure included private state or an unrelated file");
 
         ProcessResult clean = Clean(temporary);
         Assert.Equal(0, clean.ExitCode, clean.Combined);
-        Assert.False(File.Exists(Path.Combine(output, "minimal.en.locale-v1.json")), "Clean retained an inventoried generated artifact.");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.en.locale-v2.json")), "Clean retained an inventoried generated artifact.");
         Assert.False(File.Exists(Path.Combine(output, "minimal.asset-manifest-v1.json")), "Clean retained the inventoried asset manifest.");
         Assert.True(File.Exists(sentinel), "Clean deleted an uninventoried consumer file.");
     }
@@ -222,10 +272,9 @@ internal static class BuildIntegrationTests
         string? toolCommand = null)
     {
         TemporaryDirectory temporary = new();
-        Directory.CreateDirectory(temporary.Resolve("Resources"));
-        string fixture = RepositoryPaths.Resolve("spec", "corpus", "valid", "minimal");
-        File.Copy(Path.Combine(fixture, "manifest.json"), temporary.Resolve("Resources", "manifest.json"));
-        File.Copy(Path.Combine(fixture, "en.json"), temporary.Resolve("Resources", "en.json"));
+        Directory.CreateDirectory(temporary.Resolve("translations", "en"));
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), "{\"schemaVersion\":1,\"catalog\":\"minimal\",\"code\":{\"namespace\":\"Example\",\"className\":\"MinimalText\"},\"baseLocale\":\"en\"}\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "en", "Hello.mf2"), ".input {$name :string}\nHello {$name}\n", new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("Program.cs"), "internal static class Program { private static void Main() { } }\n", new UTF8Encoding(false));
 
         string props = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Build", "build", "Runic.Translations.Build.props"));
@@ -249,10 +298,6 @@ internal static class BuildIntegrationTests
                 {{output}}
                 {{extraProperties}}
               </PropertyGroup>
-              <ItemGroup>
-                <TranslationCatalog Include="Resources/manifest.json" />
-                <TranslationDocument Include="Resources/en.json" />
-              </ItemGroup>
               <Import Project="{{targets}}" />
               <Target Name="DumpTranslationItems">
                 <WriteLinesToFile File="dump.txt"
@@ -285,7 +330,7 @@ internal static class BuildIntegrationTests
         "/nologo",
         "/v:minimal");
 
-    private static string FindGeneratedDirectory(TemporaryDirectory temporary, string artifactName = "minimal.en.locale-v1.json")
+    private static string FindGeneratedDirectory(TemporaryDirectory temporary, string artifactName = "minimal.en.locale-v2.json")
     {
         string root = temporary.Resolve("artifacts", "obj");
         string artifact = Directory.EnumerateFiles(root, artifactName, SearchOption.AllDirectories).Single();

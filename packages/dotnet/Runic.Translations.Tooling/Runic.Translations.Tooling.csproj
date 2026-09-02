@@ -4,7 +4,7 @@
     <AssemblyName>Runic.Translations.Tooling</AssemblyName>
     <RootNamespace>Runic.Translations.Tooling</RootNamespace>
     <PackageId>Runic.Translations.Tooling</PackageId>
-    <Description>Preview compiler, deterministic source migration, interchange, and transactional authoring facade for Runic Translations.</Description>
+    <Description>MF2 compiler, interchange, and transactional authoring facade for Runic Translations.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
@@ -28,8 +28,7 @@
                       Condition="!Exists('../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj')" />
     <ProjectReference Include="..\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" PrivateAssets="all" />
-    <None Include="..\..\..\spec\schemas\resources-v3.schema.json" Pack="true" PackagePath="schemas" />
-    <None Include="..\..\..\spec\schemas\message-ast-v3.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\..\spec\schemas\project-v1.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="..\..\..\spec\schemas\locale-pack-v2.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="..\..\..\spec\schemas\locale-artifact-v2.schema.json" Pack="true" PackagePath="schemas" />
     <None Update="README.md" Pack="true" PackagePath="\" />

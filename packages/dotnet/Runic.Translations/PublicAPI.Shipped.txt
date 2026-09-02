@@ -410,9 +410,7 @@ type static class Runic.Translations.TranslationTransport
   field const System.Int32 Version = 1
 
 type static class Runic.Translations.TranslationsCompatibility
-  field const System.Int32 CatalogSchemaVersion = 2
   field const System.Int32 MessageGrammarVersion = 2
-  field const System.Int32 ResourceSchemaVersion = 2
   field const System.Int32 RuntimeAbiVersion = 1
 
 type enum Runic.Translations.UnsupportedLocalePolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable

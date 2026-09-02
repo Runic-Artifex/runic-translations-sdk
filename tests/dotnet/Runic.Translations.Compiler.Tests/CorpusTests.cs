@@ -343,7 +343,7 @@ internal static class CorpusTests
             return values;
         }
 
-        foreach (JsonProperty item in property.EnumerateObject())
+        foreach (System.Text.Json.JsonProperty item in property.EnumerateObject())
         {
             values.Add(item.Name, item.Value.GetString() ?? throw new InvalidDataException(item.Name + " cannot be null."));
         }

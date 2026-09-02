@@ -10,20 +10,19 @@ diagnostic identities.
 
 | Contract | Current writer version |
 |---|---:|
-| Catalog manifest schema | 1 and 2 (v3 manifest deferred) |
-| Resource document schema | 3 preview writer; 1 and 2 readers/migration inputs |
-| Message grammar | 1 and 2 execution grammar; v3 MF2 subset parser deferred |
+| MF2 project schema | 1 |
+| Authoring messages | MessageFormat 2 `.mf2` files |
+| Message grammar | MF2 with the documented Runic v1 profile |
 | Normalized message AST | 2 execution AST; 3 MF2-subset interchange AST |
 | Resolved locale artifact | 1 (grammar 1) and locale-pack-v2 (grammar 2) |
 | Runtime/generated-code ABI | 1 |
-| ESM ABI | 2 |
+| ESM ABI | 3 |
 | Transport contract | 1 |
 
 Package versions are independent from these integers. New cross-runtime schemas
-use canonical `https://runic-artifex.eu/schemas/translations/` identifiers;
-legacy wave schemas retain their frozen identity behavior. An instance `$schema`
-member is a semantic compiler concern and is not a behavior selector;
-`schemaVersion` selects compiler behavior.
+use canonical `https://runic-artifex.eu/schemas/translations/` identifiers. An
+instance `$schema` member is a semantic compiler concern and is not a behavior
+selector; `schemaVersion` selects compiler behavior.
 
 Every bundled schema's `$id` is its public URL beneath that canonical root. CI
 checks that the URL suffix and bundled filename remain identical. The same bytes
@@ -31,10 +30,11 @@ can be exported for pinned or offline tooling with `runic-translations schema`.
 
 ## Canonical compiler IR
 
-The pure compiler consumes explicitly classified manifest and document byte
-sequences. Source display paths are normalized to `/` separators and affect
-diagnostics only. Compilation order never depends on absolute paths, current
-directory, environment, clock, current culture, or input enumeration order.
+The pure compiler consumes one `runic.json` project source and explicitly
+classified MF2 message sources. Source display paths are normalized to `/`
+separators and affect diagnostics only. Compilation order never depends on
+absolute paths, current directory, environment, clock, current culture, or
+input enumeration order.
 
 Successful IR observes these orders:
 
@@ -66,15 +66,14 @@ target the most specific offending property or value token.
 output paths do not enter the pure compilation API. It becomes executable in the
 later build/CLI surface. `RTR0023`, `RTR0024`, and `RTR0099` belong to
 later external-pack, generator/runtime-ABI, and unexpected-failure surfaces.
-Schema version 2 uses `RTR0030` for structured-message validation and `RTR0031`
-for a locale outside a selected backend's built-in selector registry.
+MF2 profile validation uses `RTR0030`; `RTR0031` reports a locale outside a
+selected backend's built-in selector registry.
 
 The machine-readable [corpus](corpus/README.md) is the executable compatibility
 contract. Schema validation alone is intentionally insufficient for normalized
 uniqueness, BCP 47 canonicalization, fallback graphs, cross-file merge rules,
 pattern/descriptor parity, compiler limits, and generated identifier collisions.
 
-Schema v3 is specified in [`../docs/schema-v3.md`](../docs/schema-v3.md). It is
-a closed `runic-mf2-subset/1` interchange boundary, not a declaration of full
-MessageFormat 2 or XLIFF conformance. `locale-pack-v2` is documented in
-[`../docs/locale-pack-v2.md`](../docs/locale-pack-v2.md).
+The supported authoring profile and project convention are documented in
+[`../docs/mf2-projects.md`](../docs/mf2-projects.md). `locale-pack-v2` is
+documented in [`../docs/locale-pack-v2.md`](../docs/locale-pack-v2.md).

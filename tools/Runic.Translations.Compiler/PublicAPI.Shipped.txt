@@ -182,6 +182,8 @@ type enum Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind 
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessagesTypes = 12
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmRuntime = 8
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmRuntimeTypes = 9
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmServer = 21
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmServerTypes = 22
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmTransport = 13
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmTransportTypes = 14
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind LocaleJson = 4
@@ -192,7 +194,7 @@ type enum Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind 
 type static class Runic.Translations.Compiler.Generation.TranslationOutputRenderer
   field const System.Int32 AssetManifestVersion = 1
   field const System.Int32 CppAbiVersion = 1
-  field const System.Int32 EsmAbiVersion = 2
+  field const System.Int32 EsmAbiVersion = 3
   field const System.Int32 LocaleArtifactV2Version = 2
   field const System.Int32 LocaleArtifactVersion = 1
   field const System.Int32 TemplateManifestVersion = 1
@@ -236,9 +238,8 @@ type sealed class Runic.Translations.Compiler.TranslationCompilation
   property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic> Diagnostics { get; }
 
 type static class Runic.Translations.Compiler.TranslationCompiler
-  method static Runic.Translations.Compiler.TranslationCompilation Compile(System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource> manifests, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource> documents, Runic.Translations.Compiler.TranslationCompilerOptions options = null)
-  method static Runic.Translations.Compiler.TranslationCompilation Compile(System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource> manifests, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource> documents, Runic.Translations.Compiler.TranslationCompilerOptions options, System.Threading.CancellationToken cancellationToken)
-  method static Runic.Translations.Compiler.TranslationCompilation Compile(System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource> manifests, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource> documents, System.Threading.CancellationToken cancellationToken)
+  method static Runic.Translations.Compiler.TranslationCompilation CompileMf2Project(Runic.Translations.Compiler.TranslationSource project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource> messages, Runic.Translations.Compiler.TranslationCompilerOptions options = null)
+  method static Runic.Translations.Compiler.TranslationCompilation CompileMf2Project(Runic.Translations.Compiler.TranslationSource project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource> messages, Runic.Translations.Compiler.TranslationCompilerOptions options, System.Threading.CancellationToken cancellationToken)
 
 type sealed class Runic.Translations.Compiler.TranslationCompilerOptions
   ctor Runic.Translations.Compiler.TranslationCompilerOptions(System.Int32 maximumDocumentBytes = 8388608, System.Int32 maximumDepth = 64, System.Int32 maximumKeysPerCatalog = 50000, System.Int32 maximumValueBytes = 65536, System.Int32 maximumPlaceholdersPerValue = 32, System.Int32 maximumLocalesPerCatalog = 256)

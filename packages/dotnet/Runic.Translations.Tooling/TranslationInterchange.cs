@@ -48,7 +48,7 @@ public static class TranslationInterchange
         return new TranslationXliffExportResult(documents, new TranslationInterchangeReport(losses));
     }
 
-    /// <summary>Imports the closed Runic XLIFF 2.1 profile into a canonical v2 resource document.</summary>
+    /// <summary>Imports the closed Runic XLIFF 2.1 profile into MF2 message documents.</summary>
     public static TranslationXliffImportResult ImportXliff21(ReadOnlyMemory<byte> source)
     {
         if (source.Length == 0) throw new TranslationInterchangeException("XLIFF21-EMPTY", "An XLIFF document is required.");
@@ -175,10 +175,14 @@ public static class TranslationInterchange
         string[] layers = resources.Values.Select(static value => value.Layer).Distinct(StringComparer.Ordinal).ToArray();
         int[] schemaVersions = resources.Values.Select(static value => value.SchemaVersion).Distinct().ToArray();
         if (layers.Length != 1) throw new TranslationInterchangeException("XLIFF21-LAYER", "Every imported XLIFF unit must declare the same source layer.");
-        if (schemaVersions.Length != 1 || schemaVersions[0] is not (1 or 2)) throw new TranslationInterchangeException("XLIFF21-SCHEMA", "Every imported XLIFF unit must declare the same supported source schema version.");
-        byte[] document = RenderResourceDocument(catalog, targetLocale, resources, layers[0], false, 2); string fingerprint = ValidateImportedContract(catalog, sourceLocale, targetLocale, layers[0], schemaVersions[0], resources, document); var review = new TranslationInterchangeReview(catalog, reviews); ValidateReview(review, catalog);
+        if (schemaVersions.Length != 1 || schemaVersions[0] != 2) throw new TranslationInterchangeException("XLIFF21-SCHEMA", "Every imported XLIFF unit must use the current MF2 compiler schema.");
+        if (layers.Length != 1 || layers[0] != "base") throw new TranslationInterchangeException("XLIFF21-LAYER", "Every imported XLIFF unit must use the conventional base layer.");
+        string fingerprint = ValidateImportedContract(catalog, sourceLocale, targetLocale, resources); var review = new TranslationInterchangeReview(catalog, reviews); ValidateReview(review, catalog);
         foreach (TranslationInterchangeReviewEntry entry in review.Entries) if (entry.State == "approved" && !string.Equals(entry.SourceFingerprint, fingerprint, StringComparison.Ordinal)) throw new TranslationInterchangeException("REVIEW-FINGERPRINT", "Approved review data does not match the reconstructed source fingerprint.");
-        return new TranslationXliffImportResult(catalog, sourceLocale, targetLocale, document, review, new TranslationInterchangeReport([]));
+        TranslationMf2Document[] messages = resources.Select(static pair => new TranslationMf2Document(
+            pair.Key,
+            Encoding.UTF8.GetBytes(pair.Value.Pattern + "\n"))).ToArray();
+        return new TranslationXliffImportResult(catalog, sourceLocale, targetLocale, messages, review, new TranslationInterchangeReport([]));
     }
 
     private static ImportedUnit ReadUnit(XmlReader reader, string key, string locale, List<TranslationInterchangeReviewEntry> reviews)
@@ -206,48 +210,17 @@ public static class TranslationInterchange
         if (reader.NodeType != XmlNodeType.EndElement || reader.LocalName != name || text.Length > MaximumTextLength) throw new TranslationInterchangeException("XLIFF21-TEXT", "XLIFF text must be plain bounded text."); reader.Read(); return text.ToString();
     }
 
-    private static byte[] RenderResourceDocument(string catalog, string locale, SortedDictionary<string, ImportedUnit> units, string layer, bool source, int schemaVersion)
+    private static string ValidateImportedContract(string catalog, string sourceLocale, string targetLocale, SortedDictionary<string, ImportedUnit> units)
     {
-        var resources = new ResourceGroup();
+        string project = "{\"schemaVersion\":1,\"catalog\":" + Quote(catalog) + ",\"code\":{\"namespace\":\"Runic.Interchange\",\"className\":\"Text\"},\"baseLocale\":" + Quote(sourceLocale) + ",\"locales\":[{\"tag\":" + Quote(sourceLocale) + "},{\"tag\":" + Quote(targetLocale) + ",\"fallback\":" + Quote(sourceLocale) + "}]}";
+        var messages = new List<TranslationSource>(units.Count * 2);
         foreach ((string key, ImportedUnit unit) in units)
         {
-            ResourceGroup group = resources;
-            string[] parts = key.Split('.');
-            for (int index = 0; index < parts.Length - 1; index++)
-            {
-                if (group.Leaves.ContainsKey(parts[index])) throw new TranslationInterchangeException("XLIFF21-KEY-PREFIX", "XLIFF unit keys cannot collide with a resource group prefix.");
-                if (!group.Groups.TryGetValue(parts[index], out ResourceGroup? child)) { child = new ResourceGroup(); group.Groups.Add(parts[index], child); }
-                group = child;
-            }
-            if (group.Groups.ContainsKey(parts[^1])) throw new TranslationInterchangeException("XLIFF21-KEY-PREFIX", "XLIFF unit keys cannot collide with a resource group prefix.");
-            group.Leaves.Add(parts[^1], unit);
+            messages.Add(new TranslationSource("interchange/" + sourceLocale + "/" + key + ".mf2", Encoding.UTF8.GetBytes(unit.SourcePattern)));
+            messages.Add(new TranslationSource("interchange/" + targetLocale + "/" + key + ".mf2", Encoding.UTF8.GetBytes(unit.Pattern)));
         }
-        using var stream = new MemoryStream(); using (var writer = new Utf8JsonWriter(stream))
-        {
-            writer.WriteStartObject(); writer.WriteNumber("schemaVersion", schemaVersion); writer.WriteString("catalog", catalog); writer.WriteString("locale", locale); writer.WriteString("layer", layer); writer.WritePropertyName("resources"); WriteGroup(writer, resources, source); writer.WriteEndObject();
-        }
-        return stream.ToArray();
-    }
-
-    private static void WriteGroup(Utf8JsonWriter writer, ResourceGroup group, bool source)
-    {
-        writer.WriteStartObject();
-        foreach (string name in group.Groups.Keys.OrderBy(static value => value, StringComparer.Ordinal)) { writer.WritePropertyName(name); WriteGroup(writer, group.Groups[name], source); }
-        foreach (string name in group.Leaves.Keys.OrderBy(static value => value, StringComparer.Ordinal)) { writer.WritePropertyName(name); WriteLeaf(writer, group.Leaves[name], source); }
-        writer.WriteEndObject();
-    }
-
-    private static void WriteLeaf(Utf8JsonWriter writer, ImportedUnit unit, bool source)
-    {
-        writer.WriteStartObject(); writer.WriteString("$value", source ? unit.SourcePattern : unit.Pattern); if (unit.Description is not null) writer.WriteString("$description", unit.Description); if (unit.Since is not null) writer.WriteString("$since", unit.Since); if (unit.Deprecated is not null) writer.WriteString("$deprecated", unit.Deprecated); if (unit.Tags.Length > 0) { writer.WritePropertyName("$tags"); writer.WriteStartArray(); foreach (string tag in unit.Tags.OrderBy(static tag => tag, StringComparer.Ordinal)) writer.WriteStringValue(tag); writer.WriteEndArray(); } if (unit.Placeholders.Count > 0) { writer.WritePropertyName("$placeholders"); writer.WriteStartObject(); foreach (ImportedPlaceholder placeholder in unit.Placeholders.OrderBy(static value => value.Name, StringComparer.Ordinal)) { writer.WritePropertyName(placeholder.Name); writer.WriteStartObject(); writer.WriteString("type", placeholder.Type); writer.WriteString("format", placeholder.Format); writer.WriteEndObject(); } writer.WriteEndObject(); } writer.WriteEndObject();
-    }
-
-    private static string ValidateImportedContract(string catalog, string sourceLocale, string targetLocale, string layer, int schemaVersion, SortedDictionary<string, ImportedUnit> units, byte[] targetDocument)
-    {
-        byte[] sourceDocument = RenderResourceDocument(catalog, sourceLocale, units, layer, true, schemaVersion);
-        byte[] validationTarget = RenderResourceDocument(catalog, targetLocale, units, layer, false, schemaVersion);
-        string manifest = "{\"schemaVersion\":" + schemaVersion + ",\"catalog\":" + Quote(catalog) + ",\"code\":{\"namespace\":\"Runic.Interchange\",\"className\":\"Text\"},\"defaultLocale\":" + Quote(sourceLocale) + ",\"locales\":[{\"tag\":" + Quote(sourceLocale) + "},{\"tag\":" + Quote(targetLocale) + ",\"fallback\":" + Quote(sourceLocale) + "}],\"layers\":[{\"name\":" + Quote(layer) + ",\"priority\":0}]}";
-        TranslationCompilation compilation = TranslationCompiler.Compile([new TranslationSource("interchange.catalog.json", Encoding.UTF8.GetBytes(manifest))], [new TranslationSource("interchange.source.json", sourceDocument), new TranslationSource("interchange.target.json", validationTarget)]);
+        TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(
+            new TranslationSource("interchange/runic.json", Encoding.UTF8.GetBytes(project)), messages);
         if (!compilation.Success || compilation.Catalogs.Count != 1) throw new TranslationInterchangeException("XLIFF21-CONTRACT", "XLIFF target text or placeholder metadata does not satisfy the compiler contract.");
         return compilation.Catalogs[0].Fingerprint;
     }
@@ -320,7 +293,7 @@ public static class TranslationInterchange
     private static long MetadataBytes(CompiledTranslation value) { long bytes = ExpandedBytes(value.Description) + ExpandedBytes(value.Since) + ExpandedBytes(value.DeprecatedReason); foreach (string tag in value.Tags) bytes += ExpandedBytes(tag); foreach (CompiledTextPlaceholder placeholder in value.Placeholders) bytes += ExpandedBytes(placeholder.Name) + ExpandedBytes(placeholder.Format) + 32; return checked(bytes * 2 + 256); }
     private static long ExpandedBytes(string? value) => value is null ? 0 : checked((long)Encoding.UTF8.GetByteCount(value) * 6 + 32);
     private static bool IsReviewState(string value) => value is "draft" or "translated" or "needs-review" or "approved";
-    private static bool IsKey(string value) => value.Split('.').All(static part => part.Length > 0 && (char.IsAsciiLetter(part[0]) || part[0] == '_') && part.Skip(1).All(static character => char.IsAsciiLetterOrDigit(character) || character == '_'));
+    private static bool IsKey(string value) => value.Length > 0 && (char.IsAsciiLetter(value[0]) || value[0] == '_') && value.Skip(1).All(static character => char.IsAsciiLetterOrDigit(character) || character == '_');
     private static void RequireObject(JsonElement value, string code) { if (value.ValueKind != JsonValueKind.Object) throw new TranslationInterchangeException(code, "The JSON value must be an object."); }
     private static JsonElement Required(JsonElement value, string name, JsonValueKind kind, string code) { if (!value.TryGetProperty(name, out JsonElement item) || item.ValueKind != kind) throw new TranslationInterchangeException(code, "A required JSON member is missing or malformed."); return item; }
     private static string RequiredString(JsonElement value, string name, string code) => Required(value, name, JsonValueKind.String, code).GetString()!;
@@ -331,11 +304,6 @@ public static class TranslationInterchange
     private sealed record ImportedUnit(string SourcePattern, string Pattern, int SchemaVersion, string Layer, string? Description, string? Since, string? Deprecated, string[] Tags, IReadOnlyList<ImportedPlaceholder> Placeholders);
     private sealed record UnitNote(int SchemaVersion, string Layer, bool Structured, string? Description, string? Since, string? Deprecated, string[] Tags, IReadOnlyList<ImportedPlaceholder> Placeholders);
     private sealed record ImportedPlaceholder(string Name, string Type, string Format);
-    private sealed class ResourceGroup
-    {
-        internal Dictionary<string, ResourceGroup> Groups { get; } = new(StringComparer.Ordinal);
-        internal Dictionary<string, ImportedUnit> Leaves { get; } = new(StringComparer.Ordinal);
-    }
 }
 
 /// <summary>One canonical XLIFF export document.</summary>
@@ -357,13 +325,21 @@ public sealed class TranslationXliffExportResult
 
 public sealed class TranslationXliffImportResult
 {
-    internal TranslationXliffImportResult(string catalogId, string sourceLocale, string targetLocale, byte[] resourceDocumentBytes, TranslationInterchangeReview review, TranslationInterchangeReport report) { CatalogId = catalogId; SourceLocale = sourceLocale; TargetLocale = targetLocale; ResourceDocumentBytes = resourceDocumentBytes; Review = review; Report = report; }
+    internal TranslationXliffImportResult(string catalogId, string sourceLocale, string targetLocale, IReadOnlyList<TranslationMf2Document> messages, TranslationInterchangeReview review, TranslationInterchangeReport report) { CatalogId = catalogId; SourceLocale = sourceLocale; TargetLocale = targetLocale; Messages = messages; Review = review; Report = report; }
     public string CatalogId { get; }
     public string SourceLocale { get; }
     public string TargetLocale { get; }
-    public byte[] ResourceDocumentBytes { get; }
+    public IReadOnlyList<TranslationMf2Document> Messages { get; }
     public TranslationInterchangeReview Review { get; }
     public TranslationInterchangeReport Report { get; }
+}
+
+/// <summary>One imported MF2 message addressed by its generated-call identifier.</summary>
+public sealed class TranslationMf2Document
+{
+    internal TranslationMf2Document(string messageId, byte[] bytes) { MessageId = messageId; Bytes = bytes; }
+    public string MessageId { get; }
+    public byte[] Bytes { get; }
 }
 
 public sealed class TranslationInterchangeReport

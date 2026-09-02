@@ -8,8 +8,10 @@ canonical message has an injectively named internal module under `messages/`;
 input validation, and portable scalar formatting. Generated messages consume the
 compiler AST and never parse authoring patterns or fetch JSON.
 
-For SSR, pass `{ locale }` on each call. The configurable resolver is synchronous
-host state intended for browser applications, not a request-global SSR locale.
+`server.js` owns an `AsyncLocalStorage` request context. Wrap an SSR operation in
+`runWithLocale(locale, operation)` and ordinary message calls inside it resolve
+request-locally. Concurrent renders do not share mutable locale state. An
+explicit `{ locale }` option still overrides the context for an individual call.
 The optional Vite package maps `virtual:runic-translations/{catalog}`, `/runtime`,
 `/transport`, and `/dynamic` to these ordinary modules and invalidates them on
 watched changes.
@@ -21,19 +23,20 @@ catalog identity and use bracket access:
 ```ts
 import { m } from "virtual:runic-translations/app";
 
-m.Plain();
-m["Common.Hello"]({ name: "Ada" }, { locale: "de" });
+m.application_title();
+m.greeting({ name: "Ada" }, { locale: "de" });
 ```
 
 Names such as `m$Common$Hello` are deterministic implementation and filename
 details, not public ESM exports. The namespace is backed by static ESM re-exports,
 so Vite can remove message modules whose properties are not referenced.
 
-`runtime.js` also exports `createLocaleSource`, which creates an explicitly scoped
+`runtime.js` exports `locales`, `baseLocale`, and `resolveLocale`, as well as
+`createLocaleSource`, which creates an explicitly scoped
 mutable locale source with `getLocale`, `subscribe`, and `setLocale`. Framework
 adapters consume this structural contract and create one source per browser root
-or SSR request. Message calls still receive `{ locale }` explicitly during SSR;
-the source does not install request-global state.
+or browser root. SSR uses the generated server entrypoint rather than a mutable
+global source.
 
 Dynamic mode is explicit. Schema-v2 locale output uses
 `{catalog}.{locale}.locale-v2.json` and carries validated lowered AST rather than

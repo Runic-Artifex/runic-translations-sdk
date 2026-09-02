@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Runic.Translations.Authoring;
-using Runic.Translations.Compiler.Analysis;
 
 namespace Runic.Translations.Tool;
 
@@ -15,8 +14,6 @@ internal enum ToolCommand
     Generate,
     Verify,
     Schema,
-    Import,
-    Analyze,
 }
 
 [Flags]
@@ -34,23 +31,10 @@ internal enum ToolEmission
 
 internal sealed record ToolInvocation(
     ToolCommand Command,
-    string? CatalogPath,
-    IReadOnlyList<string> DocumentPatterns,
     string? OutputPath,
     ToolEmission Emission,
     TranslationProjectCreationRequest? ProjectCreation,
-    CatalogImportRequest? CatalogImport,
-    CatalogAnalysisRequest? CatalogAnalysis);
-
-internal sealed record CatalogAnalysisRequest(
-    string CatalogPath,
-    IReadOnlyList<string> DocumentPatterns,
-    IReadOnlyList<string> SourcePatterns,
-    bool Json,
-    bool FailOnFindings,
-    TranslationDynamicUsagePolicy DynamicUsagePolicy,
-    string? ArtifactFingerprint,
-    string? ArtifactPath);
+    string? ProjectPath = null);
 
 internal static class CommandLine
 {

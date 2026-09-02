@@ -7,9 +7,6 @@ internal static class Program
         TestRunner runner = new();
         CliIntegrationTests.Register(runner);
         BuildIntegrationTests.Register(runner);
-        GeneratedConsumerTests.Register(runner);
-        WaveBCorpusTests.Register(runner);
-        WaveCAssetManifestTests.Register(runner);
         return runner.Run();
     }
 }

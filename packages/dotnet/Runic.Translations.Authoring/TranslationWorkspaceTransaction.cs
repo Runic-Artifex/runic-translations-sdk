@@ -145,6 +145,7 @@ public static class TranslationWorkspaceTransaction
         {
             if (entries[index].Delete) continue;
             string target = ResolveContainedPath(root, entries[index].Path);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             string temporary = Path.Combine(Path.GetDirectoryName(target)!, entries[index].TemporaryName!);
             WriteFile(temporary, edits[index].Bytes!, FileMode.CreateNew);
         }
@@ -334,9 +335,12 @@ public static class TranslationWorkspaceTransaction
             throw new TranslationAuthoringException($"Transaction path '{relativePath}' escapes the workspace.");
 
         string? parent = Path.GetDirectoryName(fullPath);
-        if (parent is null || !Directory.Exists(parent))
-            throw new TranslationAuthoringException($"Parent directory for transaction path '{relativePath}' does not exist.");
+        if (parent is null)
+            throw new TranslationAuthoringException($"Transaction path '{relativePath}' has no parent directory.");
         var current = new DirectoryInfo(parent);
+        while (!current.Exists)
+            current = current.Parent
+                ?? throw new TranslationAuthoringException($"Transaction path '{relativePath}' escapes the workspace.");
         while (!string.Equals(current.FullName, root, PathComparison))
         {
             if ((current.Attributes & FileAttributes.ReparsePoint) != 0)

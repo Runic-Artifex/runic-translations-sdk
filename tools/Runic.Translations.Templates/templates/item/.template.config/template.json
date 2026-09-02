@@ -5,9 +5,9 @@
   "identity": "RunicArtifex.Translations.Item",
   "name": "Runic Translations files",
   "shortName": "runic-translations",
-  "description": "Adds a minimal compiler-valid schema-v2 translation catalog and default locale document.",
+  "description": "Adds a minimal compiler-valid runic.json and MF2 message project.",
   "tags": {
-    "language": "JSON",
+    "language": "C#",
     "type": "item"
   },
   "preferNameDirectory": false,

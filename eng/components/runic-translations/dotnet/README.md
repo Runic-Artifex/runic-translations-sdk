@@ -26,7 +26,7 @@ using Runic.Translations;
 ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
 var text = new AppText(manager);
 
-Console.WriteLine(text.Application.Name);
+Console.WriteLine(text.application_title);
 ```
 
 The template pins the runtime, build integration, and local tool to one version. It also enables ESM generation for web consumers.
@@ -39,7 +39,7 @@ The template pins the runtime, build integration, and local tool to one version.
 | [`Runic.Translations.Build`](https://www.nuget.org/packages/Runic.Translations.Build) | Incremental generator, MSBuild items, and opt-in non-C# artifact generation | C# projects and projects sharing catalogs with web or asset pipelines |
 | [`dotnet-runic-translations`](https://www.nuget.org/packages/dotnet-runic-translations) | Local `runic-translations` CLI | Developers and CI |
 | [`Runic.Translations.Templates`](https://www.nuget.org/packages/Runic.Translations.Templates) | Catalog item and standalone class-library templates | New integrations |
-| [`Runic.Translations.Tooling`](https://www.nuget.org/packages/Runic.Translations.Tooling) | Compiler facade, deterministic v2-to-v3 migration, interchange, and transactional authoring | Migration-aware editors and build tooling |
+| [`Runic.Translations.Tooling`](https://www.nuget.org/packages/Runic.Translations.Tooling) | MF2 compiler facade, interchange, and transactional authoring | Editors and build tooling |
 
 Most applications install the runtime and build packages together. Replace `<VERSION>` with one exact public preview version in every command:
 

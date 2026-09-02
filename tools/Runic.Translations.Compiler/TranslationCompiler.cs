@@ -9,6 +9,7 @@ namespace Runic.Translations.Compiler;
 
 public static class TranslationCompiler
 {
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime" };
     private static readonly string[] ManifestMembers = { "$schema", "schemaVersion", "catalog", "code", "defaultLocale", "locales", "layers", "validation", "runtime", "outputs" };
     private static readonly string[] DocumentMembers = { "$schema", "schemaVersion", "catalog", "locale", "layer", "resources" };
     private static readonly string[] LeafMembers = { "$value", "$description", "$placeholders", "$since", "$deprecated", "$tags" };
@@ -44,25 +45,19 @@ public static class TranslationCompiler
     private static readonly string[] V3FormatNodeMembers = { "kind", "function", "operand", "options" };
     private static readonly string[] V3MarkupNodeMembers = { "kind", "name", "attributes", "children" };
 
-    /// <summary>Compiles manifest and resource document sources using default limits.</summary>
-    /// <remarks>Inputs and outputs are deterministic and no environment state is consulted.</remarks>
-    public static TranslationCompilation Compile(
+    internal static TranslationCompilation Compile(
         IEnumerable<TranslationSource> manifests,
         IEnumerable<TranslationSource> documents,
         TranslationCompilerOptions? options = null)
         => Compile(manifests, documents, options, CancellationToken.None);
 
-    /// <summary>Compiles manifest and resource document sources with cancellation.</summary>
-    /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
-    public static TranslationCompilation Compile(
+    internal static TranslationCompilation Compile(
         IEnumerable<TranslationSource> manifests,
         IEnumerable<TranslationSource> documents,
         CancellationToken cancellationToken)
         => Compile(manifests, documents, null, cancellationToken);
 
-    /// <summary>Compiles manifest and resource document sources with explicit limits and cancellation.</summary>
-    /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
-    public static TranslationCompilation Compile(
+    internal static TranslationCompilation Compile(
         IEnumerable<TranslationSource> manifests,
         IEnumerable<TranslationSource> documents,
         TranslationCompilerOptions? options,
@@ -142,6 +137,254 @@ public static class TranslationCompiler
         }
 
         return new TranslationCompilation(catalogs.ToArray(), diagnostics.ToSortedArray());
+    }
+
+    /// <summary>Compiles a convention-based Runic project whose messages are standard MF2 files.</summary>
+    /// <remarks>
+    /// The project file is named <c>runic.json</c>. Message paths are relative to its directory and
+    /// use the convention <c>{locale}/{message-id}.mf2</c>.
+    /// </remarks>
+    public static TranslationCompilation CompileMf2Project(
+        TranslationSource project,
+        IEnumerable<TranslationSource> messages,
+        TranslationCompilerOptions? options = null)
+        => CompileMf2Project(project, messages, options, CancellationToken.None);
+
+    /// <summary>Compiles a convention-based Runic MF2 project with cancellation.</summary>
+    /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
+    public static TranslationCompilation CompileMf2Project(
+        TranslationSource project,
+        IEnumerable<TranslationSource> messages,
+        TranslationCompilerOptions? options,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(messages);
+        cancellationToken.ThrowIfCancellationRequested();
+        options ??= new TranslationCompilerOptions();
+        var diagnostics = new DiagnosticBag();
+        TranslationSource[] messageSources = Materialize(messages);
+        if (RejectDuplicateSourcePaths(new[] { project }, messageSources, diagnostics))
+            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
+
+        ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, options, cancellationToken);
+        ManifestModel? manifest = parsed.Root is null ? null : ReadMf2Project(parsed, diagnostics, options);
+        if (manifest is null)
+            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
+
+        string projectDirectory = ProjectDirectory(project.Path);
+        var documents = new List<DocumentModel>(messageSources.Length);
+        var discoveredLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (int index = 0; index < messageSources.Length; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            TranslationSource source = messageSources[index];
+            if (!TryMf2Identity(projectDirectory, source.Path, out string localeText, out string messageId))
+            {
+                diagnostics.Add("RTR0040", TranslationDiagnosticSeverity.Error,
+                    "MF2 message paths must use the convention '{locale}/{message-id}.mf2' relative to runic.json.",
+                    source, new ByteSpan(0, 0));
+                continue;
+            }
+            if (!TryCanonicalizeLocale(localeText, out string locale))
+            {
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error,
+                    "Invalid locale folder '" + localeText + "'.", source, new ByteSpan(0, 0));
+                continue;
+            }
+            if (!IsIdentifier(messageId))
+            {
+                diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error,
+                    "MF2 message filenames must be valid identifiers so generated calls can use property syntax.",
+                    source, new ByteSpan(0, 0));
+                continue;
+            }
+
+            Mf2ParsedMessage? message = Mf2MessageParser.Parse(source, diagnostics, options, cancellationToken);
+            if (message is null) continue;
+            discoveredLocales.Add(locale);
+            var document = new DocumentModel(source)
+            {
+                SchemaVersion = 2,
+                Catalog = manifest.Id,
+                Locale = locale,
+                Layer = "base",
+                CatalogSpan = new ByteSpan(0, 0),
+                LocaleSpan = new ByteSpan(0, 0),
+                LayerSpan = new ByteSpan(0, 0),
+            };
+            document.Resources.Add(new ResourceModel(
+                messageId,
+                message.Pattern,
+                message.Message,
+                null,
+                null,
+                null,
+                Array.Empty<string>(),
+                message.Placeholders,
+                source,
+                new ByteSpan(0, 0),
+                new ByteSpan(0, 0),
+                new ByteSpan(0, source.Bytes.Length)));
+            documents.Add(document);
+        }
+
+        if (manifest.Locales.Count == 0)
+        {
+            string[] locales = new List<string>(discoveredLocales).ToArray();
+            Array.Sort(locales, StringComparer.Ordinal);
+            for (int index = 0; index < locales.Length; index++)
+                manifest.Locales.Add(new LocaleModel(locales[index],
+                    string.Equals(locales[index], manifest.DefaultLocale, StringComparison.OrdinalIgnoreCase) ? null : manifest.DefaultLocale,
+                    new ByteSpan(0, 0), new ByteSpan(0, 0)));
+            if (locales.Length == 0 && manifest.DefaultLocale.Length != 0)
+                manifest.Locales.Add(new LocaleModel(manifest.DefaultLocale, null, manifest.DefaultLocaleSpan, manifest.DefaultLocaleSpan));
+        }
+        ValidateFallbackGraph(manifest, diagnostics);
+        if (messageSources.Length != 0 && !discoveredLocales.Contains(manifest.DefaultLocale))
+            diagnostics.Add("RTR0009", TranslationDiagnosticSeverity.Error,
+                "The base locale '" + manifest.DefaultLocale + "' has no MF2 messages.", project, manifest.DefaultLocaleSpan);
+
+        if (messageSources.Length == 0 && manifest.DefaultLocale.Length != 0)
+        {
+            documents.Add(new DocumentModel(project)
+            {
+                SchemaVersion = 2,
+                Catalog = manifest.Id,
+                Locale = manifest.DefaultLocale,
+                Layer = "base",
+                CatalogSpan = manifest.IdSpan,
+                LocaleSpan = manifest.DefaultLocaleSpan,
+                LayerSpan = new ByteSpan(0, 0),
+            });
+        }
+
+        CompiledTextCatalog? catalog = documents.Count == 0
+            ? null
+            : CompileCatalog(manifest, documents, diagnostics, options, cancellationToken);
+        return new TranslationCompilation(catalog is null ? Array.Empty<CompiledTextCatalog>() : new[] { catalog }, diagnostics.ToSortedArray());
+    }
+
+    private static ManifestModel? ReadMf2Project(ParsedJson parsed, DiagnosticBag diagnostics, TranslationCompilerOptions options)
+    {
+        JsonValue root = parsed.Root!;
+        if (root.Kind != JsonKind.Object)
+        {
+            diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Runic project root must be an object.", parsed.Source, root.Span);
+            return null;
+        }
+        ValidateKnownMembers(root, Mf2ProjectMembers, parsed.Source, diagnostics);
+        JsonProperty? version = Required(root, "schemaVersion", JsonKind.Number, parsed.Source, diagnostics);
+        if (version is not null && !string.Equals(version.Value.Text, "1", StringComparison.Ordinal))
+            diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error, "Unsupported Runic project schemaVersion.", parsed.Source, version.Value.Span);
+        JsonProperty? schema = root.Property("$schema");
+        if (schema is not null && (schema.Value.Kind != JsonKind.String ||
+            !string.Equals(schema.Value.Text, "https://runic-artifex.eu/schemas/translations/project-v1.schema.json", StringComparison.Ordinal)))
+            diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error, "The Runic project uses an unknown $schema URI.", parsed.Source, schema.Value.Span);
+
+        var model = new ManifestModel(parsed.Source) { SchemaVersion = 2 };
+        JsonProperty? catalog = Required(root, "catalog", JsonKind.String, parsed.Source, diagnostics);
+        JsonProperty? code = Required(root, "code", JsonKind.Object, parsed.Source, diagnostics);
+        JsonProperty? baseLocale = Required(root, "baseLocale", JsonKind.String, parsed.Source, diagnostics);
+        if (catalog is not null)
+        {
+            model.Id = catalog.Value.Text!;
+            model.IdSpan = catalog.Value.Span;
+            if (!IsCatalogId(model.Id) || IsWindowsDeviceStem(model.Id))
+                diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error, "Invalid catalog ID '" + model.Id + "'.", parsed.Source, catalog.Value.Span);
+        }
+        if (code is not null) ReadCode(code.Value, model, parsed.Source, diagnostics);
+        if (baseLocale is not null)
+        {
+            model.DefaultLocaleSpan = baseLocale.Value.Span;
+            if (!TryCanonicalizeLocale(baseLocale.Value.Text!, out string canonical))
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Invalid base locale '" + baseLocale.Value.Text + "'.", parsed.Source, baseLocale.Value.Span);
+            else model.DefaultLocale = canonical;
+        }
+
+        JsonProperty? locales = root.Property("locales");
+        if (locales is not null)
+        {
+            if (locales.Value.Kind != JsonKind.Array)
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "locales must be an array of locale tags.", parsed.Source, locales.Value.Span);
+            else
+            {
+                if (locales.Value.Items.Count > options.MaximumLocalesPerCatalog)
+                    diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", parsed.Source, locales.Value.Span);
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int index = 0; index < locales.Value.Items.Count; index++)
+                {
+                    JsonValue item = locales.Value.Items[index];
+                    if (item.Kind == JsonKind.Object)
+                    {
+                        ReadMf2Locale(item, model, seen, parsed.Source, diagnostics);
+                        continue;
+                    }
+                    if (item.Kind != JsonKind.String || !TryCanonicalizeLocale(item.Text!, out string locale))
+                    {
+                        diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "locales contains an invalid locale declaration.", parsed.Source, item.Span);
+                        continue;
+                    }
+                    if (!seen.Add(locale))
+                        diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Duplicate locale '" + locale + "'.", parsed.Source, item.Span);
+                    else model.Locales.Add(new LocaleModel(locale,
+                        string.Equals(locale, model.DefaultLocale, StringComparison.OrdinalIgnoreCase) ? null : model.DefaultLocale,
+                        item.Span, item.Span));
+                }
+                if (model.DefaultLocale.Length != 0 && !seen.Contains(model.DefaultLocale))
+                    diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "locales must include baseLocale.", parsed.Source, locales.Value.Span);
+            }
+        }
+        model.Layers.Add(new LayerModel("base", 0, root.Span, root.Span));
+        JsonProperty? validation = root.Property("validation");
+        if (validation is not null) ReadValidation(validation, model, parsed.Source, diagnostics);
+        JsonProperty? runtime = root.Property("runtime");
+        if (runtime is not null) ReadRuntime(runtime, model, parsed.Source, diagnostics);
+        return model;
+    }
+
+    private static void ReadMf2Locale(JsonValue item, ManifestModel model, HashSet<string> seen, TranslationSource source, DiagnosticBag diagnostics)
+    {
+        ValidateKnownMembers(item, LocaleMembers, source, diagnostics);
+        JsonProperty? tagProperty = Required(item, "tag", JsonKind.String, source, diagnostics);
+        JsonProperty? fallbackProperty = item.Property("fallback");
+        if (tagProperty is null) return;
+        if (!TryCanonicalizeLocale(tagProperty.Value.Text!, out string tag))
+        {
+            diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Invalid locale tag '" + tagProperty.Value.Text + "'.", source, tagProperty.Value.Span);
+            return;
+        }
+        if (!seen.Add(tag))
+            diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Duplicate locale '" + tag + "'.", source, tagProperty.Value.Span);
+        string? fallback = null;
+        ByteSpan fallbackSpan = item.Span;
+        if (fallbackProperty is not null)
+        {
+            fallbackSpan = fallbackProperty.Value.Span;
+            if (fallbackProperty.Value.Kind != JsonKind.String || !TryCanonicalizeLocale(fallbackProperty.Value.Text!, out fallback))
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Invalid fallback locale.", source, fallbackProperty.Value.Span);
+        }
+        model.Locales.Add(new LocaleModel(tag, fallback, tagProperty.Value.Span, fallbackSpan));
+    }
+
+    private static string ProjectDirectory(string path)
+    {
+        int slash = path.LastIndexOf('/');
+        return slash < 0 ? string.Empty : path.Substring(0, slash + 1);
+    }
+
+    private static bool TryMf2Identity(string projectDirectory, string sourcePath, out string locale, out string messageId)
+    {
+        locale = string.Empty;
+        messageId = string.Empty;
+        if (!sourcePath.StartsWith(projectDirectory, StringComparison.Ordinal) ||
+            !sourcePath.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) return false;
+        string relative = sourcePath.Substring(projectDirectory.Length);
+        int slash = relative.IndexOf('/');
+        if (slash <= 0 || slash != relative.LastIndexOf('/') || slash == relative.Length - 1) return false;
+        locale = relative.Substring(0, slash);
+        messageId = relative.Substring(slash + 1, relative.Length - slash - 1 - ".mf2".Length);
+        return messageId.Length != 0;
     }
 
     private static TranslationSource[] Materialize(IEnumerable<TranslationSource> sources)

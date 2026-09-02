@@ -18,21 +18,19 @@ try {
     const output = join(current, "out");
     await mkdir(current, { recursive: true });
     const localeTags = Array.from({ length: localeCount }, (_, index) => index === 0 ? "en" : `en-${String(index).padStart(3, "0")}`);
-    const manifest = {
+    const project = {
       schemaVersion: 1, catalog: "scale", code: { namespace: "Measurements", className: "ScaleText" },
-      defaultLocale: "en", locales: localeTags.map((tag, index) => index === 0 ? { tag } : { tag, fallback: "en" }),
-      layers: [{ name: "base", priority: 0 }], validation: { translationCompleteness: "allow" },
+      baseLocale: "en", locales: localeTags,
+      validation: { translationCompleteness: "allow" },
     };
-    const resources = {};
-    for (let index = 0; index < messageCount; index++) resources[`Message${String(index).padStart(5, "0")}`] = `MESSAGE_${index}`;
-    const document = { schemaVersion: 1, catalog: "scale", locale: "en", layer: "base", resources };
-    const manifestPath = join(current, "manifest.json");
-    const documentPath = join(current, "en.json");
-    await writeFile(manifestPath, JSON.stringify(manifest));
-    await writeFile(documentPath, JSON.stringify(document));
+    const english = join(current, "en");
+    await mkdir(english);
+    await writeFile(join(current, "runic.json"), JSON.stringify(project));
+    await Promise.all(Array.from({ length: messageCount }, (_, index) =>
+      writeFile(join(english, `Message${String(index).padStart(5, "0")}.mf2`), `MESSAGE_${index}\n`)));
     const started = performance.now();
     await run("dotnet", ["run", "--project", join(repository, "dotnet/tools/dotnet-runic-translations"), "-c", "Release", "--no-restore", "--",
-      "generate", "--catalog", manifestPath, "--documents", documentPath, "--output", output, "--emit-esm"]);
+      "generate", "--project", current, "--output", output, "--emit-esm"]);
     const elapsed = performance.now() - started;
     const files = await inventory(output);
     rows.push({ messages: messageCount, locales: localeCount, milliseconds: Math.round(elapsed), files: files.count, bytes: files.bytes });
@@ -40,15 +38,14 @@ try {
 
   const cpp = join(root, "cpp");
   await mkdir(cpp);
-  const cppManifest = join(cpp, "manifest.json");
-  const cppDocument = join(cpp, "en.json");
-  await writeFile(cppManifest, JSON.stringify({ schemaVersion: 1, catalog: "scale", code: { namespace: "Measurements", className: "ScaleText" }, defaultLocale: "en", locales: [{ tag: "en" }], layers: [{ name: "base", priority: 0 }] }));
-  const cppResources = {};
-  for (let index = 0; index < 100; index++) cppResources[`Message${String(index).padStart(5, "0")}`] = `MESSAGE_${index}`;
-  await writeFile(cppDocument, JSON.stringify({ schemaVersion: 1, catalog: "scale", locale: "en", layer: "base", resources: cppResources }));
+  await writeFile(join(cpp, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "scale", code: { namespace: "Measurements", className: "ScaleText" }, baseLocale: "en", locales: ["en"] }));
+  const cppEnglish = join(cpp, "en");
+  await mkdir(cppEnglish);
+  await Promise.all(Array.from({ length: 100 }, (_, index) =>
+    writeFile(join(cppEnglish, `Message${String(index).padStart(5, "0")}.mf2`), `MESSAGE_${index}\n`)));
   const cppOutput = join(cpp, "out");
   await run("dotnet", ["run", "--project", join(repository, "dotnet/tools/dotnet-runic-translations"), "-c", "Release", "--no-restore", "--",
-    "generate", "--catalog", cppManifest, "--documents", cppDocument, "--output", cppOutput, "--emit-cpp"]);
+    "generate", "--project", cpp, "--output", cppOutput, "--emit-cpp"]);
   const main = join(cppOutput, "main.cpp");
   await writeFile(main, "#include \"scale.translations-v1.hpp\"\n#include <iostream>\nint main(){ using namespace runic_translations::catalog_scale; for(int i=0;i<100000;i++) { auto value=m_12Message00000(\"en\"); if(value.empty()) return 2; } std::cout << \"ok\"; }\n");
   const compileStarted = performance.now();

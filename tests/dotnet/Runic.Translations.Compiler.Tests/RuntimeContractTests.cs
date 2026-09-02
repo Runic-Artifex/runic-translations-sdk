@@ -16,8 +16,6 @@ internal static class RuntimeContractTests
 
     private static void CompatibilityAndValueCarriers()
     {
-        Assert.Equal(2, TranslationsCompatibility.CatalogSchemaVersion);
-        Assert.Equal(2, TranslationsCompatibility.ResourceSchemaVersion);
         Assert.Equal(2, TranslationsCompatibility.MessageGrammarVersion);
         Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion);
 

@@ -1,6 +1,6 @@
 # Runic.Translations.Templates
 
-Start a compiler-valid Runic Translations catalog or a complete .NET 10 localization class library without hand-writing package references, MSBuild items, or the local tool manifest.
+Start a compiler-valid Runic Translations MF2 project or a complete .NET 10 localization class library.
 
 ## Install
 
@@ -24,7 +24,7 @@ dotnet tool restore
 dotnet build
 ```
 
-The project template creates a class library with schema-v2 resources, generated C# APIs, a pinned local tool manifest, and build-time ESM output. After building, application code can use the generated catalog:
+The project template creates a class library with `translations/runic.json`, standard MF2 messages, generated C# APIs, a pinned local tool manifest, and build-time ESM output. After building, application code can use the generated catalog:
 
 ```csharp
 using Example.Translations;
@@ -33,23 +33,23 @@ using Runic.Translations;
 ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
 var text = new AppText(manager);
 
-Console.WriteLine(text.Application.Name);
+Console.WriteLine(text.application_title);
 ```
 
 ## Add catalog files to an existing project
 
 ```bash
 dotnet new runic-translations \
-  --output Resources \
+  --output . \
   --catalog app \
   --defaultLocale en \
   --namespace Example.Translations \
   --className AppText
 ```
 
-The item template creates only the catalog and default-locale document. Add the matching `Runic.Translations` and `Runic.Translations.Build` packages plus `TranslationCatalog` and `TranslationDocument` items to the containing project.
+The item template creates `translations/runic.json` and a default-locale MF2 message. Add the matching `Runic.Translations` and `Runic.Translations.Build` packages; the build discovers the conventional directory without MSBuild items.
 
-Choose the project template for the fastest complete .NET and ESM setup. Choose the item template when a project already owns package versions and build configuration. Use `runic-translations init` when you need multiple locales, explicit fallback edges, optional starter content, or VS Code schema associations in one command.
+Choose the project template for a complete .NET and ESM setup. Choose the item template when a project already owns package versions and build configuration. Use `runic-translations init` when you need multiple locales, explicit fallback edges, or optional starter content in one command.
 
 ## Compatibility and status
 

@@ -49,6 +49,10 @@ public enum TranslationGeneratedOutputKind
     EsmDynamicTypes,
     /// <summary>The internal exact-key re-export index backing the public ESM message namespace.</summary>
     EsmMessageNamespace,
+    /// <summary>Request-local locale context for server-side rendering.</summary>
+    EsmServer,
+    /// <summary>TypeScript declarations for request-local server locale context.</summary>
+    EsmServerTypes,
 }
 
 /// <summary>A deterministic, UTF-8 compiler output for exactly one concern.</summary>

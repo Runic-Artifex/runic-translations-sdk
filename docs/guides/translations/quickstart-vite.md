@@ -14,20 +14,19 @@ npm install --save-dev @runic-artifex/vite-plugin-runic-translations@<VERSION>
 Commit `.config/dotnet-tools.json` and the npm lockfile. A clean checkout then
 restores the same compiler with `dotnet tool restore`.
 
-## 2. Create a catalog
+## 2. Create the project
 
-```bash
-dotnet tool run runic-translations -- init \
-  --directory Resources \
-  --catalog app \
-  --default-locale en \
-  --locale de \
-  --namespace Example.Translations \
-  --class AppText
+```text
+translations/
+├── runic.json
+├── en/application_title.mf2
+└── de/application_title.mf2
 ```
 
-The command creates a schema-v2 manifest and locale documents. Add the generated
-output directory to `.gitignore` when generation is owned by local builds and CI.
+Declare the catalog, C# names, and base locale once in `translations/runic.json`.
+Locale folders are inferred by default. See the [MF2 project convention](mf2-projects.md)
+for the complete config and supported authoring syntax. Add `.runic/` to
+`.gitignore` when Vite owns generation.
 
 ## 3. Configure Vite
 
@@ -37,50 +36,31 @@ import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [
-    runicTranslations({
-      manifest: "obj/translations/app.esm/web-module-manifest-v1.json",
-      sourceFiles: [
-        "Resources/app.catalog.json",
-        "Resources/app.en.json",
-        "Resources/app.de.json",
-      ],
-      compiler: {
-        catalog: "Resources/app.catalog.json",
-        documents: ["Resources/app.en.json", "Resources/app.de.json"],
-        output: "obj/translations",
-      },
-    }),
-  ],
+  plugins: [runicTranslations()],
 });
 ```
 
-The plugin runs the pinned local tool before Vite loads generated modules. A
+The plugin discovers `translations/runic.json`, runs the pinned local tool before
+Vite loads generated modules, and watches the config and all `.mf2` files. A
 watched authoring change is compiled before the virtual modules are invalidated.
-No JavaScript parser interprets Runic authoring syntax.
 
 ## 4. Render a message
 
 ```ts
 import { m } from "virtual:runic-translations/app";
 
-document.querySelector("#app")!.textContent = m["Application.Name"]();
+document.querySelector("#app")!.textContent = m.application_title();
 ```
 
-Use exact dotted keys through bracket access:
-
-```ts
-m["Common.Hello"]({ name: "Ada" }, { locale: "de" });
-```
+Message filenames are identifier-safe, so normal calls use property access.
 
 ## 5. Validate in CI
 
 ```bash
 dotnet tool restore
 dotnet tool run runic-translations -- verify \
-  --catalog Resources/app.catalog.json \
-  --documents Resources/app.en.json Resources/app.de.json \
-  --output obj/translations \
+  --project translations \
+  --output .runic/translations \
   --emit-esm
 npm run build
 ```
@@ -89,5 +69,5 @@ npm run build
 code `0` is valid and current, `1` represents catalog or generated-output
 diagnostics, and `2` represents invalid invocation or an operational failure.
 
-For SvelteKit locale routing and request-scoped SSR, use the Runic SvelteKit
-adapter rather than installing a request-global locale resolver.
+For SvelteKit locale routing and request-scoped SSR, pass the generated locale
+metadata and `/server` context to the Runic SvelteKit adapter.

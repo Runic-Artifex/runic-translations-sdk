@@ -4,8 +4,6 @@ using System.Text.Json;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Runic.Translations.Tooling;
-using Runic.Translations.Compiler;
 using Runic.Translations;
 
 namespace Runic.Translations.AotTests;
@@ -39,13 +37,6 @@ internal static class Program
                 new Dictionary<string, TranslationReferenceArgument> { ["name"] = new(TextArgumentType.String, "Ada") });
             string referenceJson = JsonSerializer.Serialize(reference, TranslationReferenceJsonContext.Default.TranslationReference);
             Require(referenceJson.Contains("\"arguments\":{\"name\":\"Ada\"}", StringComparison.Ordinal), "text-reference JSON");
-            TranslationCompilation interchangeCompilation = TranslationsTooling.Compile(
-                [new TranslationSource("app.catalog.json", Encoding.UTF8.GetBytes("{\"schemaVersion\":2,\"catalog\":\"app\",\"code\":{\"namespace\":\"App\",\"className\":\"Text\"},\"defaultLocale\":\"en\",\"locales\":[{\"tag\":\"en\"},{\"tag\":\"de\",\"fallback\":\"en\"}],\"layers\":[{\"name\":\"base\",\"priority\":0}]}"))],
-                [new TranslationSource("app.en.json", Encoding.UTF8.GetBytes("{\"schemaVersion\":2,\"catalog\":\"app\",\"locale\":\"en\",\"layer\":\"base\",\"resources\":{\"Hello\":\"Hello\"}}")), new TranslationSource("app.de.json", Encoding.UTF8.GetBytes("{\"schemaVersion\":2,\"catalog\":\"app\",\"locale\":\"de\",\"layer\":\"base\",\"resources\":{\"Hello\":\"Hallo\"}}"))]);
-            TranslationXliffExportResult interchange = TranslationInterchange.ExportXliff21(interchangeCompilation);
-            TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(interchange.Documents[0].Bytes);
-            Require(imported.TargetLocale == "de" && imported.ResourceDocumentBytes.Length > 0, "Native-AOT XLIFF interchange");
-
             Task[] swaps = new Task[16];
             for (int index = 0; index < swaps.Length; index++)
             {
@@ -57,7 +48,7 @@ internal static class Program
             Require(manager.Current.Format(greeting, [new TextArgument("name", "Ada")]) == "Extern Ada",
                 "external pack composition");
 
-            Console.WriteLine("PASS: Native-AOT compiled snapshot/format/fallback/swap/external-pack/transport/XLIFF smoke");
+            Console.WriteLine("PASS: Native-AOT compiled snapshot/format/fallback/swap/external-pack/transport smoke");
             return 0;
         }
         catch (Exception exception)

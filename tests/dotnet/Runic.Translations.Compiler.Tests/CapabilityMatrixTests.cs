@@ -54,10 +54,10 @@ internal static class CapabilityMatrixTests
     {
         using JsonDocument document = ReadMatrix();
         var formatters = new HashSet<string>(StringComparer.Ordinal);
-        foreach (JsonProperty formatter in document.RootElement.GetProperty("formatterProfile").EnumerateObject())
+        foreach (System.Text.Json.JsonProperty formatter in document.RootElement.GetProperty("formatterProfile").EnumerateObject())
         {
             formatters.Add(formatter.Name);
-            foreach (JsonProperty form in formatter.Value.EnumerateObject())
+            foreach (System.Text.Json.JsonProperty form in formatter.Value.EnumerateObject())
                 Assert.True(form.Value.GetString() is "exact" or "semantic", $"Unknown equivalence for {formatter.Name}.{form.Name}.");
         }
         Assert.Equal("boolean|date|datetime|integer|number|string|time|uuid", Sorted(formatters));

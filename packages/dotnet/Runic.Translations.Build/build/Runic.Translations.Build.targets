@@ -16,10 +16,17 @@
     <RunicTranslationsBuildTargetsImported>true</RunicTranslationsBuildTargetsImported>
   </PropertyGroup>
 
-  <!-- The generator consumes only explicitly declared inputs and their versioned metadata. -->
+  <!-- A Runic project marker is the single declaration; its MF2 messages are discovered by convention. -->
+  <ItemGroup Condition="'@(TranslationProject)' == '' and Exists('$(MSBuildProjectDirectory)\translations\runic.json')">
+    <TranslationProject Include="$(MSBuildProjectDirectory)\translations\runic.json" />
+  </ItemGroup>
+  <ItemGroup Condition="'@(TranslationProject)' != '' and '@(TranslationMf2)' == '' and Exists('$(MSBuildProjectDirectory)\translations\runic.json')">
+    <TranslationMf2 Include="$(MSBuildProjectDirectory)\translations\**\*.mf2" />
+  </ItemGroup>
+
   <ItemGroup>
-    <AdditionalFiles Include="@(TranslationCatalog)" RunicTranslationKind="Catalog" />
-    <AdditionalFiles Include="@(TranslationDocument)" RunicTranslationKind="Document" />
+    <AdditionalFiles Include="@(TranslationProject)" RunicTranslationKind="Project" />
+    <AdditionalFiles Include="@(TranslationMf2)" RunicTranslationKind="Mf2" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationKind" />
   </ItemGroup>
 
@@ -95,6 +102,7 @@
       <_TranslationsDesiredStateLine Include="emit-arguments=$(_TranslationsEmitArguments)" />
       <_TranslationsDesiredStateLine Include="additional-arguments=$(TranslationsToolAdditionalArguments)" />
       <_TranslationsDesiredStateLine Include="output=$(_TranslationsOutputDirectory)" />
+      <_TranslationsDesiredStateLine Include="@(TranslationProject->'project=%(FullPath)')" />
     </ItemGroup>
     <WriteLinesToFile File="$(_TranslationsGenerationStatePath)"
                       Lines="@(_TranslationsDesiredStateLine)"
@@ -107,10 +115,8 @@
     </ReadLinesFromFile>
     <ItemGroup>
       <_TranslationsDesiredResponseLine Include="generate" />
-      <_TranslationsDesiredResponseLine Include="--catalog" />
-      <_TranslationsDesiredResponseLine Include="@(TranslationCatalog->'&quot;%(FullPath)&quot;')" />
-      <_TranslationsDesiredResponseLine Include="--documents" />
-      <_TranslationsDesiredResponseLine Include="@(TranslationDocument->'&quot;%(FullPath)&quot;')" />
+      <_TranslationsDesiredResponseLine Include="--project" />
+      <_TranslationsDesiredResponseLine Include="@(TranslationProject->'&quot;%(RootDir)%(Directory)&quot;')" />
       <_TranslationsDesiredResponseLine Include="--output" />
       <_TranslationsDesiredResponseLine Include="&quot;$(_TranslationsStagingDirectory)&quot;" />
       <_TranslationsDesiredResponseLine Include="--emit-json" Condition="'$(TranslationsEmitJson)' == 'true' or ('$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
@@ -137,16 +143,14 @@
   <Target Name="RunicTranslationsGenerateTranslationArtifacts"
           BeforeTargets="BeforeCompile"
           DependsOnTargets="_RunicTranslationsPrepareTranslationsGeneration;_RunicTranslationsGenerateTranslationArtifactsCore"
-          Condition="'$(_TranslationsGenerationEnabled)' == 'true' and ('@(TranslationCatalog)' != '' or '@(TranslationDocument)' != '')" />
+          Condition="'$(_TranslationsGenerationEnabled)' == 'true' and '@(TranslationProject)' != ''" />
 
   <!-- This target is reached only after deferred path defaults and generation state exist. -->
   <Target Name="_RunicTranslationsGenerateTranslationArtifactsCore"
-          Inputs="@(TranslationCatalog);@(TranslationDocument);@(TranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
+          Inputs="@(TranslationProject);@(TranslationMf2);@(TranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
           Outputs="$(TranslationsOutputStamp)">
-    <Error Condition="'@(TranslationCatalog->Count())' != '1'"
-           Text="RTR0002: Exactly one TranslationCatalog item is required for artifact generation by this build-package version." />
-    <Error Condition="'@(TranslationDocument)' == ''"
-           Text="RTR0002: At least one TranslationDocument item is required for artifact generation." />
+    <Error Condition="'@(TranslationProject->Count())' &gt; '1'"
+           Text="RTR0002: At most one TranslationProject item is supported." />
 
     <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
           Command="$(TranslationsToolCommand) &quot;@$(_TranslationsResponseFilePath)&quot;" />

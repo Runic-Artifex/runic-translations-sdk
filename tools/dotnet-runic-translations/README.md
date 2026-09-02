@@ -1,6 +1,6 @@
 # dotnet-runic-translations
 
-Create, validate, generate, verify, import, and analyze Runic Translations catalogs from a project-local .NET tool. Use it in developer workflows and CI to catch catalog errors before generated C# or ESM reaches an application.
+Create, validate, generate, and verify Runic Translations MF2 projects from a project-local .NET tool. Use it in developer workflows and CI to catch message errors before generated C# or ESM reaches an application.
 
 ## Install locally
 
@@ -11,30 +11,21 @@ dotnet tool install dotnet-runic-translations --version <VERSION>
 
 Replace `<VERSION>` with the current preview shown on NuGet. The tool targets .NET 10. Commit `.config/dotnet-tools.json`, restore it with `dotnet tool restore`, and keep the tool on the same exact release as the runtime, build package, and Vite adapter.
 
-## Create and validate a catalog
+## Validate an MF2 project
 
 ```bash
-dotnet tool run runic-translations -- init \
-  --directory Resources \
-  --catalog app \
-  --default-locale en \
-  --locale de \
-  --namespace Example.Translations \
-  --class AppText
-
 dotnet tool run runic-translations -- validate \
-  --catalog Resources/app.catalog.json \
-  --documents Resources/app.en.json Resources/app.de.json
+  --project translations
 ```
 
-`init` creates a compiler-valid schema-v2 catalog and locale documents as one all-or-nothing directory commit. It never overwrites an existing target. Additional locales fall back to the default; use `--locale <tag>:<fallback>` for an explicit edge. `--vscode` adds project-scoped schema associations, while `--no-esm` and `--no-starter` omit their respective defaults.
+The project path may name the conventional directory or its `runic.json`. The
+tool discovers locale directories and `.mf2` messages beneath it.
 
 ## Generate C# and ESM
 
 ```bash
 dotnet tool run runic-translations -- generate \
-  --catalog Resources/app.catalog.json \
-  --documents Resources/app.en.json Resources/app.de.json \
+  --project translations \
   --output obj/translations \
   --emit-csharp \
   --emit-esm
@@ -47,16 +38,12 @@ Use `Runic.Translations.Build` for generated C# or when MSBuild should invoke th
 ## Other commands
 
 ```text
-runic-translations verify  --catalog <file> --documents <files...> --output <directory>
+runic-translations verify  --project <directory|runic.json> --output <directory>
 runic-translations schema  --output <directory>
-runic-translations import  --source en=<file> --source de=<file> --output <directory> ...
-runic-translations analyze --catalog <file> --documents <files...> --sources <files...>
 ```
 
 - `verify` renders in isolation and byte-compares the selected expected output, including extra-file detection.
 - `schema` copies the bundled source, artifact, manifest, normalized-AST, editor-state, and capability schemas.
-- `import` performs a diagnostic one-way conversion from conventional JSON or the supported lossless inlang subset. It writes native Runic sources and `runic-import-report.json`; `--dry-run` writes only the report to stdout.
-- `analyze` combines catalog completeness and contract checks with conservative C# and TypeScript usage evidence. Dynamic access does not make a key safe to delete by default.
 
 Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`. Exit code `0` means success, `1` means catalog or verification diagnostics, and `2` means invalid invocation or an operational failure.
 
@@ -65,9 +52,7 @@ Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`.
 This tool is a public preview for .NET 10. Preview commands and generated output can change with documented migrations. Pin one exact version in the local manifest and coordinate upgrades with all consumers of its generated artifacts.
 
 - [Vite quick start](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/quickstart-vite.md)
-- [Import guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/importing.md)
-- [Analysis guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/analysis.md)
-- [VS Code schema setup](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/vscode.md)
+- [MF2 project guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
 - [CLI source and examples](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/tools/dotnet-runic-translations)
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
 

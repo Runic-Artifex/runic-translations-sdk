@@ -66,9 +66,9 @@ public sealed class ArtifactInspection
     public string? ContractFingerprint { get; }
     /// <summary>The locale-pack message count.</summary>
     public int MessageCount { get; }
-    /// <summary>The resource leaf count for catalog and resource documents.</summary>
+    /// <summary>The inspected XLIFF resource count.</summary>
     public int ResourceCount { get; }
-    /// <summary>The structured MF2 message count for catalog and resource documents.</summary>
+    /// <summary>The inspected structured MF2 message count.</summary>
     public int StructuredMessageCount { get; }
     /// <summary>The XLIFF unit count.</summary>
     public int UnitCount { get; }
@@ -88,7 +88,7 @@ public sealed class ArtifactInspection
         AppendIf(text, "layer", Layer);
         AppendIf(text, "contractFingerprint", ContractFingerprint);
         if (Kind.StartsWith("locale-pack", StringComparison.Ordinal)) text.Append("messages: ").Append(MessageCount).Append('\n');
-        if (Kind.StartsWith("resources-json", StringComparison.Ordinal) || Kind == "xliff-2.1" || Kind == "xliff")
+        if (Kind == "xliff-2.1" || Kind == "xliff")
         {
             text.Append("resources: ").Append(ResourceCount).Append('\n');
             text.Append("structuredMessages: ").Append(StructuredMessageCount).Append('\n');
@@ -167,10 +167,8 @@ public static class ArtifactInspector
             if (packFamily && content.Length > maximumBytes)
                 return new ArtifactInspection("locale-pack-v2", null, null, null, null, content.Length, false, null, 0, 0, 0, 0, 0,
                     [new ArtifactInspectionFinding("RTR0023/limit-exceeded", "The external pack exceeds the configured document limit.")]);
-            if (!packFamily && HasRootMember(span, "schemaVersion"u8) && content.Length > maximumBytes)
-                return new ArtifactInspection("resources-json", null, null, null, null, content.Length, false, null, 0, 0, 0, 0, 0,
-                    [new ArtifactInspectionFinding("RTR0022", $"Document exceeds the configured byte limit of {maximumBytes} bytes.")]);
-            return packFamily ? InspectLocalePackV2(content) : InspectResourcesJson(content);
+            return packFamily ? InspectLocalePackV2(content) : Unknown(content.Length,
+                new ArtifactInspectionFinding("INSPECT-UNSUPPORTED-KIND", "The JSON artifact kind is unsupported."));
         }
         if (start < span.Length && span[start] == (byte)'<') return InspectXliff(content);
         return Unknown(content.Length, new ArtifactInspectionFinding("INSPECT-UNSUPPORTED-KIND", "The artifact kind is unsupported."));
@@ -305,73 +303,6 @@ public static class ArtifactInspector
         return count;
     }
 
-    private static ArtifactInspection InspectResourcesJson(ReadOnlyMemory<byte> content)
-    {
-        var findings = new List<ArtifactInspectionFinding>();
-        JsonDocument? document;
-        try
-        {
-            document = JsonDocument.Parse(content, new JsonDocumentOptions
-            {
-                AllowTrailingCommas = false,
-                CommentHandling = JsonCommentHandling.Disallow,
-                MaxDepth = MaximumDepth + 1,
-            });
-        }
-        catch (JsonException exception)
-        {
-            findings.Add(new ArtifactInspectionFinding("INSPECT-MALFORMED",
-                "The JSON document is incomplete or malformed near byte " + exception.BytePositionInLine + "."));
-            return new ArtifactInspection("resources-json", null, null, null, null, content.Length, false, null, 0, 0, 0, 0, 0, findings);
-        }
-
-        using (document)
-        {
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                findings.Add(new ArtifactInspectionFinding("INSPECT-MALFORMED", "The JSON document root must be an object."));
-                return new ArtifactInspection("resources-json", null, null, null, null, content.Length, false, null, 0, 0, 0, 0, 0, findings);
-            }
-
-            string kind = TryIntegerMember(document.RootElement, "schemaVersion", out int schemaVersion) && schemaVersion == 3
-                ? "resources-json-v3"
-                : "resources-json";
-            int? formatVersion = TryIntegerMember(document.RootElement, "schemaVersion", out schemaVersion) ? schemaVersion : null;
-            string? catalog = TryStringMember(document.RootElement, "catalog");
-            string? locale = TryStringMember(document.RootElement, "locale");
-            string? layer = TryStringMember(document.RootElement, "layer");
-            int resources = 0;
-            int structured = 0;
-            if (document.RootElement.TryGetProperty("resources", out JsonElement group) && group.ValueKind == JsonValueKind.Object)
-                CountGroup(group, findings, 0, ref resources, ref structured);
-            return new ArtifactInspection(kind, formatVersion, catalog, locale, layer, content.Length, false, null, 0, resources, structured, 0, 0,
-                findings.OrderBy(static finding => finding.Code, StringComparer.Ordinal)
-                    .ThenBy(static finding => finding.Message, StringComparer.Ordinal).ToArray());
-        }
-    }
-
-    private static void CountGroup(JsonElement group, List<ArtifactInspectionFinding> findings, int depth, ref int resources, ref int structured)
-    {
-        if (depth > MaximumDepth)
-        {
-            findings.Add(new ArtifactInspectionFinding("INSPECT-LIMIT", "The resource tree exceeds the configured depth limit."));
-            return;
-        }
-        foreach (JsonProperty property in group.EnumerateObject())
-        {
-            JsonElement value = property.Value;
-            if (value.ValueKind == JsonValueKind.String) { resources++; continue; }
-            if (value.ValueKind != JsonValueKind.Object) { resources++; continue; }
-            if (value.TryGetProperty("$value", out JsonElement leaf))
-            {
-                resources++;
-                if (leaf.ValueKind == JsonValueKind.Object && leaf.TryGetProperty("mf2", out _)) structured++;
-                continue;
-            }
-            CountGroup(value, findings, depth + 1, ref resources, ref structured);
-        }
-    }
-
     private static ArtifactInspection InspectXliff(ReadOnlyMemory<byte> content)
     {
         var findings = new List<ArtifactInspectionFinding>();
@@ -401,7 +332,8 @@ public static class ArtifactInspector
             catalog = import.CatalogId;
             sourceLocale = import.SourceLocale;
             targetLocale = import.TargetLocale;
-            (units, reviewEntries) = CountImportedUnits(import.ResourceDocumentBytes, import.Review.Entries.Count);
+            units = import.Messages.Count;
+            reviewEntries = import.Review.Entries.Count;
             if (import.Report.Losses.Count > 0)
                 findings.AddRange(import.Report.Losses.Select(loss => new ArtifactInspectionFinding(loss.Code, loss.Location + ": " + loss.Message)));
         }
@@ -416,16 +348,6 @@ public static class ArtifactInspector
         }
 
         return new ArtifactInspection(kind, null, catalog, targetLocale, null, content.Length, reviewEntries > 0, null, 0, units, 0, units, reviewEntries, findings);
-    }
-
-    private static (int Units, int ReviewEntries) CountImportedUnits(byte[] resourceDocumentBytes, int reviewEntries)
-    {
-        using JsonDocument document = JsonDocument.Parse(resourceDocumentBytes);
-        int resources = 0;
-        int structured = 0;
-        if (document.RootElement.TryGetProperty("resources", out JsonElement group) && group.ValueKind == JsonValueKind.Object)
-            CountGroup(group, [], 0, ref resources, ref structured);
-        return (resources, reviewEntries);
     }
 
     private static Dictionary<string, JsonElement> ReadMembers(JsonElement value, List<ArtifactInspectionFinding> findings, string[] expected)

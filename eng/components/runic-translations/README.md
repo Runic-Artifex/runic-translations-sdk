@@ -6,24 +6,22 @@ Build localization once and consume it as strongly typed C# or tree-shakable ESM
 
 It is UI-framework independent, works with NativeAOT, and can feed .NET applications, Vite applications, and SvelteKit projects that provide their own locale routing.
 
-## From catalog to generated code
+## From MF2 to generated code
 
-The project template is the shortest complete path through the toolchain:
+New projects use one conventional `translations/` directory. `runic.json`
+declares the project; each locale directory contains normal MessageFormat 2
+files whose filenames become message identifiers:
 
-```bash
-dotnet new install Runic.Translations.Templates::<VERSION>
-dotnet new runic-translations-project \
-  --name Example.Translations \
-  --catalog app \
-  --defaultLocale en \
-  --namespace Example.Translations \
-  --className AppText
-cd Example.Translations
-dotnet tool restore
-dotnet build
+```text
+translations/
+├── runic.json
+├── en/application_title.mf2
+└── de/application_title.mf2
 ```
 
-This creates a schema-v2 catalog and locale document under `Resources/`. The source generator adds typed C# APIs to the compilation, while the build integration writes ESM and other selected artifacts beneath `obj/`.
+`Runic.Translations.Build` discovers that directory automatically. The source
+generator adds typed C# APIs to the compilation, while the build integration
+writes ESM and other selected artifacts beneath `obj/`.
 
 ```csharp
 using Example.Translations;
@@ -32,7 +30,7 @@ using Runic.Translations;
 ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
 var text = new AppText(manager);
 
-Console.WriteLine(text.Application.Name);
+Console.WriteLine(text.application_title);
 await manager.SetLocaleAsync("de");
 ```
 
@@ -41,10 +39,11 @@ With ESM generation enabled, the same catalog is available to Vite through the o
 ```ts
 import { m } from "virtual:runic-translations/app";
 
-document.querySelector("#app")!.textContent = m["Application.Name"]();
+document.querySelector("#app")!.textContent = m.application_title();
 ```
 
-See the [Vite quick start](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/quickstart-vite.md) for tool pinning, Vite configuration, locale documents, and CI verification.
+See [MF2 projects](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
+and the [Vite quick start](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/quickstart-vite.md).
 
 ## Choose a package
 
@@ -54,9 +53,9 @@ Runic Translations is currently a public preview. Replace `<VERSION>` below with
 |---|---|---|
 | [`Runic.Translations`](https://www.nuget.org/packages/Runic.Translations) | `dotnet add package Runic.Translations --version <VERSION>` | NativeAOT-compatible runtime snapshots, formatting, fallback, and locale switching |
 | [`Runic.Translations.Build`](https://www.nuget.org/packages/Runic.Translations.Build) | `dotnet add package Runic.Translations.Build --version <VERSION>` | Strongly typed C# APIs, MSBuild input mapping, and opt-in JSON, TypeScript, ESM, template, or C++ artifacts |
-| [`dotnet-runic-translations`](https://www.nuget.org/packages/dotnet-runic-translations) | `dotnet tool install dotnet-runic-translations --version <VERSION>` | Local initialization, validation, generation, verification, import, schema, and analysis commands |
-| [`Runic.Translations.Templates`](https://www.nuget.org/packages/Runic.Translations.Templates) | `dotnet new install Runic.Translations.Templates::<VERSION>` | Ready-to-build .NET project or catalog item scaffolding |
-| [`Runic.Translations.Tooling`](https://www.nuget.org/packages/Runic.Translations.Tooling) | `dotnet add package Runic.Translations.Tooling --version <VERSION>` | Compiler facade, deterministic v2-to-v3 source migration, XLIFF interchange, and transactional authoring |
+| [`dotnet-runic-translations`](https://www.nuget.org/packages/dotnet-runic-translations) | `dotnet tool install dotnet-runic-translations --version <VERSION>` | Local MF2 project initialization, validation, generation, verification, and schemas |
+| [`Runic.Translations.Templates`](https://www.nuget.org/packages/Runic.Translations.Templates) | `dotnet new install Runic.Translations.Templates::<VERSION>` | Ready-to-build .NET or MF2 project scaffolding |
+| [`Runic.Translations.Tooling`](https://www.nuget.org/packages/Runic.Translations.Tooling) | `dotnet add package Runic.Translations.Tooling --version <VERSION>` | Compiler integration, XLIFF interchange, and transactional MF2 authoring |
 | [`@runic-artifex/vite-plugin-runic-translations`](https://www.npmjs.com/package/@runic-artifex/vite-plugin-runic-translations) | `npm install --save-dev @runic-artifex/vite-plugin-runic-translations@<VERSION>` | Vite virtual modules, watch integration, and HMR over generated ESM |
 
 Most .NET applications use the runtime and build packages together. Vite applications additionally use the local tool and Vite adapter. Choose Tooling only when building tooling rather than consuming generated translations.
@@ -66,18 +65,16 @@ Most .NET applications use the runtime and build packages together. Vite applica
 - The current packages target .NET 10; the generator requires a .NET 10 Roslyn host.
 - The runtime and generated C# are reflection-free and compatible with NativeAOT.
 - Preview releases may contain documented breaking changes. Package SemVer is separate from the versioned source schemas, generated ABIs, artifacts, and transport contracts.
-- For SSR, pass the locale explicitly for each ESM message call. A request-global locale resolver is not safe for concurrent requests.
+- For SSR, run rendering in the generated `/server` request context. Explicit locale overrides remain available for calls that intentionally format a different locale.
 - Runtime-loaded external packs are optional and are accepted only after their catalog, locale, fingerprint, key, argument, size, and caller-provided integrity contracts pass validation.
 
-Read the [compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md), [capability matrix](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/capabilities.md), and [schema-v2 guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/schema-v2.md) before coordinating upgrades or relying on preview locale coverage.
+Read the [compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md), [capability matrix](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/capabilities.md), and [MF2 project guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md) before coordinating upgrades or relying on preview locale coverage.
 
 ## Documentation and support
 
 - [.NET package guide](https://github.com/Runic-Artifex/runic-translations/blob/main/dotnet/README.md)
+- [MF2 project convention](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
 - [ESM backend](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/esm.md)
-- [Catalog analysis](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/analysis.md)
-- [JSON and inlang importing](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/importing.md)
-- [VS Code schema setup](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/vscode.md)
 - [Translation reference transport](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/transport.md)
 - [Runic Desktop integration](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/runic-desktop.md)
 - [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-editor)

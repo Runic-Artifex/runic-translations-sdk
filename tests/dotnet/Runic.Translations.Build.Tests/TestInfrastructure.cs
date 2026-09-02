@@ -129,13 +129,6 @@ internal static class Processes
 
 internal static class TestFixture
 {
-    public static void CopyMinimal(TemporaryDirectory temporary)
-    {
-        string source = RepositoryPaths.Resolve("spec", "corpus", "valid", "minimal");
-        File.Copy(Path.Combine(source, "manifest.json"), temporary.Resolve("manifest.json"));
-        File.Copy(Path.Combine(source, "en.json"), temporary.Resolve("en.json"));
-    }
-
     public static ProcessResult RunTool(TemporaryDirectory temporary, params string[] arguments)
     {
         Assert.True(File.Exists(RepositoryPaths.ToolAssembly), $"Tool assembly is missing: {RepositoryPaths.ToolAssembly}");
@@ -144,9 +137,6 @@ internal static class TestFixture
         Array.Copy(arguments, 0, all, 1, arguments.Length);
         return Processes.DotNet(temporary.Path, all);
     }
-
-    public static ProcessResult Generate(TemporaryDirectory temporary, string output = "generated") =>
-        RunTool(temporary, "generate", "--catalog", "manifest.json", "--documents", "en.json", "--output", output);
 
     public static string[] RelativeFiles(string directory) => Directory
         .EnumerateFiles(directory, "*", SearchOption.AllDirectories)
