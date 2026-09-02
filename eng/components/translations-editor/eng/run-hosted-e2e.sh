@@ -45,7 +45,7 @@ fi
 fixture_workspace="$(mktemp -d)"
 server_log="$(mktemp)"
 trap 'kill "${server_pid:-}" 2>/dev/null || true; rm -rf "$fixture_workspace" "$server_log"' EXIT
-cp "$repository_root"/ExampleWorkspace/* "$fixture_workspace"/
+cp -a "$repository_root/ExampleWorkspace/." "$fixture_workspace"
 
 # Compile the disposable E2E host with its fixture-only route. The production
 # assembly excludes that source file entirely.

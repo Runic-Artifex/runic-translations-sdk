@@ -1,0 +1,15 @@
+{
+  "$schema": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
+  "schemaVersion": 1,
+  "catalog": "customer-product",
+  "code": {
+    "namespace": "Customer.Product",
+    "className": "ProductText"
+  },
+  "baseLocale": "de",
+  "locales": [
+    "de",
+    { "tag": "en", "fallback": "de" },
+    { "tag": "fr", "fallback": "de" }
+  ]
+}

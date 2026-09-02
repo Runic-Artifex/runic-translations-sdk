@@ -1,0 +1,1 @@
+Clearing affects only future recovery and launches; it does not modify workspace files or discard the work currently open in this window.

@@ -561,7 +561,6 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
         value.Locale,
         value.Fallback,
         value.ReplacementFallback,
-        value.Layer,
         value.CopyFromLocale,
         value.SourceKey,
         value.TargetKey,
@@ -573,7 +572,6 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
         value.Locale,
         value.Fallback,
         value.ReplacementFallback,
-        value.Layer,
         value.CopyFromLocale,
         value.SourceKey,
         value.TargetKey,
@@ -610,8 +608,6 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
         value.AdditionalLocales.Select(static locale => new EditorProjectLocaleRequest(locale.Tag, locale.Fallback)).ToArray(),
         value.CodeNamespace,
         value.ClassName,
-        value.LayerName,
-        value.GenerateEsm,
         value.IncludeStarterMessage);
 
     private static EditorProjectCreationRequest ProjectRequest(Contract.CreateProjectRequest value) => new(
@@ -621,8 +617,6 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
         value.AdditionalLocales.Select(static locale => new EditorProjectLocaleRequest(locale.Tag, locale.Fallback)).ToArray(),
         value.CodeNamespace,
         value.ClassName,
-        value.LayerName,
-        value.GenerateEsm,
         value.IncludeStarterMessage);
 private static Contract.ApplicationInitializedSnapshotReview ApplicationInitializedSnapshotReviewValue(EditorReviewSnapshot value) => new()
     {

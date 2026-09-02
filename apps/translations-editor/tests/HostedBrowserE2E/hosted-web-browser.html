@@ -18,7 +18,7 @@
     // Wire constants mirror Contract/bridge.manifest.json for the editor contract.
     const protocol = "runic.translations.editor";
     const version = 1;
-    const fingerprint = "bb519a1ca7355a0c40897f32dca99495107729dc1f88bb71cbb054f18859f6fd";
+    const fingerprint = "45e9039e5f53ab97d6c57556a7001b97db527625a4f520592a2cb032c279d439";
 
     const body = document.body;
     const catalogOut = document.querySelector("#catalog");
@@ -140,8 +140,7 @@
       done = stage("apply-message-edit");
       const mutationRequest = {
         kind: "create-key",
-        layer: "base",
-        targetKey: "Hosted.Web.E2e",
+        targetKey: "hosted_web_e2e",
         initialValue: "Edited over the WebSocket bridge",
       };
       const previewPayload = await expectReceipt({ _tag: "PreviewMutation", request: mutationRequest });
@@ -154,14 +153,13 @@
       const appliedResult = appliedPayload.result ?? appliedPayload;
       if (appliedResult.ok !== true) throw new Error(appliedResult.message ?? "The key mutation was rejected.");
       const appliedSnapshot = appliedResult.snapshot ?? {};
-      // create-key nests namespace segments, so match the leaf name as written.
-      if (!appliedSnapshot.documents?.some((document) => document.content.includes('"E2e"'))) {
+      if (!appliedSnapshot.documents?.some((document) => document.path === "de/hosted_web_e2e.mf2")) {
         throw new Error("The mutation snapshot did not contain the created key.");
       }
       done("key created");
 
       done = stage("save-document");
-      const mutated = appliedResult.snapshot.documents.find((document) => document.path === "product.de.json")
+      const mutated = appliedResult.snapshot.documents.find((document) => document.path === "de/hosted_web_e2e.mf2")
         ?? appliedResult.snapshot.documents[0];
       const savedPayload = await expectReceipt({
         _tag: "SaveDocument",
@@ -179,7 +177,7 @@
         _tag: "SaveReview",
         request: {
           entries: [{
-            key: "Hosted.Web.E2e",
+            key: "hosted_web_e2e",
             locale: "de",
             state: "approved",
             note: "Approved from the hosted-browser e2e.",
@@ -190,7 +188,7 @@
       });
       const reviewedResult = reviewedPayload.result ?? reviewedPayload;
       if (reviewedResult.ok !== true) throw new Error(reviewedResult.message ?? "The review state was not saved.");
-      if (reviewedResult.review?.entries?.some((entry) => entry.key === "Hosted.Web.E2e" && entry.state === "approved") !== true) {
+      if (reviewedResult.review?.entries?.some((entry) => entry.key === "hosted_web_e2e" && entry.state === "approved") !== true) {
         throw new Error("The saved review did not record the approved entry.");
       }
       done("approved");

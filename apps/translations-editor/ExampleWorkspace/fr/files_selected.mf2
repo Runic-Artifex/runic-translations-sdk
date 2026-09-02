@@ -1,0 +1,4 @@
+.input {$count :integer select=plural}
+.match $count
+one {{Un fichier sélectionné}}
+* {{{$count} fichiers sélectionnés}}

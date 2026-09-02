@@ -56,23 +56,23 @@
 </script>
 
 <header class="flex min-h-16 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-md sm:px-4 xl:gap-4 xl:px-6">
-  <Sidebar.Trigger class="shrink-0 md:hidden" aria-label={ui.text("Ui.Toolbar.OpenNavigation")} />
+  <Sidebar.Trigger class="shrink-0 md:hidden" aria-label={ui.text("ui_toolbar_open_navigation")} />
   <div class="min-w-0 flex-1"></div>
 
   <div class="flex shrink-0 items-center gap-2">
-    <Button variant="ghost" size="icon-xs" disabled={!canUndo || historyBusy} onclick={onundo} aria-label={undoLabel === undefined ? ui.text("Ui.Toolbar.UndoSavedChange") : `${ui.text("Ui.Toolbar.Undo")} ${undoLabel}`} title={undoLabel === undefined ? `${ui.text("Ui.Toolbar.UndoSavedChange")} (Ctrl+Z)` : `${ui.text("Ui.Toolbar.Undo")} ${undoLabel} (Ctrl+Z)`}>
+    <Button variant="ghost" size="icon-xs" disabled={!canUndo || historyBusy} onclick={onundo} aria-label={undoLabel === undefined ? ui.text("ui_toolbar_undo_saved_change") : `${ui.text("ui_toolbar_undo")} ${undoLabel}`} title={undoLabel === undefined ? `${ui.text("ui_toolbar_undo_saved_change")} (Ctrl+Z)` : `${ui.text("ui_toolbar_undo")} ${undoLabel} (Ctrl+Z)`}>
       <Undo2Icon data-icon="inline-start" />
     </Button>
-    <Button variant="ghost" size="icon-xs" disabled={!canRedo || historyBusy} onclick={onredo} aria-label={redoLabel === undefined ? ui.text("Ui.Toolbar.RedoSavedChange") : `${ui.text("Ui.Toolbar.Redo")} ${redoLabel}`} title={redoLabel === undefined ? `${ui.text("Ui.Toolbar.RedoSavedChange")} (Ctrl+Shift+Z)` : `${ui.text("Ui.Toolbar.Redo")} ${redoLabel} (Ctrl+Shift+Z)`}>
+    <Button variant="ghost" size="icon-xs" disabled={!canRedo || historyBusy} onclick={onredo} aria-label={redoLabel === undefined ? ui.text("ui_toolbar_redo_saved_change") : `${ui.text("ui_toolbar_redo")} ${redoLabel}`} title={redoLabel === undefined ? `${ui.text("ui_toolbar_redo_saved_change")} (Ctrl+Shift+Z)` : `${ui.text("ui_toolbar_redo")} ${redoLabel} (Ctrl+Shift+Z)`}>
       <Redo2Icon data-icon="inline-start" />
     </Button>
     {#if reviewDirty}
-      <Button variant="ghost" size="icon-xs" class="hidden sm:inline-flex" disabled={reviewSaving} onclick={ondiscardreview} aria-label={ui.text("Ui.Toolbar.DiscardWorkflow")} title={ui.text("Ui.Toolbar.DiscardWorkflow")}>
+      <Button variant="ghost" size="icon-xs" class="hidden sm:inline-flex" disabled={reviewSaving} onclick={ondiscardreview} aria-label={ui.text("ui_toolbar_discard_workflow")} title={ui.text("ui_toolbar_discard_workflow")}>
         <Undo2Icon data-icon="inline-start" />
       </Button>
       <Button variant="outline" size="xs" class="hidden lg:inline-flex" disabled={reviewSaving || reviewDisabled} onclick={onsavereview}>
         {#if reviewSaving}<Spinner data-icon="inline-start" />{/if}
-        {reviewSaving ? ui.text("Ui.Toolbar.SavingWorkflow") : ui.text("Ui.Toolbar.SaveWorkflow")}
+        {reviewSaving ? ui.text("ui_toolbar_saving_workflow") : ui.text("ui_toolbar_save_workflow")}
       </Button>
     {/if}
 

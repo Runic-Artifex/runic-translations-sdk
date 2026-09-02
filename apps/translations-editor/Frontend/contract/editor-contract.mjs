@@ -206,8 +206,6 @@ const EditorProjectCreationRequest = Schema.Struct({
   additionalLocales: Schema.Array(EditorProjectLocaleRequest),
   codeNamespace: Schema.String,
   className: Schema.String,
-  layerName: Schema.String,
-  generateEsm: Schema.Boolean,
   includeStarterMessage: Schema.Boolean,
 });
 
@@ -260,7 +258,6 @@ const EditorMutationRequest = Schema.Struct({
   locale: Schema.optional(Schema.String),
   fallback: Schema.optional(Schema.String),
   replacementFallback: Schema.optional(Schema.String),
-  layer: Schema.optional(Schema.String),
   copyFromLocale: Schema.optional(Schema.String),
   sourceKey: Schema.optional(Schema.String),
   targetKey: Schema.optional(Schema.String),

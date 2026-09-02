@@ -45,14 +45,8 @@
         "directory": {
           "type": "string"
         },
-        "generateEsm": {
-          "type": "boolean"
-        },
         "includeStarterMessage": {
           "type": "boolean"
-        },
-        "layerName": {
-          "type": "string"
         }
       },
       "required": [
@@ -62,8 +56,6 @@
         "additionalLocales",
         "codeNamespace",
         "className",
-        "layerName",
-        "generateEsm",
         "includeStarterMessage"
       ],
       "type": "object"

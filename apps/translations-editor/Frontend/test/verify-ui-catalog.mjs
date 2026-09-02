@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { glob, readFile } from "node:fs/promises";
 import { parse } from "svelte/compiler";
+import { readUiMessages } from "./ui-messages.mjs";
 
 const [english, german] = await Promise.all([
-  readCatalog("../../EditorResources/editor.en.json"),
-  readCatalog("../../EditorResources/editor.de.json"),
+  readUiMessages("en"),
+  readUiMessages("de"),
 ]);
 
 const sources = [];
@@ -17,7 +18,7 @@ const keys = new Set();
 const uncataloged = [];
 for (const source of sources) {
   const markup = await readFile(new URL(`../${source}`, import.meta.url), "utf8");
-  for (const match of markup.matchAll(/ui\.text\("(Ui\.[A-Za-z0-9.]+)"\)/g)) keys.add(match[1]);
+  for (const match of markup.matchAll(/ui\.text\("(ui_[a-z0-9_]+)"\)/g)) keys.add(match[1]);
   visit(parse(markup).html, (node, parent) => {
     if (node.type === "Text" && parent?.type !== "Attribute" && isVisibleCopy(node.data, parent)) uncataloged.push(`${source}: ${node.data.trim()}`);
     if (node.type === "Attribute" && ["aria-label", "title", "placeholder", "alt"].includes(node.name) &&
@@ -26,8 +27,8 @@ for (const source of sources) {
 }
 
 for (const key of keys) {
-  assert.equal(typeof get(english.resources, key), "string", `English catalog omits ${key}.`);
-  assert.equal(typeof get(german.resources, key), "string", `German catalog omits ${key}.`);
+  assert.equal(typeof english[key], "string", `English project omits ${key}.`);
+  assert.equal(typeof german[key], "string", `German project omits ${key}.`);
 }
 assert.deepEqual(uncataloged, [], `Found uncataloged visible or accessible copy:\n${uncataloged.join("\n")}`);
 console.log(`PASS: ${keys.size} UI catalog keys are present in both locales and all static editor copy is catalog-backed.`);
@@ -40,6 +41,4 @@ function isVisibleCopy(value, parent) {
   if (parent?.name === "placeholder" && /[/.]|^[a-z]{2}(?:-[A-Z]{2})?$/.test(copy)) return false;
   return true;
 }
-function get(value, key) { return key.split(".").reduce((current, part) => current?.[part], value); }
-async function readCatalog(path) { return JSON.parse(await readFile(new URL(path, import.meta.url), "utf8")); }
 function visit(value, action, parent) { if (value === null || typeof value !== "object") return; if (typeof value.type === "string") action(value, parent); for (const child of Object.values(value)) Array.isArray(child) ? child.forEach((item) => visit(item, action, value)) : visit(child, action, value); }

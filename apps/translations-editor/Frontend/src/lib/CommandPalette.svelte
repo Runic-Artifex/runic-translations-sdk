@@ -96,24 +96,24 @@
     onOpenAutoFocus={focusSearch}
     onkeydown={handleKeydown}
   >
-    <Dialog.Title class="sr-only">{ui.text("Ui.CommandPalette.Title")}</Dialog.Title>
-    <Dialog.Description class="sr-only">{ui.text("Ui.CommandPalette.Description")}</Dialog.Description>
+    <Dialog.Title class="sr-only">{ui.text("ui_command_palette_title")}</Dialog.Title>
+    <Dialog.Description class="sr-only">{ui.text("ui_command_palette_description")}</Dialog.Description>
     <div class="border-b px-3 py-2.5">
       <Input
         bind:ref={searchInput}
         bind:value={query}
-        placeholder={ui.text("Ui.CommandPalette.Placeholder")}
+        placeholder={ui.text("ui_command_palette_placeholder")}
         autocomplete="off"
         spellcheck="false"
-        aria-label={ui.text("Ui.CommandPalette.SearchAriaLabel")}
+        aria-label={ui.text("ui_command_palette_search_aria_label")}
         class="border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
         oninput={() => setActive(0)}
       />
     </div>
     {#if filtered.length === 0}
-      <p class="px-4 py-8 text-center text-sm text-muted-foreground">{ui.text("Ui.CommandPalette.NoMatches")}</p>
+      <p class="px-4 py-8 text-center text-sm text-muted-foreground">{ui.text("ui_command_palette_no_matches")}</p>
     {:else}
-      <div bind:this={listElement} role="listbox" tabindex="-1" aria-label={ui.text("Ui.CommandPalette.CommandsAriaLabel")} aria-activedescendant={activeId === undefined ? undefined : `palette-option-${activeId}`} class="max-h-80 overflow-y-auto p-1.5">
+      <div bind:this={listElement} role="listbox" tabindex="-1" aria-label={ui.text("ui_command_palette_commands_aria_label")} aria-activedescendant={activeId === undefined ? undefined : `palette-option-${activeId}`} class="max-h-80 overflow-y-auto p-1.5">
         {#each groups as group (group.id)}
           <p class="px-2 pt-2 pb-1 text-[0.65rem] font-semibold tracking-wide text-muted-foreground uppercase">{group.label}</p>
           {#each group.commands as command, index (command.id)}

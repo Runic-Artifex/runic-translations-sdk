@@ -25,7 +25,7 @@ export interface TranslationRow {
   structured: boolean;
 }
 
-type JsonObject = Record<string, unknown>;
+const newMf2DocumentRevision = "new-mf2-document";
 
 export function buildRows(
   snapshot: WorkspaceSnapshot | undefined,
@@ -45,25 +45,35 @@ export function buildRows(
   }
 
   const entriesByLocale = new Map<string, Map<string, ResourceEntry>>();
+  const documentsByLocale = new Map<string, Map<string, EditorDocument>>();
   const keys = new Set<string>();
   for (const locale of snapshot.catalog.locales) {
     const entries = new Map<string, ResourceEntry>();
+    const entryDocuments = new Map<string, EditorDocument>();
     for (const document of [...(byLocale.get(locale.tag) ?? [])].reverse()) {
       const content = drafts[document.path] ?? document.content;
-      for (const entry of flattenDocument(content)) entries.set(entry.key, entry);
+      for (const entry of flattenDocument(content, document.path)) {
+        entries.set(entry.key, entry);
+        entryDocuments.set(entry.key, document);
+      }
     }
     entriesByLocale.set(locale.tag, entries);
+    documentsByLocale.set(locale.tag, entryDocuments);
     for (const key of entries.keys()) keys.add(key);
   }
 
   const sourceEntries = entriesByLocale.get(snapshot.catalog.defaultLocale) ?? new Map();
+  const mf2Manifest = snapshot.documents.find((document) => document.isManifest && document.path.endsWith("runic.json"));
   return [...keys].sort().map((key) => {
     const source = sourceEntries.get(key);
     const cells: Record<string, TranslationCell> = {};
     for (const locale of snapshot.catalog!.locales) {
       const entry = entriesByLocale.get(locale.tag)?.get(key);
       cells[locale.tag] = {
-        document: primaryDocument(byLocale.get(locale.tag) ?? []),
+        document: documentsByLocale.get(locale.tag)?.get(key) ??
+          (mf2Manifest !== undefined
+            ? missingMf2Document(mf2Manifest, locale.tag, key)
+            : primaryDocument(byLocale.get(locale.tag) ?? [])),
         entry,
         inheritedFrom: entry === undefined ? fallbackWithValue(snapshot, entriesByLocale, locale.tag, key) : undefined,
       };
@@ -78,40 +88,37 @@ export function buildRows(
   });
 }
 
+function missingMf2Document(
+  manifest: EditorDocument | undefined,
+  locale: string,
+  key: string,
+): EditorDocument | undefined {
+  if (manifest === undefined) return undefined;
+  const separator = manifest.path.lastIndexOf("/");
+  const directory = separator < 0 ? "" : manifest.path.slice(0, separator + 1);
+  return {
+    path: `${directory}${locale}/${key}.mf2`,
+    content: "",
+    revision: newMf2DocumentRevision,
+    isManifest: false,
+    isMalformed: false,
+    locale,
+    layer: "base",
+  };
+}
+
 export function updateResourceValue(
   content: string,
-  key: string,
+  _key: string,
   value: ResourceValue,
-  sourceTemplate?: ResourceEntry,
+  _sourceTemplate?: ResourceEntry,
 ): string {
-  const document = JSON.parse(content) as JsonObject;
-  const resources = object(document.resources, "resources");
-  const segments = key.split(".");
-  let group = resources;
-  for (const segment of segments.slice(0, -1)) {
-    const existing = group[segment];
-    if (!isObject(existing) || "$value" in existing) group[segment] = {};
-    group = object(group[segment], segment);
-  }
-  const leaf = segments.at(-1)!;
-  const existing = group[leaf];
-  if (isObject(existing) && "$value" in existing) {
-    existing.$value = value;
-  } else if (sourceTemplate?.placeholders !== undefined) {
-    group[leaf] = {
-      $value: value,
-      $placeholders: structuredClone(sourceTemplate.placeholders),
-    };
-  } else if (typeof value === "string") {
-    group[leaf] = value;
-  } else {
-    group[leaf] = { $value: value };
-  }
-  return `${JSON.stringify(document, null, 2)}\n`;
+  if (typeof value !== "string") throw new TypeError("MF2 messages must be edited as MF2 source text.");
+  return value.endsWith("\n") ? value : `${value}\n`;
 }
 
 export function formatJson(content: string): string {
-  return `${JSON.stringify(JSON.parse(content), null, 2)}\n`;
+  return `${content.replaceAll("\r\n", "\n").trimEnd()}\n`;
 }
 
 export function preview(entry: ResourceEntry | undefined): string {
@@ -128,42 +135,10 @@ export function coverage(rows: TranslationRow[], locale: string): { translated: 
   };
 }
 
-function flattenDocument(content: string): ResourceEntry[] {
-  try {
-    const document = JSON.parse(content) as JsonObject;
-    return flattenGroup(object(document.resources, "resources"), []);
-  } catch {
-    return [];
-  }
-}
-
-function flattenGroup(group: JsonObject, path: string[]): ResourceEntry[] {
-  const entries: ResourceEntry[] = [];
-  for (const [name, candidate] of Object.entries(group)) {
-    const next = [...path, name];
-    if (typeof candidate === "string") {
-      entries.push({ key: next.join("."), value: candidate, tags: [], structured: false });
-    } else if (isObject(candidate) && "$value" in candidate) {
-      const value = candidate.$value;
-      if (typeof value === "string" || isObject(value)) {
-        entries.push({
-          key: next.join("."),
-          value,
-          description: typeof candidate.$description === "string" ? candidate.$description : undefined,
-          tags: Array.isArray(candidate.$tags)
-            ? candidate.$tags.filter((tag): tag is string => typeof tag === "string")
-            : [],
-          placeholders: isObject(candidate.$placeholders)
-            ? candidate.$placeholders
-            : undefined,
-          structured: typeof value !== "string",
-        });
-      }
-    } else if (isObject(candidate)) {
-      entries.push(...flattenGroup(candidate, next));
-    }
-  }
-  return entries;
+function flattenDocument(content: string, path: string): ResourceEntry[] {
+  if (!path.endsWith(".mf2")) return [];
+  const key = path.slice(path.lastIndexOf("/") + 1, -".mf2".length);
+  return [{ key, value: content, tags: [], structured: /^\s*\.(?:input|local|match)\b/m.test(content) || content.includes("{#") }];
 }
 
 function primaryDocument(documents: EditorDocument[]): EditorDocument | undefined {
@@ -188,13 +163,4 @@ function fallbackWithValue(
     current = snapshot.catalog?.locales.find((candidate) => candidate.tag === current)?.fallback;
   }
   return undefined;
-}
-
-function object(value: unknown, name: string): JsonObject {
-  if (!isObject(value)) throw new TypeError(`Expected '${name}' to be a JSON object.`);
-  return value;
-}
-
-function isObject(value: unknown): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

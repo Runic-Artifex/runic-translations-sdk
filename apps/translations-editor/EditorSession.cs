@@ -15,9 +15,9 @@ internal sealed class EditorSession : IDisposable
     private (string Token, PreparedInterchangeImport Prepared)? _preparedReviewImport;
     private bool _disposed;
 
-    public EditorSession(string workspacePath, string? catalogId = null)
+    public EditorSession(string workspacePath)
     {
-        _workspace = new EditorWorkspace(workspacePath, catalogId);
+        _workspace = new EditorWorkspace(workspacePath);
     }
 
     public async Task<WorkspaceSnapshot> LoadAsync(CancellationToken cancellationToken = default)
@@ -486,7 +486,7 @@ internal sealed class EditorSession : IDisposable
         try
         {
             ThrowIfDisposed();
-            var replacement = new EditorWorkspace(request.Directory, request.CatalogId);
+            var replacement = new EditorWorkspace(request.Directory);
             try
             {
                 WorkspaceSnapshot snapshot = await replacement.LoadAsync(cancellationToken).ConfigureAwait(false);
@@ -545,8 +545,6 @@ internal sealed class EditorSession : IDisposable
         request.CodeNamespace,
         request.ClassName,
         request.AdditionalLocales.Select(static locale => new TranslationProjectLocale(locale.Tag, locale.Fallback)),
-        request.LayerName,
-        request.GenerateEsm,
         request.IncludeStarterMessage);
 
     private static TranslationWorkspaceTransactionPlan PlanMutation(EditorWorkspace workspace, EditorMutationRequest request)
@@ -557,13 +555,13 @@ internal sealed class EditorSession : IDisposable
         {
             "add-locale" => TranslationWorkspaceMutation.AddLocale(new TranslationAddLocaleRequest(
                 workspace.Root, catalogId, request.Locale ?? string.Empty, request.Fallback,
-                request.Layer ?? string.Empty, request.CopyFromLocale ?? string.Empty)),
+                request.CopyFromLocale ?? string.Empty)),
             "remove-locale" => TranslationWorkspaceMutation.RemoveLocale(new TranslationRemoveLocaleRequest(
                 workspace.Root, catalogId, request.Locale ?? string.Empty, request.ReplacementFallback)),
             "set-fallback" => TranslationWorkspaceMutation.SetFallback(new TranslationSetFallbackRequest(
                 workspace.Root, catalogId, request.Locale ?? string.Empty, request.Fallback)),
             "create-key" => TranslationWorkspaceMutation.CreateKey(new TranslationCreateKeyRequest(
-                workspace.Root, catalogId, request.TargetKey ?? string.Empty, request.InitialValue ?? string.Empty, request.Layer ?? string.Empty)),
+                workspace.Root, catalogId, request.TargetKey ?? string.Empty, request.InitialValue ?? string.Empty)),
             "rename-key" => KeyMutation(TranslationKeyMutationKind.RenameOrMove),
             "duplicate-key" => KeyMutation(TranslationKeyMutationKind.Duplicate),
             "delete-key" => KeyMutation(TranslationKeyMutationKind.Delete),

@@ -84,7 +84,7 @@ async function temporaryNuGetConfig(directory) {
 
 async function manifestFacts(path) {
   const manifest = JSON.parse(await readFile(path, "utf8"));
-  if (manifest.webModuleManifestVersion !== 1 || manifest.esmAbiVersion !== 2 || manifest.catalog !== "editor" || !/^sha256:[a-f0-9]{64}$/.test(manifest.contractFingerprint)) throw new Error("Editor generated manifest contract failed closed.");
+  if (manifest.webModuleManifestVersion !== 1 || manifest.esmAbiVersion !== 3 || manifest.catalog !== "editor" || !/^sha256:[a-f0-9]{64}$/.test(manifest.contractFingerprint)) throw new Error("Editor generated manifest contract failed closed.");
   for (const asset of manifest.assets) {
     const content = await readFile(join(dirname(path), asset.path));
     if (asset.byteLength !== content.byteLength || asset.sha256 !== await sha256(content)) throw new Error(`Editor manifest asset mismatch: ${asset.path}`);
@@ -110,10 +110,10 @@ async function gates(manifestPath, directory) {
     import(pathToFileURL(join(copied, manifest.entrypoints.messages)).href + "?messages"),
     import(pathToFileURL(join(copied, "transport.js")).href + "?transport"),
   ]);
-  assert.equal(messages.m["App.Title"]({ locale: "en" }), "Translations");
-  assert.equal(messages.m["App.Title"]({ locale: "de" }), "Übersetzungen");
+  assert.equal(messages.m["app_title"]({ locale: "en" }), "Translations");
+  assert.equal(messages.m["app_title"]({ locale: "de" }), "Übersetzungen");
   assert.throws(() => runtime.resolveLocale("fr"), RangeError);
-  const reference = { version: 1, catalog: manifest.catalog, contractFingerprint: manifest.contractFingerprint, key: "App.Title", arguments: {} };
+  const reference = { version: 1, catalog: manifest.catalog, contractFingerprint: manifest.contractFingerprint, key: "app_title", arguments: {} };
   assert.equal(transport.decodeTextReference(reference).ok, true);
   assert.equal(transport.decodeTextReference({ ...reference, contractFingerprint: "sha256:" + "0".repeat(64) }).ok, false);
   const entry = join(copied, manifest.entrypoints.messages);
@@ -189,7 +189,7 @@ export function verifyReceipt(receipt) {
   for (const journey of receipt?.journeys ?? []) {
     if (journey?.schema !== schema || !same(journey.isolation, { nuget: ".nuget/packages", bun: ".bun-cache" })) errors.push("journey contract mismatch");
     if (journey?.compatibility?.id !== "runic-1.0-preview.1" || journey.compatibility?.releaseTrainVersion !== canonicalPreviewVersion || !/^[a-f0-9]{64}$/.test(journey.compatibility?.sha256 ?? "")) errors.push("canonical compatibility pin mismatch");
-    if (journey?.generated?.catalog !== "editor" || journey.generated?.esmAbiVersion !== 2 || !/^sha256:[a-f0-9]{64}$/.test(journey.generated?.contractFingerprint ?? "") || !/^[a-f0-9]{64}$/.test(journey.embedded?.sha256 ?? "")) errors.push("generated or embedded artifact mismatch");
+    if (journey?.generated?.catalog !== "editor" || journey.generated?.esmAbiVersion !== 3 || !/^sha256:[a-f0-9]{64}$/.test(journey.generated?.contractFingerprint ?? "") || !/^[a-f0-9]{64}$/.test(journey.embedded?.sha256 ?? "")) errors.push("generated or embedded artifact mismatch");
     if (!same(journey?.negativeGates, expectedGates) || !same(journey?.localeEvidence, ["en", "de", "structured-interchange"])) errors.push("closed-boundary evidence mismatch");
     if (!Array.isArray(journey?.nugetCandidates) || journey.nugetCandidates.length !== 4 || journey.nugetCandidates.some(item => item.source !== "exact-local" || !/^[a-f0-9]{64}$/.test(item.archiveSha256 ?? "")) || journey?.npmCandidate?.identity !== pluginIdentity || journey.npmCandidate?.source !== "exact-local" || !/^[a-f0-9]{64}$/.test(journey.npmCandidate?.archiveSha256 ?? "")) errors.push("candidate provenance mismatch");
     if (!same(journey?.phases?.map(item => item.name), ["tool-restore", "editor-build", "frontend-check", "manifest-contract", "editor-interchange-smoke", "editor-package", "package-smoke"]) || journey.phases.some(item => item.status !== "passed" || item.exitCode !== 0)) errors.push("desktop proof phases mismatch");

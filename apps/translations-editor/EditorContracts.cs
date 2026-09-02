@@ -154,8 +154,6 @@ internal sealed record EditorProjectCreationRequest(
     IReadOnlyList<EditorProjectLocaleRequest> AdditionalLocales,
     string CodeNamespace,
     string ClassName,
-    string LayerName,
-    bool GenerateEsm,
     bool IncludeStarterMessage);
 
 internal sealed record EditorProjectPlan(
@@ -186,7 +184,6 @@ internal sealed record EditorMutationRequest(
     string? Locale,
     string? Fallback,
     string? ReplacementFallback,
-    string? Layer,
     string? CopyFromLocale,
     string? SourceKey,
     string? TargetKey,
@@ -269,11 +266,15 @@ internal sealed record PreparedInterchangeImport(
     byte[] SourceHash,
     string CatalogId,
     string ExpectedCatalogFingerprint,
-    string? TargetDocumentPath,
-    string? ExpectedTargetDocumentRevision,
-    byte[]? DocumentBytes,
+    IReadOnlyList<PreparedInterchangeDocument> Documents,
     IReadOnlyList<TranslationEditorStateEntry> MergedEntries,
     string? ExpectedSidecarRevision);
+
+internal sealed record PreparedInterchangeDocument(
+    string Path,
+    string? ExpectedRevision,
+    byte[]? OriginalBytes,
+    byte[] Bytes);
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

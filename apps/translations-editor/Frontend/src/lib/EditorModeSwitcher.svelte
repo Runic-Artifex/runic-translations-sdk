@@ -34,7 +34,7 @@
     spacing={1}
     value={mode}
     class="grid w-full grid-cols-2 sm:flex sm:w-auto"
-    aria-label={ui.text("Ui.EditorMode.EditingMode")}
+    aria-label={ui.text("ui_editor_mode_editing_mode")}
     onValueChange={(value) => {
       if (value !== "") onchange(value as EditorMode);
     }}

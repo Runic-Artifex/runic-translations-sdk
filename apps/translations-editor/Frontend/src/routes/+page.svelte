@@ -2,40 +2,6 @@
   import { onMount } from "svelte";
   import { m } from "virtual:runic-translations/editor";
 
-  // ESM ABI v2 exposes messages as a namespace with catalog-key bindings.
-  const m$App$Advanced = m["App.Advanced"];
-  const m$App$All = m["App.All"];
-  const m$App$AddMessage = m["App.AddMessage"];
-  const m$App$ApproveTranslations = m["App.ApproveTranslations"];
-  const m$App$DefaultLocale = m["App.DefaultLocale"];
-  const m$App$Diagnostics = m["App.Diagnostics"];
-  const m$App$Eyebrow = m["App.Eyebrow"];
-  const m$App$Invalid = m["App.Invalid"];
-  const m$App$Missing = m["App.Missing"];
-  const m$App$MissingTranslation = m["App.MissingTranslation"];
-  const m$App$MarkForReview = m["App.MarkForReview"];
-  const m$App$MessageBulkActions = m["App.MessageBulkActions"];
-  const m$App$MessageFilters = m["App.MessageFilters"];
-  const m$App$Messages = m["App.Messages"];
-  const m$App$NoResults = m["App.NoResults"];
-  const m$App$NoMatchingMessages = m["App.NoMatchingMessages"];
-  const m$App$NoSelection = m["App.NoSelection"];
-  const m$App$Raw = m["App.Raw"];
-  const m$App$Reload = m["App.Reload"];
-  const m$App$Review = m["App.Review"];
-  const m$App$Save = m["App.Save"];
-  const m$App$Saved = m["App.Saved"];
-  const m$App$Saving = m["App.Saving"];
-  const m$App$Search = m["App.Search"];
-  const m$App$Simple = m["App.Simple"];
-  const m$App$Structured = m["App.Structured"];
-  const m$App$Stale = m["App.Stale"];
-  const m$App$Title = m["App.Title"];
-  const m$App$Unsaved = m["App.Unsaved"];
-  const m$App$Translated = m["App.Translated"];
-  const m$App$Valid = m["App.Valid"];
-  const m$App$Workspace = m["App.Workspace"];
-  const m$App$VisibleMessages = m["App.VisibleMessages"];
   import type {
     EditorAbout,
     EditorDiagnostic,
@@ -178,8 +144,6 @@
   let projectLocales = $state<ProjectLocaleDraft[]>([]);
   let projectNamespace = $state("Customer.Product");
   let projectClassName = $state("ProductText");
-  let projectLayer = $state("base");
-  let projectGenerateEsm = $state(true);
   let projectIncludeStarter = $state(true);
   let projectPlan = $state.raw<EditorProjectPlan>();
   let projectError = $state<string>();
@@ -205,7 +169,6 @@
   let mutationLocale = $state("");
   let mutationFallback = $state("");
   let mutationReplacementFallback = $state("");
-  let mutationLayer = $state("base");
   let mutationCopyFrom = $state("");
   let mutationSourceKey = $state("");
   let mutationTargetKey = $state("");
@@ -318,7 +281,7 @@
     { value: "structured" as const, label: labels.structured, count: rows.filter((row) => row.structured).length },
     { value: "needs-review" as const, label: labels.review, count: rows.filter((row) => effectiveReviewState(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[selectedLocale]?.entry !== undefined) === "needs-review").length },
     { value: "stale" as const, label: labels.stale, count: rows.filter((row) => isStale(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value)).length },
-    { value: "quality" as const, label: ui.text("Ui.Page.Quality.Title"), count: qualityKeySet.size },
+    { value: "quality" as const, label: ui.text("ui_page_quality_title"), count: qualityKeySet.size },
   ]);
   let visibleRows = $derived.by(() => {
     const searchMatches = messageSearch.matchingRows(query);
@@ -1237,8 +1200,6 @@
     projectLocales = [];
     projectNamespace = "Customer.Product";
     projectClassName = "ProductText";
-    projectLayer = "base";
-    projectGenerateEsm = true;
     projectIncludeStarter = true;
     projectPlan = undefined;
     projectError = undefined;
@@ -1269,8 +1230,6 @@
       })),
       codeNamespace: projectNamespace.trim(),
       className: projectClassName.trim(),
-      layerName: projectLayer.trim(),
-      generateEsm: projectGenerateEsm,
       includeStarterMessage: projectIncludeStarter,
     };
   }
@@ -1291,8 +1250,8 @@
         return false;
       }
     }
-    if (projectStep === 3 && [projectNamespace, projectClassName, projectLayer].some((value) => value.trim() === "")) {
-      projectError = "Namespace, class name, and layer are required.";
+    if (projectStep === 3 && [projectNamespace, projectClassName].some((value) => value.trim() === "")) {
+      projectError = "Namespace and class name are required.";
       return false;
     }
     projectError = undefined;
@@ -1412,7 +1371,6 @@
       : "";
     mutationFallback = current.catalog.defaultLocale;
     mutationReplacementFallback = current.catalog.defaultLocale;
-    mutationLayer = current.catalog.layers[0]?.name ?? "base";
     mutationCopyFrom = current.catalog.defaultLocale;
     mutationSourceKey = selectedKey;
     mutationTargetKey = kind === "duplicate-key" ? `${selectedKey}Copy` : kind === "create-key" ? "" : selectedKey;
@@ -1431,7 +1389,6 @@
       locale: mutationLocale.trim() || undefined,
       fallback: mutationFallback.trim() || undefined,
       replacementFallback: mutationReplacementFallback.trim() || undefined,
-      layer: mutationLayer,
       copyFromLocale: mutationCopyFrom,
       sourceKey: mutationSourceKey.trim() || undefined,
       targetKey: mutationTargetKey.trim() || undefined,
@@ -1694,59 +1651,59 @@
 
   function mutationTitle(kind: MutationKind): string {
     return {
-      "add-locale": ui.text("Ui.Page.Mutation.AddLanguage"),
-      "remove-locale": ui.text("Ui.Page.Mutation.RemoveLanguage"),
-      "set-fallback": ui.text("Ui.Page.Mutation.ChangeFallbackRelationships"),
+      "add-locale": ui.text("ui_page_mutation_add_language"),
+      "remove-locale": ui.text("ui_page_mutation_remove_language"),
+      "set-fallback": ui.text("ui_page_mutation_change_fallback_relationships"),
       "create-key": labels.addMessage,
-      "rename-key": ui.text("Ui.Page.Mutation.RenameMoveMessage"),
-      "duplicate-key": ui.text("Ui.Page.Mutation.DuplicateMessage"),
-      "delete-key": ui.text("Ui.Page.Mutation.DeleteMessage"),
+      "rename-key": ui.text("ui_page_mutation_rename_move_message"),
+      "duplicate-key": ui.text("ui_page_mutation_duplicate_message"),
+      "delete-key": ui.text("ui_page_mutation_delete_message"),
     }[kind];
   }
 
   function labelsFor(locale: string) {
     const options = { locale };
     return {
-      title: m$App$Title(options),
-      eyebrow: m$App$Eyebrow(options),
-      search: m$App$Search(options),
-      all: m$App$All(options),
-      missing: m$App$Missing(options),
-      structured: m$App$Structured(options),
-      save: m$App$Save(options),
-      saving: m$App$Saving(options),
-      reload: m$App$Reload(options),
-      simple: m$App$Simple(options),
-      advanced: m$App$Advanced(options),
-      raw: m$App$Raw(options),
-      noSelection: m$App$NoSelection(options),
-      noResults: m$App$NoResults(options),
-      valid: m$App$Valid(options),
-      invalid: m$App$Invalid(options),
-      unsaved: m$App$Unsaved(options),
-      saved: m$App$Saved(options),
-      defaultLocale: m$App$DefaultLocale(options),
-      workspace: m$App$Workspace(options),
-      diagnostics: m$App$Diagnostics(options),
-      messages: m$App$Messages(options),
-      messageBulkActions: m$App$MessageBulkActions(options),
-      visibleMessages: m$App$VisibleMessages(options),
-      markForReview: m$App$MarkForReview(options),
-      approveTranslations: m$App$ApproveTranslations(options),
-      addMessage: m$App$AddMessage(options),
-      noMatchingMessages: m$App$NoMatchingMessages(options),
-      missingTranslation: m$App$MissingTranslation(options),
-      translated: m$App$Translated(options),
-      stale: m$App$Stale(options),
-      review: m$App$Review(options),
-      messageFilters: m$App$MessageFilters(options),
+      title: m.app_title(options),
+      eyebrow: m.app_eyebrow(options),
+      search: m.app_search(options),
+      all: m.app_all(options),
+      missing: m.app_missing(options),
+      structured: m.app_structured(options),
+      save: m.app_save(options),
+      saving: m.app_saving(options),
+      reload: m.app_reload(options),
+      simple: m.app_simple(options),
+      advanced: m.app_advanced(options),
+      raw: m.app_raw(options),
+      noSelection: m.app_no_selection(options),
+      noResults: m.app_no_results(options),
+      valid: m.app_valid(options),
+      invalid: m.app_invalid(options),
+      unsaved: m.app_unsaved(options),
+      saved: m.app_saved(options),
+      defaultLocale: m.app_default_locale(options),
+      workspace: m.app_workspace(options),
+      diagnostics: m.app_diagnostics(options),
+      messages: m.app_messages(options),
+      messageBulkActions: m.app_message_bulk_actions(options),
+      visibleMessages: m.app_visible_messages(options),
+      markForReview: m.app_mark_for_review(options),
+      approveTranslations: m.app_approve_translations(options),
+      addMessage: m.app_add_message(options),
+      noMatchingMessages: m.app_no_matching_messages(options),
+      missingTranslation: m.app_missing_translation(options),
+      translated: m.app_translated(options),
+      stale: m.app_stale(options),
+      review: m.app_review(options),
+      messageFilters: m.app_message_filters(options),
     };
   }
 </script>
 
 <svelte:head>
   <title>{labels.title}</title>
-    <meta name="description" content={ui.text("Ui.Page.MetaDescription")} />
+    <meta name="description" content={ui.text("ui_page_meta_description")} />
 </svelte:head>
 <svelte:window onkeydown={handleKeyboard} onbeforeunload={protectDraft} />
 
@@ -1769,15 +1726,15 @@
 {#if externalChanges.length > 0}
   <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-4xl">
     <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
-      <Alert.Title>{ui.text("Ui.Page.ExternalChanges.Title")}</Alert.Title>
+      <Alert.Title>{ui.text("ui_page_external_changes_title")}</Alert.Title>
       <Alert.Description class="min-w-0">
         <p class="truncate font-mono text-xs">{externalChanges.join(", ")}</p>
-        <p>{hasUnsavedWork ? ui.text("Ui.Page.ExternalChanges.UnsavedIntact") : ui.text("Ui.Page.ExternalChanges.ReloadLatest")}</p>
+        <p>{hasUnsavedWork ? ui.text("ui_page_external_changes_unsaved_intact") : ui.text("ui_page_external_changes_reload_latest")}</p>
       </Alert.Description>
       <Alert.Action class="static col-span-full mt-2 flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" size="xs" onclick={() => { externalChanges = []; externalFileChanges = []; }}>{ui.text("Ui.Page.KeepCurrentView")}</Button>
-        <Button variant="outline" size="xs" onclick={reviewExternalChanges}>{ui.text("Ui.Page.ExternalChanges.CompareMerge")}</Button>
-        <Button size="xs" onclick={() => void loadWorkspace(true)}>{ui.text("Ui.Page.ExternalChanges.ReloadFiles")}</Button>
+        <Button variant="ghost" size="xs" onclick={() => { externalChanges = []; externalFileChanges = []; }}>{ui.text("ui_page_keep_current_view")}</Button>
+        <Button variant="outline" size="xs" onclick={reviewExternalChanges}>{ui.text("ui_page_external_changes_compare_merge")}</Button>
+        <Button size="xs" onclick={() => void loadWorkspace(true)}>{ui.text("ui_page_external_changes_reload_files")}</Button>
       </Alert.Action>
     </Alert.Root>
   </div>
@@ -1786,15 +1743,15 @@
 {#if Object.keys(recoveredDrafts).length > 0}
   <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-2xl">
     <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
-      <Alert.Title>{ui.text("Ui.Page.RecoveredDrafts.Title")}</Alert.Title>
+      <Alert.Title>{ui.text("ui_page_recovered_drafts_title")}</Alert.Title>
       <Alert.Description>
         {Object.keys(recoveredDrafts).length === 1
-          ? ui.text("Ui.Page.RecoveredDrafts.One")
-          : `${Object.keys(recoveredDrafts).length} ${ui.text("Ui.Page.RecoveredDrafts.Many")}`}
+          ? ui.text("ui_page_recovered_drafts_one")
+          : `${Object.keys(recoveredDrafts).length} ${ui.text("ui_page_recovered_drafts_many")}`}
       </Alert.Description>
       <Alert.Action class="static col-span-full mt-2 flex flex-col gap-2 min-[360px]:flex-row min-[360px]:justify-end">
-        <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>{ui.text("Ui.Page.Discard")}</Button>
-        <Button size="xs" onclick={recoverSavedDrafts}>{ui.text("Ui.Page.RecoveredDrafts.Restore")}</Button>
+        <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>{ui.text("ui_page_discard")}</Button>
+        <Button size="xs" onclick={recoverSavedDrafts}>{ui.text("ui_page_recovered_drafts_restore")}</Button>
       </Alert.Action>
     </Alert.Root>
   </div>
@@ -1804,28 +1761,28 @@
   <AppDialog
     open
     title={comparedExternalChange.path}
-    description={ui.text("Ui.Page.ExternalCompare.Description")}
+    description={ui.text("ui_page_external_compare_description")}
     class="sm:max-w-6xl"
     bodyClass="grid gap-4"
     onopenchange={(open) => { if (!open) comparedExternalChange = undefined; }}
   >
     <div class="grid gap-4 lg:grid-cols-2">
       <Field.Field>
-        <Field.Label for="external-editor-base">{ui.text("Ui.Page.ExternalCompare.EditorBase")}</Field.Label>
-        <Textarea id="external-editor-base" class="min-h-64 font-mono text-xs" readonly value={snapshot?.documents.find((document) => document.path === comparedExternalChange?.path)?.content ?? ui.text("Ui.Page.ExternalCompare.NotPreviouslyLoaded")} />
+        <Field.Label for="external-editor-base">{ui.text("ui_page_external_compare_editor_base")}</Field.Label>
+        <Textarea id="external-editor-base" class="min-h-64 font-mono text-xs" readonly value={snapshot?.documents.find((document) => document.path === comparedExternalChange?.path)?.content ?? ui.text("ui_page_external_compare_not_previously_loaded")} />
       </Field.Field>
       <Field.Field>
-        <Field.Label for="external-current-disk">{ui.text("Ui.Page.ExternalCompare.CurrentDisk")}</Field.Label>
-        <Textarea id="external-current-disk" class="min-h-64 font-mono text-xs" readonly value={comparedExternalChange.content ?? ui.text("Ui.Page.ExternalCompare.DeletedExternally")} />
+        <Field.Label for="external-current-disk">{ui.text("ui_page_external_compare_current_disk")}</Field.Label>
+        <Textarea id="external-current-disk" class="min-h-64 font-mono text-xs" readonly value={comparedExternalChange.content ?? ui.text("ui_page_external_compare_deleted_externally")} />
       </Field.Field>
     </div>
     <Field.Field>
-      <Field.Label for="external-merged-draft">{ui.text("Ui.Page.ExternalCompare.MergedDraft")}</Field.Label>
+      <Field.Label for="external-merged-draft">{ui.text("ui_page_external_compare_merged_draft")}</Field.Label>
       <Textarea id="external-merged-draft" class="min-h-64 font-mono text-xs" bind:value={mergedExternalText} spellcheck={false} />
     </Field.Field>
     {#snippet footer()}
-      <Button variant="outline" onclick={() => comparedExternalChange = undefined}>{ui.text("Ui.Page.KeepCurrentView")}</Button>
-      <Button onclick={() => void applyExternalMerge()}>{ui.text("Ui.Page.ExternalCompare.ReloadKeepMerged")}</Button>
+      <Button variant="outline" onclick={() => comparedExternalChange = undefined}>{ui.text("ui_page_keep_current_view")}</Button>
+      <Button onclick={() => void applyExternalMerge()}>{ui.text("ui_page_external_compare_reload_keep_merged")}</Button>
     {/snippet}
   </AppDialog>
 {/if}
@@ -1840,45 +1797,45 @@
   <main class="fatal-shell">
     <div class="mark" aria-hidden="true"><span></span></div>
     <p class="eyebrow">{labels.eyebrow}</p>
-    <h1>{recoveryReloadRequired ? ui.text("Ui.Page.Fatal.RecoveryReloadRequired") : ui.text("Ui.Page.Fatal.CouldNotOpen")}</h1>
-    <p>{recoveryReloadRequired ? recoveryReloadMessage ?? ui.text("Ui.Page.Fatal.RecoveryRefresh") : clientError ?? ui.text("Ui.Page.Fatal.NoCatalog")}</p>
+    <h1>{recoveryReloadRequired ? ui.text("ui_page_fatal_recovery_reload_required") : ui.text("ui_page_fatal_could_not_open")}</h1>
+    <p>{recoveryReloadRequired ? recoveryReloadMessage ?? ui.text("ui_page_fatal_recovery_refresh") : clientError ?? ui.text("ui_page_fatal_no_catalog")}</p>
     <div class="recovery-actions">
       <button class="primary" onclick={() => void loadWorkspace(false)}>{labels.reload}</button>
-      {#if recoveryReloadRequired}<button class="secondary" onclick={() => openDialogOpen = true}>{ui.text("Ui.Page.Fatal.OpenAnotherWorkspace")}</button>{/if}
+      {#if recoveryReloadRequired}<button class="secondary" onclick={() => openDialogOpen = true}>{ui.text("ui_page_fatal_open_another_workspace")}</button>{/if}
     </div>
   </main>
 {:else if snapshot.pendingTransaction !== undefined}
   <main class="recovery-shell">
     <div class="mark" aria-hidden="true"><span></span></div>
-    <p class="eyebrow">{ui.text("Ui.Page.Recovery.Eyebrow")}</p>
-    <h1>{ui.text("Ui.Page.Recovery.Title")}</h1>
-    <p>{ui.text("Ui.Page.Recovery.JournalFor")} <strong>{snapshot.pendingTransaction.catalogId}</strong> {ui.text("Ui.Page.Recovery.Lists")} {snapshot.pendingTransaction.paths.length} {snapshot.pendingTransaction.paths.length === 1 ? ui.text("Ui.Page.File") : ui.text("Ui.Page.Files")}. {ui.text("Ui.Page.Recovery.NoFurtherEditing")}</p>
+    <p class="eyebrow">{ui.text("ui_page_recovery_eyebrow")}</p>
+    <h1>{ui.text("ui_page_recovery_title")}</h1>
+    <p>{ui.text("ui_page_recovery_journal_for")} <strong>{snapshot.pendingTransaction.catalogId}</strong> {ui.text("ui_page_recovery_lists")} {snapshot.pendingTransaction.paths.length} {snapshot.pendingTransaction.paths.length === 1 ? ui.text("ui_page_file") : ui.text("ui_page_files")}. {ui.text("ui_page_recovery_no_further_editing")}</p>
     <div class="recovery-paths">
       {#each snapshot.pendingTransaction.paths as path (path)}<code>{path}</code>{/each}
     </div>
     {#if clientError}<p class="project-error" aria-live="polite">{clientError}</p>{/if}
     <div class="recovery-actions">
-      <button class="secondary" disabled={recoveryBusy} onclick={() => void recoverTransaction("rollback")}>{ui.text("Ui.Page.Recovery.RestoreBefore")}</button>
-      <button class="primary" disabled={recoveryBusy} onclick={() => void recoverTransaction("complete")}>{recoveryBusy ? ui.text("Ui.Page.Recovery.Recovering") : ui.text("Ui.Page.Recovery.Complete")}</button>
+      <button class="secondary" disabled={recoveryBusy} onclick={() => void recoverTransaction("rollback")}>{ui.text("ui_page_recovery_restore_before")}</button>
+      <button class="primary" disabled={recoveryBusy} onclick={() => void recoverTransaction("complete")}>{recoveryBusy ? ui.text("ui_page_recovery_recovering") : ui.text("ui_page_recovery_complete")}</button>
     </div>
-    <small>{ui.text("Ui.Page.Recovery.JournalNote")}</small>
+    <small>{ui.text("ui_page_recovery_journal_note")}</small>
   </main>
 {:else if snapshot.catalog === undefined}
   <main class="welcome-shell">
     <header class="welcome-brand">
       <div class="mark small" aria-hidden="true"><span></span></div>
       <div><p class="eyebrow">{labels.eyebrow}</p><h1>{labels.title}</h1></div>
-      <select aria-label={ui.text("Ui.Page.InterfaceLanguage")} value={uiLocale} onchange={(event) => uiLocale = event.currentTarget.value}>
+      <select aria-label={ui.text("ui_page_interface_language")} value={uiLocale} onchange={(event) => uiLocale = event.currentTarget.value}>
         <option value="en">EN</option><option value="de">DE</option>
       </select>
     </header>
     <section class="welcome-content">
       <div class="welcome-heading">
-        <p class="eyebrow">{ui.text("Ui.Page.Welcome.Eyebrow")}</p>
-        <h2>{snapshot.catalogs.length > 1 ? ui.text("Ui.Page.Welcome.ChooseCatalog") : ui.text("Ui.Page.Welcome.OpenProject")}</h2>
+        <p class="eyebrow">{ui.text("ui_page_welcome_eyebrow")}</p>
+        <h2>{snapshot.catalogs.length > 1 ? ui.text("ui_page_welcome_choose_catalog") : ui.text("ui_page_welcome_open_project")}</h2>
         <p>{snapshot.catalogs.length > 1
-          ? `${ui.text("Ui.Page.Welcome.Found")} ${snapshot.catalogs.length} ${ui.text("Ui.Page.Welcome.CatalogsBelow")}`
-          : ui.text("Ui.Page.Welcome.OpenOrCreate")}</p>
+          ? `${ui.text("ui_page_welcome_found")} ${snapshot.catalogs.length} ${ui.text("ui_page_welcome_catalogs_below")}`
+          : ui.text("ui_page_welcome_open_or_create")}</p>
       </div>
 
       {#if snapshot.catalogs.length > 0}
@@ -1887,29 +1844,29 @@
             <button class="catalog-choice" onclick={() => void openWorkspace(catalog.id)} disabled={openingWorkspace}>
               <span class={{ "status-dot": true, warning: !catalog.success }}></span>
               <span><strong>{catalog.id}</strong><small>{catalog.manifestPaths.join(", ")}</small></span>
-              <span class="catalog-metrics">{catalog.localeCount} {ui.text("Ui.Page.Locales")}<br />{catalog.messageCount} {ui.text("Ui.Page.Messages")}</span>
-              <span class={catalog.errorCount > 0 ? "health error" : "health"}>{catalog.errorCount > 0 ? `${catalog.errorCount} ${ui.text("Ui.Page.Errors")}` : ui.text("Ui.Page.Healthy")}</span>
+              <span class="catalog-metrics">{catalog.localeCount} {ui.text("ui_page_locales")}<br />{catalog.messageCount} {ui.text("ui_page_messages")}</span>
+              <span class={catalog.errorCount > 0 ? "health error" : "health"}>{catalog.errorCount > 0 ? `${catalog.errorCount} ${ui.text("ui_page_errors")}` : ui.text("ui_page_healthy")}</span>
             </button>
           {/each}
         </div>
       {/if}
 
       <div class="open-workspace-card">
-        <label for="open-directory">{ui.text("Ui.Page.WorkspaceDirectory")}</label>
+        <label for="open-directory">{ui.text("ui_page_workspace_directory")}</label>
         <div><input id="open-directory" bind:value={openDirectory} placeholder="/projects/customer-app" autocomplete="off" />
-          <button class="secondary" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? ui.text("Ui.Page.Choosing") : ui.text("Ui.Page.Browse")}</button>
-          <button class="primary" disabled={openingWorkspace} onclick={() => void openWorkspace()}>{openingWorkspace ? ui.text("Ui.Page.Opening") : ui.text("Ui.Page.Open")}</button></div>
-        <small>{ui.text("Ui.Page.Welcome.TraversalNote")}</small>
+          <button class="secondary" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? ui.text("ui_page_choosing") : ui.text("ui_page_browse")}</button>
+          <button class="primary" disabled={openingWorkspace} onclick={() => void openWorkspace()}>{openingWorkspace ? ui.text("ui_page_opening") : ui.text("ui_page_open")}</button></div>
+        <small>{ui.text("ui_page_welcome_traversal_note")}</small>
       </div>
 
       <div class="welcome-actions">
-        <button class="secondary" onclick={openProjectWizard}>＋ {ui.text("Ui.Page.Welcome.CreateProject")}</button>
-        <button class="secondary" onclick={() => void loadWorkspace(true)}>↻ {ui.text("Ui.Page.Welcome.Scan")} {snapshot.root}</button>
+        <button class="secondary" onclick={openProjectWizard}>＋ {ui.text("ui_page_welcome_create_project")}</button>
+        <button class="secondary" onclick={() => void loadWorkspace(true)}>↻ {ui.text("ui_page_welcome_scan")} {snapshot.root}</button>
       </div>
 
       {#if recentProjects.length > 0}
         <section class="recent-projects">
-          <header><strong>{ui.text("Ui.Page.Welcome.RecentProjects")}</strong><span>{ui.text("Ui.Page.Welcome.StoredLocalProfile")}</span></header>
+          <header><strong>{ui.text("ui_page_welcome_recent_projects")}</strong><span>{ui.text("ui_page_welcome_stored_local_profile")}</span></header>
           {#each recentProjects as project (`${project.root}\n${project.catalogId}`)}
             <button onclick={() => void openWorkspace(project.catalogId, project.root)} disabled={openingWorkspace}>
               <span><strong>{project.catalogId}</strong><code>{project.root}</code></span>
@@ -1921,9 +1878,9 @@
 
       {#if malformedDocuments.length > 0}
         <section class="repair-list">
-          <header><div><strong>{ui.text("Ui.Page.Welcome.RepairMalformedJson")}</strong><span>{malformedDocuments.length} {ui.text("Ui.Page.Welcome.FilesNeedAttention")}</span></div></header>
+          <header><div><strong>{ui.text("ui_page_welcome_repair_malformed_json")}</strong><span>{malformedDocuments.length} {ui.text("ui_page_welcome_files_need_attention")}</span></div></header>
           {#each malformedDocuments as document (document.path)}
-            <button onclick={() => beginRepair(document)}><span>!</span><code>{document.path}</code><small>{ui.text("Ui.Page.Welcome.OpenRepairEditor")} →</small></button>
+            <button onclick={() => beginRepair(document)}><span>!</span><code>{document.path}</code><small>{ui.text("ui_page_welcome_open_repair_editor")} →</small></button>
           {/each}
         </section>
       {/if}
@@ -2050,7 +2007,7 @@
       />
 
       <div class="flex justify-end border-b px-4 py-2">
-        <Button variant="outline" size="sm" disabled={loading || interchangeBusy} onclick={() => interchangeOpen = true}>{ui.text("Ui.Page.Interchange")}…</Button>
+        <Button variant="outline" size="sm" disabled={loading || interchangeBusy} onclick={() => interchangeOpen = true}>{ui.text("ui_page_interchange")}…</Button>
       </div>
 
       {#if selectedRow === undefined}
@@ -2060,7 +2017,7 @@
               <MessageSquareTextIcon aria-hidden="true" />
             </Empty.Media>
             <Empty.Title class="font-serif font-medium">{labels.noSelection}</Empty.Title>
-            <Empty.Description>{ui.text("Ui.Page.EmptySelection.Description")}</Empty.Description>
+            <Empty.Description>{ui.text("ui_page_empty_selection_description")}</Empty.Description>
           </Empty.Header>
         </Empty.Root>
       {:else}
@@ -2070,7 +2027,7 @@
             description={selectedRow.description}
             tags={selectedRow.tags}
             locale={selectedLocale}
-            layer={currentDocument?.layer ?? ui.text("Ui.Page.NoDocument")}
+            layer={currentDocument?.layer ?? ui.text("ui_page_no_document")}
             inheritedFrom={currentCell?.inheritedFrom}
             onrename={() => prepareMutation("rename-key")}
             onduplicate={() => prepareMutation("duplicate-key")}
@@ -2080,7 +2037,7 @@
           <ReviewWorkflow
             state={currentReviewState}
             dirty={reviewDirty}
-            message={reviewMessage ?? ui.text("Ui.Page.ProjectNotes")}
+            message={reviewMessage ?? ui.text("ui_page_project_notes")}
             disabled={snapshot.review?.error !== undefined || reviewMutationBlocked}
             stale={currentIsStale}
             terminologyCount={terminology.length}
@@ -2106,7 +2063,7 @@
           <TranslationEditor
             {mode}
             locale={selectedLocale}
-            label={mode === "translation" ? localeName(selectedLocale) : currentDocument?.path ?? ui.text("Ui.Page.ResourceDocument")}
+            label={mode === "translation" ? localeName(selectedLocale) : currentDocument?.path ?? ui.text("ui_page_resource_document")}
             value={editorText}
             resourceValue={currentCell?.entry?.value ?? selectedRow.cells[snapshot.catalog.defaultLocale]?.entry?.value}
             missing={currentCell?.entry === undefined}
@@ -2120,8 +2077,8 @@
           {#if mode === "translation"}
             <section class="message-preview" aria-live="polite">
               <header>
-                <div><strong>{ui.text("Ui.Page.Preview.Title")}</strong><span>{ui.text("Ui.Page.Preview.Description")}</span></div>
-                <span class="preview-state">{previewBusy ? ui.text("Ui.Page.Preview.Compiling") : previewAst === undefined ? ui.text("Ui.Page.Preview.Unavailable") : selectedLocale}</span>
+                <div><strong>{ui.text("ui_page_preview_title")}</strong><span>{ui.text("ui_page_preview_description")}</span></div>
+                <span class="preview-state">{previewBusy ? ui.text("ui_page_preview_compiling") : previewAst === undefined ? ui.text("ui_page_preview_unavailable") : selectedLocale}</span>
               </header>
               {#if previewAst !== undefined && Object.keys(previewAst.inputs).length > 0}
                 <div class="sample-inputs">
@@ -2132,7 +2089,7 @@
               {/if}
               <div class="preview-canvas">
                 {#if previewBusy}
-                  <span class="preview-placeholder">{ui.text("Ui.Page.Preview.CompilingDraft")}</span>
+                  <span class="preview-placeholder">{ui.text("ui_page_preview_compiling_draft")}</span>
                 {:else if previewError}
                   <span class="preview-error">{previewError}</span>
                 {:else if simulatedPreviewResult?.kind === "text"}
@@ -2140,10 +2097,10 @@
                 {:else if simulatedPreviewResult?.kind === "content"}
                   <div class="safe-content">{@render previewNodes(simulatedPreviewResult.nodes)}</div>
                 {:else}
-                  <span class="preview-placeholder">{ui.text("Ui.Page.Preview.EditToBuild")}</span>
+                  <span class="preview-placeholder">{ui.text("ui_page_preview_edit_to_build")}</span>
                 {/if}
               </div>
-              <p class="safe-note">{ui.text("Ui.Page.Preview.SafeMarkup")}{pseudoLocalization ? ` ${ui.text("Ui.Page.Preview.PseudoActive")}` : ""}{uiDirection === "rtl" ? ` ${ui.text("Ui.Page.Preview.RtlActive")}` : ""}</p>
+              <p class="safe-note">{ui.text("ui_page_preview_safe_markup")}{pseudoLocalization ? ` ${ui.text("ui_page_preview_pseudo_active")}` : ""}{uiDirection === "rtl" ? ` ${ui.text("ui_page_preview_rtl_active")}` : ""}</p>
             </section>
 
             <ArtifactPreviewPanel
@@ -2178,22 +2135,22 @@
 {#if aboutDialogOpen}
   <AppDialog
     open
-    title={aboutInfo?.product ?? ui.text("Ui.Page.About.Product")}
-    description={ui.text("Ui.Page.About.Description")}
+    title={aboutInfo?.product ?? ui.text("ui_page_about_product")}
+    description={ui.text("ui_page_about_description")}
     onopenchange={(open) => aboutDialogOpen = open}
   >
     <div class="grid gap-4">
       {#if aboutBusy}
-        <div class="flex items-center gap-2 text-muted-foreground"><Spinner />{ui.text("Ui.Page.About.Reading")}</div>
+        <div class="flex items-center gap-2 text-muted-foreground"><Spinner />{ui.text("ui_page_about_reading")}</div>
       {:else if aboutInfo !== undefined}
         <dl class="grid overflow-hidden rounded-xl border">
           {#each [
-            [ui.text("Ui.Page.About.Version"), aboutInfo.version],
-            [ui.text("Ui.Page.About.UpdateChannel"), aboutInfo.updateChannel],
-            [ui.text("Ui.Page.About.SourceRevision"), aboutInfo.commit ?? ui.text("Ui.Page.About.DevelopmentBuild")],
-            [ui.text("Ui.Page.About.Runtime"), aboutInfo.runtime],
-            [ui.text("Ui.Page.About.RuntimeIdentifier"), aboutInfo.runtimeIdentifier],
-            [ui.text("Ui.Page.About.System"), `${aboutInfo.operatingSystem} · ${aboutInfo.architecture}`],
+            [ui.text("ui_page_about_version"), aboutInfo.version],
+            [ui.text("ui_page_about_update_channel"), aboutInfo.updateChannel],
+            [ui.text("ui_page_about_source_revision"), aboutInfo.commit ?? ui.text("ui_page_about_development_build")],
+            [ui.text("ui_page_about_runtime"), aboutInfo.runtime],
+            [ui.text("ui_page_about_runtime_identifier"), aboutInfo.runtimeIdentifier],
+            [ui.text("ui_page_about_system"), `${aboutInfo.operatingSystem} · ${aboutInfo.architecture}`],
           ] as item (item[0])}
             <div class="grid gap-1 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[9rem_1fr] sm:gap-4">
               <dt class="text-muted-foreground">{item[0]}</dt><dd class="m-0 overflow-wrap-anywhere font-mono text-xs">{item[1]}</dd>
@@ -2202,40 +2159,40 @@
         </dl>
       {/if}
       <Alert.Root>
-        <Alert.Title>{ui.text("Ui.Page.About.DiagnosticBundleTitle")}</Alert.Title>
-        <Alert.Description>{ui.text("Ui.Page.About.DiagnosticBundleDescription")}</Alert.Description>
+        <Alert.Title>{ui.text("ui_page_about_diagnostic_bundle_title")}</Alert.Title>
+        <Alert.Description>{ui.text("ui_page_about_diagnostic_bundle_description")}</Alert.Description>
         {#if diagnosticMessage}<p class="text-sm text-primary" aria-live="polite">{diagnosticMessage}</p>{/if}
       </Alert.Root>
       {#if diagnosticBundlePath !== undefined}
         <section class="grid gap-2 rounded-xl border p-4" aria-labelledby="diagnostic-bundle-actions-title">
-          <h3 id="diagnostic-bundle-actions-title" class="font-medium">{ui.text("Ui.Page.About.DiagnosticBundle")}</h3>
-          <Input aria-label={ui.text("Ui.Page.About.DiagnosticBundlePath")} readonly value={diagnosticBundlePath} class="font-mono text-xs" />
+          <h3 id="diagnostic-bundle-actions-title" class="font-medium">{ui.text("ui_page_about_diagnostic_bundle")}</h3>
+          <Input aria-label={ui.text("ui_page_about_diagnostic_bundle_path")} readonly value={diagnosticBundlePath} class="font-mono text-xs" />
           <div class="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" disabled={diagnosticBusy} onclick={() => void revealDiagnosticBundle()}>{ui.text("Ui.Page.About.RevealLocation")}</Button>
-            <Button variant="outline" size="sm" onclick={() => void copyDiagnosticBundlePath()}>{ui.text("Ui.Page.About.CopyPath")}</Button>
-            <Button variant="destructive" size="sm" disabled={diagnosticBusy} onclick={() => void deleteDiagnosticBundle()}>{ui.text("Ui.Page.About.DeleteBundle")}</Button>
+            <Button variant="outline" size="sm" disabled={diagnosticBusy} onclick={() => void revealDiagnosticBundle()}>{ui.text("ui_page_about_reveal_location")}</Button>
+            <Button variant="outline" size="sm" onclick={() => void copyDiagnosticBundlePath()}>{ui.text("ui_page_about_copy_path")}</Button>
+            <Button variant="destructive" size="sm" disabled={diagnosticBusy} onclick={() => void deleteDiagnosticBundle()}>{ui.text("ui_page_about_delete_bundle")}</Button>
           </div>
-          <p class="text-xs text-muted-foreground">{ui.text("Ui.Page.About.BundleNoUpload")}</p>
+          <p class="text-xs text-muted-foreground">{ui.text("ui_page_about_bundle_no_upload")}</p>
         </section>
       {/if}
       <section class="grid gap-3 rounded-xl border p-4" aria-labelledby="local-state-title">
         <div class="grid gap-1 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4">
-          <div><h3 id="local-state-title" class="font-medium">{ui.text("Ui.Page.About.LocalState")}</h3><p class="text-sm text-muted-foreground">{ui.text("Ui.Page.About.LocalStateDescription")}</p></div>
-          <Button variant="outline" size="sm" disabled={(localStateSummary?.entries ?? 0) === 0} onclick={clearLocalState}>{ui.text("Ui.Page.About.ClearLocalState")}</Button>
+          <div><h3 id="local-state-title" class="font-medium">{ui.text("ui_page_about_local_state")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_about_local_state_description")}</p></div>
+          <Button variant="outline" size="sm" disabled={(localStateSummary?.entries ?? 0) === 0} onclick={clearLocalState}>{ui.text("ui_page_about_clear_local_state")}</Button>
         </div>
         {#if localStateSummary !== undefined}
-          <p class="text-sm text-muted-foreground">{localStateSummary.entries} {ui.text("Ui.Page.About.Entries")} · {localStateSummary.bytes.toLocaleString()} {ui.text("Ui.Page.About.Bytes")} · {localStateSummary.preferenceEntries} {ui.text("Ui.Page.About.Preferences")} · {localStateSummary.recentProjectEntries} {ui.text("Ui.Page.About.RecentProjectRecords")} · {localStateSummary.draftEntries} {ui.text("Ui.Page.About.RecoveryDraftRecords")}{localStateSummary.recovered ? ` · ${ui.text("Ui.Page.About.RecoveredUnreadable")}` : ""}</p>
+          <p class="text-sm text-muted-foreground">{localStateSummary.entries} {ui.text("ui_page_about_entries")} · {localStateSummary.bytes.toLocaleString()} {ui.text("ui_page_about_bytes")} · {localStateSummary.preferenceEntries} {ui.text("ui_page_about_preferences")} · {localStateSummary.recentProjectEntries} {ui.text("ui_page_about_recent_project_records")} · {localStateSummary.draftEntries} {ui.text("ui_page_about_recovery_draft_records")}{localStateSummary.recovered ? ` · ${ui.text("ui_page_about_recovered_unreadable")}` : ""}</p>
         {/if}
-        <p class="text-xs text-muted-foreground">{ui.text("Ui.Page.About.ClearLocalStateNote")}</p>
+        <p class="text-xs text-muted-foreground">{ui.text("ui_page_about_clear_local_state_note")}</p>
         {#if localStateMessage}<p class="text-sm text-primary" aria-live="polite">{localStateMessage}</p>{/if}
       </section>
-      <p class="text-sm text-muted-foreground">{ui.text("Ui.Page.About.LicenseNote")}</p>
+      <p class="text-sm text-muted-foreground">{ui.text("ui_page_about_license_note")}</p>
     </div>
     {#snippet footer()}
-      <Button variant="outline" onclick={() => aboutDialogOpen = false}>{ui.text("Ui.Page.Close")}</Button>
+      <Button variant="outline" onclick={() => aboutDialogOpen = false}>{ui.text("ui_page_close")}</Button>
       <Button disabled={diagnosticBusy || aboutBusy} onclick={() => void createDiagnosticBundle()}>
         {#if diagnosticBusy}<Spinner data-icon="inline-start" />{/if}
-        {diagnosticBusy ? ui.text("Ui.Page.About.CreatingBundle") : ui.text("Ui.Page.About.CreateBundle")}
+        {diagnosticBusy ? ui.text("ui_page_about_creating_bundle") : ui.text("ui_page_about_create_bundle")}
       </Button>
     {/snippet}
   </AppDialog>
@@ -2244,19 +2201,19 @@
 {#if terminologyDialogOpen}
   <AppDialog
     open
-    title={ui.text("Ui.Page.Terminology.Title")}
-    description={ui.text("Ui.Page.Terminology.Description")}
+    title={ui.text("ui_page_terminology_title")}
+    description={ui.text("ui_page_terminology_description")}
     class="sm:max-w-4xl"
     onopenchange={(open) => terminologyDialogOpen = open}
   >
     <div inert={reviewMutationBlocked} aria-disabled={reviewMutationBlocked} class:opacity-60={reviewMutationBlocked}>
     <Field.FieldGroup class="grid gap-3 sm:grid-cols-2">
-      <Field.Field><Field.Label for="term-source">{ui.text("Ui.Page.Terminology.SourceTerm")}</Field.Label><Input id="term-source" bind:value={termSource} placeholder={ui.text("Ui.Page.Terminology.SourcePlaceholder")} /></Field.Field>
-      <Field.Field><Field.Label for="term-preferred">{ui.text("Ui.Page.Terminology.Preferred")}</Field.Label><Input id="term-preferred" bind:value={termPreferred} placeholder={ui.text("Ui.Page.Terminology.PreferredPlaceholder")} /></Field.Field>
-      <Field.Field><Field.Label for="term-locale">{ui.text("Ui.Page.Terminology.Locale")}</Field.Label><Input id="term-locale" bind:value={termLocale} placeholder={ui.text("Ui.Page.Terminology.LocalePlaceholder")} /></Field.Field>
-      <Field.Field><Field.Label for="term-note">{ui.text("Ui.Page.Terminology.Note")}</Field.Label><Input id="term-note" bind:value={termNote} placeholder={ui.text("Ui.Page.Terminology.NotePlaceholder")} /></Field.Field>
+      <Field.Field><Field.Label for="term-source">{ui.text("ui_page_terminology_source_term")}</Field.Label><Input id="term-source" bind:value={termSource} placeholder={ui.text("ui_page_terminology_source_placeholder")} /></Field.Field>
+      <Field.Field><Field.Label for="term-preferred">{ui.text("ui_page_terminology_preferred")}</Field.Label><Input id="term-preferred" bind:value={termPreferred} placeholder={ui.text("ui_page_terminology_preferred_placeholder")} /></Field.Field>
+      <Field.Field><Field.Label for="term-locale">{ui.text("ui_page_terminology_locale")}</Field.Label><Input id="term-locale" bind:value={termLocale} placeholder={ui.text("ui_page_terminology_locale_placeholder")} /></Field.Field>
+      <Field.Field><Field.Label for="term-note">{ui.text("ui_page_terminology_note")}</Field.Label><Input id="term-note" bind:value={termNote} placeholder={ui.text("ui_page_terminology_note_placeholder")} /></Field.Field>
       <Button class="justify-self-start sm:col-span-2" variant="outline" disabled={reviewMutationBlocked || termSource.trim() === "" || termPreferred.trim() === ""} onclick={addTerm}>
-        <PlusIcon data-icon="inline-start" />{ui.text("Ui.Page.Terminology.AddTerm")}
+        <PlusIcon data-icon="inline-start" />{ui.text("ui_page_terminology_add_term")}
       </Button>
     </Field.FieldGroup>
     <div class="mt-5 grid overflow-hidden rounded-xl border">
@@ -2264,19 +2221,19 @@
         <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-4 py-3 last:border-b-0">
           <div class="min-w-0">
             <div class="flex min-w-0 flex-wrap items-center gap-2"><strong>{term.source}</strong><span class="text-muted-foreground">→</span><strong>{term.preferred}</strong>{#if term.locale}<Badge variant="outline">{term.locale}</Badge>{/if}</div>
-            <p class="truncate text-xs text-muted-foreground">{term.note ?? ui.text("Ui.Page.Terminology.NoNote")}</p>
+            <p class="truncate text-xs text-muted-foreground">{term.note ?? ui.text("ui_page_terminology_no_note")}</p>
           </div>
-          <Button variant="ghost" size="icon-xs" aria-label={`${ui.text("Ui.Page.Terminology.RemoveTerm")} ${term.source}`} onclick={() => removeTerm(index)}><Trash2Icon /></Button>
+          <Button variant="ghost" size="icon-xs" aria-label={`${ui.text("ui_page_terminology_remove_term")} ${term.source}`} onclick={() => removeTerm(index)}><Trash2Icon /></Button>
         </div>
       {:else}
-        <p class="p-6 text-center text-sm text-muted-foreground">{ui.text("Ui.Page.Terminology.Empty")}</p>
+        <p class="p-6 text-center text-sm text-muted-foreground">{ui.text("ui_page_terminology_empty")}</p>
       {/each}
     </div>
     </div>
     {#snippet footer()}
-      <Button variant="outline" onclick={() => terminologyDialogOpen = false}>{ui.text("Ui.Page.Done")}</Button>
+      <Button variant="outline" onclick={() => terminologyDialogOpen = false}>{ui.text("ui_page_done")}</Button>
       <Button disabled={!reviewDirty || reviewMutationBlocked} onclick={() => void saveReview()}>
-        {#if reviewSaving}<Spinner data-icon="inline-start" />{/if}{ui.text("Ui.Page.Terminology.SaveWorkflow")}
+        {#if reviewSaving}<Spinner data-icon="inline-start" />{/if}{ui.text("ui_page_terminology_save_workflow")}
       </Button>
     {/snippet}
   </AppDialog>
@@ -2285,13 +2242,13 @@
 {#if reportDialogOpen}
   <AppDialog
     open
-    title={`${selectedLocale} ${ui.text("Ui.Page.Quality.Report")}`}
-    description={`${localeQualityFindings.length} ${ui.text("Ui.Page.Quality.FindingsAcross")} ${qualityKeySet.size} ${ui.text("Ui.Page.Messages")}. ${ui.text("Ui.Page.Quality.CsvOrder")}`}
+    title={`${selectedLocale} ${ui.text("ui_page_quality_report")}`}
+    description={`${localeQualityFindings.length} ${ui.text("ui_page_quality_findings_across")} ${qualityKeySet.size} ${ui.text("ui_page_messages")}. ${ui.text("ui_page_quality_csv_order")}`}
     class="sm:max-w-4xl"
     onopenchange={(open) => reportDialogOpen = open}
   >
-    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("Ui.Page.Quality.CsvAriaLabel")} readonly value={qualityReportCsv(localeQualityFindings)} />
-    {#snippet footer()}<Button variant="outline" onclick={() => reportDialogOpen = false}>{ui.text("Ui.Page.Close")}</Button>{/snippet}
+    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("ui_page_quality_csv_aria_label")} readonly value={qualityReportCsv(localeQualityFindings)} />
+    {#snippet footer()}<Button variant="outline" onclick={() => reportDialogOpen = false}>{ui.text("ui_page_close")}</Button>{/snippet}
   </AppDialog>
 {/if}
 
@@ -2318,16 +2275,16 @@
   <AppDialog
     open
     title={repairDocument.path}
-    description={ui.text("Ui.Page.Repair.Description")}
+    description={ui.text("ui_page_repair_description")}
     class="sm:max-w-4xl"
     showCloseButton={!repairBusy}
     onopenchange={(open) => { if (!open && !repairBusy) closeRepair(); }}
   >
-    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("Ui.Page.Repair.DocumentAriaLabel")} bind:value={repairText} spellcheck={false} disabled={repairBusy || editorMutationBlocked} />
-    {#if repairMessage}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("Ui.Page.Repair.Failed")}</Alert.Title><Alert.Description>{repairMessage}</Alert.Description></Alert.Root>{/if}
+    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("ui_page_repair_document_aria_label")} bind:value={repairText} spellcheck={false} disabled={repairBusy || editorMutationBlocked} />
+    {#if repairMessage}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("ui_page_repair_failed")}</Alert.Title><Alert.Description>{repairMessage}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
-      <Button variant="outline" disabled={repairBusy} onclick={closeRepair}>{ui.text("Ui.Page.Cancel")}</Button>
-      <Button disabled={repairBusy} onclick={() => void saveRepair()}>{#if repairBusy}<Spinner data-icon="inline-start" />{/if}{repairBusy ? ui.text("Ui.Page.Validating") : ui.text("Ui.Page.Repair.ValidateSave")}</Button>
+      <Button variant="outline" disabled={repairBusy} onclick={closeRepair}>{ui.text("ui_page_cancel")}</Button>
+      <Button disabled={repairBusy} onclick={() => void saveRepair()}>{#if repairBusy}<Spinner data-icon="inline-start" />{/if}{repairBusy ? ui.text("ui_page_validating") : ui.text("ui_page_repair_validate_save")}</Button>
     {/snippet}
   </AppDialog>
 {/if}
@@ -2335,22 +2292,22 @@
 {#if openDialogOpen}
   <AppDialog
     open
-    title={ui.text("Ui.Page.OpenProject.Title")}
-    description={ui.text("Ui.Page.OpenProject.Description")}
+    title={ui.text("ui_page_open_project_title")}
+    description={ui.text("ui_page_open_project_description")}
     showCloseButton={!openingWorkspace && !pickingWorkspace}
     onopenchange={(open) => { if (!openingWorkspace && !pickingWorkspace) openDialogOpen = open; }}
   >
     <Field.Field>
-      <Field.Label for="dialog-open-directory">{ui.text("Ui.Page.WorkspaceDirectory")}</Field.Label>
+      <Field.Label for="dialog-open-directory">{ui.text("ui_page_workspace_directory")}</Field.Label>
       <div class="flex flex-col gap-2 sm:flex-row">
         <Input id="dialog-open-directory" class="min-w-0 flex-1" bind:value={openDirectory} autocomplete="off" />
-        <Button variant="outline" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? ui.text("Ui.Page.Choosing") : ui.text("Ui.Page.Browse")}</Button>
+        <Button variant="outline" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? ui.text("ui_page_choosing") : ui.text("ui_page_browse")}</Button>
       </div>
     </Field.Field>
-    {#if clientError}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("Ui.Page.Fatal.CouldNotOpen")}</Alert.Title><Alert.Description>{clientError}</Alert.Description></Alert.Root>{/if}
+    {#if clientError}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("ui_page_fatal_could_not_open")}</Alert.Title><Alert.Description>{clientError}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
-      <Button variant="outline" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>{ui.text("Ui.Page.Cancel")}</Button>
-      <Button disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{#if openingWorkspace}<Spinner data-icon="inline-start" />{/if}{openingWorkspace ? ui.text("Ui.Page.Opening") : ui.text("Ui.Page.OpenProject.Action")}</Button>
+      <Button variant="outline" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>{ui.text("ui_page_cancel")}</Button>
+      <Button disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{#if openingWorkspace}<Spinner data-icon="inline-start" />{/if}{openingWorkspace ? ui.text("ui_page_opening") : ui.text("ui_page_open_project_action")}</Button>
     {/snippet}
   </AppDialog>
 {/if}
@@ -2359,7 +2316,7 @@
   <AppDialog
     open
     title={mutationTitle(mutationKind)}
-    description={ui.text("Ui.Page.Mutation.Description")}
+    description={ui.text("ui_page_mutation_description")}
     class="sm:max-w-3xl"
     showCloseButton={!mutationBusy}
     onopenchange={(open) => { if (!mutationBusy) mutationDialogOpen = open; }}
@@ -2367,13 +2324,13 @@
     <Field.FieldGroup class="gap-4">
       {#if mutationKind === "add-locale" || mutationKind === "remove-locale" || mutationKind === "set-fallback"}
         <Field.Field>
-          <Field.Label for="language-operation">{ui.text("Ui.Page.Mutation.LanguageOperation")}</Field.Label>
+          <Field.Label for="language-operation">{ui.text("ui_page_mutation_language_operation")}</Field.Label>
           <Select.Root type="single" value={mutationKind} onValueChange={changeMutationKind}>
             <Select.Trigger id="language-operation" class="w-full">{mutationTitle(mutationKind)}</Select.Trigger>
-            <Select.Content><Select.Group><Select.Label>{ui.text("Ui.Page.Mutation.LanguageOperation")}</Select.Label>
-              <Select.Item value="add-locale" label={ui.text("Ui.Page.Mutation.AddLanguage")}>{ui.text("Ui.Page.Mutation.AddLanguage")}</Select.Item>
-              <Select.Item value="remove-locale" label={ui.text("Ui.Page.Mutation.RemoveLanguage")}>{ui.text("Ui.Page.Mutation.RemoveLanguage")}</Select.Item>
-              <Select.Item value="set-fallback" label={ui.text("Ui.Page.Mutation.ChangeFallback")}>{ui.text("Ui.Page.Mutation.ChangeFallback")}</Select.Item>
+            <Select.Content><Select.Group><Select.Label>{ui.text("ui_page_mutation_language_operation")}</Select.Label>
+              <Select.Item value="add-locale" label={ui.text("ui_page_mutation_add_language")}>{ui.text("ui_page_mutation_add_language")}</Select.Item>
+              <Select.Item value="remove-locale" label={ui.text("ui_page_mutation_remove_language")}>{ui.text("ui_page_mutation_remove_language")}</Select.Item>
+              <Select.Item value="set-fallback" label={ui.text("ui_page_mutation_change_fallback")}>{ui.text("ui_page_mutation_change_fallback")}</Select.Item>
             </Select.Group></Select.Content>
           </Select.Root>
         </Field.Field>
@@ -2381,77 +2338,68 @@
 
       {#if mutationKind === "add-locale"}
         <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="mutation-locale">{ui.text("Ui.Page.Mutation.NewLocaleTag")}</Field.Label><Input id="mutation-locale" bind:value={mutationLocale} oninput={invalidateMutationPreview} placeholder="fr-FR" autocomplete="off" /></Field.Field>
-          <Field.Field><Field.Label for="mutation-fallback">{ui.text("Ui.Page.Mutation.Fallback")}</Field.Label>
+          <Field.Field><Field.Label for="mutation-locale">{ui.text("ui_page_mutation_new_locale_tag")}</Field.Label><Input id="mutation-locale" bind:value={mutationLocale} oninput={invalidateMutationPreview} placeholder="fr-FR" autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="mutation-fallback">{ui.text("ui_page_mutation_fallback")}</Field.Label>
             <Select.Root type="single" value={mutationFallback} onValueChange={(value) => { mutationFallback = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="mutation-fallback" class="w-full">{mutationFallback} · {localeName(mutationFallback)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
-          <Field.Field><Field.Label for="mutation-copy-from">{ui.text("Ui.Page.Mutation.CopyStarterValues")}</Field.Label>
+          <Field.Field><Field.Label for="mutation-copy-from">{ui.text("ui_page_mutation_copy_starter_values")}</Field.Label>
             <Select.Root type="single" value={mutationCopyFrom} onValueChange={(value) => { mutationCopyFrom = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="mutation-copy-from" class="w-full">{mutationCopyFrom} · {localeName(mutationCopyFrom)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
-            <Field.Description>{ui.text("Ui.Page.Mutation.CopyStarterValuesDescription")}</Field.Description>
-          </Field.Field>
-          <Field.Field><Field.Label for="mutation-layer">{ui.text("Ui.Page.Mutation.Layer")}</Field.Label>
-            <Select.Root type="single" value={mutationLayer} onValueChange={(value) => { mutationLayer = value; invalidateMutationPreview(); }}>
-              <Select.Trigger id="mutation-layer" class="w-full">{mutationLayer}</Select.Trigger>
-              <Select.Content><Select.Group>{#each snapshot.catalog.layers as layer (layer.name)}<Select.Item value={layer.name} label={layer.name}>{layer.name}</Select.Item>{/each}</Select.Group></Select.Content>
-            </Select.Root>
+            <Field.Description>{ui.text("ui_page_mutation_copy_starter_values_description")}</Field.Description>
           </Field.Field>
         </div>
       {:else if mutationKind === "remove-locale"}
         <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="remove-locale">{ui.text("Ui.Page.Mutation.LanguageToRemove")}</Field.Label>
+          <Field.Field><Field.Label for="remove-locale">{ui.text("ui_page_mutation_language_to_remove")}</Field.Label>
             <Select.Root type="single" value={mutationLocale} onValueChange={(value) => { mutationLocale = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="remove-locale" class="w-full">{mutationLocale} · {localeName(mutationLocale)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
-          <Field.Field><Field.Label for="replacement-fallback">{ui.text("Ui.Page.Mutation.RedirectFallbacks")}</Field.Label>
+          <Field.Field><Field.Label for="replacement-fallback">{ui.text("ui_page_mutation_redirect_fallbacks")}</Field.Label>
             <Select.Root type="single" value={mutationReplacementFallback} onValueChange={(value) => { mutationReplacementFallback = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="replacement-fallback" class="w-full">{mutationReplacementFallback}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={locale.tag}>{locale.tag}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
         </div>
-        <Alert.Root variant="destructive"><Alert.Title>{ui.text("Ui.Page.Mutation.FilesDeleted")}</Alert.Title><Alert.Description>{ui.text("Ui.Page.Mutation.FilesDeletedDescription")}</Alert.Description></Alert.Root>
+        <Alert.Root variant="destructive"><Alert.Title>{ui.text("ui_page_mutation_files_deleted")}</Alert.Title><Alert.Description>{ui.text("ui_page_mutation_files_deleted_description")}</Alert.Description></Alert.Root>
       {:else if mutationKind === "set-fallback"}
         <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="fallback-locale">{ui.text("Ui.Page.Mutation.Language")}</Field.Label>
+          <Field.Field><Field.Label for="fallback-locale">{ui.text("ui_page_mutation_language")}</Field.Label>
             <Select.Root type="single" value={mutationLocale} onValueChange={(value) => { mutationLocale = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="fallback-locale" class="w-full">{mutationLocale} · {localeName(mutationLocale)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
-          <Field.Field><Field.Label for="fallback-target">{ui.text("Ui.Page.Mutation.Fallback")}</Field.Label>
+          <Field.Field><Field.Label for="fallback-target">{ui.text("ui_page_mutation_fallback")}</Field.Label>
             <Select.Root type="single" value={mutationFallback} onValueChange={(value) => { mutationFallback = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="fallback-target" class="w-full">{mutationFallback} · {localeName(mutationFallback)}</Select.Trigger>
               <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
             </Select.Root>
           </Field.Field>
         </div>
-        <div class="flex flex-wrap gap-2">{#each snapshot.catalog.locales as locale (locale.tag)}<Badge variant="outline"><strong>{locale.tag}</strong>{locale.tag === mutationLocale ? ` → ${mutationFallback}` : locale.fallback ? ` → ${locale.fallback}` : ` · ${ui.text("Ui.Page.ProjectWizard.Source")}`}</Badge>{/each}</div>
+        <div class="flex flex-wrap gap-2">{#each snapshot.catalog.locales as locale (locale.tag)}<Badge variant="outline"><strong>{locale.tag}</strong>{locale.tag === mutationLocale ? ` → ${mutationFallback}` : locale.fallback ? ` → ${locale.fallback}` : ` · ${ui.text("ui_page_project_wizard_source")}`}</Badge>{/each}</div>
       {:else if mutationKind === "create-key"}
-        <Field.Field><Field.Label for="mutation-target-key">{ui.text("Ui.Page.Mutation.MessageKey")}</Field.Label><Input id="mutation-target-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} placeholder="Checkout.Actions.Pay" autocomplete="off" /><Field.Description>{ui.text("Ui.Page.Mutation.MessageKeyDescription")}</Field.Description></Field.Field>
-        <Field.Field><Field.Label for="mutation-initial-value">{ui.text("Ui.Page.Mutation.InitialText")}</Field.Label><Textarea id="mutation-initial-value" class="min-h-28" bind:value={mutationInitialValue} oninput={invalidateMutationPreview} placeholder={ui.text("Ui.Page.Mutation.InitialTextPlaceholder")} /><Field.Description>{ui.text("Ui.Page.Mutation.InitialTextDescription")}</Field.Description></Field.Field>
-        <Field.Field><Field.Label for="message-layer">{ui.text("Ui.Page.Mutation.Layer")}</Field.Label>
-          <Select.Root type="single" value={mutationLayer} onValueChange={(value) => { mutationLayer = value; invalidateMutationPreview(); }}><Select.Trigger id="message-layer" class="w-full">{mutationLayer}</Select.Trigger><Select.Content><Select.Group>{#each snapshot.catalog.layers as layer (layer.name)}<Select.Item value={layer.name} label={layer.name}>{layer.name}</Select.Item>{/each}</Select.Group></Select.Content></Select.Root>
-        </Field.Field>
+        <Field.Field><Field.Label for="mutation-target-key">{ui.text("ui_page_mutation_message_key")}</Field.Label><Input id="mutation-target-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} placeholder="checkout_actions_pay" autocomplete="off" /><Field.Description>{ui.text("ui_page_mutation_message_key_description")}</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="mutation-initial-value">{ui.text("ui_page_mutation_initial_text")}</Field.Label><Textarea id="mutation-initial-value" class="min-h-28" bind:value={mutationInitialValue} oninput={invalidateMutationPreview} placeholder={ui.text("ui_page_mutation_initial_text_placeholder")} /><Field.Description>{ui.text("ui_page_mutation_initial_text_description")}</Field.Description></Field.Field>
       {:else if mutationKind === "rename-key" || mutationKind === "duplicate-key"}
-        <Field.Field><Field.Label for="mutation-source-key">{ui.text("Ui.Page.Mutation.ExistingKey")}</Field.Label><Input id="mutation-source-key" value={mutationSourceKey} readonly /></Field.Field>
-        <Field.Field><Field.Label for="mutation-new-key">{mutationKind === "rename-key" ? ui.text("Ui.Page.Mutation.NewKeyGroupPath") : ui.text("Ui.Page.Mutation.DuplicateKey")}</Field.Label><Input id="mutation-new-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} autocomplete="off" /><Field.Description>{ui.text("Ui.Page.Mutation.RenameDescription")}</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="mutation-source-key">{ui.text("ui_page_mutation_existing_key")}</Field.Label><Input id="mutation-source-key" value={mutationSourceKey} readonly /></Field.Field>
+        <Field.Field><Field.Label for="mutation-new-key">{mutationKind === "rename-key" ? ui.text("ui_page_mutation_new_key_group_path") : ui.text("ui_page_mutation_duplicate_key")}</Field.Label><Input id="mutation-new-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} autocomplete="off" /><Field.Description>{ui.text("ui_page_mutation_rename_description")}</Field.Description></Field.Field>
       {:else}
-        <Alert.Root variant="destructive"><Alert.Title>{ui.text("Ui.Page.Mutation.Delete")} {mutationSourceKey}?</Alert.Title><Alert.Description>{ui.text("Ui.Page.Mutation.DeleteDescription")}</Alert.Description></Alert.Root>
+        <Alert.Root variant="destructive"><Alert.Title>{ui.text("ui_page_mutation_delete")} {mutationSourceKey}?</Alert.Title><Alert.Description>{ui.text("ui_page_mutation_delete_description")}</Alert.Description></Alert.Root>
       {/if}
     </Field.FieldGroup>
 
-    {#if mutationError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("Ui.Page.Mutation.Invalid")}</Alert.Title><Alert.Description>{mutationError}</Alert.Description></Alert.Root>{/if}
+    {#if mutationError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("ui_page_mutation_invalid")}</Alert.Title><Alert.Description>{mutationError}</Alert.Description></Alert.Root>{/if}
     {#if mutationPreview?.ok}
-      <section class="mt-5 overflow-hidden rounded-xl border" aria-label={ui.text("Ui.Page.Mutation.OperationPreview")}>
-        <header class="flex items-center justify-between gap-3 border-b px-4 py-3"><strong>{ui.text("Ui.Page.Mutation.OperationPreview")}</strong><Badge variant="secondary">{mutationPreview.files.length} {ui.text("Ui.Page.Mutation.Affected")} {mutationPreview.files.length === 1 ? ui.text("Ui.Page.File") : ui.text("Ui.Page.Files")}</Badge></header>
+      <section class="mt-5 overflow-hidden rounded-xl border" aria-label={ui.text("ui_page_mutation_operation_preview")}>
+        <header class="flex items-center justify-between gap-3 border-b px-4 py-3"><strong>{ui.text("ui_page_mutation_operation_preview")}</strong><Badge variant="secondary">{mutationPreview.files.length} {ui.text("ui_page_mutation_affected")} {mutationPreview.files.length === 1 ? ui.text("ui_page_file") : ui.text("ui_page_files")}</Badge></header>
         {#each mutationPreview.files as file (file.path)}
           <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"><Badge variant={file.kind === "delete" ? "destructive" : file.kind === "create" ? "default" : "secondary"}>{file.kind}</Badge><code class="truncate text-xs">{file.path}</code><small class="col-start-2 text-muted-foreground sm:col-start-auto">{file.beforeBytes.toLocaleString()} → {file.afterBytes.toLocaleString()} bytes</small></div>
         {/each}
@@ -2461,19 +2409,19 @@
           <div class="flex items-start gap-3">
             <Checkbox id="confirm-irreversible" bind:checked={mutationIrreversibleConfirmed} />
             <div class="grid gap-1.5 leading-none">
-              <Field.Label for="confirm-irreversible">{ui.text("Ui.Page.Mutation.IrreversibleConfirm")}</Field.Label>
-              <Field.Description>{ui.text("Ui.Page.Mutation.IrreversibleDescription")}</Field.Description>
+              <Field.Label for="confirm-irreversible">{ui.text("ui_page_mutation_irreversible_confirm")}</Field.Label>
+              <Field.Description>{ui.text("ui_page_mutation_irreversible_description")}</Field.Description>
             </div>
           </div>
         </Field.Field>
       {/if}
     {/if}
     {#snippet footer()}
-      <Button variant="outline" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>{ui.text("Ui.Page.Cancel")}</Button>
+      <Button variant="outline" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>{ui.text("ui_page_cancel")}</Button>
       {#if mutationPreview?.ok}
-        <Button variant={mutationKind === "remove-locale" || mutationKind === "delete-key" ? "destructive" : "default"} disabled={mutationBusy || (mutationPreview.requiresIrreversibleConfirmation && !mutationIrreversibleConfirmed)} onclick={() => void applyMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? ui.text("Ui.Page.Mutation.Committing") : ui.text("Ui.Page.Mutation.Commit")}</Button>
+        <Button variant={mutationKind === "remove-locale" || mutationKind === "delete-key" ? "destructive" : "default"} disabled={mutationBusy || (mutationPreview.requiresIrreversibleConfirmation && !mutationIrreversibleConfirmed)} onclick={() => void applyMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? ui.text("ui_page_mutation_committing") : ui.text("ui_page_mutation_commit")}</Button>
       {:else}
-        <Button disabled={mutationBusy} onclick={() => void previewMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? ui.text("Ui.Page.Mutation.Checking") : ui.text("Ui.Page.Mutation.Preview")}</Button>
+        <Button disabled={mutationBusy} onclick={() => void previewMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? ui.text("ui_page_mutation_checking") : ui.text("ui_page_mutation_preview")}</Button>
       {/if}
     {/snippet}
   </AppDialog>
@@ -2482,14 +2430,14 @@
 {#if projectDialogOpen}
   <AppDialog
     open
-    title={ui.text("Ui.Page.ProjectWizard.Title")}
-    description={ui.text("Ui.Page.ProjectWizard.Description")}
+    title={ui.text("ui_page_project_wizard_title")}
+    description={ui.text("ui_page_project_wizard_description")}
     class="sm:max-w-3xl"
     showCloseButton={!projectBusy}
     onopenchange={(open) => { if (!open && !projectBusy) closeProjectWizard(); }}
   >
-    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={ui.text("Ui.Page.ProjectWizard.StepsAriaLabel")}>
-      {#each [ui.text("Ui.Page.ProjectWizard.StepProject"), ui.text("Ui.Page.ProjectWizard.StepLanguages"), ui.text("Ui.Page.ProjectWizard.StepSettings"), ui.text("Ui.Page.ProjectWizard.StepReview")] as title, index (title)}
+    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={ui.text("ui_page_project_wizard_steps_aria_label")}>
+      {#each [ui.text("ui_page_project_wizard_step_project"), ui.text("ui_page_project_wizard_step_languages"), ui.text("ui_page_project_wizard_step_settings"), ui.text("ui_page_project_wizard_step_review")] as title, index (title)}
         <li class="flex items-center gap-2 text-sm" aria-current={projectStep === index + 1 ? "step" : undefined}>
           <Badge variant={projectStep === index + 1 ? "default" : projectStep > index + 1 ? "secondary" : "outline"}>{projectStep > index + 1 ? "✓" : index + 1}</Badge>
           <span class={projectStep === index + 1 ? "font-medium" : "text-muted-foreground"}>{title}</span>
@@ -2498,57 +2446,55 @@
     </ol>
 
     {#if projectStep === 1}
-      <div class="mb-5"><h3 class="font-medium">{ui.text("Ui.Page.ProjectWizard.WhereLive")}</h3><p class="text-sm text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.NoOverwrite")}</p></div>
+      <div class="mb-5"><h3 class="font-medium">{ui.text("ui_page_project_wizard_where_live")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_no_overwrite")}</p></div>
       <Field.FieldGroup>
-        <Field.Field><Field.Label for="project-directory">{ui.text("Ui.Page.ProjectWizard.NewDirectory")}</Field.Label><Input id="project-directory" bind:value={projectDirectory} placeholder="/projects/customer-app/Resources" autocomplete="off" /><Field.Description>{ui.text("Ui.Page.ProjectWizard.DirectoryDescription")}</Field.Description></Field.Field>
-        <Field.Field><Field.Label for="project-catalog">{ui.text("Ui.Page.ProjectWizard.CatalogId")}</Field.Label><Input id="project-catalog" bind:value={projectCatalog} placeholder="product" autocomplete="off" /><Field.Description>{ui.text("Ui.Page.ProjectWizard.CatalogIdDescription")}</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="project-directory">{ui.text("ui_page_project_wizard_new_directory")}</Field.Label><Input id="project-directory" bind:value={projectDirectory} placeholder="/projects/customer-app/Resources" autocomplete="off" /><Field.Description>{ui.text("ui_page_project_wizard_directory_description")}</Field.Description></Field.Field>
+        <Field.Field><Field.Label for="project-catalog">{ui.text("ui_page_project_wizard_catalog_id")}</Field.Label><Input id="project-catalog" bind:value={projectCatalog} placeholder="product" autocomplete="off" /><Field.Description>{ui.text("ui_page_project_wizard_catalog_id_description")}</Field.Description></Field.Field>
       </Field.FieldGroup>
     {:else if projectStep === 2}
-      <div class="mb-5"><h3 class="font-medium">{ui.text("Ui.Page.ProjectWizard.WhichLanguages")}</h3><p class="text-sm text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.LanguageDescription")}</p></div>
+      <div class="mb-5"><h3 class="font-medium">{ui.text("ui_page_project_wizard_which_languages")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_language_description")}</p></div>
       <div class="grid gap-3">
         <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_auto]">
-          <Field.Field><Field.Label for="project-default-locale">{ui.text("Ui.Page.ProjectWizard.SourceDefault")}</Field.Label><Input id="project-default-locale" bind:value={projectDefaultLocale} placeholder="de" autocomplete="off" /></Field.Field>
-          <Badge variant="secondary" class="mb-2">{ui.text("Ui.Page.ProjectWizard.CanonicalSource")}</Badge>
+          <Field.Field><Field.Label for="project-default-locale">{ui.text("ui_page_project_wizard_source_default")}</Field.Label><Input id="project-default-locale" bind:value={projectDefaultLocale} placeholder="de" autocomplete="off" /></Field.Field>
+          <Badge variant="secondary" class="mb-2">{ui.text("ui_page_project_wizard_canonical_source")}</Badge>
         </div>
         {#each projectLocales as locale (locale.id)}
           <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_1fr_auto]">
-            <Field.Field><Field.Label for={`project-locale-${locale.id}`}>{ui.text("Ui.Page.ProjectWizard.AdditionalLanguage")}</Field.Label><Input id={`project-locale-${locale.id}`} bind:value={locale.tag} placeholder="en" autocomplete="off" /></Field.Field>
-            <Field.Field><Field.Label for={`project-fallback-${locale.id}`}>{ui.text("Ui.Page.Mutation.Fallback")}</Field.Label>
+            <Field.Field><Field.Label for={`project-locale-${locale.id}`}>{ui.text("ui_page_project_wizard_additional_language")}</Field.Label><Input id={`project-locale-${locale.id}`} bind:value={locale.tag} placeholder="en" autocomplete="off" /></Field.Field>
+            <Field.Field><Field.Label for={`project-fallback-${locale.id}`}>{ui.text("ui_page_mutation_fallback")}</Field.Label>
               <Select.Root type="single" value={locale.fallback} onValueChange={(value) => locale.fallback = value}>
-                <Select.Trigger id={`project-fallback-${locale.id}`} class="w-full">{locale.fallback || `${ui.text("Ui.Page.ProjectWizard.Default")} (${projectDefaultLocale || ui.text("Ui.Page.ProjectWizard.Source")})`}</Select.Trigger>
-                <Select.Content><Select.Group><Select.Item value="" label={`${ui.text("Ui.Page.ProjectWizard.Default")} (${projectDefaultLocale || ui.text("Ui.Page.ProjectWizard.Source")})`}>{ui.text("Ui.Page.ProjectWizard.Default")} ({projectDefaultLocale || ui.text("Ui.Page.ProjectWizard.Source")})</Select.Item>{#each projectLocales.filter((candidate) => candidate.id !== locale.id && candidate.tag.trim() !== "") as candidate (candidate.id)}<Select.Item value={candidate.tag} label={candidate.tag}>{candidate.tag}</Select.Item>{/each}</Select.Group></Select.Content>
+                <Select.Trigger id={`project-fallback-${locale.id}`} class="w-full">{locale.fallback || `${ui.text("ui_page_project_wizard_default")} (${projectDefaultLocale || ui.text("ui_page_project_wizard_source")})`}</Select.Trigger>
+                <Select.Content><Select.Group><Select.Item value="" label={`${ui.text("ui_page_project_wizard_default")} (${projectDefaultLocale || ui.text("ui_page_project_wizard_source")})`}>{ui.text("ui_page_project_wizard_default")} ({projectDefaultLocale || ui.text("ui_page_project_wizard_source")})</Select.Item>{#each projectLocales.filter((candidate) => candidate.id !== locale.id && candidate.tag.trim() !== "") as candidate (candidate.id)}<Select.Item value={candidate.tag} label={candidate.tag}>{candidate.tag}</Select.Item>{/each}</Select.Group></Select.Content>
               </Select.Root>
             </Field.Field>
-            <Button variant="ghost" size="icon-sm" aria-label={`${ui.text("Ui.Page.ProjectWizard.RemoveLocale")} ${locale.tag || ui.text("Ui.Page.ProjectWizard.Row")}`} onclick={() => removeProjectLocale(locale.id)}><Trash2Icon /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label={`${ui.text("ui_page_project_wizard_remove_locale")} ${locale.tag || ui.text("ui_page_project_wizard_row")}`} onclick={() => removeProjectLocale(locale.id)}><Trash2Icon /></Button>
           </div>
         {/each}
-        <Button variant="outline" class="justify-self-start" onclick={addProjectLocale}><PlusIcon data-icon="inline-start" />{ui.text("Ui.Page.ProjectWizard.AddLanguage")}</Button>
+        <Button variant="outline" class="justify-self-start" onclick={addProjectLocale}><PlusIcon data-icon="inline-start" />{ui.text("ui_page_project_wizard_add_language")}</Button>
       </div>
     {:else if projectStep === 3}
-      <div class="mb-5"><h3 class="font-medium">{ui.text("Ui.Page.ProjectWizard.GeneratedApi")}</h3><p class="text-sm text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.GeneratedApiDescription")}</p></div>
+      <div class="mb-5"><h3 class="font-medium">{ui.text("ui_page_project_wizard_generated_api")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_generated_api_description")}</p></div>
       <Field.FieldGroup>
         <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="project-namespace">{ui.text("Ui.Page.ProjectWizard.CodeNamespace")}</Field.Label><Input id="project-namespace" bind:value={projectNamespace} autocomplete="off" /></Field.Field>
-          <Field.Field><Field.Label for="project-class">{ui.text("Ui.Page.ProjectWizard.GeneratedClass")}</Field.Label><Input id="project-class" bind:value={projectClassName} autocomplete="off" /></Field.Field>
-          <Field.Field><Field.Label for="project-layer">{ui.text("Ui.Page.ProjectWizard.InitialLayer")}</Field.Label><Input id="project-layer" bind:value={projectLayer} autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="project-namespace">{ui.text("ui_page_project_wizard_code_namespace")}</Field.Label><Input id="project-namespace" bind:value={projectNamespace} autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="project-class">{ui.text("ui_page_project_wizard_generated_class")}</Field.Label><Input id="project-class" bind:value={projectClassName} autocomplete="off" /></Field.Field>
         </div>
-        <Field.Field orientation="horizontal"><Checkbox id="project-esm" bind:checked={projectGenerateEsm} /><Field.Content><Field.Label for="project-esm">{ui.text("Ui.Page.ProjectWizard.EnableEsm")}</Field.Label><Field.Description>{ui.text("Ui.Page.ProjectWizard.EnableEsmDescription")}</Field.Description></Field.Content></Field.Field>
-        <Field.Field orientation="horizontal"><Checkbox id="project-starter" bind:checked={projectIncludeStarter} /><Field.Content><Field.Label for="project-starter">{ui.text("Ui.Page.ProjectWizard.AddStarter")}</Field.Label><Field.Description>{ui.text("Ui.Page.ProjectWizard.AddStarterDescription")}</Field.Description></Field.Content></Field.Field>
+        <Field.Field orientation="horizontal"><Checkbox id="project-starter" bind:checked={projectIncludeStarter} /><Field.Content><Field.Label for="project-starter">{ui.text("ui_page_project_wizard_add_starter")}</Field.Label><Field.Description>{ui.text("ui_page_project_wizard_add_starter_description")}</Field.Description></Field.Content></Field.Field>
       </Field.FieldGroup>
     {:else if projectStep === 4 && projectPlan !== undefined}
-      <Alert.Root><Alert.Title>{ui.text("Ui.Page.ProjectWizard.ReadyCreate")} {projectPlan.catalogId}</Alert.Title><Alert.Description>{projectPlan.locales.length} {projectPlan.locales.length === 1 ? ui.text("Ui.Page.ProjectWizard.Language") : ui.text("Ui.Page.ProjectWizard.Languages")} · {projectPlan.files.length} {ui.text("Ui.Page.Files")} · {ui.text("Ui.Page.ProjectWizard.CompilerValidated")}</Alert.Description></Alert.Root>
-      <dl class="mt-4 grid gap-3 rounded-xl border p-4"><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.Directory")}</dt><dd class="m-0 truncate font-mono text-xs">{projectPlan.directory}</dd></div><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("Ui.Page.ProjectWizard.Languages")}</dt><dd class="m-0 font-medium">{projectPlan.locales.map((locale) => locale.tag).join(", ")}</dd></div></dl>
-      <section class="mt-4 overflow-hidden rounded-xl border" aria-label={ui.text("Ui.Page.ProjectWizard.FilesToCreate")}><h4 class="border-b px-4 py-3 font-medium">{ui.text("Ui.Page.ProjectWizard.FilesToCreate")}</h4>{#each projectPlan.files as file (file)}<div class="border-b px-4 py-3 last:border-b-0"><code class="text-xs">{file}</code></div>{/each}</section>
+      <Alert.Root><Alert.Title>{ui.text("ui_page_project_wizard_ready_create")} {projectPlan.catalogId}</Alert.Title><Alert.Description>{projectPlan.locales.length} {projectPlan.locales.length === 1 ? ui.text("ui_page_project_wizard_language") : ui.text("ui_page_project_wizard_languages")} · {projectPlan.files.length} {ui.text("ui_page_files")} · {ui.text("ui_page_project_wizard_compiler_validated")}</Alert.Description></Alert.Root>
+      <dl class="mt-4 grid gap-3 rounded-xl border p-4"><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_directory")}</dt><dd class="m-0 truncate font-mono text-xs">{projectPlan.directory}</dd></div><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_languages")}</dt><dd class="m-0 font-medium">{projectPlan.locales.map((locale) => locale.tag).join(", ")}</dd></div></dl>
+      <section class="mt-4 overflow-hidden rounded-xl border" aria-label={ui.text("ui_page_project_wizard_files_to_create")}><h4 class="border-b px-4 py-3 font-medium">{ui.text("ui_page_project_wizard_files_to_create")}</h4>{#each projectPlan.files as file (file)}<div class="border-b px-4 py-3 last:border-b-0"><code class="text-xs">{file}</code></div>{/each}</section>
     {/if}
 
-    {#if projectError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("Ui.Page.ProjectWizard.Invalid")}</Alert.Title><Alert.Description>{projectError}</Alert.Description></Alert.Root>{/if}
+    {#if projectError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("ui_page_project_wizard_invalid")}</Alert.Title><Alert.Description>{projectError}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
-      <Button variant="outline" disabled={projectBusy} onclick={closeProjectWizard}>{ui.text("Ui.Page.Cancel")}</Button>
-      {#if projectStep > 1}<Button variant="ghost" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>{ui.text("Ui.Page.Back")}</Button>{/if}
+      <Button variant="outline" disabled={projectBusy} onclick={closeProjectWizard}>{ui.text("ui_page_cancel")}</Button>
+      {#if projectStep > 1}<Button variant="ghost" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>{ui.text("ui_page_back")}</Button>{/if}
       {#if projectStep < 4}
-        <Button disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("Ui.Page.Validating") : ui.text("Ui.Page.Continue")}</Button>
+        <Button disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("ui_page_validating") : ui.text("ui_page_continue")}</Button>
       {:else}
-        <Button disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("Ui.Page.Creating") : ui.text("Ui.Page.ProjectWizard.CreateProject")}</Button>
+        <Button disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("ui_page_creating") : ui.text("ui_page_project_wizard_create_project")}</Button>
       {/if}
     {/snippet}
   </AppDialog>

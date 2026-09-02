@@ -113,10 +113,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <TranslationCatalog Include="EditorResources/editor.catalog.json" />
-    <TranslationDocument Include="EditorResources/editor.en.json" />
-    <TranslationDocument Include="EditorResources/editor.de.json" />
-    <EditorFrontendInput Include="Frontend/package.json;Frontend/bun.lock;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/*.json" />
+    <TranslationProject Include="EditorResources/runic.json" />
+    <TranslationMf2 Include="EditorResources/**/*.mf2" />
+    <EditorFrontendInput Include="Frontend/package.json;Frontend/bun.lock;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/**/*" />
     <None Update="ExampleWorkspace/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

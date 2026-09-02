@@ -120,68 +120,68 @@
     {#each list as node, index (`${path.join(".")}-${index}-${kind(node)}`)}
       <article class="pattern-node">
         <header>
-          <label>{ui.text("Ui.Pattern.ContentType")}
+          <label>{ui.text("ui_pattern_content_type")}
             <select value={kind(node)} onchange={(event) => replace(path, index, replacement(event.currentTarget.value as ReturnType<typeof kind>))}>
-              <option value="text">{ui.text("Ui.Pattern.Text")}</option>
-              <option value="input" disabled={inputNames.length === 0}>{ui.text("Ui.Pattern.InputChip")}</option>
-              <option value="local" disabled={localNames.length === 0}>{ui.text("Ui.Pattern.DeclarationChip")}</option>
-              <option value="format" disabled={formattableInputs.length === 0}>{ui.text("Ui.Pattern.InlineFormatter")}</option>
-              <option value="markup">{ui.text("Ui.Pattern.SemanticMarkup")}</option>
+              <option value="text">{ui.text("ui_pattern_text")}</option>
+              <option value="input" disabled={inputNames.length === 0}>{ui.text("ui_pattern_input_chip")}</option>
+              <option value="local" disabled={localNames.length === 0}>{ui.text("ui_pattern_declaration_chip")}</option>
+              <option value="format" disabled={formattableInputs.length === 0}>{ui.text("ui_pattern_inline_formatter")}</option>
+              <option value="markup">{ui.text("ui_pattern_semantic_markup")}</option>
             </select>
           </label>
           <div class="node-actions">
-            <button aria-label={ui.text("Ui.Pattern.MoveContentUp")} disabled={index === 0} onclick={() => mutate(path, (items) => items.splice(index - 1, 0, items.splice(index, 1)[0]))}>↑</button>
-            <button aria-label={ui.text("Ui.Pattern.MoveContentDown")} disabled={index === list.length - 1} onclick={() => mutate(path, (items) => items.splice(index + 1, 0, items.splice(index, 1)[0]))}>↓</button>
-            <button class="remove" aria-label={ui.text("Ui.Pattern.RemoveContent")} onclick={() => mutate(path, (items) => items.splice(index, 1))}>×</button>
+            <button aria-label={ui.text("ui_pattern_move_content_up")} disabled={index === 0} onclick={() => mutate(path, (items) => items.splice(index - 1, 0, items.splice(index, 1)[0]))}>↑</button>
+            <button aria-label={ui.text("ui_pattern_move_content_down")} disabled={index === list.length - 1} onclick={() => mutate(path, (items) => items.splice(index + 1, 0, items.splice(index, 1)[0]))}>↓</button>
+            <button class="remove" aria-label={ui.text("ui_pattern_remove_content")} onclick={() => mutate(path, (items) => items.splice(index, 1))}>×</button>
           </div>
         </header>
 
         {#if typeof node === "string"}
-          <textarea aria-label={ui.text("Ui.Pattern.TextContent")} value={node} oninput={(event) => replace(path, index, event.currentTarget.value)}></textarea>
+          <textarea aria-label={ui.text("ui_pattern_text_content")} value={node} oninput={(event) => replace(path, index, event.currentTarget.value)}></textarea>
         {:else if "input" in node}
-          <label class="chip-field">{ui.text("Ui.Pattern.ProtectedInput")}
+          <label class="chip-field">{ui.text("ui_pattern_protected_input")}
             <select value={node.input} onchange={(event) => replace(path, index, { input: event.currentTarget.value })}>
               {#each inputNames as name (name)}<option value={name}>{name}</option>{/each}
             </select>
           </label>
         {:else if "local" in node}
-          <label class="chip-field local">{ui.text("Ui.Pattern.FormattedDeclaration")}
+          <label class="chip-field local">{ui.text("ui_pattern_formatted_declaration")}
             <select value={node.local} onchange={(event) => replace(path, index, { local: event.currentTarget.value })}>
               {#each localNames as name (name)}<option value={name}>{name}</option>{/each}
             </select>
           </label>
         {:else if "format" in node}
           <div class="format-grid">
-            <label>{ui.text("Ui.Pattern.Input")}<select value={node.format.input} onchange={(event) => updateFormat(path, index, "input", event.currentTarget.value)}>{#each formattableInputs as name (name)}<option value={name}>{name}</option>{/each}</select></label>
-            <label>{ui.text("Ui.Pattern.Formatter")}<select value={node.format.function} onchange={(event) => updateFormat(path, index, "function", event.currentTarget.value as FormatFunction)}>{#each formatFunctions as fn (fn)}<option value={fn}>{fn}</option>{/each}</select></label>
+            <label>{ui.text("ui_pattern_input")}<select value={node.format.input} onchange={(event) => updateFormat(path, index, "input", event.currentTarget.value)}>{#each formattableInputs as name (name)}<option value={name}>{name}</option>{/each}</select></label>
+            <label>{ui.text("ui_pattern_formatter")}<select value={node.format.function} onchange={(event) => updateFormat(path, index, "function", event.currentTarget.value as FormatFunction)}>{#each formatFunctions as fn (fn)}<option value={fn}>{fn}</option>{/each}</select></label>
             {#if node.format.function === "relativeTime"}
-              <label>{ui.text("Ui.Pattern.Unit")}<select value={node.format.unit ?? "day"} onchange={(event) => updateFormat(path, index, "unit", event.currentTarget.value)}>{#each relativeTimeUnits as unit (unit)}<option value={unit}>{unit}</option>{/each}</select></label>
-              <label>{ui.text("Ui.Pattern.Numeric")}<select value={node.format.numeric ?? "auto"} onchange={(event) => updateFormat(path, index, "numeric", event.currentTarget.value)}><option value="auto">auto</option><option value="always">always</option></select></label>
+              <label>{ui.text("ui_pattern_unit")}<select value={node.format.unit ?? "day"} onchange={(event) => updateFormat(path, index, "unit", event.currentTarget.value)}>{#each relativeTimeUnits as unit (unit)}<option value={unit}>{unit}</option>{/each}</select></label>
+              <label>{ui.text("ui_pattern_numeric")}<select value={node.format.numeric ?? "auto"} onchange={(event) => updateFormat(path, index, "numeric", event.currentTarget.value)}><option value="auto">auto</option><option value="always">always</option></select></label>
             {:else}
-              <label>{ui.text("Ui.Pattern.Format")}<input value={node.format.format ?? ""} placeholder={ui.text("Ui.Pattern.CompilerDefault")} oninput={(event) => updateFormat(path, index, "format", event.currentTarget.value)} /></label>
+              <label>{ui.text("ui_pattern_format")}<input value={node.format.format ?? ""} placeholder={ui.text("ui_pattern_compiler_default")} oninput={(event) => updateFormat(path, index, "format", event.currentTarget.value)} /></label>
             {/if}
           </div>
         {:else}
           <div class="markup-editor">
-            <label>{ui.text("Ui.Pattern.SemanticName")}<input value={node.markup.name} oninput={(event) => mutate(path, (items) => { const current = items[index]; if (typeof current !== "string" && "markup" in current) current.markup.name = event.currentTarget.value; })} /></label>
+            <label>{ui.text("ui_pattern_semantic_name")}<input value={node.markup.name} oninput={(event) => mutate(path, (items) => { const current = items[index]; if (typeof current !== "string" && "markup" in current) current.markup.name = event.currentTarget.value; })} /></label>
             <div class="attributes">
-              <header><strong>{ui.text("Ui.Pattern.Attributes")}</strong><button onclick={() => addAttribute(path, index)}>＋ {ui.text("Ui.Pattern.Add")}</button></header>
+              <header><strong>{ui.text("ui_pattern_attributes")}</strong><button onclick={() => addAttribute(path, index)}>＋ {ui.text("ui_pattern_add")}</button></header>
               {#each Object.entries(node.markup.attributes ?? {}) as [name, value] (name)}
-                <div><input aria-label={ui.text("Ui.Pattern.AttributeName")} value={name} oninput={(event) => updateAttribute(path, index, name, event.currentTarget.value, value)} /><input aria-label={`${ui.text("Ui.Pattern.ValueFor")} ${name}`} value={value} oninput={(event) => updateAttribute(path, index, name, name, event.currentTarget.value)} /><button aria-label={`${ui.text("Ui.Pattern.Remove")} ${name}`} onclick={() => removeAttribute(path, index, name)}>×</button></div>
+                <div><input aria-label={ui.text("ui_pattern_attribute_name")} value={name} oninput={(event) => updateAttribute(path, index, name, event.currentTarget.value, value)} /><input aria-label={`${ui.text("ui_pattern_value_for")} ${name}`} value={value} oninput={(event) => updateAttribute(path, index, name, name, event.currentTarget.value)} /><button aria-label={`${ui.text("ui_pattern_remove")} ${name}`} onclick={() => removeAttribute(path, index, name)}>×</button></div>
               {/each}
             </div>
-            <div class="children-label">{ui.text("Ui.Pattern.ChildrenDescription")}</div>
+            <div class="children-label">{ui.text("ui_pattern_children_description")}</div>
             {@render nodeList(node.markup.children, [...path, index], depth + 1)}
           </div>
         {/if}
       </article>
     {/each}
-    <div class="add-nodes" role="group" aria-label={ui.text("Ui.Pattern.AddContent")}>
-      <button onclick={() => mutate(path, (items) => items.push(""))}>＋ {ui.text("Ui.Pattern.Text")}</button>
-      <button disabled={inputNames.length === 0} onclick={() => mutate(path, (items) => items.push({ input: inputNames[0] }))}>＋ {ui.text("Ui.Pattern.Input")}</button>
-      <button disabled={localNames.length === 0} onclick={() => mutate(path, (items) => items.push({ local: localNames[0] }))}>＋ {ui.text("Ui.Pattern.Declaration")}</button>
-      <button disabled={formattableInputs.length === 0} onclick={() => mutate(path, (items) => items.push(replacement("format")))}>＋ {ui.text("Ui.Pattern.Formatter")}</button>
-      <button onclick={() => mutate(path, (items) => items.push(replacement("markup")))}>＋ {ui.text("Ui.Pattern.Markup")}</button>
+    <div class="add-nodes" role="group" aria-label={ui.text("ui_pattern_add_content")}>
+      <button onclick={() => mutate(path, (items) => items.push(""))}>＋ {ui.text("ui_pattern_text")}</button>
+      <button disabled={inputNames.length === 0} onclick={() => mutate(path, (items) => items.push({ input: inputNames[0] }))}>＋ {ui.text("ui_pattern_input")}</button>
+      <button disabled={localNames.length === 0} onclick={() => mutate(path, (items) => items.push({ local: localNames[0] }))}>＋ {ui.text("ui_pattern_declaration")}</button>
+      <button disabled={formattableInputs.length === 0} onclick={() => mutate(path, (items) => items.push(replacement("format")))}>＋ {ui.text("ui_pattern_formatter")}</button>
+      <button onclick={() => mutate(path, (items) => items.push(replacement("markup")))}>＋ {ui.text("ui_pattern_markup")}</button>
     </div>
   </div>
 {/snippet}

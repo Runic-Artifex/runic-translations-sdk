@@ -36,9 +36,6 @@
           ],
           "type": "string"
         },
-        "layer": {
-          "type": "string"
-        },
         "locale": {
           "type": "string"
         },

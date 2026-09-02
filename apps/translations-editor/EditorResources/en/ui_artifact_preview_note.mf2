@@ -1,0 +1,1 @@
+Both columns run the same compiler-normalized AST pipeline; markup stays semantic data and is never interpreted as HTML.

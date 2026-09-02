@@ -83,13 +83,11 @@ internal static class EditorCommandModule
         [Option("--smoke-test")] bool smokeTest,
         [Option("--native-shell-canary")] bool nativeShellCanary,
         [Option("--validate")] bool validate,
-        [Option("--workspace")] string? workspacePath = null,
-        [Option("--catalog")] string? catalog = null) =>
+        [Option("--workspace")] string? workspacePath = null) =>
         operations.ExecuteAsync(new EditorCommandRequest(
             "edit",
             workspace,
             workspacePath,
-            catalog,
             webview,
             smokeTest,
             validate,
@@ -106,13 +104,11 @@ internal static class EditorCommandModule
         [FromServices] IEditorCommandOperations operations,
         [Argument(AllowMultipleValues = true)] IReadOnlyList<string> workspace,
         CommandExecutionContext context,
-        [Option("--workspace")] string? workspacePath = null,
-        [Option("--catalog")] string? catalog = null) =>
+        [Option("--workspace")] string? workspacePath = null) =>
         operations.ExecuteAsync(new EditorCommandRequest(
             "validate",
             workspace,
             workspacePath,
-            catalog,
             false,
             false,
             false,
@@ -125,10 +121,9 @@ internal static class EditorCommandModule
         [FromServices] IEditorCommandOperations operations,
         [Argument(AllowMultipleValues = true)] IReadOnlyList<string> workspace,
         CommandExecutionContext context,
-        [Option("--workspace")] string? workspacePath = null,
-        [Option("--catalog")] string? catalog = null) =>
+        [Option("--workspace")] string? workspacePath = null) =>
         operations.ExecuteAsync(new EditorCommandRequest(
-            "diagnostics", workspace, workspacePath, catalog, false, false, false, context.OutputMode));
+            "diagnostics", workspace, workspacePath, false, false, false, context.OutputMode));
 
     /// <summary>Exports XLIFF documents or portable review JSON from one workspace.</summary>
     [Command("export")]
@@ -139,10 +134,9 @@ internal static class EditorCommandModule
         CommandExecutionContext context,
         [Option("--format", Required = true)] string format,
         [Option("--output", Required = true)] string output,
-        [Option("--workspace")] string? workspacePath = null,
-        [Option("--catalog")] string? catalog = null) =>
+        [Option("--workspace")] string? workspacePath = null) =>
         operations.ExecuteAsync(new EditorCommandRequest(
-            "export", workspace, workspacePath, catalog, false, false, false, context.OutputMode,
+            "export", workspace, workspacePath, false, false, false, context.OutputMode,
             Format: format, Output: output));
 
     /// <summary>Reports the reviewable diff and refusals for an XLIFF or review JSON import without writing files.</summary>
@@ -154,10 +148,9 @@ internal static class EditorCommandModule
         CommandExecutionContext context,
         [Option("--format", Required = true)] string format,
         [Option("--source", Required = true)] string source,
-        [Option("--workspace")] string? workspacePath = null,
-        [Option("--catalog")] string? catalog = null) =>
+        [Option("--workspace")] string? workspacePath = null) =>
         operations.ExecuteAsync(new EditorCommandRequest(
-            "report", workspace, workspacePath, catalog, false, false, false, context.OutputMode,
+            "report", workspace, workspacePath, false, false, false, context.OutputMode,
             Format: format, Source: source));
 
     /// <summary>Previews and, only with <c>--apply</c>, commits one XLIFF or review JSON import.</summary>
@@ -170,10 +163,9 @@ internal static class EditorCommandModule
         [Option("--format", Required = true)] string format,
         [Option("--source", Required = true)] string source,
         [Option("--apply")] bool apply,
-        [Option("--workspace")] string? workspacePath = null,
-        [Option("--catalog")] string? catalog = null) =>
+        [Option("--workspace")] string? workspacePath = null) =>
         operations.ExecuteAsync(new EditorCommandRequest(
-            "import", workspace, workspacePath, catalog, false, false, false, context.OutputMode,
+            "import", workspace, workspacePath, false, false, false, context.OutputMode,
             Format: format, Source: source, Apply: apply));
 
     /// <summary>
@@ -186,13 +178,11 @@ internal static class EditorCommandModule
         [FromServices] IEditorCommandOperations operations,
         [Argument(AllowMultipleValues = true)] IReadOnlyList<string> workspace,
         CommandExecutionContext context,
-        [Option("--workspace")] string? workspacePath = null,
-        [Option("--catalog")] string? catalog = null) =>
+        [Option("--workspace")] string? workspacePath = null) =>
         operations.ExecuteAsync(new EditorCommandRequest(
             "serve",
             workspace,
             workspacePath,
-            catalog,
             false,
             false,
             false,
@@ -218,7 +208,6 @@ internal sealed record EditorCommandRequest(
     string Command,
     IReadOnlyList<string> Workspace,
     string? WorkspacePath,
-    string? Catalog,
     bool Webview,
     bool SmokeTest,
     bool Validate,

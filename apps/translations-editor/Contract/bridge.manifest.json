@@ -204,7 +204,7 @@
       "tag": "ValidateDocument"
     }
   ],
-  "contractFingerprint": "bb519a1ca7355a0c40897f32dca99495107729dc1f88bb71cbb054f18859f6fd",
+  "contractFingerprint": "45e9039e5f53ab97d6c57556a7001b97db527625a4f520592a2cb032c279d439",
   "csharp": {
     "contractName": "Editor",
     "namespace": "Runic.Translations.Editor.Contract"
@@ -334,7 +334,7 @@
       "file": "schemas/command/ApplyMutation.schema.json",
       "kind": "command",
       "name": "ApplyMutation",
-      "sha256": "a88d256d78bd97e51ed38eacacd3c2900ed5dc22e29da37630141891120c4a10"
+      "sha256": "98efba47b18dfc0b3b962f11703de50ea473e832942c95fb7172d289b644a69e"
     },
     {
       "direction": "client-to-host",
@@ -383,7 +383,7 @@
       "file": "schemas/command/CreateProject.schema.json",
       "kind": "command",
       "name": "CreateProject",
-      "sha256": "18164c1ea05581212985fa35c8a9b0006ea7aad0a49d412499b557f713d7a28d"
+      "sha256": "e72ce2f3ef46d94855a260298b93de03014a6f7ac7f35fc980442946db490845"
     },
     {
       "direction": "client-to-host",
@@ -558,14 +558,14 @@
       "file": "schemas/command/PreviewMutation.schema.json",
       "kind": "command",
       "name": "PreviewMutation",
-      "sha256": "929a1f111865f52a2b9071b5be8925658306f0e3e69bd8c47e1a95eaf1d10eee"
+      "sha256": "79be932e58f7ee362a7874016d454ab0d39665eb8eba7401c488a17e501228d6"
     },
     {
       "direction": "client-to-host",
       "file": "schemas/command/PreviewProject.schema.json",
       "kind": "command",
       "name": "PreviewProject",
-      "sha256": "293ef4e45a14bc1fcfb1af4dd70c87b9f7f9bcc4eea426f97c6dd33acbb73242"
+      "sha256": "83f1acced47d40fc7b09c40eb67e7b4e2fde8ef62c1b43f57e9b90de955536b6"
     },
     {
       "direction": "client-to-host",

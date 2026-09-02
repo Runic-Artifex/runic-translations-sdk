@@ -48,7 +48,7 @@
   <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
     <div class="flex min-w-0 items-center gap-3">
       {#if busy}
-        <Spinner class="size-5 shrink-0 text-primary" aria-label={ui.text("Ui.Validation.Validating")} />
+        <Spinner class="size-5 shrink-0 text-primary" aria-label={ui.text("ui_validation_validating")} />
       {:else if invalid}
         <AlertCircleIcon class="size-5 shrink-0" aria-hidden="true" />
       {:else}
@@ -56,14 +56,14 @@
       {/if}
       <div class="min-w-0">
         <Alert.Title class="text-xs font-semibold">
-          {busy ? ui.text("Ui.Validation.ValidatingWithCompiler") : invalid ? invalidLabel : validLabel}
+          {busy ? ui.text("ui_validation_validating_with_compiler") : invalid ? invalidLabel : validLabel}
         </Alert.Title>
         <Alert.Description class="text-xs">
-          {diagnosticsLabel} · {errorCount} {ui.text("Ui.Validation.Errors")} · {warningCount} {ui.text("Ui.Validation.Warnings")}
+          {diagnosticsLabel} · {errorCount} {ui.text("ui_validation_errors")} · {warningCount} {ui.text("ui_validation_warnings")}
         </Alert.Description>
       </div>
     </div>
-    <Badge variant="outline" class="font-mono text-[0.65rem]">{ui.text("Ui.Validation.Compiler")} · {ui.text("Ui.Validation.Schema")} v{schemaVersion}</Badge>
+    <Badge variant="outline" class="font-mono text-[0.65rem]">{ui.text("ui_validation_compiler")} · {ui.text("ui_validation_schema")} v{schemaVersion}</Badge>
   </header>
 
   {#if clientError}

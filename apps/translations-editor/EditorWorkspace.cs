@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Xml;
 using System.Xml.Linq;
 using Runic.Translations.Tooling;
@@ -15,6 +14,7 @@ namespace Runic.Translations.Editor;
 internal sealed class EditorWorkspace : IDisposable
 {
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+    internal const string NewMf2DocumentRevision = "new-mf2-document";
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly string _root;
     private readonly FileSystemWatcher _watcher;
@@ -24,11 +24,10 @@ internal sealed class EditorWorkspace : IDisposable
     private int _watcherOverflowed;
     private bool _disposed;
 
-    public EditorWorkspace(string root, string? catalogId = null)
+    public EditorWorkspace(string root)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         _root = Path.GetFullPath(root);
-        _catalogId = catalogId;
         if (!Directory.Exists(_root))
             throw new DirectoryNotFoundException($"The translation workspace '{_root}' does not exist.");
         _watcher = new FileSystemWatcher(_root)
@@ -57,8 +56,11 @@ internal sealed class EditorWorkspace : IDisposable
             if (!overflowed && _pendingChanges.IsEmpty)
                 return new EditorExternalChanges(false, [], []);
 
-            TranslationWorkspaceDiscoveryResult discovery = TranslationWorkspaceDiscovery.Discover(_root, cancellationToken: cancellationToken);
-            Dictionary<string, string> current = Fingerprints(discovery);
+            Dictionary<string, byte[]> currentFiles = ReadCurrentTranslationFiles(cancellationToken);
+            Dictionary<string, string> current = currentFiles.ToDictionary(
+                static pair => pair.Key,
+                static pair => Revision(pair.Value),
+                StringComparer.Ordinal);
             var candidates = new HashSet<string>(_pendingChanges.Keys, StringComparer.Ordinal);
             _pendingChanges.Clear();
             if (overflowed)
@@ -73,17 +75,15 @@ internal sealed class EditorWorkspace : IDisposable
                     !string.Equals(known, revision, StringComparison.Ordinal))
                 .Order(StringComparer.Ordinal)
                 .ToArray();
-            var discoveredByPath = discovery.Files.ToDictionary(file => file.RelativePath, StringComparer.Ordinal);
             var changes = new EditorExternalFileChange[changed.Length];
             for (int index = 0; index < changed.Length; index++)
             {
                 string path = changed[index];
-                if (!discoveredByPath.TryGetValue(path, out TranslationWorkspaceFile? file))
+                if (!currentFiles.TryGetValue(path, out byte[]? bytes))
                 {
                     changes[index] = new EditorExternalFileChange(path, false, null, null);
                     continue;
                 }
-                byte[] bytes = file.GetUtf8Bytes();
                 changes[index] = new EditorExternalFileChange(path, true, StrictUtf8.GetString(bytes), Revision(bytes));
             }
             return new EditorExternalChanges(overflowed, changed, changes);
@@ -140,8 +140,6 @@ internal sealed class EditorWorkspace : IDisposable
             ThrowIfDisposed();
             string path = NormalizeKnownPath(relativePath);
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            if (state.Files.Exists(file => string.Equals(file.Path, path, StringComparison.Ordinal) && file.Kind == DocumentKind.Malformed))
-                return MalformedValidation(path);
             return new ValidationResult(state.Compilation.Success, Diagnostics(state.Compilation));
         }
         finally
@@ -200,24 +198,22 @@ internal sealed class EditorWorkspace : IDisposable
             ThrowIfDisposed();
             string path = NormalizeKnownPath(relativePath);
             string fullPath = ContainedPath(path);
-            if (!File.Exists(fullPath))
+            bool creatingMf2 = !File.Exists(fullPath) &&
+                string.Equals(expectedRevision, NewMf2DocumentRevision, StringComparison.Ordinal) &&
+                path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase) &&
+                FindMf2ProjectConfig() is not null;
+            if (!File.Exists(fullPath) && !creatingMf2)
                 return Failure("not-found", $"'{path}' no longer exists.");
 
-            byte[] currentBytes = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
-            string currentRevision = Revision(currentBytes);
-            if (!string.Equals(currentRevision, expectedRevision, StringComparison.Ordinal))
-                return Failure("conflict", $"'{path}' changed on disk. Reload before saving your draft.");
+            if (!creatingMf2)
+            {
+                byte[] currentBytes = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
+                string currentRevision = Revision(currentBytes);
+                if (!string.Equals(currentRevision, expectedRevision, StringComparison.Ordinal))
+                    return Failure("conflict", $"'{path}' changed on disk. Reload before saving your draft.");
+            }
 
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            if (state.Files.Exists(file => string.Equals(file.Path, path, StringComparison.Ordinal) && file.Kind == DocumentKind.Malformed))
-            {
-                return new EditorOperationResult(
-                    false,
-                    "validation",
-                    "The draft is not valid JSON.",
-                    null,
-                    MalformedValidation(path));
-            }
             if (!state.Compilation.Success)
             {
                 return new EditorOperationResult(
@@ -243,8 +239,9 @@ internal sealed class EditorWorkspace : IDisposable
                 $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
             try
             {
+                Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
                 await File.WriteAllBytesAsync(temporaryPath, bytes, cancellationToken).ConfigureAwait(false);
-                File.Move(temporaryPath, fullPath, true);
+                File.Move(temporaryPath, fullPath, !creatingMf2);
                 committed = true;
             }
             finally
@@ -462,27 +459,17 @@ internal sealed class EditorWorkspace : IDisposable
             CollectCatalogRefusals(catalog, import, refusals);
             CollectXliffSourceRefusals(bytes, catalog, refusals);
 
-            int importedSchemaVersion;
-            string? importedLayer;
-            Dictionary<string, string> importedValues;
-            using (JsonDocument parsed = JsonDocument.Parse(import.ResourceDocumentBytes))
-            {
-                importedSchemaVersion = parsed.RootElement.GetProperty("schemaVersion").GetInt32();
-                importedLayer = parsed.RootElement.GetProperty("layer").GetString();
-                importedValues = new Dictionary<string, string>(StringComparer.Ordinal);
-                Flatten(parsed.RootElement.GetProperty("resources"), string.Empty, importedValues);
-            }
+            Dictionary<string, TranslationMf2Document> importedMessages = import.Messages
+                .ToDictionary(static message => message.MessageId, StringComparer.Ordinal);
+            Dictionary<string, string> importedValues = importedMessages.ToDictionary(
+                static pair => pair.Key,
+                static pair => StrictUtf8.GetString(pair.Value.Bytes).TrimEnd('\r', '\n'),
+                StringComparer.Ordinal);
             if (!string.Equals(import.SourceLocale, catalog.DefaultLocale, StringComparison.Ordinal))
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-LOCALE-MISMATCH",
                     $"The document source locale '{import.SourceLocale}' does not match the catalog default locale '{catalog.DefaultLocale}'."));
-            if (importedLayer is null || !catalog.Layers.Any(layer => string.Equals(layer.Name, importedLayer, StringComparison.Ordinal)))
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-LAYER-NOT-IN-CATALOG",
-                    $"The document layer '{importedLayer ?? "(missing)"}' is not defined by catalog '{catalog.Id}'."));
             foreach (string key in importedValues.Keys.Where(key => !catalog.CanonicalResources.Any(candidate => string.Equals(candidate.Key, key, StringComparison.Ordinal))).Order(StringComparer.Ordinal))
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", $"The imported document defines '{key}', which is not part of catalog '{catalog.Id}'."));
-            if (importedSchemaVersion != catalog.SchemaVersion)
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-SCHEMA-MISMATCH",
-                    $"The document declares schema version {importedSchemaVersion}; the open catalog uses version {catalog.SchemaVersion}."));
 
             var sidecar = TranslationEditorStateStore.Load(_root, catalog.Id);
             if (sidecar.Error is not null)
@@ -493,12 +480,17 @@ internal sealed class EditorWorkspace : IDisposable
                 return (new EditorXliffImportPlan(false, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, null,
                     [], 0, 0, 0, 0, 0, false, refusals.Order(InterchangeRefusalOrder.Instance).ToArray()), null);
 
-            string layer = importedLayer!;
-            string targetDocumentPath = ResolveInterchangeTargetPath(state.Files, catalog.Id, import.TargetLocale, layer);
-            WorkspaceFile? targetDocument = state.Files.FirstOrDefault(file => string.Equals(file.Path, targetDocumentPath, StringComparison.Ordinal));
-            Dictionary<string, string> direct = targetDocument is null
-                ? new Dictionary<string, string>(StringComparer.Ordinal)
-                : ResourceValues(targetDocument.Content);
+            const string layer = "base";
+            CompiledTextLocale targetLocale = catalog.Locales.Single(locale => string.Equals(locale.Tag, import.TargetLocale, StringComparison.Ordinal));
+            Dictionary<string, string> direct = targetLocale.DirectResources.ToDictionary(
+                static resource => resource.Key,
+                static resource => resource.Pattern.TrimEnd('\r', '\n'),
+                StringComparer.Ordinal);
+            string configPath = FindMf2ProjectConfig()!;
+            string projectPrefix = NormalizeRelativePath(Path.GetRelativePath(_root, Path.GetDirectoryName(configPath)!));
+            if (projectPrefix == ".") projectPrefix = string.Empty;
+            else projectPrefix += "/";
+            var documents = new List<PreparedInterchangeDocument>();
             var changes = new List<EditorKeyChange>();
             bool overflowed = false;
             int added = 0, changed = 0, removed = 0, unchanged = 0;
@@ -509,11 +501,24 @@ internal sealed class EditorWorkspace : IDisposable
                 else if (string.Equals(before, after, StringComparison.Ordinal)) unchanged += 1;
                 else changed += 1;
                 Push(ref changes, ref overflowed, new EditorKeyChange(key, direct.ContainsKey(key) ? "changed" : "added", before, after, null, null));
+                if (string.Equals(before, after, StringComparison.Ordinal)) continue;
+                string targetPath = $"{projectPrefix}{import.TargetLocale}/{key}.mf2";
+                WorkspaceFile? target = state.Files.FirstOrDefault(file => string.Equals(file.Path, targetPath, StringComparison.Ordinal));
+                byte[]? original = target is null ? null : StrictUtf8.GetBytes(target.Content);
+                documents.Add(new PreparedInterchangeDocument(
+                    targetPath,
+                    target?.Revision,
+                    original,
+                    importedMessages[key].Bytes));
             }
-            foreach ((string key, string before) in direct.Where(pair => !importedValues.ContainsKey(pair.Key)).OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+
+            TranslationCompilation proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
+            if (!proposed.Success)
             {
-                removed += 1;
-                Push(ref changes, ref overflowed, new EditorKeyChange(key, "removed", before, null, null, null));
+                string message = string.Join(" ", proposed.Diagnostics
+                    .Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error)
+                    .Select(static diagnostic => $"[{diagnostic.Id}] {diagnostic.Message}"));
+                return (RefuseXliff("EDITOR-MF2-IMPORT", message), null);
             }
 
             Dictionary<string, TranslationEditorStateEntry> currentEntries = sidecar.State.Entries
@@ -530,18 +535,12 @@ internal sealed class EditorWorkspace : IDisposable
             }
 
             List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Review.Entries);
-            string? targetDocumentRevision = targetDocument?.Revision;
-            byte[] documentBytes = MergeImportedResourceDocument(
-                targetDocument?.Content,
-                import.ResourceDocumentBytes);
             var prepared = new PreparedInterchangeImport(
                 ResolveImportSourcePath(path),
                 SHA256.HashData(bytes),
                 import.CatalogId,
                 catalog.Fingerprint,
-                targetDocumentPath,
-                targetDocumentRevision,
-                documentBytes,
+                documents,
                 merged,
                 sidecar.Revision);
             return (new EditorXliffImportPlan(true, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, layer,
@@ -563,7 +562,8 @@ internal sealed class EditorWorkspace : IDisposable
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        bool documentCommitted = false;
+        var staged = new List<(PreparedInterchangeDocument Document, string FullPath, string TemporaryPath)>();
+        var committed = new List<(PreparedInterchangeDocument Document, string FullPath)>();
         try
         {
             ThrowIfDisposed();
@@ -579,30 +579,40 @@ internal sealed class EditorWorkspace : IDisposable
             if (!string.Equals(sidecarRevision, prepared.ExpectedSidecarRevision, StringComparison.Ordinal))
                 return Failure("conflict", "The workflow sidecar changed on disk. Preview the import again.");
 
-            if (prepared.DocumentBytes is { } documentBytes)
+            foreach (PreparedInterchangeDocument document in prepared.Documents)
             {
-                if (prepared.TargetDocumentPath is not { } targetDocumentPath)
-                    return Failure("invalid-import", "The import preview did not identify a target translation document.");
-                string fullPath = ContainedPath(targetDocumentPath);
-                string? currentTargetRevision = File.Exists(fullPath)
+                string fullPath = ContainedPath(document.Path);
+                string? currentRevision = File.Exists(fullPath)
                     ? Revision(await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false))
                     : null;
-                if (!string.Equals(currentTargetRevision, prepared.ExpectedTargetDocumentRevision, StringComparison.Ordinal))
-                    return Failure("conflict", "The target translation document changed on disk. Preview the import again.");
+                if (!string.Equals(currentRevision, document.ExpectedRevision, StringComparison.Ordinal))
+                    return Failure("conflict", $"'{document.Path}' changed on disk. Preview the import again.");
                 Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-                await WriteAtomicallyAsync(fullPath, documentBytes, cancellationToken).ConfigureAwait(false);
-                documentCommitted = true;
+                string temporaryPath = Path.Combine(
+                    Path.GetDirectoryName(fullPath)!,
+                    $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+                await File.WriteAllBytesAsync(temporaryPath, document.Bytes, cancellationToken).ConfigureAwait(false);
+                staged.Add((document, fullPath, temporaryPath));
             }
+
             try
             {
+                foreach ((PreparedInterchangeDocument document, string fullPath, string temporaryPath) in staged)
+                {
+                    File.Move(temporaryPath, fullPath, true);
+                    committed.Add((document, fullPath));
+                }
                 var state = new TranslationEditorState(prepared.CatalogId, prepared.MergedEntries, TranslationEditorStateStore.Load(_root, prepared.CatalogId).State.Terminology);
                 _ = TranslationEditorStateStore.Save(_root, state, prepared.ExpectedSidecarRevision);
             }
-            catch (Exception exception) when (documentCommitted && exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
+            catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
             {
-                return new EditorOperationResult(false, "partial-commit",
-                    $"The translation document was updated but the workflow data could not be saved ({exception.Message}). Preview and apply the import again to finish it.",
-                    null, null);
+                bool rolledBack = await RollBackInterchangeDocumentsAsync(committed, CancellationToken.None).ConfigureAwait(false);
+                return rolledBack
+                    ? Failure("io", $"The import was not applied ({exception.Message}).")
+                    : new EditorOperationResult(false, "partial-commit",
+                        $"The import could not be rolled back after a write failed ({exception.Message}). Reload the workspace and review the affected MF2 files.",
+                        null, null);
             }
             WorkspaceSnapshot snapshot = await LoadCoreAsync(CancellationToken.None).ConfigureAwait(false);
             return new EditorOperationResult(snapshot.Success, "imported",
@@ -615,6 +625,11 @@ internal sealed class EditorWorkspace : IDisposable
         }
         finally
         {
+            foreach ((_, _, string temporaryPath) in staged)
+            {
+                try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+            }
             _gate.Release();
         }
     }
@@ -679,9 +694,7 @@ internal sealed class EditorWorkspace : IDisposable
                 SHA256.HashData(bytes),
                 catalog.Id,
                 catalog.Fingerprint,
-                null,
-                null,
-                null,
+                [],
                 merged,
                 sidecar.Revision);
             return (new EditorReviewImportPlan(true, null, null, catalog.Id, changes.ToArray(), added, changed, removed, overflowed, []), prepared);
@@ -826,13 +839,43 @@ internal sealed class EditorWorkspace : IDisposable
             .ToList();
     }
 
-    private static Dictionary<string, string> ResourceValues(string content)
+    private static TranslationCompilation CompileWithInterchangeDocuments(
+        IReadOnlyList<WorkspaceFile> files,
+        IReadOnlyList<PreparedInterchangeDocument> documents,
+        CancellationToken cancellationToken)
     {
-        using JsonDocument document = JsonDocument.Parse(content);
-        var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (document.RootElement.TryGetProperty("resources", out JsonElement resources))
-            Flatten(resources, string.Empty, values);
-        return values;
+        WorkspaceFile project = files.Single(static file => file.Kind == DocumentKind.Manifest);
+        var messages = files
+            .Where(static file => file.Kind == DocumentKind.Resource)
+            .ToDictionary(static file => file.Path, static file => file.Content, StringComparer.Ordinal);
+        foreach (PreparedInterchangeDocument document in documents)
+            messages[document.Path] = StrictUtf8.GetString(document.Bytes);
+        return TranslationCompiler.CompileMf2Project(
+            Source(project.Path, project.Content),
+            messages.OrderBy(static pair => pair.Key, StringComparer.Ordinal).Select(static pair => Source(pair.Key, pair.Value)),
+            null,
+            cancellationToken);
+    }
+
+    private static async Task<bool> RollBackInterchangeDocumentsAsync(
+        List<(PreparedInterchangeDocument Document, string FullPath)> committed,
+        CancellationToken cancellationToken)
+    {
+        bool succeeded = true;
+        for (int index = committed.Count - 1; index >= 0; index--)
+        {
+            (PreparedInterchangeDocument document, string fullPath) = committed[index];
+            try
+            {
+                if (document.OriginalBytes is null) File.Delete(fullPath);
+                else await WriteAtomicallyAsync(fullPath, document.OriginalBytes, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                succeeded = false;
+            }
+        }
+        return succeeded;
     }
 
     private static void CollectXliffSourceRefusals(byte[] bytes, CompiledTextCatalog catalog, List<EditorInterchangeRefusal> refusals)
@@ -876,44 +919,6 @@ internal sealed class EditorWorkspace : IDisposable
             refusals.Add(new EditorInterchangeRefusal("EDITOR-APPROVAL-FINGERPRINT",
                 $"The approved review entry '{entry.Key}' ({entry.Locale}) was created for a different source catalog revision."));
         }
-    }
-
-    private static byte[] MergeImportedResourceDocument(string? existingContent, byte[] importedBytes)
-    {
-        if (existingContent is null) return importedBytes;
-        JsonObject? existing = JsonNode.Parse(existingContent) as JsonObject;
-        using JsonDocument imported = JsonDocument.Parse(importedBytes);
-        if (existing?["resources"] is not JsonObject existingResources ||
-            !imported.RootElement.TryGetProperty("resources", out JsonElement importedResources))
-            return importedBytes;
-        MergeImportedResources(existingResources, importedResources);
-        return JsonSerializer.SerializeToUtf8Bytes(existing);
-    }
-
-    private static void MergeImportedResources(JsonObject destination, JsonElement source)
-    {
-        foreach (JsonProperty property in source.EnumerateObject())
-        {
-            if (property.Value.ValueKind == JsonValueKind.Object &&
-                destination[property.Name] is JsonObject existingChild)
-            {
-                MergeImportedResources(existingChild, property.Value);
-                continue;
-            }
-            destination[property.Name] = JsonNode.Parse(property.Value.GetRawText());
-        }
-    }
-
-    private static string ResolveInterchangeTargetPath(IReadOnlyList<WorkspaceFile> files, string catalogId, string localeTag, string layer)
-    {
-        WorkspaceFile? existing = files
-            .Where(file => file.Kind == DocumentKind.Resource &&
-                string.Equals(file.CatalogId, catalogId, StringComparison.Ordinal) &&
-                string.Equals(file.Locale, localeTag, StringComparison.Ordinal) &&
-                string.Equals(file.Layer, layer, StringComparison.Ordinal))
-            .OrderBy(static file => file.Path, StringComparer.Ordinal)
-            .FirstOrDefault();
-        return existing?.Path ?? $"{catalogId}.{localeTag}.json";
     }
 
     private static void Flatten(JsonElement node, string prefix, Dictionary<string, string> values)
@@ -966,55 +971,91 @@ internal sealed class EditorWorkspace : IDisposable
         string? replacementContent,
         CancellationToken cancellationToken)
     {
-        TranslationWorkspaceDiscoveryResult discovery = TranslationWorkspaceDiscovery.Discover(_root, cancellationToken: cancellationToken);
-        if (replacementPath is null)
-        {
-            ReplaceKnownRevisions(Fingerprints(discovery));
-            _pendingChanges.Clear();
-            Interlocked.Exchange(ref _watcherOverflowed, 0);
-        }
-        if (_catalogId is null && discovery.Catalogs.Count == 1)
-            _catalogId = discovery.Catalogs[0].Id;
-        if (_catalogId is not null && !discovery.Catalogs.Any(catalog => string.Equals(catalog.Id, _catalogId, StringComparison.Ordinal)))
-            throw new ArgumentException($"Catalog '{_catalogId}' was not found in this workspace.");
+        string? projectConfig = FindMf2ProjectConfig();
+        if (projectConfig is null)
+            throw new ArgumentException("The workspace must contain translations/runic.json or runic.json and MF2 message files.");
+        return ReadMf2StateAsync(projectConfig, replacementPath, replacementContent, cancellationToken);
+    }
 
-        var files = new List<WorkspaceFile>(discovery.Files.Count);
-        foreach (TranslationWorkspaceFile discoveredFile in discovery.Files)
+    private Task<WorkspaceState> ReadMf2StateAsync(
+        string configPath,
+        string? replacementPath,
+        string? replacementContent,
+        CancellationToken cancellationToken)
+    {
+        string projectRoot = Path.GetDirectoryName(configPath)!;
+        string configRelativePath = NormalizeRelativePath(Path.GetRelativePath(_root, configPath));
+        var paths = new List<string> { configPath };
+        paths.AddRange(Directory.EnumerateFiles(projectRoot, "*.mf2", SearchOption.AllDirectories).Order(StringComparer.Ordinal));
+        var files = new List<WorkspaceFile>(paths.Count);
+        TranslationSource? projectSource = null;
+        var messageSources = new List<TranslationSource>();
+        string? catalogId = null;
+        foreach (string fullPath in paths)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string relativePath = discoveredFile.RelativePath;
-            byte[] bytes = discoveredFile.GetUtf8Bytes();
+            string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
+            byte[] bytes = File.ReadAllBytes(fullPath);
             string content = StrictUtf8.GetString(bytes);
             if (string.Equals(relativePath, replacementPath, StringComparison.Ordinal))
                 content = replacementContent ?? string.Empty;
-            DocumentKind kind = string.Equals(relativePath, replacementPath, StringComparison.Ordinal)
-                ? DetectKind(content)
-                : ToDocumentKind(discoveredFile.Kind);
-            if (kind == DocumentKind.Unrelated) continue;
-            string? catalogId = discoveredFile.CatalogId;
-            string? locale = discoveredFile.Locale;
-            string? layer = discoveredFile.Layer;
-            if (string.Equals(relativePath, replacementPath, StringComparison.Ordinal))
-                ReadFileIdentity(content, out catalogId, out locale, out layer);
-            if (kind != DocumentKind.Malformed && _catalogId is not null && !string.Equals(catalogId, _catalogId, StringComparison.Ordinal))
-                continue;
-            files.Add(new WorkspaceFile(relativePath, content, Revision(bytes), kind, catalogId, locale, layer));
+            bool isProject = string.Equals(relativePath, configRelativePath, StringComparison.Ordinal);
+            if (isProject)
+            {
+                catalogId = ReadCatalogId(content);
+                projectSource = Source(relativePath, content);
+                files.Add(new WorkspaceFile(relativePath, content, Revision(bytes), DocumentKind.Manifest, catalogId, null, null));
+            }
+            else
+            {
+                string localPath = NormalizeRelativePath(Path.GetRelativePath(projectRoot, fullPath));
+                string? locale = localPath.Contains('/', StringComparison.Ordinal) ? localPath[..localPath.IndexOf('/')] : null;
+                messageSources.Add(Source(relativePath, content));
+                files.Add(new WorkspaceFile(relativePath, content, Revision(bytes), DocumentKind.Resource, catalogId, locale, "base"));
+            }
+        }
+        if (projectSource is null) throw new ArgumentException("The Runic translation project has no runic.json file.");
+        if (replacementPath is not null && !files.Exists(file => string.Equals(file.Path, replacementPath, StringComparison.Ordinal)))
+        {
+            string replacementFullPath = ContainedPath(replacementPath);
+            string projectBoundary = projectRoot.EndsWith(Path.DirectorySeparatorChar)
+                ? projectRoot
+                : projectRoot + Path.DirectorySeparatorChar;
+            if (!replacementFullPath.StartsWith(projectBoundary, StringComparison.Ordinal) ||
+                !replacementPath.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"'{replacementPath}' is not an MF2 message in this project.", nameof(replacementPath));
+            string localPath = NormalizeRelativePath(Path.GetRelativePath(projectRoot, replacementFullPath));
+            string? locale = localPath.Contains('/', StringComparison.Ordinal) ? localPath[..localPath.IndexOf('/')] : null;
+            string content = replacementContent ?? string.Empty;
+            messageSources.Add(Source(replacementPath, content));
+            files.Add(new WorkspaceFile(replacementPath, content, NewMf2DocumentRevision, DocumentKind.Resource, catalogId, locale, "base"));
+            files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         }
 
-        files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
-        if (replacementPath is not null && !files.Exists(file => string.Equals(file.Path, replacementPath, StringComparison.Ordinal)))
-            throw new ArgumentException($"'{replacementPath}' is not a translation file in this workspace.", nameof(replacementPath));
-
-        TranslationSource[] manifests = (_catalogId is null ? Enumerable.Empty<WorkspaceFile>() : files)
-            .Where(static file => file.Kind == DocumentKind.Manifest)
-            .Select(static file => Source(file.Path, file.Content))
-            .ToArray();
-        TranslationSource[] documents = (_catalogId is null ? Enumerable.Empty<WorkspaceFile>() : files)
-            .Where(static file => file.Kind == DocumentKind.Resource)
-            .Select(static file => Source(file.Path, file.Content))
-            .ToArray();
-        TranslationCompilation compilation = TranslationCompiler.Compile(manifests, documents, cancellationToken);
-        return Task.FromResult(new WorkspaceState(files, compilation, CatalogSummaries(discovery)));
+        TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(projectSource, messageSources, null, cancellationToken);
+        CompiledTextCatalog? compiled = compilation.Catalogs.Count == 0 ? null : compilation.Catalogs[0];
+        _catalogId = compiled?.Id ?? catalogId;
+        if (replacementPath is null)
+        {
+            _knownRevisions.Clear();
+            foreach (WorkspaceFile file in files) _knownRevisions[file.Path] = file.Revision;
+            _pendingChanges.Clear();
+            Interlocked.Exchange(ref _watcherOverflowed, 0);
+        }
+        int errors = compilation.Diagnostics.Count(item => item.Severity == TranslationDiagnosticSeverity.Error);
+        var summaries = new[]
+        {
+            new EditorCatalogSummary(
+                _catalogId ?? string.Empty,
+                new[] { configRelativePath },
+                messageSources.Count,
+                compiled?.Locales.Count ?? 0,
+                compiled?.CanonicalResources.Count ?? 0,
+                errors,
+                compilation.Diagnostics.Count - errors,
+                compilation.Success),
+        };
+        return Task.FromResult(new WorkspaceState(files, compilation, summaries));
     }
 
     private WorkspaceSnapshot CreateSnapshot(WorkspaceState state)
@@ -1034,7 +1075,7 @@ internal sealed class EditorWorkspace : IDisposable
                 file.Content,
                 file.Revision,
                 file.Kind == DocumentKind.Manifest,
-                file.Kind == DocumentKind.Malformed,
+                false,
                 file.Locale,
                 file.Layer));
         }
@@ -1085,41 +1126,31 @@ internal sealed class EditorWorkspace : IDisposable
             JsonElement root = document.RootElement;
             string id = root.GetProperty("catalog").GetString() ?? string.Empty;
             int schemaVersion = root.GetProperty("schemaVersion").GetInt32();
-            string defaultLocale = root.GetProperty("defaultLocale").GetString() ?? string.Empty;
+            string defaultLocale = root.GetProperty("baseLocale").GetString() ?? string.Empty;
             var locales = new List<EditorLocale>();
-            foreach (JsonElement locale in root.GetProperty("locales").EnumerateArray())
+            if (root.TryGetProperty("locales", out JsonElement localeValues))
             {
-                locales.Add(new EditorLocale(
-                    locale.GetProperty("tag").GetString() ?? string.Empty,
-                    locale.TryGetProperty("fallback", out JsonElement fallback) ? fallback.GetString() : null));
+                foreach (JsonElement locale in localeValues.EnumerateArray())
+                {
+                    if (locale.ValueKind == JsonValueKind.String)
+                    {
+                        string tag = locale.GetString() ?? string.Empty;
+                        locales.Add(new EditorLocale(tag, string.Equals(tag, defaultLocale, StringComparison.OrdinalIgnoreCase) ? null : defaultLocale));
+                    }
+                    else
+                    {
+                        locales.Add(new EditorLocale(
+                            locale.GetProperty("tag").GetString() ?? string.Empty,
+                            locale.TryGetProperty("fallback", out JsonElement fallback) ? fallback.GetString() : null));
+                    }
+                }
             }
-            var layers = new List<EditorLayer>();
-            foreach (JsonElement layer in root.GetProperty("layers").EnumerateArray())
-                layers.Add(new EditorLayer(layer.GetProperty("name").GetString() ?? string.Empty, layer.GetProperty("priority").GetInt32()));
-            layers.Sort(static (left, right) => right.Priority.CompareTo(left.Priority));
-            return new EditorCatalog(id, schemaVersion, defaultLocale, locales, layers);
+            if (locales.Count == 0 && defaultLocale.Length != 0) locales.Add(new EditorLocale(defaultLocale, null));
+            return new EditorCatalog(id, schemaVersion, defaultLocale, locales, [new EditorLayer("base", 0)]);
         }
         catch (JsonException)
         {
             return null;
-        }
-    }
-
-    private static void ReadFileIdentity(string content, out string? catalog, out string? locale, out string? layer)
-    {
-        catalog = null;
-        locale = null;
-        layer = null;
-        try
-        {
-            using JsonDocument document = JsonDocument.Parse(content);
-            JsonElement root = document.RootElement;
-            catalog = StringProperty(root, "catalog");
-            locale = StringProperty(root, "locale");
-            layer = StringProperty(root, "layer");
-        }
-        catch (JsonException)
-        {
         }
     }
 
@@ -1130,53 +1161,17 @@ internal sealed class EditorWorkspace : IDisposable
             ? property.GetString()
             : null;
 
-    private static DocumentKind DetectKind(string content)
+    private static string? ReadCatalogId(string content)
     {
         try
         {
             using JsonDocument document = JsonDocument.Parse(content);
-            JsonElement root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) return DocumentKind.Unrelated;
-            if (root.TryGetProperty("defaultLocale", out _) && root.TryGetProperty("locales", out _) && root.TryGetProperty("layers", out _))
-                return DocumentKind.Manifest;
-            if (root.TryGetProperty("locale", out _) && root.TryGetProperty("layer", out _) && root.TryGetProperty("resources", out _))
-                return DocumentKind.Resource;
-            return DocumentKind.Unrelated;
+            return StringProperty(document.RootElement, "catalog");
         }
         catch (JsonException)
         {
-            return DocumentKind.Malformed;
+            return null;
         }
-    }
-
-    private static DocumentKind ToDocumentKind(TranslationWorkspaceFileKind kind) => kind switch
-    {
-        TranslationWorkspaceFileKind.CatalogManifest => DocumentKind.Manifest,
-        TranslationWorkspaceFileKind.ResourceDocument => DocumentKind.Resource,
-        TranslationWorkspaceFileKind.MalformedJson => DocumentKind.Malformed,
-        _ => DocumentKind.Unrelated,
-    };
-
-    private static EditorCatalogSummary[] CatalogSummaries(TranslationWorkspaceDiscoveryResult discovery)
-    {
-        var summaries = new EditorCatalogSummary[discovery.Catalogs.Count];
-        for (int index = 0; index < summaries.Length; index++)
-        {
-            TranslationDiscoveredCatalog catalog = discovery.Catalogs[index];
-            int errors = catalog.Compilation.Diagnostics.Count(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
-            int warnings = catalog.Compilation.Diagnostics.Count - errors;
-            CompiledTextCatalog? compiled = catalog.Compilation.Catalogs.Count == 0 ? null : catalog.Compilation.Catalogs[0];
-            summaries[index] = new EditorCatalogSummary(
-                catalog.Id,
-                catalog.ManifestPaths,
-                catalog.DocumentPaths.Count,
-                compiled?.Locales.Count ?? 0,
-                compiled?.CanonicalResources.Count ?? 0,
-                errors,
-                warnings,
-                catalog.Compilation.Success);
-        }
-        return summaries;
     }
 
     private string NormalizeKnownPath(string path)
@@ -1208,11 +1203,29 @@ internal sealed class EditorWorkspace : IDisposable
 
     private static string Revision(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
-    private static Dictionary<string, string> Fingerprints(TranslationWorkspaceDiscoveryResult discovery)
+    private string? FindMf2ProjectConfig()
     {
-        var result = new Dictionary<string, string>(discovery.Files.Count, StringComparer.Ordinal);
-        foreach (TranslationWorkspaceFile file in discovery.Files)
-            result[file.RelativePath] = Revision(file.GetUtf8Bytes());
+        string direct = Path.Combine(_root, "runic.json");
+        if (File.Exists(direct)) return direct;
+        string conventional = Path.Combine(_root, "translations", "runic.json");
+        return File.Exists(conventional) ? conventional : null;
+    }
+
+    private Dictionary<string, byte[]> ReadCurrentTranslationFiles(CancellationToken cancellationToken)
+    {
+        string? config = FindMf2ProjectConfig();
+        if (config is null)
+            throw new TranslationAuthoringException("The workspace does not contain runic.json.");
+        string projectRoot = Path.GetDirectoryName(config)!;
+        var result = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            [NormalizeRelativePath(Path.GetRelativePath(_root, config))] = File.ReadAllBytes(config),
+        };
+        foreach (string path in Directory.EnumerateFiles(projectRoot, "*.mf2", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            result[NormalizeRelativePath(Path.GetRelativePath(_root, path))] = File.ReadAllBytes(path);
+        }
         return result;
     }
 
@@ -1237,7 +1250,8 @@ internal sealed class EditorWorkspace : IDisposable
     private void QueueChange(string fullPath)
     {
         if (_disposed) return;
-        if (!fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return;
+        if (!fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase) &&
+            !fullPath.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) return;
         string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
         if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)) return;
         if (relativePath.StartsWith(".runic-translations/", StringComparison.Ordinal)) return;
@@ -1250,10 +1264,8 @@ internal sealed class EditorWorkspace : IDisposable
 
     private enum DocumentKind
     {
-        Unrelated,
         Manifest,
         Resource,
-        Malformed,
     }
 
     private sealed record WorkspaceFile(

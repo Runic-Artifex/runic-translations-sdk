@@ -57,7 +57,7 @@
               {...props}
               size="lg"
               class="h-auto min-h-16 py-2"
-              aria-label={`${ui.text("Ui.Project.Label")} ${catalogId}`}
+              aria-label={`${ui.text("ui_project_label")} ${catalogId}`}
               tooltipContent={catalogId}
             >
               {#if success}
@@ -74,7 +74,7 @@
               <span class="grid min-w-0 flex-1 text-left leading-tight">
                 <span class="truncate font-semibold">{catalogId}</span>
                 <span class="truncate text-xs text-muted-foreground">
-                  {localeCount} {localeCount === 1 ? ui.text("Ui.Project.Locale") : ui.text("Ui.Project.Locales")} · {ui.text("Ui.Project.Schema")} v{schemaVersion}
+                  {localeCount} {localeCount === 1 ? ui.text("ui_project_locale") : ui.text("ui_project_locales")} · {ui.text("ui_project_schema")} v{schemaVersion}
                 </span>
               </span>
               <ChevronsUpDownIcon class="ml-auto" aria-hidden="true" />
@@ -83,14 +83,14 @@
         </DropdownMenu.Trigger>
         <DropdownMenu.Content class="w-(--bits-dropdown-menu-anchor-width) min-w-72" align="start">
           <DropdownMenu.Label class="grid gap-1">
-            <span>{ui.text("Ui.Project.Current")}</span>
+            <span>{ui.text("ui_project_current")}</span>
             <span class="truncate font-mono text-xs font-normal text-muted-foreground" title={root}>{root}</span>
           </DropdownMenu.Label>
 
           {#if recentProjects.length > 0}
             <DropdownMenu.Separator />
             <DropdownMenu.Group>
-              <DropdownMenu.Label>{ui.text("Ui.Project.Recent")}</DropdownMenu.Label>
+              <DropdownMenu.Label>{ui.text("ui_project_recent")}</DropdownMenu.Label>
               {#each recentProjects.slice(0, 5) as project (`${project.root}\n${project.catalogId}`)}
                 <DropdownMenu.Item onclick={() => onopenrecent(project)}>
                   <LanguagesIcon />
@@ -111,11 +111,11 @@
             </DropdownMenu.Item>
             <DropdownMenu.Item onclick={onopenworkspace}>
               <FolderOpenIcon />
-              {ui.text("Ui.Project.OpenWorkspace")}
+              {ui.text("ui_project_open_workspace")}
             </DropdownMenu.Item>
             <DropdownMenu.Item onclick={onnewproject}>
               <PlusIcon />
-              {ui.text("Ui.Project.New")}
+              {ui.text("ui_project_new")}
             </DropdownMenu.Item>
           </DropdownMenu.Group>
         </DropdownMenu.Content>
