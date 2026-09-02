@@ -19,7 +19,7 @@ internal static class ProjectCreationTests
         runner.Add("Creation permits a real parent beneath an ancestor alias", AncestorAliasIsAllowed);
         runner.Add("Creation rejects a linked target parent", LinkedParentIsRejected);
         runner.Add("Project without starter messages remains compiler-valid", NoStarterIsValid);
-        runner.Add("VS Code settings are opt-in and scoped to the created catalog", VsCodeSettingsAreOptIn);
+        runner.Add("Project config carries its editor schema declaration", ProjectConfigDeclaresSchema);
     }
 
     private static void GermanOnlyIsValid()
@@ -28,7 +28,7 @@ internal static class ProjectCreationTests
         Assert.True(plan.Compilation.Success, "Generated project did not compile.");
         Assert.Equal(2, plan.Files.Count);
         Assert.Equal("de", plan.Locales[0].Tag);
-        Assert.True(Utf8(plan, "product.de.json").Contains("\"Application\"", StringComparison.Ordinal), "Starter message is missing.");
+        Assert.True(Utf8(plan, "de/application_title.mf2").Contains("ProductText", StringComparison.Ordinal), "Starter message is missing.");
     }
 
     private static void ThreeLocalesAreCanonical()
@@ -44,7 +44,7 @@ internal static class ProjectCreationTests
         Assert.True(plan.Compilation.Success, "Generated project did not compile.");
         Assert.Equal("de-DE|en-US:de-DE|zh-Hans-CN:en-US", string.Join('|', plan.Locales.Select(LocaleText)));
         Assert.Equal(
-            "product.catalog.json|product.de-DE.json|product.en-US.json|product.zh-Hans-CN.json",
+            "de-DE/application_title.mf2|en-US/application_title.mf2|runic.json|zh-Hans-CN/application_title.mf2",
             string.Join('|', plan.Files.Select(file => file.RelativePath)));
     }
 
@@ -71,7 +71,7 @@ internal static class ProjectCreationTests
         Assert.Throws<TranslationAuthoringException>(
             () => TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
                 "unused", "product", "de", "Customer.Product", "ProductText", [new("en", "fr"), new("fr", "en")])),
-            "contain a cycle");
+            "Fallback cycle");
     }
 
     private static void CreationCommitsCompleteProject()
@@ -83,7 +83,8 @@ internal static class ProjectCreationTests
         Assert.Equal(Path.GetFullPath(target), result);
         Assert.Equal(
             string.Join('|', plan.Files.Select(file => file.RelativePath)),
-            string.Join('|', Directory.EnumerateFiles(target).Select(Path.GetFileName).Order(StringComparer.Ordinal)));
+            string.Join('|', Directory.EnumerateFiles(target, "*", SearchOption.AllDirectories)
+                .Select(file => Path.GetRelativePath(target, file).Replace('\\', '/')).Order(StringComparer.Ordinal)));
         for (int index = 0; index < plan.Files.Count; index++)
         {
             Assert.True(
@@ -116,7 +117,7 @@ internal static class ProjectCreationTests
         string target = Path.Combine(alias, "projects", "Resources");
         string result = TranslationProjectWriter.Create(TranslationProjectScaffolder.Render(Request(target, "en")));
         Assert.Equal(Path.GetFullPath(target), result);
-        Assert.True(File.Exists(Path.Combine(real, "projects", "Resources", "product.en.json")), "Project was not created beneath the resolved ancestor.");
+        Assert.True(File.Exists(Path.Combine(real, "projects", "Resources", "en", "application_title.mf2")), "Project was not created beneath the resolved ancestor.");
     }
 
     private static void LinkedParentIsRejected()
@@ -143,24 +144,20 @@ internal static class ProjectCreationTests
             "Customer.Product",
             "ProductText",
             includeStarterMessage: false));
-        Assert.True(plan.Compilation.Success, "Empty schema-v2 project did not compile.");
-        Assert.False(Utf8(plan, "product.de.json").Contains("Application", StringComparison.Ordinal), "Starter message was unexpectedly emitted.");
+        Assert.True(plan.Compilation.Success, "Empty MF2 project did not compile.");
+        Assert.Equal("runic.json", string.Join('|', plan.Files.Select(file => file.RelativePath)));
     }
 
-    private static void VsCodeSettingsAreOptIn()
+    private static void ProjectConfigDeclaresSchema()
     {
         TranslationProjectPlan plan = TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
             "unused",
             "product",
             "en",
             "Customer.Product",
-            "ProductText",
-            includeVsCodeSettings: true));
-        string settings = Utf8(plan, ".vscode/settings.json");
-        Assert.True(settings.Contains("catalog-v2.schema.json", StringComparison.Ordinal), "Catalog schema association is missing.");
-        Assert.True(settings.Contains("resources-v2.schema.json", StringComparison.Ordinal), "Resource schema association is missing.");
-        Assert.True(settings.Contains("**/product.*.json", StringComparison.Ordinal), "Resource association is not catalog-scoped.");
-        Assert.True(settings.Contains("!**/product.catalog.json", StringComparison.Ordinal), "Catalog exclusion is missing.");
+            "ProductText"));
+        string config = Utf8(plan, "runic.json");
+        Assert.True(config.Contains("project-v1.schema.json", StringComparison.Ordinal), "Project schema declaration is missing.");
     }
 
     private static TranslationProjectCreationRequest Request(string directory, string locale) => new(

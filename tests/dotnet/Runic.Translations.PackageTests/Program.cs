@@ -10,8 +10,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using Runic.Translations.Tooling;
-using Runic.Translations.Compiler;
 using Runic.Translations;
 using Runic.Translations.PackageConsumer;
 
@@ -88,8 +86,7 @@ internal static class Program
             "lib/net10.0/Runic.Translations.Tooling.dll",
             "lib/net10.0/Runic.Translations.Authoring.dll",
             "lib/net10.0/Runic.Translations.Compiler.dll",
-            "schemas/resources-v3.schema.json",
-            "schemas/message-ast-v3.schema.json",
+            "schemas/project-v1.schema.json",
             "schemas/locale-pack-v2.schema.json",
             "schemas/locale-artifact-v2.schema.json");
         AssertPackageShape(build,
@@ -117,12 +114,12 @@ internal static class Program
             "Runic.Translations.Templates.nuspec",
             "README.md",
             "content/templates/item/.template.config/template.json",
-            "content/templates/item/_catalog_._defaultLocale_.json",
-            "content/templates/item/_catalog_.catalog.json",
+            "content/templates/item/translations/_defaultLocale_/application_title.mf2",
+            "content/templates/item/translations/runic.json",
             "content/templates/project/.config/dotnet-tools.json",
             "content/templates/project/.template.config/template.json",
-            "content/templates/project/Resources/_catalog_._defaultLocale_.json",
-            "content/templates/project/Resources/_catalog_.catalog.json",
+            "content/templates/project/translations/_defaultLocale_/application_title.mf2",
+            "content/templates/project/translations/runic.json",
             "content/templates/project/RunicTranslationsProject.csproj");
 
         AssertDependencies(runtime, Array.Empty<string>());
@@ -154,34 +151,10 @@ internal static class Program
 
     private static async Task ExerciseRuntimePackageAsync()
     {
-        SourceV3MigrationResult migration = TranslationsTooling.MigrateV2ToV3(Encoding.UTF8.GetBytes("{\"schemaVersion\":2,\"catalog\":\"app\",\"locale\":\"en\",\"layer\":\"base\",\"resources\":{}}"));
-        Assert(migration.DocumentBytes.Length > 0 && migration.Report.IsLossless,
-            "packed tooling facade migrates a valid v2 document");
-        TranslationCompilation interchangeCompilation = TranslationsTooling.Compile(
-            [new TranslationSource("app.catalog.json", Encoding.UTF8.GetBytes("{\"schemaVersion\":2,\"catalog\":\"app\",\"code\":{\"namespace\":\"App\",\"className\":\"Text\"},\"defaultLocale\":\"en\",\"locales\":[{\"tag\":\"en\"},{\"tag\":\"de\",\"fallback\":\"en\"}],\"layers\":[{\"name\":\"base\",\"priority\":0}]}"))],
-            [new TranslationSource("app.en.json", Encoding.UTF8.GetBytes("{\"schemaVersion\":2,\"catalog\":\"app\",\"locale\":\"en\",\"layer\":\"base\",\"resources\":{\"Hello\":\"Hello\"}}")), new TranslationSource("app.de.json", Encoding.UTF8.GetBytes("{\"schemaVersion\":2,\"catalog\":\"app\",\"locale\":\"de\",\"layer\":\"base\",\"resources\":{\"Hello\":\"Hallo\"}}"))]);
-        TranslationXliffExportResult interchange = TranslationInterchange.ExportXliff21(interchangeCompilation);
-        TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(interchange.Documents.Single().Bytes);
-        Assert(imported.ResourceDocumentBytes.Length > 0 && imported.TargetLocale == "de",
-            "packed tooling facade exchanges the closed XLIFF 2.1 profile");
-        LocalePackV2BuildResult localePacks = TranslationsTooling.BuildLocalePackV2(interchangeCompilation);
-        Assert(localePacks.Documents.Count == 2 && localePacks.Documents.All(document => document.Text.Contains("\"artifactVersion\":2", StringComparison.Ordinal)),
-            "packed tooling facade builds canonical locale-pack-v2 artifacts");
         ITranslationManager generatedManager = await ConsumerTextCatalog.CreateManagerAsync().ConfigureAwait(false);
         var generatedText = new ConsumerText(generatedManager);
         Assert(string.Equals(generatedText.Greeting("Ada"), "Hello Ada", StringComparison.Ordinal),
             "typed generated accessor compiles and formats through the packed runtime");
-
-        byte[] generatedPack = Encoding.UTF8.GetBytes(
-            "{\"artifactVersion\":1,\"messageGrammarVersion\":1,\"catalog\":\"packageconsumer\",\"locale\":\"en\"," +
-            "\"contractFingerprint\":\"" + ConsumerTextCatalog.ContractFingerprint + "\",\"messages\":{\"Greeting\":{" +
-            "\"pattern\":\"External {name}\",\"arguments\":[{\"name\":\"name\",\"type\":\"string\",\"format\":\"none\"}]}}}");
-        ITranslationManager generatedExternalManager = await ConsumerTextCatalog.CreateExternalManagerAsync(
-            new MemoryPackSource("packageconsumer", "en", generatedPack),
-            integrityVerifier: static (content, _) => ValueTask.FromResult(content.Length > 0)).ConfigureAwait(false);
-        var generatedExternalText = new ConsumerText(generatedExternalManager);
-        Assert(string.Equals(generatedExternalText.Greeting("Ada"), "External Ada", StringComparison.Ordinal),
-            "generated external manager composes a verified pack through the shipped snapshot factory");
 
         CompiledTranslationCatalog catalog = CreateCatalog();
         var provider = new CompiledTranslationProvider(catalog);

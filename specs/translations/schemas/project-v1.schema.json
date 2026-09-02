@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
+  "title": "Runic Translations MF2 project v1",
+  "type": "object",
+  "required": ["schemaVersion", "catalog", "code", "baseLocale"],
+  "properties": {
+    "$schema": { "const": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "catalog": { "$ref": "#/$defs/id" },
+    "code": { "$ref": "#/$defs/code" },
+    "baseLocale": { "$ref": "#/$defs/localeTag" },
+    "locales": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/localeTag" },
+          { "$ref": "#/$defs/locale" }
+        ]
+      }
+    },
+    "validation": { "$ref": "#/$defs/validation" },
+    "runtime": { "$ref": "#/$defs/runtime" }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
+    "identifier": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "namespace": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$" },
+    "localeTag": { "type": "string", "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$" },
+    "locale": {
+      "type": "object",
+      "required": ["tag"],
+      "properties": {
+        "tag": { "$ref": "#/$defs/localeTag" },
+        "fallback": { "$ref": "#/$defs/localeTag" }
+      },
+      "additionalProperties": false
+    },
+    "code": {
+      "type": "object",
+      "required": ["namespace", "className"],
+      "properties": {
+        "namespace": { "$ref": "#/$defs/namespace" },
+        "className": { "$ref": "#/$defs/identifier" },
+        "visibility": { "enum": ["public", "internal"] }
+      },
+      "additionalProperties": false
+    },
+    "policy": { "enum": ["allow", "warning", "error"] },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "translationCompleteness": { "$ref": "#/$defs/policy" },
+        "extraLocaleKeys": { "$ref": "#/$defs/policy" },
+        "emptyValues": { "$ref": "#/$defs/policy" }
+      },
+      "additionalProperties": false
+    },
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "unsupportedLocale": { "enum": ["exact", "parentsThenDefault", "default"] },
+        "missingKey": { "enum": ["throw", "returnKey", "returnMarker"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

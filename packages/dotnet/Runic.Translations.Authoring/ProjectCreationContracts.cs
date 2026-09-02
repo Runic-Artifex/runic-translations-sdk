@@ -15,10 +15,7 @@ public sealed class TranslationProjectCreationRequest
         string codeNamespace,
         string className,
         IEnumerable<TranslationProjectLocale>? additionalLocales = null,
-        string layerName = "base",
-        bool generateEsm = true,
-        bool includeStarterMessage = true,
-        bool includeVsCodeSettings = false)
+        bool includeStarterMessage = true)
     {
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(catalogId);
@@ -33,10 +30,7 @@ public sealed class TranslationProjectCreationRequest
         AdditionalLocales = additionalLocales is null
             ? Array.Empty<TranslationProjectLocale>()
             : new List<TranslationProjectLocale>(additionalLocales).ToArray();
-        LayerName = layerName;
-        GenerateEsm = generateEsm;
         IncludeStarterMessage = includeStarterMessage;
-        IncludeVsCodeSettings = includeVsCodeSettings;
     }
 
     public string Directory { get; }
@@ -45,10 +39,7 @@ public sealed class TranslationProjectCreationRequest
     public string CodeNamespace { get; }
     public string ClassName { get; }
     public IReadOnlyList<TranslationProjectLocale> AdditionalLocales { get; }
-    public string LayerName { get; }
-    public bool GenerateEsm { get; }
     public bool IncludeStarterMessage { get; }
-    public bool IncludeVsCodeSettings { get; }
 }
 
 public sealed class TranslationProjectFile

@@ -53,13 +53,9 @@ internal static class EditorStateTests
         Assert.True(result.Error is not null && result.State.Entries.Count == 0,
             "Malformed editor state was not isolated as an empty optional state.");
 
-        File.WriteAllText(System.IO.Path.Combine(directory.Path, "product.catalog.json"),
-            """{"schemaVersion":2,"catalog":"product","code":{"namespace":"Test","className":"Text"},"defaultLocale":"de","locales":[{"tag":"de"}],"layers":[{"name":"base","priority":0}]}""");
-        File.WriteAllText(System.IO.Path.Combine(directory.Path, "product.de.json"),
-            """{"schemaVersion":2,"catalog":"product","locale":"de","layer":"base","resources":{"Save":"Speichern"}}""");
-        TranslationWorkspaceDiscoveryResult discovery = TranslationWorkspaceDiscovery.Discover(directory.Path);
-        Assert.True(discovery.Catalogs.Single().Compilation.Success,
-            "A malformed optional sidecar affected compiler discovery.");
+        TranslationEditorStateLoadResult second = TranslationEditorStateStore.Load(directory.Path, "product");
+        Assert.True(second.Error is not null && second.State.Entries.Count == 0,
+            "Malformed optional state did not remain isolated from MF2 project inputs.");
     }
 
     private static void Hostile()

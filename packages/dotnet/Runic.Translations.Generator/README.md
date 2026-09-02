@@ -1,6 +1,6 @@
 # Runic.Translations.Generator
 
-This internal analyzer turns validated translation catalogs into strongly typed C# keys, accessors, compiled locale data, and reflection-free registration during compilation. It ships as part of `Runic.Translations.Build`, not as a separately versioned package.
+This internal analyzer turns a validated MF2 project into strongly typed C# keys, accessors, compiled locale data, and reflection-free registration during compilation. It ships as part of `Runic.Translations.Build`, not as a separately versioned package.
 
 ## Install
 
@@ -12,10 +12,10 @@ The easiest setup is to install `Runic.Translations.Build`, which maps its item 
 
 ```xml
 <ItemGroup>
-  <AdditionalFiles Include="Resources/app.catalog.json"
-                   RunicTranslationKind="Catalog" />
-  <AdditionalFiles Include="Resources/app.en.json"
-                   RunicTranslationKind="Document" />
+  <AdditionalFiles Include="translations/runic.json"
+                   RunicTranslationKind="Project" />
+  <AdditionalFiles Include="translations/**/*.mf2"
+                   RunicTranslationKind="Mf2" />
 </ItemGroup>
 ```
 
@@ -43,7 +43,7 @@ The containing Build package is a public preview. It requires a .NET 10 compiler
 
 - [Generated package consumer](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/tests/Runic.Translations.PackageTests)
 - [Generator tests and examples](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/tests/Runic.Translations.Generator.Tests)
-- [Schema-v2 guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/schema-v2.md)
+- [MF2 project guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
 - [Compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md)
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
 

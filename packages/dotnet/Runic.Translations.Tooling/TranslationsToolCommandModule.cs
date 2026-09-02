@@ -36,7 +36,7 @@ public static class TranslationsToolCommandModule
             {
                 TranslationsToolFailurePresentation.ErrorOnly => new ErrorOnlyHumanConsole(console),
                 TranslationsToolFailurePresentation.OutputOnly => new OutputOnlyHumanConsole(console),
-                TranslationsToolFailurePresentation.LegacyDiagnostics => new LegacyDiagnosticsHumanConsole(console, diagnostics),
+                TranslationsToolFailurePresentation.DiagnosticsOnly => new DiagnosticsOnlyHumanConsole(console, diagnostics),
                 _ => console,
             }
             : console;
@@ -68,49 +68,20 @@ public static class TranslationsToolCommandModule
     }
 
     [Command("init")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Init([FromServices] ITranslationsToolCommandOperations operations, [Option("--directory", Required = true)] string directory, [Option("--catalog", Required = true)] string catalog, [Option("--default-locale", Required = true)] string defaultLocale, [Option("--namespace", Required = true)] string codeNamespace, [Option("--class", Required = true)] string className, [Option("--locale", AllowMultipleValues = true)] IReadOnlyList<string> locales, [Option("--no-esm")] bool noEsm, [Option("--no-starter")] bool noStarter, [Option("--vscode")] bool vscode, [Option("--layer")] string? layer = null) => operations.Execute(new("init", catalog, locales, null, null, directory, defaultLocale, codeNamespace, className, layer, null, null, null, null, noEsm, noStarter, vscode, false, false, false, null, null, null, null));
+    public static CommandOutcome<TranslationsToolCommandResult> Init([FromServices] ITranslationsToolCommandOperations operations, [Option("--directory", Required = true)] string directory, [Option("--catalog", Required = true)] string catalog, [Option("--default-locale", Required = true)] string defaultLocale, [Option("--namespace", Required = true)] string codeNamespace, [Option("--class", Required = true)] string className, [Option("--locale", AllowMultipleValues = true)] IReadOnlyList<string> locales, [Option("--no-starter")] bool noStarter) => operations.Execute(new("init", Directory: directory, Catalog: catalog, DefaultLocale: defaultLocale, Namespace: codeNamespace, ClassName: className, Locales: locales, NoStarter: noStarter));
 
     [Command("validate")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Validate([FromServices] ITranslationsToolCommandOperations operations, [Option("--catalog", Required = true)] string catalog, [Option("--documents", AllowMultipleValues = true, AllowMultipleOccurrences = false, Required = true)] IReadOnlyList<string> documents) => operations.Execute(new("validate", catalog, documents, null, null, null, null, null, null, null, null, null, null, null, false, false, false, false, false, false, null, null, null, null));
+    public static CommandOutcome<TranslationsToolCommandResult> Validate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project) => operations.Execute(new("validate", Project: project));
 
     [Command("generate")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Generate([FromServices] ITranslationsToolCommandOperations operations, [Option("--catalog", Required = true)] string catalog, [Option("--documents", AllowMultipleValues = true, AllowMultipleOccurrences = false, Required = true)] IReadOnlyList<string> documents, [Option("--output", Required = true)] string output, [Option("--emit-csharp")] bool csharp, [Option("--emit-json")] bool json, [Option("--emit-typescript")] bool typescript, [Option("--emit-template-manifest")] bool manifest, [Option("--emit-esm")] bool esm, [Option("--emit-cpp")] bool cpp) => operations.Execute(new("generate", catalog, documents, output, null, null, null, null, null, null, null, null, null, null, csharp, json, typescript, manifest, esm, cpp, null, null, null, null));
+    public static CommandOutcome<TranslationsToolCommandResult> Generate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project, [Option("--output", Required = true)] string output, [Option("--emit-csharp")] bool csharp, [Option("--emit-json")] bool json, [Option("--emit-typescript")] bool typescript, [Option("--emit-template-manifest")] bool manifest, [Option("--emit-esm")] bool esm, [Option("--emit-cpp")] bool cpp) => operations.Execute(new("generate", Project: project, Output: output, EmitCSharp: csharp, EmitJson: json, EmitTypeScript: typescript, EmitTemplateManifest: manifest, EmitEsm: esm, EmitCpp: cpp));
 
     [Command("verify")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Verify([FromServices] ITranslationsToolCommandOperations operations, [Option("--catalog", Required = true)] string catalog, [Option("--documents", AllowMultipleValues = true, AllowMultipleOccurrences = false, Required = true)] IReadOnlyList<string> documents, [Option("--output", Required = true)] string output, [Option("--emit-csharp")] bool csharp, [Option("--emit-json")] bool json, [Option("--emit-typescript")] bool typescript, [Option("--emit-template-manifest")] bool manifest, [Option("--emit-esm")] bool esm, [Option("--emit-cpp")] bool cpp) => operations.Execute(new("verify", catalog, documents, output, null, null, null, null, null, null, null, null, null, null, csharp, json, typescript, manifest, esm, cpp, null, null, null, null));
+    public static CommandOutcome<TranslationsToolCommandResult> Verify([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project, [Option("--output", Required = true)] string output, [Option("--emit-csharp")] bool csharp, [Option("--emit-json")] bool json, [Option("--emit-typescript")] bool typescript, [Option("--emit-template-manifest")] bool manifest, [Option("--emit-esm")] bool esm, [Option("--emit-cpp")] bool cpp) => operations.Execute(new("verify", Project: project, Output: output, EmitCSharp: csharp, EmitJson: json, EmitTypeScript: typescript, EmitTemplateManifest: manifest, EmitEsm: esm, EmitCpp: cpp));
 
     [Command("schema")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Schema([FromServices] ITranslationsToolCommandOperations operations, [Option("--output", Required = true)] string output) => operations.Execute(new("schema", null, [], output, null, null, null, null, null, null, null, null, null, null, false, false, false, false, false, false, null, null, null, null));
+    public static CommandOutcome<TranslationsToolCommandResult> Schema([FromServices] ITranslationsToolCommandOperations operations, [Option("--output", Required = true)] string output) => operations.Execute(new("schema", Output: output));
 
-    [Command("import")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Import([FromServices] ITranslationsToolCommandOperations operations, [Option("--source", AllowMultipleValues = true, Required = true)] IReadOnlyList<string> source, [Option("--catalog", Required = true)] string catalog, [Option("--default-locale", Required = true)] string defaultLocale, [Option("--namespace", Required = true)] string codeNamespace, [Option("--class", Required = true)] string className, [Option("--output", Required = true)] string output, [Option("--dry-run")] bool dryRun, [Option("--allow-partial")] bool allowPartial, [Option("--format")] string? format = null) => operations.Execute(new("import", catalog, [], output, source, null, defaultLocale, codeNamespace, className, null, format, null, null, null, false, false, false, false, false, false, dryRun, allowPartial, null, null));
-
-    [Command("analyze")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Analyze([FromServices] ITranslationsToolCommandOperations operations, [Option("--catalog", Required = true)] string catalog, [Option("--documents", AllowMultipleValues = true, AllowMultipleOccurrences = false, Required = true)] IReadOnlyList<string> documents, [Option("--sources", AllowMultipleValues = true, AllowMultipleOccurrences = false)] IReadOnlyList<string> sources, [Option("--fail-on-findings")] bool fail, [Option("--unsafe-ignore-dynamic")] bool ignore, [Option("--artifact-fingerprint")] string? fingerprint = null, [Option("--artifact-path")] string? artifactPath = null, [Option("--format")] string? format = null) => operations.Execute(new("analyze", catalog, documents, null, sources, null, null, null, null, null, format, fingerprint, artifactPath, null, false, false, false, false, false, false, fail, ignore, null, null));
-
-    [Command("inspect")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Inspect([FromServices] ITranslationsToolCommandOperations operations, [Option("--source", Required = true)] string source) => operations.Execute(new("inspect", null, [], null, [source], null, null, null, null, null, null, null, null, null, false, false, false, false, false, false, false, false, null, null));
-
-    [Command("migrate")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Migrate([FromServices] ITranslationsToolCommandOperations operations, [Option("--source", Required = true)] string source, [Option("--output", Required = true)] string output, [Option("--report")] string? report = null) => operations.Execute(new("migrate", null, [], output, [source], null, null, null, null, null, null, null, null, report, false, false, false, false, false, false, false, false, null, null));
-
-    [Command("xliff-export")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> XliffExport([FromServices] ITranslationsToolCommandOperations operations, [Option("--catalog", Required = true)] string catalog, [Option("--documents", AllowMultipleValues = true, AllowMultipleOccurrences = false, Required = true)] IReadOnlyList<string> documents, [Option("--output", Required = true)] string output, [Option("--review")] string? review = null) => operations.Execute(new("xliff-export", catalog, documents, output, null, null, null, null, null, null, null, null, null, review, false, false, false, false, false, false, false, false, null, null));
-
-    [Command("xliff-import")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> XliffImport([FromServices] ITranslationsToolCommandOperations operations, [Option("--source", Required = true)] string source, [Option("--output", Required = true)] string output, [Option("--review-output")] string? review = null) => operations.Execute(new("xliff-import", null, [], output, [source], null, null, null, null, null, null, null, null, review, false, false, false, false, false, false, false, false, null, null));
-
-    [Command("review-export")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> ReviewExport([FromServices] ITranslationsToolCommandOperations operations, [Option("--catalog", Required = true)] string catalog, [Option("--output", Required = true)] string output) => operations.Execute(new("review-export", catalog, [], output, null, null, null, null, null, null, null, null, null, null, false, false, false, false, false, false, false, false, null, null));
-
-    [Command("review-import")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> ReviewImport([FromServices] ITranslationsToolCommandOperations operations, [Option("--source", Required = true)] string source) => operations.Execute(new("review-import", null, [], null, [source], null, null, null, null, null, null, null, null, null, false, false, false, false, false, false, false, false, null, null));
-
-    [Command("review-report")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> ReviewReport([FromServices] ITranslationsToolCommandOperations operations, [Option("--source", Required = true)] string source) => operations.Execute(new("review-report", null, [], null, [source], null, null, null, null, null, null, null, null, null, false, false, false, false, false, false, false, false, null, null));
-
-    [Command("locale-pack")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> LocalePack([FromServices] ITranslationsToolCommandOperations operations, [Option("--catalog", Required = true)] string catalog, [Option("--documents", AllowMultipleValues = true, AllowMultipleOccurrences = false, Required = true)] IReadOnlyList<string> documents, [Option("--output", Required = true)] string output) => operations.Execute(new("locale-pack", catalog, documents, output, null, null, null, null, null, null, null, null, null, null, false, false, false, false, false, false, false, false, null, null));
 
     private sealed class ResultCodec : ICommandResultCodec<TranslationsToolCommandResult>
     {
@@ -160,13 +131,13 @@ public static class TranslationsToolCommandModule
         public ValueTask WriteErrorAsync(ReadOnlyMemory<char> value, CancellationToken cancellationToken) => ValueTask.CompletedTask;
     }
 
-    private sealed class LegacyDiagnosticsHumanConsole : ICommandConsole
+    private sealed class DiagnosticsOnlyHumanConsole : ICommandConsole
     {
         private readonly ICommandConsole _inner;
-        private readonly string _legacyDiagnostics;
+        private readonly string _diagnostics;
         private bool _written;
 
-        internal LegacyDiagnosticsHumanConsole(ICommandConsole inner, IReadOnlyList<CommandDiagnostic> diagnostics)
+        internal DiagnosticsOnlyHumanConsole(ICommandConsole inner, IReadOnlyList<CommandDiagnostic> diagnostics)
         {
             _inner = inner;
             var text = new StringBuilder();
@@ -176,7 +147,7 @@ public static class TranslationsToolCommandModule
                 text.Append('\n');
             }
 
-            _legacyDiagnostics = text.ToString();
+            _diagnostics = text.ToString();
         }
 
         public bool IsInteractive => _inner.IsInteractive;
@@ -189,9 +160,9 @@ public static class TranslationsToolCommandModule
 
         public ValueTask WriteErrorAsync(ReadOnlyMemory<char> value, CancellationToken cancellationToken)
         {
-            if (_written || _legacyDiagnostics.Length == 0) return ValueTask.CompletedTask;
+            if (_written || _diagnostics.Length == 0) return ValueTask.CompletedTask;
             _written = true;
-            return _inner.WriteErrorAsync(_legacyDiagnostics.AsMemory(), cancellationToken);
+            return _inner.WriteErrorAsync(_diagnostics.AsMemory(), cancellationToken);
         }
     }
 }
@@ -205,15 +176,31 @@ public enum TranslationsToolFailurePresentation
     ErrorOnly,
     /// <summary>Writes application-owned report text to standard output only.</summary>
     OutputOnly,
-    /// <summary>Writes application-owned report text and legacy diagnostics through their original streams.</summary>
-    LegacyDiagnostics,
+    /// <summary>Writes application-owned report text and diagnostics through their original streams.</summary>
+    DiagnosticsOnly,
 }
 
 /// <summary>Host operation bridge for the composable generated command catalog.</summary>
 public interface ITranslationsToolCommandOperations { CommandOutcome<TranslationsToolCommandResult> Execute(TranslationsToolCommandRequest request); }
 
 /// <summary>Typed values bound by the generated catalog before host operation policy runs.</summary>
-public sealed record TranslationsToolCommandRequest(string Command, string? Catalog, IReadOnlyList<string> Documents, string? Output, IReadOnlyList<string>? Sources, string? Directory, string? DefaultLocale, string? Namespace, string? ClassName, string? Layer, string? Format, string? ArtifactFingerprint, string? ArtifactPath, string? AuxiliaryPath, bool EmitCSharp, bool EmitJson, bool EmitTypeScript, bool EmitTemplateManifest, bool EmitEsm, bool EmitCpp, bool? FlagOne, bool? FlagTwo, string? UnusedOne, string? UnusedTwo);
+public sealed record TranslationsToolCommandRequest(
+    string Command,
+    string? Project = null,
+    string? Output = null,
+    string? Directory = null,
+    string? Catalog = null,
+    string? DefaultLocale = null,
+    string? Namespace = null,
+    string? ClassName = null,
+    IReadOnlyList<string>? Locales = null,
+    bool NoStarter = false,
+    bool EmitCSharp = false,
+    bool EmitJson = false,
+    bool EmitTypeScript = false,
+    bool EmitTemplateManifest = false,
+    bool EmitEsm = false,
+    bool EmitCpp = false);
 
 /// <summary>Portable command payload; the standard dispatcher renders its human text or JSON envelope.</summary>
 public sealed record TranslationsToolCommandResult(string Output, string Error) { public override string ToString() => Output; }

@@ -1,6 +1,6 @@
 # Runic.Translations.Authoring
 
-Build editors and workspace tools on supported Runic Translations project creation, discovery, mutation, transaction, recovery, and review-state APIs. The package validates proposed changes with the compiler and provides safe filesystem operations without imposing a user interface.
+Build editors and workspace tools on supported Runic Translations project creation, mutation, transaction, recovery, and review-state APIs. The package validates proposed changes with the compiler and provides safe filesystem operations without imposing a user interface.
 
 ## Install
 
@@ -12,7 +12,7 @@ This assembly is not published as a standalone package: it ships inside the prev
 using Runic.Translations.Authoring;
 
 var request = new TranslationProjectCreationRequest(
-    directory: "Resources",
+    directory: "translations",
     catalogId: "app",
     defaultLocale: "en",
     codeNamespace: "Example.Translations",
@@ -29,7 +29,7 @@ Console.WriteLine(createdDirectory);
 
 ## When to choose this package
 
-Consume these authoring APIs through the preview `Runic.Translations.Tooling` package when building a translation editor, project wizard, workspace migration, or other tool that must inspect and change source catalogs. Use `dotnet-runic-translations` or `Runic.Translations.Templates` when you only need a ready-made command or scaffold. Runtime applications do not need this assembly.
+Consume these authoring APIs through the preview `Runic.Translations.Tooling` package when building a translation editor, project wizard, or other tool that must inspect and change `runic.json` and MF2 sources. Use `dotnet-runic-translations` or `Runic.Translations.Templates` when you only need a ready-made command or scaffold. Runtime applications do not need this assembly.
 
 Mutation and recovery APIs use expected revisions and contained paths to detect concurrent or unsafe changes. Callers still own user authorization, backups, source control, and any product-specific review workflow.
 
@@ -39,7 +39,7 @@ This package is a public preview for .NET 10. Preview APIs and workspace operati
 
 - [Project creation example](https://github.com/Runic-Artifex/runic-translations/blob/main/dotnet/tests/Runic.Translations.Authoring.Tests/ProjectCreationTests.cs)
 - [Workspace authoring examples](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/tests/Runic.Translations.Authoring.Tests)
-- [Schema-v2 guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/schema-v2.md)
+- [MF2 project convention](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
 - [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-editor)
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
 

@@ -17,6 +17,5 @@
 
   <ItemGroup>
     <PackageReference Include="Runic.Translations" Version="$(TranslationsPackageVersion)" />
-    <PackageReference Include="Runic.Translations.Tooling" Version="$(TranslationsPackageVersion)" />
   </ItemGroup>
 </Project>

@@ -1,29 +1,28 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
 const prefix = "\0virtual:runic-translations/";
-const supportedEsmAbiVersion = 2;
+const supportedEsmAbiVersion = 3;
 const execFileAsync = promisify(execFile);
 
 /**
  * Exposes compiler-generated ESM without coupling messages to Vite or a UI framework.
- * @param {{ manifest: string, sourceFiles?: readonly string[], compiler?: {
- *   catalog: string, documents: readonly string[], output: string, cwd?: string,
- *   command?: string, commandArguments?: readonly string[]
- * } }} options
+ * @param {{ project?: string, output?: string, manifest?: string, sourceFiles?: readonly string[],
+ *   command?: string, commandArguments?: readonly string[], cwd?: string }} [options]
  */
-export function runicTranslations(options) {
-  if (!options || typeof options.manifest !== "string" || options.manifest.length === 0)
-    throw new TypeError("runicTranslations requires a manifest path.");
-
-  const manifestPath = resolve(options.manifest);
-  const compiler = compilerOptions(options.compiler);
+export function runicTranslations(options = {}) {
+  if (!options || typeof options !== "object" || Array.isArray(options))
+    throw new TypeError("runicTranslations options must be an object.");
+  const project = options.manifest === undefined ? projectOptions(options) : undefined;
+  const manifestPath = project?.manifest ?? resolve(options.manifest);
+  const compiler = project;
   const sourceFiles = Object.freeze(Array.from(new Set([
     ...(options.sourceFiles ?? []).map(path => resolve(path)),
-    ...(compiler ? [compiler.catalog, ...compiler.documents.filter(path => !hasGlob(path))] : []),
+    ...(project?.sourceFiles ?? []),
   ])));
   let catalog;
   let entries;
@@ -31,14 +30,7 @@ export function runicTranslations(options) {
 
   async function compile() {
     if (!compiler) return;
-    const argumentsValue = [
-      ...compiler.commandArguments,
-      "generate",
-      "--catalog", compiler.catalog,
-      "--documents", ...compiler.documents,
-      "--output", compiler.output,
-      "--emit-esm",
-    ];
+    const argumentsValue = [...compiler.commandArguments, "generate", "--project", compiler.project, "--output", compiler.output, "--emit-esm"];
     compilation = compilation.catch(() => undefined).then(() => execFileAsync(compiler.command, argumentsValue, {
       cwd: compiler.cwd,
       maxBuffer: 16 * 1024 * 1024,
@@ -89,6 +81,7 @@ export function runicTranslations(options) {
     entries = Object.freeze({
       messages: assets.get(requiredEntrypoints.messages),
       runtime: assets.get(requiredEntrypoints.runtime),
+      server: assets.get(document.entrypoints.server ?? "server.js") ?? contained(root, document.entrypoints.server ?? "server.js"),
       transport: assets.get("transport.js") ?? contained(root, "transport.js"),
       dynamic: assets.get(document.entrypoints.dynamic ?? "dynamic.js") ?? contained(root, document.entrypoints.dynamic ?? "dynamic.js"),
     });
@@ -117,6 +110,8 @@ export function runicTranslations(options) {
         return virtualId("messages");
       if (id === `virtual:runic-translations/${catalog}/runtime`)
         return virtualId("runtime");
+      if (id === `virtual:runic-translations/${catalog}/server`)
+        return virtualId("server");
       if (id === `virtual:runic-translations/${catalog}/transport`)
         return virtualId("transport");
       if (id === `virtual:runic-translations/${catalog}/dynamic`)
@@ -128,6 +123,7 @@ export function runicTranslations(options) {
       if (!entries) await refresh();
       if (id === virtualId("messages")) return `export * from ${JSON.stringify(toVitePath(entries.messages))};\n`;
       if (id === virtualId("runtime")) return `export * from ${JSON.stringify(toVitePath(entries.runtime))};\n`;
+      if (id === virtualId("server")) return `export * from ${JSON.stringify(toVitePath(entries.server))};\n`;
       if (id === virtualId("transport")) return `export * from ${JSON.stringify(toVitePath(entries.transport))};\n`;
       if (id === virtualId("dynamic")) return `export * from ${JSON.stringify(toVitePath(entries.dynamic))};\n`;
       return null;
@@ -137,7 +133,7 @@ export function runicTranslations(options) {
       if (context.file !== manifestPath && !sourceFiles.includes(context.file) && !isGenerated(context.file, manifestPath)) return;
       if (compiler && sourceFiles.includes(context.file)) await compile();
       await refresh();
-      const modules = [virtualId("messages"), virtualId("runtime"), virtualId("transport"), virtualId("dynamic")]
+      const modules = [virtualId("messages"), virtualId("runtime"), virtualId("server"), virtualId("transport"), virtualId("dynamic")]
         .map(id => context.server.moduleGraph.getModuleById(id))
         .filter(Boolean);
       for (const module of modules) context.server.moduleGraph.invalidateModule(module);
@@ -146,33 +142,42 @@ export function runicTranslations(options) {
   };
 }
 
-function compilerOptions(value) {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new TypeError("compiler must be an options object.");
-  if (typeof value.catalog !== "string" || value.catalog.length === 0)
-    throw new TypeError("compiler.catalog must be a non-empty path.");
-  if (!Array.isArray(value.documents) || value.documents.length === 0 || value.documents.some(path => typeof path !== "string" || path.length === 0))
-    throw new TypeError("compiler.documents must contain at least one non-empty path or glob.");
-  if (typeof value.output !== "string" || value.output.length === 0)
-    throw new TypeError("compiler.output must be a non-empty path.");
-  if (value.command !== undefined && (typeof value.command !== "string" || value.command.length === 0))
-    throw new TypeError("compiler.command must be a non-empty executable name.");
-  if (value.commandArguments !== undefined && (!Array.isArray(value.commandArguments) || value.commandArguments.some(argument => typeof argument !== "string")))
-    throw new TypeError("compiler.commandArguments must contain only strings.");
-  const cwd = resolve(value.cwd ?? process.cwd());
+function projectOptions(options) {
+  const cwd = resolve(options.cwd ?? process.cwd());
+  if (options.project !== undefined && (typeof options.project !== "string" || options.project.length === 0))
+    throw new TypeError("project must be a non-empty path.");
+  if (options.output !== undefined && (typeof options.output !== "string" || options.output.length === 0))
+    throw new TypeError("output must be a non-empty path.");
+  if (options.command !== undefined && (typeof options.command !== "string" || options.command.length === 0))
+    throw new TypeError("command must be a non-empty executable name.");
+  if (options.commandArguments !== undefined && (!Array.isArray(options.commandArguments) || options.commandArguments.some(argument => typeof argument !== "string")))
+    throw new TypeError("commandArguments must contain only strings.");
+  const supplied = resolve(cwd, options.project ?? "translations");
+  const config = supplied.endsWith(`${sep}runic.json`) ? supplied : join(supplied, "runic.json");
+  let settings;
+  try {
+    settings = JSON.parse(readFileSync(config, "utf8"));
+  } catch (error) {
+    throw new Error(`Could not read Runic translation project '${config}': ${error.message}`);
+  }
+  if (!settings || settings.schemaVersion !== 1 || typeof settings.catalog !== "string" || settings.catalog.length === 0)
+    throw new Error("The Runic translation project must declare schemaVersion 1 and a catalog ID.");
+  const project = dirname(config);
+  const output = resolve(cwd, options.output ?? ".runic/translations");
+  const sourceFiles = [config];
+  for (const entry of readdirSync(project, { recursive: true })) {
+    const path = join(project, entry);
+    if (statSync(path).isFile() && path.endsWith(".mf2")) sourceFiles.push(path);
+  }
   return Object.freeze({
-    catalog: resolve(cwd, value.catalog),
-    documents: Object.freeze(value.documents.map(path => hasGlob(path) ? path : resolve(cwd, path))),
-    output: resolve(cwd, value.output),
+    project,
+    output,
+    manifest: join(output, `${settings.catalog}.esm`, "web-module-manifest-v1.json"),
+    sourceFiles: Object.freeze(sourceFiles),
     cwd,
-    command: value.command ?? "dotnet",
-    commandArguments: Object.freeze(value.commandArguments ?? ["tool", "run", "runic-translations", "--"]),
+    command: options.command ?? "dotnet",
+    commandArguments: Object.freeze(options.commandArguments ?? ["tool", "run", "runic-translations", "--"]),
   });
-}
-
-function hasGlob(path) {
-  return /[*?\[\]{}]/.test(path);
 }
 
 function contained(root, relativePath) {

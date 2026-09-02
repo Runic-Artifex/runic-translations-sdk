@@ -9,8 +9,10 @@ command_line_version="${RunicCommandLineVersion:-1.0.0-preview.1}"
 configuration="Release"
 runtime_identifier="$(dotnet --info | awk '/ RID:/{print $2; exit}')"
 restore_options=()
+tool_source_options=(--add-source "$package_feed")
 if [[ -n "${NUGET_CONFIG_FILE:-}" ]]; then
   restore_options+=(--configfile "$NUGET_CONFIG_FILE")
+  tool_source_options=()
 fi
 
 rm -rf "$artifacts_root"
@@ -86,6 +88,7 @@ dotnet restore "$package_consumer" \
 tool_root="$artifacts_root/tool"
 dotnet tool install dotnet-runic-translations --version "$package_version" \
   --tool-path "$tool_root" \
+  "${tool_source_options[@]}" \
   "${restore_options[@]}"
 "$tool_root/runic-translations" --help >/dev/null
 "$tool_root/runic-translations" help >/dev/null
@@ -100,14 +103,13 @@ expect_tool_usage() {
   fi
   [[ "$text" == *"$expected"* ]] || { echo "Missing packaged diagnostic '$expected': $text" >&2; exit 1; }
 }
-expect_tool_usage "validate requires --catalog <file>" validate
-expect_tool_usage "validate requires --documents <path-or-glob...>" validate --catalog missing.json
+expect_tool_usage "validate requires --project <value>" validate
 expect_tool_usage "unknown command" definitely-not-a-command
-expect_tool_usage "--catalog requires exactly one value" validate --catalog
+expect_tool_usage "--project requires exactly one value" validate --project
 tool_parse_json=$("$tool_root/runic-translations" validate --runic-output=JSON 2>&1 || true)
 node -e '
   const value = JSON.parse(process.argv[1]);
-  if (value.success !== false || value.exitCode !== 2 || value.fault?.code !== "RCLI1012" || value.diagnostics?.[0]?.arguments?.[0] !== "--catalog") process.exit(1);
+  if (value.success !== false || value.exitCode !== 2 || value.fault?.code !== "RCLI1012" || value.diagnostics?.[0]?.arguments?.[0] !== "--project") process.exit(1);
 ' "$tool_parse_json"
 tool_json_root="$artifacts_root/tool-json"
 tool_json=$("$tool_root/runic-translations" schema --output "$tool_json_root" --runic-output=json)
@@ -171,19 +173,16 @@ verify_parser_compatibility() {
   expect_usage "a command is required."
   expect_usage "unknown command 'definitely-not-a-command'." definitely-not-a-command
   local command
-  for command in init validate generate verify schema import analyze inspect migrate xliff-export xliff-import review-export review-import review-report locale-pack; do
+  for command in init validate generate verify schema; do
     expect_usage "unknown option or positional argument '--bogus'." "$command" --bogus
   done
-  expect_usage "schema accepts only --output <directory>." schema --catalog catalog.json
+  for command in import analyze inspect migrate xliff-export xliff-import review-export review-import review-report locale-pack; do
+    expect_usage "unknown command '$command'." "$command"
+  done
+  expect_usage "schema accepts only --output <directory>." schema --project translations
   expect_usage "unknown option or positional argument '--bogus'." schema --bogus
-  expect_usage "validate does not accept --output." validate --catalog catalog.json --documents document.json --output output
-  expect_usage "validate does not accept emit switches." validate --catalog catalog.json --documents document.json --emit-json
-  expect_usage "analyze does not accept emit switches." analyze --catalog catalog.json --documents document.json --emit-json
-  expect_usage "--documents requires at least one explicit path or glob." validate --catalog catalog.json --documents
-  expect_usage "--documents may be specified only once." validate --catalog catalog.json --documents first.json --documents second.json
-  expect_usage "--sources requires at least one explicit path or glob." analyze --catalog catalog.json --documents document.json --sources
-  expect_usage "--sources may be specified only once." analyze --catalog catalog.json --documents document.json --sources first.cs --sources second.cs
-  expect_usage "import requires at least one --source <locale>=<file>." import --catalog catalog --default-locale en --namespace Verification.Tool --class VerificationText --output output
+  expect_usage "validate does not accept --output." validate --project translations --output output
+  expect_usage "validate does not accept emit switches." validate --project translations --emit-json
 }
 
 verify_conflict_presentation "$tool_root/runic-translations" "$artifacts_root/managed-tool-project" managed
@@ -209,10 +208,10 @@ native_project="$artifacts_root/native-tool-project"
   --directory "$native_project" --catalog native --default-locale en \
   --namespace Native.Tool --class NativeText --locale de
 "$tool_aot_root/dotnet-runic-translations" generate \
-  --catalog "$native_project/native.catalog.json" --documents "$native_project/native.en.json" "$native_project/native.de.json" \
+  --project "$native_project" \
   --output "$artifacts_root/native-generated"
 "$tool_aot_root/dotnet-runic-translations" verify \
-  --catalog "$native_project/native.catalog.json" --documents "$native_project/native.en.json" "$native_project/native.de.json" \
+  --project "$native_project" \
   --output "$artifacts_root/native-generated"
 test -f "$artifacts_root/native-generated/native.en.locale-v2.json"
 native_parse_json=$("$tool_aot_root/dotnet-runic-translations" validate --runic-output=JSON 2>&1 || true)
@@ -223,20 +222,7 @@ node -e '
 verify_conflict_presentation "$tool_aot_root/dotnet-runic-translations" "$native_project-conflict" native-conflict
 verify_parser_compatibility "$tool_aot_root/dotnet-runic-translations" native
 "$tool_aot_root/dotnet-runic-translations" validate \
-  --catalog "$native_project/native.catalog.json" --documents "$native_project/native.en.json" "$native_project/native.de.json"
-"$tool_aot_root/dotnet-runic-translations" locale-pack \
-  --catalog "$native_project/native.catalog.json" --documents "$native_project/native.en.json" "$native_project/native.de.json" \
-  --output "$artifacts_root/native-locale-pack"
-"$tool_aot_root/dotnet-runic-translations" xliff-export \
-  --catalog "$native_project/native.catalog.json" --documents "$native_project/native.en.json" "$native_project/native.de.json" \
-  --output "$artifacts_root/native-xliff"
-native_xliff="$(find "$artifacts_root/native-xliff" -name '*.xliff' -print -quit)"
-test -n "$native_xliff"
-"$tool_aot_root/dotnet-runic-translations" xliff-import --source "$native_xliff" --output "$artifacts_root/native-xliff-import"
-"$tool_aot_root/dotnet-runic-translations" review-export --catalog native --output "$artifacts_root/native-review.json"
-"$tool_aot_root/dotnet-runic-translations" review-import --source "$artifacts_root/native-review.json" >/dev/null
-"$tool_aot_root/dotnet-runic-translations" review-report --source "$artifacts_root/native-review.json" >/dev/null
-"$tool_aot_root/dotnet-runic-translations" migrate --source "$native_project/native.en.json" --output "$artifacts_root/native.en.v3.json"
+  --project "$native_project"
 
 template_package="$package_feed/Runic.Translations.Templates.$package_version.nupkg"
 template_root="$artifacts_root/templates"
@@ -253,8 +239,8 @@ dotnet new runic-translations \
   --default-locale de \
   --namespace Customer.Product \
   --class ProductText
-cmp "$template_root/item/product.catalog.json" "$template_root/cli/product.catalog.json"
-cmp "$template_root/item/product.de.json" "$template_root/cli/product.de.json"
+cmp "$template_root/item/translations/runic.json" "$template_root/cli/runic.json"
+cmp "$template_root/item/translations/de/application_title.mf2" "$template_root/cli/de/application_title.mf2"
 dotnet new runic-translations-project \
   --output "$template_root/project" \
   --name Customer.Product.Text \
@@ -262,8 +248,8 @@ dotnet new runic-translations-project \
   --defaultLocale de \
   --namespace Customer.Product \
   --className ProductText
-cmp "$template_root/item/product.catalog.json" "$template_root/project/Resources/product.catalog.json"
-cmp "$template_root/item/product.de.json" "$template_root/project/Resources/product.de.json"
+cmp "$template_root/item/translations/runic.json" "$template_root/project/translations/runic.json"
+cmp "$template_root/item/translations/de/application_title.mf2" "$template_root/project/translations/de/application_title.mf2"
 template_project="$template_root/project/Customer.Product.Text.csproj"
 dotnet restore "$template_project" \
   -p:RestoreAdditionalProjectSources="$package_feed" \

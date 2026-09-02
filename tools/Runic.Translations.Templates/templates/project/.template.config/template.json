@@ -5,7 +5,7 @@
   "identity": "RunicArtifex.Translations.Project",
   "name": "Runic Translations project",
   "shortName": "runic-translations-project",
-  "description": "Creates a .NET class library with schema-v2 resources, generated C# APIs, and ESM output.",
+  "description": "Creates a .NET class library with a conventional runic.json and MF2 messages, generated C# APIs, and ESM output.",
   "sourceName": "RunicTranslationsProject",
   "preferNameDirectory": true,
   "tags": {

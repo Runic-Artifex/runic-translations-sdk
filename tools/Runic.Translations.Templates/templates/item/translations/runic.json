@@ -1,0 +1,13 @@
+{
+  "$schema": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
+  "schemaVersion": 1,
+  "catalog": "__CATALOG__",
+  "code": {
+    "namespace": "__NAMESPACE__",
+    "className": "__CLASS_NAME__"
+  },
+  "baseLocale": "__DEFAULT_LOCALE__",
+  "locales": [
+    "__DEFAULT_LOCALE__"
+  ]
+}

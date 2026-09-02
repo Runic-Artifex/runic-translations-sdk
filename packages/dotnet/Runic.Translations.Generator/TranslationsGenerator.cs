@@ -102,8 +102,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             return default;
 
         InputKind kind;
-        if (string.Equals(kindValue, "Catalog", StringComparison.Ordinal)) kind = InputKind.Catalog;
-        else if (string.Equals(kindValue, "Document", StringComparison.Ordinal)) kind = InputKind.Document;
+        if (string.Equals(kindValue, "Project", StringComparison.Ordinal)) kind = InputKind.Project;
+        else if (string.Equals(kindValue, "Mf2", StringComparison.Ordinal)) kind = InputKind.Mf2;
         else return default;
 
         SourceText? sourceText = additionalText.GetText(cancellationToken);
@@ -131,8 +131,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
 
     private static void Generate(SourceProductionContext context, IEnumerable<GeneratorInput> inputs)
     {
-        var manifests = new List<TranslationSource>();
-        var documents = new List<TranslationSource>();
+        var projects = new List<TranslationSource>();
+        var mf2Messages = new List<TranslationSource>();
         var sourceTexts = new Dictionary<string, SourceText>(StringComparer.Ordinal);
 
         var materializedInputs = new List<GeneratorInput>();
@@ -157,15 +157,20 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             SourceText sourceText = SourceText.From(input.Text, new UTF8Encoding(false, true));
             sourceTexts[input.Path] = sourceText;
             var source = new TranslationSource(input.Path, new UTF8Encoding(false, true).GetBytes(input.Text));
-            if (input.Kind == InputKind.Catalog) manifests.Add(source);
-            else documents.Add(source);
+            if (input.Kind == InputKind.Project) projects.Add(source);
+            else mf2Messages.Add(source);
         }
 
-        TranslationCompilation compilation = TranslationCompiler.Compile(
-            manifests,
-            documents,
-            options: null,
-            context.CancellationToken);
+        if (projects.Count == 0 && mf2Messages.Count == 0) return;
+        if (projects.Count != 1)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Descriptor("RTR0002", DiagnosticSeverity.Error),
+                Location.None,
+                "Exactly one Runic translation project must be supplied."));
+            return;
+        }
+        TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(projects[0], mf2Messages, null, context.CancellationToken);
 
         bool hasErrors = false;
         for (int i = 0; i < compilation.Diagnostics.Count; i++)
@@ -264,8 +269,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     private enum InputKind
     {
         None,
-        Catalog,
-        Document,
+        Project,
+        Mf2,
     }
 
     private readonly struct GeneratorInput : IEquatable<GeneratorInput>

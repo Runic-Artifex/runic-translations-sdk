@@ -18,42 +18,29 @@ import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [
-    runicTranslations({
-      manifest: "obj/translations/app.esm/web-module-manifest-v1.json",
-      sourceFiles: [
-        "Resources/app.catalog.json",
-        "Resources/app.en.json",
-        "Resources/app.de.json",
-      ],
-      compiler: {
-        catalog: "Resources/app.catalog.json",
-        documents: ["Resources/app.en.json", "Resources/app.de.json"],
-        output: "obj/translations",
-      },
-    }),
-  ],
+  plugins: [runicTranslations()],
 });
 ```
 
-The optional `compiler` block runs the default project-local command—`dotnet tool run runic-translations -- generate`—before loading the manifest and after watched authoring changes. Omit `compiler` when MSBuild or another host already regenerates the declared output; keep `sourceFiles` for HMR invalidation.
+The no-argument form discovers `translations/runic.json`, compiles its MF2 files
+to `.runic/translations`, and watches both config and messages. In a split
+frontend/backend layout, use `runicTranslations({ project: "../translations" })`.
+When another build owns generation, pass its generated `manifest` and optional
+`sourceFiles` instead.
 
 ## Render a message
 
 ```ts
 import { m } from "virtual:runic-translations/app";
 
-document.querySelector("#app")!.textContent = m["Application.Name"]();
+document.querySelector("#app")!.textContent = m.application_title();
 
-const greeting = m["Common.Hello"](
-  { name: "Ada" },
-  { locale: "de" },
-);
+const greeting = m.greeting({ name: "Ada" }, { locale: "de" });
 ```
 
-Single-segment keys use dot access. Dotted catalog keys retain their exact spelling and use bracket access. Static ESM re-exports let Vite remove message modules that are not referenced.
+MF2 filenames become identifier-safe message properties. Static ESM re-exports let Vite remove message modules that are not referenced.
 
-Additional entry points are available for locale configuration (`/runtime`), cross-process text references (`/transport`), and validated runtime-loaded schema-v2 locale artifacts (`/dynamic`). For SSR and SvelteKit, pass `{ locale }` explicitly on each message call; do not use request-global mutable locale state across concurrent requests.
+Additional entry points are available for generated locale configuration (`/runtime`), request-local SSR (`/server`), cross-process text references (`/transport`), and validated runtime-loaded locale artifacts (`/dynamic`). Wrap SSR rendering with `/server`'s `runWithLocale`; explicit per-call locale options are only needed for intentional overrides.
 
 ## When to choose this package
 

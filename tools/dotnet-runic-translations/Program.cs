@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,7 +8,6 @@ using Runic.CommandLine;
 using Runic.Translations.Tooling;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
-using Runic.Translations.Compiler.Analysis;
 
 namespace Runic.Translations.Tool;
 
@@ -109,14 +107,11 @@ internal static class Program
         "RCLI1001" => "unknown option or positional argument.",
         "RCLI1002" when diagnostic.Arguments.Count >= 1 => $"unknown command '{diagnostic.Arguments[0]}'.",
         "RCLI1002" => "a command is required.",
-        "RCLI1003" when diagnostic.Arguments.Count >= 1 && diagnostic.Arguments[0] == "--documents" => "--documents requires at least one explicit path or glob.",
-        "RCLI1003" when diagnostic.Arguments.Count >= 1 && diagnostic.Arguments[0] == "--sources" => "--sources requires at least one explicit path or glob.",
         "RCLI1003" when diagnostic.Arguments.Count >= 1 => $"{diagnostic.Arguments[0]} requires exactly one value.",
         "RCLI1003" => "an option requires a value.",
         "RCLI1005" => "a required argument is missing.",
         "RCLI1007" when diagnostic.Arguments.Count >= 1 => $"{diagnostic.Arguments[0]} may be specified only once.",
         "RCLI1007" => "an option may be specified only once.",
-        "RCLI1012" when diagnostic.Arguments.Count >= 2 && diagnostic.Arguments[0] == "--source" && diagnostic.Arguments[1] == "import" => "import requires at least one --source <locale>=<file>.",
         "RCLI1012" when diagnostic.Arguments.Count >= 2 => $"{diagnostic.Arguments[1]} requires {diagnostic.Arguments[0]} {ExpectedValueShape(diagnostic.Arguments[0])}.",
         "RCLI1013" => "help does not accept additional arguments.",
         _ => "invalid command invocation.",
@@ -127,7 +122,7 @@ internal static class Program
         "--emit-template-manifest" or "--emit-esm" or "--emit-cpp";
 
     private static bool IsSchemaForbiddenOption(string option) =>
-        option is "--catalog" or "--documents" || IsEmitSwitch(option);
+        option == "--project" || IsEmitSwitch(option);
 
     private static int Fatal(string code, string kind, string message, int exitCode, bool usage = false)
     {
@@ -153,9 +148,6 @@ internal static class Program
 
     private static string ExpectedValueShape(string option) => option switch
     {
-        "--documents" => "<path-or-glob...>",
-        "--source" => "<file> or <locale>=<file>",
-        "--catalog" => "<file>",
         "--output" or "--directory" => "<directory>",
         "--default-locale" => "<tag>",
         _ => "<value>",
@@ -222,25 +214,10 @@ internal static class Program
         return result;
     }
 
-    internal static ToolOperationResult ExecuteInit(string directory, string catalog, string defaultLocale, string codeNamespace, string className, IReadOnlyList<string> locales, string? layer, bool noEsm, bool noStarter, bool vscode) =>
-        Execute(new ToolInvocation(ToolCommand.Init, null, Array.Empty<string>(), null, ToolEmission.None,
+    internal static ToolOperationResult ExecuteInit(string directory, string catalog, string defaultLocale, string codeNamespace, string className, IReadOnlyList<string> locales, bool noStarter) =>
+        Execute(new ToolInvocation(ToolCommand.Init, null, ToolEmission.None,
             new TranslationProjectCreationRequest(directory, catalog, defaultLocale, codeNamespace, className,
-                ParseLocales(locales), layer ?? "base", !noEsm, !noStarter, vscode), null, null));
-
-    internal static ToolOperationResult ExecuteImport(IReadOnlyList<string> sourceValues, string catalog, string defaultLocale, string codeNamespace, string className, string output, string? format, bool dryRun, bool allowPartial) =>
-        Execute(new ToolInvocation(ToolCommand.Import, null, Array.Empty<string>(), null, ToolEmission.None, null,
-            new CatalogImportRequest(ParseSources(sourceValues), output, catalog, defaultLocale, codeNamespace, className, dryRun, allowPartial, format ?? "auto"), null));
-
-    internal static ToolOperationResult ExecuteAnalyze(string catalog, IReadOnlyList<string> documents, IReadOnlyList<string> sources, string? format, bool failOnFindings, bool unsafeIgnoreDynamic, string? artifactFingerprint, string? artifactPath)
-    {
-        if (format is not null && format is not ("text" or "json")) return Usage("--format expects text or json.");
-        if ((artifactFingerprint is null) != (artifactPath is null)) return Usage("--artifact-fingerprint and --artifact-path must be supplied together.");
-        if (artifactFingerprint is not null && (artifactFingerprint.Length != 71 || !artifactFingerprint.StartsWith("sha256:", StringComparison.Ordinal) || !IsLowerHex(artifactFingerprint.AsSpan(7)))) return Usage("--artifact-fingerprint expects sha256: followed by 64 lowercase hexadecimal characters.");
-        return Execute(new ToolInvocation(ToolCommand.Analyze, catalog, documents, null, ToolEmission.None, null, null,
-            new CatalogAnalysisRequest(catalog, documents, sources, format == "json", failOnFindings,
-                unsafeIgnoreDynamic ? TranslationDynamicUsagePolicy.IgnoreForDeletionCandidates : TranslationDynamicUsagePolicy.Conservative,
-                artifactFingerprint, artifactPath)));
-    }
+                ParseLocales(locales), !noStarter)));
 
     internal static ToolEmission Emission(bool csharp, bool json, bool typescript, bool templateManifest, bool esm, bool cpp)
     {
@@ -252,33 +229,6 @@ internal static class Program
         if (esm) result |= ToolEmission.Esm;
         if (cpp) result |= ToolEmission.Cpp;
         return result == ToolEmission.None ? ToolEmission.All : result;
-    }
-
-    internal static ToolOperationResult ExecuteTooling(Action<ToolOperationResult> operation)
-    {
-        var result = new ToolOperationResult();
-        try { operation(result); }
-        catch (TranslationInterchangeException exception)
-        {
-            result.AddDiagnostic("RCLI9007", "tooling", $"{exception.Code}: {exception.Message}", CommandDiagnosticSeverity.Error, exception.Code);
-            result.ExitCode = DiagnosticFailure;
-            result.ExitCategory = CommandExitCategory.Validation;
-        }
-        catch (SourceMigrationException exception)
-        {
-            result.AddDiagnostic("RCLI9008", "migration", $"{exception.Code}: {exception.Message}", CommandDiagnosticSeverity.Error, exception.Code);
-            result.ExitCode = DiagnosticFailure;
-            result.ExitCategory = CommandExitCategory.Validation;
-        }
-        catch (LocalePackBuildException exception)
-        {
-            result.AddDiagnostic("RCLI9009", "locale-pack", $"{exception.Code}: {exception.Message}", CommandDiagnosticSeverity.Error, exception.Code);
-            result.ExitCode = DiagnosticFailure;
-            result.ExitCategory = CommandExitCategory.Validation;
-        }
-        catch (ToolUsageException exception) { result.AddDiagnostic("RCLI9003", "tool-usage", exception.Message, CommandDiagnosticSeverity.Error); result.ExitCode = InvocationFailure; result.ExitCategory = CommandExitCategory.Usage; }
-        catch (IOException exception) { result.AddDiagnostic("RCLI9005", "io", exception.Message, CommandDiagnosticSeverity.Error); result.ExitCode = InvocationFailure; result.ExitCategory = CommandExitCategory.Usage; }
-        return result;
     }
 
     private static ToolOperationResult Usage(string message)
@@ -299,25 +249,6 @@ internal static class Program
             else throw new ToolUsageException("--locale expects <tag> or <tag>:<fallback>.");
         }
         return locales;
-    }
-
-    private static List<CatalogImportSource> ParseSources(IReadOnlyList<string> values)
-    {
-        if (values.Count == 0) throw new ToolUsageException("import requires at least one --source <locale>=<file>.");
-        var sources = new List<CatalogImportSource>(values.Count);
-        foreach (string value in values)
-        {
-            int separator = value.IndexOf('=');
-            if (separator <= 0 || separator == value.Length - 1) throw new ToolUsageException("--source expects <locale>=<file>.");
-            sources.Add(new CatalogImportSource(value[..separator], value[(separator + 1)..]));
-        }
-        return sources;
-    }
-
-    private static bool IsLowerHex(ReadOnlySpan<char> value)
-    {
-        foreach (char character in value) if (character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')) return false;
-        return true;
     }
 
     private static string SafeDomainMessage(string message, string fallback)
@@ -396,36 +327,8 @@ internal static class Program
             return Success;
         }
 
-        if (invocation.Command == ToolCommand.Import)
-        {
-            CatalogImportResult importResult = CatalogImporter.Import(invocation.CatalogImport!);
-            WriteImportDiagnostics(importResult.Diagnostics, result);
-            if (importResult.Compilation is not null)
-            {
-                WriteDiagnostics(importResult.Compilation.Diagnostics, result);
-            }
-
-            if (invocation.CatalogImport!.DryRun)
-            {
-                result.WriteOutput(Encoding.UTF8.GetString(importResult.Report));
-                return importResult.CanWrite ? Success : DiagnosticFailure;
-            }
-
-            if (!importResult.CanWrite)
-            {
-                result.AddDiagnostic("RCLI9010", "import", "no files were written; see the diagnostics or run with --dry-run for the full report.", CommandDiagnosticSeverity.Error);
-                return DiagnosticFailure;
-            }
-
-            ArtifactFiles.WriteAtomically(invocation.CatalogImport.OutputPath, importResult.Artifacts);
-            result.WriteOutputLine($"imported {importResult.Artifacts.Count - 1} catalog file(s) and wrote runic-import-report.json.");
-            return Success;
-        }
-
-        CompilerInputs inputs = InputFiles.Read(invocation.CatalogPath!, invocation.DocumentPatterns);
-        TranslationCompilation compilation = TranslationCompiler.Compile(
-            [inputs.Catalog],
-            inputs.Documents);
+        CompilerInputs inputs = InputFiles.ReadProject(invocation.ProjectPath!);
+        TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(inputs.Project, inputs.Messages);
         WriteDiagnostics(compilation.Diagnostics, result);
         if (!compilation.Success)
         {
@@ -434,27 +337,8 @@ internal static class Program
 
         if (invocation.Command == ToolCommand.Validate)
         {
-            result.WriteOutputLine($"validated {compilation.Catalogs.Count} catalog(s) and {inputs.Documents.Count} document(s).");
+            result.WriteOutputLine($"validated {compilation.Catalogs.Count} project(s) and {inputs.Messages.Count} MF2 message(s).");
             return Success;
-        }
-
-        if (invocation.Command == ToolCommand.Analyze)
-        {
-            CatalogAnalysisRequest request = invocation.CatalogAnalysis!;
-            CompiledTextCatalog catalog = compilation.Catalogs[0];
-            IReadOnlyList<TranslationUsageSource> sources = InputFiles.ReadUsageSources(request.SourcePatterns, catalog.Id);
-            var options = new TranslationAnalysisOptions(request.DynamicUsagePolicy);
-            TranslationAnalysisReport report = request.ArtifactFingerprint is null
-                ? TranslationAnalyzer.Analyze(compilation, sources, options)
-                : TranslationAnalyzer.Analyze(
-                    compilation,
-                    sources,
-                    [new TranslationArtifactSnapshot(catalog.Id, request.ArtifactFingerprint, request.ArtifactPath!)],
-                    options);
-            result.WriteOutput(request.Json
-                ? TranslationAnalysisRenderer.RenderJson(report)
-                : TranslationAnalysisRenderer.RenderText(report));
-            return request.FailOnFindings && report.HasFindings ? DiagnosticFailure : Success;
         }
 
         IReadOnlyList<ToolArtifact> artifacts = CompilerOutputAdapter.Render(compilation.Catalogs, invocation.Emission);
@@ -497,44 +381,19 @@ internal static class Program
         }
     }
 
-    private static void WriteImportDiagnostics(IReadOnlyList<CatalogImportDiagnostic> diagnostics, ToolOperationResult result)
-    {
-        for (int index = 0; index < diagnostics.Count; index++)
-        {
-            CatalogImportDiagnostic diagnostic = diagnostics[index];
-            string path = string.IsNullOrEmpty(diagnostic.Path) ? "import" : diagnostic.Path.Replace('\\', '/');
-            string key = diagnostic.Key is null ? string.Empty : $" [{diagnostic.Key}]";
-            result.AddDiagnostic(
-                "RCLI9013",
-                "import-diagnostic",
-                $"{path}: {diagnostic.Severity} {diagnostic.Code}{key}: {diagnostic.Message}",
-                diagnostic.Severity.Equals("warning", StringComparison.OrdinalIgnoreCase) ? CommandDiagnosticSeverity.Warning : CommandDiagnosticSeverity.Error,
-                diagnostic.Code);
-        }
-    }
-
     private static void WriteUsage(TextWriter writer)
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  runic-translations init --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [init-options]");
-        writer.WriteLine("  runic-translations validate --catalog <file> --documents <path-or-glob...>");
-        writer.WriteLine("  runic-translations generate --catalog <file> --documents <path-or-glob...> --output <directory> [emit-switches]");
-        writer.WriteLine("  runic-translations verify --catalog <file> --documents <path-or-glob...> --output <directory> [emit-switches]");
+        writer.WriteLine("  runic-translations validate --project <translations-directory>");
+        writer.WriteLine("  runic-translations generate --project <translations-directory> --output <directory> [emit-switches]");
+        writer.WriteLine("  runic-translations verify --project <translations-directory> --output <directory> [emit-switches]");
         writer.WriteLine("  runic-translations schema --output <directory>");
-        writer.WriteLine("  runic-translations import --source <locale>=<file>... --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> --output <directory> [--format auto|json|inlang] [--dry-run] [--allow-partial]");
-        writer.WriteLine("  runic-translations analyze --catalog <file> --documents <path-or-glob...> [--sources <path-or-glob...>] [analysis-options]");
-        writer.WriteLine("  runic-translations inspect --source <file>");
-        writer.WriteLine("  runic-translations migrate --source <v2-file> --output <v3-file> [--report <file>]");
-        writer.WriteLine("  runic-translations xliff-export --catalog <file> --documents <path-or-glob...> --output <directory> [--review <file>]");
-        writer.WriteLine("  runic-translations xliff-import --source <file> --output <directory> [--review-output <file>]");
-        writer.WriteLine("  runic-translations review-export --catalog <id> --output <file>");
-        writer.WriteLine("  runic-translations review-import|review-report --source <file>");
         writer.WriteLine();
         writer.WriteLine("Arguments may be read from a UTF-8 response file with @<file>.");
         writer.WriteLine("Framework transport uses --runic-output human|json; --output remains the tool destination option.");
-        writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --layer <name> --no-esm --no-starter --vscode.");
+        writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --no-starter.");
         writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest --emit-esm --emit-cpp.");
-        writer.WriteLine("Analysis options: --format text|json --fail-on-findings --unsafe-ignore-dynamic --artifact-fingerprint <sha256:...> --artifact-path <path>.");
         writer.WriteLine("With no emit switches, generate and verify use all output groups.");
         writer.WriteLine("Exit codes: 0 success; 1 validation or verification diagnostics; 2 invocation or operational failure.");
     }
@@ -575,12 +434,12 @@ internal sealed class ToolExecutionSink : ICommandOutcomeSink
         if (outcome.IsSuccess) return TranslationsToolFailurePresentation.Standard;
         if (outcome.ExitCategory != CommandExitCategory.Validation) return TranslationsToolFailurePresentation.ErrorOnly;
         if (diagnostics.Count == 0 && outcome.HumanOutput is { Length: > 0 }) return TranslationsToolFailurePresentation.OutputOnly;
-        return diagnostics.Count != 0 && HasLegacyToolDiagnostic(diagnostics)
-            ? TranslationsToolFailurePresentation.LegacyDiagnostics
+        return diagnostics.Count != 0 && HasApplicationDiagnostic(diagnostics)
+            ? TranslationsToolFailurePresentation.DiagnosticsOnly
             : TranslationsToolFailurePresentation.Standard;
     }
 
-    private static bool HasLegacyToolDiagnostic(IReadOnlyList<CommandDiagnostic> diagnostics)
+    private static bool HasApplicationDiagnostic(IReadOnlyList<CommandDiagnostic> diagnostics)
     {
         foreach (CommandDiagnostic diagnostic in diagnostics)
         {
@@ -618,21 +477,11 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
     {
         ToolOperationResult result = request.Command switch
         {
-            "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Documents, request.Layer, request.EmitCSharp, request.EmitJson, request.EmitTypeScript),
-            "validate" => Program.Execute(new ToolInvocation(ToolCommand.Validate, request.Catalog, request.Documents, null, ToolEmission.None, null, null, null)),
-            "generate" => Program.Execute(new ToolInvocation(ToolCommand.Generate, request.Catalog, request.Documents, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp), null, null, null)),
-            "verify" => Program.Execute(new ToolInvocation(ToolCommand.Verify, request.Catalog, request.Documents, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp), null, null, null)),
-            "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, null, Array.Empty<string>(), request.Output, ToolEmission.None, null, null, null)),
-            "import" => Program.ExecuteImport(request.Sources!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Output!, request.Format, request.FlagOne == true, request.FlagTwo == true),
-            "analyze" => Program.ExecuteAnalyze(request.Catalog!, request.Documents, request.Sources ?? Array.Empty<string>(), request.Format, request.FlagOne == true, request.FlagTwo == true, request.ArtifactFingerprint, request.ArtifactPath),
-            "inspect" => Program.ExecuteTooling(result => ToolingOperations.Inspect(request.Sources![0], result)),
-            "migrate" => Program.ExecuteTooling(result => ToolingOperations.Migrate(request.Sources![0], request.Output!, request.AuxiliaryPath, result)),
-            "xliff-export" => Program.ExecuteTooling(result => ToolingOperations.ExportXliff(request.Catalog!, request.Documents, request.Output!, request.AuxiliaryPath, result)),
-            "xliff-import" => Program.ExecuteTooling(result => ToolingOperations.ImportXliff(request.Sources![0], request.Output!, request.AuxiliaryPath, result)),
-            "review-export" => Program.ExecuteTooling(result => ToolingOperations.ExportReview(request.Catalog!, request.Output!, result)),
-            "review-import" => Program.ExecuteTooling(result => ToolingOperations.ImportReview(request.Sources![0], result)),
-            "review-report" => Program.ExecuteTooling(result => ToolingOperations.ReportReview(request.Sources![0], result)),
-            "locale-pack" => Program.ExecuteTooling(result => ToolingOperations.BuildLocalePack(request.Catalog!, request.Documents, request.Output!, result)),
+            "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter),
+            "validate" => ExecuteCompilation(request, ToolCommand.Validate, null, ToolEmission.None),
+            "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp)),
+            "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp)),
+            "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
             _ => new ToolOperationResult { ExitCode = 2 },
         };
         return result.ExitCode == 0
@@ -642,6 +491,24 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
                 new CommandFault("RCLI9000", "The translations command could not be completed."),
                 result.Diagnostics,
                 result.HumanOutput ?? (result.Output.Length == 0 ? null : result.Output + Environment.NewLine));
+    }
+
+    private static ToolOperationResult ExecuteCompilation(
+        TranslationsToolCommandRequest request,
+        ToolCommand command,
+        string? output,
+        ToolEmission emission)
+    {
+        string? project = request.Project;
+        if (string.IsNullOrWhiteSpace(project)) return Usage("--project is required.");
+        return Program.Execute(new ToolInvocation(command, output, emission, null, project));
+    }
+
+    private static ToolOperationResult Usage(string message)
+    {
+        var result = new ToolOperationResult { ExitCode = 2, ExitCategory = CommandExitCategory.Usage };
+        result.AddDiagnostic("RCLI9003", "tool-usage", message, CommandDiagnosticSeverity.Error);
+        return result;
     }
 }
 

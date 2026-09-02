@@ -47,6 +47,7 @@ internal static class SchemaTests
         AssertReferencesResolve(ReadSchemaPath("resources-v2.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("message-ast-v2.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("capabilities-v1.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("project-v1.schema.json"));
     }
 
     private static void ValidCorpusSourcesAreStrictJson()
@@ -144,7 +145,7 @@ internal static class SchemaTests
         {
             if (element.ValueKind == JsonValueKind.Object)
             {
-                foreach (JsonProperty property in element.EnumerateObject())
+                foreach (System.Text.Json.JsonProperty property in element.EnumerateObject())
                 {
                     if (property.NameEquals("$ref"))
                     {

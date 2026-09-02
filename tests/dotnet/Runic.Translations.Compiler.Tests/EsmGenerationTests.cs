@@ -24,7 +24,7 @@ internal static class EsmGenerationTests
         IReadOnlyList<TranslationGeneratedOutput> first = TranslationOutputRenderer.RenderEsmModules(catalog);
         IReadOnlyList<TranslationGeneratedOutput> second = TranslationOutputRenderer.RenderEsmModules(catalog);
 
-        Assert.Equal(13, first.Count);
+        Assert.Equal(15, first.Count);
         Assert.Equal(string.Join('|', first.Select(output => output.RelativePath)), string.Join('|', second.Select(output => output.RelativePath)));
         for (int index = 0; index < first.Count; index++)
         {
@@ -67,6 +67,7 @@ internal static class EsmGenerationTests
             File.WriteAllText(script, """
                 import { m } from "./portable.esm/messages.js";
                 import { configureLocaleResolver, createLocaleSource, resolveLocale, contractFingerprint } from "./portable.esm/runtime.js";
+                import { runWithLocale } from "./portable.esm/server.js";
                 import { decodeTextReference, formatTextReference } from "./portable.esm/transport.js";
                 const equal = (actual, expected) => { if (actual !== expected) throw new Error(`expected ${expected}; actual ${actual}`); };
                 equal(m.Plain(), "Plain");
@@ -86,6 +87,9 @@ internal static class EsmGenerationTests
                 const isolated = await Promise.all(Array.from({ length: 100 }, (_, index) => Promise.resolve().then(() =>
                   m.Plain({ locale: index % 2 === 0 ? "en" : "de" }))));
                 if (isolated.some((value, index) => value !== (index % 2 === 0 ? "Plain" : "Einfach"))) throw new Error("explicit SSR locales leaked across calls");
+                const requestLocal = await Promise.all(Array.from({ length: 100 }, (_, index) =>
+                  runWithLocale(index % 2 === 0 ? "en" : "de", async () => { await Promise.resolve(); return m.Plain(); })));
+                if (requestLocal.some((value, index) => value !== (index % 2 === 0 ? "Plain" : "Einfach"))) throw new Error("request-local SSR locales leaked across calls");
                 const restore = configureLocaleResolver(() => "de");
                 equal(m.Plain(), "Einfach");
                 restore();

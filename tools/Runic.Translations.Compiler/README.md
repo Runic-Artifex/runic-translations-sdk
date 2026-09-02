@@ -1,24 +1,24 @@
 # Runic.Translations.Compiler
 
-This internal assembly compiles Runic Translations catalogs for the shipping Tooling, Build, and CLI products. It accepts UTF-8 sources, returns deterministic diagnostics and a language-neutral compiled model, and can render C#, JSON, TypeScript, ESM, template manifests, and an experimental C++20 surface.
+This internal assembly compiles Runic MF2 projects for the shipping Tooling, Build, and CLI products. It accepts UTF-8 sources, returns deterministic diagnostics and a language-neutral compiled model, and can render C#, JSON, TypeScript, ESM, template manifests, and an experimental C++20 surface.
 
 ## Install
 
 Install `Runic.Translations.Tooling` when hosting compilation directly. The compiler assembly ships inside that package and is not separately versioned.
 
-## Compile a catalog
+## Compile a project
 
 ```csharp
 using Runic.Translations.Compiler;
 
-var catalog = new TranslationSource(
-    "Resources/app.catalog.json",
-    File.ReadAllBytes("Resources/app.catalog.json"));
-var english = new TranslationSource(
-    "Resources/app.en.json",
-    File.ReadAllBytes("Resources/app.en.json"));
+var project = new TranslationSource(
+    "translations/runic.json",
+    File.ReadAllBytes("translations/runic.json"));
+var title = new TranslationSource(
+    "translations/en/application_title.mf2",
+    File.ReadAllBytes("translations/en/application_title.mf2"));
 
-TranslationCompilation result = TranslationCompiler.Compile([catalog], [english]);
+TranslationCompilation result = TranslationCompiler.CompileMf2Project(project, [title]);
 
 foreach (TranslationDiagnostic diagnostic in result.Diagnostics)
 {
@@ -43,10 +43,9 @@ Compilation is deterministic for the same classified UTF-8 inputs and options. I
 
 The containing Tooling package is a public preview for .NET 10. Source schemas, normalized message grammar, artifact schemas, and ESM ABI are versioned separately from package SemVer.
 
-- [Compiler API example](https://github.com/Runic-Artifex/runic-translations/blob/main/dotnet/tests/Runic.Translations.Compiler.Tests/CompilerTests.cs)
-- [Schema-v2 guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/schema-v2.md)
+- [Compiler API example](https://github.com/Runic-Artifex/runic-translations/blob/main/dotnet/tests/Runic.Translations.Compiler.Tests/Mf2ProjectTests.cs)
+- [MF2 project guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
 - [ESM backend](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/esm.md)
-- [Catalog analysis](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/analysis.md)
 - [Compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md)
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
 

@@ -8,7 +8,7 @@ and initial selector support. The fixture compiles with Clang under `-Werror`.
 This surface is experimental and excluded from default emission. Its dependency-
 free formatter intentionally makes no broad locale-equivalence claim. It rejects
 structured format and markup nodes explicitly instead of flattening them. The
-schema-v2 fixture proves multi-selector lowering still consumes the canonical AST.
+MF2 compiler fixtures prove selector lowering still consumes the canonical AST.
 
 [ADR 0002](adr/0002-cpp-formatter-provider.md) selects ICU4C for a future
 production formatter adapter. That work remains a generator backend, never a

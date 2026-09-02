@@ -1,6 +1,6 @@
 # Runic.Translations.Build
 
-Connect Runic Translations catalogs to MSBuild with simple project items. The package feeds classified inputs to the C# generator and can invoke a pinned local tool to produce JSON, TypeScript, ESM, template manifests, or the experimental C++20 output.
+Connect a conventional Runic MF2 project to MSBuild. The package discovers the project, feeds its inputs to the C# generator, and can invoke a pinned local tool to produce JSON, TypeScript, ESM, template manifests, or the experimental C++20 output.
 
 ## Install
 
@@ -14,13 +14,10 @@ Replace `<VERSION>` with the current preview shown on NuGet. The package targets
 
 ## Configure a project
 
-```xml
-<ItemGroup>
-  <TranslationCatalog Include="Resources/app.catalog.json" />
-  <TranslationDocument Include="Resources/app.en.json" />
-  <TranslationDocument Include="Resources/app.de.json" />
-</ItemGroup>
+Place `runic.json` and locale message directories under `translations/`. No
+MSBuild items are required:
 
+```xml
 <PropertyGroup>
   <TranslationsEmitEsm>true</TranslationsEmitEsm>
 </PropertyGroup>
@@ -31,7 +28,7 @@ dotnet tool restore
 dotnet build
 ```
 
-Catalogs and documents become Roslyn `AdditionalFiles` with `RunicTranslationKind` metadata for `Runic.Translations.Generator`. ESM output defaults to `obj/<configuration>/<target-framework>/translations/app.esm/`; consume its `web-module-manifest-v1.json` with the Vite adapter.
+The project declaration and MF2 messages become Roslyn `AdditionalFiles` with `RunicTranslationKind` metadata for `Runic.Translations.Generator`. ESM output defaults to `obj/<configuration>/<target-framework>/translations/app.esm/`; consume its `web-module-manifest-v1.json` with the Vite adapter.
 
 ## Select generated artifacts
 
@@ -51,7 +48,7 @@ Choose this package for generated C# and whenever MSBuild owns input classificat
 
 ## Important build behavior
 
-- The current target accepts exactly one catalog and one or more documents.
+- The current target accepts exactly one `runic.json` project and its discovered `.mf2` messages.
 - The default launcher is the project-local `dotnet tool run runic-translations --`; restore the committed tool manifest before building.
 - Output must resolve beneath `IntermediateOutputPath`. Unsafe paths fail with `RTR0020`.
 - Incremental generation tracks inputs, settings, the tool manifest, declared outputs, and an owned-output inventory.

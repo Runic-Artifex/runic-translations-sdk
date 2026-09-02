@@ -5,7 +5,6 @@ public sealed record TranslationAddLocaleRequest(
     string CatalogId,
     string Locale,
     string? Fallback,
-    string Layer,
     string CopyFromLocale);
 
 public sealed record TranslationRemoveLocaleRequest(
@@ -24,8 +23,7 @@ public sealed record TranslationCreateKeyRequest(
     string Root,
     string CatalogId,
     string Key,
-    string InitialValue,
-    string Layer);
+    string InitialValue);
 
 public enum TranslationKeyMutationKind
 {
