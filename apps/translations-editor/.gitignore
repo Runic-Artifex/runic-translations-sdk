@@ -5,3 +5,4 @@ artifacts/
 bin/
 obj/
 .packages/
+.direnv/
