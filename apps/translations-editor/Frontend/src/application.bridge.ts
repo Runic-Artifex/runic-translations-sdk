@@ -1,19 +1,5 @@
-// Authoring source for the editor Application Bridge wire contract.
-//
-// EditorContracts.cs is the authoritative domain surface; this file encodes the
-// same shapes once as an Effect Schema contract. The committed artifacts under
-// ../Contract are generated from here with the toolkit generator:
-//
-//   cd Frontend
-//   nix develop -c node ../../runic-toolkit/eng/generate-application-bridge-contract.mjs \
-//     "$PWD/contract/editor-contract.mjs" "$PWD/../Contract"
-//
-// Wire deltas forced by the C# generator (Runic.Application.Bridge.Generators):
-// - integers are emitted as 64-bit (Schema.Int stays "integer" on the wire);
-// - IReadOnlyDictionary<string,string> samples are encoded as { key, value } pairs.
-// Everything else is byte-for-byte the legacy camelCase payload.
-
 import { Schema } from "effect";
+import { bridge, defineApplicationBridgeContract } from "@runic-artifex/application-bridge";
 
 const EditorLocale = Schema.Struct({
   tag: Schema.String,
@@ -108,7 +94,7 @@ const EditorHistoryState = Schema.Struct({
   redoLabel: Schema.optional(Schema.String),
 });
 
-const WorkspaceSnapshot = Schema.Struct({
+export const WorkspaceSnapshot = Schema.Struct({
   root: Schema.String,
   catalog: Schema.optional(EditorCatalog),
   catalogs: Schema.Array(EditorCatalogSummary),
@@ -367,28 +353,13 @@ const EditorReviewImportPreview = Schema.Struct({
   refusals: Schema.Array(EditorInterchangeRefusal),
 });
 
-const errors = [
-  "TransportUnavailable",
-  "TransportClosed",
-  "ProtocolVersionMismatch",
-  "ProtocolDecodeError",
-  "CommandRejected",
-  "StaleRevision",
-  "OperationFailed",
-  "OperationCancelled",
-  "OperationTimedOut",
-].map((tag) => ({
-  tag,
-  schema: Schema.TaggedStruct(tag, { message: Schema.String, retryable: Schema.Boolean }),
-}));
-
 // The editor keeps authoritative conflict detection inside EditorSession
 // (file revisions, review sidecars, confirmation tokens), so no bridge command
 // advances the transport revision; expectedRevision stays neutral by design.
-const command = (
-  tag,
-  schema,
-  receipt,
+const command = <C extends Schema.Schema.Any>(
+  tag: string,
+  schema: C,
+  receipt: string,
 ) => ({
   tag,
   schema,
@@ -519,20 +490,28 @@ const receipts = [
   { tag: "ReviewJsonImportApplied", schema: Schema.TaggedStruct("ReviewJsonImportApplied", { result: EditorReviewOperationResult }) },
 ];
 
-export default {
-  formatVersion: 1,
+const receiptByTag = new Map(receipts.map((receipt) => [receipt.tag, receipt.schema] as const));
+const bridgeCommands = commands.map((item) => {
+  const receipt = receiptByTag.get(item.receipt);
+  if (receipt === undefined) throw new TypeError(`Receipt '${item.receipt}' is not declared.`);
+  return bridge.command(item.schema, {
+    receipt,
+    startsOperation: item.startsOperation,
+    cancellable: item.cancellable,
+    advancesRevision: item.advancesRevision,
+  });
+});
+
+export default defineApplicationBridgeContract({
   protocol: { identity: "runic.translations.editor", version: 1 },
   csharp: { namespace: "Runic.Translations.Editor.Contract", contractName: "Editor" },
-  limits: {
-    maxFrameBytes: 262144,
-    maxDepth: 32,
-    maxStringBytes: 65536,
-    maxCollectionItems: 4096,
-    maxPendingCommands: 64,
-  },
-  schemas: {},
-  commands,
-  receipts,
+  snapshot: WorkspaceSnapshot,
+  commands: bridgeCommands,
   events: [],
-  errors,
-};
+  errors: [],
+  initialize: { _tag: "InitializeApplication" },
+});
+
+export type EditorCommand = (typeof commands)[number]["schema"]["Type"];
+export type EditorReceipt = (typeof receipts)[number]["schema"]["Type"];
+export type EditorEvent = never;

@@ -8,7 +8,8 @@ import {
   createRunicDevtoolsObserver,
   preserveRunicHmrResource,
 } from "virtual:runic/client";
-import { EditorContract, type EditorCommand, type EditorReceipt } from "./editor-contract";
+import EditorContract from "../application.bridge.generated";
+import type { EditorCommand, EditorReceipt } from "../application.bridge";
 import { mockApplicationBridgeLayer } from "./mock-bridge";
 import type {
   EditorAbout,

@@ -15,10 +15,9 @@
   <output id="summary"></output>
   <script>
     "use strict";
-    // Wire constants mirror Contract/bridge.manifest.json for the editor contract.
-    const protocol = "runic.translations.editor";
-    const version = 1;
-    const fingerprint = "45e9039e5f53ab97d6c57556a7001b97db527625a4f520592a2cb032c279d439";
+    const protocol = "__BRIDGE_PROTOCOL__";
+    const version = __BRIDGE_VERSION__;
+    const fingerprint = "__BRIDGE_FINGERPRINT__";
 
     const body = document.body;
     const catalogOut = document.querySelector("#catalog");

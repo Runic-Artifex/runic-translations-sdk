@@ -105,12 +105,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The generated Application Bridge contract: the manifest carries its own
-         canonical fingerprint, and each schema is checksum-verified at compile
-         time by Runic.Application.Bridge.Generators. -->
-    <AdditionalFiles Include="Contract/bridge.manifest.json" />
-    <AdditionalFiles Include="Contract/schemas/**/*.schema.json" />
+    <AdditionalFiles Include="Contract/bridge.ir.json" />
   </ItemGroup>
+
+  <Target Name="GenerateApplicationBridgeContract"
+          BeforeTargets="CoreCompile"
+          Inputs="Frontend/src/application.bridge.ts;Frontend/package.json;Frontend/bun.lock"
+          Outputs="Contract/bridge.ir.json;Frontend/src/application.bridge.generated.ts">
+    <Exec WorkingDirectory="Frontend"
+          Command="bun install --frozen-lockfile --ignore-scripts"
+          Condition="'$(RUNIC_EDITOR_FRONTEND_CANDIDATES)' != '1'" />
+    <Exec WorkingDirectory="Frontend" Command="bun run contract:generate" />
+  </Target>
 
   <ItemGroup>
     <TranslationProject Include="EditorResources/runic.json" />
