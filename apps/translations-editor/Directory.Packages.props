@@ -3,18 +3,22 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
+    <RunicApplicationPackageVersion Condition="'$(RunicApplicationPackageVersion)' == ''">1.0.0-preview.1</RunicApplicationPackageVersion>
+    <RunicCommandLinePackageVersion Condition="'$(RunicCommandLinePackageVersion)' == ''">1.0.0-preview.1</RunicCommandLinePackageVersion>
+    <RunicTranslationsPackageVersion Condition="'$(RunicTranslationsPackageVersion)' == ''">1.0.0-preview.1</RunicTranslationsPackageVersion>
+    <RunicAssetsPackageVersion Condition="'$(RunicAssetsPackageVersion)' == ''">1.0.0-preview.1</RunicAssetsPackageVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Runic.Application" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.Application.Bridge" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.Application.Desktop" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.Application.Hosting" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.CommandLine" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.Translations" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.Translations.Tooling" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.Translations.Build" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.Assets" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.Assets.AspNetCore" Version="1.0.0-preview.1" />
-    <PackageVersion Include="Runic.Assets.Desktop" Version="1.0.0-preview.1" />
+    <PackageVersion Include="Runic.Application" Version="$(RunicApplicationPackageVersion)" />
+    <PackageVersion Include="Runic.Application.Bridge" Version="$(RunicApplicationPackageVersion)" />
+    <PackageVersion Include="Runic.Application.Desktop" Version="$(RunicApplicationPackageVersion)" />
+    <PackageVersion Include="Runic.Application.Hosting" Version="$(RunicApplicationPackageVersion)" />
+    <PackageVersion Include="Runic.CommandLine" Version="$(RunicCommandLinePackageVersion)" />
+    <PackageVersion Include="Runic.Translations" Version="$(RunicTranslationsPackageVersion)" />
+    <PackageVersion Include="Runic.Translations.Tooling" Version="$(RunicTranslationsPackageVersion)" />
+    <PackageVersion Include="Runic.Translations.Build" Version="$(RunicTranslationsPackageVersion)" />
+    <PackageVersion Include="Runic.Assets" Version="$(RunicAssetsPackageVersion)" />
+    <PackageVersion Include="Runic.Assets.AspNetCore" Version="$(RunicAssetsPackageVersion)" />
+    <PackageVersion Include="Runic.Assets.Desktop" Version="$(RunicAssetsPackageVersion)" />
   </ItemGroup>
 </Project>

@@ -8,6 +8,7 @@ manifest="$repository_root/obj/Release/net10.0/translations/editor.esm/web-modul
 verification_root="$(mktemp -d)"
 cli_workspace="$(mktemp -d)"
 registry_pid=""
+registry_ready=""
 cleanup() {
   if [[ -n "$registry_pid" ]]; then
     kill "$registry_pid" 2>/dev/null || true
@@ -32,10 +33,28 @@ local_npm_manifests=(
   "$repository_root/../runic-toolkit/web/packages/application-bridge/package.json"
   "$repository_root/../runic-desktop/web/packages/desktop/package.json"
   "$repository_root/../runic-svelte/packages/svelte/package.json"
+  "$repository_root/../runic-svelte/packages/sveltekit/package.json"
   "$repository_root/../runic-vite/package.json"
   "$repository_root/../runic-translations/web/package.json"
 )
-if [[ -f "${local_npm_manifests[0]}" && -f "${local_npm_manifests[1]}" && -f "${local_npm_manifests[2]}" && -f "${local_npm_manifests[3]}" && -f "${local_npm_manifests[4]}" ]]; then
+if [[ -f "${local_npm_manifests[0]}" && -f "${local_npm_manifests[1]}" && -f "${local_npm_manifests[2]}" && -f "${local_npm_manifests[3]}" && -f "${local_npm_manifests[4]}" && -f "${local_npm_manifests[5]}" ]]; then
+  node --input-type=module - "${local_npm_manifests[@]}" <<'NODE'
+  import { readFileSync } from "node:fs";
+  const expected = [
+    "@runic-artifex/application-bridge",
+    "@runic-artifex/desktop",
+    "@runic-artifex/svelte",
+    "@runic-artifex/sveltekit",
+    "@runic-artifex/vite-plugin-runic",
+    "@runic-artifex/vite-plugin-runic-translations",
+  ];
+  for (const [index, path] of process.argv.slice(2).entries()) {
+    const manifest = JSON.parse(readFileSync(path, "utf8"));
+    if (manifest.name !== expected[index] || manifest.version !== "1.0.0-preview.1") {
+      throw new Error(`Sibling package '${path}' is ${manifest.name}@${manifest.version}; expected ${expected[index]}@1.0.0-preview.1.`);
+    }
+  }
+NODE
   npm_feed="$verification_root/npm-feed"
   registry_ready="$verification_root/npm-registry.url"
   npm_userconfig="$verification_root/npmrc"
@@ -49,6 +68,8 @@ if [[ -f "${local_npm_manifests[0]}" && -f "${local_npm_manifests[1]}" && -f "${
   npm --prefix "$repository_root/../runic-desktop" pack --workspace @runic-artifex/desktop --ignore-scripts --pack-destination "$npm_feed"
   npm --prefix "$repository_root/../runic-svelte" run build --workspace @runic-artifex/svelte
   npm --prefix "$repository_root/../runic-svelte" pack --workspace @runic-artifex/svelte --ignore-scripts --pack-destination "$npm_feed"
+  npm --prefix "$repository_root/../runic-svelte" run build --workspace @runic-artifex/sveltekit
+  npm --prefix "$repository_root/../runic-svelte" pack --workspace @runic-artifex/sveltekit --ignore-scripts --pack-destination "$npm_feed"
   (
     cd "$repository_root/../runic-vite"
     npm run build
@@ -71,7 +92,9 @@ fi
 if [[ "${RUNIC_EDITOR_FRONTEND_CANDIDATES:-}" == "1" ]]; then
   [[ -d "$frontend/node_modules" ]] || { echo "The coordinated frontend candidates were not installed." >&2; exit 1; }
 else
-  npm --prefix "$frontend" ci --ignore-scripts --no-audit --no-fund
+  bun_install_args=(install --cwd "$frontend" --frozen-lockfile --ignore-scripts)
+  if [[ -s "$registry_ready" ]]; then bun_install_args+=(--registry "$(<"$registry_ready")"); fi
+  bun "${bun_install_args[@]}"
 fi
 build_args=(build "$project" -c Release --nologo -p:RunicTranslationsBuildMode=Verification)
 if [[ -n "${RUNIC_EDITOR_NUGET_CONFIG:-}" ]]; then
@@ -83,7 +106,7 @@ if rg -a -q 'RUNIC_EDITOR_HOSTED_E2E_ASSETS|__hosted-e2e' "$repository_root/bin/
   exit 1
 fi
 
-RUNIC_TRANSLATIONS_MANIFEST="$manifest" npm --prefix "$frontend" run verify
+RUNIC_TRANSLATIONS_MANIFEST="$manifest" bun run --cwd "$frontend" verify
 
 dotnet run --project "$project" -c Release --no-build -- \
   --smoke-test \

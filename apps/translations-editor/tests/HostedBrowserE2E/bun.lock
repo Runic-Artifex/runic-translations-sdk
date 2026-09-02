@@ -1,0 +1,15 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 0,
+  "workspaces": {
+    "": {
+      "name": "@runic-artifex/runic-translations-editor-hosted-e2e",
+      "devDependencies": {
+        "playwright-core": "1.62.1",
+      },
+    },
+  },
+  "packages": {
+    "playwright-core": ["playwright-core@1.62.1", "", { "bin": "cli.js" }, "sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw=="],
+  }
+}

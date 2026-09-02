@@ -13,15 +13,28 @@ $root = Join-Path ([System.IO.Path]::GetTempPath()) ("runic-editor-release-contr
 $version = "1.0.0-preview.contract"
 $commit = if ([string]::IsNullOrWhiteSpace($CandidateSetOutput)) { "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } else { (& git -C $repositoryRoot rev-parse HEAD).Trim() }
 $tree = if ([string]::IsNullOrWhiteSpace($CandidateSetOutput)) { "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" } else { (& git -C $repositoryRoot rev-parse "HEAD^{tree}").Trim() }
-$fixtureLock = Join-Path $root "package-lock.fixture.json"
-$fixtureFrontend = Join-Path $repositoryRoot "Frontend"
+$fixtureLock = Join-Path $root "bun.fixture.lock"
+$fixtureFrontend = Join-Path $root "frontend-fixture"
 $fixtureAssets = Join-Path $root "project.assets.fixture.json"
 
 try {
     New-Item -ItemType Directory -Force -Path $root | Out-Null
-    $lock = Get-Content -Raw -Path (Join-Path $repositoryRoot "Frontend/package-lock.json") | ConvertFrom-Json -AsHashtable
-    $lock.packages["node_modules/svelte-toolbelt"].Remove("license")
-    $lock | ConvertTo-Json -Depth 64 | Set-Content -Path $fixtureLock -Encoding utf8NoBOM
+    $fixturePackageRoot = Join-Path $fixtureFrontend "node_modules/svelte-toolbelt"
+    New-Item -ItemType Directory -Force -Path $fixturePackageRoot | Out-Null
+    [ordered]@{ name = "svelte-toolbelt"; version = "0.10.6" } | ConvertTo-Json | Set-Content -Path (Join-Path $fixturePackageRoot "package.json") -Encoding utf8NoBOM
+    $fixtureCandidateVersion = "1.0.0-ci.sha0123456789abcdef"
+    $fixtureCandidateRoot = Join-Path $fixtureFrontend "node_modules/@runic-artifex/application-bridge"
+    New-Item -ItemType Directory -Force -Path $fixtureCandidateRoot | Out-Null
+    [ordered]@{ name = "@runic-artifex/application-bridge"; version = $fixtureCandidateVersion; license = "MIT" } | ConvertTo-Json | Set-Content -Path (Join-Path $fixtureCandidateRoot "package.json") -Encoding utf8NoBOM
+    [ordered]@{
+        lockfileVersion = 2
+        configVersion = 0
+        workspaces = [ordered]@{ "" = [ordered]@{ name = "fixture"; dependencies = [ordered]@{ "svelte-toolbelt" = "0.10.6"; "@runic-artifex/application-bridge" = "file:C:\candidate\runic-artifex-application-bridge-$fixtureCandidateVersion.tgz" } } }
+        packages = [ordered]@{
+            "svelte-toolbelt" = @("svelte-toolbelt@0.10.6", "", [ordered]@{}, "sha512-fixture")
+            "@runic-artifex/application-bridge" = @("@runic-artifex/application-bridge@C:\candidate\runic-artifex-application-bridge-$fixtureCandidateVersion.tgz", [ordered]@{}, "sha512-candidate")
+        }
+    } | ConvertTo-Json -Depth 16 | Set-Content -Path $fixtureLock -Encoding utf8NoBOM
     $nugetRoot = Join-Path $root "nuget"
     $nugetPackage = Join-Path $nugetRoot "fixture.package/1.2.3"
     New-Item -ItemType Directory -Force -Path $nugetPackage | Out-Null
@@ -62,6 +75,8 @@ try {
     $previewDependencies = Get-Content -Raw (Join-Path $root "release-staging/dependencies.json") | ConvertFrom-Json -AsHashtable
     $unassertedDependency = @($previewDependencies.packages | Where-Object { $_.ecosystem -eq "npm" -and $_.name -eq "svelte-toolbelt" })
     if ($unassertedDependency.Count -ne 1 -or $unassertedDependency[0].license -ne "NOASSERTION") { throw "Undeclared npm licenses must be recorded as SPDX NOASSERTION." }
+    $candidateDependency = @($previewDependencies.packages | Where-Object { $_.ecosystem -eq "npm" -and $_.name -eq "@runic-artifex/application-bridge" })
+    if ($candidateDependency.Count -ne 1 -or $candidateDependency[0].version -ne $fixtureCandidateVersion -or $candidateDependency[0].source -ne "https://npm.pkg.github.com/@runic-artifex/application-bridge" -or $candidateDependency[0].integrity -ne "sha512-candidate") { throw "Local Bun candidate archives must retain their exact registry identity and integrity." }
     $previewSbomPath = Join-Path $root "release-staging/sbom.spdx.json"
     $previewSbom = Get-Content -Raw $previewSbomPath | ConvertFrom-Json -AsHashtable
     $previewDependency = @($previewSbom.packages | Where-Object { $_.name -like "nuget:*" })[0]

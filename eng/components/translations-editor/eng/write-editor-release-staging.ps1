@@ -63,58 +63,14 @@ function Get-SourceDate() {
 }
 
 function Get-NodeDependencies() {
-    $lockPath = if ($LockFile) { $LockFile } else { Join-Path $repositoryRoot "Frontend/package-lock.json" }
+    $lockPath = if ($LockFile) { $LockFile } else { Join-Path $repositoryRoot "Frontend/bun.lock" }
     $frontendRoot = if ($FrontendRoot) { $FrontendRoot } else { Join-Path $repositoryRoot "Frontend" }
-    if (-not (Test-Path $lockPath -PathType Leaf)) { throw "The npm lockfile '$lockPath' is missing." }
+    if (-not (Test-Path $lockPath -PathType Leaf)) { throw "The Bun lockfile '$lockPath' is missing." }
     if (-not (Test-Path $frontendRoot -PathType Container)) { throw "The frontend artifact root '$frontendRoot' is missing." }
-    $lock = Get-Content -Raw -Path $lockPath | ConvertFrom-Json -AsHashtable
-    $result = [System.Collections.Generic.List[object]]::new()
-    foreach ($entry in $lock.packages.GetEnumerator() | Sort-Object Key) {
-        if ($entry.Key -notlike "node_modules/*") { continue }
-        $name = $entry.Key.Substring("node_modules/".Length)
-        $resolved = if ($entry.Value.ContainsKey("resolved")) { [string]$entry.Value.resolved } else { "" }
-        $integrity = if ($entry.Value.ContainsKey("integrity")) { [string]$entry.Value.integrity } else { "" }
-        if (($resolved.Length -eq 0 -or $integrity.Length -eq 0) -and $entry.Value.ContainsKey("inBundle") -and $entry.Value.inBundle) {
-            $parentPath = $entry.Key.Substring(0, $entry.Key.LastIndexOf("/node_modules/"))
-            $parent = $lock.packages[$parentPath]
-            if ($null -eq $parent -or -not $parent.ContainsKey("integrity")) { throw "Bundled npm dependency '$name' lacks an integrity-bound parent." }
-            $parentResolved = if ($parent.ContainsKey("resolved")) { [string]$parent.resolved } else {
-                $parentName = $parentPath.Substring($parentPath.LastIndexOf("node_modules/") + "node_modules/".Length)
-                $parentLeaf = $parentName.Split('/')[-1]
-                "https://registry.npmjs.org/$parentName/-/$parentLeaf-$($parent.version).tgz"
-            }
-            $resolved = "bundled:" + $parentResolved
-            $integrity = "bundled:" + [string]$parent.integrity
-        }
-        if ($integrity.Length -eq 0) { throw "Npm dependency '$name' lacks locked integrity metadata." }
-        $license = if ($entry.Value.ContainsKey("license")) { [string]$entry.Value.license } else { "" }
-        if ($resolved.Length -eq 0) {
-            $packageLeaf = $name.Split('/')[-1]
-            $resolved = "https://registry.npmjs.org/$name/-/$packageLeaf-$($entry.Value.version).tgz"
-        }
-        $packageJson = Join-Path $frontendRoot ($entry.Key + "/package.json")
-        $installedMetadata = $null
-        if ($license.Length -eq 0) {
-            if (-not (Test-Path $packageJson -PathType Leaf)) { throw "Npm dependency '$name' lacks a lockfile license or installed package metadata." }
-            $installedMetadata = Get-Content -Raw -Path $packageJson | ConvertFrom-Json -AsHashtable
-            if ([string]$installedMetadata.name -ne $name -or [string]$installedMetadata.version -ne [string]$entry.Value.version) { throw "Installed npm metadata does not bind '$name@$($entry.Value.version)'." }
-            if ($installedMetadata.ContainsKey("license")) { $license = [string]$installedMetadata.license }
-        }
-        if ($license.Length -eq 0) { $license = "NOASSERTION" }
-        $installedMetadataSha256 = if ($null -eq $installedMetadata) { "" } else { Get-Digest $packageJson }
-        $metadataSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes("$name`n$($entry.Value.version)`n$resolved`n$integrity`n$license"))).ToLowerInvariant()
-        $result.Add([ordered]@{
-            name = $name
-            version = [string]$entry.Value.version
-            integrity = $integrity
-            source = $resolved
-            license = $license
-            metadataSha256 = $metadataSha256
-            installedMetadataSha256 = $installedMetadataSha256
-            ecosystem = "npm"
-        })
-    }
-    return @($result)
+    $exporter = Join-Path $repositoryRoot "eng/export-bun-dependencies.mjs"
+    $json = (& node $exporter $lockPath $frontendRoot)
+    if ($LASTEXITCODE -ne 0) { throw "The Bun dependency closure could not be exported." }
+    return @($json | ConvertFrom-Json -AsHashtable)
 }
 
 function Get-DotnetDependencies() {

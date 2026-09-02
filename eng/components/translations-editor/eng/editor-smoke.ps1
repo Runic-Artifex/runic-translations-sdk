@@ -19,7 +19,7 @@ try {
     if ($env:RUNIC_EDITOR_FRONTEND_CANDIDATES -eq "1") {
         if (-not (Test-Path (Join-Path $frontend "node_modules") -PathType Container)) { throw "The coordinated frontend candidates were not installed." }
     } else {
-        npm --prefix $frontend ci --ignore-scripts --no-audit --no-fund
+        bun install --cwd $frontend --frozen-lockfile --ignore-scripts
         if ($LASTEXITCODE -ne 0) { throw "Frontend dependency restore failed." }
     }
     $buildArguments = @("build", $project, "--configuration", $Configuration, "-p:RunicTranslationsBuildMode=Verification")

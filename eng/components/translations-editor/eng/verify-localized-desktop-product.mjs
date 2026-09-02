@@ -32,7 +32,24 @@ function run(command, args, cwd = root, env = {}) {
 }
 function requireSuccess(name, result) { if (!result.ok) throw new Error(`${name} failed:\n${result.output.slice(-4096)}`); }
 function phase(name, command, args, result) { return { name, argv: [command, ...args], status: result.ok ? "passed" : "failed", exitCode: result.exitCode }; }
-function environment(directory) { return { DOTNET_CLI_HOME: join(directory, ".dotnet"), NUGET_PACKAGES: join(directory, ".nuget", "packages"), NUGET_HTTP_CACHE_PATH: join(directory, ".nuget", "http-cache"), npm_config_cache: join(directory, ".npm-cache") }; }
+function environment(directory) { return { DOTNET_CLI_HOME: join(directory, ".dotnet"), NUGET_PACKAGES: join(directory, ".nuget", "packages"), NUGET_HTTP_CACHE_PATH: join(directory, ".nuget", "http-cache"), BUN_INSTALL_CACHE_DIR: join(directory, ".bun-cache") }; }
+function parseJsonc(text) {
+  let result = "", inString = false, escaped = false;
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index];
+    if (inString) {
+      result += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') inString = false;
+    } else if (character === '"') { inString = true; result += character; }
+    else if (character === ",") {
+      let next = index + 1; while (/\s/u.test(text[next] ?? "")) next++;
+      if (text[next] !== "}" && text[next] !== "]") result += character;
+    } else result += character;
+  }
+  return JSON.parse(result);
+}
 function packageVersion(packages, ecosystem, identity) {
   const value = packages.find(candidate => candidate.ecosystem === ecosystem && candidate.identity === identity)?.version;
   if (value !== canonicalPreviewVersion) throw new Error(`Compatibility set must pin ${ecosystem}:${identity} to ${canonicalPreviewVersion}.`);
@@ -47,9 +64,11 @@ async function compatibilityFacts() {
   }
   for (const identity of candidateIdentities) packageVersion(value.packages, "nuget", identity);
   packageVersion(value.packages, "npm", pluginIdentity);
-  const pins = [...(await readFile(join(root, "Directory.Packages.props"), "utf8")).matchAll(/<PackageVersion Include="([^"]+)" Version="([^"]+)"\s*\/>/g)];
-  for (const [, identity, version] of pins) {
-    if (version !== canonicalPreviewVersion || packageVersion(value.packages, "nuget", identity) !== version) {
+  const packageProperties = await readFile(join(root, "Directory.Packages.props"), "utf8");
+  const defaults = new Map([...packageProperties.matchAll(/<(Runic\w+PackageVersion)\s+Condition="[^"]+">([^<]+)<\/\1>/g)].map(match => [match[1], match[2]]));
+  const pins = [...packageProperties.matchAll(/<PackageVersion Include="([^"]+)" Version="\$\((Runic\w+PackageVersion)\)"\s*\/>/g)];
+  for (const [, identity, property] of pins) {
+    if (defaults.get(property) !== canonicalPreviewVersion || packageVersion(value.packages, "nuget", identity) !== canonicalPreviewVersion) {
       throw new Error(`Editor central package pin ${identity} must match the canonical ${canonicalPreviewVersion} compatibility pin.`);
     }
   }
@@ -120,10 +139,10 @@ async function candidateFacts() {
   }));
   const manifest = JSON.parse((await run("tar", ["-xOf", pluginArchive, "package/package.json"])).output);
   if (manifest.name !== pluginIdentity || manifest.version !== packageVersion(compatibility.packages, "npm", pluginIdentity)) throw new Error("The supplied translations Vite archive is not the coordinated candidate.");
-  const lock = JSON.parse(await readFile(join(root, "Frontend", "package-lock.json"), "utf8"));
-  const installed = lock.packages?.[`node_modules/${pluginIdentity}`];
-  if (!installed || installed.version !== manifest.version || installed.integrity !== await sha512(pluginArchive)) throw new Error("The Editor lockfile is not bound to the supplied exact-local translations Vite candidate.");
-  return { compatibility, nuget, npm: { identity: manifest.name, version: manifest.version, source: "exact-local", integrity: installed.integrity, archiveSha256: await sha256(pluginArchive) } };
+  const lock = parseJsonc(await readFile(join(root, "Frontend", "bun.lock"), "utf8"));
+  const installed = Object.values(lock.packages ?? {}).find(entry => Array.isArray(entry) && entry[0] === `${pluginIdentity}@${manifest.version}`);
+  if (!installed || installed[3] !== await sha512(pluginArchive)) throw new Error("The Editor Bun lockfile is not bound to the supplied exact-local translations Vite candidate.");
+  return { compatibility, nuget, npm: { identity: manifest.name, version: manifest.version, source: "exact-local", integrity: installed[3], archiveSha256: await sha256(pluginArchive) } };
 }
 
 async function archiveFacts(path) {
@@ -142,7 +161,7 @@ async function one() {
     for (const [name, command, args] of [
       ["tool-restore", "dotnet", ["tool", "restore", "--configfile", config, "--no-cache"]],
       ["editor-build", "dotnet", ["build", "Runic.Translations.Editor.csproj", "--configuration", "Release", "--nologo", `-p:RestoreConfigFile=${config}`]],
-      ["frontend-check", "npm", ["--prefix", "Frontend", "run", "check"]],
+      ["frontend-check", "bun", ["run", "--cwd", "Frontend", "check"]],
     ]) {
       const result = await run(command, args, root, env); phases.push(phase(name, command, args, result)); requireSuccess(name, result);
     }
@@ -158,7 +177,7 @@ async function one() {
     const packageSmoke = await run("dotnet", [join(publish, "Runic.Translations.Editor.dll"), "--smoke-test", "--workspace", join(publish, "ExampleWorkspace")], root, env);
     phases.push(phase("package-smoke", "dotnet", ["Runic.Translations.Editor.dll", "--smoke-test"], packageSmoke)); requireSuccess("packaged editor smoke", packageSmoke);
     const embedded = await archiveFacts(join(root, "obj", "Release", "net10.0", "runic-assets", "Runic.Translations.Editor.runic-assets"));
-    return { schema, isolation: { nuget: ".nuget/packages", npm: ".npm-cache" }, compatibility: { id: candidates.compatibility.id, releaseTrainVersion: candidates.compatibility.releaseTrainVersion, sha256: candidates.compatibility.sha256 }, generated, embedded, negativeGates, localeEvidence: ["en", "de", "structured-interchange"], nugetCandidates: candidates.nuget, npmCandidate: candidates.npm, phases };
+    return { schema, isolation: { nuget: ".nuget/packages", bun: ".bun-cache" }, compatibility: { id: candidates.compatibility.id, releaseTrainVersion: candidates.compatibility.releaseTrainVersion, sha256: candidates.compatibility.sha256 }, generated, embedded, negativeGates, localeEvidence: ["en", "de", "structured-interchange"], nugetCandidates: candidates.nuget, npmCandidate: candidates.npm, phases };
   } finally { await rm(directory, { recursive: true, force: true }); }
 }
 
@@ -166,7 +185,7 @@ export function verifyReceipt(receipt) {
   const errors = [];
   if (receipt?.schema !== repeatSchema || !Array.isArray(receipt.journeys) || receipt.journeys.length !== 2) errors.push("two desktop journeys are required");
   for (const journey of receipt?.journeys ?? []) {
-    if (journey?.schema !== schema || !same(journey.isolation, { nuget: ".nuget/packages", npm: ".npm-cache" })) errors.push("journey contract mismatch");
+    if (journey?.schema !== schema || !same(journey.isolation, { nuget: ".nuget/packages", bun: ".bun-cache" })) errors.push("journey contract mismatch");
     if (journey?.compatibility?.id !== "runic-1.0-preview.1" || journey.compatibility?.releaseTrainVersion !== canonicalPreviewVersion || !/^[a-f0-9]{64}$/.test(journey.compatibility?.sha256 ?? "")) errors.push("canonical compatibility pin mismatch");
     if (journey?.generated?.catalog !== "editor" || journey.generated?.esmAbiVersion !== 2 || !/^sha256:[a-f0-9]{64}$/.test(journey.generated?.contractFingerprint ?? "") || !/^[a-f0-9]{64}$/.test(journey.embedded?.sha256 ?? "")) errors.push("generated or embedded artifact mismatch");
     if (!same(journey?.negativeGates, expectedGates) || !same(journey?.localeEvidence, ["en", "de", "structured-interchange"])) errors.push("closed-boundary evidence mismatch");

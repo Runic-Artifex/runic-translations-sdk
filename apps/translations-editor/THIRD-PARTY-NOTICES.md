@@ -2,7 +2,7 @@
 
 The Runic Translations Editor redistributes or incorporates the following
 components. Versions are fixed by `Directory.Packages.props` and
-`Frontend/package-lock.json` in the corresponding source revision.
+`Frontend/bun.lock` in the corresponding source revision.
 
 | Component | Copyright / project | License |
 |---|---|---|

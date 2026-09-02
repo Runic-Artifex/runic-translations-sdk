@@ -89,7 +89,7 @@ Machine-translation providers and signed stable distribution are not available y
 
 ## Build from source
 
-Source development requires the .NET 10 SDK, Node.js, and npm. Sibling source projects are used automatically when they are available. Package-consumer fixtures provide the maintained isolated-candidate path: provide `RUNIC_EDITOR_NUGET_FEED`, `RUNIC_EDITOR_NPM_ARCHIVE`, and `RUNIC_EDITOR_COMPATIBILITY_SET` explicitly for the exact temporary local candidates. The verifier creates its own temporary NuGet configuration and caches; it never relies on a shared workspace feed or persistent user configuration. The canonical compatibility train is `1.0.0-preview.1`. Do not add a project `.npmrc`, configure GitHub credentials, or use GitHub Packages for local work.
+Source development requires the .NET 10 SDK, Node.js 24.18.0, and Bun 1.4.0. Sibling source projects are used automatically when they are available. Package-consumer fixtures provide the maintained isolated-candidate path: provide `RUNIC_EDITOR_NUGET_FEED`, `RUNIC_EDITOR_NPM_ARCHIVE`, and `RUNIC_EDITOR_COMPATIBILITY_SET` explicitly for the exact temporary local candidates. The verifier creates its own temporary NuGet configuration and caches; it never relies on a shared workspace feed or persistent user configuration. The canonical compatibility train is `1.0.0-preview.1`. Do not add a project `.npmrc`, configure GitHub credentials, or use GitHub Packages for local work.
 
 For the repeatable package proof, stage the exact candidate `.nupkg` files in a fresh temporary directory and point the verifier at the canonical compatibility manifest:
 
@@ -102,7 +102,7 @@ RUNIC_EDITOR_COMPATIBILITY_SET=/path/to/runic.compatibility-set.json \
 
 ```bash
 dotnet tool restore
-npm --prefix Frontend ci
+bun install --cwd Frontend --frozen-lockfile
 dotnet run --project Runic.Translations.Editor.csproj -- edit ExampleWorkspace
 ```
 
@@ -110,7 +110,7 @@ For frontend-only development, build the .NET project once to produce the locali
 
 ```bash
 RUNIC_TRANSLATIONS_MANIFEST=../obj/Debug/net10.0/translations/editor.esm/web-module-manifest-v1.json \
-  npm --prefix Frontend run dev:mock
+  bun run --cwd Frontend dev:mock
 ```
 
 Mock mode keeps writes in memory. Run `./verify.sh` to build against released packages, check the Svelte application and production bundle, exercise the compiler/save/recovery path, and detect unintended generated changes.

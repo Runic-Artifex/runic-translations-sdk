@@ -1,0 +1,35 @@
+name: Prepare exact Runic candidates
+description: Restore the Editor against the immutable registry candidates selected by the release authority.
+
+outputs:
+  config-file:
+    description: NuGet configuration mapped to the coordinated GitHub Packages candidates.
+    value: ${{ steps.prepare.outputs.config-file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Select exact registry candidates
+      shell: bash
+      run: node eng/export-ci-candidates.mjs >> "$GITHUB_ENV"
+
+    - name: Download exact npm candidates
+      shell: bash
+      env:
+        RUNIC_CANDIDATE_NPM_FEED: ${{ runner.temp }}/runic-editor-candidate-npm
+      run: node eng/download-github-npm.mjs "$RUNIC_CANDIDATE_NPM_FEED"
+
+    - id: prepare
+      name: Prepare exact frontend and tool inputs
+      shell: bash
+      env:
+        RUNIC_CANDIDATE_NPM_FEED: ${{ runner.temp }}/runic-editor-candidate-npm
+      run: |
+        node eng/prepare-ci-inputs.mjs
+        printf 'RUNIC_EDITOR_NUGET_CONFIG=%s\n' "$GITHUB_WORKSPACE/eng/NuGet.ci.config" >> "$GITHUB_ENV"
+        printf 'RUNIC_EDITOR_FRONTEND_CANDIDATES=1\n' >> "$GITHUB_ENV"
+        printf 'config-file=%s\n' "$GITHUB_WORKSPACE/eng/NuGet.ci.config" >> "$GITHUB_OUTPUT"
+
+    - name: Install exact frontend dependency graph
+      shell: bash
+      run: bun install --cwd Frontend --ignore-scripts

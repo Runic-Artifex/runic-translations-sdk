@@ -2,6 +2,7 @@
   "name": "@runic-artifex/runic-translations-editor-hosted-e2e",
   "private": true,
   "version": "0.0.0-private",
+  "packageManager": "bun@1.4.0",
   "license": "MIT",
   "description": "Hosted-web browser e2e suite for the runic-translations-editor serve boot mode.",
   "devDependencies": {

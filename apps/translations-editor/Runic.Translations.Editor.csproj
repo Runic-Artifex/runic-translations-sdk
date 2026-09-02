@@ -116,7 +116,7 @@
     <TranslationCatalog Include="EditorResources/editor.catalog.json" />
     <TranslationDocument Include="EditorResources/editor.en.json" />
     <TranslationDocument Include="EditorResources/editor.de.json" />
-    <EditorFrontendInput Include="Frontend/package.json;Frontend/package-lock.json;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/*.json" />
+    <EditorFrontendInput Include="Frontend/package.json;Frontend/bun.lock;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/*.json" />
     <None Update="ExampleWorkspace/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -150,10 +150,10 @@
           Inputs="@(EditorFrontendInput);$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json"
           Outputs="Frontend/build/index.html">
     <Exec WorkingDirectory="Frontend"
-          Command="npm ci --ignore-scripts --no-audit --no-fund"
+          Command="bun install --frozen-lockfile --ignore-scripts"
           Condition="'$(RUNIC_EDITOR_FRONTEND_CANDIDATES)' != '1'" />
     <Exec WorkingDirectory="Frontend"
-          Command="npm run build"
+          Command="bun run build"
           EnvironmentVariables="RUNIC_TRANSLATIONS_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json" />
   </Target>
 

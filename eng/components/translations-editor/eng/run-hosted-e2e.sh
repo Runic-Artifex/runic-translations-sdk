@@ -38,7 +38,7 @@ if [[ ! -f "$e2e_dir/node_modules/playwright-core/package.json" ]]; then
   if [[ -f "$toolkit_node_modules/playwright-core/package.json" ]]; then
     export NODE_PATH="$toolkit_node_modules"
   else
-    npm --prefix "$e2e_dir" ci --ignore-scripts --no-audit --no-fund
+    bun install --cwd "$e2e_dir" --frozen-lockfile --ignore-scripts
   fi
 fi
 
