@@ -116,7 +116,7 @@
     <ItemGroup>
       <_TranslationsDesiredResponseLine Include="generate" />
       <_TranslationsDesiredResponseLine Include="--project" />
-      <_TranslationsDesiredResponseLine Include="@(TranslationProject->'&quot;%(RootDir)%(Directory)&quot;')" />
+      <_TranslationsDesiredResponseLine Include="@(TranslationProject->'&quot;%(FullPath)&quot;')" />
       <_TranslationsDesiredResponseLine Include="--output" />
       <_TranslationsDesiredResponseLine Include="&quot;$(_TranslationsStagingDirectory)&quot;" />
       <_TranslationsDesiredResponseLine Include="--emit-json" Condition="'$(TranslationsEmitJson)' == 'true' or ('$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />

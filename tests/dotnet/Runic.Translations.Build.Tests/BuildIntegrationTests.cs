@@ -63,6 +63,12 @@ internal static class BuildIntegrationTests
         Assert.Contains("@(TranslationMf2)", inputs);
         Assert.Contains("$(MSBuildProjectFullPath)", inputs);
         Assert.Equal("$(TranslationsOutputStamp)", outputs);
+
+        string responseProject = document
+            .Descendants("_TranslationsDesiredResponseLine")
+            .Select(element => (string?)element.Attribute("Include"))
+            .Single(value => value?.StartsWith("@(TranslationProject", StringComparison.Ordinal) == true)!;
+        Assert.Equal("@(TranslationProject->'\"%(FullPath)\"')", responseProject);
     }
 
     private static void GenerationIsIsolated()
