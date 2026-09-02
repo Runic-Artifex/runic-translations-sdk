@@ -32,7 +32,7 @@ function run(command, args, cwd = root, env = {}) {
 }
 function requireSuccess(name, result) { if (!result.ok) throw new Error(`${name} failed:\n${result.output.slice(-4096)}`); }
 function phase(name, command, args, result) { return { name, argv: [command, ...args], status: result.ok ? "passed" : "failed", exitCode: result.exitCode }; }
-function environment(directory) { return { DOTNET_CLI_HOME: join(directory, ".dotnet"), NUGET_PACKAGES: join(directory, ".nuget", "packages"), NUGET_HTTP_CACHE_PATH: join(directory, ".nuget", "http-cache"), BUN_INSTALL_CACHE_DIR: join(directory, ".bun-cache") }; }
+function environment(directory) { return { DOTNET_CLI_HOME: join(directory, ".dotnet"), NUGET_PACKAGES: join(directory, ".nuget", "packages"), NUGET_HTTP_CACHE_PATH: join(directory, ".nuget", "http-cache"), BUN_INSTALL_CACHE_DIR: join(directory, ".bun-cache"), RUNIC_EDITOR_FRONTEND_CANDIDATES: "1" }; }
 function parseJsonc(text) {
   let result = "", inString = false, escaped = false;
   for (let index = 0; index < text.length; index++) {
@@ -163,7 +163,9 @@ async function one() {
       ["editor-build", "dotnet", ["build", "Runic.Translations.Editor.csproj", "--configuration", "Release", "--nologo", `-p:RestoreConfigFile=${config}`]],
       ["frontend-check", "bun", ["run", "--cwd", "Frontend", "check"]],
     ]) {
-      const result = await run(command, args, root, env); phases.push(phase(name, command, args, result)); requireSuccess(name, result);
+      const result = await run(command, args, root, env);
+      phases.push(phase(name, command, args.map(value => value.replaceAll(directory, "$WORKSPACE")), result));
+      requireSuccess(name, result);
     }
     const manifestPath = join(root, "obj", "Release", "net10.0", "translations", "editor.esm", "web-module-manifest-v1.json");
     const generated = await manifestFacts(manifestPath);
