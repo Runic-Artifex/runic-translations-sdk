@@ -9,8 +9,10 @@ command_line_version="${RunicCommandLineVersion:-1.0.0-preview.1}"
 configuration="Release"
 runtime_identifier="$(dotnet --info | awk '/ RID:/{print $2; exit}')"
 restore_options=()
+tool_source_options=(--add-source "$package_feed")
 if [[ -n "${NUGET_CONFIG_FILE:-}" ]]; then
   restore_options+=(--configfile "$NUGET_CONFIG_FILE")
+  tool_source_options=()
 fi
 
 rm -rf "$artifacts_root"
@@ -86,7 +88,7 @@ dotnet restore "$package_consumer" \
 tool_root="$artifacts_root/tool"
 dotnet tool install dotnet-runic-translations --version "$package_version" \
   --tool-path "$tool_root" \
-  --add-source "$package_feed" \
+  "${tool_source_options[@]}" \
   "${restore_options[@]}"
 "$tool_root/runic-translations" --help >/dev/null
 "$tool_root/runic-translations" help >/dev/null
