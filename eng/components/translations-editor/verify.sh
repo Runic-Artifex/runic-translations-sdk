@@ -10,6 +10,7 @@ cli_workspace="$(mktemp -d)"
 registry_pid=""
 registry_ready=""
 cleanup() {
+  RUNNER_TEMP="$verification_root" node "$repository_root/eng/restore-ci-inputs.mjs" 2>/dev/null || true
   if [[ -n "$registry_pid" ]]; then
     kill "$registry_pid" 2>/dev/null || true
     wait "$registry_pid" 2>/dev/null || true
@@ -92,21 +93,25 @@ fi
 if [[ "${RUNIC_EDITOR_FRONTEND_CANDIDATES:-}" == "1" ]]; then
   [[ -d "$frontend/node_modules" ]] || { echo "The coordinated frontend candidates were not installed." >&2; exit 1; }
 else
-  bun_install_args=(install --cwd "$frontend" --frozen-lockfile --ignore-scripts)
-  if [[ -s "$registry_ready" ]]; then bun_install_args+=(--registry "$(<"$registry_ready")"); fi
-  bun "${bun_install_args[@]}"
+  if [[ -s "$registry_ready" ]]; then
+    # Reuse the CI input preparation so local verification installs the exact
+    # packed archives instead of same-version registry cache entries or links.
+    RUNIC_CANDIDATE_NPM_FEED="$npm_feed" RUNNER_TEMP="$verification_root" \
+      node "$repository_root/eng/prepare-ci-inputs.mjs" --frontend-only
+  fi
+  bun install --cwd "$frontend" --ignore-scripts
 fi
 build_args=(build "$project" -c Release --nologo -p:RunicTranslationsBuildMode=Verification)
 if [[ -n "${RUNIC_EDITOR_NUGET_CONFIG:-}" ]]; then
   build_args+=("-p:RestoreConfigFile=$RUNIC_EDITOR_NUGET_CONFIG")
 fi
 dotnet "${build_args[@]}"
-if rg -a -q 'RUNIC_EDITOR_HOSTED_E2E_ASSETS|__hosted-e2e' "$repository_root/bin/Release/net10.0/Runic.Translations.Editor.dll"; then
+if grep -a -q -E 'RUNIC_EDITOR_HOSTED_E2E_ASSETS|__hosted-e2e' "$repository_root/bin/Release/net10.0/Runic.Translations.Editor.dll"; then
   echo "The production editor assembly contains hosted-browser fixture routing." >&2
   exit 1
 fi
 
-RUNIC_TRANSLATIONS_MANIFEST="$manifest" bun run --cwd "$frontend" verify
+RUNIC_TRANSLATIONS_MANIFEST="$manifest" bun run --cwd "$frontend" verify:built
 
 dotnet run --project "$project" -c Release --no-build -- \
   --smoke-test \
@@ -134,6 +139,7 @@ fi
 pwsh -NoProfile -File "$repository_root/eng/verify-editor-release-contract.ps1"
 bash "$repository_root/eng/run-hosted-e2e.sh"
 
+RUNNER_TEMP="$verification_root" node "$repository_root/eng/restore-ci-inputs.mjs"
 git -C "$repository_root" diff --check
 git -C "$repository_root" diff --binary --no-ext-diff > "$verification_root/after.diff"
 git -C "$repository_root" status --porcelain=v1 -z > "$verification_root/after.status"

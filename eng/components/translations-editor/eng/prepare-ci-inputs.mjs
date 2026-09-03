@@ -11,7 +11,10 @@ const backup = process.env.RUNNER_TEMP
   : join(root, ".ci", "candidate-inputs");
 if (!feed) throw new Error("RUNIC_CANDIDATE_NPM_FEED must name the local candidate archive directory.");
 
-const inputs = ["Frontend/package.json", "Frontend/bun.lock", ".config/dotnet-tools.json"];
+const frontendOnly = process.argv.includes("--frontend-only");
+const inputs = frontendOnly
+  ? ["Frontend/package.json", "Frontend/bun.lock"]
+  : ["Frontend/package.json", "Frontend/bun.lock", ".config/dotnet-tools.json"];
 await mkdir(backup, { recursive: true });
 for (const input of inputs) {
   await mkdir(join(backup, dirname(input)), { recursive: true });
@@ -57,9 +60,11 @@ for (const section of ["dependencies", "devDependencies"]) {
 }
 await writeFile(frontendPath, `${JSON.stringify(frontend, null, 2)}\n`);
 
-const toolPath = join(root, ".config/dotnet-tools.json");
-const toolManifest = JSON.parse(await readFile(toolPath, "utf8"));
-const toolVersion = process.env.RUNIC_TRANSLATIONS_TOOL_VERSION;
-if (!toolVersion) throw new Error("RUNIC_TRANSLATIONS_TOOL_VERSION must select the exact tool candidate.");
-toolManifest.tools["dotnet-runic-translations"].version = toolVersion;
-await writeFile(toolPath, `${JSON.stringify(toolManifest, null, 2)}\n`);
+if (!frontendOnly) {
+  const toolPath = join(root, ".config/dotnet-tools.json");
+  const toolManifest = JSON.parse(await readFile(toolPath, "utf8"));
+  const toolVersion = process.env.RUNIC_TRANSLATIONS_TOOL_VERSION;
+  if (!toolVersion) throw new Error("RUNIC_TRANSLATIONS_TOOL_VERSION must select the exact tool candidate.");
+  toolManifest.tools["dotnet-runic-translations"].version = toolVersion;
+  await writeFile(toolPath, `${JSON.stringify(toolManifest, null, 2)}\n`);
+}
