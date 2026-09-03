@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Runic.Translations.Editor.Contract;
 
 namespace Runic.Translations.Editor;
 
@@ -25,7 +26,11 @@ internal sealed partial class EditorHostedWebServer
                 return;
             }
             context.Response.ContentType = "text/html; charset=utf-8";
-            await context.Response.SendFileAsync(fixture, context.RequestAborted).ConfigureAwait(false);
+            string html = (await File.ReadAllTextAsync(fixture, context.RequestAborted).ConfigureAwait(false))
+                .Replace("__BRIDGE_PROTOCOL__", EditorBridgeContract.ProtocolIdentity, StringComparison.Ordinal)
+                .Replace("__BRIDGE_VERSION__", EditorBridgeContract.ProtocolVersion.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+                .Replace("__BRIDGE_FINGERPRINT__", EditorBridgeContract.Fingerprint, StringComparison.Ordinal);
+            await context.Response.WriteAsync(html, context.RequestAborted).ConfigureAwait(false);
         });
     }
 }

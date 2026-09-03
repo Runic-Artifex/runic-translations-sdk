@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { MockApplicationBridge } from "@runic-artifex/application-bridge";
-import type { EditorCommand, EditorReceipt } from "./editor-contract";
+import type { EditorCommand, EditorReceipt } from "../application.bridge";
 import type {
   EditorDocument,
   EditorProjectCreationRequest,

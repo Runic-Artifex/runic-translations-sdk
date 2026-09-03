@@ -8,14 +8,24 @@ const [packageJson, fullVerification, viteConfig, svelteConfig] = await Promise.
   readFile(new URL("../svelte.config.js", import.meta.url), "utf8"),
 ]);
 const frontend = JSON.parse(packageJson);
+const expandScript = (name, visited = new Set()) => {
+  if (visited.has(name)) return "";
+  visited.add(name);
+  const command = frontend.scripts?.[name];
+  if (typeof command !== "string") return "";
+  const nested = [...command.matchAll(/\bbun run ([\w:-]+)/g)]
+    .map(([, dependency]) => expandScript(dependency, visited));
+  return [command, ...nested].join("\n");
+};
 const command = frontend.scripts?.verify;
+const expandedCommand = expandScript("verify");
 
 assert.equal(typeof command, "string", "Frontend has no verify script.");
 assert.equal(frontend.packageManager, "bun@1.4.0", "Frontend must use the authority-pinned Bun release.");
 for (const test of ["verify-ui-catalog.mjs", "verify-keyboard-a11y.mjs", "verify-command-palette.mjs", "verify-w03-simulation.mjs", "verify-local-state.mjs"]) {
-  assert.match(command, new RegExp(test.replace(".", "\\.")), `Frontend verification omits ${test}.`);
+  assert.match(expandedCommand, new RegExp(test.replace(".", "\\.")), `Frontend verification omits ${test}.`);
 }
-assert.match(fullVerification, /RUNIC_TRANSLATIONS_MANIFEST="\$manifest" bun run --cwd "\$frontend" verify/,
+assert.match(fullVerification, /RUNIC_TRANSLATIONS_MANIFEST="\$manifest" bun run --cwd "\$frontend" verify:built/,
   "The repository verifier bypasses the frontend verification source of truth.");
 assert.doesNotMatch(viteConfig, /desktop:\s*true/,
   "The Vite plugin must not duplicate SvelteKit Desktop output ownership.");
