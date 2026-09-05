@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "bun@1.4.0",
   "engines": {
-    "node": ">=24.18.0"
+    "node": ">=24.18.0 <25"
   },
   "exports": {
     ".": {
@@ -32,12 +32,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Runic-Artifex/runic-translations.git",
-    "directory": "web"
+    "url": "git+https://github.com/Runic-Artifex/runic-sdk.git",
+    "directory": "packages/runic-translations/web"
   },
-  "homepage": "https://github.com/Runic-Artifex/runic-translations/tree/main/web#readme",
+  "homepage": "https://github.com/Runic-Artifex/runic-sdk/tree/main/packages/runic-translations/web#readme",
   "bugs": {
-    "url": "https://github.com/Runic-Artifex/runic-translations/issues"
+    "url": "https://github.com/Runic-Artifex/runic-sdk/issues"
   },
   "keywords": [
     "runic-artifex",

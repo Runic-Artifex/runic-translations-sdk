@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="../../Directory.Build.props" />
   <PropertyGroup>
     <!--
       Development is the approachable inner loop. Verification is selected by CI
@@ -25,10 +26,8 @@
     <Authors>RunicArtifex</Authors>
     <Company>RunicArtifex</Company>
     <Copyright>Copyright (c) 2026 Viktor Jannicke</Copyright>
-    <RepositoryUrl>https://github.com/Runic-Artifex/runic-translations</RepositoryUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <PackageProjectUrl>https://github.com/Runic-Artifex/runic-translations</PackageProjectUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags Condition="'$(PackageTags)' == ''">runic-artifex;i18n;localization;resources;dotnet;nativeaot</PackageTags>

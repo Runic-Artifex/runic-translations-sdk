@@ -1,3 +1,5 @@
+> This package is now developed in the [Runic SDK workspace](../../README.md). Use its root build and verification commands.
+
 ![Runic Translations banner](.github/assets/brand/banner.png)
 
 # Runic Translations

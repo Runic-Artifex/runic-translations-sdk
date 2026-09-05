@@ -15,10 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj"
-                      Condition="Exists('../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj')" />
-    <PackageReference Include="Runic.CommandLine"
-                      Condition="!Exists('../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj')" />
+    <ProjectReference Include="../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj" />
     <ProjectReference Include="..\..\src\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />
     <ProjectReference Include="..\..\src\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" />
     <ProjectReference Include="..\..\src\Runic.Translations.Tooling\Runic.Translations.Tooling.csproj" />

@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "bun@1.4.0",
   "engines": {
-    "node": ">=24.18.0"
+    "node": ">=24.18.0 <25"
   },
   "scripts": {
     "build": "vite build",
@@ -19,9 +19,9 @@
     "verify": "bun run verify:checks && bun run build && node test/verify-production.mjs"
   },
   "dependencies": {
-    "@runic-artifex/application-bridge": "1.0.0-preview.1",
-    "@runic-artifex/desktop": "1.0.0-preview.1",
-    "@runic-artifex/svelte": "1.0.0-preview.1",
+    "@runic-artifex/application-bridge": "workspace:*",
+    "@runic-artifex/desktop": "workspace:*",
+    "@runic-artifex/svelte": "workspace:*",
     "effect": "3.22.1",
     "svelte": "5.56.8"
   },
@@ -29,10 +29,10 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@internationalized/date": "^3.12.3",
     "@lucide/svelte": "^1.30.0",
-    "@runic-artifex/application-bridge-tooling": "1.0.0-preview.1",
-    "@runic-artifex/sveltekit": "1.0.0-preview.1",
-    "@runic-artifex/vite-plugin-runic": "1.0.0-preview.1",
-    "@runic-artifex/vite-plugin-runic-translations": "1.0.0-preview.1",
+    "@runic-artifex/application-bridge-tooling": "workspace:*",
+    "@runic-artifex/sveltekit": "workspace:*",
+    "@runic-artifex/vite-plugin-runic": "workspace:*",
+    "@runic-artifex/vite-plugin-runic-translations": "workspace:*",
     "@sveltejs/adapter-static": "3.0.10",
     "@sveltejs/kit": "2.70.2",
     "@sveltejs/vite-plugin-svelte": "7.2.0",

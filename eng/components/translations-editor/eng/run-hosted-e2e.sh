@@ -31,10 +31,10 @@ if [[ -z "$browser" || ! -x "$browser" ]]; then
 fi
 export WEBUI_BROWSER_PATH="$browser"
 
-# playwright-core resolution: vendored node_modules first, then the sibling toolkit
+# playwright-core resolution: vendored node_modules first, then the workspace toolkit
 # checkout, otherwise restore the pinned dev dependency.
 if [[ ! -f "$e2e_dir/node_modules/playwright-core/package.json" ]]; then
-  toolkit_node_modules="$repository_root/../runic-toolkit/node_modules"
+  toolkit_node_modules="$repository_root/../../packages/runic-toolkit/node_modules"
   if [[ -f "$toolkit_node_modules/playwright-core/package.json" ]]; then
     export NODE_PATH="$toolkit_node_modules"
   else

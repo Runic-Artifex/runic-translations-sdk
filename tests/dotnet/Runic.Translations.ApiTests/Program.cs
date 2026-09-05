@@ -89,7 +89,7 @@ internal static class Program
         string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Release";
         string generatorPath = Path.Combine(root, "dotnet", "src", "Runic.Translations.Generator", "bin", configuration, "net10.0", "Runic.Translations.Generator.dll");
         string packageRoot = Environment.GetEnvironmentVariable("NUGET_PACKAGES") ??
-            Path.Combine(root, ".packages", "nuget");
+            Path.GetFullPath(Path.Combine(root, "..", "..", ".cache", "nuget"));
         string codeAnalysisPath = Path.Combine(packageRoot, "microsoft.codeanalysis.common", "4.14.0", "lib", "netstandard2.0", "Microsoft.CodeAnalysis.dll");
         if (!File.Exists(generatorPath) || !File.Exists(codeAnalysisPath))
         {
@@ -419,6 +419,7 @@ internal sealed class ApiManifest
         "System.Runtime.InteropServices.InAttribute" or
         "System.Runtime.InteropServices.OptionalAttribute" or
         "System.Runtime.InteropServices.OutAttribute" or
+        "System.Diagnostics.DebuggerStepThroughAttribute" or
         "System.Runtime.CompilerServices.AsyncIteratorStateMachineAttribute" or
         "System.Runtime.CompilerServices.AsyncStateMachineAttribute" or
         "System.Runtime.CompilerServices.CompilerGeneratedAttribute" or

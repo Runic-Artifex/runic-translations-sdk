@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="../../Directory.Packages.props" />
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
@@ -9,16 +10,5 @@
     <RunicAssetsPackageVersion Condition="'$(RunicAssetsPackageVersion)' == ''">1.0.0-preview.1</RunicAssetsPackageVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Runic.Application" Version="$(RunicApplicationPackageVersion)" />
-    <PackageVersion Include="Runic.Application.Bridge" Version="$(RunicApplicationPackageVersion)" />
-    <PackageVersion Include="Runic.Application.Desktop" Version="$(RunicApplicationPackageVersion)" />
-    <PackageVersion Include="Runic.Application.Hosting" Version="$(RunicApplicationPackageVersion)" />
-    <PackageVersion Include="Runic.CommandLine" Version="$(RunicCommandLinePackageVersion)" />
-    <PackageVersion Include="Runic.Translations" Version="$(RunicTranslationsPackageVersion)" />
-    <PackageVersion Include="Runic.Translations.Tooling" Version="$(RunicTranslationsPackageVersion)" />
-    <PackageVersion Include="Runic.Translations.Build" Version="$(RunicTranslationsPackageVersion)" />
-    <PackageVersion Include="Runic.Assets" Version="$(RunicAssetsPackageVersion)" />
-    <PackageVersion Include="Runic.Assets.AspNetCore" Version="$(RunicAssetsPackageVersion)" />
-    <PackageVersion Include="Runic.Assets.Desktop" Version="$(RunicAssetsPackageVersion)" />
   </ItemGroup>
 </Project>
