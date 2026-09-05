@@ -33,9 +33,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Runic-Artifex/runic-sdk.git",
-    "directory": "packages/runic-translations/web"
+    "directory": "packages/web/vite-plugin-runic-translations"
   },
-  "homepage": "https://github.com/Runic-Artifex/runic-sdk/tree/main/packages/runic-translations/web#readme",
+  "homepage": "https://github.com/Runic-Artifex/runic-sdk/tree/main/packages/web/vite-plugin-runic-translations#readme",
   "bugs": {
     "url": "https://github.com/Runic-Artifex/runic-sdk/issues"
   },

@@ -133,7 +133,7 @@ module.exports = {
 
 ## Customizing Components
 
-See also: [rules/styling.md](./rules/styling.md) for Incorrect/Correct examples.
+See also: [rules/styling.md](rules/styling.md) for Incorrect/Correct examples.
 
 Prefer these approaches in order:
 
@@ -210,4 +210,4 @@ npx shadcn-svelte@latest update button
 npx shadcn-svelte@latest update --all
 ```
 
-See [Updating Components in SKILL.md](./SKILL.md#updating-components). Review `git diff` after `update` to see what changed.
+See [Updating Components in SKILL.md](SKILL.md#updating-components). Review `git diff` after `update` to see what changed.

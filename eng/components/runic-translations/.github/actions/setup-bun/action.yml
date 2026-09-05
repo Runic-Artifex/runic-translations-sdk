@@ -13,6 +13,6 @@ runs:
     - uses: actions/cache@v4
       with:
         path: ~/.bun/install/cache
-        key: bun-${{ runner.os }}-${{ runner.arch }}-1.4.0-${{ hashFiles('web/bun.lock') }}
+        key: bun-${{ runner.os }}-${{ runner.arch }}-1.4.0-${{ hashFiles('../web/vite-plugin-runic-translations/bun.lock') }}
         restore-keys: |
           bun-${{ runner.os }}-${{ runner.arch }}-1.4.0-

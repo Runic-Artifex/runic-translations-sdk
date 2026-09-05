@@ -20,7 +20,7 @@ export function prepareWebPackage(root, version, revision, registryName, command
   const registry = registries.get(registryName);
   if (!registry) throw new Error("registry must be github or public");
 
-  const manifestPath = path.join(root, "web", "package.json");
+  const manifestPath = path.join(root, "../web/vite-plugin-runic-translations", "package.json");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   manifest.version = version;
   manifest.gitHead = revision;

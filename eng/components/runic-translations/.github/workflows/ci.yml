@@ -53,7 +53,7 @@ jobs:
           cp artifacts/verification/packages/*.nupkg "$RUNNER_TEMP/packages/"
           node eng/prepare-web-package.mjs \
             "$PACKAGE_VERSION" "$GITHUB_SHA" github "$RunicCommandLineVersion"
-          (cd web && bun pm pack --destination "$RUNNER_TEMP/packages" --quiet)
+          (cd ../web/vite-plugin-runic-translations && bun pm pack --destination "$RUNNER_TEMP/packages" --quiet)
           sha256sum "$RUNNER_TEMP"/packages/*
 
       - name: Validate candidate contract

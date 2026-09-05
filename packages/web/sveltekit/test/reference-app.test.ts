@@ -8,7 +8,7 @@ const execute = promisify(execFile);
 const fixture = resolve("test/fixtures/translations-app");
 const output = resolve(fixture, "build");
 const generated = resolve(fixture, ".svelte-kit");
-const vite = resolve("../../node_modules/vite/bin/vite.js");
+const vite = resolve("node_modules/vite/bin/vite.js");
 
 afterEach(async () => {
   await Promise.all([

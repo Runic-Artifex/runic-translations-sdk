@@ -41,7 +41,7 @@ Use the real aliases from `components.json` (often `$lib/components/ui/...`), no
 
 These rules are **always enforced**. Each links to a file with Incorrect/Correct code pairs.
 
-### Styling & Tailwind → [styling.md](./rules/styling.md)
+### Styling & Tailwind → [styling.md](rules/styling.md)
 
 - **`class` for layout, not styling.** Never override component colors or typography.
 - **No `space-x-*` or `space-y-*`.** Use `flex` with `gap-*`. For vertical stacks, `flex flex-col gap-*`.
@@ -51,7 +51,7 @@ These rules are **always enforced**. Each links to a file with Incorrect/Correct
 - **Use `cn()` for conditional classes.** Don't write manual template literal ternaries.
 - **No manual `z-index` on overlay components.** Dialog, Sheet, Popover, etc. handle their own stacking.
 
-### Forms & Inputs → [forms.md](./rules/forms.md)
+### Forms & Inputs → [forms.md](rules/forms.md)
 
 - **Forms use `Field.FieldGroup` + `Field.Field`.** Never use raw `div` with `space-y-*` or `grid gap-*` for form layout.
 - **`InputGroup` uses `InputGroup.Input`/`InputGroup.Textarea`.** Never raw `Input`/`Textarea` inside `InputGroup.Root`.
@@ -60,7 +60,7 @@ These rules are **always enforced**. Each links to a file with Incorrect/Correct
 - **`Field.FieldSet` + `Field.FieldLegend` for grouping related checkboxes/radios.** Don't use a `div` with a heading.
 - **Field validation uses `data-invalid` + `aria-invalid`.** `data-invalid` on `Field`, `aria-invalid` on the control. For disabled: `data-disabled` on `Field`, `disabled` on the control.
 
-### Component Structure → [composition.md](./rules/composition.md)
+### Component Structure → [composition.md](rules/composition.md)
 
 - **Items always inside their Group.** `Select.Item` → `Select.Group`. `DropdownMenu.Item` → `DropdownMenu.Group`. `Command.Item` → `Command.Group`.
 - **Custom triggers.** Wrap controls in `Dialog.Trigger` / `AlertDialog.Trigger`, or control open state with `bind:open` on the root — see component docs.
@@ -70,7 +70,7 @@ These rules are **always enforced**. Each links to a file with Incorrect/Correct
 - **`Tabs.Trigger` must be inside `Tabs.List`.** Never render triggers directly in `Tabs`.
 - **`Avatar` always needs `Avatar.Fallback`.** For when the image fails to load.
 
-### Use Components, Not Custom Markup → [composition.md](./rules/composition.md)
+### Use Components, Not Custom Markup → [composition.md](rules/composition.md)
 
 - **Use existing components before custom markup.** Check if a component exists before writing a styled `div`.
 - **Callouts use `Alert`.** Don't build custom styled divs.
@@ -80,7 +80,7 @@ These rules are **always enforced**. Each links to a file with Incorrect/Correct
 - **Use `Skeleton`** for loading placeholders. No custom `animate-pulse` divs.
 - **Use `Badge`** instead of custom styled spans.
 
-### Icons → [icons.md](./rules/icons.md)
+### Icons → [icons.md](rules/icons.md)
 
 - **Icons in `<Button>` use `data-icon`.** `data-icon="inline-start"` or `data-icon="inline-end"` on the icon.
 - **No sizing classes on icons inside components.** Components handle icon sizing via CSS. No `size-4` or `w-4 h-4`.
@@ -167,7 +167,7 @@ Use `components.json` and the filesystem — not a separate `info` command:
 - **`registry`** → where the CLI fetches components; default official registry at `shadcn-svelte.com`.
 - **`resolvedPaths`** (conceptual) → the CLI resolves `aliases` to absolute paths; list `aliases.ui` on disk to see installed components.
 
-See [cli.md](./cli.md) for commands and flags.
+See [cli.md](cli.md) for commands and flags.
 
 ## Component Docs, Examples, and Usage
 
@@ -178,7 +178,7 @@ Open `https://shadcn-svelte.com/docs/components/<name>.md` for docs and examples
 1. **Get project context** — read `components.json` and list the UI components directory when needed.
 2. **Check installed components first** — before running `add`, list files under the resolved `ui` path. Don't import components that haven't been added, and don't re-add ones already present unless updating.
 3. **Discover components** — `npx shadcn-svelte@latest add` with no arguments (interactive list), or the docs site.
-4. **Install or update** — `npx shadcn-svelte@latest add <name>` or a registry **URL**. To refresh existing files from the registry, use `npx shadcn-svelte@latest update` (see [cli.md](./cli.md)).
+4. **Install or update** — `npx shadcn-svelte@latest add <name>` or a registry **URL**. To refresh existing files from the registry, use `npx shadcn-svelte@latest update` (see [cli.md](cli.md)).
 5. **Fix imports in third-party / URL-added items** — After adding from a custom registry URL, check for hardcoded paths that don't match the project's `aliases`. Rewrite imports to use the project's `ui` / `lib` aliases from `components.json`.
 6. **Review added components** — After adding, **read the added files** and verify composition (groups, titles, validation attrs). Align icon imports with `iconLibrary`.
 7. **Remote registry items** — Adding by URL is explicit; if the user wants a component from an unknown source, confirm the registry URL or item before running `add`.
@@ -219,9 +219,9 @@ npx shadcn-svelte@latest registry build
 
 ## Detailed References
 
-- [rules/forms.md](./rules/forms.md) — Field.FieldGroup, Field.Field, InputGroup, ToggleGroup, Field.FieldSet, validation states
-- [rules/composition.md](./rules/composition.md) — Groups, overlays, Card, Tabs, Avatar, Alert, Empty, Toast, Separator, Skeleton, Badge, Button loading
-- [rules/icons.md](./rules/icons.md) — data-icon, icon sizing, passing icon components
-- [rules/styling.md](./rules/styling.md) — Semantic colors, variants, class, spacing, size, truncate, dark mode, cn(), z-index
-- [cli.md](./cli.md) — Commands, flags, registry
-- [customization.md](./customization.md) — Theming, CSS variables, extending components
+- [rules/forms.md](rules/forms.md) — Field.FieldGroup, Field.Field, InputGroup, ToggleGroup, Field.FieldSet, validation states
+- [rules/composition.md](rules/composition.md) — Groups, overlays, Card, Tabs, Avatar, Alert, Empty, Toast, Separator, Skeleton, Badge, Button loading
+- [rules/icons.md](rules/icons.md) — data-icon, icon sizing, passing icon components
+- [rules/styling.md](rules/styling.md) — Semantic colors, variants, class, spacing, size, truncate, dark mode, cn(), z-index
+- [cli.md](cli.md) — Commands, flags, registry
+- [customization.md](customization.md) — Theming, CSS variables, extending components

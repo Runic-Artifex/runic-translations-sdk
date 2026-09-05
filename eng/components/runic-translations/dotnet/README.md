@@ -29,14 +29,14 @@ var text = new AppText(manager);
 Console.WriteLine(text.application_title);
 ```
 
-The template pins the runtime, build integration, and local tool to one version. It also enables ESM generation for web consumers.
+The template pins the runtime, build integration, and local tool to one version. It also enables ESM generation for ../web/vite-plugin-runic-translations consumers.
 
 ## Package selection
 
 | Package | Role | Typical consumer |
 |---|---|---|
 | [`Runic.Translations`](https://www.nuget.org/packages/Runic.Translations) | NativeAOT-compatible runtime, immutable snapshots, formatting, fallback, and locale switching | .NET applications |
-| [`Runic.Translations.Build`](https://www.nuget.org/packages/Runic.Translations.Build) | Incremental generator, MSBuild items, and opt-in non-C# artifact generation | C# projects and projects sharing catalogs with web or asset pipelines |
+| [`Runic.Translations.Build`](https://www.nuget.org/packages/Runic.Translations.Build) | Incremental generator, MSBuild items, and opt-in non-C# artifact generation | C# projects and projects sharing catalogs with ../web/vite-plugin-runic-translations or asset pipelines |
 | [`dotnet-runic-translations`](https://www.nuget.org/packages/dotnet-runic-translations) | Local `runic-translations` CLI | Developers and CI |
 | [`Runic.Translations.Templates`](https://www.nuget.org/packages/Runic.Translations.Templates) | Catalog item and standalone class-library templates | New integrations |
 | [`Runic.Translations.Tooling`](https://www.nuget.org/packages/Runic.Translations.Tooling) | MF2 compiler facade, interchange, and transactional authoring | Editors and build tooling |

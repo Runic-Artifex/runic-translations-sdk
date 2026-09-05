@@ -37,7 +37,7 @@ if (manifest.license !== "MIT") throw new Error(`${expectedName} must use MIT.`)
 if (typeof manifest.description !== "string" || manifest.description.length < 20) {
   throw new Error(`${expectedName} must provide a meaningful description.`);
 }
-if (manifest.repository?.url !== expectedRepository || manifest.repository?.directory !== "web") {
+if (manifest.repository?.url !== expectedRepository || manifest.repository?.directory !== "../web/vite-plugin-runic-translations") {
   throw new Error(`${expectedName} has invalid repository provenance.`);
 }
 if (manifest.gitHead !== repositoryCommit) {

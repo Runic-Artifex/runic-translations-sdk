@@ -41,12 +41,12 @@ export function runicTranslations(options = {}) {
   async function refresh() {
     const document = JSON.parse(await readFile(manifestPath, "utf8"));
     if (document.webModuleManifestVersion !== 1)
-      throw new Error(`Unsupported Runic web module manifest version '${document.webModuleManifestVersion}'.`);
+      throw new Error(`Unsupported Runic ../web/vite-plugin-runic-translations module manifest version '${document.webModuleManifestVersion}'.`);
     if (document.esmAbiVersion !== supportedEsmAbiVersion)
       throw new Error(`Unsupported Runic ESM ABI version '${document.esmAbiVersion}'. Expected '${supportedEsmAbiVersion}'.`);
     if (typeof document.catalog !== "string" || !document.entrypoints ||
         typeof document.contractFingerprint !== "string" || !/^sha256:[a-f0-9]{64}$/.test(document.contractFingerprint))
-      throw new Error("The Runic web module manifest is malformed.");
+      throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest is malformed.");
     catalog = document.catalog;
     const root = dirname(manifestPath);
     const requiredEntrypoints = {
@@ -54,13 +54,13 @@ export function runicTranslations(options = {}) {
       runtime: document.entrypoints.runtime,
     };
     if (!Array.isArray(document.assets))
-      throw new Error("The Runic web module manifest does not declare its generated assets.");
+      throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest does not declare its generated assets.");
     const assets = new Map();
     for (const asset of document.assets) {
       if (!asset || typeof asset.path !== "string" || typeof asset.sha256 !== "string" ||
           !/^[a-f0-9]{64}$/.test(asset.sha256) || !Number.isSafeInteger(asset.byteLength) || asset.byteLength < 0 ||
           typeof asset.mediaType !== "string" || assets.has(asset.path))
-        throw new Error("The Runic web module manifest contains an invalid generated asset entry.");
+        throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest contains an invalid generated asset entry.");
       const path = contained(root, asset.path);
       const content = await readFile(path);
       if (content.byteLength !== asset.byteLength || createHash("sha256").update(content).digest("hex") !== asset.sha256)
@@ -69,15 +69,15 @@ export function runicTranslations(options = {}) {
     }
     for (const path of Object.values(requiredEntrypoints)) {
       if (typeof path !== "string")
-        throw new Error("The Runic web module manifest omits a required generated entrypoint.");
+        throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest omits a required generated entrypoint.");
       contained(root, path);
       if (!assets.has(path))
-        throw new Error("The Runic web module manifest omits a required generated entrypoint.");
+        throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest omits a required generated entrypoint.");
     }
     const runtime = await readFile(assets.get(requiredEntrypoints.runtime), "utf8");
     const runtimeFingerprint = /^export const contractFingerprint = ("sha256:[a-f0-9]{64}");$/m.exec(runtime)?.[1];
     if (runtimeFingerprint !== JSON.stringify(document.contractFingerprint))
-      throw new Error("The Runic web module manifest fingerprint does not match its generated runtime.");
+      throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest fingerprint does not match its generated runtime.");
     entries = Object.freeze({
       messages: assets.get(requiredEntrypoints.messages),
       runtime: assets.get(requiredEntrypoints.runtime),

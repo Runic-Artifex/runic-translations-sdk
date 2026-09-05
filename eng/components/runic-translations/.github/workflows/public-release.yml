@@ -20,7 +20,7 @@ on:
       - eng/publish-public-nuget.sh
       - eng/validate-public-npm.mjs
       - dotnet/**/*.csproj
-      - web/**
+      - ../web/vite-plugin-runic-translations/**
   workflow_dispatch:
     inputs:
       version:
@@ -109,7 +109,7 @@ jobs:
           cp artifacts/verification/packages/*.nupkg "$RUNNER_TEMP/packages/"
           node eng/prepare-web-package.mjs \
             "$PACKAGE_VERSION" "$GITHUB_SHA" public "$RunicCommandLineVersion"
-          (cd web && bun pm pack --destination "$RUNNER_TEMP/packages" --quiet)
+          (cd ../web/vite-plugin-runic-translations && bun pm pack --destination "$RUNNER_TEMP/packages" --quiet)
 
       - name: Validate public package contract
         uses: Runic-Artifex/.github/.github/actions/validate-release-artifacts@main
