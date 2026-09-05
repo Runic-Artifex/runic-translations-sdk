@@ -61,7 +61,6 @@ function ready(): Promise<unknown> {
 
 /** Each editor command correlates with exactly one generated receipt tag. */
 const receiptTags = {
-  InitializeApplication: "ApplicationInitialized",
   LoadWorkspace: "WorkspaceLoaded",
   CheckExternalChanges: "ExternalChangesChecked",
   PickWorkspace: "WorkspacePicked",

@@ -653,10 +653,7 @@ export const mockApplicationBridgeLayer = MockApplicationBridge<
   never,
   unknown
 >({
-  initialize: () => Effect.succeed(receipt({
-    _tag: "ApplicationInitialized",
-    snapshot: wire(structuredClone(snapshot)),
-  })),
+  initialize: () => Effect.succeed(wire(structuredClone(snapshot))),
   dispatch: (command) => Effect.promise(async () => handle(command)),
 });
 
@@ -675,8 +672,6 @@ type MockMutationRequest = {
 
 async function handle(command: EditorCommand): Promise<EditorReceipt> {
   switch (command._tag) {
-    case "InitializeApplication":
-      return receipt({ _tag: "ApplicationInitialized", snapshot: wire(structuredClone(snapshot)) });
     case "LoadWorkspace":
       return receipt({ _tag: "WorkspaceLoaded", snapshot: wire(await load()) });
     case "CheckExternalChanges":

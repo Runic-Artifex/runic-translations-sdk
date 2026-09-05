@@ -15,14 +15,12 @@ internal sealed class EditorDesktopHost : IApplicationHost
     internal static bool PackagedUiEmbedded =>
         typeof(EditorDesktopHost).Assembly.GetManifestResourceInfo(PackagedUiResourceName) is not null;
 
-    private readonly EditorSession _session;
     private readonly string _workspacePath;
     private readonly bool _useWebView;
     private DesktopApplicationHost? _host;
 
-    public EditorDesktopHost(EditorSession session, string workspacePath, bool useWebView)
+    public EditorDesktopHost(string workspacePath, bool useWebView)
     {
-        _session = session ?? throw new ArgumentNullException(nameof(session));
         ArgumentException.ThrowIfNullOrWhiteSpace(workspacePath);
         _workspacePath = workspacePath;
         _useWebView = useWebView;
@@ -31,6 +29,7 @@ internal sealed class EditorDesktopHost : IApplicationHost
     public async ValueTask StartAsync(
         ApplicationCompositionManifest manifest,
         ReadOnlyMemory<string> arguments,
+        IServiceProvider services,
         CancellationToken cancellationToken)
     {
         AssetArchiveSource assets = AssetArchive.ReadEmbedded(
@@ -57,12 +56,10 @@ internal sealed class EditorDesktopHost : IApplicationHost
                 Resizable = true,
                 HighContrast = DesktopPlatform.IsHighContrast,
             },
-            CreateBridgeSession = () => new ApplicationBridgeSession(
-                new EditorBridgeDispatcher(new EditorBridgeHandler(_session))),
         });
         try
         {
-            await _host.StartAsync(manifest, arguments, cancellationToken).ConfigureAwait(false);
+            await _host.StartAsync(manifest, arguments, services, cancellationToken).ConfigureAwait(false);
             Console.WriteLine(
                 $"Runic Translations Editor is serving '{Path.GetFullPath(_workspacePath)}' at {_host.Surface!.Url}");
         }

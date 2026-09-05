@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "vite build",
-    "contract:generate": "runic-bridge generate",
-    "contract:check": "runic-bridge check",
+    "contract:generate": "runic-bridge generate --authority effect --source src/application.bridge.ts",
+    "contract:check": "runic-bridge check --authority effect --source src/application.bridge.ts",
     "dev": "vite dev",
     "dev:mock": "vite dev --mode mock",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

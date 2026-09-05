@@ -7,6 +7,8 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <RunicApplicationBridgeAuthority>effect</RunicApplicationBridgeAuthority>
+    <RunicApplicationBridgeGenerate>false</RunicApplicationBridgeGenerate>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Runic.Translations.Editor</AssemblyName>
     <RootNamespace>Runic.Translations.Editor</RootNamespace>
@@ -110,8 +112,7 @@
 
   <Target Name="GenerateApplicationBridgeContract"
           BeforeTargets="CoreCompile"
-          Inputs="Frontend/src/application.bridge.ts;Frontend/package.json;Frontend/bun.lock"
-          Outputs="Contract/bridge.ir.json;Frontend/src/application.bridge.generated.ts">
+          Condition="'$(RunicBridgeInspect)' != 'true' and '$(DesignTimeBuild)' != 'true'">
     <Exec WorkingDirectory="Frontend"
           Command="bun install --frozen-lockfile --ignore-scripts"
           Condition="'$(RUNIC_EDITOR_FRONTEND_CANDIDATES)' != '1'" />

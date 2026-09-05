@@ -104,7 +104,7 @@ export const WorkspaceSnapshot = Schema.Struct({
   pendingTransaction: Schema.optional(EditorPendingTransaction),
   review: Schema.optional(EditorReviewSnapshot),
   history: Schema.optional(EditorHistoryState),
-});
+}).annotations({ identifier: "WorkspaceSnapshot" });
 
 const ValidationResult = Schema.Struct({
   success: Schema.Boolean,
@@ -370,7 +370,6 @@ const command = <C extends Schema.Schema.Any>(
 });
 
 const commands = [
-  command("InitializeApplication", Schema.TaggedStruct("InitializeApplication", {}), "ApplicationInitialized"),
   command("LoadWorkspace", Schema.TaggedStruct("LoadWorkspace", {}), "WorkspaceLoaded"),
   command("CheckExternalChanges", Schema.TaggedStruct("CheckExternalChanges", {}), "ExternalChangesChecked"),
   command("PickWorkspace", Schema.TaggedStruct("PickWorkspace", {}), "WorkspacePicked"),
@@ -459,7 +458,6 @@ const commands = [
 ];
 
 const receipts = [
-  { tag: "ApplicationInitialized", schema: Schema.TaggedStruct("ApplicationInitialized", { snapshot: WorkspaceSnapshot }) },
   { tag: "WorkspaceLoaded", schema: Schema.TaggedStruct("WorkspaceLoaded", { snapshot: WorkspaceSnapshot }) },
   { tag: "ExternalChangesChecked", schema: Schema.TaggedStruct("ExternalChangesChecked", { changes: EditorExternalChanges }) },
   { tag: "WorkspacePicked", schema: Schema.TaggedStruct("WorkspacePicked", { result: EditorWorkspacePickerResult }) },
@@ -509,7 +507,6 @@ export default defineApplicationBridgeContract({
   commands: bridgeCommands,
   events: [],
   errors: [],
-  initialize: { _tag: "InitializeApplication" },
 });
 
 export type EditorCommand = (typeof commands)[number]["schema"]["Type"];

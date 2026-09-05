@@ -113,7 +113,7 @@
 
       // 1. Initialize handshake.
       let done = stage("initialize-handshake");
-      const snapshotFrame = await send(frame("initialize", { _tag: "InitializeApplication" }));
+      const snapshotFrame = await send(frame("initialize", {}));
       if (snapshotFrame.kind !== "snapshot") {
         throw new Error(`Expected an initialization snapshot, received kind=${snapshotFrame.kind}.`);
       }

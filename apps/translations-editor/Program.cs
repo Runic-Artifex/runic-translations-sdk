@@ -299,9 +299,10 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
                 CommandExitCategory.Unavailable,
                 new CommandFault("REDIT0004", "The packaged web UI was not embedded into this editor build."));
         using var session = new EditorSession(workspacePath);
-        await using ApplicationHost application = RunicApplication.CreateBuilder(launchArguments)
-            .UseHost(new EditorDesktopHost(session, workspacePath, useWebView))
-            .Build();
+        RunicApplicationBuilder applicationBuilder = RunicApplication.CreateBuilder(launchArguments)
+            .UseHost(new EditorDesktopHost(workspacePath, useWebView));
+        Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton(applicationBuilder.Services, session);
+        await using ApplicationHost application = applicationBuilder.Build();
         await application.RunAsync().ConfigureAwait(false);
         return CommandOutcome.Success(new EditorCommandResult(string.Empty));
     }

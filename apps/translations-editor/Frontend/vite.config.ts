@@ -16,7 +16,7 @@ export default defineConfig({
     tailwindcss(),
     runic({
       contract: { identity: "runic.translations.editor", version: "1" },
-      applicationBridge: true,
+      applicationBridge: { authority: "effect", source: "src/application.bridge.ts" },
     }),
     runicTranslations({
       manifest,

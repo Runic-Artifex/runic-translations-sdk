@@ -10,15 +10,10 @@ namespace Runic.Translations.Editor;
 /// </summary>
 internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEditorBridgeHandler
 {
-    public async ValueTask<Contract.ApplicationInitialized> InitializeApplicationAsync(
-        Contract.InitializeApplication command,
-        BridgeCommandContext context,
-        CancellationToken cancellationToken) => new()
-    {
-        Tag = "ApplicationInitialized",
-        Snapshot = ApplicationInitializedSnapshotValue(
-            await session.LoadAsync(cancellationToken).ConfigureAwait(false)),
-    };
+    public async ValueTask<Contract.WorkspaceSnapshot> GetSnapshotAsync(
+        BridgeSnapshotContext context,
+        CancellationToken cancellationToken) => WorkspaceSnapshotValue(
+            await session.LoadAsync(cancellationToken).ConfigureAwait(false));
 
     public async ValueTask<Contract.WorkspaceLoaded> LoadWorkspaceAsync(
         Contract.LoadWorkspace command,
@@ -26,7 +21,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
         CancellationToken cancellationToken) => new()
     {
         Tag = "WorkspaceLoaded",
-        Snapshot = WorkspaceLoadedSnapshotValue(
+        Snapshot = WorkspaceSnapshotValue(
             await session.LoadAsync(cancellationToken).ConfigureAwait(false)),
     };
 
@@ -618,12 +613,12 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
         value.CodeNamespace,
         value.ClassName,
         value.IncludeStarterMessage);
-private static Contract.ApplicationInitializedSnapshotReview ApplicationInitializedSnapshotReviewValue(EditorReviewSnapshot value) => new()
+private static Contract.WorkspaceSnapshotReview WorkspaceSnapshotReviewValue(EditorReviewSnapshot value) => new()
     {
         Path = value.Path,
         Revision = value.Revision,
         Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.ApplicationInitializedSnapshotReviewEntriesItem
+        Entries = value.Entries.Select(static value => new Contract.WorkspaceSnapshotReviewEntriesItem
         {
             Key = value.Key,
             Locale = value.Locale,
@@ -631,13 +626,13 @@ private static Contract.ApplicationInitializedSnapshotReview ApplicationInitiali
             Note = value.Note,
             SourceFingerprint = value.SourceFingerprint,
             Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.ApplicationInitializedSnapshotReviewEntriesItemSamplesItem
+                .Select(static sample => new Contract.WorkspaceSnapshotReviewEntriesItemSamplesItem
                 {
                     Key = sample.Key,
                     Value = sample.Value,
                 }).ToArray(),
         }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.ApplicationInitializedSnapshotReviewTerminologyItem
+        Terminology = value.Terminology.Select(static value => new Contract.WorkspaceSnapshotReviewTerminologyItem
         {
             Source = value.Source,
             Preferred = value.Preferred,
@@ -646,11 +641,11 @@ private static Contract.ApplicationInitializedSnapshotReview ApplicationInitiali
         }).ToArray(),
     };
 
-    private static Contract.ApplicationInitializedSnapshot ApplicationInitializedSnapshotValue(WorkspaceSnapshot value) => new()
+    private static Contract.WorkspaceSnapshot WorkspaceSnapshotValue(WorkspaceSnapshot value) => new()
     {
         Root = value.Root,
-        Catalog = value.Catalog is null ? null : ApplicationInitializedSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.ApplicationInitializedSnapshotCatalogsItem
+        Catalog = value.Catalog is null ? null : WorkspaceSnapshotCatalog(value.Catalog),
+        Catalogs = value.Catalogs.Select(static value => new Contract.WorkspaceSnapshotCatalogsItem
         {
             Id = value.Id,
             ManifestPaths = value.ManifestPaths.ToArray(),
@@ -661,7 +656,7 @@ private static Contract.ApplicationInitializedSnapshotReview ApplicationInitiali
             WarningCount = value.WarningCount,
             Success = value.Success,
         }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.ApplicationInitializedSnapshotDocumentsItem
+        Documents = value.Documents.Select(static value => new Contract.WorkspaceSnapshotDocumentsItem
         {
             Path = value.Path,
             Content = value.Content,
@@ -671,7 +666,7 @@ private static Contract.ApplicationInitializedSnapshotReview ApplicationInitiali
             Locale = value.Locale,
             Layer = value.Layer,
         }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.ApplicationInitializedSnapshotDiagnosticsItem
+        Diagnostics = value.Diagnostics.Select(static value => new Contract.WorkspaceSnapshotDiagnosticsItem
                 {
                     Id = value.Id,
                     Severity = value.Severity,
@@ -685,13 +680,13 @@ private static Contract.ApplicationInitializedSnapshotReview ApplicationInitiali
         Success = value.Success,
         PendingTransaction = value.PendingTransaction is null
             ? null
-            : new Contract.ApplicationInitializedSnapshotPendingTransaction
+            : new Contract.WorkspaceSnapshotPendingTransaction
             {
                 CatalogId = value.PendingTransaction.CatalogId,
                 Paths = value.PendingTransaction.Paths.ToArray(),
             },
-        Review = value.Review is null ? null : ApplicationInitializedSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.ApplicationInitializedSnapshotHistory
+        Review = value.Review is null ? null : WorkspaceSnapshotReviewValue(value.Review),
+        History = value.History is null ? null : new Contract.WorkspaceSnapshotHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
@@ -700,121 +695,25 @@ private static Contract.ApplicationInitializedSnapshotReview ApplicationInitiali
         },
     };
 
-    private static Contract.ApplicationInitializedSnapshotCatalog ApplicationInitializedSnapshotCatalog(EditorCatalog value) => new()
+    private static Contract.WorkspaceSnapshotCatalog WorkspaceSnapshotCatalog(EditorCatalog value) => new()
     {
         Id = value.Id,
         SchemaVersion = value.SchemaVersion,
         DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.ApplicationInitializedSnapshotCatalogLocalesItem
+        Locales = value.Locales.Select(static value => new Contract.WorkspaceSnapshotCatalogLocalesItem
         {
             Tag = value.Tag,
             Fallback = value.Fallback,
         }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.ApplicationInitializedSnapshotCatalogLayersItem
+        Layers = value.Layers.Select(static value => new Contract.WorkspaceSnapshotCatalogLayersItem
         {
             Name = value.Name,
             Priority = value.Priority,
         }).ToArray(),
     };
 
-private static Contract.WorkspaceLoadedSnapshotReview WorkspaceLoadedSnapshotReviewValue(EditorReviewSnapshot value) => new()
-    {
-        Path = value.Path,
-        Revision = value.Revision,
-        Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.WorkspaceLoadedSnapshotReviewEntriesItem
-        {
-            Key = value.Key,
-            Locale = value.Locale,
-            State = value.State,
-            Note = value.Note,
-            SourceFingerprint = value.SourceFingerprint,
-            Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.WorkspaceLoadedSnapshotReviewEntriesItemSamplesItem
-                {
-                    Key = sample.Key,
-                    Value = sample.Value,
-                }).ToArray(),
-        }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.WorkspaceLoadedSnapshotReviewTerminologyItem
-        {
-            Source = value.Source,
-            Preferred = value.Preferred,
-            Locale = value.Locale,
-            Note = value.Note,
-        }).ToArray(),
-    };
 
-    private static Contract.WorkspaceLoadedSnapshot WorkspaceLoadedSnapshotValue(WorkspaceSnapshot value) => new()
-    {
-        Root = value.Root,
-        Catalog = value.Catalog is null ? null : WorkspaceLoadedSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.WorkspaceLoadedSnapshotCatalogsItem
-        {
-            Id = value.Id,
-            ManifestPaths = value.ManifestPaths.ToArray(),
-            DocumentCount = value.DocumentCount,
-            LocaleCount = value.LocaleCount,
-            MessageCount = value.MessageCount,
-            ErrorCount = value.ErrorCount,
-            WarningCount = value.WarningCount,
-            Success = value.Success,
-        }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.WorkspaceLoadedSnapshotDocumentsItem
-        {
-            Path = value.Path,
-            Content = value.Content,
-            Revision = value.Revision,
-            IsManifest = value.IsManifest,
-            IsMalformed = value.IsMalformed,
-            Locale = value.Locale,
-            Layer = value.Layer,
-        }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.WorkspaceLoadedSnapshotDiagnosticsItem
-                {
-                    Id = value.Id,
-                    Severity = value.Severity,
-                    Message = value.Message,
-                    Path = value.Path,
-                    Line = value.Line,
-                    Column = value.Column,
-                    EndLine = value.EndLine,
-                    EndColumn = value.EndColumn,
-                }).ToArray(),
-        Success = value.Success,
-        PendingTransaction = value.PendingTransaction is null
-            ? null
-            : new Contract.WorkspaceLoadedSnapshotPendingTransaction
-            {
-                CatalogId = value.PendingTransaction.CatalogId,
-                Paths = value.PendingTransaction.Paths.ToArray(),
-            },
-        Review = value.Review is null ? null : WorkspaceLoadedSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.WorkspaceLoadedSnapshotHistory
-        {
-            CanUndo = value.History.CanUndo,
-            CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
-        },
-    };
 
-    private static Contract.WorkspaceLoadedSnapshotCatalog WorkspaceLoadedSnapshotCatalog(EditorCatalog value) => new()
-    {
-        Id = value.Id,
-        SchemaVersion = value.SchemaVersion,
-        DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.WorkspaceLoadedSnapshotCatalogLocalesItem
-        {
-            Tag = value.Tag,
-            Fallback = value.Fallback,
-        }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.WorkspaceLoadedSnapshotCatalogLayersItem
-        {
-            Name = value.Name,
-            Priority = value.Priority,
-        }).ToArray(),
-    };
 
 private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(EditorReviewSnapshot value) => new()
     {
@@ -843,39 +742,12 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
             Note = value.Note,
         }).ToArray(),
     };
-private static Contract.MutationAppliedResultSnapshotReview MutationAppliedResultSnapshotReviewValue(EditorReviewSnapshot value) => new()
-    {
-        Path = value.Path,
-        Revision = value.Revision,
-        Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.MutationAppliedResultSnapshotReviewEntriesItem
-        {
-            Key = value.Key,
-            Locale = value.Locale,
-            State = value.State,
-            Note = value.Note,
-            SourceFingerprint = value.SourceFingerprint,
-            Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.MutationAppliedResultSnapshotReviewEntriesItemSamplesItem
-                {
-                    Key = sample.Key,
-                    Value = sample.Value,
-                }).ToArray(),
-        }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.MutationAppliedResultSnapshotReviewTerminologyItem
-        {
-            Source = value.Source,
-            Preferred = value.Preferred,
-            Locale = value.Locale,
-            Note = value.Note,
-        }).ToArray(),
-    };
     private static Contract.MutationAppliedResult MutationAppliedResultValue(EditorOperationResult value) => new()
     {
         Ok = value.Ok,
         Kind = value.Kind,
         Message = value.Message,
-        Snapshot = value.Snapshot is null ? null : MutationAppliedResultSnapshotValue(value.Snapshot),
+        Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.MutationAppliedResultValidation
         {
             Success = value.Validation.Success,
@@ -901,110 +773,14 @@ private static Contract.MutationAppliedResultSnapshotReview MutationAppliedResul
     };
 
 
-    private static Contract.MutationAppliedResultSnapshot MutationAppliedResultSnapshotValue(WorkspaceSnapshot value) => new()
-    {
-        Root = value.Root,
-        Catalog = value.Catalog is null ? null : MutationAppliedResultSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.MutationAppliedResultSnapshotCatalogsItem
-        {
-            Id = value.Id,
-            ManifestPaths = value.ManifestPaths.ToArray(),
-            DocumentCount = value.DocumentCount,
-            LocaleCount = value.LocaleCount,
-            MessageCount = value.MessageCount,
-            ErrorCount = value.ErrorCount,
-            WarningCount = value.WarningCount,
-            Success = value.Success,
-        }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.MutationAppliedResultSnapshotDocumentsItem
-        {
-            Path = value.Path,
-            Content = value.Content,
-            Revision = value.Revision,
-            IsManifest = value.IsManifest,
-            IsMalformed = value.IsMalformed,
-            Locale = value.Locale,
-            Layer = value.Layer,
-        }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.MutationAppliedResultSnapshotDiagnosticsItem
-                {
-                    Id = value.Id,
-                    Severity = value.Severity,
-                    Message = value.Message,
-                    Path = value.Path,
-                    Line = value.Line,
-                    Column = value.Column,
-                    EndLine = value.EndLine,
-                    EndColumn = value.EndColumn,
-                }).ToArray(),
-        Success = value.Success,
-        PendingTransaction = value.PendingTransaction is null
-            ? null
-            : new Contract.MutationAppliedResultSnapshotPendingTransaction
-            {
-                CatalogId = value.PendingTransaction.CatalogId,
-                Paths = value.PendingTransaction.Paths.ToArray(),
-            },
-        Review = value.Review is null ? null : MutationAppliedResultSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.MutationAppliedResultSnapshotHistory
-        {
-            CanUndo = value.History.CanUndo,
-            CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
-        },
-    };
 
-    private static Contract.MutationAppliedResultSnapshotCatalog MutationAppliedResultSnapshotCatalog(EditorCatalog value) => new()
-    {
-        Id = value.Id,
-        SchemaVersion = value.SchemaVersion,
-        DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.MutationAppliedResultSnapshotCatalogLocalesItem
-        {
-            Tag = value.Tag,
-            Fallback = value.Fallback,
-        }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.MutationAppliedResultSnapshotCatalogLayersItem
-        {
-            Name = value.Name,
-            Priority = value.Priority,
-        }).ToArray(),
-    };
 
-private static Contract.TransactionRecoveredResultSnapshotReview TransactionRecoveredResultSnapshotReviewValue(EditorReviewSnapshot value) => new()
-    {
-        Path = value.Path,
-        Revision = value.Revision,
-        Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.TransactionRecoveredResultSnapshotReviewEntriesItem
-        {
-            Key = value.Key,
-            Locale = value.Locale,
-            State = value.State,
-            Note = value.Note,
-            SourceFingerprint = value.SourceFingerprint,
-            Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.TransactionRecoveredResultSnapshotReviewEntriesItemSamplesItem
-                {
-                    Key = sample.Key,
-                    Value = sample.Value,
-                }).ToArray(),
-        }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.TransactionRecoveredResultSnapshotReviewTerminologyItem
-        {
-            Source = value.Source,
-            Preferred = value.Preferred,
-            Locale = value.Locale,
-            Note = value.Note,
-        }).ToArray(),
-    };
     private static Contract.TransactionRecoveredResult TransactionRecoveredResultValue(EditorOperationResult value) => new()
     {
         Ok = value.Ok,
         Kind = value.Kind,
         Message = value.Message,
-        Snapshot = value.Snapshot is null ? null : TransactionRecoveredResultSnapshotValue(value.Snapshot),
+        Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.TransactionRecoveredResultValidation
         {
             Success = value.Validation.Success,
@@ -1030,110 +806,14 @@ private static Contract.TransactionRecoveredResultSnapshotReview TransactionReco
     };
 
 
-    private static Contract.TransactionRecoveredResultSnapshot TransactionRecoveredResultSnapshotValue(WorkspaceSnapshot value) => new()
-    {
-        Root = value.Root,
-        Catalog = value.Catalog is null ? null : TransactionRecoveredResultSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.TransactionRecoveredResultSnapshotCatalogsItem
-        {
-            Id = value.Id,
-            ManifestPaths = value.ManifestPaths.ToArray(),
-            DocumentCount = value.DocumentCount,
-            LocaleCount = value.LocaleCount,
-            MessageCount = value.MessageCount,
-            ErrorCount = value.ErrorCount,
-            WarningCount = value.WarningCount,
-            Success = value.Success,
-        }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.TransactionRecoveredResultSnapshotDocumentsItem
-        {
-            Path = value.Path,
-            Content = value.Content,
-            Revision = value.Revision,
-            IsManifest = value.IsManifest,
-            IsMalformed = value.IsMalformed,
-            Locale = value.Locale,
-            Layer = value.Layer,
-        }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.TransactionRecoveredResultSnapshotDiagnosticsItem
-                {
-                    Id = value.Id,
-                    Severity = value.Severity,
-                    Message = value.Message,
-                    Path = value.Path,
-                    Line = value.Line,
-                    Column = value.Column,
-                    EndLine = value.EndLine,
-                    EndColumn = value.EndColumn,
-                }).ToArray(),
-        Success = value.Success,
-        PendingTransaction = value.PendingTransaction is null
-            ? null
-            : new Contract.TransactionRecoveredResultSnapshotPendingTransaction
-            {
-                CatalogId = value.PendingTransaction.CatalogId,
-                Paths = value.PendingTransaction.Paths.ToArray(),
-            },
-        Review = value.Review is null ? null : TransactionRecoveredResultSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.TransactionRecoveredResultSnapshotHistory
-        {
-            CanUndo = value.History.CanUndo,
-            CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
-        },
-    };
 
-    private static Contract.TransactionRecoveredResultSnapshotCatalog TransactionRecoveredResultSnapshotCatalog(EditorCatalog value) => new()
-    {
-        Id = value.Id,
-        SchemaVersion = value.SchemaVersion,
-        DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.TransactionRecoveredResultSnapshotCatalogLocalesItem
-        {
-            Tag = value.Tag,
-            Fallback = value.Fallback,
-        }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.TransactionRecoveredResultSnapshotCatalogLayersItem
-        {
-            Name = value.Name,
-            Priority = value.Priority,
-        }).ToArray(),
-    };
 
-private static Contract.UndoAppliedResultSnapshotReview UndoAppliedResultSnapshotReviewValue(EditorReviewSnapshot value) => new()
-    {
-        Path = value.Path,
-        Revision = value.Revision,
-        Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.UndoAppliedResultSnapshotReviewEntriesItem
-        {
-            Key = value.Key,
-            Locale = value.Locale,
-            State = value.State,
-            Note = value.Note,
-            SourceFingerprint = value.SourceFingerprint,
-            Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.UndoAppliedResultSnapshotReviewEntriesItemSamplesItem
-                {
-                    Key = sample.Key,
-                    Value = sample.Value,
-                }).ToArray(),
-        }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.UndoAppliedResultSnapshotReviewTerminologyItem
-        {
-            Source = value.Source,
-            Preferred = value.Preferred,
-            Locale = value.Locale,
-            Note = value.Note,
-        }).ToArray(),
-    };
     private static Contract.UndoAppliedResult UndoAppliedResultValue(EditorOperationResult value) => new()
     {
         Ok = value.Ok,
         Kind = value.Kind,
         Message = value.Message,
-        Snapshot = value.Snapshot is null ? null : UndoAppliedResultSnapshotValue(value.Snapshot),
+        Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.UndoAppliedResultValidation
         {
             Success = value.Validation.Success,
@@ -1159,110 +839,14 @@ private static Contract.UndoAppliedResultSnapshotReview UndoAppliedResultSnapsho
     };
 
 
-    private static Contract.UndoAppliedResultSnapshot UndoAppliedResultSnapshotValue(WorkspaceSnapshot value) => new()
-    {
-        Root = value.Root,
-        Catalog = value.Catalog is null ? null : UndoAppliedResultSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.UndoAppliedResultSnapshotCatalogsItem
-        {
-            Id = value.Id,
-            ManifestPaths = value.ManifestPaths.ToArray(),
-            DocumentCount = value.DocumentCount,
-            LocaleCount = value.LocaleCount,
-            MessageCount = value.MessageCount,
-            ErrorCount = value.ErrorCount,
-            WarningCount = value.WarningCount,
-            Success = value.Success,
-        }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.UndoAppliedResultSnapshotDocumentsItem
-        {
-            Path = value.Path,
-            Content = value.Content,
-            Revision = value.Revision,
-            IsManifest = value.IsManifest,
-            IsMalformed = value.IsMalformed,
-            Locale = value.Locale,
-            Layer = value.Layer,
-        }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.UndoAppliedResultSnapshotDiagnosticsItem
-                {
-                    Id = value.Id,
-                    Severity = value.Severity,
-                    Message = value.Message,
-                    Path = value.Path,
-                    Line = value.Line,
-                    Column = value.Column,
-                    EndLine = value.EndLine,
-                    EndColumn = value.EndColumn,
-                }).ToArray(),
-        Success = value.Success,
-        PendingTransaction = value.PendingTransaction is null
-            ? null
-            : new Contract.UndoAppliedResultSnapshotPendingTransaction
-            {
-                CatalogId = value.PendingTransaction.CatalogId,
-                Paths = value.PendingTransaction.Paths.ToArray(),
-            },
-        Review = value.Review is null ? null : UndoAppliedResultSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.UndoAppliedResultSnapshotHistory
-        {
-            CanUndo = value.History.CanUndo,
-            CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
-        },
-    };
 
-    private static Contract.UndoAppliedResultSnapshotCatalog UndoAppliedResultSnapshotCatalog(EditorCatalog value) => new()
-    {
-        Id = value.Id,
-        SchemaVersion = value.SchemaVersion,
-        DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.UndoAppliedResultSnapshotCatalogLocalesItem
-        {
-            Tag = value.Tag,
-            Fallback = value.Fallback,
-        }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.UndoAppliedResultSnapshotCatalogLayersItem
-        {
-            Name = value.Name,
-            Priority = value.Priority,
-        }).ToArray(),
-    };
 
-private static Contract.RedoAppliedResultSnapshotReview RedoAppliedResultSnapshotReviewValue(EditorReviewSnapshot value) => new()
-    {
-        Path = value.Path,
-        Revision = value.Revision,
-        Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.RedoAppliedResultSnapshotReviewEntriesItem
-        {
-            Key = value.Key,
-            Locale = value.Locale,
-            State = value.State,
-            Note = value.Note,
-            SourceFingerprint = value.SourceFingerprint,
-            Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.RedoAppliedResultSnapshotReviewEntriesItemSamplesItem
-                {
-                    Key = sample.Key,
-                    Value = sample.Value,
-                }).ToArray(),
-        }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.RedoAppliedResultSnapshotReviewTerminologyItem
-        {
-            Source = value.Source,
-            Preferred = value.Preferred,
-            Locale = value.Locale,
-            Note = value.Note,
-        }).ToArray(),
-    };
     private static Contract.RedoAppliedResult RedoAppliedResultValue(EditorOperationResult value) => new()
     {
         Ok = value.Ok,
         Kind = value.Kind,
         Message = value.Message,
-        Snapshot = value.Snapshot is null ? null : RedoAppliedResultSnapshotValue(value.Snapshot),
+        Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.RedoAppliedResultValidation
         {
             Success = value.Validation.Success,
@@ -1288,110 +872,14 @@ private static Contract.RedoAppliedResultSnapshotReview RedoAppliedResultSnapsho
     };
 
 
-    private static Contract.RedoAppliedResultSnapshot RedoAppliedResultSnapshotValue(WorkspaceSnapshot value) => new()
-    {
-        Root = value.Root,
-        Catalog = value.Catalog is null ? null : RedoAppliedResultSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.RedoAppliedResultSnapshotCatalogsItem
-        {
-            Id = value.Id,
-            ManifestPaths = value.ManifestPaths.ToArray(),
-            DocumentCount = value.DocumentCount,
-            LocaleCount = value.LocaleCount,
-            MessageCount = value.MessageCount,
-            ErrorCount = value.ErrorCount,
-            WarningCount = value.WarningCount,
-            Success = value.Success,
-        }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.RedoAppliedResultSnapshotDocumentsItem
-        {
-            Path = value.Path,
-            Content = value.Content,
-            Revision = value.Revision,
-            IsManifest = value.IsManifest,
-            IsMalformed = value.IsMalformed,
-            Locale = value.Locale,
-            Layer = value.Layer,
-        }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.RedoAppliedResultSnapshotDiagnosticsItem
-                {
-                    Id = value.Id,
-                    Severity = value.Severity,
-                    Message = value.Message,
-                    Path = value.Path,
-                    Line = value.Line,
-                    Column = value.Column,
-                    EndLine = value.EndLine,
-                    EndColumn = value.EndColumn,
-                }).ToArray(),
-        Success = value.Success,
-        PendingTransaction = value.PendingTransaction is null
-            ? null
-            : new Contract.RedoAppliedResultSnapshotPendingTransaction
-            {
-                CatalogId = value.PendingTransaction.CatalogId,
-                Paths = value.PendingTransaction.Paths.ToArray(),
-            },
-        Review = value.Review is null ? null : RedoAppliedResultSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.RedoAppliedResultSnapshotHistory
-        {
-            CanUndo = value.History.CanUndo,
-            CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
-        },
-    };
 
-    private static Contract.RedoAppliedResultSnapshotCatalog RedoAppliedResultSnapshotCatalog(EditorCatalog value) => new()
-    {
-        Id = value.Id,
-        SchemaVersion = value.SchemaVersion,
-        DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.RedoAppliedResultSnapshotCatalogLocalesItem
-        {
-            Tag = value.Tag,
-            Fallback = value.Fallback,
-        }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.RedoAppliedResultSnapshotCatalogLayersItem
-        {
-            Name = value.Name,
-            Priority = value.Priority,
-        }).ToArray(),
-    };
 
-private static Contract.DocumentSavedResultSnapshotReview DocumentSavedResultSnapshotReviewValue(EditorReviewSnapshot value) => new()
-    {
-        Path = value.Path,
-        Revision = value.Revision,
-        Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.DocumentSavedResultSnapshotReviewEntriesItem
-        {
-            Key = value.Key,
-            Locale = value.Locale,
-            State = value.State,
-            Note = value.Note,
-            SourceFingerprint = value.SourceFingerprint,
-            Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.DocumentSavedResultSnapshotReviewEntriesItemSamplesItem
-                {
-                    Key = sample.Key,
-                    Value = sample.Value,
-                }).ToArray(),
-        }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.DocumentSavedResultSnapshotReviewTerminologyItem
-        {
-            Source = value.Source,
-            Preferred = value.Preferred,
-            Locale = value.Locale,
-            Note = value.Note,
-        }).ToArray(),
-    };
     private static Contract.DocumentSavedResult DocumentSavedResultValue(EditorOperationResult value) => new()
     {
         Ok = value.Ok,
         Kind = value.Kind,
         Message = value.Message,
-        Snapshot = value.Snapshot is null ? null : DocumentSavedResultSnapshotValue(value.Snapshot),
+        Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.DocumentSavedResultValidation
         {
             Success = value.Validation.Success,
@@ -1417,110 +905,14 @@ private static Contract.DocumentSavedResultSnapshotReview DocumentSavedResultSna
     };
 
 
-    private static Contract.DocumentSavedResultSnapshot DocumentSavedResultSnapshotValue(WorkspaceSnapshot value) => new()
-    {
-        Root = value.Root,
-        Catalog = value.Catalog is null ? null : DocumentSavedResultSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.DocumentSavedResultSnapshotCatalogsItem
-        {
-            Id = value.Id,
-            ManifestPaths = value.ManifestPaths.ToArray(),
-            DocumentCount = value.DocumentCount,
-            LocaleCount = value.LocaleCount,
-            MessageCount = value.MessageCount,
-            ErrorCount = value.ErrorCount,
-            WarningCount = value.WarningCount,
-            Success = value.Success,
-        }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.DocumentSavedResultSnapshotDocumentsItem
-        {
-            Path = value.Path,
-            Content = value.Content,
-            Revision = value.Revision,
-            IsManifest = value.IsManifest,
-            IsMalformed = value.IsMalformed,
-            Locale = value.Locale,
-            Layer = value.Layer,
-        }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.DocumentSavedResultSnapshotDiagnosticsItem
-                {
-                    Id = value.Id,
-                    Severity = value.Severity,
-                    Message = value.Message,
-                    Path = value.Path,
-                    Line = value.Line,
-                    Column = value.Column,
-                    EndLine = value.EndLine,
-                    EndColumn = value.EndColumn,
-                }).ToArray(),
-        Success = value.Success,
-        PendingTransaction = value.PendingTransaction is null
-            ? null
-            : new Contract.DocumentSavedResultSnapshotPendingTransaction
-            {
-                CatalogId = value.PendingTransaction.CatalogId,
-                Paths = value.PendingTransaction.Paths.ToArray(),
-            },
-        Review = value.Review is null ? null : DocumentSavedResultSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.DocumentSavedResultSnapshotHistory
-        {
-            CanUndo = value.History.CanUndo,
-            CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
-        },
-    };
 
-    private static Contract.DocumentSavedResultSnapshotCatalog DocumentSavedResultSnapshotCatalog(EditorCatalog value) => new()
-    {
-        Id = value.Id,
-        SchemaVersion = value.SchemaVersion,
-        DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.DocumentSavedResultSnapshotCatalogLocalesItem
-        {
-            Tag = value.Tag,
-            Fallback = value.Fallback,
-        }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.DocumentSavedResultSnapshotCatalogLayersItem
-        {
-            Name = value.Name,
-            Priority = value.Priority,
-        }).ToArray(),
-    };
 
-private static Contract.ProjectCreatedResultSnapshotReview ProjectCreatedResultSnapshotReviewValue(EditorReviewSnapshot value) => new()
-    {
-        Path = value.Path,
-        Revision = value.Revision,
-        Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.ProjectCreatedResultSnapshotReviewEntriesItem
-        {
-            Key = value.Key,
-            Locale = value.Locale,
-            State = value.State,
-            Note = value.Note,
-            SourceFingerprint = value.SourceFingerprint,
-            Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.ProjectCreatedResultSnapshotReviewEntriesItemSamplesItem
-                {
-                    Key = sample.Key,
-                    Value = sample.Value,
-                }).ToArray(),
-        }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.ProjectCreatedResultSnapshotReviewTerminologyItem
-        {
-            Source = value.Source,
-            Preferred = value.Preferred,
-            Locale = value.Locale,
-            Note = value.Note,
-        }).ToArray(),
-    };
     private static Contract.ProjectCreatedResult ProjectCreatedResultValue(EditorOperationResult value) => new()
     {
         Ok = value.Ok,
         Kind = value.Kind,
         Message = value.Message,
-        Snapshot = value.Snapshot is null ? null : ProjectCreatedResultSnapshotValue(value.Snapshot),
+        Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.ProjectCreatedResultValidation
         {
             Success = value.Validation.Success,
@@ -1546,110 +938,14 @@ private static Contract.ProjectCreatedResultSnapshotReview ProjectCreatedResultS
     };
 
 
-    private static Contract.ProjectCreatedResultSnapshot ProjectCreatedResultSnapshotValue(WorkspaceSnapshot value) => new()
-    {
-        Root = value.Root,
-        Catalog = value.Catalog is null ? null : ProjectCreatedResultSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.ProjectCreatedResultSnapshotCatalogsItem
-        {
-            Id = value.Id,
-            ManifestPaths = value.ManifestPaths.ToArray(),
-            DocumentCount = value.DocumentCount,
-            LocaleCount = value.LocaleCount,
-            MessageCount = value.MessageCount,
-            ErrorCount = value.ErrorCount,
-            WarningCount = value.WarningCount,
-            Success = value.Success,
-        }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.ProjectCreatedResultSnapshotDocumentsItem
-        {
-            Path = value.Path,
-            Content = value.Content,
-            Revision = value.Revision,
-            IsManifest = value.IsManifest,
-            IsMalformed = value.IsMalformed,
-            Locale = value.Locale,
-            Layer = value.Layer,
-        }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.ProjectCreatedResultSnapshotDiagnosticsItem
-                {
-                    Id = value.Id,
-                    Severity = value.Severity,
-                    Message = value.Message,
-                    Path = value.Path,
-                    Line = value.Line,
-                    Column = value.Column,
-                    EndLine = value.EndLine,
-                    EndColumn = value.EndColumn,
-                }).ToArray(),
-        Success = value.Success,
-        PendingTransaction = value.PendingTransaction is null
-            ? null
-            : new Contract.ProjectCreatedResultSnapshotPendingTransaction
-            {
-                CatalogId = value.PendingTransaction.CatalogId,
-                Paths = value.PendingTransaction.Paths.ToArray(),
-            },
-        Review = value.Review is null ? null : ProjectCreatedResultSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.ProjectCreatedResultSnapshotHistory
-        {
-            CanUndo = value.History.CanUndo,
-            CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
-        },
-    };
 
-    private static Contract.ProjectCreatedResultSnapshotCatalog ProjectCreatedResultSnapshotCatalog(EditorCatalog value) => new()
-    {
-        Id = value.Id,
-        SchemaVersion = value.SchemaVersion,
-        DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.ProjectCreatedResultSnapshotCatalogLocalesItem
-        {
-            Tag = value.Tag,
-            Fallback = value.Fallback,
-        }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.ProjectCreatedResultSnapshotCatalogLayersItem
-        {
-            Name = value.Name,
-            Priority = value.Priority,
-        }).ToArray(),
-    };
 
-private static Contract.WorkspaceOpenedResultSnapshotReview WorkspaceOpenedResultSnapshotReviewValue(EditorReviewSnapshot value) => new()
-    {
-        Path = value.Path,
-        Revision = value.Revision,
-        Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.WorkspaceOpenedResultSnapshotReviewEntriesItem
-        {
-            Key = value.Key,
-            Locale = value.Locale,
-            State = value.State,
-            Note = value.Note,
-            SourceFingerprint = value.SourceFingerprint,
-            Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.WorkspaceOpenedResultSnapshotReviewEntriesItemSamplesItem
-                {
-                    Key = sample.Key,
-                    Value = sample.Value,
-                }).ToArray(),
-        }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.WorkspaceOpenedResultSnapshotReviewTerminologyItem
-        {
-            Source = value.Source,
-            Preferred = value.Preferred,
-            Locale = value.Locale,
-            Note = value.Note,
-        }).ToArray(),
-    };
     private static Contract.WorkspaceOpenedResult WorkspaceOpenedResultValue(EditorOperationResult value) => new()
     {
         Ok = value.Ok,
         Kind = value.Kind,
         Message = value.Message,
-        Snapshot = value.Snapshot is null ? null : WorkspaceOpenedResultSnapshotValue(value.Snapshot),
+        Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.WorkspaceOpenedResultValidation
         {
             Success = value.Validation.Success,
@@ -1675,83 +971,14 @@ private static Contract.WorkspaceOpenedResultSnapshotReview WorkspaceOpenedResul
     };
 
 
-    private static Contract.WorkspaceOpenedResultSnapshot WorkspaceOpenedResultSnapshotValue(WorkspaceSnapshot value) => new()
-    {
-        Root = value.Root,
-        Catalog = value.Catalog is null ? null : WorkspaceOpenedResultSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.WorkspaceOpenedResultSnapshotCatalogsItem
-        {
-            Id = value.Id,
-            ManifestPaths = value.ManifestPaths.ToArray(),
-            DocumentCount = value.DocumentCount,
-            LocaleCount = value.LocaleCount,
-            MessageCount = value.MessageCount,
-            ErrorCount = value.ErrorCount,
-            WarningCount = value.WarningCount,
-            Success = value.Success,
-        }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.WorkspaceOpenedResultSnapshotDocumentsItem
-        {
-            Path = value.Path,
-            Content = value.Content,
-            Revision = value.Revision,
-            IsManifest = value.IsManifest,
-            IsMalformed = value.IsMalformed,
-            Locale = value.Locale,
-            Layer = value.Layer,
-        }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.WorkspaceOpenedResultSnapshotDiagnosticsItem
-                {
-                    Id = value.Id,
-                    Severity = value.Severity,
-                    Message = value.Message,
-                    Path = value.Path,
-                    Line = value.Line,
-                    Column = value.Column,
-                    EndLine = value.EndLine,
-                    EndColumn = value.EndColumn,
-                }).ToArray(),
-        Success = value.Success,
-        PendingTransaction = value.PendingTransaction is null
-            ? null
-            : new Contract.WorkspaceOpenedResultSnapshotPendingTransaction
-            {
-                CatalogId = value.PendingTransaction.CatalogId,
-                Paths = value.PendingTransaction.Paths.ToArray(),
-            },
-        Review = value.Review is null ? null : WorkspaceOpenedResultSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.WorkspaceOpenedResultSnapshotHistory
-        {
-            CanUndo = value.History.CanUndo,
-            CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
-        },
-    };
 
-    private static Contract.WorkspaceOpenedResultSnapshotCatalog WorkspaceOpenedResultSnapshotCatalog(EditorCatalog value) => new()
-    {
-        Id = value.Id,
-        SchemaVersion = value.SchemaVersion,
-        DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.WorkspaceOpenedResultSnapshotCatalogLocalesItem
-        {
-            Tag = value.Tag,
-            Fallback = value.Fallback,
-        }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.WorkspaceOpenedResultSnapshotCatalogLayersItem
-        {
-            Name = value.Name,
-            Priority = value.Priority,
-        }).ToArray(),
-    };
 
     private static Contract.XliffImportAppliedResult XliffImportAppliedResultValue(EditorOperationResult value) => new()
     {
         Ok = value.Ok,
         Kind = value.Kind,
         Message = value.Message,
-        Snapshot = value.Snapshot is null ? null : XliffImportAppliedResultSnapshotValue(value.Snapshot),
+        Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.XliffImportAppliedResultValidation
         {
             Success = value.Validation.Success,
@@ -1776,104 +1003,8 @@ private static Contract.WorkspaceOpenedResultSnapshotReview WorkspaceOpenedResul
         },
     };
 
-private static Contract.XliffImportAppliedResultSnapshotReview XliffImportAppliedResultSnapshotReviewValue(EditorReviewSnapshot value) => new()
-    {
-        Path = value.Path,
-        Revision = value.Revision,
-        Error = value.Error,
-        Entries = value.Entries.Select(static value => new Contract.XliffImportAppliedResultSnapshotReviewEntriesItem
-        {
-            Key = value.Key,
-            Locale = value.Locale,
-            State = value.State,
-            Note = value.Note,
-            SourceFingerprint = value.SourceFingerprint,
-            Samples = value.Samples.OrderBy(static sample => sample.Key, StringComparer.Ordinal)
-                .Select(static sample => new Contract.XliffImportAppliedResultSnapshotReviewEntriesItemSamplesItem
-                {
-                    Key = sample.Key,
-                    Value = sample.Value,
-                }).ToArray(),
-        }).ToArray(),
-        Terminology = value.Terminology.Select(static value => new Contract.XliffImportAppliedResultSnapshotReviewTerminologyItem
-        {
-            Source = value.Source,
-            Preferred = value.Preferred,
-            Locale = value.Locale,
-            Note = value.Note,
-        }).ToArray(),
-    };
 
-    private static Contract.XliffImportAppliedResultSnapshot XliffImportAppliedResultSnapshotValue(WorkspaceSnapshot value) => new()
-    {
-        Root = value.Root,
-        Catalog = value.Catalog is null ? null : XliffImportAppliedResultSnapshotCatalog(value.Catalog),
-        Catalogs = value.Catalogs.Select(static value => new Contract.XliffImportAppliedResultSnapshotCatalogsItem
-        {
-            Id = value.Id,
-            ManifestPaths = value.ManifestPaths.ToArray(),
-            DocumentCount = value.DocumentCount,
-            LocaleCount = value.LocaleCount,
-            MessageCount = value.MessageCount,
-            ErrorCount = value.ErrorCount,
-            WarningCount = value.WarningCount,
-            Success = value.Success,
-        }).ToArray(),
-        Documents = value.Documents.Select(static value => new Contract.XliffImportAppliedResultSnapshotDocumentsItem
-        {
-            Path = value.Path,
-            Content = value.Content,
-            Revision = value.Revision,
-            IsManifest = value.IsManifest,
-            IsMalformed = value.IsMalformed,
-            Locale = value.Locale,
-            Layer = value.Layer,
-        }).ToArray(),
-        Diagnostics = value.Diagnostics.Select(static value => new Contract.XliffImportAppliedResultSnapshotDiagnosticsItem
-                {
-                    Id = value.Id,
-                    Severity = value.Severity,
-                    Message = value.Message,
-                    Path = value.Path,
-                    Line = value.Line,
-                    Column = value.Column,
-                    EndLine = value.EndLine,
-                    EndColumn = value.EndColumn,
-                }).ToArray(),
-        Success = value.Success,
-        PendingTransaction = value.PendingTransaction is null
-            ? null
-            : new Contract.XliffImportAppliedResultSnapshotPendingTransaction
-            {
-                CatalogId = value.PendingTransaction.CatalogId,
-                Paths = value.PendingTransaction.Paths.ToArray(),
-            },
-        Review = value.Review is null ? null : XliffImportAppliedResultSnapshotReviewValue(value.Review),
-        History = value.History is null ? null : new Contract.XliffImportAppliedResultSnapshotHistory
-        {
-            CanUndo = value.History.CanUndo,
-            CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
-        },
-    };
 
-    private static Contract.XliffImportAppliedResultSnapshotCatalog XliffImportAppliedResultSnapshotCatalog(EditorCatalog value) => new()
-    {
-        Id = value.Id,
-        SchemaVersion = value.SchemaVersion,
-        DefaultLocale = value.DefaultLocale,
-        Locales = value.Locales.Select(static value => new Contract.XliffImportAppliedResultSnapshotCatalogLocalesItem
-        {
-            Tag = value.Tag,
-            Fallback = value.Fallback,
-        }).ToArray(),
-        Layers = value.Layers.Select(static value => new Contract.XliffImportAppliedResultSnapshotCatalogLayersItem
-        {
-            Name = value.Name,
-            Priority = value.Priority,
-        }).ToArray(),
-    };
 
     private static Contract.ReviewJsonImportAppliedResult ReviewJsonImportAppliedResultValue(EditorReviewOperationResult value) => new()
     {
