@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../../eng/build/translations.props" />
   <PropertyGroup>
     <TargetFramework>$(RunicTranslationsGeneratorTargetFramework)</TargetFramework>
     <AssemblyName>Runic.Translations.Tooling</AssemblyName>
@@ -17,18 +18,19 @@
     </ItemGroup>
   </Target>
   <ItemGroup>
-    <ProjectReference Include="../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj" />
-    <ProjectReference Include="../../../../runic-command-line/src/Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj"
+    <ProjectReference Include="../Runic.CommandLine/Runic.CommandLine.csproj" />
+    <ProjectReference Include="../Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj"
                       PrivateAssets="all"
                       ReferenceOutputAssembly="false"
                       OutputItemType="Analyzer" />
-    <ProjectReference Include="..\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" PrivateAssets="all" />
-    <None Include="..\..\..\spec\schemas\project-v1.schema.json" Pack="true" PackagePath="schemas" />
-    <None Include="..\..\..\spec\schemas\locale-pack-v2.schema.json" Pack="true" PackagePath="schemas" />
-    <None Include="..\..\..\spec\schemas\locale-artifact-v2.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\runic-translations\spec\schemas\project-v1.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\runic-translations\spec\schemas\locale-pack-v2.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\runic-translations\spec\schemas\locale-artifact-v2.schema.json" Pack="true" PackagePath="schemas" />
     <None Update="README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\..\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
+    <None Include="..\..\runic-translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\runic-translations\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
+  <Import Project="../../../eng/build/translations.targets" />
 </Project>

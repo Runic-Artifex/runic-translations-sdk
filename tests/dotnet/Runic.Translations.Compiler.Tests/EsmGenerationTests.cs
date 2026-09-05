@@ -130,7 +130,7 @@ internal static class EsmGenerationTests
                 m["Common.Hello"]({ name: 42 });
                 void value;
                 """, new UTF8Encoding(false));
-            string typeScript = Path.Combine(RepositoryPaths.RepositoryRoot, "web", "node_modules", ".bin", "tsc");
+            string typeScript = Path.Combine(RepositoryPaths.RepositoryRoot, "node_modules", ".bin", "tsc");
             var typeCheck = new ProcessStartInfo(typeScript)
             {
                 WorkingDirectory = directory,

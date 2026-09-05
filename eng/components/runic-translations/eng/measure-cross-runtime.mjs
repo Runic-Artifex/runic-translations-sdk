@@ -29,7 +29,7 @@ try {
     await Promise.all(Array.from({ length: messageCount }, (_, index) =>
       writeFile(join(english, `Message${String(index).padStart(5, "0")}.mf2`), `MESSAGE_${index}\n`)));
     const started = performance.now();
-    await run("dotnet", ["run", "--project", join(repository, "dotnet/tools/dotnet-runic-translations"), "-c", "Release", "--no-restore", "--",
+    await run("dotnet", ["run", "--project", join(repository, "../../tools/dotnet-runic-translations"), "-c", "Release", "--no-restore", "--",
       "generate", "--project", current, "--output", output, "--emit-esm"]);
     const elapsed = performance.now() - started;
     const files = await inventory(output);
@@ -44,7 +44,7 @@ try {
   await Promise.all(Array.from({ length: 100 }, (_, index) =>
     writeFile(join(cppEnglish, `Message${String(index).padStart(5, "0")}.mf2`), `MESSAGE_${index}\n`)));
   const cppOutput = join(cpp, "out");
-  await run("dotnet", ["run", "--project", join(repository, "dotnet/tools/dotnet-runic-translations"), "-c", "Release", "--no-restore", "--",
+  await run("dotnet", ["run", "--project", join(repository, "../../tools/dotnet-runic-translations"), "-c", "Release", "--no-restore", "--",
     "generate", "--project", cpp, "--output", cppOutput, "--emit-cpp"]);
   const main = join(cppOutput, "main.cpp");
   await writeFile(main, "#include \"scale.translations-v1.hpp\"\n#include <iostream>\nint main(){ using namespace runic_translations::catalog_scale; for(int i=0;i<100000;i++) { auto value=m_12Message00000(\"en\"); if(value.empty()) return 2; } std::cout << \"ok\"; }\n");

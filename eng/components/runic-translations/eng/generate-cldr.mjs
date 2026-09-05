@@ -4,8 +4,8 @@ import process from 'node:process';
 
 const root = path.resolve(import.meta.dirname, '..');
 const sourcePath = path.join(root, 'eng/cldr/runic-subset-48.2.json');
-const registryPath = path.join(root, 'dotnet/src/Runic.Translations.Compiler/TranslationCapabilityRegistry.cs');
-const runtimePath = path.join(root, 'dotnet/src/Runic.Translations/Formatting/GeneratedLocaleData.cs');
+const registryPath = path.join(root, '../../tools/Runic.Translations.Compiler/TranslationCapabilityRegistry.cs');
+const runtimePath = path.join(root, '../dotnet/Runic.Translations/Formatting/GeneratedLocaleData.cs');
 const matrixPath = path.join(root, 'spec/capabilities-v1.json');
 const check = process.argv.slice(2).includes('--check');
 if (process.argv.length > (check ? 3 : 2)) throw new Error('Usage: node eng/generate-cldr.mjs [--check]');

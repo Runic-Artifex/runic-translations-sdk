@@ -328,7 +328,7 @@ internal static class ExternalPackTests
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            string candidate = Path.Combine(directory.FullName, "spec", "corpus", name);
+            string candidate = Path.Combine(directory.FullName, "packages", "runic-translations", "spec", "corpus", name);
             if (File.Exists(candidate)) return candidate;
             directory = directory.Parent;
         }

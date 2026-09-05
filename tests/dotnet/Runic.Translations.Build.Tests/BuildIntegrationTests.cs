@@ -48,8 +48,8 @@ internal static class BuildIntegrationTests
     private static void TargetDeclaresInputsAndOutputs()
     {
         string targetsPath = RepositoryPaths.Resolve(
+            "packages",
             "dotnet",
-            "src",
             "Runic.Translations.Build",
             "build",
             "Runic.Translations.Build.targets");
@@ -103,12 +103,12 @@ internal static class BuildIntegrationTests
         File.WriteAllText(temporary.Resolve("translations", "en", "application_title.mf2"), "Application title\n", new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("translations", "de", "application_title.mf2"), "Anwendungstitel\n", new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("Program.cs"), "internal static class Program { private static void Main() { _ = typeof(Example.AppText); } }\n", new UTF8Encoding(false));
-        string props = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Build", "build", "Runic.Translations.Build.props"));
-        string targets = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets"));
-        string runtimeProject = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations", "Runic.Translations.csproj"));
-        string compilerProject = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Compiler", "Runic.Translations.Compiler.csproj"));
-        string generatorProject = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Generator", "Runic.Translations.Generator.csproj"));
-        string compilerAssembly = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Compiler", "bin", "$(Configuration)", "net10.0", "Runic.Translations.Compiler.dll"));
+        string props = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.props"));
+        string targets = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets"));
+        string runtimeProject = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations", "Runic.Translations.csproj"));
+        string compilerProject = XmlPath(RepositoryPaths.Resolve("tools", "Runic.Translations.Compiler", "Runic.Translations.Compiler.csproj"));
+        string generatorProject = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Generator", "Runic.Translations.Generator.csproj"));
+        string compilerAssembly = XmlPath(RepositoryPaths.Resolve("tools", "Runic.Translations.Compiler", "bin", "$(Configuration)", "net10.0", "Runic.Translations.Compiler.dll"));
         string tool = $"dotnet &quot;{XmlPath(RepositoryPaths.ToolAssembly)}&quot;";
         string project = $$"""
             <Project Sdk="Microsoft.NET.Sdk">
@@ -283,8 +283,8 @@ internal static class BuildIntegrationTests
         File.WriteAllText(temporary.Resolve("translations", "en", "Hello.mf2"), ".input {$name :string}\nHello {$name}\n", new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("Program.cs"), "internal static class Program { private static void Main() { } }\n", new UTF8Encoding(false));
 
-        string props = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Build", "build", "Runic.Translations.Build.props"));
-        string targets = XmlPath(RepositoryPaths.Resolve("dotnet", "src", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets"));
+        string props = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.props"));
+        string targets = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets"));
         string tool = toolCommand is null
             ? $"dotnet &quot;{XmlPath(RepositoryPaths.ToolAssembly)}&quot;"
             : XmlPath(toolCommand);

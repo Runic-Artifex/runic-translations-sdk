@@ -271,7 +271,7 @@ internal static class AnalysisTests
         string actual,
         AnalysisModel.TranslationAnalysisReport report)
     {
-        string path = RepositoryPaths.Resolve("dotnet", "tests", "Runic.Translations.Compiler.Tests", "Golden", fileName);
+        string path = RepositoryPaths.Resolve("tests", "dotnet", "Runic.Translations.Compiler.Tests", "Golden", fileName);
         string expected = File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
         foreach (AnalysisModel.TranslationCatalogAnalysis catalog in report.Catalogs)
         {

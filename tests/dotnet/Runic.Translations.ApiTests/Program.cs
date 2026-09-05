@@ -35,7 +35,7 @@ internal static class Program
             foreach ((Assembly assembly, string projectDirectory) in targets)
             {
                 ApiManifest manifest = ApiManifest.Create(assembly);
-                string baselinePath = Path.Combine(root, "dotnet", "src", projectDirectory, "PublicAPI.Shipped.txt");
+                string baselinePath = Path.Combine(root, projectDirectory == "Runic.Translations.Compiler" ? "tools" : "packages/dotnet", projectDirectory, "PublicAPI.Shipped.txt");
                 byte[] actual = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(manifest.Text);
 
                 if (write)
@@ -87,7 +87,7 @@ internal static class Program
     private static Assembly LoadGeneratorAssembly(string root)
     {
         string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Release";
-        string generatorPath = Path.Combine(root, "dotnet", "src", "Runic.Translations.Generator", "bin", configuration, "net10.0", "Runic.Translations.Generator.dll");
+        string generatorPath = Path.Combine(root, "packages", "dotnet", "Runic.Translations.Generator", "bin", configuration, "net10.0", "Runic.Translations.Generator.dll");
         string packageRoot = Environment.GetEnvironmentVariable("NUGET_PACKAGES") ??
             Path.GetFullPath(Path.Combine(root, "..", "..", ".cache", "nuget"));
         string codeAnalysisPath = Path.Combine(packageRoot, "microsoft.codeanalysis.common", "4.14.0", "lib", "netstandard2.0", "Microsoft.CodeAnalysis.dll");
@@ -150,8 +150,7 @@ internal static class Program
         DirectoryInfo? directory = new(start);
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "Runic.Translations.slnx")) &&
-                Directory.Exists(Path.Combine(directory.FullName, "dotnet", "src", "Runic.Translations")))
+            if (File.Exists(Path.Combine(directory.FullName, "RunicSdk.Core.slnx")))
             {
                 return directory.FullName;
             }

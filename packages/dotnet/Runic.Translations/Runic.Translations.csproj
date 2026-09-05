@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../../eng/build/translations.props" />
   <PropertyGroup>
     <TargetFramework>$(RunicTranslationsCompatibilityTargetFramework)</TargetFramework>
     <AssemblyName>Runic.Translations</AssemblyName>
@@ -12,7 +13,8 @@
 
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\..\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
+    <None Include="..\..\runic-translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\runic-translations\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
+  <Import Project="../../../eng/build/translations.targets" />
 </Project>

@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../../eng/build/translations.props" />
   <PropertyGroup>
     <TargetFramework>$(RunicTranslationsGeneratorTargetFramework)</TargetFramework>
     <AssemblyName>Runic.Translations.Build</AssemblyName>
@@ -14,7 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Runic.Translations.Generator\Runic.Translations.Generator.csproj" PrivateAssets="all" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Update="build\Runic.Translations.Build.props"
@@ -33,4 +34,5 @@
                               PackagePath="analyzers/dotnet/cs" />
     </ItemGroup>
   </Target>
+  <Import Project="../../../eng/build/translations.targets" />
 </Project>

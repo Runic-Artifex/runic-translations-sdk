@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../../eng/build/translations.props" />
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -7,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Runic.Translations\Runic.Translations.csproj" />
+    <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations\Runic.Translations.csproj" />
   </ItemGroup>
+  <Import Project="../../../eng/build/translations.targets" />
 </Project>

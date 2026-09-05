@@ -474,7 +474,7 @@ internal static class CompilerTests
         string caseName,
         bool reverseDocuments = false)
     {
-        string directory = RepositoryPaths.Resolve("spec", "corpus", category, caseName);
+        string directory = RepositoryPaths.Resolve("packages", "runic-translations", "spec", "corpus", category, caseName);
         string manifestPath = Path.Combine(directory, "manifest.json");
         List<CompilerModel.TranslationSource> manifests = new();
         if (File.Exists(manifestPath))
@@ -504,7 +504,7 @@ internal static class CompilerTests
     internal static CompilerModel.TranslationSource ReadSource(string absolutePath)
     {
         string path = Path.GetRelativePath(
-            RepositoryPaths.Resolve("spec", "corpus"),
+            RepositoryPaths.Resolve("packages", "runic-translations", "spec", "corpus"),
             absolutePath).Replace('\\', '/');
         return new CompilerModel.TranslationSource(path, File.ReadAllBytes(absolutePath));
     }

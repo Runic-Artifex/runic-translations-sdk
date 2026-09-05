@@ -30,7 +30,7 @@ internal static class RepositoryPaths
         get
         {
             string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
-            return Resolve("dotnet", "tools", "dotnet-runic-translations", "bin", configuration, "net10.0", "dotnet-runic-translations.dll");
+            return Resolve("tools", "dotnet-runic-translations", "bin", configuration, "net10.0", "dotnet-runic-translations.dll");
         }
     }
 
@@ -39,8 +39,8 @@ internal static class RepositoryPaths
         DirectoryInfo? current = new(AppContext.BaseDirectory);
         while (current is not null)
         {
-            if (File.Exists(Path.Combine(current.FullName, "Runic.Translations.slnx")) &&
-                Directory.Exists(Path.Combine(current.FullName, "spec", "schemas")))
+            if (File.Exists(Path.Combine(current.FullName, "RunicSdk.Core.slnx")) &&
+                Directory.Exists(Path.Combine(current.FullName, "packages", "runic-translations", "spec", "schemas")))
             {
                 return current.FullName;
             }

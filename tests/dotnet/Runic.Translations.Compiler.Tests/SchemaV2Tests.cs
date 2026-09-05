@@ -83,7 +83,7 @@ internal static class SchemaV2Tests
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                     File.WriteAllBytes(path, output.GetUtf8Bytes());
                 }
-            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "spec", "corpus", "v2-plural-conformance.json"), Path.Combine(directory, "cases.json"));
+            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "packages", "runic-translations", "spec", "corpus", "v2-plural-conformance.json"), Path.Combine(directory, "cases.json"));
             string script = Path.Combine(directory, "test.mjs");
             File.WriteAllText(script, """
                 import { readFile } from "node:fs/promises";
@@ -135,7 +135,7 @@ internal static class SchemaV2Tests
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllBytes(path, output.GetUtf8Bytes());
             }
-            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "spec", "corpus", "locale-pack-v2-parity.json"), Path.Combine(directory, "locale-pack-v2-parity.json"));
+            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "packages", "runic-translations", "spec", "corpus", "locale-pack-v2-parity.json"), Path.Combine(directory, "locale-pack-v2-parity.json"));
             string identity = System.Text.Json.JsonSerializer.Serialize(
                 new { catalog = catalog.Id, fingerprint = catalog.Fingerprint, locale = "en-US" });
             string script = Path.Combine(directory, "test.mjs");
@@ -238,8 +238,8 @@ internal static class SchemaV2Tests
             TranslationGeneratedOutput localeArtifact = TranslationOutputRenderer.RenderLocaleJson(catalog, "en");
             Assert.True(localeArtifact.RelativePath.EndsWith("locale-v2.json", StringComparison.Ordinal), "Schema v2 was emitted as a v1 locale artifact.");
             File.WriteAllBytes(Path.Combine(directory, "artifact.json"), localeArtifact.GetUtf8Bytes());
-            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "spec", "corpus", "v2-relative-time-conformance.json"), Path.Combine(directory, "relative-cases.json"));
-            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "spec", "corpus", "locale-pack-v2-parity.json"), Path.Combine(directory, "locale-pack-v2-parity.json"));
+            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "packages", "runic-translations", "spec", "corpus", "v2-relative-time-conformance.json"), Path.Combine(directory, "relative-cases.json"));
+            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "packages", "runic-translations", "spec", "corpus", "locale-pack-v2-parity.json"), Path.Combine(directory, "locale-pack-v2-parity.json"));
             string script = Path.Combine(directory, "test.mjs");
             File.WriteAllText(script, """
                 import { readFile } from "node:fs/promises";
@@ -324,7 +324,7 @@ internal static class SchemaV2Tests
                 TranslationOutputRenderer.RenderCSharpCatalogData(catalog),
                 TranslationOutputRenderer.RenderCSharpRegistration(catalog),
             }) File.WriteAllBytes(Path.Combine(directory, output.RelativePath), output.GetUtf8Bytes());
-            string runtimeProject = Path.Combine(RepositoryPaths.RepositoryRoot, "dotnet", "src", "Runic.Translations", "Runic.Translations.csproj");
+            string runtimeProject = Path.Combine(RepositoryPaths.RepositoryRoot, "packages", "dotnet", "Runic.Translations", "Runic.Translations.csproj");
             string project = Path.Combine(directory, "Generated.csproj");
             File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><LangVersion>14.0</LangVersion><ImplicitUsings>disable</ImplicitUsings><GenerateDocumentationFile>false</GenerateDocumentationFile></PropertyGroup><ItemGroup><ProjectReference Include=\"" + runtimeProject + "\" /></ItemGroup></Project>", new UTF8Encoding(false));
             var start = new ProcessStartInfo("dotnet")

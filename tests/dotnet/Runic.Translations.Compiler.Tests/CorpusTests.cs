@@ -234,7 +234,7 @@ internal static class CorpusTests
     private static CompilerModel.TranslationSource ReadCorpusSource(string path)
     {
         string absolutePath = RepositoryPaths.Resolve(
-            "spec", "corpus", path.Replace('/', Path.DirectorySeparatorChar));
+            "packages", "runic-translations", "spec", "corpus", path.Replace('/', Path.DirectorySeparatorChar));
         return new CompilerModel.TranslationSource(path, File.ReadAllBytes(absolutePath));
     }
 
@@ -265,7 +265,7 @@ internal static class CorpusTests
 
     private static CorpusIndex ReadIndex()
     {
-        string path = RepositoryPaths.Resolve("spec", "corpus", "index.json");
+        string path = RepositoryPaths.Resolve("packages", "runic-translations", "spec", "corpus", "index.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
         JsonElement root = document.RootElement;
         JsonElement contracts = root.GetProperty("sourceContracts");

@@ -1,9 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <RunicTranslationsSourceRoot>$(MSBuildProjectDirectory)/../../packages/runic-translations</RunicTranslationsSourceRoot>
-  </PropertyGroup>
-  <Import Project="$(RunicTranslationsSourceRoot)/dotnet/src/Runic.Translations.Build/build/Runic.Translations.Build.props"
-          Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+  <Import Project="$(RunicSdkRoot)packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.props"
+          Condition="'$(RunicSdkRoot)' != ''" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -20,7 +17,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TranslationsEmitEsm>true</TranslationsEmitEsm>
     <TranslationsToolCommand>dotnet tool run runic-translations --</TranslationsToolCommand>
-    <TranslationsToolCommand Condition="'$(RunicTranslationsSourceRoot)' != ''">dotnet run --project &quot;$(RunicTranslationsSourceRoot)/dotnet/tools/dotnet-runic-translations/dotnet-runic-translations.csproj&quot; --configuration Release --</TranslationsToolCommand>
+    <TranslationsToolCommand Condition="'$(RunicSdkRoot)' != ''">dotnet run --project &quot;$(RunicSdkRoot)tools/dotnet-runic-translations/dotnet-runic-translations.csproj&quot; --configuration Release --</TranslationsToolCommand>
     <TranslationsRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TranslationsRuntimePath>
     <TranslationsOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</TranslationsOutputPath>
     <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
@@ -49,30 +46,30 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../packages/runic-toolkit/src/Runic.Application.Desktop/Runic.Application.Desktop.csproj" />
-    <ProjectReference Include="../../packages/runic-toolkit/src/Runic.Application.Hosting/Runic.Application.Hosting.csproj" />
-    <ProjectReference Include="../../packages/runic-toolkit/src/Runic.Application.Bridge/Runic.Application.Bridge.csproj" />
-    <ProjectReference Include="../../packages/runic-toolkit/src/Runic.Application.Bridge.Generators/Runic.Application.Bridge.Generators.csproj"
+    <ProjectReference Include="../../packages/dotnet/Runic.Application.Desktop/Runic.Application.Desktop.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.Application.Hosting/Runic.Application.Hosting.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.Application.Bridge/Runic.Application.Bridge.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.Application.Bridge.Generators/Runic.Application.Bridge.Generators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
-    <ProjectReference Include="../../packages/runic-assets/src/Runic.Assets.Desktop/Runic.Assets.Desktop.csproj" />
-    <ProjectReference Include="../../packages/runic-assets/src/Runic.Assets.AspNetCore/Runic.Assets.AspNetCore.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.Assets.Desktop/Runic.Assets.Desktop.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.Assets.AspNetCore/Runic.Assets.AspNetCore.csproj" />
     <!-- The base package owns the archive build/embed targets even when the
          runtime adapters are supplied by workspace project references. -->
-    <ProjectReference Include="../../packages/runic-assets/src/Runic.Assets/Runic.Assets.csproj" />
-    <ProjectReference Include="../../packages/runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj" />
-    <ProjectReference Include="../../packages/runic-command-line/src/Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj"
+    <ProjectReference Include="../../packages/dotnet/Runic.Assets/Runic.Assets.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.CommandLine/Runic.CommandLine.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
-    <ProjectReference Include="../../packages/runic-translations/dotnet/src/Runic.Translations/Runic.Translations.csproj" />
-    <ProjectReference Include="../../packages/runic-translations/dotnet/src/Runic.Translations.Compiler/Runic.Translations.Compiler.csproj" />
-    <ProjectReference Include="../../packages/runic-translations/dotnet/src/Runic.Translations.Authoring/Runic.Translations.Authoring.csproj" />
-    <ProjectReference Include="../../packages/runic-translations/dotnet/src/Runic.Translations.Tooling/Runic.Translations.Tooling.csproj" />
-    <ProjectReference Include="../../packages/runic-translations/dotnet/src/Runic.Translations.Generator/Runic.Translations.Generator.csproj"
+    <ProjectReference Include="../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" />
+    <ProjectReference Include="../../tools/Runic.Translations.Compiler/Runic.Translations.Compiler.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.Translations.Authoring/Runic.Translations.Authoring.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.Translations.Tooling/Runic.Translations.Tooling.csproj" />
+    <ProjectReference Include="../../packages/dotnet/Runic.Translations.Generator/Runic.Translations.Generator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
-    <Analyzer Include="$(RunicTranslationsSourceRoot)/dotnet/src/Runic.Translations.Compiler/bin/$(Configuration)/net10.0/Runic.Translations.Compiler.dll"
-              Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+    <Analyzer Include="$(RunicSdkRoot)tools/Runic.Translations.Compiler/bin/$(Configuration)/net10.0/Runic.Translations.Compiler.dll"
+              Condition="'$(RunicSdkRoot)' != ''" />
   </ItemGroup>
 
   <ItemGroup>
@@ -126,9 +123,9 @@
           EnvironmentVariables="RUNIC_TRANSLATIONS_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json" />
   </Target>
 
-  <Import Project="../../packages/runic-assets/src/Runic.Assets/buildTransitive/Runic.Assets.targets"
-          Condition="Exists('../../packages/runic-assets/src/Runic.Assets/buildTransitive/Runic.Assets.targets')" />
+  <Import Project="../../packages/dotnet/Runic.Assets/buildTransitive/Runic.Assets.targets"
+          Condition="Exists('../../packages/dotnet/Runic.Assets/buildTransitive/Runic.Assets.targets')" />
 
-  <Import Project="$(RunicTranslationsSourceRoot)/dotnet/src/Runic.Translations.Build/build/Runic.Translations.Build.targets"
-          Condition="'$(RunicTranslationsSourceRoot)' != ''" />
+  <Import Project="$(RunicSdkRoot)packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets"
+          Condition="'$(RunicSdkRoot)' != ''" />
 </Project>

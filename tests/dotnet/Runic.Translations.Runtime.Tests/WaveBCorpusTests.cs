@@ -238,7 +238,7 @@ internal static class WaveBCorpusTests
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            string candidate = Path.Combine(directory.FullName, "spec", "corpus", "wave-b");
+            string candidate = Path.Combine(directory.FullName, "packages", "runic-translations", "spec", "corpus", "wave-b");
             if (File.Exists(Path.Combine(candidate, "index.json"))) return candidate;
             directory = directory.Parent;
         }

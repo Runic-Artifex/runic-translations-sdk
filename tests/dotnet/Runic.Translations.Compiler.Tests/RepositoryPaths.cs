@@ -25,9 +25,7 @@ internal static class RepositoryPaths
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "Runic.Translations.slnx")) &&
-                Directory.Exists(Path.Combine(directory.FullName, "spec")) &&
-                Directory.Exists(Path.Combine(directory.FullName, "dotnet", "src")))
+            if (File.Exists(Path.Combine(directory.FullName, "RunicSdk.Core.slnx")))
             {
                 return directory.FullName;
             }

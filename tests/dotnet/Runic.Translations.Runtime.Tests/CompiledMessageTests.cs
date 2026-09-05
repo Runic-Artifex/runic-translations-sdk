@@ -90,7 +90,7 @@ internal static class CompiledMessageTests
 
     private static void PluralCorpus()
     {
-        string path = Path.Combine(FindRepositoryRoot(), "spec", "corpus", "v2-plural-conformance.json");
+        string path = Path.Combine(FindRepositoryRoot(), "packages", "runic-translations", "spec", "corpus", "v2-plural-conformance.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
         foreach (JsonElement item in document.RootElement.GetProperty("cases").EnumerateArray())
         {
@@ -104,7 +104,7 @@ internal static class CompiledMessageTests
 
     private static void RelativeTimeCorpus()
     {
-        string path = Path.Combine(FindRepositoryRoot(), "spec", "corpus", "v2-relative-time-conformance.json");
+        string path = Path.Combine(FindRepositoryRoot(), "packages", "runic-translations", "spec", "corpus", "v2-relative-time-conformance.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
         Assert.Equal("48.2", document.RootElement.GetProperty("cldrVersion").GetString());
         foreach (JsonElement item in document.RootElement.GetProperty("cases").EnumerateArray())
@@ -123,7 +123,7 @@ internal static class CompiledMessageTests
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "Runic.Translations.slnx"))) return directory.FullName;
+            if (File.Exists(Path.Combine(directory.FullName, "RunicSdk.Core.slnx"))) return directory.FullName;
             directory = directory.Parent;
         }
         throw new InvalidOperationException("Could not locate repository root.");

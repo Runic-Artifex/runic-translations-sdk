@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../eng/build/translations.props" />
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -15,23 +16,24 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../runic-command-line/src/Runic.CommandLine/Runic.CommandLine.csproj" />
-    <ProjectReference Include="..\..\src\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />
-    <ProjectReference Include="..\..\src\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" />
-    <ProjectReference Include="..\..\src\Runic.Translations.Tooling\Runic.Translations.Tooling.csproj" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\locale-artifact-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-artifact-v1.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\locale-artifact-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-artifact-v2.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\external-pack-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.external-pack-v1.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\template-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.template-manifest-v1.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\asset-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.asset-manifest-v1.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\web-module-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.web-module-manifest-v1.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\message-ast-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.message-ast-v2.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\locale-pack-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-pack-v2.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\editor-state-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.editor-state-v1.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\capabilities-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.capabilities-v1.schema.json" />
-    <EmbeddedResource Include="..\..\..\spec\schemas\project-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.project-v1.schema.json" />
+    <ProjectReference Include="../../packages/dotnet/Runic.CommandLine/Runic.CommandLine.csproj" />
+    <ProjectReference Include="..\..\packages\dotnet\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />
+    <ProjectReference Include="..\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" />
+    <ProjectReference Include="..\..\packages\dotnet\Runic.Translations.Tooling\Runic.Translations.Tooling.csproj" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\locale-artifact-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-artifact-v1.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\locale-artifact-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-artifact-v2.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\external-pack-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.external-pack-v1.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\template-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.template-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\asset-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.asset-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\web-module-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.web-module-manifest-v1.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\message-ast-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.message-ast-v2.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\locale-pack-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-pack-v2.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\editor-state-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.editor-state-v1.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\capabilities-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.capabilities-v1.schema.json" />
+    <EmbeddedResource Include="..\..\packages\runic-translations\spec\schemas\project-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.project-v1.schema.json" />
     <None Update="README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\..\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
+    <None Include="..\..\packages\runic-translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\packages\runic-translations\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
+  <Import Project="../../eng/build/translations.targets" />
 </Project>
