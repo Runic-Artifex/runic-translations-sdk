@@ -52,7 +52,7 @@ internal static class SchemaTests
 
     private static void ValidCorpusSourcesAreStrictJson()
     {
-        string validRoot = RepositoryPaths.Resolve("packages", "runic-translations", "spec", "corpus", "valid");
+        string validRoot = RepositoryPaths.Resolve("specs", "translations", "corpus", "valid");
         Assert.True(Directory.Exists(validRoot), "The version 1 valid corpus directory is missing.");
 
         string[] paths = Directory.GetFiles(validRoot, "*.json", SearchOption.AllDirectories);
@@ -86,7 +86,7 @@ internal static class SchemaTests
 
     private static void CanonicalIdentifiersMatchFiles()
     {
-        string directory = RepositoryPaths.Resolve("packages", "runic-translations", "spec", "schemas");
+        string directory = RepositoryPaths.Resolve("specs", "translations", "schemas");
         string[] paths = Directory.GetFiles(directory, "*.schema.json", SearchOption.TopDirectoryOnly);
         Array.Sort(paths, StringComparer.Ordinal);
         Assert.True(paths.Length != 0, "No published schemas were found.");
@@ -112,7 +112,7 @@ internal static class SchemaTests
     }
 
     private static string ReadSchemaPath(string fileName) =>
-        RepositoryPaths.Resolve("packages", "runic-translations", "spec", "schemas", fileName);
+        RepositoryPaths.Resolve("specs", "translations", "schemas", fileName);
 
     private static void AssertSchemaRoot(JsonElement root, params string[] requiredMembers)
     {

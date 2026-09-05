@@ -41,6 +41,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)../../packages/runic-translations/.github/assets/brand/icon.png" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)../branding/translations/icon.png" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 </Project>

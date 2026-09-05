@@ -83,7 +83,7 @@ internal static class SchemaV2Tests
                     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                     File.WriteAllBytes(path, output.GetUtf8Bytes());
                 }
-            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "packages", "runic-translations", "spec", "corpus", "v2-plural-conformance.json"), Path.Combine(directory, "cases.json"));
+            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "specs", "translations", "corpus", "v2-plural-conformance.json"), Path.Combine(directory, "cases.json"));
             string script = Path.Combine(directory, "test.mjs");
             File.WriteAllText(script, """
                 import { readFile } from "node:fs/promises";
@@ -135,7 +135,7 @@ internal static class SchemaV2Tests
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllBytes(path, output.GetUtf8Bytes());
             }
-            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "packages", "runic-translations", "spec", "corpus", "locale-pack-v2-parity.json"), Path.Combine(directory, "locale-pack-v2-parity.json"));
+            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "specs", "translations", "corpus", "locale-pack-v2-parity.json"), Path.Combine(directory, "locale-pack-v2-parity.json"));
             string identity = System.Text.Json.JsonSerializer.Serialize(
                 new { catalog = catalog.Id, fingerprint = catalog.Fingerprint, locale = "en-US" });
             string script = Path.Combine(directory, "test.mjs");
@@ -238,8 +238,8 @@ internal static class SchemaV2Tests
             TranslationGeneratedOutput localeArtifact = TranslationOutputRenderer.RenderLocaleJson(catalog, "en");
             Assert.True(localeArtifact.RelativePath.EndsWith("locale-v2.json", StringComparison.Ordinal), "Schema v2 was emitted as a v1 locale artifact.");
             File.WriteAllBytes(Path.Combine(directory, "artifact.json"), localeArtifact.GetUtf8Bytes());
-            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "packages", "runic-translations", "spec", "corpus", "v2-relative-time-conformance.json"), Path.Combine(directory, "relative-cases.json"));
-            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "packages", "runic-translations", "spec", "corpus", "locale-pack-v2-parity.json"), Path.Combine(directory, "locale-pack-v2-parity.json"));
+            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "specs", "translations", "corpus", "v2-relative-time-conformance.json"), Path.Combine(directory, "relative-cases.json"));
+            File.Copy(Path.Combine(RepositoryPaths.RepositoryRoot, "specs", "translations", "corpus", "locale-pack-v2-parity.json"), Path.Combine(directory, "locale-pack-v2-parity.json"));
             string script = Path.Combine(directory, "test.mjs");
             File.WriteAllText(script, """
                 import { readFile } from "node:fs/promises";

@@ -13,8 +13,8 @@
 
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\runic-translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\runic-translations\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
+    <None Include="..\..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

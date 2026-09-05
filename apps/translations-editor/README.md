@@ -10,7 +10,7 @@ Runic Translations Editor is a companion to [Runic Translations](https://github.
 
 ## Preview availability
 
-The first public preview has not been published yet. [GitHub Releases](https://github.com/Runic-Artifex/runic-translations-editor/releases) will be the canonical download location when it is ready; until a release appears there, do not trust archives distributed elsewhere. Source development uses the local candidate feeds documented below; it does not use GitHub Packages.
+The first public preview has not been published yet. [GitHub Releases](https://github.com/Runic-Artifex/runic-translations-editor/releases) will be the canonical download location when it is ready; until a release appears there, do not trust archives distributed elsewhere. Source development uses the shared SDK workspace.
 
 The planned preview artifacts are:
 
@@ -99,31 +99,29 @@ Machine-translation providers and signed stable distribution are not available y
 
 ## Build from source
 
-Source development requires the .NET 10 SDK, Node.js 24.18.0, and Bun 1.4.0. Sibling source projects are used automatically when they are available. Package-consumer fixtures provide the maintained isolated-candidate path: provide `RUNIC_EDITOR_NUGET_FEED`, `RUNIC_EDITOR_NPM_ARCHIVE`, and `RUNIC_EDITOR_COMPATIBILITY_SET` explicitly for the exact temporary local candidates. The verifier creates its own temporary NuGet configuration and caches; it never relies on a shared workspace feed or persistent user configuration. The canonical compatibility train is `1.0.0-preview.1`. Do not add a project `.npmrc`, configure GitHub credentials, or use GitHub Packages for local work.
+Use the shared SDK toolchain and run these commands from its root:
 
-For the repeatable package proof, stage the exact candidate `.nupkg` files in a fresh temporary directory and point the verifier at the canonical compatibility manifest:
-
-```bash
-RUNIC_EDITOR_NUGET_FEED=/tmp/runic-editor-feed \
-RUNIC_EDITOR_NPM_ARCHIVE=/tmp/runic-artifex-vite-plugin-runic-translations-1.0.0-preview.1.tgz \
-RUNIC_EDITOR_COMPATIBILITY_SET=/path/to/runic.compatibility-set.json \
-  node eng/verify-localized-desktop-product.mjs run-twice > localized-desktop-receipt.json
+```sh
+bun run bootstrap
+bun run build
+bun run dev:editor
 ```
 
-```bash
-dotnet tool restore
-bun install --cwd Frontend --frozen-lockfile
-dotnet run --project Runic.Translations.Editor.csproj -- edit ExampleWorkspace
+All Runic dependencies resolve from source in the workspace. `bun run test` checks
+the frontend, generated contract, editor save/recovery smoke and example workspace.
+`bun run verify-packages` checks the SDK's isolated package consumers. See the
+[contributor guide](../../CONTRIBUTING.md) for the complete verification sequence.
+
+For frontend-only development, build once to generate the localized ESM module,
+then run this from the SDK root:
+
+```sh
+RUNIC_TRANSLATIONS_MANIFEST="$PWD/apps/translations-editor/obj/Debug/net10.0/translations/editor.esm/web-module-manifest-v1.json" \
+  bun run --cwd apps/translations-editor/Frontend dev:mock
 ```
 
-For frontend-only development, build the .NET project once to produce the localized ESM module, then run:
-
-```bash
-RUNIC_TRANSLATIONS_MANIFEST=../obj/Debug/net10.0/translations/editor.esm/web-module-manifest-v1.json \
-  bun run --cwd Frontend dev:mock
-```
-
-Mock mode keeps writes in memory. Run `./verify.sh` to build against released packages, check the Svelte application and production bundle, exercise the compiler/save/recovery path, and detect unintended generated changes.
+Mock mode keeps writes in memory. Former standalone release and candidate-feed
+scripts are retained as [engineering history](../../eng/archive/README.md).
 
 ## Support and license
 

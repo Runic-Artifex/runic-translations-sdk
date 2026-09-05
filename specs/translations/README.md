@@ -75,5 +75,5 @@ uniqueness, BCP 47 canonicalization, fallback graphs, cross-file merge rules,
 pattern/descriptor parity, compiler limits, and generated identifier collisions.
 
 The supported authoring profile and project convention are documented in
-[`../docs/mf2-projects.md`](../docs/mf2-projects.md). `locale-pack-v2` is
-documented in [`../docs/locale-pack-v2.md`](../docs/locale-pack-v2.md).
+[`../../docs/guides/translations/mf2-projects.md`](../../docs/guides/translations/mf2-projects.md). `locale-pack-v2` is
+documented in [`../../docs/guides/translations/locale-pack-v2.md`](../../docs/guides/translations/locale-pack-v2.md).

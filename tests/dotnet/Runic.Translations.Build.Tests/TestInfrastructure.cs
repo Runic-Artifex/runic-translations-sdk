@@ -40,7 +40,7 @@ internal static class RepositoryPaths
         while (current is not null)
         {
             if (File.Exists(Path.Combine(current.FullName, "RunicSdk.Core.slnx")) &&
-                Directory.Exists(Path.Combine(current.FullName, "packages", "runic-translations", "spec", "schemas")))
+                Directory.Exists(Path.Combine(current.FullName, "specs", "translations", "schemas")))
             {
                 return current.FullName;
             }

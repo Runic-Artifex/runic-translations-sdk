@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 
 const [packageJson, fullVerification, viteConfig, svelteConfig] = await Promise.all([
   readFile(new URL("../package.json", import.meta.url), "utf8"),
-  readFile(new URL("../../verify.sh", import.meta.url), "utf8"),
+  readFile(new URL("../../../../eng/run.mjs", import.meta.url), "utf8"),
   readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
   readFile(new URL("../svelte.config.js", import.meta.url), "utf8"),
 ]);
@@ -25,8 +25,10 @@ assert.equal(frontend.packageManager, "bun@1.4.0", "Frontend must use the author
 for (const test of ["verify-ui-catalog.mjs", "verify-keyboard-a11y.mjs", "verify-command-palette.mjs", "verify-w03-simulation.mjs", "verify-local-state.mjs"]) {
   assert.match(expandedCommand, new RegExp(test.replace(".", "\\.")), `Frontend verification omits ${test}.`);
 }
-assert.match(fullVerification, /RUNIC_TRANSLATIONS_MANIFEST="\$manifest" bun run --cwd "\$frontend" verify:built/,
-  "The repository verifier bypasses the frontend verification source of truth.");
+assert.match(fullVerification, /verify:built/,
+  "The SDK verifier bypasses the frontend verification source of truth.");
+assert.match(fullVerification, /RUNIC_TRANSLATIONS_MANIFEST/,
+  "The SDK verifier must supply the generated translation manifest.");
 assert.doesNotMatch(viteConfig, /desktop:\s*true/,
   "The Vite plugin must not duplicate SvelteKit Desktop output ownership.");
 assert.match(svelteConfig, /runicToolkitAdapter\(\{[^}]*mode:\s*["']spa["'][^}]*desktop:\s*true[^}]*\}\)/s,

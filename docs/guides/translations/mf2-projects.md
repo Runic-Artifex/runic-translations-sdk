@@ -76,7 +76,7 @@ export default {
 The no-argument form discovers `translations/runic.json`, generates into
 `.runic/translations`, watches the config and every MF2 message, and exposes the
 generated virtual modules. In a split frontend/backend layout, pass only the
-relative project directory: `runicTranslations({ project: "../translations" })`.
+relative project directory: `runicTranslations({ project: "../../../eng/archive/runic-translations/translations" })`.
 
 The CLI accepts either the directory or config file:
 

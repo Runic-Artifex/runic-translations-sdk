@@ -25,12 +25,12 @@
                       OutputItemType="Analyzer" />
     <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" PrivateAssets="all" />
-    <None Include="..\..\runic-translations\spec\schemas\project-v1.schema.json" Pack="true" PackagePath="schemas" />
-    <None Include="..\..\runic-translations\spec\schemas\locale-pack-v2.schema.json" Pack="true" PackagePath="schemas" />
-    <None Include="..\..\runic-translations\spec\schemas\locale-artifact-v2.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\..\specs\translations\schemas\project-v1.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\..\specs\translations\schemas\locale-pack-v2.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\..\specs\translations\schemas\locale-artifact-v2.schema.json" Pack="true" PackagePath="schemas" />
     <None Update="README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\runic-translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\runic-translations\eng\cldr\LICENSE" Pack="true" PackagePath="licenses" />
+    <None Include="..\..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

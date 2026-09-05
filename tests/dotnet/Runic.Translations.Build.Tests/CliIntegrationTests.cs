@@ -199,7 +199,7 @@ internal static class CliIntegrationTests
         using TemporaryDirectory temporary = new();
         ProcessResult result = TestFixture.RunTool(temporary, "schema", "--output", "schemas");
         Assert.Equal(0, result.ExitCode, result.Combined);
-        string source = RepositoryPaths.Resolve("packages", "runic-translations", "spec", "schemas");
+        string source = RepositoryPaths.Resolve("specs", "translations", "schemas");
         string[] excluded = ["catalog-v1.schema.json", "catalog-v2.schema.json", "resources-v1.schema.json", "resources-v2.schema.json", "resources-v3.schema.json", "message-ast-v3.schema.json"];
         string[] expected = Directory.EnumerateFiles(source, "*.schema.json").Select(path => Path.GetFileName(path)!)
             .Where(name => !excluded.Contains(name, StringComparer.Ordinal)).Order(StringComparer.Ordinal).ToArray();

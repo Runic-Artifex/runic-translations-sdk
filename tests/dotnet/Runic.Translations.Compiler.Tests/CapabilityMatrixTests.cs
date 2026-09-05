@@ -64,7 +64,7 @@ internal static class CapabilityMatrixTests
     }
 
     private static JsonDocument ReadMatrix() => JsonDocument.Parse(
-        File.ReadAllBytes(RepositoryPaths.Resolve("packages", "runic-translations", "spec", "capabilities-v1.json")),
+        File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "capabilities-v1.json")),
         new JsonDocumentOptions { AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow, MaxDepth = 32 });
 
     private static void AssertCapability(string locale, string capability, bool expected)
