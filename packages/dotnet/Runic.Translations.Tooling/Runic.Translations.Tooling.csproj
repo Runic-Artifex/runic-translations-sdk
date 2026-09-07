@@ -11,7 +11,8 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);BundleToolingAssemblies</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
-  <Target Name="BundleToolingAssemblies" DependsOnTargets="ResolveProjectReferences">
+  <Target Name="BuildToolingAssemblies" BeforeTargets="BundleToolingAssemblies" DependsOnTargets="ResolveProjectReferences" Condition="'$(NoBuild)' != 'true'" />
+  <Target Name="BundleToolingAssemblies">
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Authoring.dll" PackagePath="lib/$(TargetFramework)" />
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Compiler.dll" PackagePath="lib/$(TargetFramework)" />

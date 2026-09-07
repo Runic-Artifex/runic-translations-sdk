@@ -26,7 +26,8 @@
           PackagePath="build\Runic.Translations.Build.targets" />
   </ItemGroup>
 
-  <Target Name="BundleTranslationAnalyzers" DependsOnTargets="ResolveProjectReferences">
+  <Target Name="BuildTranslationAnalyzers" BeforeTargets="BundleTranslationAnalyzers" DependsOnTargets="ResolveProjectReferences" Condition="'$(NoBuild)' != 'true'" />
+  <Target Name="BundleTranslationAnalyzers">
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Generator.dll"
                               PackagePath="analyzers/dotnet/cs" />
