@@ -15,7 +15,7 @@ internal static class EsmGenerationTests
     public static void Register(TestRunner runner)
     {
         runner.Add("ESM generation is deterministic and manifest-complete", DeterministicManifest);
-        runner.Add("generated ESM executes v1 messages and portable formatting in Node", ExecutesInNode);
+        runner.Add("generated ESM executes v1 messages and portable formatting in Bun", ExecutesInBun);
     }
 
     private static void DeterministicManifest()
@@ -49,7 +49,7 @@ internal static class EsmGenerationTests
         Assert.True(messages.Text.Contains("export * as m", StringComparison.Ordinal), "The public message namespace was not generated.");
     }
 
-    private static void ExecutesInNode()
+    private static void ExecutesInBun()
     {
         IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderEsmModules(Catalog());
         string directory = Path.Combine(Path.GetTempPath(), "runic-esm-tests-" + Guid.NewGuid().ToString("N"));
@@ -103,13 +103,13 @@ internal static class EsmGenerationTests
                 if (decodeTextReference({ version: 1, catalog: "portable", contractFingerprint: "sha256:bad", key: "Plain", arguments: {} }).ok) throw new Error("fingerprint skew accepted");
                 """, new UTF8Encoding(false));
 
-            var start = new ProcessStartInfo("node", script)
+            var start = new ProcessStartInfo("bun", script)
             {
                 RedirectStandardError = true,
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
             };
-            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Node.js.");
+            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Bun.");
             string standardOutput = process.StandardOutput.ReadToEnd();
             string standardError = process.StandardError.ReadToEnd();
             process.WaitForExit();
@@ -130,14 +130,15 @@ internal static class EsmGenerationTests
                 m["Common.Hello"]({ name: 42 });
                 void value;
                 """, new UTF8Encoding(false));
-            string typeScript = Path.Combine(RepositoryPaths.RepositoryRoot, "node_modules", ".bin", "tsc");
-            var typeCheck = new ProcessStartInfo(typeScript)
+            string typeScript = Path.Combine(RepositoryPaths.RepositoryRoot, "node_modules", "typescript", "bin", "tsc");
+            var typeCheck = new ProcessStartInfo("bun")
             {
                 WorkingDirectory = directory,
                 RedirectStandardError = true,
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
             };
+            typeCheck.ArgumentList.Add(typeScript);
             foreach (string argument in new[] { "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", types })
                 typeCheck.ArgumentList.Add(argument);
             using Process checker = Process.Start(typeCheck) ?? throw new InvalidOperationException("Could not start TypeScript.");

@@ -13,7 +13,7 @@ const expandScript = (name, visited = new Set()) => {
   visited.add(name);
   const command = frontend.scripts?.[name];
   if (typeof command !== "string") return "";
-  const nested = [...command.matchAll(/\bbun run ([\w:-]+)/g)]
+  const nested = [...command.matchAll(/\bbun run (?:--bun )?([\w:-]+)/g)]
     .map(([, dependency]) => expandScript(dependency, visited));
   return [command, ...nested].join("\n");
 };

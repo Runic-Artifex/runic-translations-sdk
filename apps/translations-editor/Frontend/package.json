@@ -14,9 +14,9 @@
     "dev": "vite dev",
     "dev:mock": "vite dev --mode mock",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "verify:checks": "bun run check && node test/verify-appearance.mjs && node test/verify-message-preview.mjs && node --expose-gc test/verify-review-model.mjs && node test/verify-message-search.mjs && node test/verify-message-virtualization.mjs && node test/verify-message-list-catalog.mjs && node test/verify-ui-catalog.mjs && node test/verify-localization-readiness.mjs && node test/verify-command-palette.mjs && node test/verify-keyboard-a11y.mjs && node test/verify-w03-simulation.mjs && node test/verify-local-state.mjs && node test/verify-verification-wiring.mjs",
-    "verify:built": "bun run verify:checks && node test/verify-production.mjs",
-    "verify": "bun run verify:checks && bun run build && node test/verify-production.mjs"
+    "verify:checks": "bun run --bun check && bun test/verify-appearance.mjs && bun test/verify-message-preview.mjs && bun --expose-gc test/verify-review-model.mjs && bun test/verify-message-search.mjs && bun test/verify-message-virtualization.mjs && bun test/verify-message-list-catalog.mjs && bun test/verify-ui-catalog.mjs && bun test/verify-localization-readiness.mjs && bun test/verify-command-palette.mjs && bun test/verify-keyboard-a11y.mjs && bun test/verify-w03-simulation.mjs && bun test/verify-local-state.mjs && bun test/verify-verification-wiring.mjs",
+    "verify:built": "bun run --bun verify:checks && bun test/verify-production.mjs",
+    "verify": "bun run --bun verify:checks && bun run --bun build && bun test/verify-production.mjs"
   },
   "dependencies": {
     "@runic-artifex/application-bridge": "workspace:*",

@@ -18,8 +18,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node build.mjs",
-    "test": "bun run build && node --test test/*.test.js"
+    "build": "bun build.mjs",
+    "test": "bun run --bun build && bun test --timeout 120000 test/*.test.js"
   },
   "peerDependencies": {
     "vite": ">=6 <9"

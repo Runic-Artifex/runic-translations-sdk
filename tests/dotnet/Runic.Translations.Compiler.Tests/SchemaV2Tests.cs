@@ -99,8 +99,8 @@ internal static class SchemaV2Tests
                   if (actual !== item.expected) throw new Error(`${item.locale}/${item.value}: expected ${item.expected}; actual ${actual}`);
                 }
                 """, new UTF8Encoding(false));
-            var start = new ProcessStartInfo("node", script) { RedirectStandardError = true, UseShellExecute = false };
-            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Node.js.");
+            var start = new ProcessStartInfo("bun", script) { RedirectStandardError = true, UseShellExecute = false };
+            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Bun.");
             string error = process.StandardError.ReadToEnd();
             process.WaitForExit();
             Assert.Equal(0, process.ExitCode, error);
@@ -175,8 +175,8 @@ internal static class SchemaV2Tests
                 }
                 """;
             File.WriteAllText(script, source.Replace("__IDENTITY__", identity, StringComparison.Ordinal), new UTF8Encoding(false));
-            var start = new ProcessStartInfo("node", script) { RedirectStandardError = true, UseShellExecute = false };
-            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Node.js.");
+            var start = new ProcessStartInfo("bun", script) { RedirectStandardError = true, UseShellExecute = false };
+            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Bun.");
             string error = process.StandardError.ReadToEnd();
             process.WaitForExit();
             Assert.Equal(0, process.ExitCode, error);
@@ -302,8 +302,8 @@ internal static class SchemaV2Tests
                   if (actual !== item.expected) throw new Error(`${item.locale}/${item.value}/${item.unit}: expected ${item.expected}; actual ${actual}`);
                 }
                 """, new UTF8Encoding(false));
-            var start = new ProcessStartInfo("node", script) { RedirectStandardError = true, UseShellExecute = false };
-            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Node.js.");
+            var start = new ProcessStartInfo("bun", script) { RedirectStandardError = true, UseShellExecute = false };
+            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Bun.");
             string error = process.StandardError.ReadToEnd();
             process.WaitForExit();
             Assert.Equal(0, process.ExitCode, error);
@@ -373,8 +373,8 @@ internal static class SchemaV2Tests
                 if (m["Files.Deleted"]({ count: 3n }) !== "3 files") throw new Error("catch-all failed");
                 if (m["Files.Deleted"]({ count: 1n }, { locale: "de" }) !== "Eine Datei") throw new Error("localized variant failed");
                 """, new UTF8Encoding(false));
-            var start = new ProcessStartInfo("node", script) { RedirectStandardError = true, UseShellExecute = false };
-            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Node.js.");
+            var start = new ProcessStartInfo("bun", script) { RedirectStandardError = true, UseShellExecute = false };
+            using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Bun.");
             string error = process.StandardError.ReadToEnd();
             process.WaitForExit();
             Assert.Equal(0, process.ExitCode, error);

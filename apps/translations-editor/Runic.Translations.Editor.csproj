@@ -79,7 +79,7 @@
   <Target Name="GenerateApplicationBridgeContract"
           BeforeTargets="CoreCompile"
           Condition="'$(RunicBridgeInspect)' != 'true' and '$(DesignTimeBuild)' != 'true'">
-    <Exec WorkingDirectory="Frontend" Command="bun run contract:generate" />
+    <Exec WorkingDirectory="Frontend" Command="bun run --bun contract:generate" />
   </Target>
 
   <ItemGroup>
@@ -119,7 +119,7 @@
           Inputs="@(EditorFrontendInput);$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json"
           Outputs="Frontend/build/index.html">
     <Exec WorkingDirectory="Frontend"
-          Command="bun run build"
+          Command="bun run --bun build"
           EnvironmentVariables="RUNIC_TRANSLATIONS_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm/web-module-manifest-v1.json" />
   </Target>
 
