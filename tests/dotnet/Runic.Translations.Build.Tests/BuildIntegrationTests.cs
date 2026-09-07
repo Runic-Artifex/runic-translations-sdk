@@ -323,9 +323,11 @@ internal static class BuildIntegrationTests
 
     private static ProcessResult Build(TemporaryDirectory temporary, bool noRestore = false)
     {
+        // Fixtures create their output paths in Debug. MSBuild otherwise inherits
+        // CONFIGURATION from CI and can build elsewhere, bypassing the test's link.
         string[] arguments = noRestore
-            ? ["build", "Consumer.csproj", "--no-restore", "/nologo", "/v:minimal"]
-            : ["build", "Consumer.csproj", "/nologo", "/v:minimal"];
+            ? ["build", "Consumer.csproj", "--configuration", "Debug", "--no-restore", "/nologo", "/v:minimal"]
+            : ["build", "Consumer.csproj", "--configuration", "Debug", "/nologo", "/v:minimal"];
         return Processes.DotNet(temporary.Path, arguments);
     }
 
@@ -333,6 +335,8 @@ internal static class BuildIntegrationTests
         temporary.Path,
         "clean",
         "Consumer.csproj",
+        "--configuration",
+        "Debug",
         "/nologo",
         "/v:minimal");
 
