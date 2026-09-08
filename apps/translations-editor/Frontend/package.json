@@ -22,7 +22,7 @@
     "@runic-artifex/application-bridge": "workspace:*",
     "@runic-artifex/desktop": "workspace:*",
     "@runic-artifex/svelte": "workspace:*",
-    "effect": "3.22.1",
+    "effect": "4.0.0-rc.112",
     "svelte": "5.57.0"
   },
   "devDependencies": {

@@ -42,7 +42,7 @@ const EditorDocument = Schema.Struct({
 
 const EditorDiagnostic = Schema.Struct({
   id: Schema.String,
-  severity: Schema.Literal("error", "warning"),
+  severity: Schema.Literals(["error", "warning"]),
   message: Schema.String,
   path: Schema.String,
   line: Schema.Int,
@@ -61,7 +61,7 @@ const EditorSampleEntry = Schema.Struct({
   value: Schema.String,
 });
 
-const EditorReviewState = Schema.Literal("draft", "translated", "needs-review", "approved");
+const EditorReviewState = Schema.Literals(["draft", "translated", "needs-review", "approved"]);
 
 const EditorReviewEntry = Schema.Struct({
   key: Schema.String,
@@ -104,7 +104,7 @@ export const WorkspaceSnapshot = Schema.Struct({
   pendingTransaction: Schema.optional(EditorPendingTransaction),
   review: Schema.optional(EditorReviewSnapshot),
   history: Schema.optional(EditorHistoryState),
-}).annotations({ identifier: "WorkspaceSnapshot" });
+}).annotate({ identifier: "WorkspaceSnapshot" });
 
 const ValidationResult = Schema.Struct({
   success: Schema.Boolean,
@@ -229,7 +229,7 @@ const EditorWorkspacePickerResult = Schema.Struct({
   message: Schema.optional(Schema.String),
 });
 
-const MutationKind = Schema.Literal(
+const MutationKind = Schema.Literals([
   "add-locale",
   "remove-locale",
   "set-fallback",
@@ -237,7 +237,7 @@ const MutationKind = Schema.Literal(
   "rename-key",
   "duplicate-key",
   "delete-key",
-);
+]);
 
 const EditorMutationRequest = Schema.Struct({
   kind: MutationKind,
@@ -305,7 +305,7 @@ const EditorReviewFileResult = Schema.Struct({
 
 const EditorKeyChange = Schema.Struct({
   key: Schema.String,
-  kind: Schema.Literal("added", "changed", "removed", "state-change"),
+  kind: Schema.Literals(["added", "changed", "removed", "state-change"]),
   before: Schema.optional(Schema.String),
   after: Schema.optional(Schema.String),
   stateBefore: Schema.optional(Schema.String),
@@ -334,7 +334,7 @@ const EditorXliffImportPreview = Schema.Struct({
 const EditorReviewChange = Schema.Struct({
   key: Schema.String,
   locale: Schema.String,
-  kind: Schema.Literal("added", "changed", "removed"),
+  kind: Schema.Literals(["added", "changed", "removed"]),
   stateBefore: Schema.optional(Schema.String),
   stateAfter: Schema.optional(Schema.String),
 });
@@ -356,7 +356,7 @@ const EditorReviewImportPreview = Schema.Struct({
 // The editor keeps authoritative conflict detection inside EditorSession
 // (file revisions, review sidecars, confirmation tokens), so no bridge command
 // advances the transport revision; expectedRevision stays neutral by design.
-const command = <C extends Schema.Schema.Any>(
+const command = <C extends Schema.Codec<any, any, never, never>>(
   tag: string,
   schema: C,
   receipt: string,
@@ -377,7 +377,7 @@ const commands = [
   command("ApplyMutation", Schema.TaggedStruct("ApplyMutation", { request: EditorMutationRequest }), "MutationApplied"),
   command(
     "RecoverTransaction",
-    Schema.TaggedStruct("RecoverTransaction", { mode: Schema.Literal("complete", "rollback") }),
+    Schema.TaggedStruct("RecoverTransaction", { mode: Schema.Literals(["complete", "rollback"]) }),
     "TransactionRecovered",
   ),
   command("Undo", Schema.TaggedStruct("Undo", {}), "UndoApplied"),
