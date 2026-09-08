@@ -32,8 +32,8 @@ for the complete config and supported authoring syntax. Add `.runic/` to
 
 ```ts
 // vite.config.ts
-import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations";
-import { defineConfig } from "vite";
+import { runicTranslations } from '@runic-artifex/vite-plugin-runic-translations';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [runicTranslations()],
@@ -47,9 +47,9 @@ watched authoring change is compiled before the virtual modules are invalidated.
 ## 4. Render a message
 
 ```ts
-import { m } from "virtual:runic-translations/app";
+import { m } from 'virtual:runic-translations/app';
 
-document.querySelector("#app")!.textContent = m.application_title();
+document.querySelector('#app')!.textContent = m.application_title();
 ```
 
 Message filenames are identifier-safe, so normal calls use property access.

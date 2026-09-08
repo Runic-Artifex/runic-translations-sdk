@@ -40,10 +40,10 @@ External packs are untrusted until their artifact version, catalog, locale, cont
 
 This package is a public preview for .NET 10. Preview releases may contain documented breaking API changes. Keep the runtime and generated source on the same Runic Translations release; runtime ABI mismatches fail explicitly.
 
-- [Runtime and generated C# example](https://github.com/Runic-Artifex/runic-translations/blob/main/dotnet/tests/Runic.Translations.PackageTests/Program.cs)
-- [NativeAOT example](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/tests/Runic.Translations.AotTests)
-- [Compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md)
-- [External translation pack contract](https://github.com/Runic-Artifex/runic-translations/blob/main/spec/README.md)
-- [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
+- [Runtime and generated C# example](https://github.com/Runic-Artifex/runic-sdk/blob/main/tests/dotnet/Runic.Translations.PackageTests/Program.cs)
+- [NativeAOT example](https://github.com/Runic-Artifex/runic-sdk/tree/main/tests/dotnet/Runic.Translations.AotTests)
+- [Compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md)
+- [External translation pack contract](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/wave-b/external-packs.md)
+- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-translations/blob/main/THIRD-PARTY-NOTICES.md) for bundled data attribution.
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for bundled data attribution.

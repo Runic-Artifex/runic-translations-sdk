@@ -50,10 +50,10 @@ Choose the plugin when Vite should resolve generated virtual modules and invalid
 
 The plugin is a public preview for Vite `>=6 <9`. It accepts the supported web-module manifest and ESM ABI only and reports a clear error for incompatible generated output. Keep the adapter and .NET tool on one release, regenerate ESM during upgrades, and review preview migration notes.
 
-- [Ten-minute Vite workflow](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/quickstart-vite.md)
-- [ESM backend and SSR guidance](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/esm.md)
-- [Compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md)
-- [Plugin tests and production build examples](https://github.com/Runic-Artifex/runic-translations/tree/main/web/test)
-- [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
+- [Ten-minute Vite workflow](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
+- [ESM backend and SSR guidance](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/esm.md)
+- [Compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md)
+- [Plugin tests and production build examples](https://github.com/Runic-Artifex/runic-sdk/tree/main/packages/web/vite-plugin-runic-translations/test)
+- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations/blob/main/LICENSE).
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE).

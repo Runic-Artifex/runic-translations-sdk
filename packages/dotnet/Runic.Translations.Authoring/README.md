@@ -4,7 +4,7 @@ Build editors and workspace tools on supported Runic Translations project creati
 
 ## Install
 
-This assembly is not published as a standalone package: it ships inside the preview `Runic.Translations.Tooling` package (disposition: merge), and direct standalone consumption is deprecated pending editor migration.
+This assembly is not published as a standalone package: it ships inside the preview `Runic.Translations.Tooling` package and is not a separate public package.
 
 ## Create a validated project
 
@@ -37,10 +37,10 @@ Mutation and recovery APIs use expected revisions and contained paths to detect 
 
 This package is a public preview for .NET 10. Preview APIs and workspace operations may change with documented migrations. Keep it on the same exact release as the compiler and any CLI or editor that exchanges its project contracts.
 
-- [Project creation example](https://github.com/Runic-Artifex/runic-translations/blob/main/dotnet/tests/Runic.Translations.Authoring.Tests/ProjectCreationTests.cs)
-- [Workspace authoring examples](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/tests/Runic.Translations.Authoring.Tests)
-- [MF2 project convention](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
-- [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-editor)
-- [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
+- [Project creation example](https://github.com/Runic-Artifex/runic-sdk/blob/main/tests/dotnet/Runic.Translations.Authoring.Tests/ProjectCreationTests.cs)
+- [Workspace authoring examples](https://github.com/Runic-Artifex/runic-sdk/tree/main/tests/dotnet/Runic.Translations.Authoring.Tests)
+- [MF2 project convention](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/mf2-projects.md)
+- [Runic Translations Editor](https://github.com/Runic-Artifex/runic-sdk/tree/main/apps/translations-editor)
+- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-translations/blob/main/THIRD-PARTY-NOTICES.md) for attribution.
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for attribution.

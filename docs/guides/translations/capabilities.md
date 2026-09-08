@@ -10,16 +10,16 @@ Conforming backends: **dotnet, esm**
 ## Locale selectors and relative time
 
 | Locale family | Cardinal | Ordinal | Relative time |
-|---|---:|---:|---:|
-| `da` | yes | yes | — |
-| `de` | yes | yes | yes |
-| `en` | yes | yes | yes |
-| `es` | yes | yes | yes |
-| `fr` | yes | yes | yes |
-| `it` | yes | yes | yes |
-| `nl` | yes | yes | — |
-| `no` | yes | yes | — |
-| `sv` | yes | yes | — |
+| ------------- | -------: | ------: | ------------: |
+| `da`          |      yes |     yes |             — |
+| `de`          |      yes |     yes |           yes |
+| `en`          |      yes |     yes |           yes |
+| `es`          |      yes |     yes |           yes |
+| `fr`          |      yes |     yes |           yes |
+| `it`          |      yes |     yes |           yes |
+| `nl`          |      yes |     yes |             — |
+| `no`          |      yes |     yes |             — |
+| `sv`          |      yes |     yes |             — |
 
 Locale variants such as `de-DE` use the declared base language capability.
 Unsupported selector or relative-time combinations fail compilation with `RTR0031`.
@@ -30,19 +30,19 @@ Plural selection and relative-time language patterns are generated from the pinn
 
 ## Formatter equivalence
 
-| Formatter | Forms | Equivalence |
-|---|---|---|
-| `string` | `default` | exact |
-| `boolean` | `default` | exact |
-| `integer` | `plain` | exact |
-| `integer` | `grouped` | semantic |
-| `number` | `plain`, `grouped`, `fixed`, `percent` | semantic |
-| `date` | `iso` | exact |
-| `date` | `localized` | semantic |
-| `time` | `iso` | exact |
-| `time` | `localized` | semantic |
-| `datetime` | `iso`, `localized` | semantic |
-| `uuid` | `d`, `n` | exact |
+| Formatter  | Forms                                  | Equivalence |
+| ---------- | -------------------------------------- | ----------- |
+| `string`   | `default`                              | exact       |
+| `boolean`  | `default`                              | exact       |
+| `integer`  | `plain`                                | exact       |
+| `integer`  | `grouped`                              | semantic    |
+| `number`   | `plain`, `grouped`, `fixed`, `percent` | semantic    |
+| `date`     | `iso`                                  | exact       |
+| `date`     | `localized`                            | semantic    |
+| `time`     | `iso`                                  | exact       |
+| `time`     | `localized`                            | semantic    |
+| `datetime` | `iso`, `localized`                     | semantic    |
+| `uuid`     | `d`, `n`                               | exact       |
 
 **Exact:** Backends produce the same canonical value for every accepted portable input.
 

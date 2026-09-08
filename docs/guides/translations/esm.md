@@ -21,10 +21,10 @@ key is available through normal property access. Dotted keys retain their exact
 catalog identity and use bracket access:
 
 ```ts
-import { m } from "virtual:runic-translations/app";
+import { m } from 'virtual:runic-translations/app';
 
 m.application_title();
-m.greeting({ name: "Ada" }, { locale: "de" });
+m.greeting({ name: 'Ada' }, { locale: 'de' });
 ```
 
 Names such as `m$Common$Hello` are deterministic implementation and filename

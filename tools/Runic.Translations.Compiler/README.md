@@ -43,10 +43,10 @@ Compilation is deterministic for the same classified UTF-8 inputs and options. I
 
 The containing Tooling package is a public preview for .NET 10. Source schemas, normalized message grammar, artifact schemas, and ESM ABI are versioned separately from package SemVer.
 
-- [Compiler API example](https://github.com/Runic-Artifex/runic-translations/blob/main/dotnet/tests/Runic.Translations.Compiler.Tests/Mf2ProjectTests.cs)
-- [MF2 project guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
-- [ESM backend](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/esm.md)
-- [Compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md)
-- [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
+- [Compiler API example](https://github.com/Runic-Artifex/runic-sdk/blob/main/tests/dotnet/Runic.Translations.Compiler.Tests/Mf2ProjectTests.cs)
+- [MF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/mf2-projects.md)
+- [ESM backend](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/esm.md)
+- [Compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md)
+- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-translations/blob/main/THIRD-PARTY-NOTICES.md) for bundled data attribution.
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for bundled data attribution.

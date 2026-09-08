@@ -51,9 +51,9 @@ Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`.
 
 This tool is a public preview for .NET 10. Preview commands and generated output can change with documented migrations. Pin one exact version in the local manifest and coordinate upgrades with all consumers of its generated artifacts.
 
-- [Vite quick start](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/quickstart-vite.md)
-- [MF2 project guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
-- [CLI source and examples](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/tools/dotnet-runic-translations)
-- [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
+- [Vite quick start](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
+- [MF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/mf2-projects.md)
+- [CLI source and examples](https://github.com/Runic-Artifex/runic-sdk/tree/main/tools/dotnet-runic-translations)
+- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-translations/blob/main/THIRD-PARTY-NOTICES.md) for bundled data attribution.
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for bundled data attribution.

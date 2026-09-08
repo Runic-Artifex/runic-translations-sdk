@@ -59,10 +59,10 @@ Choose this package for generated C# and whenever MSBuild owns input classificat
 
 This package is a public preview for .NET 10. Preview targets and properties may change with documented migrations. Use the same release across the package family and regenerate outputs when upgrading.
 
-- [Complete project template](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/templates/Runic.Translations.Templates/templates/project)
-- [Vite quick start](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/quickstart-vite.md)
-- [ESM backend](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/esm.md)
-- [Compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md)
-- [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
+- [Complete project template](https://github.com/Runic-Artifex/runic-sdk/tree/main/tools/Runic.Translations.Templates/templates/project)
+- [Vite quick start](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
+- [ESM backend](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/esm.md)
+- [Compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md)
+- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations/blob/main/LICENSE).
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE).

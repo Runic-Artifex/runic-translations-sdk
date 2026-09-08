@@ -53,12 +53,12 @@ Choose the project template for a complete .NET and ESM setup. Choose the item t
 
 ## Compatibility and status
 
-Template output uses the package version embedded at packing time. If you pass `--packageVersion`, it must identify one matching release of the runtime, build package, and tool. Preview upgrades may change generated project files or source schemas; review the [compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md) before updating an existing project.
+Template output uses the package version embedded at packing time. If you pass `--packageVersion`, it must identify one matching release of the runtime, build package, and tool. Preview upgrades may change generated project files or source schemas; review the [compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md) before updating an existing project.
 
-- [Project template source](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/templates/Runic.Translations.Templates/templates/project)
-- [Item template source](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/templates/Runic.Translations.Templates/templates/item)
-- [.NET package guide](https://github.com/Runic-Artifex/runic-translations/blob/main/dotnet/README.md)
-- [Vite quick start](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/quickstart-vite.md)
-- [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
+- [Project template source](https://github.com/Runic-Artifex/runic-sdk/tree/main/tools/Runic.Translations.Templates/templates/project)
+- [Item template source](https://github.com/Runic-Artifex/runic-sdk/tree/main/tools/Runic.Translations.Templates/templates/item)
+- [.NET package guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/packages/dotnet/Runic.Translations/README.md)
+- [Vite quick start](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
+- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations/blob/main/LICENSE).
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE).

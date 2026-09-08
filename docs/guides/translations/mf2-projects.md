@@ -45,10 +45,10 @@ The field {$field} is required.
 ```
 
 ```ts
-import { m } from "virtual:runic-translations/app";
+import { m } from 'virtual:runic-translations/app';
 
 m.application_title();
-m.validation_required({ field: "email" });
+m.validation_required({ field: 'email' });
 ```
 
 The authoring files use MessageFormat 2 syntax. The v1 compiler accepts plain
@@ -66,7 +66,7 @@ and all `translations/**/*.mf2` files. No MSBuild item list is required.
 Vite uses the same project:
 
 ```ts
-import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations";
+import { runicTranslations } from '@runic-artifex/vite-plugin-runic-translations';
 
 export default {
   plugins: [runicTranslations()],
@@ -76,7 +76,7 @@ export default {
 The no-argument form discovers `translations/runic.json`, generates into
 `.runic/translations`, watches the config and every MF2 message, and exposes the
 generated virtual modules. In a split frontend/backend layout, pass only the
-relative project directory: `runicTranslations({ project: "../../../eng/archive/runic-translations/translations" })`.
+relative project directory: `runicTranslations({ project: "./translations" })`.
 
 The CLI accepts either the directory or config file:
 
@@ -100,9 +100,9 @@ an explicit locale. Server rendering defaults to the base locale.
 The generated `/server` entrypoint adds request-local context:
 
 ```ts
-import { runWithLocale } from "virtual:runic-translations/app/server";
+import { runWithLocale } from 'virtual:runic-translations/app/server';
 
-const html = await runWithLocale("de", () => renderRequest());
+const html = await runWithLocale('de', () => renderRequest());
 ```
 
 Calls such as `m.application_title()` inside that operation use `de`, including

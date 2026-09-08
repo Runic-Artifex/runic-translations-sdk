@@ -41,10 +41,10 @@ Choose `Runic.Translations.Build` for typed C# application APIs and generated we
 
 The containing Build package is a public preview. It requires a .NET 10 compiler host and emits code against the matching runtime ABI; an incompatible runtime fails explicitly.
 
-- [Generated package consumer](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/tests/Runic.Translations.PackageTests)
-- [Generator tests and examples](https://github.com/Runic-Artifex/runic-translations/tree/main/dotnet/tests/Runic.Translations.Generator.Tests)
-- [MF2 project guide](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/mf2-projects.md)
-- [Compatibility policy](https://github.com/Runic-Artifex/runic-translations/blob/main/docs/compatibility.md)
-- [Issues and support](https://github.com/Runic-Artifex/runic-translations/issues)
+- [Generated package consumer](https://github.com/Runic-Artifex/runic-sdk/tree/main/tests/dotnet/Runic.Translations.PackageTests)
+- [Generator tests and examples](https://github.com/Runic-Artifex/runic-sdk/tree/main/tests/dotnet/Runic.Translations.Generator.Tests)
+- [MF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/mf2-projects.md)
+- [Compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md)
+- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-translations/blob/main/THIRD-PARTY-NOTICES.md) for bundled data attribution.
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for bundled data attribution.
