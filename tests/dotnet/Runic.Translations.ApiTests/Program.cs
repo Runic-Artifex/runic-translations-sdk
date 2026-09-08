@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text;
+using System.Xml.Linq;
 using Runic.Translations;
 
 namespace Runic.Translations.ApiTests;
@@ -90,7 +91,10 @@ internal static class Program
         string generatorPath = Path.Combine(root, "packages", "dotnet", "Runic.Translations.Generator", "bin", configuration, "net10.0", "Runic.Translations.Generator.dll");
         string packageRoot = Environment.GetEnvironmentVariable("NUGET_PACKAGES") ??
             Path.GetFullPath(Path.Combine(root, "..", "..", ".cache", "nuget"));
-        string codeAnalysisPath = Path.Combine(packageRoot, "microsoft.codeanalysis.common", "4.14.0", "lib", "netstandard2.0", "Microsoft.CodeAnalysis.dll");
+        string roslynVersion = XDocument.Load(Path.Combine(root, "Directory.Packages.props"))
+            .Descendants("PackageVersion").Single(element => (string?)element.Attribute("Include") == "Microsoft.CodeAnalysis.CSharp")
+            .Attribute("Version")!.Value;
+        string codeAnalysisPath = Path.Combine(packageRoot, "microsoft.codeanalysis.common", roslynVersion, "lib", "netstandard2.0", "Microsoft.CodeAnalysis.dll");
         if (!File.Exists(generatorPath) || !File.Exists(codeAnalysisPath))
         {
             throw new InvalidOperationException("Generator build output or its Roslyn dependency is missing.");

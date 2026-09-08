@@ -21,7 +21,8 @@ const command = frontend.scripts?.verify;
 const expandedCommand = expandScript("verify");
 
 assert.equal(typeof command, "string", "Frontend has no verify script.");
-assert.equal(frontend.packageManager, "bun@1.4.0", "Frontend must use the authority-pinned Bun release.");
+const compatibility = JSON.parse(await readFile(new URL("../../../../eng/release/runic.compatibility-set.json", import.meta.url), "utf8"));
+assert.equal(frontend.packageManager, `bun@${compatibility.toolchain.bun}`, "Frontend must use the authority-pinned Bun release.");
 for (const test of ["verify-ui-catalog.mjs", "verify-keyboard-a11y.mjs", "verify-command-palette.mjs", "verify-w03-simulation.mjs", "verify-local-state.mjs"]) {
   assert.match(expandedCommand, new RegExp(test.replace(".", "\\.")), `Frontend verification omits ${test}.`);
 }
