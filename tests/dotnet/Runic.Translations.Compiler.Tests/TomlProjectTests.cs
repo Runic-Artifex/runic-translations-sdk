@@ -140,7 +140,7 @@ internal static class TomlProjectTests
         Assert.Equal("dialog,title", string.Join(",", document.Entries[2].KeyPath));
         Assert.Equal("dialog.\"title\"", Encoding.UTF8.GetString(source.GetUtf8Bytes(),
             document.Entries[2].KeyLocation.StartByte, document.Entries[2].KeyLocation.LengthBytes));
-        Assert.Equal(Encoding.UTF8.GetByteCount(text.Substring(0, text.IndexOf("[document]", StringComparison.Ordinal))), document.RootInsertionByte);
+        Assert.Equal(Encoding.UTF8.GetByteCount(text.AsSpan(0, text.IndexOf("[document]", StringComparison.Ordinal))), document.RootInsertionByte);
         Assert.Equal(3, document.Tables.Count);
         Assert.Equal("document,nested", string.Join(",", document.Tables[1].Path));
         Assert.Equal("[document]", Encoding.UTF8.GetString(source.GetUtf8Bytes(),
