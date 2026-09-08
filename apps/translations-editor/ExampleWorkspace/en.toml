@@ -1,0 +1,4 @@
+common_cancel = "Cancel\n"
+common_save = "Save\n"
+dashboard_welcome = ".input {$name :string}\nWelcome back, {$name}\n"
+files_selected = ".input {$count :integer select=plural}\n.match $count\none {{One file selected}}\n* {{{$count} files selected}}\n"

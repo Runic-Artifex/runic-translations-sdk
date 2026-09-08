@@ -36,6 +36,14 @@ internal static class GeneratorTestHost
         return new GeneratorRun(driver, result, compilation, updated, driverDiagnostics);
     }
 
+    internal static GeneratorRunResult Rerun(GeneratorRun run, params TestInput[] inputs)
+    {
+        var texts = inputs.Select(static input => (AdditionalText)new MemoryAdditionalText(input.Path, input.Text)).ToImmutableArray();
+        return run.Driver.ReplaceAdditionalTexts(texts)
+            .WithUpdatedAnalyzerConfigOptions(new TestOptionsProvider(inputs))
+            .RunGenerators(run.InputCompilation).GetRunResult().Results.Single();
+    }
+
     private static IEnumerable<MetadataReference> References(RuntimeReferenceMode runtimeReferenceMode)
     {
         string trustedAssemblies = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")

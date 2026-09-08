@@ -7,7 +7,7 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import { Spinner } from "$lib/components/ui/spinner/index.js";
   import type { EditorDiagnostic } from "$lib/contracts";
-  import { getUiText } from "$lib/ui-text";
+  import { getUiText, displayNotice } from "$lib/ui-text";
 
   interface Props {
     busy: boolean;
@@ -38,6 +38,22 @@
   const ui = getUiText();
 
   let invalid = $derived(errorCount > 0 || clientError !== undefined);
+  // Parser diagnostics may legitimately share code and source coordinates,
+  // including identical messages. Occurrences distinguish rows without dropping
+  // diagnostics, while stable identities preserve focus across equivalent loads.
+  let diagnosticRows = $derived.by(() => {
+    const occurrences = new Map<string, number>();
+    return diagnostics.map((diagnostic) => {
+      const identity = JSON.stringify([
+        diagnostic.path, diagnostic.id, diagnostic.severity,
+        diagnostic.line, diagnostic.column, diagnostic.endLine, diagnostic.endColumn,
+        diagnostic.message, diagnostic.notice,
+      ]);
+      const occurrence = occurrences.get(identity) ?? 0;
+      occurrences.set(identity, occurrence + 1);
+      return { key: `${identity}:${occurrence}`, diagnostic };
+    });
+  });
 </script>
 
 <Alert.Root
@@ -59,7 +75,7 @@
           {busy ? ui.text("ui_validation_validating_with_compiler") : invalid ? invalidLabel : validLabel}
         </Alert.Title>
         <Alert.Description class="text-xs">
-          {diagnosticsLabel} · {errorCount} {ui.text("ui_validation_errors")} · {warningCount} {ui.text("ui_validation_warnings")}
+          {diagnosticsLabel} · {ui.text("ui_count_errors", { count: errorCount })} · {ui.text("ui_count_warnings", { count: warningCount })}
         </Alert.Description>
       </div>
     </div>
@@ -74,7 +90,7 @@
 
   {#if diagnostics.length > 0}
     <div class="divide-y border-t">
-      {#each diagnostics as diagnostic (`${diagnostic.path}-${diagnostic.id}-${diagnostic.line}-${diagnostic.column}`)}
+      {#each diagnosticRows as { key, diagnostic } (key)}
         <Button
           variant="ghost"
           class="grid h-auto w-full grid-cols-[auto_minmax(0,1fr)] items-start justify-start gap-3 px-4 py-3 text-left whitespace-normal md:grid-cols-[auto_minmax(0,1fr)_auto]"
@@ -86,7 +102,7 @@
             <TriangleAlertIcon class="mt-0.5 size-4 text-primary" aria-hidden="true" />
           {/if}
           <span class="min-w-0 text-xs leading-5 text-muted-foreground">
-            <strong class="mr-2 font-mono text-foreground">{diagnostic.id}</strong>{diagnostic.message}
+            <strong class="mr-2 font-mono text-foreground">{diagnostic.id}</strong>{displayNotice(diagnostic.notice ?? diagnostic.message, ui)}
           </span>
           <code class="hidden whitespace-nowrap text-[0.65rem] text-muted-foreground md:block">
             {diagnostic.path}:{diagnostic.line}:{diagnostic.column}

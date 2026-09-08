@@ -1,6 +1,7 @@
 {
   "$schema": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
   "schemaVersion": 1,
+  "sourceLayout": "locale-toml",
   "catalog": "packageconsumer",
   "code": {
     "namespace": "Runic.Translations.PackageConsumer",

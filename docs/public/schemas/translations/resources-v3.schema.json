@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/resources-v3.schema.json",
+  "title": "Runic Translations MF2-oriented resource document v3",
+  "type": "object",
+  "required": ["schemaVersion", "catalog", "locale", "layer", "resources"],
+  "properties": {
+    "$schema": { "type": "string", "minLength": 1 },
+    "schemaVersion": { "const": 3 },
+    "catalog": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
+    "locale": { "type": "string", "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$" },
+    "layer": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
+    "resources": { "$ref": "#/$defs/group" }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "input": { "type": "object", "required": ["type", "format"], "properties": { "type": { "enum": ["string", "bool", "int64", "decimal", "date", "time", "instant", "uuid"] }, "format": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+    "mf2": { "type": "object", "required": ["profile", "ast"], "properties": { "profile": { "const": "runic-mf2-subset/1" }, "ast": { "$ref": "message-ast-v3.schema.json" } }, "additionalProperties": false },
+    "leaf": { "type": "object", "required": ["$value"], "properties": { "$value": { "oneOf": [{ "type": "string" }, { "type": "object", "required": ["mf2"], "properties": { "mf2": { "$ref": "#/$defs/mf2" } }, "additionalProperties": false }] }, "$description": { "type": "string" }, "$since": { "type": "string" }, "$deprecated": { "type": "string" }, "$tags": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }, "$placeholders": { "type": "object", "propertyNames": { "$ref": "#/$defs/name" }, "additionalProperties": { "$ref": "#/$defs/input" } } }, "additionalProperties": false },
+    "group": { "type": "object", "propertyNames": { "$ref": "#/$defs/name" }, "additionalProperties": { "oneOf": [{ "type": "string" }, { "$ref": "#/$defs/leaf" }, { "$ref": "#/$defs/group" }] } }
+  }
+}

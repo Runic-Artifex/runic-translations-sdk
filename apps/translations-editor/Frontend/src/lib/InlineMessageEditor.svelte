@@ -271,8 +271,8 @@
             "shrink-0 rounded-full text-muted-foreground hover:text-foreground",
             dropBoundary === boundary && "bg-primary text-primary-foreground ring-2 ring-primary/40",
           ]}
-          aria-label={`${ui.text("ui_inline_insert")} ${description}`}
-          title={`${ui.text("ui_inline_insert")} ${description}`}
+          aria-label={ui.text("ui_inline_insert_at", { position: description })}
+          title={ui.text("ui_inline_insert_at", { position: description })}
           ondragenter={(event) => allowBoundaryDrop(event, boundary)}
           ondragover={(event) => allowBoundaryDrop(event, boundary)}
           ondragleave={() => dropBoundary = undefined}
@@ -331,7 +331,7 @@
           ]}
           rows="1"
           value={slot.text}
-          aria-label={`${label}, ${ui.text("ui_inline_text")} ${index + 1}`}
+          aria-label={ui.text("ui_inline_text_index", { label: label, index: index + 1 })}
           placeholder={ui.text("ui_inline_write_text")}
           spellcheck="true"
           lang={locale}
@@ -347,15 +347,15 @@
           }}
           ondrop={(event) => dropVariable(event, index, event.currentTarget)}
         ></textarea>
-        {@render insertionPoint(index, slot.text.length, `${ui.text("ui_inline_after_text")} ${index + 1}`)}
+        {@render insertionPoint(index, slot.text.length, ui.text("ui_inline_after_text_index", { index: index + 1 }))}
       {/if}
       {#if slot.token !== undefined}
         <Button
           variant="secondary"
           size="sm"
           class="h-7 shrink-0 rounded-full px-2 font-mono text-xs"
-          aria-label={`${ui.text("ui_inline_variable")} ${slot.token}. ${ui.text("ui_inline_open_settings")}`}
-          title={`${ui.text("ui_inline_variable")} ${slot.token}. ${ui.text("ui_inline_click_to_inspect")}`}
+          aria-label={ui.text("ui_inline_variable_settings", { name: slot.token })}
+          title={ui.text("ui_inline_variable_inspect", { name: slot.token })}
           draggable="true"
           ondragstart={(event) => startVariableDrag(event, slot.token!, index)}
           ondragend={() => {
@@ -367,7 +367,7 @@
           <GripVerticalIcon data-icon="inline-start" aria-hidden="true" />
           {slot.token}
         </Button>
-        {@render insertionPoint(index + 1, 0, `${ui.text("ui_inline_after_variable")} ${slot.token}`)}
+        {@render insertionPoint(index + 1, 0, ui.text("ui_inline_after_variable_name", { name: slot.token }))}
       {/if}
     {/each}
   </div>
@@ -404,16 +404,16 @@
           oninput={(event) => onupdateformat(selectedToken!.name, event.currentTarget.value)}
         />
       </Field.Field>
-      <Button variant="ghost" size="icon" disabled={!canMoveSelected("earlier")} aria-label={`${ui.text("ui_inline_move")} ${selectedToken.name} ${ui.text("ui_inline_earlier")}`} title={ui.text("ui_inline_move_variable_earlier")} onclick={() => moveSelected("earlier")}>
+      <Button variant="ghost" size="icon" disabled={!canMoveSelected("earlier")} aria-label={ui.text("ui_inline_move_name_earlier", { name: selectedToken.name })} title={ui.text("ui_inline_move_variable_earlier")} onclick={() => moveSelected("earlier")}>
         <ArrowLeftIcon />
       </Button>
-      <Button variant="ghost" size="icon" disabled={!canMoveSelected("later")} aria-label={`${ui.text("ui_inline_move")} ${selectedToken.name} ${ui.text("ui_inline_later")}`} title={ui.text("ui_inline_move_variable_later")} onclick={() => moveSelected("later")}>
+      <Button variant="ghost" size="icon" disabled={!canMoveSelected("later")} aria-label={ui.text("ui_inline_move_name_later", { name: selectedToken.name })} title={ui.text("ui_inline_move_variable_later")} onclick={() => moveSelected("later")}>
         <ArrowRightIcon />
       </Button>
-      <Button variant="ghost" size="icon" aria-label={`${ui.text("ui_inline_remove")} ${selectedToken.name} ${ui.text("ui_inline_from_this_translation")}`} title={ui.text("ui_inline_remove_variable")} onclick={removeSelectedToken}>
+      <Button variant="ghost" size="icon" aria-label={ui.text("ui_inline_remove_name", { name: selectedToken.name })} title={ui.text("ui_inline_remove_variable")} onclick={removeSelectedToken}>
         <Trash2Icon />
       </Button>
-      <Button variant="ghost" size="icon" aria-label={`${ui.text("ui_common_close")} ${selectedToken.name} ${ui.text("ui_inline_settings")}`} title={ui.text("ui_inline_close_variable_settings")} onclick={() => selectedToken = undefined}>
+      <Button variant="ghost" size="icon" aria-label={ui.text("ui_inline_close_name_settings", { name: selectedToken.name })} title={ui.text("ui_inline_close_variable_settings")} onclick={() => selectedToken = undefined}>
         <XIcon />
       </Button>
     </div>

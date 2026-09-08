@@ -11,7 +11,7 @@ public static class TranslationWorkspaceTransaction
 {
     private const string JournalFileName = ".runic-translations.transaction.json";
     private const int JournalVersion = 1;
-    private const int MaximumEdits = 512;
+    private const int MaximumEdits = 100_001;
     private const int MaximumJournalBytes = 96 * 1024 * 1024;
 
     public static void Commit(TranslationWorkspaceTransactionPlan plan) => CommitCore(plan, null);
@@ -71,11 +71,19 @@ public static class TranslationWorkspaceTransaction
         TranslationWorkspaceEdit[] edits = plan.Edits.OrderBy(static edit => edit.RelativePath, StringComparer.Ordinal).ToArray();
         RejectDuplicatePaths(edits);
         var entries = new List<JournalEntry>(edits.Length);
+        long originalBytes = 0;
+        long replacementBytes = 0;
         for (int index = 0; index < edits.Length; index++)
         {
             TranslationWorkspaceEdit edit = edits[index];
             string target = ResolveContainedPath(root, edit.RelativePath);
             bool exists = File.Exists(target);
+            long originalLength = exists ? new FileInfo(target).Length : 0;
+            originalBytes = checked(originalBytes + originalLength);
+            replacementBytes = checked(replacementBytes + (edit.Bytes?.Length ?? 0));
+            if (originalLength > 8 * 1024 * 1024 || (edit.Bytes?.Length ?? 0) > 8 * 1024 * 1024 ||
+                originalBytes > MaximumJournalBytes / 4 * 3 || replacementBytes > MaximumJournalBytes)
+                throw new TranslationAuthoringException("The transaction exceeds its document or aggregate staging byte limit.");
             byte[]? original = exists ? File.ReadAllBytes(target) : null;
             ValidateExpectedRevision(edit, original);
             ValidateEditKind(edit, exists);
@@ -91,11 +99,15 @@ public static class TranslationWorkspaceTransaction
         }
 
         var journal = new TransactionJournal(JournalVersion, root, plan.CatalogId, entries.ToArray());
+        // Serialize and enforce the recovery budget before creating any staged files.
+        byte[] journalBytes = JsonSerializer.SerializeToUtf8Bytes(journal, AuthoringJsonContext.Default.TransactionJournal);
+        if (journalBytes.Length > MaximumJournalBytes)
+            throw new TranslationAuthoringException($"The transaction recovery journal exceeds {MaximumJournalBytes} bytes.");
         string journalTemporaryPath = journalPath + $".{Guid.NewGuid():N}.tmp";
         try
         {
             WriteTemporaryFiles(root, edits, journal.Entries);
-            WriteJournal(journalTemporaryPath, journal);
+            WriteFile(journalTemporaryPath, journalBytes, FileMode.CreateNew);
             File.Move(journalTemporaryPath, journalPath);
             for (int index = 0; index < journal.Entries.Length; index++)
             {
@@ -149,14 +161,6 @@ public static class TranslationWorkspaceTransaction
             string temporary = Path.Combine(Path.GetDirectoryName(target)!, entries[index].TemporaryName!);
             WriteFile(temporary, edits[index].Bytes!, FileMode.CreateNew);
         }
-    }
-
-    private static void WriteJournal(string path, TransactionJournal journal)
-    {
-        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(journal, AuthoringJsonContext.Default.TransactionJournal);
-        if (bytes.Length > MaximumJournalBytes)
-            throw new InvalidOperationException($"The transaction recovery journal exceeds {MaximumJournalBytes} bytes.");
-        WriteFile(path, bytes, FileMode.CreateNew);
     }
 
     private static TransactionJournal ReadJournal(string root, string path)

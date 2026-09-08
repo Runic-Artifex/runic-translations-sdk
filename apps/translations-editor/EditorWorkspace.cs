@@ -29,7 +29,7 @@ internal sealed class EditorWorkspace : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         _root = Path.GetFullPath(root);
         if (!Directory.Exists(_root))
-            throw new DirectoryNotFoundException($"The translation workspace '{_root}' does not exist.");
+            throw new EditorUserException(EditorNotice.Create("ui_backend_workspace_missing", ("path", _root)));
         _watcher = new FileSystemWatcher(_root)
         {
             IncludeSubdirectories = true,
@@ -119,7 +119,7 @@ internal sealed class EditorWorkspace : IDisposable
                 null,
                 [],
                 [],
-                [new EditorDiagnostic("RECOVERY", "error", "An interrupted workspace transaction requires recovery.", string.Empty, 1, 1, 1, 1)],
+                [new EditorDiagnostic("RECOVERY", "error", string.Empty, string.Empty, 1, 1, 1, 1, EditorNotice.Create("ui_backend_recovery_required"))],
                 false,
                 new EditorPendingTransaction(pending.CatalogId, pending.Paths),
                 null,
@@ -127,6 +127,39 @@ internal sealed class EditorWorkspace : IDisposable
         }
         WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
         return CreateSnapshot(state);
+    }
+
+    public async Task<EditorDocumentDraft> TransformDocumentAsync(string relativePath, string content,
+        string? key, string? value, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            string path = NormalizeKnownPath(relativePath);
+            string? locale = SourceLocale(path);
+            if (key is not null && value is not null)
+            {
+                if (path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase))
+                {
+                    TranslationLocaleDocument document = TranslationLocaleReader.Read(Source(path, content), locale!, cancellationToken: cancellationToken);
+                    bool exists = document.Entries.Any(entry => entry.Key == key);
+                    content = StrictUtf8.GetString(TranslationLocaleWriter.Apply(Source(path, content), locale!,
+                        [new TranslationLocaleEdit(exists ? TranslationLocaleEditKind.SetValue : TranslationLocaleEditKind.Add, key, value)]));
+                }
+                else if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
+                    content = value.EndsWith('\n') ? value : value + "\n";
+                else throw new EditorUserException(EditorNotice.Create("ui_backend_not_message_document"));
+            }
+            WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
+            return new EditorDocumentDraft(state.Compilation.Success, content, ReadEntries(path, content, locale), Diagnostics(state.Compilation));
+        }
+        catch (Exception exception) when (exception is ArgumentException or TranslationAuthoringException)
+        {
+            return new EditorDocumentDraft(false, content, [],
+                [new EditorDiagnostic("EDITOR-TRANSFORM", "error", string.Empty, relativePath, 1, 1, 1, 1, EditorNotice.FromException(exception))]);
+        }
+        finally { _gate.Release(); }
     }
 
     public async Task<ValidationResult> ValidateAsync(
@@ -171,13 +204,13 @@ internal sealed class EditorWorkspace : IDisposable
             JsonElement messages = document.RootElement.GetProperty("messages");
             if (!messages.TryGetProperty(key, out JsonElement message))
                 return new EditorMessagePreview(false, locale, null,
-                    [new EditorDiagnostic("PREVIEW", "error", $"The compiled locale has no message '{key}'.", path, 1, 1, 1, 1)]);
+                    [new EditorDiagnostic("PREVIEW", "error", string.Empty, path, 1, 1, 1, 1, EditorNotice.Create("ui_backend_preview_key_missing", ("key", key)))]);
             return new EditorMessagePreview(true, locale, message.GetRawText(), diagnostics);
         }
         catch (Exception exception) when (exception is ArgumentException or JsonException)
         {
             return new EditorMessagePreview(false, null, null,
-                [new EditorDiagnostic("PREVIEW", "error", exception.Message, relativePath, 1, 1, 1, 1)]);
+                [new EditorDiagnostic("PREVIEW", "error", string.Empty, relativePath, 1, 1, 1, 1, EditorNotice.FromException(exception))]);
         }
         finally
         {
@@ -200,17 +233,17 @@ internal sealed class EditorWorkspace : IDisposable
             string fullPath = ContainedPath(path);
             bool creatingMf2 = !File.Exists(fullPath) &&
                 string.Equals(expectedRevision, NewMf2DocumentRevision, StringComparison.Ordinal) &&
-                path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase) &&
+                IsSourcePath(path) &&
                 FindMf2ProjectConfig() is not null;
             if (!File.Exists(fullPath) && !creatingMf2)
-                return Failure("not-found", $"'{path}' no longer exists.");
+                return Failure("not-found", EditorNotice.Create("ui_backend_document_missing", ("path", path)));
 
             if (!creatingMf2)
             {
-                byte[] currentBytes = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
+                byte[] currentBytes = ReadSourceBytes(fullPath);
                 string currentRevision = Revision(currentBytes);
                 if (!string.Equals(currentRevision, expectedRevision, StringComparison.Ordinal))
-                    return Failure("conflict", $"'{path}' changed on disk. Reload before saving your draft.");
+                    return Failure("conflict", EditorNotice.Create("ui_backend_document_conflict", ("path", path)));
             }
 
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
@@ -219,7 +252,7 @@ internal sealed class EditorWorkspace : IDisposable
                 return new EditorOperationResult(
                     false,
                     "validation",
-                    "The draft contains validation errors.",
+                    EditorNotice.Create("ui_backend_draft_validation"),
                     null,
                     new ValidationResult(false, Diagnostics(state.Compilation)));
             }
@@ -231,7 +264,7 @@ internal sealed class EditorWorkspace : IDisposable
             }
             catch (EncoderFallbackException)
             {
-                return Failure("encoding", "The document contains text that cannot be encoded as UTF-8.");
+                return Failure("encoding", EditorNotice.Create("ui_backend_encoding"));
             }
 
             string temporaryPath = Path.Combine(
@@ -241,6 +274,8 @@ internal sealed class EditorWorkspace : IDisposable
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
                 await File.WriteAllBytesAsync(temporaryPath, bytes, cancellationToken).ConfigureAwait(false);
+                if (!creatingMf2 && !string.Equals(Revision(ReadSourceBytes(fullPath)), expectedRevision, StringComparison.Ordinal))
+                    return Failure("conflict", EditorNotice.Create("ui_backend_document_conflict", ("path", path)));
                 File.Move(temporaryPath, fullPath, !creatingMf2);
                 committed = true;
             }
@@ -263,19 +298,19 @@ internal sealed class EditorWorkspace : IDisposable
         }
         catch (ArgumentException exception)
         {
-            return Failure("invalid-request", exception.Message);
+            return Failure("invalid-request", EditorNotice.FromException(exception));
         }
         catch (IOException exception) when (committed)
         {
-            return new EditorOperationResult(true, "saved", $"The document was saved; reload the workspace to refresh it. {exception.Message}", null, null);
+            return new EditorOperationResult(true, "saved", EditorNotice.Create("ui_backend_saved_reload") with { Detail = exception.Message }, null, null);
         }
         catch (UnauthorizedAccessException exception) when (committed)
         {
-            return new EditorOperationResult(true, "saved", $"The document was saved; reload the workspace to refresh it. {exception.Message}", null, null);
+            return new EditorOperationResult(true, "saved", EditorNotice.Create("ui_backend_saved_reload") with { Detail = exception.Message }, null, null);
         }
         catch (IOException exception)
         {
-            return Failure("io", exception.Message);
+            return Failure("io", EditorNotice.FromException(exception));
         }
         finally
         {
@@ -292,7 +327,7 @@ internal sealed class EditorWorkspace : IDisposable
         try
         {
             ThrowIfDisposed();
-            if (_catalogId is null) return new EditorReviewOperationResult(false, "Select a catalog before saving review data.", null, null);
+            if (_catalogId is null) return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_select_catalog_review"), null, null);
             var state = new TranslationEditorState(
                 _catalogId,
                 request.Entries.Select(static entry => new TranslationEditorStateEntry(
@@ -304,7 +339,7 @@ internal sealed class EditorWorkspace : IDisposable
         }
         catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
         {
-            return new EditorReviewOperationResult(false, exception.Message, null, null);
+            return new EditorReviewOperationResult(false, EditorNotice.FromException(exception), null, null);
         }
         finally
         {
@@ -320,12 +355,12 @@ internal sealed class EditorWorkspace : IDisposable
         try
         {
             ThrowIfDisposed();
-            if (_catalogId is null) return new EditorReviewOperationResult(false, "Select a catalog before changing review data.", null, null);
+            if (_catalogId is null) return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_select_catalog_review_change"), null, null);
             TranslationEditorStateLoadResult current = TranslationEditorStateStore.Load(_root, _catalogId);
             if (current.Error is not null)
-                return new EditorReviewOperationResult(false, current.Error, null, null);
+                return new EditorReviewOperationResult(false, EditorNotice.External(current.Error), null, null);
             if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
-                return new EditorReviewOperationResult(false, "The editor-state sidecar changed on disk. Reload before changing history.", null, null);
+                return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_sidecar_history_conflict"), null, null);
             string fullPath = ContainedPath(current.Path);
             cancellationToken.ThrowIfCancellationRequested();
             if (File.Exists(fullPath)) File.Delete(fullPath);
@@ -335,7 +370,7 @@ internal sealed class EditorWorkspace : IDisposable
         }
         catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
         {
-            return new EditorReviewOperationResult(false, exception.Message, null, null);
+            return new EditorReviewOperationResult(false, EditorNotice.FromException(exception), null, null);
         }
         finally
         {
@@ -374,7 +409,7 @@ internal sealed class EditorWorkspace : IDisposable
             ThrowIfDisposed();
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
             if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
-                return new EditorXliffExportResult(false, "XLIFF export requires a successfully compiled catalog.", null, [], []);
+                return new EditorXliffExportResult(false, EditorNotice.Create("ui_backend_xliff_compile"), null, [], []);
             CompiledTextCatalog catalog = state.Compilation.Catalogs[0];
             TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.Id), catalog);
             TranslationXliffExportResult export = TranslationInterchange.ExportXliff21(state.Compilation, review);
@@ -416,7 +451,7 @@ internal sealed class EditorWorkspace : IDisposable
             ThrowIfDisposed();
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
             if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
-                return new EditorReviewFileResult(false, "Review export requires a successfully compiled catalog.", null, 0);
+                return new EditorReviewFileResult(false, EditorNotice.Create("ui_backend_review_compile"), null, 0);
             CompiledTextCatalog catalog = state.Compilation.Catalogs[0];
             TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.Id), catalog);
             byte[] bytes = TranslationInterchange.ExportReviewJson(review);
@@ -451,7 +486,7 @@ internal sealed class EditorWorkspace : IDisposable
             ThrowIfDisposed();
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
             if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
-                return (RefuseXliff("EDITOR-COMPILE", "The open catalog does not compile; fix the reported errors before importing."), null);
+                return (RefuseXliff("EDITOR-COMPILE", EditorNotice.Create("ui_backend_import_compile")), null);
             CompiledTextCatalog catalog = state.Compilation.Catalogs[0];
             byte[] bytes = await ReadImportSourceAsync(path, cancellationToken).ConfigureAwait(false);
             TranslationXliffImportResult import = TranslationInterchange.ImportXliff21(bytes);
@@ -467,13 +502,13 @@ internal sealed class EditorWorkspace : IDisposable
                 StringComparer.Ordinal);
             if (!string.Equals(import.SourceLocale, catalog.DefaultLocale, StringComparison.Ordinal))
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-LOCALE-MISMATCH",
-                    $"The document source locale '{import.SourceLocale}' does not match the catalog default locale '{catalog.DefaultLocale}'."));
+                    EditorNotice.Create("ui_backend_refusal_1", ("value1", import.SourceLocale!), ("value2", catalog.DefaultLocale!))));
             foreach (string key in importedValues.Keys.Where(key => !catalog.CanonicalResources.Any(candidate => string.Equals(candidate.Key, key, StringComparison.Ordinal))).Order(StringComparer.Ordinal))
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", $"The imported document defines '{key}', which is not part of catalog '{catalog.Id}'."));
+                refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_2", ("value1", key!), ("value2", catalog.Id!))));
 
             var sidecar = TranslationEditorStateStore.Load(_root, catalog.Id);
             if (sidecar.Error is not null)
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", sidecar.Error));
+                refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", EditorNotice.External(sidecar.Error)));
             CollectApprovalFingerprintRefusals(catalog, import.Review.Entries, refusals);
 
             if (refusals.Count > 0)
@@ -491,6 +526,8 @@ internal sealed class EditorWorkspace : IDisposable
             if (projectPrefix == ".") projectPrefix = string.Empty;
             else projectPrefix += "/";
             var documents = new List<PreparedInterchangeDocument>();
+            var localeEdits = new List<TranslationLocaleEdit>();
+            bool localeToml = UsesLocaleToml(state.Files.Single(file => file.Kind == DocumentKind.Manifest).Content);
             var changes = new List<EditorKeyChange>();
             bool overflowed = false;
             int added = 0, changed = 0, removed = 0, unchanged = 0;
@@ -502,6 +539,12 @@ internal sealed class EditorWorkspace : IDisposable
                 else changed += 1;
                 Push(ref changes, ref overflowed, new EditorKeyChange(key, direct.ContainsKey(key) ? "changed" : "added", before, after, null, null));
                 if (string.Equals(before, after, StringComparison.Ordinal)) continue;
+                if (localeToml)
+                {
+                    localeEdits.Add(new TranslationLocaleEdit(direct.ContainsKey(key)
+                        ? TranslationLocaleEditKind.SetValue : TranslationLocaleEditKind.Add, key, after));
+                    continue;
+                }
                 string targetPath = $"{projectPrefix}{import.TargetLocale}/{key}.mf2";
                 WorkspaceFile? target = state.Files.FirstOrDefault(file => string.Equals(file.Path, targetPath, StringComparison.Ordinal));
                 byte[]? original = target is null ? null : StrictUtf8.GetBytes(target.Content);
@@ -512,13 +555,24 @@ internal sealed class EditorWorkspace : IDisposable
                     importedMessages[key].Bytes));
             }
 
+            if (localeEdits.Count != 0)
+            {
+                WorkspaceFile? target = state.Files.FirstOrDefault(file => file.Kind == DocumentKind.Resource &&
+                    file.Path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(file.Locale, import.TargetLocale, StringComparison.OrdinalIgnoreCase));
+                string targetPath = target?.Path ?? $"{projectPrefix}{import.TargetLocale}.toml";
+                byte[]? original = target is null ? null : StrictUtf8.GetBytes(target.Content);
+                byte[] updated = TranslationLocaleWriter.Apply(Source(targetPath, target?.Content ?? string.Empty),
+                    import.TargetLocale!, localeEdits);
+                documents.Add(new PreparedInterchangeDocument(targetPath, target?.Revision, original, updated));
+            }
             TranslationCompilation proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
             if (!proposed.Success)
             {
                 string message = string.Join(" ", proposed.Diagnostics
                     .Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error)
                     .Select(static diagnostic => $"[{diagnostic.Id}] {diagnostic.Message}"));
-                return (RefuseXliff("EDITOR-MF2-IMPORT", message), null);
+                return (RefuseXliff("EDITOR-MF2-IMPORT", EditorNotice.External(message)), null);
             }
 
             Dictionary<string, TranslationEditorStateEntry> currentEntries = sidecar.State.Entries
@@ -567,26 +621,26 @@ internal sealed class EditorWorkspace : IDisposable
         try
         {
             ThrowIfDisposed();
-            byte[] source = await File.ReadAllBytesAsync(prepared.SourcePath, cancellationToken).ConfigureAwait(false);
+            byte[] source = await ReadImportSourceAsync(prepared.SourcePath, cancellationToken).ConfigureAwait(false);
             if (!Convert.ToHexStringLower(SHA256.HashData(source)).Equals(Convert.ToHexStringLower(prepared.SourceHash), StringComparison.Ordinal))
-                return Failure("import-file-changed", "The imported file changed after it was previewed. Review it again.");
+                return Failure("import-file-changed", EditorNotice.Create("ui_backend_import_file_changed"));
             WorkspaceState currentState = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
             if (!currentState.Compilation.Success || currentState.Compilation.Catalogs.Count != 1 ||
                 !string.Equals(currentState.Compilation.Catalogs[0].Id, prepared.CatalogId, StringComparison.Ordinal) ||
                 !string.Equals(currentState.Compilation.Catalogs[0].Fingerprint, prepared.ExpectedCatalogFingerprint, StringComparison.Ordinal))
-                return Failure("conflict", "The catalog changed on disk. Preview the import again.");
+                return Failure("conflict", EditorNotice.Create("ui_backend_import_catalog_changed"));
             string? sidecarRevision = TranslationEditorStateStore.Load(_root, prepared.CatalogId).Revision;
             if (!string.Equals(sidecarRevision, prepared.ExpectedSidecarRevision, StringComparison.Ordinal))
-                return Failure("conflict", "The workflow sidecar changed on disk. Preview the import again.");
+                return Failure("conflict", EditorNotice.Create("ui_backend_import_sidecar_changed"));
 
             foreach (PreparedInterchangeDocument document in prepared.Documents)
             {
                 string fullPath = ContainedPath(document.Path);
                 string? currentRevision = File.Exists(fullPath)
-                    ? Revision(await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false))
+                    ? Revision(ReadSourceBytes(fullPath))
                     : null;
                 if (!string.Equals(currentRevision, document.ExpectedRevision, StringComparison.Ordinal))
-                    return Failure("conflict", $"'{document.Path}' changed on disk. Preview the import again.");
+                    return Failure("conflict", EditorNotice.Create("ui_backend_import_document_conflict", ("path", document.Path)));
                 Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
                 string temporaryPath = Path.Combine(
                     Path.GetDirectoryName(fullPath)!,
@@ -609,19 +663,19 @@ internal sealed class EditorWorkspace : IDisposable
             {
                 bool rolledBack = await RollBackInterchangeDocumentsAsync(committed, CancellationToken.None).ConfigureAwait(false);
                 return rolledBack
-                    ? Failure("io", $"The import was not applied ({exception.Message}).")
+                    ? Failure("io", EditorNotice.Create("ui_backend_import_not_applied") with { Detail = exception.Message })
                     : new EditorOperationResult(false, "partial-commit",
-                        $"The import could not be rolled back after a write failed ({exception.Message}). Reload the workspace and review the affected MF2 files.",
+                        EditorNotice.Create("ui_backend_import_partial") with { Detail = exception.Message },
                         null, null);
             }
             WorkspaceSnapshot snapshot = await LoadCoreAsync(CancellationToken.None).ConfigureAwait(false);
             return new EditorOperationResult(snapshot.Success, "imported",
-                snapshot.Success ? null : string.Join(" ", snapshot.Diagnostics.Select(static diagnostic => diagnostic.Message)),
+                snapshot.Success ? null : EditorNotice.External(string.Join(" ", snapshot.Diagnostics.Select(static diagnostic => diagnostic.Message))),
                 snapshot.Success ? snapshot : null, null);
         }
         catch (Exception exception) when (exception is TranslationEditorStateException or ArgumentException or IOException or UnauthorizedAccessException)
         {
-            return Failure("io", exception.Message);
+            return Failure("io", EditorNotice.FromException(exception));
         }
         finally
         {
@@ -644,26 +698,26 @@ internal sealed class EditorWorkspace : IDisposable
             ThrowIfDisposed();
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
             if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
-                return (RefuseReview("EDITOR-COMPILE", "The open catalog does not compile; fix the reported errors before importing."), null);
+                return (RefuseReview("EDITOR-COMPILE", EditorNotice.Create("ui_backend_import_compile")), null);
             CompiledTextCatalog catalog = state.Compilation.Catalogs[0];
             byte[] bytes = await ReadImportSourceAsync(path, cancellationToken).ConfigureAwait(false);
             TranslationInterchangeReview import = TranslationInterchange.ImportReviewJson(bytes);
             var refusals = new List<EditorInterchangeRefusal>();
             if (!string.Equals(import.CatalogId, catalog.Id, StringComparison.Ordinal))
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-CATALOG-MISMATCH",
-                    $"The review file targets catalog '{import.CatalogId}' but the open catalog is '{catalog.Id}'."));
+                    EditorNotice.Create("ui_backend_refusal_3", ("value1", import.CatalogId!), ("value2", catalog.Id!))));
             var canonicalKeys = new HashSet<string>(catalog.CanonicalResources.Select(static value => value.Key), StringComparer.Ordinal);
             var localeTags = new HashSet<string>(catalog.Locales.Select(static value => value.Tag), StringComparer.Ordinal);
             foreach (TranslationInterchangeReviewEntry entry in import.Entries)
             {
                 if (!canonicalKeys.Contains(entry.Key))
-                    refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", $"The review file references '{entry.Key}', which is not part of catalog '{catalog.Id}'."));
+                    refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_4", ("value1", entry.Key!), ("value2", catalog.Id!))));
                 if (!localeTags.Contains(entry.Locale))
-                    refusals.Add(new EditorInterchangeRefusal("EDITOR-LOCALE-NOT-IN-CATALOG", $"The review file references locale '{entry.Locale}', which the open catalog does not define."));
+                    refusals.Add(new EditorInterchangeRefusal("EDITOR-LOCALE-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_5", ("value1", entry.Locale!))));
             }
             TranslationEditorStateLoadResult sidecar = TranslationEditorStateStore.Load(_root, catalog.Id);
             if (sidecar.Error is not null)
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", sidecar.Error));
+                refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", EditorNotice.External(sidecar.Error)));
             CollectApprovalFingerprintRefusals(catalog, import.Entries, refusals);
             if (refusals.Count > 0)
                 return (new EditorReviewImportPlan(false, null, null, import.CatalogId, [], 0, 0, 0, false,
@@ -717,24 +771,24 @@ internal sealed class EditorWorkspace : IDisposable
         try
         {
             ThrowIfDisposed();
-            byte[] source = await File.ReadAllBytesAsync(prepared.SourcePath, cancellationToken).ConfigureAwait(false);
+            byte[] source = await ReadImportSourceAsync(prepared.SourcePath, cancellationToken).ConfigureAwait(false);
             if (!Convert.ToHexStringLower(SHA256.HashData(source)).Equals(Convert.ToHexStringLower(prepared.SourceHash), StringComparison.Ordinal))
-                return new EditorReviewOperationResult(false, "The review file changed after it was previewed. Import it again.", null, null);
+                return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_review_file_changed"), null, null);
             WorkspaceState currentState = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
             if (!currentState.Compilation.Success || currentState.Compilation.Catalogs.Count != 1 ||
                 !string.Equals(currentState.Compilation.Catalogs[0].Id, prepared.CatalogId, StringComparison.Ordinal) ||
                 !string.Equals(currentState.Compilation.Catalogs[0].Fingerprint, prepared.ExpectedCatalogFingerprint, StringComparison.Ordinal))
-                return new EditorReviewOperationResult(false, "The catalog changed on disk. Preview the import again.", null, null);
+                return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_catalog_changed"), null, null);
             TranslationEditorStateLoadResult sidecar = TranslationEditorStateStore.Load(_root, prepared.CatalogId);
             if (!string.Equals(sidecar.Revision, prepared.ExpectedSidecarRevision, StringComparison.Ordinal))
-                return new EditorReviewOperationResult(false, "The workflow sidecar changed on disk. Preview the import again.", null, null);
+                return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_sidecar_changed"), null, null);
             var state = new TranslationEditorState(prepared.CatalogId, prepared.MergedEntries, sidecar.State.Terminology);
             TranslationEditorStateLoadResult saved = TranslationEditorStateStore.Save(_root, state, prepared.ExpectedSidecarRevision);
             return new EditorReviewOperationResult(true, null, Review(saved), null);
         }
         catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
         {
-            return new EditorReviewOperationResult(false, exception.Message, null, null);
+            return new EditorReviewOperationResult(false, EditorNotice.FromException(exception), null, null);
         }
         finally
         {
@@ -758,32 +812,31 @@ internal sealed class EditorWorkspace : IDisposable
 
     private static string Identity(string key, string locale) => key + "\0" + locale;
 
-    private static EditorXliffImportPlan RefuseXliff(string code, string message) =>
+    private static EditorXliffImportPlan RefuseXliff(string code, EditorNotice message) =>
         new(false, message, null, null, null, null, null, [], 0, 0, 0, 0, 0, false, [new EditorInterchangeRefusal(code, message)]);
 
-    private static EditorReviewImportPlan RefuseReview(string code, string message) =>
+    private static EditorReviewImportPlan RefuseReview(string code, EditorNotice message) =>
         new(false, message, null, null, [], 0, 0, 0, false, [new EditorInterchangeRefusal(code, message)]);
 
     private static string InterchangeCode(Exception exception) => exception is TranslationInterchangeException interchange
         ? interchange.Code
         : exception is TranslationAuthoringException ? "EDITOR-AUTHORING" : "EDITOR-IO";
 
-    private static string InterchangeMessage(Exception exception) => exception is TranslationInterchangeException interchange
-        ? $"[{interchange.Code}] {interchange.Message}"
-        : exception.Message;
+    private static EditorNotice InterchangeMessage(Exception exception) => EditorNotice.FromException(exception);
 
     private sealed class InterchangeRefusalOrder : IComparer<EditorInterchangeRefusal>
     {
         internal static readonly InterchangeRefusalOrder Instance = new();
         public int Compare(EditorInterchangeRefusal? left, EditorInterchangeRefusal? right) =>
-            string.CompareOrdinal(left?.Code, right?.Code) is var byCode && byCode != 0 ? byCode : string.CompareOrdinal(left?.Message, right?.Message);
+            string.CompareOrdinal(left?.Code, right?.Code) is var byCode && byCode != 0 ? byCode : string.CompareOrdinal(left?.Message.ToString(), right?.Message.ToString());
     }
 
-    private async Task<byte[]> ReadImportSourceAsync(string path, CancellationToken cancellationToken)
+    private Task<byte[]> ReadImportSourceAsync(string path, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        cancellationToken.ThrowIfCancellationRequested();
         string fullPath = ResolveImportSourcePath(path);
-        return await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false);
+        return Task.FromResult(ReadSourceBytes(fullPath));
     }
 
     private string ResolveImportSourcePath(string path)
@@ -850,7 +903,7 @@ internal sealed class EditorWorkspace : IDisposable
             .ToDictionary(static file => file.Path, static file => file.Content, StringComparer.Ordinal);
         foreach (PreparedInterchangeDocument document in documents)
             messages[document.Path] = StrictUtf8.GetString(document.Bytes);
-        return TranslationCompiler.CompileMf2Project(
+        return TranslationCompiler.CompileProject(
             Source(project.Path, project.Content),
             messages.OrderBy(static pair => pair.Key, StringComparer.Ordinal).Select(static pair => Source(pair.Key, pair.Value)),
             null,
@@ -891,7 +944,7 @@ internal sealed class EditorWorkspace : IDisposable
             string? source = unit.Element(xliff + "segment")?.Element(xliff + "source")?.Value;
             if (key is null || source is null || !liveSources.TryGetValue(key, out string? liveSource) || string.Equals(source, liveSource, StringComparison.Ordinal)) continue;
             refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-MISMATCH",
-                $"The XLIFF source for '{key}' does not match the open catalog and cannot be applied."));
+                EditorNotice.Create("ui_backend_refusal_6", ("value1", key!))));
         }
     }
 
@@ -899,13 +952,13 @@ internal sealed class EditorWorkspace : IDisposable
     {
         if (!string.Equals(import.CatalogId, catalog.Id, StringComparison.Ordinal))
             refusals.Add(new EditorInterchangeRefusal("EDITOR-CATALOG-MISMATCH",
-                $"The document targets catalog '{import.CatalogId}' but the open catalog is '{catalog.Id}'."));
+                EditorNotice.Create("ui_backend_refusal_7", ("value1", import.CatalogId!), ("value2", catalog.Id!))));
         if (!catalog.Locales.Any(locale => string.Equals(locale.Tag, import.TargetLocale, StringComparison.Ordinal)))
             refusals.Add(new EditorInterchangeRefusal("EDITOR-LOCALE-NOT-IN-CATALOG",
-                $"The document targets locale '{import.TargetLocale}', which the open catalog does not define."));
+                EditorNotice.Create("ui_backend_refusal_8", ("value1", import.TargetLocale!))));
         if (string.Equals(import.TargetLocale, catalog.DefaultLocale, StringComparison.Ordinal))
             refusals.Add(new EditorInterchangeRefusal("EDITOR-TARGET-DEFAULT-LOCALE",
-                $"The document targets default locale '{catalog.DefaultLocale}', which is canonical source text and cannot be imported through XLIFF."));
+                EditorNotice.Create("ui_backend_refusal_9", ("value1", catalog.DefaultLocale!))));
     }
 
     private static void CollectApprovalFingerprintRefusals(
@@ -917,7 +970,7 @@ internal sealed class EditorWorkspace : IDisposable
         {
             if (string.Equals(entry.SourceFingerprint, catalog.Fingerprint, StringComparison.Ordinal)) continue;
             refusals.Add(new EditorInterchangeRefusal("EDITOR-APPROVAL-FINGERPRINT",
-                $"The approved review entry '{entry.Key}' ({entry.Locale}) was created for a different source catalog revision."));
+                EditorNotice.Create("ui_backend_refusal_10", ("value1", entry.Key!), ("value2", entry.Locale!))));
         }
     }
 
@@ -973,7 +1026,7 @@ internal sealed class EditorWorkspace : IDisposable
     {
         string? projectConfig = FindMf2ProjectConfig();
         if (projectConfig is null)
-            throw new ArgumentException("The workspace must contain translations/runic.json or runic.json and MF2 message files.");
+            throw new EditorUserException(EditorNotice.Create("ui_backend_project_required"));
         return ReadMf2StateAsync(projectConfig, replacementPath, replacementContent, cancellationToken);
     }
 
@@ -986,7 +1039,7 @@ internal sealed class EditorWorkspace : IDisposable
         string projectRoot = Path.GetDirectoryName(configPath)!;
         string configRelativePath = NormalizeRelativePath(Path.GetRelativePath(_root, configPath));
         var paths = new List<string> { configPath };
-        paths.AddRange(Directory.EnumerateFiles(projectRoot, "*.mf2", SearchOption.AllDirectories).Order(StringComparer.Ordinal));
+        paths.AddRange(EnumerateSourceFiles(projectRoot).Order(StringComparer.Ordinal));
         var files = new List<WorkspaceFile>(paths.Count);
         TranslationSource? projectSource = null;
         var messageSources = new List<TranslationSource>();
@@ -995,7 +1048,7 @@ internal sealed class EditorWorkspace : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
             string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
-            byte[] bytes = File.ReadAllBytes(fullPath);
+            byte[] bytes = ReadSourceBytes(ContainedPath(relativePath));
             string content = StrictUtf8.GetString(bytes);
             if (string.Equals(relativePath, replacementPath, StringComparison.Ordinal))
                 content = replacementContent ?? string.Empty;
@@ -1009,12 +1062,12 @@ internal sealed class EditorWorkspace : IDisposable
             else
             {
                 string localPath = NormalizeRelativePath(Path.GetRelativePath(projectRoot, fullPath));
-                string? locale = localPath.Contains('/', StringComparison.Ordinal) ? localPath[..localPath.IndexOf('/')] : null;
+                string? locale = SourceLocale(localPath);
                 messageSources.Add(Source(relativePath, content));
                 files.Add(new WorkspaceFile(relativePath, content, Revision(bytes), DocumentKind.Resource, catalogId, locale, "base"));
             }
         }
-        if (projectSource is null) throw new ArgumentException("The Runic translation project has no runic.json file.");
+        if (projectSource is null) throw new EditorUserException(EditorNotice.Create("ui_backend_project_config_missing"));
         if (replacementPath is not null && !files.Exists(file => string.Equals(file.Path, replacementPath, StringComparison.Ordinal)))
         {
             string replacementFullPath = ContainedPath(replacementPath);
@@ -1022,18 +1075,28 @@ internal sealed class EditorWorkspace : IDisposable
                 ? projectRoot
                 : projectRoot + Path.DirectorySeparatorChar;
             if (!replacementFullPath.StartsWith(projectBoundary, StringComparison.Ordinal) ||
-                !replacementPath.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException($"'{replacementPath}' is not an MF2 message in this project.", nameof(replacementPath));
+                !IsSourcePath(replacementPath))
+                throw new EditorUserException(EditorNotice.Create("ui_backend_source_outside_project", ("path", replacementPath)));
             string localPath = NormalizeRelativePath(Path.GetRelativePath(projectRoot, replacementFullPath));
-            string? locale = localPath.Contains('/', StringComparison.Ordinal) ? localPath[..localPath.IndexOf('/')] : null;
+            string? locale = SourceLocale(localPath);
             string content = replacementContent ?? string.Empty;
             messageSources.Add(Source(replacementPath, content));
             files.Add(new WorkspaceFile(replacementPath, content, NewMf2DocumentRevision, DocumentKind.Resource, catalogId, locale, "base"));
             files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         }
 
-        TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(projectSource, messageSources, null, cancellationToken);
+        TranslationCompilation compilation = TranslationCompiler.CompileProject(projectSource, messageSources, null, cancellationToken);
         CompiledTextCatalog? compiled = compilation.Catalogs.Count == 0 ? null : compilation.Catalogs[0];
+        if (compiled is not null)
+        {
+            for (int index = 0; index < files.Count; index++)
+            {
+                WorkspaceFile file = files[index];
+                string? canonicalLocale = compiled.Locales.FirstOrDefault(locale =>
+                    string.Equals(locale.Tag, file.Locale, StringComparison.OrdinalIgnoreCase))?.Tag;
+                if (canonicalLocale is not null) files[index] = file with { Locale = canonicalLocale };
+            }
+        }
         _catalogId = compiled?.Id ?? catalogId;
         if (replacementPath is null)
         {
@@ -1066,18 +1129,30 @@ internal sealed class EditorWorkspace : IDisposable
             : state.Files.Find(file => file.Kind == DocumentKind.Manifest && string.Equals(file.CatalogId, _catalogId, StringComparison.Ordinal));
         if (manifest is not null)
             catalog = ReadCatalog(manifest.Content);
+        if (catalog is not null && state.Compilation.Catalogs.Count != 0)
+        {
+            CompiledTextCatalog compiledCatalog = state.Compilation.Catalogs[0];
+            catalog = catalog with
+            {
+                DefaultLocale = compiledCatalog.DefaultLocale,
+                Locales = compiledCatalog.Locales.Select(static locale => new EditorLocale(locale.Tag, locale.FallbackTag)).ToArray(),
+            };
+        }
 
         var documents = new List<EditorDocument>(state.Files.Count);
         foreach (WorkspaceFile file in state.Files)
         {
+            TranslationLocaleDocument? localeDocument = file.Path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) && file.Locale is not null
+                ? TranslationLocaleReader.Read(Source(file.Path, file.Content), file.Locale) : null;
             documents.Add(new EditorDocument(
                 file.Path,
                 file.Content,
                 file.Revision,
                 file.Kind == DocumentKind.Manifest,
-                false,
+                localeDocument?.Success == false,
                 file.Locale,
-                file.Layer));
+                file.Layer,
+                localeDocument is null ? ReadEntries(file.Path, file.Content, file.Locale) : ReadEntries(localeDocument)));
         }
         EditorReviewSnapshot? review = _catalogId is null
             ? null
@@ -1116,7 +1191,7 @@ internal sealed class EditorWorkspace : IDisposable
 
     private static ValidationResult MalformedValidation(string path) => new(
         false,
-        [new EditorDiagnostic("JSON", "error", "The document is not valid JSON.", path, 1, 1, 1, 1)]);
+        [new EditorDiagnostic("JSON", "error", string.Empty, path, 1, 1, 1, 1, EditorNotice.Create("ui_backend_invalid_json"))]);
 
     private static EditorCatalog? ReadCatalog(string content)
     {
@@ -1189,11 +1264,18 @@ internal sealed class EditorWorkspace : IDisposable
 
     private string ContainedPath(string relativePath)
     {
-        if (Path.IsPathRooted(relativePath)) throw new ArgumentException("Workspace paths must be relative.", nameof(relativePath));
+        if (Path.IsPathRooted(relativePath)) throw new EditorUserException(EditorNotice.Create("ui_backend_path_relative"));
         string fullPath = Path.GetFullPath(relativePath.Replace('/', Path.DirectorySeparatorChar), _root);
         string boundary = _root.EndsWith(Path.DirectorySeparatorChar) ? _root : _root + Path.DirectorySeparatorChar;
         if (!fullPath.StartsWith(boundary, StringComparison.Ordinal))
-            throw new ArgumentException("The requested path escapes the workspace.", nameof(relativePath));
+            throw new EditorUserException(EditorNotice.Create("ui_backend_path_escape"));
+        for (string? current = fullPath; current is not null && current.StartsWith(boundary, StringComparison.Ordinal);
+            current = Path.GetDirectoryName(current))
+        {
+            if ((File.Exists(current) || Directory.Exists(current)) &&
+                (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                throw new EditorUserException(EditorNotice.Create("ui_backend_path_link"));
+        }
         return fullPath;
     }
 
@@ -1215,16 +1297,16 @@ internal sealed class EditorWorkspace : IDisposable
     {
         string? config = FindMf2ProjectConfig();
         if (config is null)
-            throw new TranslationAuthoringException("The workspace does not contain runic.json.");
+            throw new EditorUserException(EditorNotice.Create("ui_backend_config_required"));
         string projectRoot = Path.GetDirectoryName(config)!;
         var result = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
-            [NormalizeRelativePath(Path.GetRelativePath(_root, config))] = File.ReadAllBytes(config),
+            [NormalizeRelativePath(Path.GetRelativePath(_root, config))] = ReadSourceBytes(ContainedPath(NormalizeRelativePath(Path.GetRelativePath(_root, config)))),
         };
-        foreach (string path in Directory.EnumerateFiles(projectRoot, "*.mf2", SearchOption.AllDirectories))
+        foreach (string path in EnumerateSourceFiles(projectRoot))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            result[NormalizeRelativePath(Path.GetRelativePath(_root, path))] = File.ReadAllBytes(path);
+            result[NormalizeRelativePath(Path.GetRelativePath(_root, path))] = ReadSourceBytes(ContainedPath(NormalizeRelativePath(Path.GetRelativePath(_root, path))));
         }
         return result;
     }
@@ -1251,14 +1333,64 @@ internal sealed class EditorWorkspace : IDisposable
     {
         if (_disposed) return;
         if (!fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase) &&
-            !fullPath.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) return;
+            !IsSourcePath(fullPath)) return;
         string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
         if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)) return;
         if (relativePath.StartsWith(".runic-translations/", StringComparison.Ordinal)) return;
         _pendingChanges.TryAdd(relativePath, 0);
     }
 
-    private static EditorOperationResult Failure(string kind, string message) => new(false, kind, message, null, null);
+    private static bool IsSourcePath(string path) =>
+        path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase);
+
+    private static IEnumerable<string> EnumerateSourceFiles(string root)
+    {
+        foreach (string path in Directory.EnumerateFileSystemEntries(root).Order(StringComparer.Ordinal))
+        {
+            FileAttributes attributes = File.GetAttributes(path);
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
+                throw new EditorUserException(EditorNotice.Create("ui_backend_path_link"));
+            if ((attributes & FileAttributes.Directory) != 0)
+            {
+                if (Path.GetFileName(path) == ".runic-translations") continue;
+                foreach (string child in EnumerateSourceFiles(path)) yield return child;
+            }
+            else if (IsSourcePath(path)) yield return path;
+        }
+    }
+
+    private static byte[] ReadSourceBytes(string path)
+    {
+        if (new FileInfo(path).Length > new TranslationCompilerOptions().MaximumDocumentBytes)
+            throw new EditorUserException(EditorNotice.Create("ui_backend_document_size"));
+        return File.ReadAllBytes(path);
+    }
+
+    private static string? SourceLocale(string path) => path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase)
+        ? Path.GetFileNameWithoutExtension(path)
+        : path.Contains('/', StringComparison.Ordinal) ? path[..path.IndexOf('/')] : null;
+
+    private static bool UsesLocaleToml(string config)
+    {
+        using JsonDocument document = JsonDocument.Parse(config);
+        return StringProperty(document.RootElement, "sourceLayout") == "locale-toml";
+    }
+
+    private static EditorMessageEntry[] ReadEntries(string path, string content, string? locale)
+    {
+        if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
+            return [new EditorMessageEntry(Path.GetFileNameWithoutExtension(path), content, 0, StrictUtf8.GetByteCount(content))];
+        if (!path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) || locale is null) return [];
+        TranslationLocaleDocument document = TranslationLocaleReader.Read(Source(path, content), locale);
+        return ReadEntries(document);
+    }
+
+    private static EditorMessageEntry[] ReadEntries(TranslationLocaleDocument document) =>
+        document.Entries.Select(entry => new EditorMessageEntry(entry.Key, StrictUtf8.GetString(entry.Message.GetUtf8Bytes()),
+            entry.ValueLocation.StartByte, entry.ValueLocation.LengthBytes)).ToArray();
+
+    private static EditorOperationResult Failure(string kind, EditorNotice message) => new(false, kind, message, null, null);
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 

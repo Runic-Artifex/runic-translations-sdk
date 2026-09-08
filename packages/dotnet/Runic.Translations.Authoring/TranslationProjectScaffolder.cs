@@ -7,7 +7,7 @@ using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Authoring;
 
-/// <summary>Creates the convention-based <c>runic.json</c> and MF2 project layout.</summary>
+/// <summary>Creates the convention-based <c>runic.json</c> and locale TOML project layout.</summary>
 public static class TranslationProjectScaffolder
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
@@ -30,19 +30,20 @@ public static class TranslationProjectScaffolder
             locales.Add(new TranslationProjectLocale(tag, fallback));
         }
 
-        var files = new List<TranslationProjectFile>(1 + (request.IncludeStarterMessage ? locales.Count : 0))
+        var files = new List<TranslationProjectFile>(1 + locales.Count)
         {
             new("runic.json", RenderProject(request, defaultLocale, locales)),
         };
-        if (request.IncludeStarterMessage)
         {
-            byte[] starter = Utf8.GetBytes(RequireValue(request.ClassName, "class name") + "\n");
+            byte[] starter = request.IncludeStarterMessage
+                ? Utf8.GetBytes("application_title = " + TranslationLocaleWriter.EncodeValue(RequireValue(request.ClassName, "class name") + "\n") + "\n")
+                : [];
             for (int index = 0; index < locales.Count; index++)
-                files.Add(new TranslationProjectFile($"{locales[index].Tag}/application_title.mf2", starter));
+                files.Add(new TranslationProjectFile($"{locales[index].Tag}.toml", starter));
         }
         files.Sort((left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
 
-        TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(
+        TranslationCompilation compilation = TranslationCompiler.CompileProject(
             new TranslationSource("runic.json", files.Find(static file => file.RelativePath == "runic.json")!.Bytes),
             MessageSources(files));
         if (!compilation.Success) throw new TranslationAuthoringException(FormatDiagnostics(compilation.Diagnostics));
@@ -60,6 +61,7 @@ public static class TranslationProjectScaffolder
             writer.WriteStartObject();
             writer.WriteString("$schema", "https://runic-artifex.eu/schemas/translations/project-v1.schema.json");
             writer.WriteNumber("schemaVersion", 1);
+            writer.WriteString("sourceLayout", "locale-toml");
             writer.WriteString("catalog", RequireValue(request.CatalogId, "catalog ID"));
             writer.WriteStartObject("code");
             writer.WriteString("namespace", RequireValue(request.CodeNamespace, "code namespace"));
@@ -97,7 +99,7 @@ public static class TranslationProjectScaffolder
     {
         var sources = new List<TranslationSource>();
         for (int index = 0; index < files.Count; index++)
-            if (files[index].RelativePath.EndsWith(".mf2", StringComparison.Ordinal))
+            if (files[index].RelativePath.EndsWith(".toml", StringComparison.Ordinal))
                 sources.Add(new TranslationSource(files[index].RelativePath, files[index].Bytes));
         return sources.ToArray();
     }

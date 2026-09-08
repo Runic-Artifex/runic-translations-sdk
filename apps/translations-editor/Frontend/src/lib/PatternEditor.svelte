@@ -167,7 +167,7 @@
             <div class="attributes">
               <header><strong>{ui.text("ui_pattern_attributes")}</strong><button onclick={() => addAttribute(path, index)}>＋ {ui.text("ui_pattern_add")}</button></header>
               {#each Object.entries(node.markup.attributes ?? {}) as [name, value] (name)}
-                <div><input aria-label={ui.text("ui_pattern_attribute_name")} value={name} oninput={(event) => updateAttribute(path, index, name, event.currentTarget.value, value)} /><input aria-label={`${ui.text("ui_pattern_value_for")} ${name}`} value={value} oninput={(event) => updateAttribute(path, index, name, name, event.currentTarget.value)} /><button aria-label={`${ui.text("ui_pattern_remove")} ${name}`} onclick={() => removeAttribute(path, index, name)}>×</button></div>
+                <div><input aria-label={ui.text("ui_pattern_attribute_name")} value={name} oninput={(event) => updateAttribute(path, index, name, event.currentTarget.value, value)} /><input aria-label={ui.text("ui_pattern_value_for_name", { name: name })} value={value} oninput={(event) => updateAttribute(path, index, name, name, event.currentTarget.value)} /><button aria-label={ui.text("ui_pattern_remove_name", { name: name })} onclick={() => removeAttribute(path, index, name)}>×</button></div>
               {/each}
             </div>
             <div class="children-label">{ui.text("ui_pattern_children_description")}</div>

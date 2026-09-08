@@ -13,21 +13,21 @@ internal static class EditorWorkspacePicker
                 false,
                 false,
                 null,
-                "No native folder picker is available. Enter the workspace directory instead.");
+                EditorNotice.Create("ui_backend_picker_unavailable"));
         }
 
         using var process = new Process { StartInfo = startInfo };
         try
         {
             if (!process.Start())
-                return new EditorWorkspacePickerResult(false, false, null, "The native folder picker could not be started.");
+                return new EditorWorkspacePickerResult(false, false, null, EditorNotice.Create("ui_backend_picker_start"));
             Task<string> outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             Task<string> errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             string output = (await outputTask.ConfigureAwait(false)).Trim();
             string error = (await errorTask.ConfigureAwait(false)).Trim();
             if (process.ExitCode != 0 || output.Length == 0)
-                return new EditorWorkspacePickerResult(false, true, null, error.Length == 0 ? null : error);
+                return new EditorWorkspacePickerResult(false, true, null, error.Length == 0 ? null : EditorNotice.External(error));
             return new EditorWorkspacePickerResult(true, false, Path.GetFullPath(output), null);
         }
         catch (OperationCanceledException)
@@ -37,7 +37,7 @@ internal static class EditorWorkspacePicker
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            return new EditorWorkspacePickerResult(false, false, null, exception.Message);
+            return new EditorWorkspacePickerResult(false, false, null, EditorNotice.FromException(exception));
         }
     }
 
@@ -52,7 +52,6 @@ internal static class EditorWorkspacePicker
             result.ArgumentList.Add(
                 "Add-Type -AssemblyName System.Windows.Forms; " +
                 "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; " +
-                "$dialog.Description = 'Open a Runic Translations workspace'; " +
                 "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) }");
             return result;
         }
@@ -61,7 +60,7 @@ internal static class EditorWorkspacePicker
         {
             var result = StartInfo("/usr/bin/osascript");
             result.ArgumentList.Add("-e");
-            result.ArgumentList.Add("POSIX path of (choose folder with prompt \"Open a Runic Translations workspace\")");
+            result.ArgumentList.Add("POSIX path of (choose folder)");
             return result;
         }
 
@@ -70,7 +69,6 @@ internal static class EditorWorkspacePicker
         var linux = StartInfo(linuxPicker);
         linux.ArgumentList.Add("--file-selection");
         linux.ArgumentList.Add("--directory");
-        linux.ArgumentList.Add("--title=Open a Runic Translations workspace");
         return linux;
     }
 

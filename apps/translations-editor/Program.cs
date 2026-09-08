@@ -596,6 +596,15 @@ internal sealed partial class EditorHostedWebServer : IAsyncDisposable
             RunicAssetEndpointExtensions.WriteAssetAsync(context, assets, assets.Manifest.EntryPoint));
         application.MapRunicAssetSource(assets);
         MapTestFixtures(application);
+        // This capability exists only in the explicit loopback hosted mode.
+        // The UI accepts this fixed relative endpoint from its own origin;
+        // WebSocket Origin admission remains enforced by the transport below.
+        application.MapGet("/_runic/editor-host", context =>
+        {
+            context.Response.ContentType = "application/json; charset=utf-8";
+            context.Response.Headers.CacheControl = "no-store";
+            return context.Response.WriteAsync("{\"profile\":\"runic.translations.editor.hosted/1\",\"bridgePath\":\"/bridge\",\"connectionEpoch\":" + transport.NextConnectionEpoch.ToString(CultureInfo.InvariantCulture) + "}", context.RequestAborted);
+        });
         application.MapRunicApplicationBridge("/bridge", transport);
 
         await application.StartAsync().ConfigureAwait(false);

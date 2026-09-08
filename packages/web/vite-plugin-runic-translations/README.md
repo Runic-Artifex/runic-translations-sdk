@@ -22,8 +22,11 @@ export default defineConfig({
 });
 ```
 
-The no-argument form discovers `translations/runic.json`, compiles its MF2 files
-to `.runic/translations`, and watches both config and messages. In a split
+The no-argument form discovers `translations/runic.json`, compiles its locale
+TOML files to `.runic/translations`, and watches config and message edits,
+including added, removed, and renamed locale files. New projects declare
+`sourceLayout: "locale-toml"`; projects without it retain legacy MF2-file input.
+In a split
 frontend/backend layout, use `runicTranslations({ project: "../translations" })`.
 When another build owns generation, pass its generated `manifest` and optional
 `sourceFiles` instead.
@@ -38,7 +41,9 @@ document.querySelector("#app")!.textContent = m.application_title();
 const greeting = m.greeting({ name: "Ada" }, { locale: "de" });
 ```
 
-MF2 filenames become identifier-safe message properties. Static ESM re-exports let Vite remove message modules that are not referenced.
+TOML keys become identifier-safe message properties; their string values contain
+MF2 messages. Static ESM re-exports let Vite remove message modules that are not
+referenced.
 
 Additional entry points are available for generated locale configuration (`/runtime`), request-local SSR (`/server`), cross-process text references (`/transport`), and validated runtime-loaded locale artifacts (`/dynamic`). Wrap SSR rendering with `/server`'s `runWithLocale`; explicit per-call locale options are only needed for intentional overrides.
 

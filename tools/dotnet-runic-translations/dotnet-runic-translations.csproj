@@ -31,6 +31,7 @@
     <EmbeddedResource Include="..\..\specs\translations\schemas\editor-state-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.editor-state-v1.schema.json" />
     <EmbeddedResource Include="..\..\specs\translations\schemas\capabilities-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.capabilities-v1.schema.json" />
     <EmbeddedResource Include="..\..\specs\translations\schemas\project-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.project-v1.schema.json" />
+    <None Include="../../specs/translations/licenses/Tomlyn-LICENSE.txt" Pack="true" PackagePath="licenses" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
     <None Include="..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />

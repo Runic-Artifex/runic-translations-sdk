@@ -32,7 +32,7 @@
   let groups = $derived.by(() => {
     const rendered: Array<{ id: string; label: string; start: number; commands: readonly PaletteCommand[] }> = [];
     let offset = 0;
-    for (const group of groupCommands(filtered)) {
+    for (const group of groupCommands(filtered, ui)) {
       rendered.push({ id: group.id, label: group.label, start: offset, commands: group.commands });
       offset += group.commands.length;
     }

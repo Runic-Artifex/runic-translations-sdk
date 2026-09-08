@@ -3,6 +3,7 @@ import { MockApplicationBridge } from "@runic-artifex/application-bridge";
 import type { EditorCommand, EditorReceipt } from "../application.bridge";
 import type {
   EditorDocument,
+  EditorNotice,
   EditorProjectCreationRequest,
   EditorReviewSaveRequest,
   EditorReviewSnapshot,
@@ -75,8 +76,8 @@ let destructiveConfirmation: { token: string; request: string; fingerprint: stri
 let preparedXliffImport: { token: string; fingerprint: string } | undefined;
 let preparedReviewImport: { token: string; fingerprint: string } | undefined;
 type MockHistoryEntry =
-  | { kind: "document"; label: string; path: string; before: EditorDocument; after: EditorDocument; bytes: number }
-  | { kind: "review"; label: string; before: EditorReviewSnapshot | undefined; after: EditorReviewSnapshot | undefined; bytes: number };
+  | { kind: "document"; label: EditorNotice; path: string; before: EditorDocument; after: EditorDocument; bytes: number }
+  | { kind: "review"; label: EditorNotice; before: EditorReviewSnapshot | undefined; after: EditorReviewSnapshot | undefined; bytes: number };
 let undoStack: MockHistoryEntry[] = [];
 let redoStack: MockHistoryEntry[] = [];
 let historyBytes = 0;
@@ -115,7 +116,7 @@ function recordHistory(entry: MockHistoryEntry | undefined): void {
 function recordDocumentHistory(before: EditorDocument, after: EditorDocument): void {
   const entry = {
     kind: "document" as const,
-    label: `Save ${after.path}`,
+    label: { code: "ui_backend_history_save", args: [{ name: "path", value: after.path }] },
     path: after.path,
     before: structuredClone(before),
     after: structuredClone(after),
@@ -126,7 +127,7 @@ function recordDocumentHistory(before: EditorDocument, after: EditorDocument): v
 function recordReviewHistory(before: EditorReviewSnapshot | undefined, after: EditorReviewSnapshot | undefined): void {
   const entry = {
     kind: "review" as const,
-    label: "Save workflow",
+    label: { code: "ui_backend_history_review", args: [] },
     before: structuredClone(before),
     after: structuredClone(after),
   };
@@ -694,6 +695,18 @@ async function handle(command: EditorCommand): Promise<EditorReceipt> {
       return receipt({ _tag: "UndoApplied", result: wire(await undo()) });
     case "Redo":
       return receipt({ _tag: "RedoApplied", result: wire(await redo()) });
+    case "TransformDocument": {
+      // Mock fixtures intentionally exercise the legacy MF2 layout. Production
+      // TOML edits always use the shared compiler reader and authoring writer.
+      const content = command.value === undefined ? command.content
+        : command.value.endsWith("\n") ? command.value : `${command.value}\n`;
+      const validation = await validate(command.path, content);
+      const key = command.path.slice(command.path.lastIndexOf("/") + 1, -4);
+      return receipt({ _tag: "DocumentTransformed", result: {
+        ...validation, content,
+        entries: command.path.endsWith(".mf2") ? [{ key, content, valueStartByte: 0, valueLengthBytes: new TextEncoder().encode(content).length }] : [],
+      } });
+    }
     case "ValidateDocument":
       return receipt({
         _tag: "DocumentValidated",
@@ -757,7 +770,7 @@ async function handle(command: EditorCommand): Promise<EditorReceipt> {
 }
 
 function receipt<T extends object>(value: T): EditorReceipt {
-  return value as EditorReceipt;
+  return wire(value) as EditorReceipt;
 }
 
 function localStateSnapshot(recovered: boolean): { entries: { key: string; value: string }[]; recovered: boolean } {
@@ -794,7 +807,9 @@ function wire<T>(value: T): T {
   const source = value as Record<string, unknown>;
   const output: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(source)) {
-    output[key] = key === "samples" && item !== null && typeof item === "object" && !Array.isArray(item)
+    output[key] = key === "message" && typeof item === "string" && !("severity" in source) && !("semanticLoss" in source)
+      ? { code: "ui_backend_external_error", args: [], detail: item }
+      : key === "samples" && item !== null && typeof item === "object" && !Array.isArray(item)
       ? Object.entries(item).map(([sampleKey, sampleValue]) => ({ key: sampleKey, value: sampleValue }))
       : wire(item);
   }

@@ -17,7 +17,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.9.0" PrivateAssets="all" />
-    <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
+    <!-- This non-packable project must expose its compiler runtime closure to project-reference hosts.
+         The Build package independently bundles that closure under analyzers, away from application runtime assets. -->
+    <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

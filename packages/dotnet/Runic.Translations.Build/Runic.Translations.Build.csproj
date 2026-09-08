@@ -11,12 +11,15 @@
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);BundleTranslationAnalyzers</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Runic.Translations.Generator\Runic.Translations.Generator.csproj" PrivateAssets="all" />
+    <None Include="../../../specs/translations/licenses/Tomlyn-LICENSE.txt" Pack="true" PackagePath="licenses" />
+    <None Include="../../../specs/translations/THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Update="build\Runic.Translations.Build.props"
           Pack="true"
@@ -30,6 +33,8 @@
   <Target Name="BundleTranslationAnalyzers">
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Generator.dll"
+                              PackagePath="analyzers/dotnet/cs" />
+      <TfmSpecificPackageFile Include="$(OutputPath)Tomlyn.dll"
                               PackagePath="analyzers/dotnet/cs" />
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Compiler.dll"
                               PackagePath="analyzers/dotnet/cs" />

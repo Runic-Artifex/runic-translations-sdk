@@ -16,19 +16,54 @@
     <RunicTranslationsBuildTargetsImported>true</RunicTranslationsBuildTargetsImported>
   </PropertyGroup>
 
-  <!-- A Runic project marker is the single declaration; its MF2 messages are discovered by convention. -->
+  <!-- A Runic project marker is the single declaration; its locale documents are discovered beside the declared marker. -->
   <ItemGroup Condition="'@(TranslationProject)' == '' and Exists('$(MSBuildProjectDirectory)\translations\runic.json')">
     <TranslationProject Include="$(MSBuildProjectDirectory)\translations\runic.json" />
   </ItemGroup>
-  <ItemGroup Condition="'@(TranslationProject)' != '' and '@(TranslationMf2)' == '' and Exists('$(MSBuildProjectDirectory)\translations\runic.json')">
-    <TranslationMf2 Include="$(MSBuildProjectDirectory)\translations\**\*.mf2" />
-  </ItemGroup>
-
   <ItemGroup>
     <AdditionalFiles Include="@(TranslationProject)" RunicTranslationKind="Project" />
-    <AdditionalFiles Include="@(TranslationMf2)" RunicTranslationKind="Mf2" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationKind" />
   </ItemGroup>
+
+  <!-- At execution time the declared project items exist and transformed wildcard
+       strings can be expanded by a fresh Include. Evaluation-time transforms retain
+       wildcard characters literally. Run before compiler editorconfig generation. -->
+  <Target Name="_RunicTranslationsDiscoverTranslationSources"
+          BeforeTargets="PrepareForBuild;GenerateMSBuildEditorConfigFileShouldRun;CoreCompile">
+    <PropertyGroup>
+      <_TranslationsSourceDiscoveryGlobs>@(TranslationProject->'%(RootDir)%(Directory)**/*')</_TranslationsSourceDiscoveryGlobs>
+    </PropertyGroup>
+    <ItemGroup Condition="'@(TranslationProject)' != ''">
+      <_TranslationsDiscoveredSource Include="$(_TranslationsSourceDiscoveryGlobs)" />
+    </ItemGroup>
+    <!-- MSBuild globs are case-sensitive on Linux. Match extensions after discovery
+         with MSBuild's case-insensitive string comparison, matching the compiler contract. -->
+    <ItemGroup Condition="'@(TranslationMf2)' == ''">
+      <TranslationMf2 Include="@(_TranslationsDiscoveredSource)"
+                      Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.mf2'" />
+    </ItemGroup>
+    <ItemGroup Condition="'@(TranslationToml)' == ''">
+      <TranslationToml Include="@(_TranslationsDiscoveredSource)"
+                       Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.toml'" />
+    </ItemGroup>
+    <ItemGroup>
+      <AdditionalFiles Include="@(TranslationMf2)" RunicTranslationKind="Mf2" />
+      <AdditionalFiles Include="@(TranslationToml)" RunicTranslationKind="Toml" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_RunicTranslationsValidateTranslationSources"
+          DependsOnTargets="_RunicTranslationsDiscoverTranslationSources"
+          BeforeTargets="CoreCompile;RunicTranslationsGenerateTranslationArtifacts">
+    <ItemGroup>
+      <_TranslationsCheckedSource Include="@(TranslationProject);@(TranslationMf2);@(TranslationToml)" />
+      <_TranslationsCheckedDirectory Include="@(_TranslationsCheckedSource->'%(RootDir)%(Directory)')" />
+    </ItemGroup>
+    <Error Condition="Exists('%(_TranslationsCheckedSource.Identity)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('%(_TranslationsCheckedSource.Identity)')))), 1024)) != 0"
+           Text="RTR0020: Translation source '%(_TranslationsCheckedSource.Identity)' must not be a symbolic link or reparse point." />
+    <Error Condition="Exists('%(_TranslationsCheckedDirectory.Identity)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('%(_TranslationsCheckedDirectory.Identity)')))), 1024)) != 0"
+           Text="RTR0020: Translation source directory '%(_TranslationsCheckedDirectory.Identity)' must not be a symbolic link or reparse point." />
+  </Target>
 
   <Target Name="_RunicTranslationsValidateTranslationsOutputPath">
     <!-- Defer defaults until target execution: some SDKs finalize IntermediateOutputPath late. -->
@@ -89,7 +124,7 @@
   </Target>
 
   <Target Name="_RunicTranslationsPrepareTranslationsGeneration"
-          DependsOnTargets="_RunicTranslationsReadAndValidateTranslationsInventory">
+          DependsOnTargets="_RunicTranslationsDiscoverTranslationSources;_RunicTranslationsReadAndValidateTranslationsInventory">
     <MakeDir Directories="$(_TranslationsOutputDirectory)" />
     <RemoveDir Directories="$(_TranslationsStagingDirectory)"
                Condition="Exists('$(_TranslationsStagingDirectory)')" />
@@ -103,6 +138,8 @@
       <_TranslationsDesiredStateLine Include="additional-arguments=$(TranslationsToolAdditionalArguments)" />
       <_TranslationsDesiredStateLine Include="output=$(_TranslationsOutputDirectory)" />
       <_TranslationsDesiredStateLine Include="@(TranslationProject->'project=%(FullPath)')" />
+      <_TranslationsDesiredStateLine Include="@(TranslationMf2->'mf2=%(FullPath)')" />
+      <_TranslationsDesiredStateLine Include="@(TranslationToml->'toml=%(FullPath)')" />
     </ItemGroup>
     <WriteLinesToFile File="$(_TranslationsGenerationStatePath)"
                       Lines="@(_TranslationsDesiredStateLine)"
@@ -147,7 +184,7 @@
 
   <!-- This target is reached only after deferred path defaults and generation state exist. -->
   <Target Name="_RunicTranslationsGenerateTranslationArtifactsCore"
-          Inputs="@(TranslationProject);@(TranslationMf2);@(TranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
+          Inputs="@(TranslationProject);@(TranslationMf2);@(TranslationToml);@(TranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
           Outputs="$(TranslationsOutputStamp)">
     <Error Condition="'@(TranslationProject->Count())' &gt; '1'"
            Text="RTR0002: At most one TranslationProject item is supported." />

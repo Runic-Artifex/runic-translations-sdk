@@ -328,16 +328,28 @@ internal static class Program
         }
 
         CompilerInputs inputs = InputFiles.ReadProject(invocation.ProjectPath!);
-        TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(inputs.Project, inputs.Messages);
+        TranslationCompilation compilation = TranslationCompiler.CompileProject(inputs.Project, inputs.Messages);
         WriteDiagnostics(compilation.Diagnostics, result);
         if (!compilation.Success)
         {
             return DiagnosticFailure;
         }
 
+        if (invocation.Command == ToolCommand.Migrate)
+        {
+            string supplied = Path.GetFullPath(invocation.ProjectPath!);
+            string root = Directory.Exists(supplied) ? supplied : Path.GetDirectoryName(supplied)!;
+            TranslationWorkspaceTransactionPlan plan = TranslationWorkspaceMutation.MigrateToLocaleToml(root, compilation.Catalogs[0].Id);
+            foreach (TranslationWorkspaceEdit edit in plan.Edits)
+                result.WriteOutputLine($"{edit.Kind.ToString().ToLowerInvariant()} {edit.RelativePath}");
+            if (!invocation.DryRun) TranslationWorkspaceTransaction.Commit(plan);
+            result.WriteOutputLine(invocation.DryRun ? "migration preview; no files written." : "migrated project to locale TOML.");
+            return Success;
+        }
+
         if (invocation.Command == ToolCommand.Validate)
         {
-            result.WriteOutputLine($"validated {compilation.Catalogs.Count} project(s) and {inputs.Messages.Count} MF2 message(s).");
+            result.WriteOutputLine($"validated {compilation.Catalogs.Count} project(s) and {inputs.Messages.Count} source document(s).");
             return Success;
         }
 
@@ -385,6 +397,7 @@ internal static class Program
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  runic-translations init --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [init-options]");
+        writer.WriteLine("  runic-translations migrate --project <translations-directory> [--dry-run]");
         writer.WriteLine("  runic-translations validate --project <translations-directory>");
         writer.WriteLine("  runic-translations generate --project <translations-directory> --output <directory> [emit-switches]");
         writer.WriteLine("  runic-translations verify --project <translations-directory> --output <directory> [emit-switches]");
@@ -478,6 +491,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         ToolOperationResult result = request.Command switch
         {
             "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter),
+            "migrate" => Program.Execute(new ToolInvocation(ToolCommand.Migrate, null, ToolEmission.None, null, request.Project, request.DryRun)),
             "validate" => ExecuteCompilation(request, ToolCommand.Validate, null, ToolEmission.None),
             "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp)),
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp)),

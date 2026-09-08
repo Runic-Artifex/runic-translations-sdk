@@ -74,7 +74,7 @@
               <span class="grid min-w-0 flex-1 text-left leading-tight">
                 <span class="truncate font-semibold">{catalogId}</span>
                 <span class="truncate text-xs text-muted-foreground">
-                  {localeCount} {localeCount === 1 ? ui.text("ui_project_locale") : ui.text("ui_project_locales")} · {ui.text("ui_project_schema")} v{schemaVersion}
+                  {ui.text("ui_count_project_locales", { count: localeCount, version: schemaVersion })}
                 </span>
               </span>
               <ChevronsUpDownIcon class="ml-auto" aria-hidden="true" />

@@ -8,13 +8,17 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Source-tree analyzer hosts resolve compiler dependencies from this output directory. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <!-- These names deliberately mirror the normative serialized descriptor vocabulary. -->
     <NoWarn>$(NoWarn);CA1720</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Tomlyn" ExcludeAssets="analyzers;build;buildTransitive" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\specs\translations\licenses\Tomlyn-LICENSE.txt" Pack="true" PackagePath="licenses" />
     <None Include="..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
   <Import Project="../../eng/build/translations.targets" />

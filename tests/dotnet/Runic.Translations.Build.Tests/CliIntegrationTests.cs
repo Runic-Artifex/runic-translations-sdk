@@ -9,13 +9,38 @@ internal static class CliIntegrationTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Add("CLI migration previews then preserves generated semantics", MigrationPreservesSemantics);
         runner.Add("CLI help and invalid invocation use stable exit codes", HelpAndUsageExitCodes);
-        runner.Add("CLI init creates and validates a one-locale MF2 project", InitCreatesOneLocaleProject);
+        runner.Add("CLI init creates and validates a one-locale TOML project", InitCreatesOneLocaleProject);
         runner.Add("CLI init creates canonical locale files and explicit fallbacks", InitCreatesMultipleLocales);
         runner.Add("CLI init rejects conflicts without changing the target", InitConflictDoesNotWrite);
-        runner.Add("CLI init supports an empty MF2 project", InitWithoutStarterIsValid);
+        runner.Add("CLI init supports an empty TOML project", InitWithoutStarterIsValid);
         runner.Add("CLI project mode validates and generates conventional MF2", ProjectModeValidatesAndGenerates);
         runner.Add("CLI schema writes exact bundled versioned schemas", SchemaWritesExactSchemas);
+    }
+
+    private static void MigrationPreservesSemantics()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations", "en"));
+        const string manifest = "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}\n";
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), manifest);
+        const string message = ".input {$name :string}\nHello {$name}\n";
+        File.WriteAllText(temporary.Resolve("translations", "en", "Greeting.mf2"), message);
+        ProcessResult before = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated");
+        Assert.Equal(0, before.ExitCode, before.Combined);
+        ProcessResult preview = TestFixture.RunTool(temporary, "migrate", "--project", "translations/runic.json", "--dry-run");
+        Assert.Equal(0, preview.ExitCode, preview.Combined);
+        Assert.Contains("create en.toml", preview.StandardOutput);
+        Assert.Equal(manifest, File.ReadAllText(temporary.Resolve("translations", "runic.json")));
+        Assert.Equal(message, File.ReadAllText(temporary.Resolve("translations", "en", "Greeting.mf2")));
+        Assert.False(File.Exists(temporary.Resolve("translations", "en.toml")), "preview wrote locale TOML");
+        ProcessResult migrate = TestFixture.RunTool(temporary, "migrate", "--project", "translations");
+        Assert.Equal(0, migrate.ExitCode, migrate.Combined);
+        Assert.True(File.Exists(temporary.Resolve("translations", "en.toml")), "migration omitted locale TOML");
+        Assert.False(File.Exists(temporary.Resolve("translations", "en", "Greeting.mf2")), "migration retained mixed-layout input");
+        ProcessResult verify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "generated");
+        Assert.Equal(0, verify.ExitCode, verify.Combined);
     }
 
     private static void ProjectModeValidatesAndGenerates()
@@ -31,7 +56,7 @@ internal static class CliIntegrationTests
 
         ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "translations");
         Assert.Equal(0, validate.ExitCode, validate.Combined);
-        Assert.Contains("2 MF2 message(s)", validate.StandardOutput);
+        Assert.Contains("2 source document(s)", validate.StandardOutput);
 
         ProcessResult generate = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated", "--emit-esm");
         Assert.Equal(0, generate.ExitCode, generate.Combined);
@@ -91,7 +116,7 @@ internal static class CliIntegrationTests
         Assert.Equal(0, create.ExitCode, create.Combined);
         Assert.Contains("created 2 translation file(s)", create.StandardOutput);
         Assert.Equal(
-            "de/application_title.mf2|runic.json",
+            "de.toml|runic.json",
             string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
         ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "Resources");
         Assert.Equal(0, validate.ExitCode, validate.Combined);
@@ -139,7 +164,7 @@ internal static class CliIntegrationTests
 
         Assert.Equal(0, create.ExitCode, create.Combined);
         Assert.Equal(
-            "de-DE/application_title.mf2|en-US/application_title.mf2|fr/application_title.mf2|runic.json",
+            "de-DE.toml|en-US.toml|fr.toml|runic.json",
             string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
         string manifest = File.ReadAllText(temporary.Resolve("Resources", "runic.json"), Encoding.UTF8);
         Assert.Contains("\"en-US\"", manifest);
@@ -189,7 +214,7 @@ internal static class CliIntegrationTests
             "EmptyText",
             "--no-starter");
         Assert.Equal(0, create.ExitCode, create.Combined);
-        Assert.Equal("runic.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
+        Assert.Equal("en.toml|runic.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
         ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "Resources");
         Assert.Equal(0, validate.ExitCode, validate.Combined);
     }

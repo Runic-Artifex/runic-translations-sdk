@@ -70,6 +70,9 @@ public static class TranslationsToolCommandModule
     [Command("init")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Init([FromServices] ITranslationsToolCommandOperations operations, [Option("--directory", Required = true)] string directory, [Option("--catalog", Required = true)] string catalog, [Option("--default-locale", Required = true)] string defaultLocale, [Option("--namespace", Required = true)] string codeNamespace, [Option("--class", Required = true)] string className, [Option("--locale", AllowMultipleValues = true)] IReadOnlyList<string> locales, [Option("--no-starter")] bool noStarter) => operations.Execute(new("init", Directory: directory, Catalog: catalog, DefaultLocale: defaultLocale, Namespace: codeNamespace, ClassName: className, Locales: locales, NoStarter: noStarter));
 
+    [Command("migrate")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    public static CommandOutcome<TranslationsToolCommandResult> Migrate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project, [Option("--dry-run")] bool dryRun) => operations.Execute(new("migrate", Project: project, DryRun: dryRun));
+
     [Command("validate")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Validate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project) => operations.Execute(new("validate", Project: project));
 
@@ -200,7 +203,8 @@ public sealed record TranslationsToolCommandRequest(
     bool EmitTypeScript = false,
     bool EmitTemplateManifest = false,
     bool EmitEsm = false,
-    bool EmitCpp = false);
+    bool EmitCpp = false,
+    bool DryRun = false);
 
 /// <summary>Portable command payload; the standard dispatcher renders its human text or JSON envelope.</summary>
 public sealed record TranslationsToolCommandResult(string Output, string Error) { public override string ToString() => Output; }

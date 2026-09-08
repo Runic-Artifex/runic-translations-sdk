@@ -77,13 +77,13 @@ internal static class EditorDiagnostics
             if (new FileInfo(path).Length > MaximumBundleBytes)
             {
                 File.Delete(path);
-                return new EditorDiagnosticBundleResult(false, null, "The diagnostic bundle exceeded its size limit.");
+                return new EditorDiagnosticBundleResult(false, null, EditorNotice.Create("ui_backend_bundle_size"));
             }
             return new EditorDiagnosticBundleResult(true, path, null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            return new EditorDiagnosticBundleResult(false, null, "The diagnostic bundle could not be created.");
+            return new EditorDiagnosticBundleResult(false, null, EditorNotice.Create("ui_backend_bundle_create"));
         }
     }
 
@@ -91,21 +91,21 @@ internal static class EditorDiagnostics
     {
         string? bundle = OwnedBundle(path);
         if (bundle is null)
-            return new EditorDiagnosticBundleActionResult(false, "That diagnostic bundle is no longer available in this user profile.");
+            return new EditorDiagnosticBundleActionResult(false, EditorNotice.Create("ui_backend_bundle_missing"));
 
         try
         {
             ProcessStartInfo? startInfo = RevealStartInfo(bundle);
             if (startInfo is null)
-                return new EditorDiagnosticBundleActionResult(false, "Revealing diagnostic bundles is not supported on this platform.");
+                return new EditorDiagnosticBundleActionResult(false, EditorNotice.Create("ui_backend_bundle_reveal_unsupported"));
             using var process = Process.Start(startInfo);
             return process is null
-                ? new EditorDiagnosticBundleActionResult(false, "The diagnostic bundle location could not be opened.")
+                ? new EditorDiagnosticBundleActionResult(false, EditorNotice.Create("ui_backend_bundle_reveal"))
                 : new EditorDiagnosticBundleActionResult(true, null);
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            return new EditorDiagnosticBundleActionResult(false, "The diagnostic bundle location could not be opened.");
+            return new EditorDiagnosticBundleActionResult(false, EditorNotice.Create("ui_backend_bundle_reveal"));
         }
     }
 
@@ -113,7 +113,7 @@ internal static class EditorDiagnostics
     {
         string? bundle = OwnedBundle(path);
         if (bundle is null)
-            return new EditorDiagnosticBundleActionResult(false, "That diagnostic bundle is no longer available in this user profile.");
+            return new EditorDiagnosticBundleActionResult(false, EditorNotice.Create("ui_backend_bundle_missing"));
 
         try
         {
@@ -122,7 +122,7 @@ internal static class EditorDiagnostics
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return new EditorDiagnosticBundleActionResult(false, "The diagnostic bundle could not be deleted.");
+            return new EditorDiagnosticBundleActionResult(false, EditorNotice.Create("ui_backend_bundle_delete"));
         }
     }
 

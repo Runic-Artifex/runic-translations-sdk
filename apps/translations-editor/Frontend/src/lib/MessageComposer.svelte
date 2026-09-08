@@ -326,7 +326,7 @@
         {#if message.selectors.some((selector) => selector.function === "plural")}
           <Badge variant="secondary">{ui.text("ui_composer_plural_message")}</Badge>
         {:else if message.selectors.length > 0}
-          <Badge variant="secondary">{message.variants.length} {ui.text("ui_composer_cases")}</Badge>
+          <Badge variant="secondary">{ui.text("ui_count_cases", { count: message.variants.length })}</Badge>
         {/if}
       </div>
       <p class="text-xs leading-relaxed text-muted-foreground">

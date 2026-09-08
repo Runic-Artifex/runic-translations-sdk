@@ -233,6 +233,19 @@ internal static class WorkspaceMutationTests
                     "Customer.Product",
                     "ProductText",
                     additionalLocales)));
+            // This suite deliberately retains legacy CRUD/recovery compatibility coverage.
+            JsonObject config = Read(Path, "runic.json");
+            config.Remove("sourceLayout");
+            File.WriteAllText(System.IO.Path.Combine(Path, "runic.json"), config.ToJsonString());
+            foreach (string localeFile in Directory.EnumerateFiles(Path, "*.toml"))
+            {
+                string locale = System.IO.Path.GetFileNameWithoutExtension(localeFile);
+                var document = TranslationLocaleReader.Read(new TranslationSource(localeFile, File.ReadAllBytes(localeFile)), locale);
+                Directory.CreateDirectory(System.IO.Path.Combine(Path, locale));
+                foreach (var entry in document.Entries)
+                    File.WriteAllBytes(System.IO.Path.Combine(Path, locale, entry.Key + ".mf2"), entry.Message.GetUtf8Bytes());
+                File.Delete(localeFile);
+            }
         }
 
         public string Path { get; }

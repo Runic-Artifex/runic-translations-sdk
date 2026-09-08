@@ -131,9 +131,9 @@ assert(fuzzy.length === 1 && fuzzy[0].id === "approve",
   "Case-insensitive subsequence matching failed across word boundaries.");
 assert(palette.filterCommands(commands, "zzzqx").length === 0,
   "Non-matching queries must produce an empty result set.");
-const jsonMatch = palette.filterCommands(commands, "json").map((entry) => entry.id);
-assert(jsonMatch[0] === "view.mode-raw",
-  "Direct keyword text (json) should surface raw-mode ahead of incidental matches.");
+const sourceMatch = palette.filterCommands(commands, "source").map((entry) => entry.id);
+assert(sourceMatch[0] === "view.mode-raw",
+  "Direct source-mode text should surface raw-mode ahead of incidental matches.");
 
 const grouped = palette.groupCommands(commands);
 assert(grouped.map((group) => group.id).join(",") ===

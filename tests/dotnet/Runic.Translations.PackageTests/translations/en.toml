@@ -1,0 +1,4 @@
+Greeting = '''
+.input {$name :string}
+Hello {$name}
+'''

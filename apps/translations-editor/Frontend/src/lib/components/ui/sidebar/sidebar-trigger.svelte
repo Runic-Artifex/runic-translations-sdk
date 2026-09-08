@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getUiText } from "$lib/ui-text.js";
+	const ui = getUiText();
 	import PanelLeftIcon from '@lucide/svelte/icons/panel-left';
 	import { Button } from "$lib/components/ui/button/index.js";
 	import { cn } from "$lib/utils.js";
@@ -32,5 +34,5 @@
 	{...restProps}
 >
 	<PanelLeftIcon  />
-	<span class="sr-only">Toggle Sidebar</span>
+	<span class="sr-only">{ui.text("ui_a11y_toggle_sidebar")}</span>
 </Button>

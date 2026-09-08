@@ -1,6 +1,6 @@
 # Runic.Translations.Compiler
 
-This internal assembly compiles Runic MF2 projects for the shipping Tooling, Build, and CLI products. It accepts UTF-8 sources, returns deterministic diagnostics and a language-neutral compiled model, and can render C#, JSON, TypeScript, ESM, template manifests, and an experimental C++20 surface.
+This internal assembly compiles Runic locale TOML and legacy MF2 projects for the shipping Tooling, Build, and CLI products. It accepts UTF-8 sources, returns deterministic diagnostics and a language-neutral compiled model, and can render C#, JSON, TypeScript, ESM, template manifests, and an experimental C++20 surface.
 
 ## Install
 
@@ -15,10 +15,10 @@ var project = new TranslationSource(
     "translations/runic.json",
     File.ReadAllBytes("translations/runic.json"));
 var title = new TranslationSource(
-    "translations/en/application_title.mf2",
-    File.ReadAllBytes("translations/en/application_title.mf2"));
+    "translations/en.toml",
+    File.ReadAllBytes("translations/en.toml"));
 
-TranslationCompilation result = TranslationCompiler.CompileMf2Project(project, [title]);
+TranslationCompilation result = TranslationCompiler.CompileProject(project, [title]);
 
 foreach (TranslationDiagnostic diagnostic in result.Diagnostics)
 {
@@ -30,6 +30,8 @@ if (!result.Success)
     Environment.ExitCode = 1;
 }
 ```
+
+For TOML inputs, set `"sourceLayout": "locale-toml"` in `runic.json`. Each flat identifier key in `en.toml` has a string value containing MF2. Omitting the discriminator retains the legacy `{locale}/{message-id}.mf2` layout. See the [locale profile](../../specs/translations/locale-toml-v1.md).
 
 Inputs are copied by `TranslationSource`; pass normalized logical paths when stable diagnostic locations and fingerprints matter. Use `TranslationCompilerOptions` and cancellation for untrusted or interactive inputs rather than increasing the built-in size, depth, locale, key, value, and placeholder limits without a resource budget.
 

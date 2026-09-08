@@ -1,3 +1,9 @@
+export interface EditorNotice {
+  code: string;
+  args: Array<{ name: string; value?: string; number?: number }>;
+  detail?: string;
+}
+
 export interface EditorLocale {
   tag: string;
   fallback?: string;
@@ -27,12 +33,27 @@ export interface EditorCatalog {
   layers: EditorLayer[];
 }
 
+export interface EditorMessageEntry {
+  key: string;
+  content: string;
+  valueStartByte: number;
+  valueLengthBytes: number;
+}
+
+export interface EditorDocumentDraft {
+  success: boolean;
+  content: string;
+  entries: EditorMessageEntry[];
+  diagnostics: EditorDiagnostic[];
+}
+
 export interface EditorDocument {
   path: string;
   content: string;
   revision: string;
   isManifest: boolean;
   isMalformed: boolean;
+  entries?: EditorMessageEntry[];
   locale?: string;
   layer?: string;
 }
@@ -46,6 +67,7 @@ export interface EditorDiagnostic {
   column: number;
   endLine: number;
   endColumn: number;
+  notice?: EditorNotice;
 }
 
 export interface WorkspaceSnapshot {
@@ -99,7 +121,7 @@ export interface EditorReviewSaveRequest {
 
 export interface EditorReviewOperationResult {
   ok: boolean;
-  message?: string;
+  message?: EditorNotice;
   review?: EditorReviewSnapshot;
   history?: EditorHistoryState;
 }
@@ -107,8 +129,8 @@ export interface EditorReviewOperationResult {
 export interface EditorHistoryState {
   canUndo: boolean;
   canRedo: boolean;
-  undoLabel?: string;
-  redoLabel?: string;
+  undoLabel?: EditorNotice;
+  redoLabel?: EditorNotice;
 }
 
 export interface EditorAbout {
@@ -125,12 +147,12 @@ export interface EditorAbout {
 export interface EditorDiagnosticBundleResult {
   ok: boolean;
   path?: string;
-  message?: string;
+  message?: EditorNotice;
 }
 
 export interface EditorDiagnosticBundleActionResult {
   ok: boolean;
-  message?: string;
+  message?: EditorNotice;
 }
 
 export interface EditorLocalStateEntry {
@@ -163,7 +185,7 @@ export interface EditorMessagePreview {
 export interface EditorOperationResult {
   ok: boolean;
   kind: string;
-  message?: string;
+  message?: EditorNotice;
   snapshot?: WorkspaceSnapshot;
   validation?: ValidationResult;
   history?: EditorHistoryState;
@@ -186,7 +208,7 @@ export interface EditorProjectCreationRequest {
 
 export interface EditorProjectPlan {
   ok: boolean;
-  message?: string;
+  message?: EditorNotice;
   directory: string;
   catalogId: string;
   locales: EditorLocale[];
@@ -215,7 +237,7 @@ export interface EditorWorkspacePickerResult {
   ok: boolean;
   cancelled: boolean;
   directory?: string;
-  message?: string;
+  message?: EditorNotice;
 }
 
 export interface EditorMutationRequest {
@@ -239,7 +261,7 @@ export interface EditorMutationFile {
 
 export interface EditorMutationPreview {
   ok: boolean;
-  message?: string;
+  message?: EditorNotice;
   files: EditorMutationFile[];
   requiresIrreversibleConfirmation: boolean;
   confirmationToken?: string;
@@ -254,7 +276,7 @@ export interface EditorInterchangeLoss {
 
 export interface EditorInterchangeRefusal {
   code: string;
-  message: string;
+  message: EditorNotice;
 }
 
 export interface EditorInterchangeFile {
@@ -265,7 +287,7 @@ export interface EditorInterchangeFile {
 
 export interface EditorXliffExportResult {
   ok: boolean;
-  message?: string;
+  message?: EditorNotice;
   catalogId?: string;
   documents: EditorInterchangeFile[];
   losses: EditorInterchangeLoss[];
@@ -274,7 +296,7 @@ export interface EditorXliffExportResult {
 
 export interface EditorReviewFileResult {
   ok: boolean;
-  message?: string;
+  message?: EditorNotice;
   path?: string;
   entryCount: number;
 }
@@ -292,7 +314,7 @@ export interface EditorKeyChange {
 
 export interface EditorXliffImportPreview {
   ok: boolean;
-  message?: string;
+  message?: EditorNotice;
   requiresIrreversibleConfirmation: boolean;
   confirmationToken?: string;
   catalogId?: string;
@@ -321,7 +343,7 @@ export interface EditorReviewChange {
 
 export interface EditorReviewImportPreview {
   ok: boolean;
-  message?: string;
+  message?: EditorNotice;
   requiresIrreversibleConfirmation: boolean;
   confirmationToken?: string;
   catalogId?: string;

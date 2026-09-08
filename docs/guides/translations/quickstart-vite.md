@@ -19,12 +19,14 @@ restores the same compiler with `dotnet tool restore`.
 ```text
 translations/
 ├── runic.json
-├── en/application_title.mf2
-└── de/application_title.mf2
+├── en.toml
+└── de.toml
 ```
 
 Declare the catalog, C# names, and base locale once in `translations/runic.json`.
-Locale folders are inferred by default. See the [MF2 project convention](mf2-projects.md)
+Set `sourceLayout` to `"locale-toml"`; locale tags come from the TOML filenames.
+Each locale file contains entries such as `application_title = 'Runic application'`.
+See the [TOML locale project convention](mf2-projects.md)
 for the complete config and supported authoring syntax. Add `.runic/` to
 `.gitignore` when Vite owns generation.
 
@@ -41,7 +43,8 @@ export default defineConfig({
 ```
 
 The plugin discovers `translations/runic.json`, runs the pinned local tool before
-Vite loads generated modules, and watches the config and all `.mf2` files. A
+Vite loads generated modules, and watches the config and locale `.toml` files,
+including file additions and removals. A
 watched authoring change is compiled before the virtual modules are invalidated.
 
 ## 4. Render a message
@@ -52,7 +55,7 @@ import { m } from 'virtual:runic-translations/app';
 document.querySelector('#app')!.textContent = m.application_title();
 ```
 
-Message filenames are identifier-safe, so normal calls use property access.
+Message keys are identifier-safe, so normal calls use property access.
 
 ## 5. Validate in CI
 

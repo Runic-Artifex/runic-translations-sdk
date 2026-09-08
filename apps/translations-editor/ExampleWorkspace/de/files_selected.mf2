@@ -1,4 +1,0 @@
-.input {$count :integer select=plural}
-.match $count
-one {{Eine Datei ausgewählt}}
-* {{{$count} Dateien ausgewählt}}

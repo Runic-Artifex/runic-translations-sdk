@@ -104,6 +104,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         InputKind kind;
         if (string.Equals(kindValue, "Project", StringComparison.Ordinal)) kind = InputKind.Project;
         else if (string.Equals(kindValue, "Mf2", StringComparison.Ordinal)) kind = InputKind.Mf2;
+        else if (string.Equals(kindValue, "Toml", StringComparison.Ordinal)) kind = InputKind.Toml;
         else return default;
 
         SourceText? sourceText = additionalText.GetText(cancellationToken);
@@ -132,7 +133,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     private static void Generate(SourceProductionContext context, IEnumerable<GeneratorInput> inputs)
     {
         var projects = new List<TranslationSource>();
-        var mf2Messages = new List<TranslationSource>();
+        var messages = new List<TranslationSource>();
         var sourceTexts = new Dictionary<string, SourceText>(StringComparer.Ordinal);
 
         var materializedInputs = new List<GeneratorInput>();
@@ -158,10 +159,10 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             sourceTexts[input.Path] = sourceText;
             var source = new TranslationSource(input.Path, new UTF8Encoding(false, true).GetBytes(input.Text));
             if (input.Kind == InputKind.Project) projects.Add(source);
-            else mf2Messages.Add(source);
+            else messages.Add(source);
         }
 
-        if (projects.Count == 0 && mf2Messages.Count == 0) return;
+        if (projects.Count == 0 && messages.Count == 0) return;
         if (projects.Count != 1)
         {
             context.ReportDiagnostic(Diagnostic.Create(
@@ -170,7 +171,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 "Exactly one Runic translation project must be supplied."));
             return;
         }
-        TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(projects[0], mf2Messages, null, context.CancellationToken);
+        TranslationCompilation compilation = TranslationCompiler.CompileProject(projects[0], messages, null, context.CancellationToken);
 
         bool hasErrors = false;
         for (int i = 0; i < compilation.Diagnostics.Count; i++)
@@ -271,6 +272,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         None,
         Project,
         Mf2,
+        Toml,
     }
 
     private readonly struct GeneratorInput : IEquatable<GeneratorInput>

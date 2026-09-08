@@ -1,4 +1,5 @@
-import type { EditorDocument, WorkspaceSnapshot } from "./contracts";
+import type { UiText } from "./ui-text";
+import type { EditorDocument, EditorMessageEntry, WorkspaceSnapshot } from "./contracts";
 
 export type ResourceValue = string | Record<string, unknown>;
 
@@ -30,6 +31,7 @@ const newMf2DocumentRevision = "new-mf2-document";
 export function buildRows(
   snapshot: WorkspaceSnapshot | undefined,
   drafts: Record<string, string>,
+  parsedDrafts: Record<string, { content: string; entries: EditorMessageEntry[] }> = {},
 ): TranslationRow[] {
   if (snapshot?.catalog === undefined) return [];
   const documents = snapshot.documents.filter((document) => !document.isManifest);
@@ -52,7 +54,9 @@ export function buildRows(
     const entryDocuments = new Map<string, EditorDocument>();
     for (const document of [...(byLocale.get(locale.tag) ?? [])].reverse()) {
       const content = drafts[document.path] ?? document.content;
-      for (const entry of flattenDocument(content, document.path)) {
+      const parsed = parsedDrafts[document.path];
+      const messageEntries = parsed?.content === content ? parsed.entries : document.entries;
+      for (const entry of flattenDocument(content, document.path, messageEntries)) {
         entries.set(entry.key, entry);
         entryDocuments.set(entry.key, document);
       }
@@ -72,7 +76,7 @@ export function buildRows(
       cells[locale.tag] = {
         document: documentsByLocale.get(locale.tag)?.get(key) ??
           (mf2Manifest !== undefined
-            ? missingMf2Document(mf2Manifest, locale.tag, key)
+            ? missingMessageDocument(mf2Manifest, locale.tag, key, primaryDocument(byLocale.get(locale.tag) ?? []))
             : primaryDocument(byLocale.get(locale.tag) ?? [])),
         entry,
         inheritedFrom: entry === undefined ? fallbackWithValue(snapshot, entriesByLocale, locale.tag, key) : undefined,
@@ -88,16 +92,20 @@ export function buildRows(
   });
 }
 
-function missingMf2Document(
+function missingMessageDocument(
   manifest: EditorDocument | undefined,
   locale: string,
   key: string,
+  existing?: EditorDocument,
 ): EditorDocument | undefined {
   if (manifest === undefined) return undefined;
   const separator = manifest.path.lastIndexOf("/");
   const directory = separator < 0 ? "" : manifest.path.slice(0, separator + 1);
+  let localeToml = false;
+  try { localeToml = JSON.parse(manifest.content).sourceLayout === "locale-toml"; } catch { /* Invalid manifest is diagnosed by the compiler. */ }
+  if (localeToml && existing !== undefined) return existing;
   return {
-    path: `${directory}${locale}/${key}.mf2`,
+    path: localeToml ? `${directory}${locale}.toml` : `${directory}${locale}/${key}.mf2`,
     content: "",
     revision: newMf2DocumentRevision,
     isManifest: false,
@@ -121,11 +129,11 @@ export function formatJson(content: string): string {
   return `${content.replaceAll("\r\n", "\n").trimEnd()}\n`;
 }
 
-export function preview(entry: ResourceEntry | undefined): string {
-  if (entry === undefined) return "Not translated";
+export function preview(entry: ResourceEntry | undefined, ui?: UiText): string {
+  if (entry === undefined) return ui?.text("ui_resource_not_translated") ?? "";
   if (typeof entry.value === "string") return entry.value;
   const variants = Array.isArray(entry.value.variants) ? entry.value.variants.length : 0;
-  return variants === 1 ? "Structured message · 1 variant" : `Structured message · ${variants} variants`;
+  return ui?.text("ui_count_resource_variants", { count: variants }) ?? String(variants);
 }
 
 export function coverage(rows: TranslationRow[], locale: string): { translated: number; total: number } {
@@ -135,8 +143,12 @@ export function coverage(rows: TranslationRow[], locale: string): { translated: 
   };
 }
 
-function flattenDocument(content: string, path: string): ResourceEntry[] {
-  if (!path.endsWith(".mf2")) return [];
+function flattenDocument(content: string, path: string, entries?: EditorMessageEntry[]): ResourceEntry[] {
+  if (path.toLowerCase().endsWith(".toml")) return (entries ?? []).map((entry) => ({
+    key: entry.key, value: entry.content, tags: [],
+    structured: /^\s*\.(?:input|local|match)\b/m.test(entry.content) || entry.content.includes("{#"),
+  }));
+  if (!path.toLowerCase().endsWith(".mf2")) return [];
   const key = path.slice(path.lastIndexOf("/") + 1, -".mf2".length);
   return [{ key, value: content, tags: [], structured: /^\s*\.(?:input|local|match)\b/m.test(content) || content.includes("{#") }];
 }

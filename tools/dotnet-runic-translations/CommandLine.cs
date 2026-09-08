@@ -11,6 +11,7 @@ internal enum ToolCommand
     Help,
     Init,
     Validate,
+    Migrate,
     Generate,
     Verify,
     Schema,
@@ -34,7 +35,8 @@ internal sealed record ToolInvocation(
     string? OutputPath,
     ToolEmission Emission,
     TranslationProjectCreationRequest? ProjectCreation,
-    string? ProjectPath = null);
+    string? ProjectPath = null,
+    bool DryRun = false);
 
 internal static class CommandLine
 {

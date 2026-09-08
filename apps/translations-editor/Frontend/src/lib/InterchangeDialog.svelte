@@ -12,7 +12,7 @@
   import * as Field from "$lib/components/ui/field/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Spinner } from "$lib/components/ui/spinner/index.js";
-  import { getUiText } from "$lib/ui-text";
+  import { getUiText, displayNotice } from "$lib/ui-text";
 
   let {
     open = $bindable(false),
@@ -53,7 +53,7 @@
   const ui = getUiText();
 
   const summary = (added: number, changed: number, removed: number): string =>
-    `${added} ${ui.text("ui_interchange_added")} · ${changed} ${ui.text("ui_interchange_changed")} · ${removed} ${ui.text("ui_interchange_absent_from_import")}`;
+    ui.text("ui_interchange_summary", { added, changed, removed });
 </script>
 
 <AppDialog
@@ -76,7 +76,7 @@
       <Button variant="outline" disabled={busy} onclick={onexportxliff}>{ui.text("ui_interchange_export_xliff")}</Button>
       {#if xliffExport !== undefined}
         <section class="grid gap-2" aria-live="polite">
-          <p class={xliffExport.ok ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm text-destructive"}>{xliffExport.message ?? (xliffExport.ok ? `${ui.text("ui_interchange_exported")} ${xliffExport.documents.length} ${ui.text("ui_interchange_files")}.` : ui.text("ui_interchange_xliff_export_failed"))}</p>
+          <p class={xliffExport.ok ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm text-destructive"}>{(xliffExport.message === undefined ? undefined : displayNotice(xliffExport.message, ui)) ?? (xliffExport.ok ? ui.text("ui_count_exported_files", { count: xliffExport.documents.length }) : ui.text("ui_interchange_xliff_export_failed"))}</p>
           {#if xliffExport.documents.length > 0}
             <ul class="text-sm">{#each xliffExport.documents as file (file.path)}<li><code>{file.path}</code> <span class="text-muted-foreground">· {file.locale} · {file.byteCount} {ui.text("ui_interchange_bytes")}</span></li>{/each}</ul>
           {/if}
@@ -95,9 +95,9 @@
       <Button disabled={busy || xliffImportPath.trim() === ""} onclick={onpreviewxliff}>{#if busy}<Spinner data-icon="inline-start" />{/if}{ui.text("ui_interchange_preview_xliff_import")}</Button>
       {#if xliffPreview !== undefined}
         <section class="grid gap-2" aria-live="polite">
-          <p class={xliffPreview.ok ? "text-sm text-muted-foreground" : "text-sm text-destructive"}>{xliffPreview.message ?? (xliffPreview.ok ? `${xliffPreview.targetLocale ?? ui.text("ui_interchange_target")} · ${xliffPreview.layer ?? ui.text("ui_interchange_default_layer")} · ${summary(xliffPreview.addedCount, xliffPreview.changedCount, xliffPreview.removedCount)}` : ui.text("ui_interchange_xliff_import_refused"))}</p>
+          <p class={xliffPreview.ok ? "text-sm text-muted-foreground" : "text-sm text-destructive"}>{(xliffPreview.message === undefined ? undefined : displayNotice(xliffPreview.message, ui)) ?? (xliffPreview.ok ? `${xliffPreview.targetLocale ?? ui.text("ui_interchange_target")} · ${xliffPreview.layer ?? ui.text("ui_interchange_default_layer")} · ${summary(xliffPreview.addedCount, xliffPreview.changedCount, xliffPreview.removedCount)}` : ui.text("ui_interchange_xliff_import_refused"))}</p>
           {#if xliffPreview.refusals.length > 0}
-            <Alert.Root variant="destructive"><Alert.Title>{ui.text("ui_interchange_import_refusal")}</Alert.Title><Alert.Description><ul>{#each xliffPreview.refusals as refusal (refusal.code)}<li><Badge variant="destructive">{refusal.code}</Badge> {refusal.message}</li>{/each}</ul></Alert.Description></Alert.Root>
+            <Alert.Root variant="destructive"><Alert.Title>{ui.text("ui_interchange_import_refusal")}</Alert.Title><Alert.Description><ul>{#each xliffPreview.refusals as refusal (refusal.code)}<li><Badge variant="destructive">{refusal.code}</Badge> {displayNotice(refusal.message, ui)}</li>{/each}</ul></Alert.Description></Alert.Root>
           {/if}
           {#if xliffPreview.changes.length > 0}
             <div class="max-h-48 overflow-auto rounded border text-sm"><table><thead><tr><th>{ui.text("ui_interchange_key")}</th><th>{ui.text("ui_interchange_change")}</th><th>{ui.text("ui_interchange_before_after")}</th></tr></thead><tbody>{#each xliffPreview.changes as change (`${change.key}:${change.kind}`)}<tr><td><code>{change.key}</code></td><td>{change.kind}</td><td>{change.kind === "state-change" ? `${change.stateBefore ?? "draft"} → ${change.stateAfter ?? "draft"}` : `${change.before ?? "—"} → ${change.after ?? "—"}`}</td></tr>{/each}</tbody></table></div>
@@ -118,7 +118,7 @@
         <Input id="review-export-path" bind:value={reviewPath} placeholder="interchange/review.json (default)" autocomplete="off" />
       </Field.Field>
       <Button variant="outline" disabled={busy} onclick={onexportreview}>{ui.text("ui_interchange_export_review_json")}</Button>
-      {#if reviewExport !== undefined}<p class={reviewExport.ok ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm text-destructive"}>{reviewExport.message ?? (reviewExport.ok ? `${ui.text("ui_interchange_exported")} ${reviewExport.entryCount} ${ui.text("ui_interchange_review_entries")} ${ui.text("ui_interchange_to")} ${reviewExport.path}.` : ui.text("ui_interchange_review_export_failed"))}</p>{/if}
+      {#if reviewExport !== undefined}<p class={reviewExport.ok ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm text-destructive"}>{(reviewExport.message === undefined ? undefined : displayNotice(reviewExport.message, ui)) ?? (reviewExport.ok ? ui.text("ui_count_exported_reviews", { count: reviewExport.entryCount, path: reviewExport.path ?? "" }) : ui.text("ui_interchange_review_export_failed"))}</p>{/if}
       <Field.Field>
         <Field.Label for="review-import-path">{ui.text("ui_interchange_review_file_to_import")}</Field.Label>
         <Input id="review-import-path" bind:value={reviewImportPath} placeholder="interchange/review.json" autocomplete="off" />
@@ -126,9 +126,9 @@
       <Button disabled={busy || reviewImportPath.trim() === ""} onclick={onpreviewreview}>{#if busy}<Spinner data-icon="inline-start" />{/if}{ui.text("ui_interchange_preview_review_import")}</Button>
       {#if reviewPreview !== undefined}
         <section class="grid gap-2" aria-live="polite">
-          <p class={reviewPreview.ok ? "text-sm text-muted-foreground" : "text-sm text-destructive"}>{reviewPreview.message ?? (reviewPreview.ok ? summary(reviewPreview.addedCount, reviewPreview.changedCount, reviewPreview.removedCount) : ui.text("ui_interchange_review_import_refused"))}</p>
+          <p class={reviewPreview.ok ? "text-sm text-muted-foreground" : "text-sm text-destructive"}>{(reviewPreview.message === undefined ? undefined : displayNotice(reviewPreview.message, ui)) ?? (reviewPreview.ok ? summary(reviewPreview.addedCount, reviewPreview.changedCount, reviewPreview.removedCount) : ui.text("ui_interchange_review_import_refused"))}</p>
           {#if reviewPreview.refusals.length > 0}
-            <Alert.Root variant="destructive"><Alert.Title>{ui.text("ui_interchange_import_refusal")}</Alert.Title><Alert.Description><ul>{#each reviewPreview.refusals as refusal (refusal.code)}<li><Badge variant="destructive">{refusal.code}</Badge> {refusal.message}</li>{/each}</ul></Alert.Description></Alert.Root>
+            <Alert.Root variant="destructive"><Alert.Title>{ui.text("ui_interchange_import_refusal")}</Alert.Title><Alert.Description><ul>{#each reviewPreview.refusals as refusal (refusal.code)}<li><Badge variant="destructive">{refusal.code}</Badge> {displayNotice(refusal.message, ui)}</li>{/each}</ul></Alert.Description></Alert.Root>
           {/if}
           {#if reviewPreview.changes.length > 0}
             <div class="max-h-48 overflow-auto rounded border text-sm"><table><thead><tr><th>{ui.text("ui_interchange_key")}</th><th>{ui.text("ui_interchange_locale")}</th><th>{ui.text("ui_interchange_change")}</th><th>{ui.text("ui_interchange_state")}</th></tr></thead><tbody>{#each reviewPreview.changes as change (`${change.key}:${change.locale}:${change.kind}`)}<tr><td><code>{change.key}</code></td><td>{change.locale}</td><td>{change.kind}</td><td>{change.stateBefore ?? "—"} → {change.stateAfter ?? "—"}</td></tr>{/each}</tbody></table></div>

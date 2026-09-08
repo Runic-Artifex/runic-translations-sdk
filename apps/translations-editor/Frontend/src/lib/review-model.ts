@@ -1,3 +1,4 @@
+import type { UiText } from "./ui-text";
 import type {
   EditorReviewEntry,
   EditorReviewState,
@@ -58,6 +59,7 @@ export function qualityIssues(
   locale: string,
   reviewEntries: EditorReviewEntry[],
   terminology: EditorTerminologyEntry[],
+  ui?: UiText,
 ): QualityIssue[] {
   const reviews = reviewMap(reviewEntries);
   const result: QualityIssue[] = [];
@@ -65,15 +67,15 @@ export function qualityIssues(
     const source = row.cells[sourceLocale]?.entry?.value;
     const target = row.cells[locale]?.entry?.value;
     if (target === undefined) {
-      result.push({ kind: "missing", key: row.key, locale, message: "Translation is missing." });
+      result.push({ kind: "missing", key: row.key, locale, message: (ui?.text("ui_quality_missing") ?? "Translation is missing.") });
       continue;
     }
     if (typeof source === "string" && typeof target === "string") {
       if (locale !== sourceLocale && source.trim().length > 0 && target === source) {
-        result.push({ kind: "identical", key: row.key, locale, message: "Translation is identical to the source." });
+        result.push({ kind: "identical", key: row.key, locale, message: (ui?.text("ui_quality_identical") ?? "Translation is identical to the source.") });
       }
       if (target !== target.trim()) {
-        result.push({ kind: "whitespace", key: row.key, locale, message: "Translation has leading or trailing whitespace." });
+        result.push({ kind: "whitespace", key: row.key, locale, message: (ui?.text("ui_quality_whitespace") ?? "Translation has leading or trailing whitespace.") });
       }
       for (const term of terminology) {
         if (term.locale !== undefined && term.locale !== locale) continue;
@@ -81,14 +83,14 @@ export function qualityIssues(
             !target.toLocaleLowerCase().includes(term.preferred.toLocaleLowerCase())) {
           result.push({
             kind: "terminology", key: row.key, locale,
-            message: "Preferred term '" + term.preferred + "' is missing.",
+            message: ui?.text("ui_quality_terminology", { term: term.preferred }) ?? "Preferred term '" + term.preferred + "' is missing.",
           });
         }
       }
     }
     const review = reviews.get(reviewIdentity(row.key, locale));
     if (isStale(review, source)) {
-      result.push({ kind: "stale", key: row.key, locale, message: "Source changed after this review state was recorded." });
+      result.push({ kind: "stale", key: row.key, locale, message: (ui?.text("ui_quality_stale") ?? "Source changed after this review state was recorded.") });
     }
   }
   return result.sort((left, right) =>
@@ -105,6 +107,7 @@ const strongRtlPattern = /[\u{0590}-\u{08FF}\u{FB1D}-\u{FDFF}\u{FE70}-\u{FEFF}]/
 export function bidiIssues(
   entries: ReadonlyArray<{ key: string; locale: string; text: string }>,
   context: "ltr" | "rtl",
+  ui?: UiText,
 ): QualityIssue[] {
   const result: QualityIssue[] = [];
   for (const entry of entries) {
@@ -116,8 +119,8 @@ export function bidiIssues(
       key: entry.key,
       locale: entry.locale,
       message: hasControls
-        ? "Translation contains invisible bidirectional control characters."
-        : "Translation mixes left-to-right and right-to-left runs; verify it under right-to-left simulation.",
+        ? (ui?.text("ui_quality_bidi_controls") ?? "Translation contains invisible bidirectional control characters.")
+        : (ui?.text("ui_quality_bidi_mixed") ?? "Translation mixes left-to-right and right-to-left runs; verify it under right-to-left simulation."),
     });
   }
   return result.sort((left, right) =>

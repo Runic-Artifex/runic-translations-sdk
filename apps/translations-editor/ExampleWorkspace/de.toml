@@ -1,0 +1,4 @@
+common_cancel = "Abbrechen\n"
+common_save = "Speichern\n"
+dashboard_welcome = ".input {$name :string}\nWillkommen zurück, {$name}\n"
+files_selected = ".input {$count :integer select=plural}\n.match $count\none {{Eine Datei ausgewählt}}\n* {{{$count} Dateien ausgewählt}}\n"

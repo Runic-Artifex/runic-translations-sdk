@@ -61,7 +61,7 @@ internal sealed class EditorSession : IDisposable
         }
         catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
-            return new EditorMutationPreview(false, exception.Message, []);
+            return new EditorMutationPreview(false, EditorNotice.FromException(exception), []);
         }
         finally
         {
@@ -80,13 +80,13 @@ internal sealed class EditorSession : IDisposable
             ThrowIfDisposed();
             WorkspaceSnapshot current = await _workspace.LoadAsync(cancellationToken).ConfigureAwait(false);
             if (current.PendingTransaction is not null)
-                return Failure("recovery-required", "Recover the interrupted transaction before making another change.");
+                return Failure("recovery-required", EditorNotice.Create("ui_backend_recovery_change"));
             TranslationWorkspaceTransactionPlan plan = PlanMutation(_workspace, request);
             if (!MatchesPreparedDestructiveMutation(request, plan))
             {
                 _preparedDestructiveMutation = null;
                 InvalidatePreparedImports();
-                return Failure("irreversible-confirmation", "Preview this destructive change again and confirm the exact affected files.");
+                return Failure("irreversible-confirmation", EditorNotice.Create("ui_backend_confirm_change"));
             }
             // A validated token is one-use even if the transaction cannot commit.
             // It must never be replayed after a partial transaction/recovery path.
@@ -103,12 +103,12 @@ internal sealed class EditorSession : IDisposable
             }
             catch (Exception exception) when (IsReloadFailure(exception))
             {
-                return new EditorOperationResult(true, "mutated", $"The change was committed; reload the workspace to refresh it. {exception.Message}", null, null, _history.State);
+                return new EditorOperationResult(true, "mutated", EditorNotice.Create("ui_backend_committed_reload") with { Detail = exception.Message }, null, null, _history.State);
             }
         }
         catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
-            return new EditorOperationResult(false, "workspace-mutation", exception.Message, null, null);
+            return new EditorOperationResult(false, "workspace-mutation", EditorNotice.FromException(exception), null, null);
         }
         finally
         {
@@ -129,7 +129,7 @@ internal sealed class EditorSession : IDisposable
             {
                 "complete" => TranslationWorkspaceRecoveryMode.Complete,
                 "rollback" => TranslationWorkspaceRecoveryMode.Rollback,
-                _ => throw new ArgumentException("Recovery mode must be 'complete' or 'rollback'."),
+                _ => throw new EditorUserException(EditorNotice.Create("ui_backend_recovery_mode")),
             };
             _history.Clear();
             _preparedDestructiveMutation = null;
@@ -142,18 +142,22 @@ internal sealed class EditorSession : IDisposable
             }
             catch (Exception exception) when (IsReloadFailure(exception))
             {
-                return new EditorOperationResult(true, "recovered", $"Recovery completed; reload the workspace to refresh it. {exception.Message}", null, null, _history.State);
+                return new EditorOperationResult(true, "recovered", EditorNotice.Create("ui_backend_recovered_reload") with { Detail = exception.Message }, null, null, _history.State);
             }
         }
         catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
-            return new EditorOperationResult(false, "workspace-recovery", exception.Message, null, null);
+            return new EditorOperationResult(false, "workspace-recovery", EditorNotice.FromException(exception), null, null);
         }
         finally
         {
             _gate.Release();
         }
     }
+
+    public Task<EditorDocumentDraft> TransformDocumentAsync(string relativePath, string content,
+        string? key, string? value, CancellationToken cancellationToken = default) =>
+        WithWorkspaceAsync((workspace, token) => workspace.TransformDocumentAsync(relativePath, content, key, value, token), cancellationToken);
 
     public Task<ValidationResult> ValidateAsync(
         string relativePath,
@@ -186,7 +190,7 @@ internal sealed class EditorSession : IDisposable
             string path = _workspace.NormalizeDocumentPath(relativePath);
             WorkspaceSnapshot before = await _workspace.LoadAsync(cancellationToken).ConfigureAwait(false);
             if (before.PendingTransaction is not null)
-                return Failure("recovery-required", "Recover the interrupted transaction before saving a document.");
+                return Failure("recovery-required", EditorNotice.Create("ui_backend_recovery_save"));
             EditorDocument? original = before.Documents.SingleOrDefault(document => document.Path == path);
             EditorOperationResult result = await _workspace.SaveAsync(path, content, expectedRevision, CancellationToken.None).ConfigureAwait(false);
             if (!result.Ok)
@@ -210,12 +214,12 @@ internal sealed class EditorSession : IDisposable
             }
             catch (Exception exception) when (IsReloadFailure(exception))
             {
-                return new EditorOperationResult(true, "saved", $"The document was saved; reload the workspace to refresh it. {exception.Message}", null, null, _history.State);
+                return new EditorOperationResult(true, "saved", EditorNotice.Create("ui_backend_saved_reload") with { Detail = exception.Message }, null, null, _history.State);
             }
         }
         catch (ArgumentException exception)
         {
-            return Failure("invalid-request", exception.Message);
+            return Failure("invalid-request", EditorNotice.FromException(exception));
         }
         finally
         {
@@ -234,7 +238,7 @@ internal sealed class EditorSession : IDisposable
             ThrowIfDisposed();
             WorkspaceSnapshot before = await _workspace.LoadAsync(cancellationToken).ConfigureAwait(false);
             if (before.PendingTransaction is not null)
-                return new EditorReviewOperationResult(false, "Recover the interrupted transaction before saving workflow data.", null, _history.State);
+                return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_recovery_review"), null, _history.State);
             EditorReviewSnapshot? previous = before.Review;
             EditorReviewOperationResult result = await _workspace.SaveReviewAsync(request, CancellationToken.None).ConfigureAwait(false);
             if (result.Ok && result.Review is not null && previous is not null)
@@ -302,7 +306,7 @@ internal sealed class EditorSession : IDisposable
         {
             ThrowIfDisposed();
             if (_preparedXliffImport is not { } prepared || !string.Equals(prepared.Token, confirmationToken, StringComparison.Ordinal))
-                return Failure("irreversible-confirmation", "Preview this import again to obtain a valid confirmation token.");
+                return Failure("irreversible-confirmation", EditorNotice.Create("ui_backend_confirm_import"));
             // One-use even when the commit fails partway.
             _preparedXliffImport = null;
             EditorOperationResult result = await _workspace.CommitXliffImportAsync(prepared.Prepared, CancellationToken.None).ConfigureAwait(false);
@@ -342,7 +346,7 @@ internal sealed class EditorSession : IDisposable
         {
             ThrowIfDisposed();
             if (_preparedReviewImport is not { } prepared || !string.Equals(prepared.Token, confirmationToken, StringComparison.Ordinal))
-                return new EditorReviewOperationResult(false, "Preview this import again to obtain a valid confirmation token.", null, _history.State);
+                return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_confirm_import"), null, _history.State);
             _preparedReviewImport = null;
             EditorReviewOperationResult result = await _workspace.CommitReviewImportAsync(prepared.Prepared, CancellationToken.None).ConfigureAwait(false);
             if (result.Ok && result.Review is not null)
@@ -434,7 +438,7 @@ internal sealed class EditorSession : IDisposable
         }
         catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException)
         {
-            return new EditorProjectPlan(false, exception.Message, request.Directory, request.CatalogId, [], []);
+            return new EditorProjectPlan(false, EditorNotice.FromException(exception), request.Directory, request.CatalogId, [], []);
         }
     }
 
@@ -469,7 +473,7 @@ internal sealed class EditorSession : IDisposable
         }
         catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
-            return new EditorOperationResult(false, "project-creation", exception.Message, null, null);
+            return new EditorOperationResult(false, "project-creation", EditorNotice.FromException(exception), null, null);
         }
         finally
         {
@@ -506,7 +510,7 @@ internal sealed class EditorSession : IDisposable
         }
         catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
-            return new EditorOperationResult(false, "workspace-open", exception.Message, null, null);
+            return new EditorOperationResult(false, "workspace-open", EditorNotice.FromException(exception), null, null);
         }
         finally
         {
@@ -550,7 +554,7 @@ internal sealed class EditorSession : IDisposable
     private static TranslationWorkspaceTransactionPlan PlanMutation(EditorWorkspace workspace, EditorMutationRequest request)
     {
         string catalogId = workspace.CatalogId
-            ?? throw new TranslationAuthoringException("Select a catalog before changing locales or keys.");
+            ?? throw new EditorUserException(EditorNotice.Create("ui_backend_select_catalog_mutation"));
         return request.Kind switch
         {
             "add-locale" => TranslationWorkspaceMutation.AddLocale(new TranslationAddLocaleRequest(
@@ -565,7 +569,7 @@ internal sealed class EditorSession : IDisposable
             "rename-key" => KeyMutation(TranslationKeyMutationKind.RenameOrMove),
             "duplicate-key" => KeyMutation(TranslationKeyMutationKind.Duplicate),
             "delete-key" => KeyMutation(TranslationKeyMutationKind.Delete),
-            _ => throw new TranslationAuthoringException($"Unknown editor mutation '{request.Kind}'."),
+            _ => throw new EditorUserException(EditorNotice.Create("ui_backend_unknown_mutation", ("kind", request.Kind))),
         };
 
         TranslationWorkspaceTransactionPlan KeyMutation(TranslationKeyMutationKind kind) =>
@@ -601,21 +605,21 @@ internal sealed class EditorSession : IDisposable
             ThrowIfDisposed();
             WorkspaceSnapshot current = await _workspace.LoadAsync(cancellationToken).ConfigureAwait(false);
             if (current.PendingTransaction is not null)
-                return Failure("recovery-required", "Recover the interrupted transaction before changing history.");
+                return Failure("recovery-required", EditorNotice.Create("ui_backend_recovery_history"));
             EditorHistory.Entry entry;
             bool found = undo ? _history.TryBeginUndo(out entry) : _history.TryBeginRedo(out entry);
-            if (!found) return Failure(undo ? "nothing-to-undo" : "nothing-to-redo", undo ? "There is no saved change to undo." : "There is no saved change to redo.");
+            if (!found) return Failure(undo ? "nothing-to-undo" : "nothing-to-redo", undo ? EditorNotice.Create("ui_backend_no_undo") : EditorNotice.Create("ui_backend_no_redo"));
 
             return entry switch
             {
                 EditorHistory.SaveEntry save => await ApplySaveHistoryAsync(save, undo, cancellationToken).ConfigureAwait(false),
                 EditorHistory.ReviewEntry review => await ApplyReviewHistoryAsync(review, undo, cancellationToken).ConfigureAwait(false),
-                _ => Failure("history", "The saved history entry is unsupported."),
+                _ => Failure("history", EditorNotice.Create("ui_backend_history_unsupported")),
             };
         }
         catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
-            return Failure("history", exception.Message);
+            return Failure("history", EditorNotice.FromException(exception));
         }
         finally
         {
@@ -633,8 +637,8 @@ internal sealed class EditorSession : IDisposable
         EditorOperationResult result = await _workspace.SaveAsync(entry.Path, content, expected, CancellationToken.None).ConfigureAwait(false);
         if (!result.Ok)
             return result.Kind == "conflict"
-                ? HistoryConflict(result.Message ?? "The saved document changed after this operation; history was cleared.")
-                : Failure("history", result.Message ?? "The saved document could not be changed.");
+                ? HistoryConflict(result.Message ?? EditorNotice.Create("ui_backend_history_document_conflict"))
+                : Failure("history", result.Message ?? EditorNotice.Create("ui_backend_history_document"));
         string revision = Revision(content);
         if (undo)
         {
@@ -660,7 +664,7 @@ internal sealed class EditorSession : IDisposable
         {
             EditorReviewOperationResult deleted = await _workspace.DeleteReviewAsync(entry.UndoRevision, CancellationToken.None).ConfigureAwait(false);
             if (!deleted.Ok)
-                return HistoryConflict(deleted.Message ?? "The workflow sidecar changed after this operation; history was cleared.");
+                return HistoryConflict(deleted.Message ?? EditorNotice.Create("ui_backend_history_sidecar"));
             entry.SetRedoRevision(null);
             _history.CompleteUndo(entry);
             _preparedDestructiveMutation = null;
@@ -672,7 +676,7 @@ internal sealed class EditorSession : IDisposable
         string? expected = undo ? entry.UndoRevision : entry.RedoRevision;
         EditorReviewOperationResult result = await _workspace.SaveReviewAsync(source with { ExpectedRevision = expected }, CancellationToken.None).ConfigureAwait(false);
         if (!result.Ok || result.Review?.Revision is null)
-            return HistoryConflict(result.Message ?? "The workflow sidecar changed after this operation; history was cleared.");
+            return HistoryConflict(result.Message ?? EditorNotice.Create("ui_backend_history_sidecar"));
         if (undo)
         {
             entry.SetRedoRevision(result.Review.Revision);
@@ -718,7 +722,7 @@ internal sealed class EditorSession : IDisposable
         }
         catch (Exception exception) when (IsReloadFailure(exception))
         {
-            return new EditorOperationResult(true, kind, $"The change was committed; reload the workspace to refresh it. {exception.Message}", null, null, _history.State);
+            return new EditorOperationResult(true, kind, EditorNotice.Create("ui_backend_committed_reload") with { Detail = exception.Message }, null, null, _history.State);
         }
     }
 
@@ -746,10 +750,10 @@ internal sealed class EditorSession : IDisposable
     private EditorOperationResult Success(string kind, WorkspaceSnapshot snapshot) =>
         new(true, kind, null, snapshot, null, _history.State);
 
-    private EditorOperationResult Failure(string kind, string message) =>
+    private EditorOperationResult Failure(string kind, EditorNotice message) =>
         new(false, kind, message, null, null, _history.State);
 
-    private EditorOperationResult HistoryConflict(string message)
+    private EditorOperationResult HistoryConflict(EditorNotice message)
     {
         _history.Clear();
         _preparedDestructiveMutation = null;

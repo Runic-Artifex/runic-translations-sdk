@@ -42,8 +42,8 @@
 
   const ui = getUiText();
 
-  const modeNames: Record<ThemeMode, string> = { system: ui.text("ui_settings_system"), light: ui.text("ui_settings_light"), dark: ui.text("ui_settings_dark") };
-  const paletteNames: Record<ThemePalette, string> = { runic: ui.text("ui_settings_runic_gold"), moss: ui.text("ui_settings_moss"), fjord: ui.text("ui_settings_fjord"), ember: ui.text("ui_settings_ember") };
+  const modeNames: Record<ThemeMode, string> = $derived({ system: ui.text("ui_settings_system"), light: ui.text("ui_settings_light"), dark: ui.text("ui_settings_dark") });
+  const paletteNames: Record<ThemePalette, string> = $derived({ runic: ui.text("ui_settings_runic_gold"), moss: ui.text("ui_settings_moss"), fjord: ui.text("ui_settings_fjord"), ember: ui.text("ui_settings_ember") });
   let localeName = $derived(locale === "de" ? ui.text("ui_settings_german") : ui.text("ui_settings_english"));
   let appearanceName = $derived(`${paletteNames[themePalette]} · ${modeNames[themeMode]}`);
 </script>
@@ -54,7 +54,7 @@
       <DropdownMenu.Root>
         <DropdownMenu.Trigger>
           {#snippet child({ props })}
-            <Sidebar.MenuButton {...props} size="lg" aria-label={`${ui.text("ui_settings_editor_settings")}, ${appearanceName}, ${ui.text("ui_settings_interface_language")} ${localeName}`} tooltipContent={ui.text("ui_settings_editor_settings")}>
+            <Sidebar.MenuButton {...props} size="lg" aria-label={ui.text("ui_settings_summary", { appearance: appearanceName, locale: localeName })} tooltipContent={ui.text("ui_settings_editor_settings")}>
               <Badge variant="outline" class="size-8 shrink-0 justify-center p-0">
                 <Settings2Icon aria-hidden="true" />
               </Badge>

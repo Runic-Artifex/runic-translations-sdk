@@ -63,7 +63,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
                 Ok = value.Ok,
                 Cancelled = value.Cancelled,
                 Directory = value.Directory,
-                Message = value.Message,
+                Message = value.Message is null ? null : WorkspacePickedResultMessageValue(value.Message),
             },
         };
     }
@@ -80,7 +80,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             Preview = new Contract.MutationPreviewedPreview
             {
                 Ok = value.Ok,
-                Message = value.Message,
+                Message = value.Message is null ? null : MutationPreviewedPreviewMessageValue(value.Message),
                 Files = value.Files.Select(static value => new Contract.MutationPreviewedPreviewFilesItem
                 {
                     Path = value.Path,
@@ -136,6 +136,34 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             await session.RedoAsync(cancellationToken).ConfigureAwait(false)),
     };
 
+    public async ValueTask<Contract.DocumentTransformed> TransformDocumentAsync(
+        Contract.TransformDocument command, BridgeCommandContext context, CancellationToken cancellationToken)
+    {
+        EditorDocumentDraft value = await session.TransformDocumentAsync(command.Path, command.Content,
+            command.Key, command.Value, cancellationToken).ConfigureAwait(false);
+        return new()
+        {
+            Tag = "DocumentTransformed",
+            Result = new Contract.DocumentTransformedResult
+            {
+                Success = value.Success,
+                Content = value.Content,
+                Entries = value.Entries.Select(static entry => new Contract.DocumentTransformedResultEntriesItem
+                {
+                    Key = entry.Key, Content = entry.Content,
+                    ValueStartByte = entry.ValueStartByte, ValueLengthBytes = entry.ValueLengthBytes,
+                }).ToArray(),
+                Diagnostics = value.Diagnostics.Select(static diagnostic => new Contract.DocumentTransformedResultDiagnosticsItem
+                {
+                    Id = diagnostic.Id, Severity = diagnostic.Severity, Message = diagnostic.Message,
+                    Path = diagnostic.Path, Line = diagnostic.Line, Column = diagnostic.Column,
+                    EndLine = diagnostic.EndLine, EndColumn = diagnostic.EndColumn,
+                    Notice = diagnostic.Notice is null ? null : DocumentTransformedResultDiagnosticsItemNoticeValue(diagnostic.Notice),
+                }).ToArray(),
+            },
+        };
+    }
+
     public async ValueTask<Contract.DocumentValidated> ValidateDocumentAsync(
         Contract.ValidateDocument command,
         BridgeCommandContext context,
@@ -161,6 +189,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : DocumentValidatedResultDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
             },
         };
@@ -195,6 +224,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : MessagePreviewedPreviewDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
             },
         };
@@ -231,7 +261,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
                     {
                         Ok = false,
                         Message =
-                            $"The review entry '{entry.Key}' ({entry.Locale}) lists the sample key '{sample.Key}' more than once.",
+                            ReviewSavedResultMessageValue(EditorNotice.Create("ui_backend_duplicate_sample", ("key", entry.Key), ("locale", entry.Locale), ("sample", sample.Key))),
                     },
                 };
             }
@@ -245,14 +275,14 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             Result = new Contract.ReviewSavedResult
             {
                 Ok = value.Ok,
-                Message = value.Message,
+                Message = value.Message is null ? null : ReviewSavedResultMessageValue(value.Message),
                 Review = value.Review is null ? null : ReviewSavedResultReviewValue(value.Review),
                 History = value.History is null ? null : new Contract.ReviewSavedResultHistory
                 {
                     CanUndo = value.History.CanUndo,
                     CanRedo = value.History.CanRedo,
-                    UndoLabel = value.History.UndoLabel,
-                    RedoLabel = value.History.RedoLabel,
+                    UndoLabel = value.History.UndoLabel is null ? null : ReviewSavedResultHistoryUndoLabelValue(value.History.UndoLabel),
+                    RedoLabel = value.History.RedoLabel is null ? null : ReviewSavedResultHistoryRedoLabelValue(value.History.RedoLabel),
                 },
             },
         };
@@ -294,7 +324,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             {
                 Ok = value.Ok,
                 Path = value.Path,
-                Message = value.Message,
+                Message = value.Message is null ? null : DiagnosticBundleCreatedResultMessageValue(value.Message),
             },
         };
     }
@@ -365,7 +395,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             Plan = new Contract.ProjectPreviewedPlan
             {
                 Ok = value.Ok,
-                Message = value.Message,
+                Message = value.Message is null ? null : ProjectPreviewedPlanMessageValue(value.Message),
                 Directory = value.Directory,
                 CatalogId = value.CatalogId,
                 Locales = value.Locales.Select(static value => new Contract.ProjectPreviewedPlanLocalesItem
@@ -412,7 +442,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             Result = new Contract.XliffExportedResult
             {
                 Ok = value.Ok,
-                Message = value.Message,
+                Message = value.Message is null ? null : XliffExportedResultMessageValue(value.Message),
                 CatalogId = value.CatalogId,
                 Documents = value.Documents.Select(static value => new Contract.XliffExportedResultDocumentsItem
                 {
@@ -444,7 +474,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             Preview = new Contract.XliffImportPreviewedPreview
             {
                 Ok = value.Ok,
-                Message = value.Message,
+                Message = value.Message is null ? null : XliffImportPreviewedPreviewMessageValue(value.Message),
                 RequiresIrreversibleConfirmation = value.Ok,
                 ConfirmationToken = value.ConfirmationToken,
                 CatalogId = value.CatalogId,
@@ -469,7 +499,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
                 Refusals = value.Refusals.Select(static value => new Contract.XliffImportPreviewedPreviewRefusalsItem
                 {
                     Code = value.Code,
-                    Message = value.Message,
+                    Message = XliffImportPreviewedPreviewRefusalsItemMessageValue(value.Message),
                 }).ToArray(),
             },
         };
@@ -497,7 +527,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             Result = new Contract.ReviewJsonExportedResult
             {
                 Ok = value.Ok,
-                Message = value.Message,
+                Message = value.Message is null ? null : ReviewJsonExportedResultMessageValue(value.Message),
                 Path = value.Path,
                 EntryCount = value.EntryCount,
             },
@@ -516,7 +546,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             Preview = new Contract.ReviewJsonImportPreviewedPreview
             {
                 Ok = value.Ok,
-                Message = value.Message,
+                Message = value.Message is null ? null : ReviewJsonImportPreviewedPreviewMessageValue(value.Message),
                 RequiresIrreversibleConfirmation = value.Ok,
                 ConfirmationToken = value.ConfirmationToken,
                 CatalogId = value.CatalogId,
@@ -535,7 +565,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
                 Refusals = value.Refusals.Select(static value => new Contract.ReviewJsonImportPreviewedPreviewRefusalsItem
                 {
                     Code = value.Code,
-                    Message = value.Message,
+                    Message = ReviewJsonImportPreviewedPreviewRefusalsItemMessageValue(value.Message),
                 }).ToArray(),
             },
         };
@@ -663,6 +693,11 @@ private static Contract.WorkspaceSnapshotReview WorkspaceSnapshotReviewValue(Edi
             Revision = value.Revision,
             IsManifest = value.IsManifest,
             IsMalformed = value.IsMalformed,
+            Entries = value.Entries?.Select(static entry => new Contract.WorkspaceSnapshotDocumentsItemEntriesItem
+            {
+                Key = entry.Key, Content = entry.Content,
+                ValueStartByte = entry.ValueStartByte, ValueLengthBytes = entry.ValueLengthBytes,
+            }).ToArray(),
             Locale = value.Locale,
             Layer = value.Layer,
         }).ToArray(),
@@ -676,6 +711,7 @@ private static Contract.WorkspaceSnapshotReview WorkspaceSnapshotReviewValue(Edi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : WorkspaceSnapshotDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
         Success = value.Success,
         PendingTransaction = value.PendingTransaction is null
@@ -690,8 +726,8 @@ private static Contract.WorkspaceSnapshotReview WorkspaceSnapshotReviewValue(Edi
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : WorkspaceSnapshotHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : WorkspaceSnapshotHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -746,7 +782,7 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
     {
         Ok = value.Ok,
         Kind = value.Kind,
-        Message = value.Message,
+        Message = value.Message is null ? null : MutationAppliedResultMessageValue(value.Message),
         Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.MutationAppliedResultValidation
         {
@@ -761,14 +797,15 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : MutationAppliedResultValidationDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
         },
         History = value.History is null ? null : new Contract.MutationAppliedResultHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : MutationAppliedResultHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : MutationAppliedResultHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -779,7 +816,7 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
     {
         Ok = value.Ok,
         Kind = value.Kind,
-        Message = value.Message,
+        Message = value.Message is null ? null : TransactionRecoveredResultMessageValue(value.Message),
         Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.TransactionRecoveredResultValidation
         {
@@ -794,14 +831,15 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : TransactionRecoveredResultValidationDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
         },
         History = value.History is null ? null : new Contract.TransactionRecoveredResultHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : TransactionRecoveredResultHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : TransactionRecoveredResultHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -812,7 +850,7 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
     {
         Ok = value.Ok,
         Kind = value.Kind,
-        Message = value.Message,
+        Message = value.Message is null ? null : UndoAppliedResultMessageValue(value.Message),
         Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.UndoAppliedResultValidation
         {
@@ -827,14 +865,15 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : UndoAppliedResultValidationDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
         },
         History = value.History is null ? null : new Contract.UndoAppliedResultHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : UndoAppliedResultHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : UndoAppliedResultHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -845,7 +884,7 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
     {
         Ok = value.Ok,
         Kind = value.Kind,
-        Message = value.Message,
+        Message = value.Message is null ? null : RedoAppliedResultMessageValue(value.Message),
         Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.RedoAppliedResultValidation
         {
@@ -860,14 +899,15 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : RedoAppliedResultValidationDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
         },
         History = value.History is null ? null : new Contract.RedoAppliedResultHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : RedoAppliedResultHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : RedoAppliedResultHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -878,7 +918,7 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
     {
         Ok = value.Ok,
         Kind = value.Kind,
-        Message = value.Message,
+        Message = value.Message is null ? null : DocumentSavedResultMessageValue(value.Message),
         Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.DocumentSavedResultValidation
         {
@@ -893,14 +933,15 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : DocumentSavedResultValidationDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
         },
         History = value.History is null ? null : new Contract.DocumentSavedResultHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : DocumentSavedResultHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : DocumentSavedResultHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -911,7 +952,7 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
     {
         Ok = value.Ok,
         Kind = value.Kind,
-        Message = value.Message,
+        Message = value.Message is null ? null : ProjectCreatedResultMessageValue(value.Message),
         Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.ProjectCreatedResultValidation
         {
@@ -926,14 +967,15 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : ProjectCreatedResultValidationDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
         },
         History = value.History is null ? null : new Contract.ProjectCreatedResultHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : ProjectCreatedResultHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : ProjectCreatedResultHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -944,7 +986,7 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
     {
         Ok = value.Ok,
         Kind = value.Kind,
-        Message = value.Message,
+        Message = value.Message is null ? null : WorkspaceOpenedResultMessageValue(value.Message),
         Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.WorkspaceOpenedResultValidation
         {
@@ -959,14 +1001,15 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
                     Column = value.Column,
                     EndLine = value.EndLine,
                     EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : WorkspaceOpenedResultValidationDiagnosticsItemNoticeValue(value.Notice),
                 }).ToArray(),
         },
         History = value.History is null ? null : new Contract.WorkspaceOpenedResultHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : WorkspaceOpenedResultHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : WorkspaceOpenedResultHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -977,7 +1020,7 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
     {
         Ok = value.Ok,
         Kind = value.Kind,
-        Message = value.Message,
+        Message = value.Message is null ? null : XliffImportAppliedResultMessageValue(value.Message),
         Snapshot = value.Snapshot is null ? null : WorkspaceSnapshotValue(value.Snapshot),
         Validation = value.Validation is null ? null : new Contract.XliffImportAppliedResultValidation
         {
@@ -992,14 +1035,15 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
                 Column = value.Column,
                 EndLine = value.EndLine,
                 EndColumn = value.EndColumn,
+                    Notice = value.Notice is null ? null : XliffImportAppliedResultValidationDiagnosticsItemNoticeValue(value.Notice),
             }).ToArray(),
         },
         History = value.History is null ? null : new Contract.XliffImportAppliedResultHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : XliffImportAppliedResultHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : XliffImportAppliedResultHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -1009,14 +1053,14 @@ private static Contract.ReviewSavedResultReview ReviewSavedResultReviewValue(Edi
     private static Contract.ReviewJsonImportAppliedResult ReviewJsonImportAppliedResultValue(EditorReviewOperationResult value) => new()
     {
         Ok = value.Ok,
-        Message = value.Message,
+        Message = value.Message is null ? null : ReviewJsonImportAppliedResultMessageValue(value.Message),
         Review = value.Review is null ? null : ReviewJsonImportAppliedResultReviewValue(value.Review),
         History = value.History is null ? null : new Contract.ReviewJsonImportAppliedResultHistory
         {
             CanUndo = value.History.CanUndo,
             CanRedo = value.History.CanRedo,
-            UndoLabel = value.History.UndoLabel,
-            RedoLabel = value.History.RedoLabel,
+            UndoLabel = value.History.UndoLabel is null ? null : ReviewJsonImportAppliedResultHistoryUndoLabelValue(value.History.UndoLabel),
+            RedoLabel = value.History.RedoLabel is null ? null : ReviewJsonImportAppliedResultHistoryRedoLabelValue(value.History.RedoLabel),
         },
     };
 
@@ -1051,13 +1095,13 @@ private static Contract.ReviewJsonImportAppliedResultReview ReviewJsonImportAppl
     private static Contract.DiagnosticBundleRevealedResult DiagnosticBundleActionValue(EditorDiagnosticBundleActionResult value) => new()
     {
         Ok = value.Ok,
-        Message = value.Message,
+        Message = value.Message is null ? null : DiagnosticBundleRevealedResultMessageValue(value.Message),
     };
 
     private static Contract.DiagnosticBundleDeletedResult DiagnosticBundleDeletedResultValue(EditorDiagnosticBundleActionResult value) => new()
     {
         Ok = value.Ok,
-        Message = value.Message,
+        Message = value.Message is null ? null : DiagnosticBundleDeletedResultMessageValue(value.Message),
     };
 
     private static Contract.LocalStateLoadedState LocalStateValue(EditorLocalStateSnapshot value) => new()
@@ -1080,4 +1124,564 @@ private static Contract.ReviewJsonImportAppliedResultReview ReviewJsonImportAppl
         Recovered = value.Recovered,
     };
 
+
+    private static Contract.DiagnosticBundleCreatedResultMessage DiagnosticBundleCreatedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.DiagnosticBundleCreatedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.DiagnosticBundleDeletedResultMessage DiagnosticBundleDeletedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.DiagnosticBundleDeletedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.DiagnosticBundleRevealedResultMessage DiagnosticBundleRevealedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.DiagnosticBundleRevealedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.DocumentSavedResultHistoryRedoLabel DocumentSavedResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.DocumentSavedResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.DocumentSavedResultHistoryUndoLabel DocumentSavedResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.DocumentSavedResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.DocumentSavedResultMessage DocumentSavedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.DocumentSavedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.DocumentSavedResultValidationDiagnosticsItemNotice DocumentSavedResultValidationDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.DocumentSavedResultValidationDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.DocumentTransformedResultDiagnosticsItemNotice DocumentTransformedResultDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.DocumentTransformedResultDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.DocumentValidatedResultDiagnosticsItemNotice DocumentValidatedResultDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.DocumentValidatedResultDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.MessagePreviewedPreviewDiagnosticsItemNotice MessagePreviewedPreviewDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.MessagePreviewedPreviewDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.MutationAppliedResultHistoryRedoLabel MutationAppliedResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.MutationAppliedResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.MutationAppliedResultHistoryUndoLabel MutationAppliedResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.MutationAppliedResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.MutationAppliedResultMessage MutationAppliedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.MutationAppliedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.MutationAppliedResultValidationDiagnosticsItemNotice MutationAppliedResultValidationDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.MutationAppliedResultValidationDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.MutationPreviewedPreviewMessage MutationPreviewedPreviewMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.MutationPreviewedPreviewMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ProjectCreatedResultHistoryRedoLabel ProjectCreatedResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ProjectCreatedResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ProjectCreatedResultHistoryUndoLabel ProjectCreatedResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ProjectCreatedResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ProjectCreatedResultMessage ProjectCreatedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ProjectCreatedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ProjectCreatedResultValidationDiagnosticsItemNotice ProjectCreatedResultValidationDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ProjectCreatedResultValidationDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ProjectPreviewedPlanMessage ProjectPreviewedPlanMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ProjectPreviewedPlanMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.RedoAppliedResultHistoryRedoLabel RedoAppliedResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.RedoAppliedResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.RedoAppliedResultHistoryUndoLabel RedoAppliedResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.RedoAppliedResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.RedoAppliedResultMessage RedoAppliedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.RedoAppliedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.RedoAppliedResultValidationDiagnosticsItemNotice RedoAppliedResultValidationDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.RedoAppliedResultValidationDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ReviewJsonExportedResultMessage ReviewJsonExportedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ReviewJsonExportedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ReviewJsonImportAppliedResultHistoryRedoLabel ReviewJsonImportAppliedResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ReviewJsonImportAppliedResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ReviewJsonImportAppliedResultHistoryUndoLabel ReviewJsonImportAppliedResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ReviewJsonImportAppliedResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ReviewJsonImportAppliedResultMessage ReviewJsonImportAppliedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ReviewJsonImportAppliedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ReviewJsonImportPreviewedPreviewMessage ReviewJsonImportPreviewedPreviewMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ReviewJsonImportPreviewedPreviewMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ReviewJsonImportPreviewedPreviewRefusalsItemMessage ReviewJsonImportPreviewedPreviewRefusalsItemMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ReviewJsonImportPreviewedPreviewRefusalsItemMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ReviewSavedResultHistoryRedoLabel ReviewSavedResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ReviewSavedResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ReviewSavedResultHistoryUndoLabel ReviewSavedResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ReviewSavedResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.ReviewSavedResultMessage ReviewSavedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.ReviewSavedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.TransactionRecoveredResultHistoryRedoLabel TransactionRecoveredResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.TransactionRecoveredResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.TransactionRecoveredResultHistoryUndoLabel TransactionRecoveredResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.TransactionRecoveredResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.TransactionRecoveredResultMessage TransactionRecoveredResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.TransactionRecoveredResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.TransactionRecoveredResultValidationDiagnosticsItemNotice TransactionRecoveredResultValidationDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.TransactionRecoveredResultValidationDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.UndoAppliedResultHistoryRedoLabel UndoAppliedResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.UndoAppliedResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.UndoAppliedResultHistoryUndoLabel UndoAppliedResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.UndoAppliedResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.UndoAppliedResultMessage UndoAppliedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.UndoAppliedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.UndoAppliedResultValidationDiagnosticsItemNotice UndoAppliedResultValidationDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.UndoAppliedResultValidationDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.WorkspaceOpenedResultHistoryRedoLabel WorkspaceOpenedResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.WorkspaceOpenedResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.WorkspaceOpenedResultHistoryUndoLabel WorkspaceOpenedResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.WorkspaceOpenedResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.WorkspaceOpenedResultMessage WorkspaceOpenedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.WorkspaceOpenedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.WorkspaceOpenedResultValidationDiagnosticsItemNotice WorkspaceOpenedResultValidationDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.WorkspaceOpenedResultValidationDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.WorkspacePickedResultMessage WorkspacePickedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.WorkspacePickedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.WorkspaceSnapshotDiagnosticsItemNotice WorkspaceSnapshotDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.WorkspaceSnapshotDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.WorkspaceSnapshotHistoryRedoLabel WorkspaceSnapshotHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.WorkspaceSnapshotHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.WorkspaceSnapshotHistoryUndoLabel WorkspaceSnapshotHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.WorkspaceSnapshotHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.XliffExportedResultMessage XliffExportedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.XliffExportedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.XliffImportAppliedResultHistoryRedoLabel XliffImportAppliedResultHistoryRedoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.XliffImportAppliedResultHistoryRedoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.XliffImportAppliedResultHistoryUndoLabel XliffImportAppliedResultHistoryUndoLabelValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.XliffImportAppliedResultHistoryUndoLabelArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.XliffImportAppliedResultMessage XliffImportAppliedResultMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.XliffImportAppliedResultMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.XliffImportAppliedResultValidationDiagnosticsItemNotice XliffImportAppliedResultValidationDiagnosticsItemNoticeValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.XliffImportAppliedResultValidationDiagnosticsItemNoticeArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.XliffImportPreviewedPreviewMessage XliffImportPreviewedPreviewMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.XliffImportPreviewedPreviewMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
+
+    private static Contract.XliffImportPreviewedPreviewRefusalsItemMessage XliffImportPreviewedPreviewRefusalsItemMessageValue(EditorNotice value) => new()
+    {
+        Code = value.Code,
+        Detail = value.Detail,
+        Args = value.Args.Select(static arg => new Contract.XliffImportPreviewedPreviewRefusalsItemMessageArgsItem
+        {
+            Name = arg.Name, Value = arg.Value, Number = arg.Number.HasValue ? new BridgeOptional<double>(arg.Number.Value) : default,
+        }).ToArray(),
+    };
 }

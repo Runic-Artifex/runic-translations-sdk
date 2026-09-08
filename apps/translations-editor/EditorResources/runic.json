@@ -9,9 +9,7 @@
   "baseLocale": "en",
   "locales": [
     "en",
-    {
-      "tag": "de",
-      "fallback": "en"
-    }
-  ]
+    "de"
+  ],
+  "sourceLayout": "locale-toml"
 }

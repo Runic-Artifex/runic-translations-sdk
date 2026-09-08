@@ -27,7 +27,7 @@
         <Alert.Root variant="destructive" class="gap-y-1 px-2.5 py-2">
           <WrenchIcon />
           <Alert.Title class="text-xs">
-            {malformedDocuments.length} {ui.text("ui_workspace_malformed")} {malformedDocuments.length === 1 ? ui.text("ui_workspace_file") : ui.text("ui_workspace_files")}
+            {ui.text("ui_count_malformed_files", { count: malformedDocuments.length })}
           </Alert.Title>
           <Alert.Description class="grid min-w-0 gap-1">
             {#each malformedDocuments as document (document.path)}

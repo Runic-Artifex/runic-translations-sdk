@@ -1,6 +1,9 @@
+import { notice, UiNoticeError } from "./ui-text";
+import type { EditorDocumentDraft } from "./contracts";
 import {
   ApplicationBridgeLive,
   createApplicationBridgeController,
+  createWebSocketFrameChannel,
 } from "@runic-artifex/application-bridge";
 import { createDesktopFrameChannel } from "@runic-artifex/desktop";
 import { createSvelteApplicationBridge } from "@runic-artifex/svelte";
@@ -37,6 +40,55 @@ import type {
   WorkspaceSnapshot,
 } from "./contracts";
 
+// The native bootstrap is authoritative. Hosted mode has its own explicit,
+// same-origin capability endpoint; a missing or invalid desktop bootstrap must
+// never select an arbitrary remote WebSocket endpoint.
+let hostedEndpoint: string | undefined;
+let hostedConnectionEpoch = 0;
+const nativeDesktop = globalThis.runicDesktop !== undefined;
+const applicationChannel = import.meta.env.MODE === "mock" ? undefined
+  : nativeDesktop ? createDesktopFrameChannel()
+  : createWebSocketFrameChannel(() => {
+      if (hostedEndpoint === undefined) throw new UiNoticeError(notice("ui_host_not_initialized"));
+      const socket = new WebSocket(hostedEndpoint);
+      return {
+        get readyState() { return socket.readyState; },
+        get binaryType() { return socket.binaryType; },
+        set binaryType(value) { socket.binaryType = value; },
+        // The structural channel accepts ArrayBufferLike; the browser socket
+        // requires an owned ArrayBuffer view, including under TS 6 DOM types.
+        send(bytes) { socket.send(new Uint8Array(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength))); },
+        close: socket.close.bind(socket),
+        addEventListener: socket.addEventListener.bind(socket),
+        removeEventListener: socket.removeEventListener.bind(socket),
+      };
+    });
+
+async function prepareHostChannel(): Promise<void> {
+  if (import.meta.env.MODE === "mock" || nativeDesktop) return;
+  if (globalThis.location.protocol !== "http:" || globalThis.location.hostname !== "127.0.0.1") {
+    throw new UiNoticeError(notice("ui_host_loopback_required"));
+  }
+  const response = await fetch(new URL("/_runic/editor-host", globalThis.location.origin), {
+    credentials: "same-origin", redirect: "error", cache: "no-store",
+  }).catch(() => { throw new UiNoticeError(notice("ui_host_capability_unavailable")); });
+  if (!response.ok || !response.headers.get("content-type")?.startsWith("application/json")) {
+    throw new UiNoticeError(notice("ui_host_capability_unavailable"));
+  }
+  const capability: unknown = await response.json().catch(() => { throw new UiNoticeError(notice("ui_host_capability_invalid")); });
+  if (typeof capability !== "object" || capability === null ||
+      !("profile" in capability) || capability.profile !== "runic.translations.editor.hosted/1" ||
+      !("bridgePath" in capability) || capability.bridgePath !== "/bridge" ||
+      !("connectionEpoch" in capability) || typeof capability.connectionEpoch !== "number" ||
+      !Number.isSafeInteger(capability.connectionEpoch) || capability.connectionEpoch < 0) {
+    throw new UiNoticeError(notice("ui_host_capability_invalid"));
+  }
+  const endpoint = new URL(capability.bridgePath, globalThis.location.origin);
+  endpoint.protocol = "ws:";
+  hostedEndpoint = endpoint.href;
+  hostedConnectionEpoch = capability.connectionEpoch;
+}
+
 // One neutral controller owns transport, session handshake, and command
 // dispatch. Svelte projects that controller, while Runic Vite observes its
 // state and preserves the projection across hot replacements.
@@ -46,7 +98,9 @@ const bridge = preserveRunicHmrResource("editor-bridge", () =>
       EditorContract,
       import.meta.env.MODE === "mock"
         ? mockApplicationBridgeLayer
-        : ApplicationBridgeLive(EditorContract, createDesktopFrameChannel()),
+        : ApplicationBridgeLive(EditorContract, applicationChannel!, {
+            get initialConnectionEpoch() { return hostedConnectionEpoch; },
+          }),
     ),
     { observer: createRunicDevtoolsObserver() },
   ));
@@ -56,7 +110,7 @@ let initialization: Promise<unknown> | undefined;
 function ready(): Promise<unknown> {
   // The bridge session must initialize before any command is admitted;
   // every later load goes through LoadWorkspace instead.
-  return (initialization ??= bridge.start());
+  return (initialization ??= prepareHostChannel().then(() => bridge.start()));
 }
 
 /** Each editor command correlates with exactly one generated receipt tag. */
@@ -70,6 +124,7 @@ const receiptTags = {
   Undo: "UndoApplied",
   Redo: "RedoApplied",
   ValidateDocument: "DocumentValidated",
+  TransformDocument: "DocumentTransformed",
   PreviewMessage: "MessagePreviewed",
   SaveDocument: "DocumentSaved",
   SaveReview: "ReviewSaved",
@@ -111,6 +166,7 @@ export interface EditorBridge {
   undo(): Promise<EditorOperationResult>;
   redo(): Promise<EditorOperationResult>;
   validate(path: string, content: string): Promise<ValidationResult>;
+  transformDocument(path: string, content: string, key?: string, value?: string): Promise<EditorDocumentDraft>;
   previewMessage(path: string, content: string, locale: string, key: string): Promise<EditorMessagePreview>;
   saveReview(request: EditorReviewSaveRequest): Promise<EditorReviewOperationResult>;
   about(): Promise<EditorAbout>;
@@ -169,6 +225,10 @@ export function createEditorBridge(): EditorBridge {
     async validate(path, content) {
       const receipt = await dispatch({ _tag: "ValidateDocument", path, content });
       return domain<ValidationResult>(revive(receipt.result));
+    },
+    async transformDocument(path, content, key, value) {
+      const receipt = await dispatch({ _tag: "TransformDocument", ...encodeRequest({ path, content, key, value }) });
+      return domain<EditorDocumentDraft>(revive(receipt.result));
     },
     async previewMessage(path, content, locale, key) {
       const receipt = await dispatch({ _tag: "PreviewMessage", path, content, locale, key });

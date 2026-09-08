@@ -117,7 +117,7 @@
 			aria-valuemin={minimumShare * 100}
 			aria-valuemax={(1 - minimumShare) * 100}
 			aria-valuenow={Math.round(languagesShare * 100)}
-			aria-valuetext={`${ui.text("ui_sidebar_panels_languages")} ${Math.round(languagesShare * 100)}%, ${ui.text("ui_sidebar_panels_messages")} ${Math.round((1 - languagesShare) * 100)}%`}
+			aria-valuetext={ui.text("ui_sidebar_panel_shares", { languages: Math.round(languagesShare * 100), messages: Math.round((1 - languagesShare) * 100) })}
 			title={ui.text("ui_sidebar_panels_resize_title")}
 			onpointerdown={beginResize}
 			onpointermove={continueResize}

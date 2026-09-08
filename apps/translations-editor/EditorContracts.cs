@@ -31,7 +31,14 @@ internal sealed record EditorDocument(
     bool IsManifest,
     bool IsMalformed,
     string? Locale,
-    string? Layer);
+    string? Layer,
+    IReadOnlyList<EditorMessageEntry>? Entries = null);
+
+// Logical messages share their containing document's physical path and revision.
+internal sealed record EditorMessageEntry(string Key, string Content, int ValueStartByte, int ValueLengthBytes);
+
+internal sealed record EditorDocumentDraft(bool Success, string Content,
+    IReadOnlyList<EditorMessageEntry> Entries, IReadOnlyList<EditorDiagnostic> Diagnostics);
 
 internal sealed record EditorDiagnostic(
     string Id,
@@ -41,7 +48,8 @@ internal sealed record EditorDiagnostic(
     int Line,
     int Column,
     int EndLine,
-    int EndColumn);
+    int EndColumn,
+    EditorNotice? Notice = null);
 
 internal sealed record WorkspaceSnapshot(
     string Root,
@@ -78,9 +86,9 @@ internal sealed record EditorReviewSaveRequest(
     IReadOnlyList<EditorReviewEntry> Entries,
     IReadOnlyList<EditorTerminologyEntry> Terminology);
 
-internal sealed record EditorReviewOperationResult(bool Ok, string? Message, EditorReviewSnapshot? Review, EditorHistoryState? History);
+internal sealed record EditorReviewOperationResult(bool Ok, EditorNotice? Message, EditorReviewSnapshot? Review, EditorHistoryState? History);
 
-internal sealed record EditorHistoryState(bool CanUndo, bool CanRedo, string? UndoLabel, string? RedoLabel);
+internal sealed record EditorHistoryState(bool CanUndo, bool CanRedo, EditorNotice? UndoLabel, EditorNotice? RedoLabel);
 
 internal sealed record EditorAbout(
     string Product,
@@ -92,9 +100,9 @@ internal sealed record EditorAbout(
     string OperatingSystem,
     string Architecture);
 
-internal sealed record EditorDiagnosticBundleResult(bool Ok, string? Path, string? Message);
+internal sealed record EditorDiagnosticBundleResult(bool Ok, string? Path, EditorNotice? Message);
 
-internal sealed record EditorDiagnosticBundleActionResult(bool Ok, string? Message);
+internal sealed record EditorDiagnosticBundleActionResult(bool Ok, EditorNotice? Message);
 
 // Application-owned, per-user state stays outside the browser profile so a
 // packaged desktop window and the loopback server do not get different
@@ -140,7 +148,7 @@ internal sealed record EditorMessagePreview(
 internal sealed record EditorOperationResult(
     bool Ok,
     string Kind,
-    string? Message,
+    EditorNotice? Message,
     WorkspaceSnapshot? Snapshot,
     ValidationResult? Validation,
     EditorHistoryState? History = null);
@@ -158,7 +166,7 @@ internal sealed record EditorProjectCreationRequest(
 
 internal sealed record EditorProjectPlan(
     bool Ok,
-    string? Message,
+    EditorNotice? Message,
     string Directory,
     string CatalogId,
     IReadOnlyList<EditorLocale> Locales,
@@ -177,7 +185,7 @@ internal sealed record EditorExternalChanges(
     IReadOnlyList<string> Paths,
     IReadOnlyList<EditorExternalFileChange> Changes);
 
-internal sealed record EditorWorkspacePickerResult(bool Ok, bool Cancelled, string? Directory, string? Message);
+internal sealed record EditorWorkspacePickerResult(bool Ok, bool Cancelled, string? Directory, EditorNotice? Message);
 
 internal sealed record EditorMutationRequest(
     string Kind,
@@ -194,7 +202,7 @@ internal sealed record EditorMutationFile(string Path, string Kind, long BeforeB
 
 internal sealed record EditorMutationPreview(
     bool Ok,
-    string? Message,
+    EditorNotice? Message,
     IReadOnlyList<EditorMutationFile> Files,
     bool RequiresIrreversibleConfirmation = false,
     string? ConfirmationToken = null);
@@ -203,18 +211,18 @@ internal sealed record EditorRecoveryRequest(string Mode);
 
 internal sealed record EditorInterchangeLoss(string Code, string Location, string Message, bool SemanticLoss);
 
-internal sealed record EditorInterchangeRefusal(string Code, string Message);
+internal sealed record EditorInterchangeRefusal(string Code, EditorNotice Message);
 
 internal sealed record EditorInterchangeFile(string Path, string Locale, long ByteCount);
 
 internal sealed record EditorXliffExportResult(
     bool Ok,
-    string? Message,
+    EditorNotice? Message,
     string? CatalogId,
     IReadOnlyList<EditorInterchangeFile> Documents,
     IReadOnlyList<EditorInterchangeLoss> Losses);
 
-internal sealed record EditorReviewFileResult(bool Ok, string? Message, string? Path, int EntryCount);
+internal sealed record EditorReviewFileResult(bool Ok, EditorNotice? Message, string? Path, int EntryCount);
 
 // One reviewable diff row. 'added'/'changed' describe target text the import
 // writes; 'removed' rows are keys present in the workspace locale but absent
@@ -230,7 +238,7 @@ internal sealed record EditorKeyChange(
 
 internal sealed record EditorXliffImportPlan(
     bool Ok,
-    string? Message,
+    EditorNotice? Message,
     string? ConfirmationToken,
     string? CatalogId,
     string? SourceLocale,
@@ -249,7 +257,7 @@ internal sealed record EditorReviewChange(string Key, string Locale, string Kind
 
 internal sealed record EditorReviewImportPlan(
     bool Ok,
-    string? Message,
+    EditorNotice? Message,
     string? ConfirmationToken,
     string? CatalogId,
     IReadOnlyList<EditorReviewChange> Changes,

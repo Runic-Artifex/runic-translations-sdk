@@ -20,6 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Analyzer Include="$(MSBuildThisFileDirectory)..\analyzers\dotnet\cs\Tomlyn.dll"
+              Condition="Exists('$(MSBuildThisFileDirectory)..\analyzers\dotnet\cs\Tomlyn.dll')" />
     <Analyzer Include="$(MSBuildThisFileDirectory)..\analyzers\dotnet\cs\Runic.Translations.Compiler.dll"
               Condition="Exists('$(MSBuildThisFileDirectory)..\analyzers\dotnet\cs\Runic.Translations.Compiler.dll')" />
     <Analyzer Include="$(MSBuildThisFileDirectory)..\analyzers\dotnet\cs\Runic.Translations.Generator.dll"

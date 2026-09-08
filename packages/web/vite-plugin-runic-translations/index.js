@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, normalize, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
 const prefix = "\0virtual:runic-translations/";
@@ -18,23 +18,31 @@ export function runicTranslations(options = {}) {
   if (!options || typeof options !== "object" || Array.isArray(options))
     throw new TypeError("runicTranslations options must be an object.");
   const project = options.manifest === undefined ? projectOptions(options) : undefined;
-  const manifestPath = project?.manifest ?? resolve(options.manifest);
+  let manifestPath = project?.manifest ?? resolve(options.manifest);
   const compiler = project;
-  const sourceFiles = Object.freeze(Array.from(new Set([
-    ...(options.sourceFiles ?? []).map(path => resolve(path)),
-    ...(project?.sourceFiles ?? []),
-  ])));
+  const explicitSources = new Set((options.sourceFiles ?? []).map(path => resolve(path)));
+  let sourceFiles = new Set([...explicitSources, ...(project?.sourceFiles ?? [])]);
+  let server;
+  let cleanupWatcher;
+  let updates = Promise.resolve();
   let catalog;
   let entries;
+  let generatedPaths = new Set();
   let compilation = Promise.resolve();
 
   async function compile() {
     if (!compiler) return;
     const argumentsValue = [...compiler.commandArguments, "generate", "--project", compiler.project, "--output", compiler.output, "--emit-esm"];
-    compilation = compilation.catch(() => undefined).then(() => execFileAsync(compiler.command, argumentsValue, {
-      cwd: compiler.cwd,
-      maxBuffer: 16 * 1024 * 1024,
-    })).then(() => undefined);
+    compilation = compilation.catch(() => undefined).then(() => {
+      const current = readProject(compiler.config, compiler.output);
+      manifestPath = current.manifest;
+      sourceFiles = new Set([...explicitSources, ...current.sourceFiles]);
+      server?.watcher.add([...sourceFiles]);
+      return execFileAsync(compiler.command, argumentsValue, {
+        cwd: compiler.cwd,
+        maxBuffer: 16 * 1024 * 1024,
+      });
+    }).then(() => undefined);
     return compilation;
   }
 
@@ -78,6 +86,7 @@ export function runicTranslations(options = {}) {
     const runtimeFingerprint = /^export const contractFingerprint = ("sha256:[a-f0-9]{64}");$/m.exec(runtime)?.[1];
     if (runtimeFingerprint !== JSON.stringify(document.contractFingerprint))
       throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest fingerprint does not match its generated runtime.");
+    generatedPaths = new Set(assets.values());
     entries = Object.freeze({
       messages: assets.get(requiredEntrypoints.messages),
       runtime: assets.get(requiredEntrypoints.runtime),
@@ -92,16 +101,71 @@ export function runicTranslations(options = {}) {
     return `${prefix}${catalog}/${kind}`;
   }
 
+  function isSource(path) {
+    if (!compiler) return sourceFiles.has(path);
+    if (path === compiler.config) return true;
+    if (isWithin(compiler.output, path)) return false;
+    // Include either authoring extension so mixed-layout inputs reach the compiler's diagnostics.
+    return explicitSources.has(path) || (isWithin(compiler.project, path) && /\.(mf2|toml)$/i.test(path));
+  }
+
+  function update(path, targetServer) {
+    const source = isSource(path);
+    if (!source && (compiler || !isGenerated(path, manifestPath))) return;
+    const operation = updates.catch(() => undefined).then(async () => {
+      const previousCatalog = catalog;
+      const previousPaths = generatedPaths;
+      if (compiler && source) await compile();
+      await refresh();
+      const ids = new Set([previousCatalog, catalog].filter(Boolean));
+      const modules = [...ids].flatMap(id => ["messages", "runtime", "server", "transport", "dynamic"]
+        .map(kind => targetServer.moduleGraph.getModuleById(`${prefix}${id}/${kind}`))).filter(Boolean);
+      // Generated dependencies can keep transformed code after a virtual re-export is invalidated.
+      for (const generated of new Set([...previousPaths, ...generatedPaths]))
+        for (const module of targetServer.moduleGraph.getModulesByFile?.(generated) ?? [])
+          targetServer.moduleGraph.invalidateModule(module);
+      for (const module of modules) targetServer.moduleGraph.invalidateModule(module);
+      return modules;
+    });
+    updates = operation;
+    return operation;
+  }
+
   return {
     name: "runic-translations",
     enforce: "pre",
 
+    configureServer(value) {
+      server = value;
+      if (compiler) server.watcher.add(compiler.project);
+      const membershipChanged = path => {
+        const pending = update(resolve(path), server);
+        if (!pending) return;
+        void pending.then(() => server.ws.send({ type: "full-reload" })).catch(error => {
+          server.ws.send({ type: "error", err: { message: error.message, stack: error.stack, plugin: "runic-translations" } });
+        });
+      };
+      server.watcher.on("add", membershipChanged);
+      server.watcher.on("unlink", membershipChanged);
+      const cleanup = () => {
+        server.watcher.off("add", membershipChanged);
+        server.watcher.off("unlink", membershipChanged);
+      };
+      server.httpServer?.once("close", cleanup);
+      cleanupWatcher = cleanup;
+    },
+
+    closeBundle() {
+      cleanupWatcher?.();
+    },
+
     async buildStart() {
       await compile();
       const document = await refresh();
-      this.addWatchFile(manifestPath);
+      if (compiler) this.addWatchFile(compiler.project);
+      if (!compiler) this.addWatchFile(manifestPath);
       for (const path of sourceFiles) this.addWatchFile(path);
-      for (const asset of document.assets) this.addWatchFile(contained(dirname(manifestPath), asset.path));
+      if (!compiler) for (const asset of document.assets) this.addWatchFile(contained(dirname(manifestPath), asset.path));
     },
 
     async resolveId(id) {
@@ -130,14 +194,9 @@ export function runicTranslations(options = {}) {
     },
 
     async handleHotUpdate(context) {
-      if (context.file !== manifestPath && !sourceFiles.includes(context.file) && !isGenerated(context.file, manifestPath)) return;
-      if (compiler && sourceFiles.includes(context.file)) await compile();
-      await refresh();
-      const modules = [virtualId("messages"), virtualId("runtime"), virtualId("server"), virtualId("transport"), virtualId("dynamic")]
-        .map(id => context.server.moduleGraph.getModuleById(id))
-        .filter(Boolean);
-      for (const module of modules) context.server.moduleGraph.invalidateModule(module);
-      return modules;
+      const path = resolve(context.file);
+      if (compiler && isWithin(compiler.output, path)) return [];
+      return update(path, context.server);
     },
   };
 }
@@ -154,6 +213,20 @@ function projectOptions(options) {
     throw new TypeError("commandArguments must contain only strings.");
   const supplied = resolve(cwd, options.project ?? "translations");
   const config = supplied.endsWith(`${sep}runic.json`) ? supplied : join(supplied, "runic.json");
+  const project = dirname(config);
+  const output = resolve(cwd, options.output ?? ".runic/translations");
+  return Object.freeze({
+    project,
+    config,
+    output,
+    ...readProject(config, output),
+    cwd,
+    command: options.command ?? "dotnet",
+    commandArguments: Object.freeze(options.commandArguments ?? ["tool", "run", "runic-translations", "--"]),
+  });
+}
+
+function readProject(config, output) {
   let settings;
   try {
     settings = JSON.parse(readFileSync(config, "utf8"));
@@ -162,22 +235,29 @@ function projectOptions(options) {
   }
   if (!settings || settings.schemaVersion !== 1 || typeof settings.catalog !== "string" || settings.catalog.length === 0)
     throw new Error("The Runic translation project must declare schemaVersion 1 and a catalog ID.");
+  if (settings.sourceLayout !== undefined && settings.sourceLayout !== "locale-toml")
+    throw new Error(`Unsupported Runic translation sourceLayout '${settings.sourceLayout}'.`);
   const project = dirname(config);
-  const output = resolve(cwd, options.output ?? ".runic/translations");
   const sourceFiles = [config];
-  for (const entry of readdirSync(project, { recursive: true })) {
-    const path = join(project, entry);
-    if (statSync(path).isFile() && path.endsWith(".mf2")) sourceFiles.push(path);
+  function discover(directory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (isWithin(output, path)) continue;
+      if (entry.isDirectory()) discover(path);
+      else if (entry.isFile() && (settings.sourceLayout === "locale-toml"
+        ? directory === project && /\.toml$/i.test(path) : /\.mf2$/i.test(path))) sourceFiles.push(path);
+    }
   }
-  return Object.freeze({
-    project,
-    output,
-    manifest: join(output, `${settings.catalog}.esm`, "web-module-manifest-v1.json"),
-    sourceFiles: Object.freeze(sourceFiles),
-    cwd,
-    command: options.command ?? "dotnet",
-    commandArguments: Object.freeze(options.commandArguments ?? ["tool", "run", "runic-translations", "--"]),
-  });
+  discover(project);
+  return {
+    manifest: contained(output, `${settings.catalog}.esm/web-module-manifest-v1.json`),
+    sourceFiles: Object.freeze(sourceFiles.sort()),
+  };
+}
+
+function isWithin(root, path) {
+  const candidate = relative(root, path);
+  return candidate === "" || (!isAbsolute(candidate) && candidate !== ".." && !candidate.startsWith(`..${sep}`));
 }
 
 function contained(root, relativePath) {

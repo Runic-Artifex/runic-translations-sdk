@@ -11,6 +11,7 @@ internal static class BuildIntegrationTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Add("TOML discovery follows custom project paths and membership changes", TomlMembershipIsIncremental);
         runner.Add("build props and targets expose stable import sentinels", ImportsExposeSentinels);
         runner.Add("build maps declared items to AdditionalFiles metadata", ItemsMapToAdditionalFiles);
         runner.Add("build target declares incremental Inputs and Outputs", TargetDeclaresInputsAndOutputs);
@@ -23,6 +24,46 @@ internal static class BuildIntegrationTests
         runner.Add("build rejects an output path outside the intermediate root", OutputContainmentIsEnforced);
         runner.Add("build rejects a reparse-point output root", ReparsePointOutputIsRejected);
         runner.Add("build reconciles All to JSON and clean preserves unrelated files", ReconcileAndCleanRespectOwnership);
+    }
+
+    private static void TomlMembershipIsIncremental()
+    {
+        using TemporaryDirectory temporary = CreateConsumer(generationEnabled: true);
+        string custom = temporary.Resolve("Locale Sources");
+        Directory.Move(temporary.Resolve("translations"), custom);
+        Directory.Delete(Path.Combine(custom, "en"), recursive: true);
+        string projectPath = Path.Combine(custom, "runic.json");
+        string project = File.ReadAllText(projectPath).Replace("\"schemaVersion\":1,", "\"schemaVersion\":1,\"sourceLayout\":\"locale-toml\",", StringComparison.Ordinal);
+        File.WriteAllText(projectPath, project);
+        File.WriteAllText(Path.Combine(custom, "en.ToMl"), "Hello = 'Hello'\n");
+        string consumerPath = temporary.Resolve("Consumer.csproj");
+        string consumer = File.ReadAllText(consumerPath);
+        int lastImport = consumer.LastIndexOf("<Import Project=", StringComparison.Ordinal);
+        consumer = consumer.Insert(lastImport, "<ItemGroup><TranslationProject Include=\"Locale Sources/runic.json\" /></ItemGroup>\n");
+        File.WriteAllText(consumerPath, consumer);
+        ProcessResult first = Build(temporary);
+        Assert.Equal(0, first.ExitCode, first.Combined);
+        string output = FindGeneratedDirectory(temporary);
+        string stamp = Path.Combine(output, ".generate.stamp");
+        DateTime firstWrite = File.GetLastWriteTimeUtc(stamp);
+        ProcessResult unchanged = Build(temporary, noRestore: true);
+        Assert.Equal(0, unchanged.ExitCode, unchanged.Combined);
+        Assert.Equal(firstWrite, File.GetLastWriteTimeUtc(stamp), "unchanged TOML build regenerated");
+        Thread.Sleep(1_200);
+        File.WriteAllText(Path.Combine(custom, "en.ToMl"), "Hello = 'Welcome'\n");
+        ProcessResult edited = Build(temporary, noRestore: true);
+        Assert.Equal(0, edited.ExitCode, edited.Combined);
+        Assert.Contains("Welcome", File.ReadAllText(Path.Combine(output, "minimal.en.locale-v2.json")));
+        string german = Path.Combine(custom, "de.TOML");
+        File.WriteAllText(german, "Hello = 'Hallo'\n");
+        File.SetLastWriteTimeUtc(german, firstWrite.AddMinutes(-1));
+        ProcessResult added = Build(temporary, noRestore: true);
+        Assert.Equal(0, added.ExitCode, added.Combined);
+        Assert.True(File.Exists(Path.Combine(output, "minimal.de.locale-v2.json")), "new older-dated locale was ignored");
+        File.Delete(german);
+        ProcessResult removed = Build(temporary, noRestore: true);
+        Assert.Equal(0, removed.ExitCode, removed.Combined);
+        Assert.False(File.Exists(Path.Combine(output, "minimal.de.locale-v2.json")), "deleted locale artifact survived");
     }
 
     private static void ImportsExposeSentinels()
@@ -38,6 +79,7 @@ internal static class BuildIntegrationTests
     private static void ItemsMapToAdditionalFiles()
     {
         using TemporaryDirectory temporary = CreateConsumer(generationEnabled: false);
+        File.Move(temporary.Resolve("translations", "en", "Hello.mf2"), temporary.Resolve("translations", "en", "Hello.mF2"));
         ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Consumer.csproj", "/nologo", "/t:DumpTranslationItems", "/v:minimal");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string dump = File.ReadAllText(temporary.Resolve("dump.txt"), Encoding.UTF8).Replace('\\', '/');
@@ -61,6 +103,7 @@ internal static class BuildIntegrationTests
         string outputs = (string?)target.Attribute("Outputs") ?? string.Empty;
         Assert.Contains("@(TranslationProject)", inputs);
         Assert.Contains("@(TranslationMf2)", inputs);
+        Assert.Contains("@(TranslationToml)", inputs);
         Assert.Contains("$(MSBuildProjectFullPath)", inputs);
         Assert.Equal("$(TranslationsOutputStamp)", outputs);
 
@@ -305,7 +348,7 @@ internal static class BuildIntegrationTests
                 {{extraProperties}}
               </PropertyGroup>
               <Import Project="{{targets}}" />
-              <Target Name="DumpTranslationItems">
+              <Target Name="DumpTranslationItems" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources">
                 <WriteLinesToFile File="dump.txt"
                                   Overwrite="true"
                                   Lines="PropsImported=$(RunicTranslationsBuildPropsImported);TargetsImported=$(RunicTranslationsBuildTargetsImported);@(AdditionalFiles->'%(Filename)|%(RunicTranslationKind)')" />

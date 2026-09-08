@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { getUiText } from "$lib/ui-text.js";
+	const ui = getUiText();
 	import Loader2Icon from '@lucide/svelte/icons/loader-2';
 	import { cn } from "$lib/utils.js";
 	import type { SVGAttributes } from "svelte/elements";
@@ -10,9 +12,9 @@
 		name,
 		color,
 		stroke,
-		"aria-label": ariaLabel = "Loading",
+		"aria-label": ariaLabel,
 		...restProps
 	}: SVGAttributes<SVGSVGElement> = $props();
 </script>
 
-<Loader2Icon {role} name={name === null ? undefined : name} color={color === null ? undefined : color} stroke={stroke === null ? undefined : stroke} aria-label={ariaLabel} class={cn("size-4 animate-spin", className)} {...restProps} />
+<Loader2Icon {role} name={name === null ? undefined : name} color={color === null ? undefined : color} stroke={stroke === null ? undefined : stroke} aria-label={ariaLabel ?? ui.text("ui_loading")} class={cn("size-4 animate-spin", className)} {...restProps} />

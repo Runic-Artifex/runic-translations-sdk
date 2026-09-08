@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/message-ast-v3.schema.json",
+  "title": "Runic Translations normalized MF2-subset AST v3",
+  "type": "object",
+  "required": ["astVersion", "profile", "inputs", "declarations", "selectors", "variants"],
+  "properties": {
+    "astVersion": { "const": 3 },
+    "profile": { "const": "runic-mf2-subset/1" },
+    "inputs": { "type": "object", "maxProperties": 32, "propertyNames": { "$ref": "#/$defs/name" }, "additionalProperties": { "$ref": "#/$defs/input" } },
+    "declarations": { "type": "array", "items": { "$ref": "#/$defs/declaration" } },
+    "selectors": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/selector" } },
+    "variants": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/variant" } }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+    "input": { "type": "object", "required": ["type", "format"], "properties": { "type": { "enum": ["string", "bool", "int64", "decimal", "date", "time", "instant", "uuid"] }, "format": { "type": "string", "minLength": 1 } }, "additionalProperties": false },
+    "operand": { "type": "object", "required": ["kind", "name"], "properties": { "kind": { "enum": ["input", "local"] }, "name": { "$ref": "#/$defs/name" } }, "additionalProperties": false },
+    "options": { "type": "object", "properties": { "format": { "type": "string" }, "unit": { "enum": ["second", "minute", "hour", "day", "week", "month", "year"] }, "numeric": { "enum": ["always", "auto"] } }, "additionalProperties": false, "unevaluatedProperties": false },
+    "declaration": { "type": "object", "required": ["name", "function", "operand", "options"], "properties": { "name": { "$ref": "#/$defs/name" }, "function": { "enum": ["string", "integer", "number", "date", "time", "datetime", "uuid", "relativeTime"] }, "operand": { "$ref": "#/$defs/operand" }, "options": { "$ref": "#/$defs/options" } }, "additionalProperties": false },
+    "selector": { "type": "object", "required": ["name", "operand", "function"], "properties": { "name": { "$ref": "#/$defs/name" }, "operand": { "$ref": "#/$defs/operand" }, "function": { "enum": ["literal", "plural", "ordinal"] } }, "additionalProperties": false },
+    "variant": { "type": "object", "required": ["matches", "pattern"], "properties": { "matches": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } }, "pattern": { "type": "array", "maxItems": 4096, "items": { "$ref": "#/$defs/node" } } }, "additionalProperties": false },
+    "node": { "oneOf": [
+      { "type": "object", "required": ["kind", "value"], "properties": { "kind": { "const": "text" }, "value": { "type": "string", "maxLength": 65536 } }, "additionalProperties": false },
+      { "type": "object", "required": ["kind", "operand"], "properties": { "kind": { "const": "expression" }, "operand": { "$ref": "#/$defs/operand" } }, "additionalProperties": false },
+      { "type": "object", "required": ["kind", "function", "operand", "options"], "properties": { "kind": { "const": "format" }, "function": { "enum": ["string", "integer", "number", "date", "time", "datetime", "uuid", "relativeTime"] }, "operand": { "$ref": "#/$defs/operand" }, "options": { "$ref": "#/$defs/options" } }, "additionalProperties": false },
+      { "type": "object", "required": ["kind", "name", "attributes", "children"], "properties": { "kind": { "const": "markup" }, "name": { "$ref": "#/$defs/name" }, "attributes": { "type": "object", "propertyNames": { "$ref": "#/$defs/name" }, "additionalProperties": { "type": "string" } }, "children": { "type": "array", "maxItems": 4096, "items": { "$ref": "#/$defs/node" } } }, "additionalProperties": false }
+    ] }
+  }
+}

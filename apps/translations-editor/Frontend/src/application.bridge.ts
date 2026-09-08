@@ -1,6 +1,12 @@
 import { Schema } from "effect";
 import { bridge, defineApplicationBridgeContract } from "@runic-artifex/application-bridge";
 
+const EditorNotice = Schema.Struct({
+  code: Schema.String,
+  args: Schema.Array(Schema.Struct({ name: Schema.String, value: Schema.optional(Schema.String), number: Schema.optional(Schema.Number) })),
+  detail: Schema.optional(Schema.String),
+});
+
 const EditorLocale = Schema.Struct({
   tag: Schema.String,
   fallback: Schema.optional(Schema.String),
@@ -30,12 +36,20 @@ const EditorCatalogSummary = Schema.Struct({
   success: Schema.Boolean,
 });
 
+const EditorMessageEntry = Schema.Struct({
+  key: Schema.String,
+  content: Schema.String,
+  valueStartByte: Schema.Int,
+  valueLengthBytes: Schema.Int,
+});
+
 const EditorDocument = Schema.Struct({
   path: Schema.String,
   content: Schema.String,
   revision: Schema.String,
   isManifest: Schema.Boolean,
   isMalformed: Schema.Boolean,
+  entries: Schema.optional(Schema.Array(EditorMessageEntry)),
   locale: Schema.optional(Schema.String),
   layer: Schema.optional(Schema.String),
 });
@@ -49,6 +63,14 @@ const EditorDiagnostic = Schema.Struct({
   column: Schema.Int,
   endLine: Schema.Int,
   endColumn: Schema.Int,
+  notice: Schema.optional(EditorNotice),
+});
+
+const EditorDocumentDraft = Schema.Struct({
+  success: Schema.Boolean,
+  content: Schema.String,
+  entries: Schema.Array(EditorMessageEntry),
+  diagnostics: Schema.Array(EditorDiagnostic),
 });
 
 const EditorPendingTransaction = Schema.Struct({
@@ -90,8 +112,8 @@ const EditorReviewSnapshot = Schema.Struct({
 const EditorHistoryState = Schema.Struct({
   canUndo: Schema.Boolean,
   canRedo: Schema.Boolean,
-  undoLabel: Schema.optional(Schema.String),
-  redoLabel: Schema.optional(Schema.String),
+  undoLabel: Schema.optional(EditorNotice),
+  redoLabel: Schema.optional(EditorNotice),
 });
 
 export const WorkspaceSnapshot = Schema.Struct({
@@ -121,7 +143,7 @@ const EditorMessagePreview = Schema.Struct({
 const EditorOperationResult = Schema.Struct({
   ok: Schema.Boolean,
   kind: Schema.String,
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
   snapshot: Schema.optional(WorkspaceSnapshot),
   validation: Schema.optional(ValidationResult),
   history: Schema.optional(EditorHistoryState),
@@ -135,7 +157,7 @@ const EditorReviewSaveRequest = Schema.Struct({
 
 const EditorReviewOperationResult = Schema.Struct({
   ok: Schema.Boolean,
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
   review: Schema.optional(EditorReviewSnapshot),
   history: Schema.optional(EditorHistoryState),
 });
@@ -154,12 +176,12 @@ const EditorAbout = Schema.Struct({
 const EditorDiagnosticBundleResult = Schema.Struct({
   ok: Schema.Boolean,
   path: Schema.optional(Schema.String),
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
 });
 
 const EditorDiagnosticBundleActionResult = Schema.Struct({
   ok: Schema.Boolean,
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
 });
 
 // The native host owns these records in the user's application-data directory.
@@ -197,7 +219,7 @@ const EditorProjectCreationRequest = Schema.Struct({
 
 const EditorProjectPlan = Schema.Struct({
   ok: Schema.Boolean,
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
   directory: Schema.String,
   catalogId: Schema.String,
   locales: Schema.Array(EditorLocale),
@@ -226,7 +248,7 @@ const EditorWorkspacePickerResult = Schema.Struct({
   ok: Schema.Boolean,
   cancelled: Schema.Boolean,
   directory: Schema.optional(Schema.String),
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
 });
 
 const MutationKind = Schema.Literals([
@@ -260,7 +282,7 @@ const EditorMutationFile = Schema.Struct({
 
 const EditorMutationPreview = Schema.Struct({
   ok: Schema.Boolean,
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
   files: Schema.Array(EditorMutationFile),
   requiresIrreversibleConfirmation: Schema.Boolean,
   confirmationToken: Schema.optional(Schema.String),
@@ -278,7 +300,7 @@ const EditorInterchangeLoss = Schema.Struct({
 
 const EditorInterchangeRefusal = Schema.Struct({
   code: Schema.String,
-  message: Schema.String,
+  message: EditorNotice,
 });
 
 const EditorInterchangeFile = Schema.Struct({
@@ -289,7 +311,7 @@ const EditorInterchangeFile = Schema.Struct({
 
 const EditorXliffExportResult = Schema.Struct({
   ok: Schema.Boolean,
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
   catalogId: Schema.optional(Schema.String),
   documents: Schema.Array(EditorInterchangeFile),
   losses: Schema.Array(EditorInterchangeLoss),
@@ -298,7 +320,7 @@ const EditorXliffExportResult = Schema.Struct({
 
 const EditorReviewFileResult = Schema.Struct({
   ok: Schema.Boolean,
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
   path: Schema.optional(Schema.String),
   entryCount: Schema.Int,
 });
@@ -314,7 +336,7 @@ const EditorKeyChange = Schema.Struct({
 
 const EditorXliffImportPreview = Schema.Struct({
   ok: Schema.Boolean,
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
   requiresIrreversibleConfirmation: Schema.Boolean,
   confirmationToken: Schema.optional(Schema.String),
   catalogId: Schema.optional(Schema.String),
@@ -341,7 +363,7 @@ const EditorReviewChange = Schema.Struct({
 
 const EditorReviewImportPreview = Schema.Struct({
   ok: Schema.Boolean,
-  message: Schema.optional(Schema.String),
+  message: Schema.optional(EditorNotice),
   requiresIrreversibleConfirmation: Schema.Boolean,
   confirmationToken: Schema.optional(Schema.String),
   catalogId: Schema.optional(Schema.String),
@@ -387,6 +409,12 @@ const commands = [
     Schema.TaggedStruct("ValidateDocument", { path: Schema.String, content: Schema.String }),
     "DocumentValidated",
   ),
+  command("TransformDocument", Schema.TaggedStruct("TransformDocument", {
+    path: Schema.String,
+    content: Schema.String,
+    key: Schema.optional(Schema.String),
+    value: Schema.optional(Schema.String),
+  }), "DocumentTransformed"),
   command(
     "PreviewMessage",
     Schema.TaggedStruct("PreviewMessage", {
@@ -466,6 +494,7 @@ const receipts = [
   { tag: "TransactionRecovered", schema: Schema.TaggedStruct("TransactionRecovered", { result: EditorOperationResult }) },
   { tag: "UndoApplied", schema: Schema.TaggedStruct("UndoApplied", { result: EditorOperationResult }) },
   { tag: "RedoApplied", schema: Schema.TaggedStruct("RedoApplied", { result: EditorOperationResult }) },
+  { tag: "DocumentTransformed", schema: Schema.TaggedStruct("DocumentTransformed", { result: EditorDocumentDraft }) },
   { tag: "DocumentValidated", schema: Schema.TaggedStruct("DocumentValidated", { result: ValidationResult }) },
   { tag: "MessagePreviewed", schema: Schema.TaggedStruct("MessagePreviewed", { preview: EditorMessagePreview }) },
   { tag: "DocumentSaved", schema: Schema.TaggedStruct("DocumentSaved", { result: EditorOperationResult }) },

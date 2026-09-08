@@ -1,1 +1,0 @@
-Both choices use the bounded local journal. The journal is removed only after recovery succeeds.

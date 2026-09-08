@@ -80,6 +80,7 @@ internal sealed class ResourceModel
     internal ByteSpan KeySpan { get; }
     internal ByteSpan PathSpan { get; }
     internal ByteSpan ValueSpan { get; }
+    internal TextSourceLocation? KeyLocation { get; init; }
 }
 
 internal sealed class PlaceholderModel

@@ -48,7 +48,8 @@ Choose this package for generated C# and whenever MSBuild owns input classificat
 
 ## Important build behavior
 
-- The current target accepts exactly one `runic.json` project and its discovered `.mf2` messages.
+- Discovery follows the declared `TranslationProject` directory, including nondefault paths. Explicit `TranslationToml` and legacy `TranslationMf2` items override the corresponding discovery. File membership is recorded in generation state so additions and removals invalidate artifacts.
+- The current target accepts exactly one `runic.json` project and its discovered sibling `{locale}.toml` files (`sourceLayout: "locale-toml"`) or legacy `.mf2` messages.
 - The default launcher is the project-local `dotnet tool run runic-translations --`; restore the committed tool manifest before building.
 - Output must resolve beneath `IntermediateOutputPath`. Unsafe paths fail with `RTR0020`.
 - Incremental generation tracks inputs, settings, the tool manifest, declared outputs, and an owned-output inventory.

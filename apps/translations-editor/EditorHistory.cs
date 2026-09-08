@@ -89,13 +89,13 @@ internal sealed class EditorHistory
 
     internal abstract class Entry
     {
-        protected Entry(string label, int bytes)
+        protected Entry(EditorNotice label, int bytes)
         {
             Label = label;
             Bytes = bytes;
         }
 
-        public string Label { get; }
+        public EditorNotice Label { get; }
         public int Bytes { get; }
     }
 
@@ -105,7 +105,7 @@ internal sealed class EditorHistory
         string after,
         string undoRevision,
         string redoRevision)
-        : Entry($"Save {path}", Estimate(path, before, after, undoRevision, redoRevision))
+        : Entry(EditorNotice.Create("ui_backend_history_save", ("path", path)), Estimate(path, before, after, undoRevision, redoRevision))
     {
         public string Path { get; } = path;
         public string Before { get; } = before;
@@ -123,7 +123,7 @@ internal sealed class EditorHistory
         string? undoRevision,
         string? redoRevision,
         bool deleteOnUndo)
-        : Entry("Save workflow", Estimate(undo, redo, undoRevision, redoRevision))
+        : Entry(EditorNotice.Create("ui_backend_history_review"), Estimate(undo, redo, undoRevision, redoRevision))
     {
         public EditorReviewSaveRequest Undo { get; } = undo;
         public EditorReviewSaveRequest Redo { get; } = redo;

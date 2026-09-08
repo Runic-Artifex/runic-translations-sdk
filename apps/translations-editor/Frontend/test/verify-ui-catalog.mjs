@@ -11,14 +11,15 @@ const [english, german] = await Promise.all([
 const sources = [];
 for await (const source of glob("src/{lib,routes}/**/*.svelte", {
   cwd: new URL("..", import.meta.url),
-  exclude: ["src/lib/components/ui/**"],
 })) sources.push(source);
+
+assert.deepEqual(Object.keys(english).sort(), Object.keys(german).sort(), "Locale key sets differ; fallback must not hide missing German messages.");
 
 const keys = new Set();
 const uncataloged = [];
 for (const source of sources) {
   const markup = await readFile(new URL(`../${source}`, import.meta.url), "utf8");
-  for (const match of markup.matchAll(/ui\.text\("(ui_[a-z0-9_]+)"\)/g)) keys.add(match[1]);
+  for (const match of markup.matchAll(/ui\.text\("(ui_[a-z0-9_]+)"(?=[,)])/g)) keys.add(match[1]);
   visit(parse(markup).html, (node, parent) => {
     if (node.type === "Text" && parent?.type !== "Attribute" && isVisibleCopy(node.data, parent)) uncataloged.push(`${source}: ${node.data.trim()}`);
     if (node.type === "Attribute" && ["aria-label", "title", "placeholder", "alt"].includes(node.name) &&

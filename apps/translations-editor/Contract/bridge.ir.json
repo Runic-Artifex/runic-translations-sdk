@@ -8,7 +8,7 @@
   "fingerprint": {
     "algorithm": "sha256",
     "scope": "wire",
-    "value": "b8b43be15b357f7984241759574e7b730212c3e17da7321fff8264b9b1d8faf1"
+    "value": "e91f67a360e65065044415abd3f0484a8a430dab3d33cdea97afc8e696532528"
   },
   "format": "runic.application-bridge-ir",
   "formatVersion": 1,
@@ -195,6 +195,13 @@
         "cancellable": false,
         "name": "SaveReview",
         "receipt": "ReviewSaved",
+        "startsOperation": false
+      },
+      {
+        "advancesRevision": false,
+        "cancellable": false,
+        "name": "TransformDocument",
+        "receipt": "DocumentTransformed",
         "startsOperation": false
       },
       {
@@ -1123,6 +1130,42 @@
           }
         }
       },
+      "command:TransformDocument": {
+        "kind": "object",
+        "properties": {
+          "_tag": {
+            "optional": false,
+            "type": {
+              "kind": "literal",
+              "value": "TransformDocument"
+            }
+          },
+          "content": {
+            "optional": false,
+            "type": {
+              "kind": "string"
+            }
+          },
+          "key": {
+            "optional": true,
+            "type": {
+              "kind": "string"
+            }
+          },
+          "path": {
+            "optional": false,
+            "type": {
+              "kind": "string"
+            }
+          },
+          "value": {
+            "optional": true,
+            "type": {
+              "kind": "string"
+            }
+          }
+        }
+      },
       "command:Undo": {
         "kind": "object",
         "properties": {
@@ -1461,7 +1504,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -1499,7 +1585,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -1531,7 +1660,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -1580,13 +1752,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -1601,7 +1859,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -1668,6 +1969,55 @@
                                   "kind": "string"
                                 }
                               },
+                              "notice": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "args": {
+                                      "optional": false,
+                                      "type": {
+                                        "items": {
+                                          "kind": "object",
+                                          "properties": {
+                                            "name": {
+                                              "optional": false,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            },
+                                            "number": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "number"
+                                              }
+                                            },
+                                            "value": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "kind": "array"
+                                      }
+                                    },
+                                    "code": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "detail": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
                               "path": {
                                 "optional": false,
                                 "type": {
@@ -1702,6 +2052,197 @@
                         }
                       }
                     }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "receipt:DocumentTransformed": {
+        "kind": "object",
+        "properties": {
+          "_tag": {
+            "optional": false,
+            "type": {
+              "kind": "literal",
+              "value": "DocumentTransformed"
+            }
+          },
+          "result": {
+            "optional": false,
+            "type": {
+              "kind": "object",
+              "properties": {
+                "content": {
+                  "optional": false,
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                "diagnostics": {
+                  "optional": false,
+                  "type": {
+                    "items": {
+                      "kind": "object",
+                      "properties": {
+                        "column": {
+                          "optional": false,
+                          "type": {
+                            "kind": "ref",
+                            "name": "type:Int"
+                          }
+                        },
+                        "endColumn": {
+                          "optional": false,
+                          "type": {
+                            "kind": "ref",
+                            "name": "type:Int"
+                          }
+                        },
+                        "endLine": {
+                          "optional": false,
+                          "type": {
+                            "kind": "ref",
+                            "name": "type:Int"
+                          }
+                        },
+                        "id": {
+                          "optional": false,
+                          "type": {
+                            "kind": "string"
+                          }
+                        },
+                        "line": {
+                          "optional": false,
+                          "type": {
+                            "kind": "ref",
+                            "name": "type:Int"
+                          }
+                        },
+                        "message": {
+                          "optional": false,
+                          "type": {
+                            "kind": "string"
+                          }
+                        },
+                        "notice": {
+                          "optional": true,
+                          "type": {
+                            "kind": "object",
+                            "properties": {
+                              "args": {
+                                "optional": false,
+                                "type": {
+                                  "items": {
+                                    "kind": "object",
+                                    "properties": {
+                                      "name": {
+                                        "optional": false,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "number": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "number"
+                                        }
+                                      },
+                                      "value": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "kind": "array"
+                                }
+                              },
+                              "code": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "detail": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "path": {
+                          "optional": false,
+                          "type": {
+                            "kind": "string"
+                          }
+                        },
+                        "severity": {
+                          "optional": false,
+                          "type": {
+                            "kind": "union",
+                            "members": [
+                              {
+                                "kind": "literal",
+                                "value": "error"
+                              },
+                              {
+                                "kind": "literal",
+                                "value": "warning"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "kind": "array"
+                  }
+                },
+                "entries": {
+                  "optional": false,
+                  "type": {
+                    "items": {
+                      "kind": "object",
+                      "properties": {
+                        "content": {
+                          "optional": false,
+                          "type": {
+                            "kind": "string"
+                          }
+                        },
+                        "key": {
+                          "optional": false,
+                          "type": {
+                            "kind": "string"
+                          }
+                        },
+                        "valueLengthBytes": {
+                          "optional": false,
+                          "type": {
+                            "kind": "ref",
+                            "name": "type:Int"
+                          }
+                        },
+                        "valueStartByte": {
+                          "optional": false,
+                          "type": {
+                            "kind": "ref",
+                            "name": "type:Int"
+                          }
+                        }
+                      }
+                    },
+                    "kind": "array"
+                  }
+                },
+                "success": {
+                  "optional": false,
+                  "type": {
+                    "kind": "boolean"
                   }
                 }
               }
@@ -1768,6 +2309,55 @@
                           "optional": false,
                           "type": {
                             "kind": "string"
+                          }
+                        },
+                        "notice": {
+                          "optional": true,
+                          "type": {
+                            "kind": "object",
+                            "properties": {
+                              "args": {
+                                "optional": false,
+                                "type": {
+                                  "items": {
+                                    "kind": "object",
+                                    "properties": {
+                                      "name": {
+                                        "optional": false,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "number": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "number"
+                                        }
+                                      },
+                                      "value": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "kind": "array"
+                                }
+                              },
+                              "code": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "detail": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
                           }
                         },
                         "path": {
@@ -2076,6 +2666,55 @@
                             "kind": "string"
                           }
                         },
+                        "notice": {
+                          "optional": true,
+                          "type": {
+                            "kind": "object",
+                            "properties": {
+                              "args": {
+                                "optional": false,
+                                "type": {
+                                  "items": {
+                                    "kind": "object",
+                                    "properties": {
+                                      "name": {
+                                        "optional": false,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "number": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "number"
+                                        }
+                                      },
+                                      "value": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "kind": "array"
+                                }
+                              },
+                              "code": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "detail": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
                         "path": {
                           "optional": false,
                           "type": {
@@ -2155,13 +2794,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -2176,7 +2901,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -2241,6 +3009,55 @@
                                 "optional": false,
                                 "type": {
                                   "kind": "string"
+                                }
+                              },
+                              "notice": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "args": {
+                                      "optional": false,
+                                      "type": {
+                                        "items": {
+                                          "kind": "object",
+                                          "properties": {
+                                            "name": {
+                                              "optional": false,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            },
+                                            "number": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "number"
+                                              }
+                                            },
+                                            "value": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "kind": "array"
+                                      }
+                                    },
+                                    "code": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "detail": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
                                 }
                               },
                               "path": {
@@ -2345,7 +3162,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -2400,13 +3260,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -2421,7 +3367,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -2486,6 +3475,55 @@
                                 "optional": false,
                                 "type": {
                                   "kind": "string"
+                                }
+                              },
+                              "notice": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "args": {
+                                      "optional": false,
+                                      "type": {
+                                        "items": {
+                                          "kind": "object",
+                                          "properties": {
+                                            "name": {
+                                              "optional": false,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            },
+                                            "number": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "number"
+                                              }
+                                            },
+                                            "value": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "kind": "array"
+                                      }
+                                    },
+                                    "code": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "detail": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
                                 }
                               },
                               "path": {
@@ -2591,7 +3629,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -2640,13 +3721,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -2661,7 +3828,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -2726,6 +3936,55 @@
                                 "optional": false,
                                 "type": {
                                   "kind": "string"
+                                }
+                              },
+                              "notice": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "args": {
+                                      "optional": false,
+                                      "type": {
+                                        "items": {
+                                          "kind": "object",
+                                          "properties": {
+                                            "name": {
+                                              "optional": false,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            },
+                                            "number": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "number"
+                                              }
+                                            },
+                                            "value": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "kind": "array"
+                                      }
+                                    },
+                                    "code": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "detail": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
                                 }
                               },
                               "path": {
@@ -2794,7 +4053,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -2849,13 +4151,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -2864,7 +4252,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -3126,7 +4557,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -3150,7 +4624,50 @@
                         "message": {
                           "optional": false,
                           "type": {
-                            "kind": "string"
+                            "kind": "object",
+                            "properties": {
+                              "args": {
+                                "optional": false,
+                                "type": {
+                                  "items": {
+                                    "kind": "object",
+                                    "properties": {
+                                      "name": {
+                                        "optional": false,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "number": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "number"
+                                        }
+                                      },
+                                      "value": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "kind": "array"
+                                }
+                              },
+                              "code": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "detail": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -3211,13 +4728,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -3226,7 +4829,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -3418,13 +5064,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -3439,7 +5171,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -3504,6 +5279,55 @@
                                 "optional": false,
                                 "type": {
                                   "kind": "string"
+                                }
+                              },
+                              "notice": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "args": {
+                                      "optional": false,
+                                      "type": {
+                                        "items": {
+                                          "kind": "object",
+                                          "properties": {
+                                            "name": {
+                                              "optional": false,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            },
+                                            "number": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "number"
+                                              }
+                                            },
+                                            "value": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "kind": "array"
+                                      }
+                                    },
+                                    "code": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "detail": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
                                 }
                               },
                               "path": {
@@ -3582,13 +5406,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -3603,7 +5513,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -3668,6 +5621,55 @@
                                 "optional": false,
                                 "type": {
                                   "kind": "string"
+                                }
+                              },
+                              "notice": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "args": {
+                                      "optional": false,
+                                      "type": {
+                                        "items": {
+                                          "kind": "object",
+                                          "properties": {
+                                            "name": {
+                                              "optional": false,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            },
+                                            "number": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "number"
+                                              }
+                                            },
+                                            "value": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "kind": "array"
+                                      }
+                                    },
+                                    "code": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "detail": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
                                 }
                               },
                               "path": {
@@ -3765,13 +5767,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -3786,7 +5874,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -3851,6 +5982,55 @@
                                 "optional": false,
                                 "type": {
                                   "kind": "string"
+                                }
+                              },
+                              "notice": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "args": {
+                                      "optional": false,
+                                      "type": {
+                                        "items": {
+                                          "kind": "object",
+                                          "properties": {
+                                            "name": {
+                                              "optional": false,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            },
+                                            "number": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "number"
+                                              }
+                                            },
+                                            "value": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "kind": "array"
+                                      }
+                                    },
+                                    "code": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "detail": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
                                 }
                               },
                               "path": {
@@ -3924,7 +6104,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -4033,7 +6256,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -4082,13 +6348,99 @@
                       "redoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       },
                       "undoLabel": {
                         "optional": true,
                         "type": {
-                          "kind": "string"
+                          "kind": "object",
+                          "properties": {
+                            "args": {
+                              "optional": false,
+                              "type": {
+                                "items": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "name": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "number": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "number"
+                                      }
+                                    },
+                                    "value": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
+                                },
+                                "kind": "array"
+                              }
+                            },
+                            "code": {
+                              "optional": false,
+                              "type": {
+                                "kind": "string"
+                              }
+                            },
+                            "detail": {
+                              "optional": true,
+                              "type": {
+                                "kind": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -4103,7 +6455,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -4168,6 +6563,55 @@
                                 "optional": false,
                                 "type": {
                                   "kind": "string"
+                                }
+                              },
+                              "notice": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "object",
+                                  "properties": {
+                                    "args": {
+                                      "optional": false,
+                                      "type": {
+                                        "items": {
+                                          "kind": "object",
+                                          "properties": {
+                                            "name": {
+                                              "optional": false,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            },
+                                            "number": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "number"
+                                              }
+                                            },
+                                            "value": {
+                                              "optional": true,
+                                              "type": {
+                                                "kind": "string"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "kind": "array"
+                                      }
+                                    },
+                                    "code": {
+                                      "optional": false,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    },
+                                    "detail": {
+                                      "optional": true,
+                                      "type": {
+                                        "kind": "string"
+                                      }
+                                    }
+                                  }
                                 }
                               },
                               "path": {
@@ -4332,7 +6776,50 @@
                 "message": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "ok": {
@@ -4356,7 +6843,50 @@
                         "message": {
                           "optional": false,
                           "type": {
-                            "kind": "string"
+                            "kind": "object",
+                            "properties": {
+                              "args": {
+                                "optional": false,
+                                "type": {
+                                  "items": {
+                                    "kind": "object",
+                                    "properties": {
+                                      "name": {
+                                        "optional": false,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      },
+                                      "number": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "number"
+                                        }
+                                      },
+                                      "value": {
+                                        "optional": true,
+                                        "type": {
+                                          "kind": "string"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "kind": "array"
+                                }
+                              },
+                              "code": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "detail": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -4601,6 +7131,55 @@
                       "kind": "string"
                     }
                   },
+                  "notice": {
+                    "optional": true,
+                    "type": {
+                      "kind": "object",
+                      "properties": {
+                        "args": {
+                          "optional": false,
+                          "type": {
+                            "items": {
+                              "kind": "object",
+                              "properties": {
+                                "name": {
+                                  "optional": false,
+                                  "type": {
+                                    "kind": "string"
+                                  }
+                                },
+                                "number": {
+                                  "optional": true,
+                                  "type": {
+                                    "kind": "number"
+                                  }
+                                },
+                                "value": {
+                                  "optional": true,
+                                  "type": {
+                                    "kind": "string"
+                                  }
+                                }
+                              }
+                            },
+                            "kind": "array"
+                          }
+                        },
+                        "code": {
+                          "optional": false,
+                          "type": {
+                            "kind": "string"
+                          }
+                        },
+                        "detail": {
+                          "optional": true,
+                          "type": {
+                            "kind": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
                   "path": {
                     "optional": false,
                     "type": {
@@ -4638,6 +7217,43 @@
                     "optional": false,
                     "type": {
                       "kind": "string"
+                    }
+                  },
+                  "entries": {
+                    "optional": true,
+                    "type": {
+                      "items": {
+                        "kind": "object",
+                        "properties": {
+                          "content": {
+                            "optional": false,
+                            "type": {
+                              "kind": "string"
+                            }
+                          },
+                          "key": {
+                            "optional": false,
+                            "type": {
+                              "kind": "string"
+                            }
+                          },
+                          "valueLengthBytes": {
+                            "optional": false,
+                            "type": {
+                              "kind": "ref",
+                              "name": "type:Int"
+                            }
+                          },
+                          "valueStartByte": {
+                            "optional": false,
+                            "type": {
+                              "kind": "ref",
+                              "name": "type:Int"
+                            }
+                          }
+                        }
+                      },
+                      "kind": "array"
                     }
                   },
                   "isMalformed": {
@@ -4701,13 +7317,99 @@
                 "redoLabel": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "undoLabel": {
                   "optional": true,
                   "type": {
-                    "kind": "string"
+                    "kind": "object",
+                    "properties": {
+                      "args": {
+                        "optional": false,
+                        "type": {
+                          "items": {
+                            "kind": "object",
+                            "properties": {
+                              "name": {
+                                "optional": false,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              },
+                              "number": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "number"
+                                }
+                              },
+                              "value": {
+                                "optional": true,
+                                "type": {
+                                  "kind": "string"
+                                }
+                              }
+                            }
+                          },
+                          "kind": "array"
+                        }
+                      },
+                      "code": {
+                        "optional": false,
+                        "type": {
+                          "kind": "string"
+                        }
+                      },
+                      "detail": {
+                        "optional": true,
+                        "type": {
+                          "kind": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }

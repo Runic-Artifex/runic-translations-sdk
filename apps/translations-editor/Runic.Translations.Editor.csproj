@@ -68,6 +68,8 @@
     <ProjectReference Include="../../packages/dotnet/Runic.Translations.Generator/Runic.Translations.Generator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
+    <Analyzer Include="$(RunicSdkRoot)tools/Runic.Translations.Compiler/bin/$(Configuration)/net10.0/Tomlyn.dll"
+              Condition="'$(RunicSdkRoot)' != ''" />
     <Analyzer Include="$(RunicSdkRoot)tools/Runic.Translations.Compiler/bin/$(Configuration)/net10.0/Runic.Translations.Compiler.dll"
               Condition="'$(RunicSdkRoot)' != ''" />
   </ItemGroup>
@@ -84,13 +86,14 @@
 
   <ItemGroup>
     <TranslationProject Include="EditorResources/runic.json" />
-    <TranslationMf2 Include="EditorResources/**/*.mf2" />
+    <TranslationToml Include="EditorResources/*.toml" />
     <EditorFrontendInput Include="Frontend/package.json;../../bun.lock;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/**/*" />
     <None Update="ExampleWorkspace/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
     <None Include="LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../specs/translations/licenses/Tomlyn-LICENSE.txt" Link="licenses/Tomlyn-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="PREVIEW-NOTICE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="launchers/runic-translations-editor" Link="runic-translations-editor" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

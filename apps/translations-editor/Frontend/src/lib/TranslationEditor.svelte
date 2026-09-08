@@ -50,7 +50,7 @@
         {label}
       </Field.Label>
       <span class="shrink-0 text-[0.65rem] tabular-nums text-muted-foreground">
-        {value.length.toLocaleString()} {ui.text("ui_translation_editor_characters")}
+        {ui.text("ui_count_characters", { count: value.length })}
       </span>
     </div>
 

@@ -25,7 +25,8 @@ internal static class InputFiles
         string root = Path.GetDirectoryName(configPath)!;
         var messages = new List<TranslationSource>();
         foreach (string candidate in EnumerateFilesWithoutReparsePoints(root, projectPath))
-            if (string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(candidate), ".toml", StringComparison.OrdinalIgnoreCase))
                 messages.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
         messages.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         return new CompilerInputs(ReadSource(configPath, DisplayPath(configPath, currentDirectory)), messages);

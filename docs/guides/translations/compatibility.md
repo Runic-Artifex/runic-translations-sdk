@@ -1,13 +1,16 @@
 # Compatibility and versioning
 
-Runic Translations v1 has one source contract: `runic.json` project schema 1
-plus standard MF2 files at `{locale}/{message_id}.mf2`. JSON catalog manifests
-and JSON resource documents are not accepted authoring formats.
+Runic Translations uses `runic.json` project schema 1 with an explicit source
+layout. New projects set `sourceLayout: "locale-toml"` and store MF2 string values
+under flat message keys in sibling `{locale}.toml` files. Projects without the
+field retain the historical `{locale}/{message_id}.mf2` layout for legacy reading
+and migration. Mixed layouts are rejected. JSON catalog manifests and JSON
+resource documents are not accepted authoring formats.
 
 | Contract                        | Current version | Compatibility rule                                                        |
 | ------------------------------- | --------------: | ------------------------------------------------------------------------- |
 | Runic project                   |               1 | `runic.json` is the single project declaration.                           |
-| Message source                  |             MF2 | One identifier-safe message per `.mf2` file.                              |
+| Message source                  |             MF2 | TOML string values; legacy per-message files when `sourceLayout` is absent. |
 | Normalized runtime grammar      |               2 | Every generated backend consumes the same compiler-owned execution model. |
 | Locale pack                     |               2 | Decoders reject unsupported versions before reading messages.             |
 | ESM ABI                         |               3 | Generated modules expose the typed `m.message_id()` namespace.            |

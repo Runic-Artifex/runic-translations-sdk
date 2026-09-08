@@ -152,13 +152,13 @@
       const appliedResult = appliedPayload.result ?? appliedPayload;
       if (appliedResult.ok !== true) throw new Error(appliedResult.message ?? "The key mutation was rejected.");
       const appliedSnapshot = appliedResult.snapshot ?? {};
-      if (!appliedSnapshot.documents?.some((document) => document.path === "de/hosted_web_e2e.mf2")) {
+      if (!appliedSnapshot.documents?.some((document) => document.locale === "de" && document.entries?.some((entry) => entry.key === "hosted_web_e2e"))) {
         throw new Error("The mutation snapshot did not contain the created key.");
       }
       done("key created");
 
       done = stage("save-document");
-      const mutated = appliedResult.snapshot.documents.find((document) => document.path === "de/hosted_web_e2e.mf2")
+      const mutated = appliedResult.snapshot.documents.find((document) => document.locale === "de" && document.entries?.some((entry) => entry.key === "hosted_web_e2e"))
         ?? appliedResult.snapshot.documents[0];
       const savedPayload = await expectReceipt({
         _tag: "SaveDocument",

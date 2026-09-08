@@ -1,2 +1,0 @@
-.input {$name :string}
-Willkommen zurück, {$name}

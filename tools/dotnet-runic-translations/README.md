@@ -18,8 +18,21 @@ dotnet tool run runic-translations -- validate \
   --project translations
 ```
 
-The project path may name the conventional directory or its `runic.json`. The
-tool discovers locale directories and `.mf2` messages beneath it.
+The project path may name the conventional directory or its `runic.json`.
+New projects declare `sourceLayout: "locale-toml"` and keep MF2 messages as
+string values in sibling files such as `en.toml` and `de.toml`. Projects without
+that field retain the legacy locale-directory `.mf2` layout.
+
+## Migrate an existing catalog
+
+```bash
+dotnet tool run runic-translations -- migrate --project translations --dry-run
+dotnet tool run runic-translations -- migrate --project translations
+```
+
+Migration validates the complete proposed catalog before committing its file
+transaction. It preserves decoded MF2 content and refuses collisions or stale
+files. The dry run leaves the original project unchanged.
 
 ## Generate C# and ESM
 

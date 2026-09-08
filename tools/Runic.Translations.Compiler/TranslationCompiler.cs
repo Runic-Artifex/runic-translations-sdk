@@ -7,9 +7,9 @@ using System.Threading;
 
 namespace Runic.Translations.Compiler;
 
-public static class TranslationCompiler
+public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime" };
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceLayout" };
     private static readonly string[] ManifestMembers = { "$schema", "schemaVersion", "catalog", "code", "defaultLocale", "locales", "layers", "validation", "runtime", "outputs" };
     private static readonly string[] DocumentMembers = { "$schema", "schemaVersion", "catalog", "locale", "layer", "resources" };
     private static readonly string[] LeafMembers = { "$value", "$description", "$placeholders", "$since", "$deprecated", "$tags" };
@@ -157,6 +157,14 @@ public static class TranslationCompiler
         IEnumerable<TranslationSource> messages,
         TranslationCompilerOptions? options,
         CancellationToken cancellationToken)
+        => CompileProject(project, messages, options, cancellationToken);
+
+    public static TranslationCompilation CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
+        TranslationCompilerOptions? options = null)
+        => CompileProject(project, messages, options, CancellationToken.None);
+
+    public static TranslationCompilation CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
+        TranslationCompilerOptions? options, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(messages);
@@ -172,6 +180,13 @@ public static class TranslationCompiler
         if (manifest is null)
             return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
 
+        JsonProperty? layoutProperty = parsed.Root!.Property("sourceLayout");
+        bool toml = layoutProperty is not null;
+        if (toml && (layoutProperty!.Value.Kind != JsonKind.String || layoutProperty.Value.Text != "locale-toml"))
+        {
+            diagnostics.Add("RTR0042", TranslationDiagnosticSeverity.Error, "Unsupported sourceLayout; expected 'locale-toml', or omit for legacy MF2.", project, layoutProperty.Value.Span);
+            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
+        }
         string projectDirectory = ProjectDirectory(project.Path);
         var documents = new List<DocumentModel>(messageSources.Length);
         var discoveredLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -179,6 +194,11 @@ public static class TranslationCompiler
         {
             cancellationToken.ThrowIfCancellationRequested();
             TranslationSource source = messageSources[index];
+            if (toml)
+            {
+                ReadTomlDocument(projectDirectory, source, manifest, documents, discoveredLocales, diagnostics, options, cancellationToken);
+                continue;
+            }
             if (!TryMf2Identity(projectDirectory, source.Path, out string localeText, out string messageId))
             {
                 diagnostics.Add("RTR0040", TranslationDiagnosticSeverity.Error,
@@ -229,6 +249,8 @@ public static class TranslationCompiler
             documents.Add(document);
         }
 
+        if (discoveredLocales.Count > options.MaximumLocalesPerCatalog)
+            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", project, manifest.DefaultLocaleSpan);
         if (manifest.Locales.Count == 0)
         {
             string[] locales = new List<string>(discoveredLocales).ToArray();
@@ -243,7 +265,7 @@ public static class TranslationCompiler
         ValidateFallbackGraph(manifest, diagnostics);
         if (messageSources.Length != 0 && !discoveredLocales.Contains(manifest.DefaultLocale))
             diagnostics.Add("RTR0009", TranslationDiagnosticSeverity.Error,
-                "The base locale '" + manifest.DefaultLocale + "' has no MF2 messages.", project, manifest.DefaultLocaleSpan);
+                "The base locale '" + manifest.DefaultLocale + "' has no translation sources.", project, manifest.DefaultLocaleSpan);
 
         if (messageSources.Length == 0 && manifest.DefaultLocale.Length != 0)
         {
@@ -1643,7 +1665,7 @@ public static class TranslationCompiler
             var placeholders = new List<CompiledTextPlaceholder>();
             for (int i = 0; i < resource.Placeholders.Length; i++) placeholders.Add(new CompiledTextPlaceholder(resource.Placeholders[i].Name, resource.Placeholders[i].Type, resource.Placeholders[i].Format));
             result.Add(new CompiledTranslation(ids.TryGetValue(pair.Key, out int id) ? id : -1, pair.Key, resource.Pattern, resource.Description,
-                resource.Since, resource.DeprecatedReason, (string[])resource.Tags.Clone(), placeholders.ToArray(), DiagnosticBag.Location(resource.Source, resource.KeySpan), resource.Message));
+                resource.Since, resource.DeprecatedReason, (string[])resource.Tags.Clone(), placeholders.ToArray(), resource.KeyLocation ?? DiagnosticBag.Location(resource.Source, resource.KeySpan), resource.Message));
         }
         return result.ToArray();
     }
@@ -1968,7 +1990,7 @@ public static class TranslationCompiler
              (stem[0] == 'L' && stem[1] == 'P' && stem[2] == 'T'));
     }
 
-    private static bool IsIdentifier(string value)
+    internal static bool IsIdentifier(string value)
     {
         if (value.Length == 0 || !IsIdentifierStart(value[0])) return false;
         for (int i = 1; i < value.Length; i++) if (!IsIdentifierStart(value[i]) && (value[i] < '0' || value[i] > '9')) return false;

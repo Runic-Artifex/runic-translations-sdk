@@ -1,3 +1,4 @@
+import type { UiText } from "./ui-text";
 import type { ThemeMode } from "./appearance";
 import type { EditorReviewState } from "./contracts";
 import type { EditorBridge } from "./editor-bridge";
@@ -99,6 +100,7 @@ export const paletteBridgeOperations = [
 export function buildEditorCommandPalette(
   actions: EditorPaletteActions,
   state: EditorPaletteState,
+  ui?: UiText,
 ): PaletteCommand[] {
   const commands: PaletteCommand[] = [];
   const push = (command: PaletteCommand): void => {
@@ -107,7 +109,7 @@ export function buildEditorCommandPalette(
 
   push({
     id: "workspace.reload",
-    title: "Reload workspace files",
+    title: (ui?.text("ui_palette_reload_workspace_files") ?? "Reload workspace files"),
     group: "workspace",
     keywords: "refresh rescan disk",
     disabled: !state.workspaceReady,
@@ -116,7 +118,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "workspace.interchange",
-    title: "Import or export interchange files…",
+    title: (ui?.text("ui_palette_import_or_export_interchange_files") ?? "Import or export interchange files…"),
     group: "workspace",
     keywords: "xliff xlf review json localization handoff",
     disabled: !state.workspaceReady,
@@ -124,7 +126,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "workspace.open",
-    title: "Open another workspace…",
+    title: (ui?.text("ui_palette_open_another_workspace") ?? "Open another workspace…"),
     group: "workspace",
     keywords: "switch directory catalog recent",
     disabled: !state.workspaceReady,
@@ -132,7 +134,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "workspace.new-project",
-    title: "Create new project…",
+    title: (ui?.text("ui_palette_create_new_project") ?? "Create new project…"),
     group: "workspace",
     keywords: "wizard scaffold catalog",
     run: actions.createProject,
@@ -140,7 +142,7 @@ export function buildEditorCommandPalette(
 
   push({
     id: "document.save",
-    title: "Save document",
+    title: (ui?.text("ui_palette_save_document") ?? "Save document"),
     group: "document",
     keybinding: "Ctrl+S",
     keywords: "write persist commit",
@@ -150,7 +152,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "document.undo",
-    title: "Undo saved change",
+    title: (ui?.text("ui_palette_undo_saved_change") ?? "Undo saved change"),
     group: "document",
     keybinding: "Ctrl+Z",
     keywords: "revert history back",
@@ -160,7 +162,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "document.redo",
-    title: "Redo saved change",
+    title: (ui?.text("ui_palette_redo_saved_change") ?? "Redo saved change"),
     group: "document",
     keybinding: "Ctrl+Shift+Z",
     keywords: "history forward",
@@ -171,7 +173,7 @@ export function buildEditorCommandPalette(
 
   push({
     id: "review.save-workflow",
-    title: "Save workflow changes",
+    title: (ui?.text("ui_palette_save_workflow_changes") ?? "Save workflow changes"),
     group: "review",
     keywords: "sidecar persist approve state terminology",
     disabled: !state.reviewDirty || state.reviewError,
@@ -180,7 +182,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "review.discard-workflow",
-    title: "Discard workflow changes",
+    title: (ui?.text("ui_palette_discard_workflow_changes") ?? "Discard workflow changes"),
     group: "review",
     keywords: "revert sidecar reset",
     disabled: !state.reviewDirty,
@@ -188,7 +190,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "review.state-needs-review",
-    title: "Mark message as needs review",
+    title: (ui?.text("ui_palette_mark_message_as_needs_review") ?? "Mark message as needs review"),
     group: "review",
     keywords: "flag current selection",
     disabled: !state.reviewEditable,
@@ -196,7 +198,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "review.state-approved",
-    title: "Approve message",
+    title: (ui?.text("ui_palette_approve_message") ?? "Approve message"),
     group: "review",
     keywords: "accept current selection",
     disabled: !state.reviewEditable,
@@ -204,7 +206,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "review.state-translated",
-    title: "Mark message as translated",
+    title: (ui?.text("ui_palette_mark_message_as_translated") ?? "Mark message as translated"),
     group: "review",
     keywords: "current selection",
     disabled: !state.reviewEditable,
@@ -212,7 +214,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "review.state-draft",
-    title: "Mark message as draft",
+    title: (ui?.text("ui_palette_mark_message_as_draft") ?? "Mark message as draft"),
     group: "review",
     keywords: "reset current selection",
     disabled: !state.reviewEditable,
@@ -220,7 +222,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "review.mark-visible-needs-review",
-    title: "Mark visible messages needs review",
+    title: (ui?.text("ui_palette_mark_visible_messages_needs_review") ?? "Mark visible messages needs review"),
     group: "review",
     keywords: "bulk filter all listed flag",
     disabled: !state.reviewEditable,
@@ -228,7 +230,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "review.mark-visible-approved",
-    title: "Approve visible messages",
+    title: (ui?.text("ui_palette_approve_visible_messages") ?? "Approve visible messages"),
     group: "review",
     keywords: "bulk filter all listed accept",
     disabled: !state.reviewEditable,
@@ -236,7 +238,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "review.terminology",
-    title: "Open project terminology…",
+    title: (ui?.text("ui_palette_open_project_terminology") ?? "Open project terminology…"),
     group: "review",
     keywords: "glossary terms preferred translations",
     disabled: !state.reviewEditable,
@@ -244,7 +246,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "review.quality-report",
-    title: "Open quality report…",
+    title: (ui?.text("ui_palette_open_quality_report") ?? "Open quality report…"),
     group: "review",
     keywords: "findings csv export issues",
     disabled: !state.reviewEditable,
@@ -253,7 +255,7 @@ export function buildEditorCommandPalette(
 
   push({
     id: "view.mode-translation",
-    title: "Switch to translation mode",
+    title: (ui?.text("ui_palette_switch_to_translation_mode") ?? "Switch to translation mode"),
     group: "view",
     keywords: "simple editor structured",
     disabled: state.editorMode === "translation",
@@ -261,7 +263,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "view.mode-raw",
-    title: "Switch to raw JSON mode",
+    title: (ui?.text("ui_palette_switch_to_raw_json_mode") ?? "Switch to source mode"),
     group: "view",
     keywords: "document source format json",
     disabled: state.editorMode === "raw",
@@ -270,7 +272,7 @@ export function buildEditorCommandPalette(
   for (const locale of state.locales) {
     push({
       id: `view.locale:${locale.tag}`,
-      title: `Language · ${locale.tag}`,
+      title: ui?.text("ui_palette_language", { locale: locale.tag }) ?? `Language · ${locale.tag}`,
       group: "view",
       keywords: `${locale.name} switch locale translate`,
       disabled: locale.tag === state.selectedLocale,
@@ -280,7 +282,7 @@ export function buildEditorCommandPalette(
   if (state.uiLocale !== "en") {
     push({
       id: "view.ui-locale-en",
-      title: "Interface language · English",
+      title: (ui?.text("ui_palette_interface_language_english") ?? "Interface language · English"),
       group: "view",
       keywords: "ui language english menues",
       run: () => actions.setUiLocale("en"),
@@ -289,7 +291,7 @@ export function buildEditorCommandPalette(
   if (state.uiLocale !== "de") {
     push({
       id: "view.ui-locale-de",
-      title: "Interface language · Deutsch",
+      title: (ui?.text("ui_palette_interface_language_deutsch") ?? "Interface language · Deutsch"),
       group: "view",
       keywords: "ui language german",
       run: () => actions.setUiLocale("de"),
@@ -298,7 +300,7 @@ export function buildEditorCommandPalette(
   for (const mode of ["light", "dark", "system"] as const) {
     push({
       id: `view.theme-${mode}`,
-      title: `Theme · ${mode[0].toLocaleUpperCase()}${mode.slice(1)}`,
+      title: ui?.text("ui_palette_theme", { theme: ui.text("ui_palette_theme_" + mode) }) ?? `Theme · ${mode[0].toLocaleUpperCase()}${mode.slice(1)}`,
       group: "view",
       keywords: "appearance color light dark system",
       disabled: state.themeMode === mode,
@@ -307,7 +309,7 @@ export function buildEditorCommandPalette(
   }
   push({
     id: "view.focus-search",
-    title: "Focus message search",
+    title: (ui?.text("ui_palette_focus_message_search") ?? "Focus message search"),
     group: "view",
     keywords: "filter find query input",
     disabled: !state.searchAvailable,
@@ -315,21 +317,21 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "view.toggle-languages",
-    title: "Toggle languages section",
+    title: (ui?.text("ui_palette_toggle_languages_section") ?? "Toggle languages section"),
     group: "view",
     keywords: "collapse expand sidebar panel",
     run: actions.toggleLanguagesSection,
   });
   push({
     id: "view.toggle-messages",
-    title: "Toggle messages section",
+    title: (ui?.text("ui_palette_toggle_messages_section") ?? "Toggle messages section"),
     group: "view",
     keywords: "collapse expand sidebar panel list",
     run: actions.toggleMessagesSection,
   });
   push({
     id: "view.toggle-pseudo-localization",
-    title: state.pseudoLocalization ? "Disable pseudo-localization simulation" : "Enable pseudo-localization simulation",
+    title: state.pseudoLocalization ? (ui?.text("ui_palette_disable_pseudo_localization_simulation") ?? "Disable pseudo-localization simulation") : (ui?.text("ui_palette_enable_pseudo_localization_simulation") ?? "Enable pseudo-localization simulation"),
     group: "view",
     keybinding: "Alt+P",
     keywords: "pseudo fake accented brackets lengthening qa locale preview",
@@ -337,7 +339,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "view.toggle-rtl-simulation",
-    title: state.uiDirection === "rtl" ? "Simulate right-to-left layout off" : "Simulate right-to-left layout",
+    title: state.uiDirection === "rtl" ? (ui?.text("ui_palette_simulate_right_to_left_layout_off") ?? "Simulate right-to-left layout off") : (ui?.text("ui_palette_simulate_right_to_left_layout") ?? "Simulate right-to-left layout"),
     group: "view",
     keybinding: "Alt+R",
     keywords: "rtl ltr direction bidi mirror arabic hebrew layout",
@@ -345,7 +347,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "view.toggle-artifact-preview",
-    title: state.artifactPreviewOpen ? "Hide compiled artifact preview" : "Show compiled artifact preview",
+    title: state.artifactPreviewOpen ? (ui?.text("ui_palette_hide_compiled_artifact_preview") ?? "Hide compiled artifact preview") : (ui?.text("ui_palette_show_compiled_artifact_preview") ?? "Show compiled artifact preview"),
     group: "view",
     keybinding: "Alt+B",
     keywords: "artifact compiled output side-by-side compare in-editor no launch",
@@ -354,7 +356,7 @@ export function buildEditorCommandPalette(
 
   push({
     id: "help.about",
-    title: "About & diagnostics information",
+    title: (ui?.text("ui_palette_about_diagnostics_information") ?? "About & diagnostics information"),
     group: "help",
     keywords: "version runtime product info",
     bridge: "about",
@@ -362,7 +364,7 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "help.diagnostic-bundle",
-    title: "Create sanitized diagnostic bundle",
+    title: (ui?.text("ui_palette_create_sanitized_diagnostic_bundle") ?? "Create sanitized diagnostic bundle"),
     group: "help",
     keywords: "zip privacy support report",
     bridge: "createDiagnosticBundle",
@@ -407,7 +409,7 @@ function matchScore(command: PaletteCommand, needle: string): number | undefined
   return 400 - Math.min(gaps, 300);
 }
 
-export function groupCommands(commands: readonly PaletteCommand[]): PaletteCommandGroup[] {
+export function groupCommands(commands: readonly PaletteCommand[], ui?: UiText): PaletteCommandGroup[] {
   const grouped = new Map<PaletteCommandGroupId, PaletteCommand[]>();
   for (const command of commands) {
     const bucket = grouped.get(command.group);
@@ -419,7 +421,7 @@ export function groupCommands(commands: readonly PaletteCommand[]): PaletteComma
       paletteGroupOrder.indexOf(left[0]) - paletteGroupOrder.indexOf(right[0]))
     .map(([id, groupCommands]) => ({
       id,
-      label: paletteGroupLabels[id],
+      label: ui?.text("ui_palette_group_" + id) ?? paletteGroupLabels[id],
       commands: groupCommands,
     }));
 }

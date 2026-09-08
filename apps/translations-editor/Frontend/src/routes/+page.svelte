@@ -33,7 +33,7 @@
   import CommandPalette from "$lib/CommandPalette.svelte";
   import { buildEditorCommandPalette } from "$lib/command-palette";
   import { createEditorBridge } from "$lib/editor-bridge";
-  import { createUiText, setUiText } from "$lib/ui-text";
+  import { createUiText, setUiText, notice, displayNotice, UiNoticeError, type UiMessage } from "$lib/ui-text";
   import { editorShortcut } from "$lib/editor-keyboard";
   import EditorModeSwitcher, { type EditorMode } from "$lib/EditorModeSwitcher.svelte";
   import InterchangeDialog from "$lib/InterchangeDialog.svelte";
@@ -80,7 +80,6 @@
     coverage,
     formatJson,
     preview,
-    updateResourceValue,
     type ResourceValue,
     type TranslationRow,
   } from "$lib/resource-model";
@@ -114,6 +113,10 @@
   configureLocalEditorState(bridge);
   let snapshot = $state.raw<WorkspaceSnapshot>();
   let drafts = $state<Record<string, string>>({});
+  let parsedDrafts = $state<Record<string, { content: string; entries: import("$lib/contracts").EditorMessageEntry[] }>>({});
+  const transformQueues = new Map<string, Promise<void>>();
+  const transformVersions = new Map<string, number>();
+  let workspaceGeneration = 0;
   let draftGenerations = $state<Record<string, number>>({});
   let selectedKey = $state("");
   let selectedLocale = $state("");
@@ -131,8 +134,8 @@
   let saving = $state(false);
   let validationBusy = $state(false);
   let validation = $state.raw<ValidationResult>();
-  let clientError = $state<string>();
-  let operationMessage = $state<string>();
+  let clientError = $state<UiMessage>();
+  let operationMessage = $state<UiMessage>();
   let searchInput = $state<HTMLInputElement | null>(null);
   let validationTimer: number | undefined;
   let validationEpoch = 0;
@@ -146,7 +149,7 @@
   let projectClassName = $state("ProductText");
   let projectIncludeStarter = $state(true);
   let projectPlan = $state.raw<EditorProjectPlan>();
-  let projectError = $state<string>();
+  let projectError = $state<UiMessage>();
   let projectBusy = $state(false);
   let nextProjectLocaleId = 1;
   let openDirectory = $state("");
@@ -157,7 +160,7 @@
   let repairDocument = $state.raw<EditorDocument>();
   let repairText = $state("");
   let repairBusy = $state(false);
-  let repairMessage = $state<string>();
+  let repairMessage = $state<UiMessage>();
   let externalChanges = $state<string[]>([]);
   let externalFileChanges = $state<EditorExternalFileChange[]>([]);
   let comparedExternalChange = $state.raw<EditorExternalFileChange>();
@@ -174,15 +177,15 @@
   let mutationTargetKey = $state("");
   let mutationInitialValue = $state("");
   let mutationPreview = $state.raw<EditorMutationPreview>();
-  let mutationError = $state<string>();
+  let mutationError = $state<UiMessage>();
   let mutationBusy = $state(false);
   let mutationIrreversibleConfirmed = $state(false);
   let recoveryBusy = $state(false);
   let recoveryReloadRequired = $state(false);
-  let recoveryReloadMessage = $state<string>();
+  let recoveryReloadMessage = $state<UiMessage>();
   let historyBusy = $state(false);
   let previewBusy = $state(false);
-  let previewError = $state<string>();
+  let previewError = $state<UiMessage>();
   let previewAst = $state.raw<MessageArtifact>();
   let previewSamples = $state<Record<string, string>>({});
   let previewResult = $state.raw<MessagePreviewResult>();
@@ -193,7 +196,7 @@
   let reviewRevision = $state<string>();
   let reviewDirty = $state(false);
   let reviewSaving = $state(false);
-  let reviewMessage = $state<string>();
+  let reviewMessage = $state<UiMessage>();
   let terminologyDialogOpen = $state(false);
   let termSource = $state("");
   let termPreferred = $state("");
@@ -204,10 +207,10 @@
   let aboutInfo = $state.raw<EditorAbout>();
   let aboutBusy = $state(false);
   let diagnosticBusy = $state(false);
-  let diagnosticMessage = $state<string>();
+  let diagnosticMessage = $state<UiMessage>();
   let diagnosticBundlePath = $state<string>();
   let localStateSummary = $state.raw<LocalStateSummary>();
-  let localStateMessage = $state<string>();
+  let localStateMessage = $state<UiMessage>();
   let languagesOpen = $state(true);
   let messagesOpen = $state(true);
   let pseudoLocalization = $state(false);
@@ -239,7 +242,7 @@
   );
   let editorMutationBlocked = $derived(historyBusy || saving || reviewSaving || loading || recoveryBusy || openingWorkspace);
   let reviewMutationBlocked = $derived(editorMutationBlocked || reviewSaving);
-  let rows = $derived(buildRows(snapshot, drafts));
+  let rows = $derived(buildRows(snapshot, drafts, parsedDrafts));
   let messageSearch = $derived(createMessageSearchIndex(rows));
   let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
     const state = coverage(rows, locale.tag);
@@ -260,6 +263,7 @@
     selectedLocale,
     reviewEntries,
     terminology,
+    ui,
   ));
   let localeQualityFindings = $derived.by(() => {
     const bidi = bidiIssues(
@@ -269,6 +273,7 @@
         text: preview(row.cells[selectedLocale]?.entry),
       })),
       uiDirection,
+      ui,
     );
     if (bidi.length === 0) return localeQuality;
     return [...localeQuality, ...bidi].sort((left, right) =>
@@ -304,7 +309,7 @@
     const rowReview = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
     return {
       key: row.key,
-      preview: preview(cell?.entry),
+      preview: preview(cell?.entry, ui),
       missing: cell?.entry === undefined,
       structured: row.structured,
       stale: isStale(rowReview, row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value),
@@ -327,7 +332,7 @@
     selectedKey,
   ));
   let currentDocument = $derived.by(() =>
-    snapshot?.documents.find((document) => document.path === selectedDocumentPath),
+    snapshot?.documents.find((document) => document.path === selectedDocumentPath) ?? currentCell?.document,
   );
   let currentContent = $derived(
     currentDocument === undefined
@@ -391,6 +396,7 @@
         uiDirection,
         artifactPreviewOpen,
       },
+      ui,
     ));
 
   onMount(() => {
@@ -420,10 +426,10 @@
         uiDirection = loadedSimulation.direction;
         recentProjects = readRecentProjects();
         if (nativeStateRecovered) {
-          operationMessage = "Recovered from an unreadable local editor-state record; saved preferences and recovery drafts were reset.";
+          operationMessage = notice("ui_feedback_state_recovered");
         }
       } catch (error) {
-        clientError = `The per-user editor state could not be loaded. ${errorMessage(error)}`;
+        clientError = error instanceof UiNoticeError ? error.notice : notice("ui_feedback_state_load_failed", { error: errorMessage(error) });
       }
       if (!disposed) await loadWorkspace(false);
     })();
@@ -477,7 +483,7 @@
 
   async function loadWorkspace(confirmDiscard: boolean): Promise<void> {
     if (hasUnsavedWork) {
-      if (!confirmDiscard || !confirmDiscardUnsavedWork("reload the workspace")) return;
+      if (!confirmDiscard || !confirmDiscardUnsavedWork("ui_confirm_reload_workspace")) return;
       discardUnsavedWork();
     }
     loading = true;
@@ -491,16 +497,18 @@
       externalChanges = [];
       externalFileChanges = [];
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
     } finally {
       loading = false;
     }
   }
 
   function installSnapshot(next: WorkspaceSnapshot, resetSelection: boolean): void {
+    workspaceGeneration += 1;
     snapshot = next;
     if (resetSelection) {
       drafts = {};
+      parsedDrafts = {};
       draftGenerations = {};
       recoveredDrafts = readStoredDrafts(next);
     }
@@ -525,9 +533,9 @@
     reviewMessage = next.review?.error;
   }
 
-  function confirmDiscardUnsavedWork(action: string): boolean {
+  function confirmDiscardUnsavedWork(messageKey: string): boolean {
     if (!hasUnsavedWork) return true;
-    return confirm(`Discard unsaved document drafts, repair text, and workflow/terminology changes to ${action}?`);
+    return confirm(ui.text(messageKey));
   }
 
   function discardUnsavedWork(): void {
@@ -542,9 +550,9 @@
     }
   }
 
-  function confirmDiscardNonDocumentWork(action: string): boolean {
+  function confirmDiscardNonDocumentWork(messageKey: string): boolean {
     if (!reviewDirty && !hasUnsavedRepair) return true;
-    if (!confirm(`Discard unsaved repair text and workflow/terminology changes to ${action}?`)) return false;
+    if (!confirm(ui.text(messageKey))) return false;
     if (snapshot !== undefined) installReview(snapshot);
     if (hasUnsavedRepair) {
       repairDocument = undefined;
@@ -555,7 +563,7 @@
   }
 
   function closeRepair(): void {
-    if (hasUnsavedRepair && !confirm("Discard unsaved repair text?")) return;
+    if (hasUnsavedRepair && !confirm(ui.text("ui_feedback_discard_repair"))) return;
     repairDocument = undefined;
     repairText = "";
     repairMessage = undefined;
@@ -586,7 +594,7 @@
   }
 
   function configureEditor(preferredMode?: EditorMode, key = selectedKey, locale = selectedLocale): void {
-    const row = buildRows(snapshot, drafts).find((candidate) => candidate.key === key);
+    const row = buildRows(snapshot, drafts, parsedDrafts).find((candidate) => candidate.key === key);
     const cell = row?.cells[locale];
     const document = cell?.document;
     selectedDocumentPath = document?.path ?? "";
@@ -621,7 +629,7 @@
     operationMessage = undefined;
     const document = currentDocument;
     if (document === undefined) {
-      clientError = "This locale has no resource document to edit.";
+      clientError = notice("ui_feedback_no_resource");
       return;
     }
     try {
@@ -629,7 +637,7 @@
       persistDrafts();
       scheduleValidation(document.path, value);
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
       validation = { success: false, diagnostics: [] };
     }
   }
@@ -641,25 +649,38 @@
     operationMessage = undefined;
     const document = currentDocument;
     if (document === undefined) {
-      clientError = "This locale has no resource document to edit.";
+      clientError = notice("ui_feedback_no_resource");
       return;
     }
-    try {
-      const sourceEntry = selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry;
-      const content = updateResourceValue(
-        drafts[document.path] ?? document.content,
-        selectedKey,
-        resourceValue,
-        sourceEntry,
-      );
-      setDraft(document.path, content);
+    if (typeof resourceValue !== "string") return;
+    const path = document.path;
+    const key = selectedKey;
+    const workspaceRoot = snapshot?.root;
+    const workspaceVersion = workspaceGeneration;
+    const identity = `${path}\u0000${key}`;
+    const version = (transformVersions.get(identity) ?? 0) + 1;
+    transformVersions.set(identity, version);
+    const queued = transformQueues.get(path) ?? Promise.resolve();
+    const pending = queued.then(async () => {
+      if (snapshot?.root !== workspaceRoot || workspaceGeneration !== workspaceVersion || transformVersions.get(identity) !== version) return;
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 150));
+      if (snapshot?.root !== workspaceRoot || workspaceGeneration !== workspaceVersion || transformVersions.get(identity) !== version) return;
+      const original = drafts[path] ?? document.content;
+      const generation = draftGenerations[path] ?? 0;
+      const result = await bridge.transformDocument(path, original, key, resourceValue);
+      if (snapshot?.root !== workspaceRoot || workspaceGeneration !== workspaceVersion || (draftGenerations[path] ?? 0) !== generation) return;
+      if (result.diagnostics.some((diagnostic) => diagnostic.id === "EDITOR-TRANSFORM")) {
+        clientError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message;
+        return;
+      }
+      parsedDrafts[path] = { content: result.content, entries: result.entries };
+      setDraft(path, result.content);
       persistDrafts();
-      scheduleValidation(document.path, content);
-      schedulePreview(document.path, content);
-    } catch (error) {
-      clientError = errorMessage(error);
-      validation = { success: false, diagnostics: [] };
-    }
+      validation = result;
+      if (selectedDocumentPath === path && selectedKey === key) schedulePreview(path, result.content);
+    }).catch((error) => { clientError = errorNotice(error); });
+    transformQueues.set(path, pending);
+    void pending.finally(() => { if (transformQueues.get(path) === pending) transformQueues.delete(path); });
   }
 
   function schedulePreview(path: string, content: string): void {
@@ -672,7 +693,7 @@
         if (!result.success || result.astJson === undefined || result.locale === undefined) {
           previewAst = undefined;
           previewResult = undefined;
-          previewError = result.diagnostics[0]?.message ?? "The compiler could not build a preview.";
+          previewError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
           return;
         }
         const ast = JSON.parse(result.astJson) as MessageArtifact;
@@ -685,7 +706,7 @@
         previewError = undefined;
         renderPreview(result.locale);
       }).catch((error) => {
-        if (epoch === previewEpoch) previewError = errorMessage(error);
+        if (epoch === previewEpoch) previewError = errorNotice(error);
       }).finally(() => {
         if (epoch === previewEpoch) previewBusy = false;
       });
@@ -756,7 +777,7 @@
     }
     reviewEntries = next;
     reviewDirty = true;
-    reviewMessage = visibleRows.length + " visible messages marked " + state + ". Save workflow changes to commit.";
+    reviewMessage = notice("ui_count_review_marked", { count: visibleRows.length, state });
   }
 
   async function saveReview(): Promise<void> {
@@ -770,18 +791,18 @@
         terminology: terminology.map((term) => ({ ...term })),
       });
       if (!result.ok || result.review === undefined) {
-        reviewMessage = result.message ?? "Review data could not be saved.";
+        reviewMessage = result.message ?? notice("ui_feedback_review_save_failed");
         return;
       }
       reviewEntries = structuredClone(result.review.entries);
       terminology = structuredClone(result.review.terminology);
       reviewRevision = result.review.revision;
       reviewDirty = false;
-      reviewMessage = "Workflow sidecar saved";
+      reviewMessage = notice("ui_feedback_workflow_saved");
       if (snapshot !== undefined) snapshot.review = result.review;
       if (snapshot !== undefined) snapshot.history = result.history;
     } catch (error) {
-      reviewMessage = errorMessage(error);
+      reviewMessage = errorNotice(error);
     } finally {
       reviewSaving = false;
     }
@@ -824,7 +845,7 @@
     try {
       aboutInfo = await bridge.about();
     } catch (error) {
-      diagnosticMessage = errorMessage(error);
+      diagnosticMessage = errorNotice(error);
     } finally {
       aboutBusy = false;
     }
@@ -833,14 +854,12 @@
   async function clearLocalState(): Promise<void> {
     const summary = localStateSummary ?? inspectLocalEditorState();
     if (summary.entries === 0) return;
-    if (!confirm("Remove the editor's saved preferences, recent-project list, and crash-recovery drafts from this user profile? Workspace files and currently open in-memory work will not be changed.")) return;
+    if (!confirm(ui.text("ui_feedback_clear_state_confirm"))) return;
     const removed = await clearLocalEditorState();
     recentProjects = [];
     recoveredDrafts = {};
     localStateSummary = inspectLocalEditorState();
-    localStateMessage = removed === 1
-      ? "Removed 1 local editor-state entry."
-      : `Removed ${removed} local editor-state entries.`;
+    localStateMessage = notice("ui_count_state_removed", { count: removed });
   }
 
   async function createDiagnosticBundle(): Promise<void> {
@@ -851,10 +870,10 @@
       const result = await bridge.createDiagnosticBundle();
       diagnosticBundlePath = result.ok ? result.path : undefined;
       diagnosticMessage = result.ok
-        ? "Sanitized diagnostics were saved in this user's application-data directory."
-        : result.message ?? "The diagnostic bundle could not be created.";
+        ? notice("ui_feedback_diagnostics_saved")
+        : result.message ?? notice("ui_feedback_diagnostics_failed");
     } catch (error) {
-      diagnosticMessage = errorMessage(error);
+      diagnosticMessage = errorNotice(error);
     } finally {
       diagnosticBusy = false;
     }
@@ -865,9 +884,9 @@
     diagnosticBusy = true;
     try {
       const result = await bridge.revealDiagnosticBundle(diagnosticBundlePath);
-      diagnosticMessage = result.ok ? "Opened the diagnostic bundle location." : result.message ?? "The diagnostic bundle location could not be opened.";
+      diagnosticMessage = result.ok ? notice("ui_feedback_diagnostics_opened") : result.message ?? notice("ui_feedback_diagnostics_open_failed");
     } catch (error) {
-      diagnosticMessage = errorMessage(error);
+      diagnosticMessage = errorNotice(error);
     } finally {
       diagnosticBusy = false;
     }
@@ -877,22 +896,22 @@
     if (diagnosticBundlePath === undefined) return;
     try {
       await navigator.clipboard.writeText(diagnosticBundlePath);
-      diagnosticMessage = "Copied the diagnostic bundle path.";
+      diagnosticMessage = notice("ui_feedback_diagnostics_copied");
     } catch {
-      diagnosticMessage = "The diagnostic bundle path could not be copied. Select it below and copy it manually.";
+      diagnosticMessage = notice("ui_feedback_diagnostics_copy_failed");
     }
   }
 
   async function deleteDiagnosticBundle(): Promise<void> {
     if (diagnosticBundlePath === undefined || diagnosticBusy) return;
-    if (!confirm("Delete this sanitized diagnostic bundle? This does not affect workspace files or editor state.")) return;
+    if (!confirm(ui.text("ui_feedback_diagnostics_delete_confirm"))) return;
     diagnosticBusy = true;
     try {
       const result = await bridge.deleteDiagnosticBundle(diagnosticBundlePath);
       if (result.ok) diagnosticBundlePath = undefined;
-      diagnosticMessage = result.ok ? "Deleted the diagnostic bundle." : result.message ?? "The diagnostic bundle could not be deleted.";
+      diagnosticMessage = result.ok ? notice("ui_feedback_diagnostics_deleted") : result.message ?? notice("ui_feedback_diagnostics_delete_failed");
     } catch (error) {
-      diagnosticMessage = errorMessage(error);
+      diagnosticMessage = errorNotice(error);
     } finally {
       diagnosticBusy = false;
     }
@@ -904,7 +923,7 @@
     try {
       xliffExport = await bridge.exportXliff(xliffDirectory.trim() || undefined);
     } catch (error) {
-      xliffExport = { ok: false, message: errorMessage(error), documents: [], losses: [], lossless: false };
+      xliffExport = { ok: false, message: errorNotice(error), documents: [], losses: [], lossless: false };
     } finally {
       interchangeBusy = false;
     }
@@ -917,7 +936,7 @@
       xliffPreview = await bridge.previewXliffImport(xliffImportPath.trim());
     } catch (error) {
       xliffPreview = {
-        ok: false, message: errorMessage(error), requiresIrreversibleConfirmation: false,
+        ok: false, message: errorNotice(error), requiresIrreversibleConfirmation: false,
         changes: [], addedCount: 0, changedCount: 0, removedCount: 0, unchangedCount: 0,
         reviewUpdateCount: 0, changesOverflowed: false, refusals: [],
       };
@@ -927,15 +946,15 @@
   }
 
   async function applyXliffImport(): Promise<void> {
-    if (interchangeBusy || xliffPreview?.confirmationToken === undefined || !confirmDiscardUnsavedWork("apply this XLIFF import")) return;
+    if (interchangeBusy || xliffPreview?.confirmationToken === undefined || !confirmDiscardUnsavedWork("ui_confirm_apply_xliff")) return;
     interchangeBusy = true;
     try {
       const result = await bridge.applyXliffImport(xliffPreview.confirmationToken);
-      operationMessage = result.message ?? (result.ok ? "XLIFF import applied." : "The XLIFF import could not be applied.");
+      operationMessage = result.message ?? (result.ok ? notice("ui_feedback_xliff_applied") : notice("ui_feedback_xliff_failed"));
       if (result.snapshot !== undefined) installSnapshot(result.snapshot, true);
       if (result.ok) xliffPreview = undefined;
     } catch (error) {
-      operationMessage = errorMessage(error);
+      operationMessage = errorNotice(error);
     } finally {
       interchangeBusy = false;
     }
@@ -947,7 +966,7 @@
     try {
       reviewExport = await bridge.exportReviewJson(reviewExportPath.trim() || undefined);
     } catch (error) {
-      reviewExport = { ok: false, message: errorMessage(error), entryCount: 0 };
+      reviewExport = { ok: false, message: errorNotice(error), entryCount: 0 };
     } finally {
       interchangeBusy = false;
     }
@@ -960,7 +979,7 @@
       reviewPreview = await bridge.previewReviewJsonImport(reviewImportPath.trim());
     } catch (error) {
       reviewPreview = {
-        ok: false, message: errorMessage(error), requiresIrreversibleConfirmation: false,
+        ok: false, message: errorNotice(error), requiresIrreversibleConfirmation: false,
         changes: [], addedCount: 0, changedCount: 0, removedCount: 0, changesOverflowed: false, refusals: [],
       };
     } finally {
@@ -969,18 +988,18 @@
   }
 
   async function applyReviewJsonImport(): Promise<void> {
-    if (interchangeBusy || reviewPreview?.confirmationToken === undefined || !confirmDiscardUnsavedWork("apply this review import")) return;
+    if (interchangeBusy || reviewPreview?.confirmationToken === undefined || !confirmDiscardUnsavedWork("ui_confirm_apply_review")) return;
     interchangeBusy = true;
     try {
       const result = await bridge.applyReviewJsonImport(reviewPreview.confirmationToken);
-      operationMessage = result.message ?? (result.ok ? "Review import applied." : "The review import could not be applied.");
+      operationMessage = result.message ?? (result.ok ? notice("ui_feedback_review_applied") : notice("ui_feedback_review_failed"));
       if (result.ok && result.review !== undefined && snapshot !== undefined) {
         snapshot = { ...snapshot, review: result.review, history: result.history ?? snapshot.history };
         installReview(snapshot);
         reviewPreview = undefined;
       }
     } catch (error) {
-      operationMessage = errorMessage(error);
+      operationMessage = errorNotice(error);
     } finally {
       interchangeBusy = false;
     }
@@ -998,7 +1017,7 @@
       previewError = undefined;
     } catch (error) {
       previewResult = undefined;
-      previewError = errorMessage(error);
+      previewError = errorNotice(error);
     }
   }
 
@@ -1009,7 +1028,7 @@
     if (type === "time") return "12:30:00";
     if (type === "datetime") return "2026-08-08T12:30:00Z";
     if (type === "guid") return "12345678-1234-1234-1234-123456789abc";
-    return "Sample";
+    return ui.text("ui_preview_sample");
   }
 
   function formatRaw(): void {
@@ -1019,7 +1038,7 @@
       const formatted = formatJson(editorText);
       edit(formatted);
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
     }
   }
 
@@ -1028,19 +1047,22 @@
     const epoch = ++validationEpoch;
     validationBusy = true;
     validationTimer = window.setTimeout(() => {
-      void bridge.validate(path, content).then((result) => {
+      void bridge.transformDocument(path, content).then((result) => {
         if (epoch !== validationEpoch) return;
+        parsedDrafts[path] = { content: result.content, entries: result.entries };
         validation = result;
         validationBusy = false;
       }).catch((error) => {
         if (epoch !== validationEpoch) return;
-        clientError = errorMessage(error);
+        clientError = errorNotice(error);
         validationBusy = false;
       });
     }, 350);
   }
 
   async function save(): Promise<void> {
+    const pending = transformQueues.get(selectedDocumentPath);
+    if (pending !== undefined) await pending;
     const document = currentDocument;
     const content = currentContent;
     if (document === undefined || content === undefined || !isDirty || saving || historyBusy) return;
@@ -1055,11 +1077,11 @@
       const result = await bridge.save(document.path, content, document.revision);
       if (!result.ok) {
         if (result.validation !== undefined) validation = result.validation;
-        clientError = result.message ?? `Save failed (${result.kind}).`;
+        clientError = result.message ?? notice("ui_feedback_save_failed", { kind: result.kind });
         return;
       }
       if (result.snapshot === undefined) {
-        await reloadAfterSave(document.path, content, generation, result.message ?? labels.saved);
+        await reloadAfterSave(document.path, content, generation, result.message ?? notice("app_saved"));
         return;
       }
       const key = selectedKey;
@@ -1074,16 +1096,16 @@
       selectedLocale = locale;
       configureEditor();
       operationMessage = hasNewerDraft(document.path, content, generation)
-        ? "Saved the earlier draft; your newer edit is still open."
-        : labels.saved;
+        ? notice("ui_feedback_newer_draft")
+        : notice("app_saved");
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
     } finally {
       saving = false;
     }
   }
 
-  async function reloadAfterSave(path: string, content: string, generation: number, message: string): Promise<void> {
+  async function reloadAfterSave(path: string, content: string, generation: number, message: UiMessage): Promise<void> {
     const next = await bridge.load();
     const newer = hasNewerDraft(path, content, generation);
     installSnapshot(next, false);
@@ -1093,7 +1115,7 @@
       persistDrafts();
     }
     configureEditor();
-    operationMessage = newer ? "Saved the earlier draft; your newer edit is still open." : message;
+    operationMessage = newer ? notice("ui_feedback_newer_draft") : message;
   }
 
   function handleKeyboard(event: KeyboardEvent): void {
@@ -1117,18 +1139,18 @@
       const result = await bridge.undo();
       if (!result.ok) {
         if (snapshot !== undefined && result.history !== undefined) snapshot.history = result.history;
-        clientError = result.message ?? "The saved change could not be undone.";
+        clientError = result.message ?? notice("ui_feedback_undo_failed");
         return;
       }
       if (result.snapshot === undefined) {
         await loadWorkspace(false);
-        operationMessage = result.message ?? "Saved change undone";
+        operationMessage = result.message ?? notice("ui_feedback_undo_saved");
         return;
       }
       installSnapshot(result.snapshot, false);
-      operationMessage = "Saved change undone";
+      operationMessage = notice("ui_feedback_undo_saved");
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
     } finally {
       historyBusy = false;
     }
@@ -1142,18 +1164,18 @@
       const result = await bridge.redo();
       if (!result.ok) {
         if (snapshot !== undefined && result.history !== undefined) snapshot.history = result.history;
-        clientError = result.message ?? "The saved change could not be redone.";
+        clientError = result.message ?? notice("ui_feedback_redo_failed");
         return;
       }
       if (result.snapshot === undefined) {
         await loadWorkspace(false);
-        operationMessage = result.message ?? "Saved change redone";
+        operationMessage = result.message ?? notice("ui_feedback_redo_saved");
         return;
       }
       installSnapshot(result.snapshot, false);
-      operationMessage = "Saved change redone";
+      operationMessage = notice("ui_feedback_redo_saved");
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
     } finally {
       historyBusy = false;
     }
@@ -1185,6 +1207,11 @@
     } catch {
       return tag;
     }
+  }
+
+  function errorNotice(error: unknown) {
+    if (error instanceof UiNoticeError) return error.notice;
+    return { ...notice("ui_backend_external_error"), detail: errorMessage(error) };
   }
 
   function errorMessage(error: unknown): string {
@@ -1236,22 +1263,22 @@
 
   function validateProjectStep(): boolean {
     if (projectStep === 1 && (projectDirectory.trim() === "" || projectCatalog.trim() === "")) {
-      projectError = "Choose a new directory and enter a catalog ID.";
+      projectError = notice("ui_feedback_project_directory_required");
       return false;
     }
     if (projectStep === 2) {
       const tags = [projectDefaultLocale.trim(), ...projectLocales.map((locale) => locale.tag.trim())];
       if (tags.some((tag) => tag === "")) {
-        projectError = "Every language needs a locale tag.";
+        projectError = notice("ui_feedback_locale_required");
         return false;
       }
       if (new Set(tags.map((tag) => tag.toLocaleLowerCase())).size !== tags.length) {
-        projectError = "Each language must use a different locale tag.";
+        projectError = notice("ui_feedback_locale_duplicate");
         return false;
       }
     }
     if (projectStep === 3 && [projectNamespace, projectClassName].some((value) => value.trim() === "")) {
-      projectError = "Namespace and class name are required.";
+      projectError = notice("ui_feedback_namespace_required");
       return false;
     }
     projectError = undefined;
@@ -1270,12 +1297,12 @@
       const plan = await bridge.previewProject(projectRequest());
       projectPlan = plan;
       if (!plan.ok) {
-        projectError = plan.message ?? "The proposed project is invalid.";
+        projectError = plan.message ?? notice("ui_feedback_project_invalid");
         return;
       }
       projectStep = 4;
     } catch (error) {
-      projectError = errorMessage(error);
+      projectError = errorNotice(error);
     } finally {
       projectBusy = false;
     }
@@ -1283,21 +1310,21 @@
 
   async function createProject(): Promise<void> {
     if (projectPlan?.ok !== true || projectBusy || historyBusy) return;
-    if (!confirmDiscardUnsavedWork("create a new project")) return;
+    if (!confirmDiscardUnsavedWork("ui_confirm_create_project")) return;
     if (hasUnsavedWork) discardUnsavedWork();
     projectBusy = true;
     projectError = undefined;
     try {
       const result = await bridge.createProject(projectRequest());
       if (!result.ok || result.snapshot === undefined) {
-        projectError = result.message ?? "The project could not be created.";
+        projectError = result.message ?? notice("ui_feedback_project_failed");
         return;
       }
       installSnapshot(result.snapshot, true);
-      operationMessage = "Project created";
+      operationMessage = notice("ui_feedback_project_created");
       projectDialogOpen = false;
     } catch (error) {
-      projectError = errorMessage(error);
+      projectError = errorNotice(error);
     } finally {
       projectBusy = false;
     }
@@ -1305,11 +1332,11 @@
 
   async function openWorkspace(catalogId?: string, directoryOverride?: string): Promise<void> {
     if (openingWorkspace || historyBusy) return;
-    if (!confirmDiscardUnsavedWork("open another workspace")) return;
+    if (!confirmDiscardUnsavedWork("ui_confirm_open_workspace")) return;
     if (hasUnsavedWork) discardUnsavedWork();
     const directory = directoryOverride ?? (catalogId === undefined ? openDirectory.trim() : snapshot?.root ?? "");
     if (directory === "") {
-      clientError = "Enter a workspace directory.";
+      clientError = notice("ui_feedback_workspace_directory_required");
       return;
     }
     openingWorkspace = true;
@@ -1317,7 +1344,7 @@
     try {
       const result = await bridge.openWorkspace({ directory, catalogId });
       if (!result.ok || result.snapshot === undefined) {
-        clientError = result.message ?? "The workspace could not be opened.";
+        clientError = result.message ?? notice("ui_feedback_workspace_open_failed");
         return;
       }
       installSnapshot(result.snapshot, true);
@@ -1326,7 +1353,7 @@
       openDirectory = result.snapshot.root;
       openDialogOpen = false;
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
     } finally {
       openingWorkspace = false;
     }
@@ -1344,7 +1371,7 @@
         clientError = result.message;
       }
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
     } finally {
       pickingWorkspace = false;
     }
@@ -1362,7 +1389,7 @@
     if (historyBusy) return false;
     const current = snapshot;
     if (current?.catalog === undefined) return false;
-    if (!confirmDiscardUnsavedWork("make this structural workspace change")) return false;
+    if (!confirmDiscardUnsavedWork("ui_confirm_change_workspace")) return false;
     if (hasUnsavedWork) discardUnsavedWork();
     mutationKind = kind;
     const firstNonDefault = current.catalog.locales.find((locale) => locale.tag !== current.catalog?.defaultLocale)?.tag ?? "";
@@ -1421,9 +1448,9 @@
     try {
       const result = await bridge.previewMutation(mutationRequest());
       mutationPreview = result;
-      if (!result.ok) mutationError = result.message ?? "The change is not valid.";
+      if (!result.ok) mutationError = result.message ?? notice("ui_feedback_change_invalid");
     } catch (error) {
-      mutationError = errorMessage(error);
+      mutationError = errorNotice(error);
     } finally {
       mutationBusy = false;
     }
@@ -1437,13 +1464,13 @@
     try {
       const result = await bridge.applyMutation(mutationRequest());
       if (!result.ok) {
-        mutationError = result.message ?? "The workspace change could not be committed.";
+        mutationError = result.message ?? notice("ui_feedback_change_failed");
         mutationPreview = undefined;
         return;
       }
       if (result.snapshot === undefined) {
         await loadWorkspace(false);
-        operationMessage = result.message ?? "Workspace updated";
+        operationMessage = result.message ?? notice("ui_feedback_workspace_updated");
         mutationDialogOpen = false;
         return;
       }
@@ -1453,10 +1480,10 @@
       installSnapshot(result.snapshot, true);
       if (buildRows(result.snapshot, {}).some((row) => row.key === preferredKey)) selectedKey = preferredKey;
       mutationDialogOpen = false;
-      operationMessage = "Workspace updated";
+      operationMessage = notice("ui_feedback_workspace_updated");
       configureEditor();
     } catch (error) {
-      mutationError = errorMessage(error);
+      mutationError = errorNotice(error);
       mutationPreview = undefined;
     } finally {
       mutationBusy = false;
@@ -1470,23 +1497,23 @@
     try {
       const result = await bridge.recoverTransaction(mode);
       if (!result.ok) {
-        clientError = result.message ?? "Workspace recovery failed.";
+        clientError = result.message ?? notice("ui_feedback_recovery_failed");
         return;
       }
       if (result.snapshot === undefined) {
         openDirectory = snapshot?.root ?? openDirectory;
         snapshot = undefined;
         recoveryReloadRequired = true;
-        recoveryReloadMessage = result.message ?? "Recovery completed; reload the workspace to refresh it.";
+        recoveryReloadMessage = result.message ?? notice("ui_feedback_recovery_reload");
         await loadWorkspace(false);
         return;
       }
       installSnapshot(result.snapshot, true);
       recoveryReloadRequired = false;
       recoveryReloadMessage = undefined;
-      operationMessage = mode === "complete" ? "Interrupted change completed" : "Interrupted change rolled back";
+      operationMessage = mode === "complete" ? notice("ui_feedback_recovery_completed") : notice("ui_feedback_recovery_rollback");
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
     } finally {
       recoveryBusy = false;
     }
@@ -1497,6 +1524,13 @@
     recoveredDrafts = {};
     persistDrafts();
     configureEditor();
+    for (const [path, content] of Object.entries(drafts)) {
+      void bridge.transformDocument(path, content).then((result) => {
+        if (drafts[path] !== content) return;
+        parsedDrafts[path] = { content, entries: result.entries };
+        if (selectedDocumentPath === path) configureEditor();
+      }).catch((error) => { clientError = errorNotice(error); });
+    }
   }
 
   function reviewExternalChanges(): void {
@@ -1510,7 +1544,7 @@
   async function applyExternalMerge(): Promise<void> {
     const change = comparedExternalChange;
     if (change === undefined || historyBusy) return;
-    if (!confirmDiscardNonDocumentWork("reload the external file and keep the merged document draft")) return;
+    if (!confirmDiscardNonDocumentWork("ui_confirm_external_merge")) return;
     const retainedDrafts = { ...drafts, [change.path]: mergedExternalText };
     loading = true;
     clientError = undefined;
@@ -1520,7 +1554,7 @@
       drafts = Object.fromEntries(Object.entries(retainedDrafts).filter(([path]) =>
         next.documents.some((document) => document.path === path)));
       if (drafts[change.path] === undefined) {
-        clientError = `The externally deleted file '${change.path}' cannot receive a merged draft.`;
+        clientError = notice("ui_feedback_deleted_merge", { path: change.path });
       }
       persistDrafts();
       externalChanges = [];
@@ -1528,7 +1562,7 @@
       comparedExternalChange = undefined;
       configureEditor();
     } catch (error) {
-      clientError = errorMessage(error);
+      clientError = errorNotice(error);
     } finally {
       loading = false;
     }
@@ -1613,7 +1647,7 @@
   }
 
   function beginRepair(document: EditorDocument): void {
-    if (hasUnsavedRepair && !confirm("Discard unsaved repair text and open another document?")) return;
+    if (hasUnsavedRepair && !confirm(ui.text("ui_feedback_repair_open_confirm"))) return;
     repairDocument = document;
     repairText = document.content;
     repairMessage = undefined;
@@ -1627,23 +1661,23 @@
     try {
       const checked = await bridge.validate(document.path, repairText);
       if (!checked.success) {
-        repairMessage = checked.diagnostics[0]?.message ?? "The document is still invalid.";
+        repairMessage = checked.diagnostics[0]?.notice ?? checked.diagnostics[0]?.message ?? notice("ui_feedback_repair_invalid");
         return;
       }
       const result = await bridge.save(document.path, repairText, document.revision);
       if (!result.ok) {
-        repairMessage = result.message ?? "The repaired document could not be saved.";
+        repairMessage = result.message ?? notice("ui_feedback_repair_failed");
         return;
       }
       if (result.snapshot === undefined) {
-        await reloadAfterSave(document.path, repairText, draftGenerations[document.path] ?? 0, result.message ?? labels.saved);
+        await reloadAfterSave(document.path, repairText, draftGenerations[document.path] ?? 0, result.message ?? notice("app_saved"));
         repairDocument = undefined;
         return;
       }
       repairDocument = undefined;
       installSnapshot(result.snapshot, false);
     } catch (error) {
-      repairMessage = errorMessage(error);
+      repairMessage = errorNotice(error);
     } finally {
       repairBusy = false;
     }
@@ -1745,9 +1779,7 @@
     <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
       <Alert.Title>{ui.text("ui_page_recovered_drafts_title")}</Alert.Title>
       <Alert.Description>
-        {Object.keys(recoveredDrafts).length === 1
-          ? ui.text("ui_page_recovered_drafts_one")
-          : `${Object.keys(recoveredDrafts).length} ${ui.text("ui_page_recovered_drafts_many")}`}
+        {ui.text("ui_count_recovered_drafts", { count: Object.keys(recoveredDrafts).length })}
       </Alert.Description>
       <Alert.Action class="static col-span-full mt-2 flex flex-col gap-2 min-[360px]:flex-row min-[360px]:justify-end">
         <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>{ui.text("ui_page_discard")}</Button>
@@ -1798,7 +1830,7 @@
     <div class="mark" aria-hidden="true"><span></span></div>
     <p class="eyebrow">{labels.eyebrow}</p>
     <h1>{recoveryReloadRequired ? ui.text("ui_page_fatal_recovery_reload_required") : ui.text("ui_page_fatal_could_not_open")}</h1>
-    <p>{recoveryReloadRequired ? recoveryReloadMessage ?? ui.text("ui_page_fatal_recovery_refresh") : clientError ?? ui.text("ui_page_fatal_no_catalog")}</p>
+    <p>{displayNotice(recoveryReloadRequired ? recoveryReloadMessage ?? notice("ui_page_fatal_recovery_refresh") : clientError ?? notice("ui_page_fatal_no_catalog"), ui)}</p>
     <div class="recovery-actions">
       <button class="primary" onclick={() => void loadWorkspace(false)}>{labels.reload}</button>
       {#if recoveryReloadRequired}<button class="secondary" onclick={() => openDialogOpen = true}>{ui.text("ui_page_fatal_open_another_workspace")}</button>{/if}
@@ -1809,11 +1841,11 @@
     <div class="mark" aria-hidden="true"><span></span></div>
     <p class="eyebrow">{ui.text("ui_page_recovery_eyebrow")}</p>
     <h1>{ui.text("ui_page_recovery_title")}</h1>
-    <p>{ui.text("ui_page_recovery_journal_for")} <strong>{snapshot.pendingTransaction.catalogId}</strong> {ui.text("ui_page_recovery_lists")} {snapshot.pendingTransaction.paths.length} {snapshot.pendingTransaction.paths.length === 1 ? ui.text("ui_page_file") : ui.text("ui_page_files")}. {ui.text("ui_page_recovery_no_further_editing")}</p>
+    <p>{ui.text("ui_count_recovery_journal", { catalog: snapshot.pendingTransaction.catalogId, count: snapshot.pendingTransaction.paths.length })}</p>
     <div class="recovery-paths">
       {#each snapshot.pendingTransaction.paths as path (path)}<code>{path}</code>{/each}
     </div>
-    {#if clientError}<p class="project-error" aria-live="polite">{clientError}</p>{/if}
+    {#if clientError}<p class="project-error" aria-live="polite">{displayNotice(clientError, ui)}</p>{/if}
     <div class="recovery-actions">
       <button class="secondary" disabled={recoveryBusy} onclick={() => void recoverTransaction("rollback")}>{ui.text("ui_page_recovery_restore_before")}</button>
       <button class="primary" disabled={recoveryBusy} onclick={() => void recoverTransaction("complete")}>{recoveryBusy ? ui.text("ui_page_recovery_recovering") : ui.text("ui_page_recovery_complete")}</button>
@@ -1834,7 +1866,7 @@
         <p class="eyebrow">{ui.text("ui_page_welcome_eyebrow")}</p>
         <h2>{snapshot.catalogs.length > 1 ? ui.text("ui_page_welcome_choose_catalog") : ui.text("ui_page_welcome_open_project")}</h2>
         <p>{snapshot.catalogs.length > 1
-          ? `${ui.text("ui_page_welcome_found")} ${snapshot.catalogs.length} ${ui.text("ui_page_welcome_catalogs_below")}`
+          ? ui.text("ui_count_catalogs_found", { count: snapshot.catalogs.length })
           : ui.text("ui_page_welcome_open_or_create")}</p>
       </div>
 
@@ -1844,8 +1876,8 @@
             <button class="catalog-choice" onclick={() => void openWorkspace(catalog.id)} disabled={openingWorkspace}>
               <span class={{ "status-dot": true, warning: !catalog.success }}></span>
               <span><strong>{catalog.id}</strong><small>{catalog.manifestPaths.join(", ")}</small></span>
-              <span class="catalog-metrics">{catalog.localeCount} {ui.text("ui_page_locales")}<br />{catalog.messageCount} {ui.text("ui_page_messages")}</span>
-              <span class={catalog.errorCount > 0 ? "health error" : "health"}>{catalog.errorCount > 0 ? `${catalog.errorCount} ${ui.text("ui_page_errors")}` : ui.text("ui_page_healthy")}</span>
+              <span class="catalog-metrics">{ui.text("ui_count_locales", { count: catalog.localeCount })}<br />{ui.text("ui_count_messages", { count: catalog.messageCount })}</span>
+              <span class={catalog.errorCount > 0 ? "health error" : "health"}>{catalog.errorCount > 0 ? ui.text("ui_count_errors", { count: catalog.errorCount }) : ui.text("ui_page_healthy")}</span>
             </button>
           {/each}
         </div>
@@ -1878,13 +1910,13 @@
 
       {#if malformedDocuments.length > 0}
         <section class="repair-list">
-          <header><div><strong>{ui.text("ui_page_welcome_repair_malformed_json")}</strong><span>{malformedDocuments.length} {ui.text("ui_page_welcome_files_need_attention")}</span></div></header>
+          <header><div><strong>{ui.text("ui_page_welcome_repair_malformed_json")}</strong><span>{ui.text("ui_count_files_attention", { count: malformedDocuments.length })}</span></div></header>
           {#each malformedDocuments as document (document.path)}
             <button onclick={() => beginRepair(document)}><span>!</span><code>{document.path}</code><small>{ui.text("ui_page_welcome_open_repair_editor")} →</small></button>
           {/each}
         </section>
       {/if}
-      {#if clientError}<p class="project-error" aria-live="polite">{clientError}</p>{/if}
+      {#if clientError}<p class="project-error" aria-live="polite">{displayNotice(clientError, ui)}</p>{/if}
     </section>
   </main>
 {:else}
@@ -1992,13 +2024,13 @@
         {saving}
         saveLabel={labels.save}
         savingLabel={labels.saving}
-        saveState={isDirty ? labels.unsaved : operationMessage ?? labels.saved}
+        saveState={isDirty ? labels.unsaved : displayNotice(operationMessage ?? notice("app_saved"), ui)}
         {isDirty}
         canUndo={snapshot.history?.canUndo === true && !historyBlocked}
         canRedo={snapshot.history?.canRedo === true && !historyBlocked}
         {historyBusy}
-        undoLabel={snapshot.history?.undoLabel}
-        redoLabel={snapshot.history?.redoLabel}
+        undoLabel={snapshot.history?.undoLabel === undefined ? undefined : displayNotice(snapshot.history.undoLabel, ui)}
+        redoLabel={snapshot.history?.redoLabel === undefined ? undefined : displayNotice(snapshot.history.redoLabel, ui)}
         ondiscardreview={discardReview}
         onsavereview={() => void saveReview()}
         onsave={() => void save()}
@@ -2037,7 +2069,7 @@
           <ReviewWorkflow
             state={currentReviewState}
             dirty={reviewDirty}
-            message={reviewMessage ?? ui.text("ui_page_project_notes")}
+            message={displayNotice(reviewMessage ?? notice("ui_page_project_notes"), ui)}
             disabled={snapshot.review?.error !== undefined || reviewMutationBlocked}
             stale={currentIsStale}
             terminologyCount={terminology.length}
@@ -2091,7 +2123,7 @@
                 {#if previewBusy}
                   <span class="preview-placeholder">{ui.text("ui_page_preview_compiling_draft")}</span>
                 {:else if previewError}
-                  <span class="preview-error">{previewError}</span>
+                  <span class="preview-error">{displayNotice(previewError, ui)}</span>
                 {:else if simulatedPreviewResult?.kind === "text"}
                   <p>{simulatedPreviewResult.value}</p>
                 {:else if simulatedPreviewResult?.kind === "content"}
@@ -2117,7 +2149,7 @@
           <ValidationPanel
             busy={validationBusy}
             {diagnostics}
-            {clientError}
+            clientError={clientError === undefined ? undefined : displayNotice(clientError, ui)}
             {errorCount}
             {warningCount}
             validLabel={labels.valid}
@@ -2161,7 +2193,7 @@
       <Alert.Root>
         <Alert.Title>{ui.text("ui_page_about_diagnostic_bundle_title")}</Alert.Title>
         <Alert.Description>{ui.text("ui_page_about_diagnostic_bundle_description")}</Alert.Description>
-        {#if diagnosticMessage}<p class="text-sm text-primary" aria-live="polite">{diagnosticMessage}</p>{/if}
+        {#if diagnosticMessage}<p class="text-sm text-primary" aria-live="polite">{displayNotice(diagnosticMessage, ui)}</p>{/if}
       </Alert.Root>
       {#if diagnosticBundlePath !== undefined}
         <section class="grid gap-2 rounded-xl border p-4" aria-labelledby="diagnostic-bundle-actions-title">
@@ -2181,10 +2213,10 @@
           <Button variant="outline" size="sm" disabled={(localStateSummary?.entries ?? 0) === 0} onclick={clearLocalState}>{ui.text("ui_page_about_clear_local_state")}</Button>
         </div>
         {#if localStateSummary !== undefined}
-          <p class="text-sm text-muted-foreground">{localStateSummary.entries} {ui.text("ui_page_about_entries")} · {localStateSummary.bytes.toLocaleString()} {ui.text("ui_page_about_bytes")} · {localStateSummary.preferenceEntries} {ui.text("ui_page_about_preferences")} · {localStateSummary.recentProjectEntries} {ui.text("ui_page_about_recent_project_records")} · {localStateSummary.draftEntries} {ui.text("ui_page_about_recovery_draft_records")}{localStateSummary.recovered ? ` · ${ui.text("ui_page_about_recovered_unreadable")}` : ""}</p>
+          <p class="text-sm text-muted-foreground">{ui.text("ui_count_state_entries", { count: localStateSummary.entries })} · {ui.text("ui_count_state_bytes", { count: localStateSummary.bytes })} · {ui.text("ui_count_state_preferences", { count: localStateSummary.preferenceEntries })} · {ui.text("ui_count_state_recent", { count: localStateSummary.recentProjectEntries })} · {ui.text("ui_count_state_drafts", { count: localStateSummary.draftEntries })}{localStateSummary.recovered ? ` · ${ui.text("ui_page_about_recovered_unreadable")}` : ""}</p>
         {/if}
         <p class="text-xs text-muted-foreground">{ui.text("ui_page_about_clear_local_state_note")}</p>
-        {#if localStateMessage}<p class="text-sm text-primary" aria-live="polite">{localStateMessage}</p>{/if}
+        {#if localStateMessage}<p class="text-sm text-primary" aria-live="polite">{displayNotice(localStateMessage, ui)}</p>{/if}
       </section>
       <p class="text-sm text-muted-foreground">{ui.text("ui_page_about_license_note")}</p>
     </div>
@@ -2223,7 +2255,7 @@
             <div class="flex min-w-0 flex-wrap items-center gap-2"><strong>{term.source}</strong><span class="text-muted-foreground">→</span><strong>{term.preferred}</strong>{#if term.locale}<Badge variant="outline">{term.locale}</Badge>{/if}</div>
             <p class="truncate text-xs text-muted-foreground">{term.note ?? ui.text("ui_page_terminology_no_note")}</p>
           </div>
-          <Button variant="ghost" size="icon-xs" aria-label={`${ui.text("ui_page_terminology_remove_term")} ${term.source}`} onclick={() => removeTerm(index)}><Trash2Icon /></Button>
+          <Button variant="ghost" size="icon-xs" aria-label={ui.text("ui_terminology_remove_source", { term: term.source })} onclick={() => removeTerm(index)}><Trash2Icon /></Button>
         </div>
       {:else}
         <p class="p-6 text-center text-sm text-muted-foreground">{ui.text("ui_page_terminology_empty")}</p>
@@ -2242,8 +2274,8 @@
 {#if reportDialogOpen}
   <AppDialog
     open
-    title={`${selectedLocale} ${ui.text("ui_page_quality_report")}`}
-    description={`${localeQualityFindings.length} ${ui.text("ui_page_quality_findings_across")} ${qualityKeySet.size} ${ui.text("ui_page_messages")}. ${ui.text("ui_page_quality_csv_order")}`}
+    title={ui.text("ui_quality_report_locale", { locale: selectedLocale })}
+    description={ui.text("ui_count_quality_summary", { findings: localeQualityFindings.length, messages: qualityKeySet.size })}
     class="sm:max-w-4xl"
     onopenchange={(open) => reportDialogOpen = open}
   >
@@ -2281,7 +2313,7 @@
     onopenchange={(open) => { if (!open && !repairBusy) closeRepair(); }}
   >
     <Textarea class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("ui_page_repair_document_aria_label")} bind:value={repairText} spellcheck={false} disabled={repairBusy || editorMutationBlocked} />
-    {#if repairMessage}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("ui_page_repair_failed")}</Alert.Title><Alert.Description>{repairMessage}</Alert.Description></Alert.Root>{/if}
+    {#if repairMessage}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("ui_page_repair_failed")}</Alert.Title><Alert.Description>{displayNotice(repairMessage, ui)}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
       <Button variant="outline" disabled={repairBusy} onclick={closeRepair}>{ui.text("ui_page_cancel")}</Button>
       <Button disabled={repairBusy} onclick={() => void saveRepair()}>{#if repairBusy}<Spinner data-icon="inline-start" />{/if}{repairBusy ? ui.text("ui_page_validating") : ui.text("ui_page_repair_validate_save")}</Button>
@@ -2304,7 +2336,7 @@
         <Button variant="outline" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? ui.text("ui_page_choosing") : ui.text("ui_page_browse")}</Button>
       </div>
     </Field.Field>
-    {#if clientError}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("ui_page_fatal_could_not_open")}</Alert.Title><Alert.Description>{clientError}</Alert.Description></Alert.Root>{/if}
+    {#if clientError}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("ui_page_fatal_could_not_open")}</Alert.Title><Alert.Description>{displayNotice(clientError, ui)}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
       <Button variant="outline" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>{ui.text("ui_page_cancel")}</Button>
       <Button disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{#if openingWorkspace}<Spinner data-icon="inline-start" />{/if}{openingWorkspace ? ui.text("ui_page_opening") : ui.text("ui_page_open_project_action")}</Button>
@@ -2396,10 +2428,10 @@
       {/if}
     </Field.FieldGroup>
 
-    {#if mutationError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("ui_page_mutation_invalid")}</Alert.Title><Alert.Description>{mutationError}</Alert.Description></Alert.Root>{/if}
+    {#if mutationError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("ui_page_mutation_invalid")}</Alert.Title><Alert.Description>{displayNotice(mutationError, ui)}</Alert.Description></Alert.Root>{/if}
     {#if mutationPreview?.ok}
       <section class="mt-5 overflow-hidden rounded-xl border" aria-label={ui.text("ui_page_mutation_operation_preview")}>
-        <header class="flex items-center justify-between gap-3 border-b px-4 py-3"><strong>{ui.text("ui_page_mutation_operation_preview")}</strong><Badge variant="secondary">{mutationPreview.files.length} {ui.text("ui_page_mutation_affected")} {mutationPreview.files.length === 1 ? ui.text("ui_page_file") : ui.text("ui_page_files")}</Badge></header>
+        <header class="flex items-center justify-between gap-3 border-b px-4 py-3"><strong>{ui.text("ui_page_mutation_operation_preview")}</strong><Badge variant="secondary">{ui.text("ui_count_affected_files", { count: mutationPreview.files.length })}</Badge></header>
         {#each mutationPreview.files as file (file.path)}
           <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"><Badge variant={file.kind === "delete" ? "destructive" : file.kind === "create" ? "default" : "secondary"}>{file.kind}</Badge><code class="truncate text-xs">{file.path}</code><small class="col-start-2 text-muted-foreground sm:col-start-auto">{file.beforeBytes.toLocaleString()} → {file.afterBytes.toLocaleString()} bytes</small></div>
         {/each}
@@ -2467,7 +2499,7 @@
                 <Select.Content><Select.Group><Select.Item value="" label={`${ui.text("ui_page_project_wizard_default")} (${projectDefaultLocale || ui.text("ui_page_project_wizard_source")})`}>{ui.text("ui_page_project_wizard_default")} ({projectDefaultLocale || ui.text("ui_page_project_wizard_source")})</Select.Item>{#each projectLocales.filter((candidate) => candidate.id !== locale.id && candidate.tag.trim() !== "") as candidate (candidate.id)}<Select.Item value={candidate.tag} label={candidate.tag}>{candidate.tag}</Select.Item>{/each}</Select.Group></Select.Content>
               </Select.Root>
             </Field.Field>
-            <Button variant="ghost" size="icon-sm" aria-label={`${ui.text("ui_page_project_wizard_remove_locale")} ${locale.tag || ui.text("ui_page_project_wizard_row")}`} onclick={() => removeProjectLocale(locale.id)}><Trash2Icon /></Button>
+            <Button variant="ghost" size="icon-sm" aria-label={ui.text("ui_project_remove_locale", { locale: locale.tag || ui.text("ui_page_project_wizard_row") })} onclick={() => removeProjectLocale(locale.id)}><Trash2Icon /></Button>
           </div>
         {/each}
         <Button variant="outline" class="justify-self-start" onclick={addProjectLocale}><PlusIcon data-icon="inline-start" />{ui.text("ui_page_project_wizard_add_language")}</Button>
@@ -2482,12 +2514,12 @@
         <Field.Field orientation="horizontal"><Checkbox id="project-starter" bind:checked={projectIncludeStarter} /><Field.Content><Field.Label for="project-starter">{ui.text("ui_page_project_wizard_add_starter")}</Field.Label><Field.Description>{ui.text("ui_page_project_wizard_add_starter_description")}</Field.Description></Field.Content></Field.Field>
       </Field.FieldGroup>
     {:else if projectStep === 4 && projectPlan !== undefined}
-      <Alert.Root><Alert.Title>{ui.text("ui_page_project_wizard_ready_create")} {projectPlan.catalogId}</Alert.Title><Alert.Description>{projectPlan.locales.length} {projectPlan.locales.length === 1 ? ui.text("ui_page_project_wizard_language") : ui.text("ui_page_project_wizard_languages")} · {projectPlan.files.length} {ui.text("ui_page_files")} · {ui.text("ui_page_project_wizard_compiler_validated")}</Alert.Description></Alert.Root>
+      <Alert.Root><Alert.Title>{ui.text("ui_page_project_wizard_ready_create")} {projectPlan.catalogId}</Alert.Title><Alert.Description>{ui.text("ui_count_project_summary", { languages: projectPlan.locales.length, files: projectPlan.files.length })}</Alert.Description></Alert.Root>
       <dl class="mt-4 grid gap-3 rounded-xl border p-4"><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_directory")}</dt><dd class="m-0 truncate font-mono text-xs">{projectPlan.directory}</dd></div><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_languages")}</dt><dd class="m-0 font-medium">{projectPlan.locales.map((locale) => locale.tag).join(", ")}</dd></div></dl>
       <section class="mt-4 overflow-hidden rounded-xl border" aria-label={ui.text("ui_page_project_wizard_files_to_create")}><h4 class="border-b px-4 py-3 font-medium">{ui.text("ui_page_project_wizard_files_to_create")}</h4>{#each projectPlan.files as file (file)}<div class="border-b px-4 py-3 last:border-b-0"><code class="text-xs">{file}</code></div>{/each}</section>
     {/if}
 
-    {#if projectError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("ui_page_project_wizard_invalid")}</Alert.Title><Alert.Description>{projectError}</Alert.Description></Alert.Root>{/if}
+    {#if projectError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("ui_page_project_wizard_invalid")}</Alert.Title><Alert.Description>{displayNotice(projectError, ui)}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
       <Button variant="outline" disabled={projectBusy} onclick={closeProjectWizard}>{ui.text("ui_page_cancel")}</Button>
       {#if projectStep > 1}<Button variant="ghost" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>{ui.text("ui_page_back")}</Button>{/if}

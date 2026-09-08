@@ -2,7 +2,6 @@ import tailwindcss from "@tailwindcss/vite";
 import { runic } from "@runic-artifex/vite-plugin-runic";
 import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations";
 import { sveltekit } from "@sveltejs/kit/vite";
-import { globSync } from "node:fs";
 import { defineConfig } from "vite";
 
 const manifest = process.env.RUNIC_TRANSLATIONS_MANIFEST;
@@ -20,7 +19,7 @@ export default defineConfig({
     }),
     runicTranslations({
       manifest,
-      sourceFiles: globSync("../EditorResources/{runic.json,en/*.mf2,de/*.mf2}")
+      sourceFiles: ["../EditorResources/runic.json", "../EditorResources/en.toml", "../EditorResources/de.toml"]
     }),
     sveltekit()
   ],

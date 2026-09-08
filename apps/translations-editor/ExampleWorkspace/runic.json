@@ -9,7 +9,8 @@
   "baseLocale": "de",
   "locales": [
     "de",
-    { "tag": "en", "fallback": "de" },
-    { "tag": "fr", "fallback": "de" }
-  ]
+    "en",
+    "fr"
+  ],
+  "sourceLayout": "locale-toml"
 }

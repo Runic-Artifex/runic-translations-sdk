@@ -1,16 +1,13 @@
-# MF2 projects
+# TOML locale projects with MF2 messages
 
-The v1 authoring convention keeps configuration and messages separate:
+New projects use one TOML file per locale. Configuration remains separate from
+MessageFormat 2 (MF2) message content:
 
 ```text
 translations/
 ├── runic.json
-├── en/
-│   ├── application_title.mf2
-│   └── validation_required.mf2
-└── de/
-    ├── application_title.mf2
-    └── validation_required.mf2
+├── en.toml
+└── de.toml
 ```
 
 `runic.json` is the only project declaration. It contains project policy, not
@@ -20,6 +17,7 @@ messages:
 {
   "$schema": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
   "schemaVersion": 1,
+  "sourceLayout": "locale-toml",
   "catalog": "app",
   "code": {
     "namespace": "Example.Translations",
@@ -29,20 +27,24 @@ messages:
 }
 ```
 
-Locale directories are discovered from the filesystem. Add `locales` only when
-you want the project to reject undeclared locale directories. A message ID comes
-from its filename and must be an identifier so the generated ESM API is natural:
+Locale files are siblings of `runic.json`; each filename is its locale tag. Add
+`locales` to reject undeclared locales. Keys must be identifier-safe message IDs.
+Values are TOML strings containing MF2, for example in `translations/en.toml`:
 
-```mf2
-// translations/en/application_title.mf2
-Runic application
-```
-
-```mf2
-// translations/en/validation_required.mf2
+```toml
+application_title = 'Runic application'
+validation_required = '''
 .input {$field :string}
 The field {$field} is required.
+'''
 ```
+
+Use the Runic TOML 1.1 profile: a flat key/value document with keys matching
+`[A-Za-z_][A-Za-z0-9_]*`. Tables, dotted keys (including quoted keys containing
+dots), arrays, non-string values and duplicate keys are rejected. Literal TOML
+strings keep MF2 braces and backslashes readable; basic strings use TOML escaping.
+MF2 remains the message
+language, including parameters and plural selectors.
 
 ```ts
 import { m } from 'virtual:runic-translations/app';
@@ -51,7 +53,7 @@ m.application_title();
 m.validation_required({ field: 'email' });
 ```
 
-The authoring files use MessageFormat 2 syntax. The v1 compiler accepts plain
+The decoded string values use MessageFormat 2 syntax. The v1 compiler accepts plain
 patterns, `.input`, `.local`, `.match`, quoted patterns, variables, markup, and
 the functions `:string`, `:integer`, `:number`, `:date`, `:time`, and
 `:datetime`. Runic-specific scalar formats use the explicit `:runic:*`
@@ -61,7 +63,7 @@ changing their meaning.
 ## Build and Vite discovery
 
 `Runic.Translations.Build` automatically discovers `translations/runic.json`
-and all `translations/**/*.mf2` files. No MSBuild item list is required.
+and its locale TOML files. No MSBuild item list is required.
 
 Vite uses the same project:
 
@@ -74,8 +76,8 @@ export default {
 ```
 
 The no-argument form discovers `translations/runic.json`, generates into
-`.runic/translations`, watches the config and every MF2 message, and exposes the
-generated virtual modules. In a split frontend/backend layout, pass only the
+`.runic/translations`, watches the config and locale file additions, edits and
+removals, and exposes the generated virtual modules. In a split frontend/backend layout, pass only the
 relative project directory: `runicTranslations({ project: "./translations" })`.
 
 The CLI accepts either the directory or config file:
@@ -88,8 +90,35 @@ dotnet tool run runic-translations -- generate \
   --emit-esm
 ```
 
-MF2 projects are the only supported authoring input. The compiler, CLI, MSBuild,
-Vite plugin, and editor all consume this same project layout.
+The compiler, CLI, MSBuild, Vite plugin, and editor consume this shared project
+layout. TOML is a compile-time container; generated runtime APIs and message
+formatting continue to use the same MF2 compilation model.
+
+## Existing projects
+
+A project without `sourceLayout` retains the historical
+`{locale}/{message_id}.mf2` layout. Absence does not opt an existing project into
+TOML. New templates and scaffolds set `sourceLayout: "locale-toml"` explicitly.
+Do not mix the two layouts in one project or change the discriminator before
+converting the resources.
+
+Migration groups each locale's MF2 files into one TOML document while preserving
+message IDs and decoded source content. Existing MF2 compilation still normalizes
+line endings and trims the message body; container migration does not change
+those formatting semantics. Review the migration plan and resolve destination
+collisions before applying it:
+
+```bash
+dotnet tool run runic-translations -- migrate --project translations --dry-run
+dotnet tool run runic-translations -- migrate --project translations
+dotnet tool run runic-translations -- validate --project translations
+```
+
+The dry run lists planned file creations, replacements and deletions without
+writing files. The command without `--dry-run` applies the transaction, including
+replacing the project discriminator and removing the migrated MF2 files. Commit
+or back up the original inputs before applying the plan, then verify the converted
+catalog and regenerate its outputs.
 
 ## Locale and SSR runtime
 
