@@ -9,7 +9,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-    <TranslationsPackageVersion Condition="'$(TranslationsPackageVersion)' == ''">1.0.0-preview.1</TranslationsPackageVersion>
+    <TranslationsPackageVersion Condition="'$(TranslationsPackageVersion)' == ''">0.2.0-preview.1</TranslationsPackageVersion>
     <RestoreAdditionalProjectSources Condition="'$(TranslationsPackageFeed)' != ''">$(TranslationsPackageFeed);$(RunicCommandLinePackageFeed)</RestoreAdditionalProjectSources>
     <!-- Packages under test change on every source commit. -->
     <IsPackable>false</IsPackable>

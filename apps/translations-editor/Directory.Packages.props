@@ -4,10 +4,10 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
-    <RunicApplicationPackageVersion Condition="'$(RunicApplicationPackageVersion)' == ''">1.0.0-preview.1</RunicApplicationPackageVersion>
-    <RunicCommandLinePackageVersion Condition="'$(RunicCommandLinePackageVersion)' == ''">1.0.0-preview.1</RunicCommandLinePackageVersion>
-    <RunicTranslationsPackageVersion Condition="'$(RunicTranslationsPackageVersion)' == ''">1.0.0-preview.1</RunicTranslationsPackageVersion>
-    <RunicAssetsPackageVersion Condition="'$(RunicAssetsPackageVersion)' == ''">1.0.0-preview.1</RunicAssetsPackageVersion>
+    <RunicApplicationPackageVersion Condition="'$(RunicApplicationPackageVersion)' == ''">0.2.0-preview.1</RunicApplicationPackageVersion>
+    <RunicCommandLinePackageVersion Condition="'$(RunicCommandLinePackageVersion)' == ''">0.2.0-preview.1</RunicCommandLinePackageVersion>
+    <RunicTranslationsPackageVersion Condition="'$(RunicTranslationsPackageVersion)' == ''">0.2.0-preview.1</RunicTranslationsPackageVersion>
+    <RunicAssetsPackageVersion Condition="'$(RunicAssetsPackageVersion)' == ''">0.2.0-preview.1</RunicAssetsPackageVersion>
   </PropertyGroup>
   <ItemGroup>
   </ItemGroup>
