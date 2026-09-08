@@ -395,7 +395,7 @@ type readonly struct Runic.Translations.TranslationReferenceArgument : System.IE
   property Runic.Translations.TextArgumentType Type { get; }
   property System.String Value { get; }
 
-type class Runic.Translations.TranslationReferenceJsonContext : System.Text.Json.Serialization.JsonSerializerContext, System.Text.Json.Serialization.Metadata.IBuiltInJsonTypeInfoResolver, System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Text.Json.SourceGeneration", "10.0.14.32716"), System.Text.Json.Serialization.JsonSerializableAttribute(typeof(Runic.Translations.TranslationReference)), System.Text.Json.Serialization.JsonSourceGenerationOptionsAttribute(PropertyNamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.CamelCase)]
+type class Runic.Translations.TranslationReferenceJsonContext : System.Text.Json.Serialization.JsonSerializerContext, System.Text.Json.Serialization.Metadata.IBuiltInJsonTypeInfoResolver, System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Text.Json.SourceGeneration", "10.0.14.37416"), System.Text.Json.Serialization.JsonSerializableAttribute(typeof(Runic.Translations.TranslationReference)), System.Text.Json.Serialization.JsonSourceGenerationOptionsAttribute(PropertyNamingPolicy = System.Text.Json.Serialization.JsonKnownNamingPolicy.CamelCase)]
   ctor Runic.Translations.TranslationReferenceJsonContext()
   ctor Runic.Translations.TranslationReferenceJsonContext(System.Text.Json.JsonSerializerOptions options)
   method System.Text.Json.Serialization.Metadata.JsonTypeInfo GetTypeInfo(System.Type type)

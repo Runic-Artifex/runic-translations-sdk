@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="5.9.0" PrivateAssets="all" />
     <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations.Generator\Runic.Translations.Generator.csproj" />
     <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations\Runic.Translations.csproj" />
   </ItemGroup>
