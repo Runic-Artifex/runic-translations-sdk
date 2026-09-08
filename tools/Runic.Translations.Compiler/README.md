@@ -31,7 +31,7 @@ if (!result.Success)
 }
 ```
 
-For TOML inputs, set `"sourceLayout": "locale-toml"` in `runic.json`. Each flat identifier key in `en.toml` has a string value containing MF2. Omitting the discriminator retains the legacy `{locale}/{message-id}.mf2` layout. See the [locale profile](../../specs/translations/locale-toml-v1.md).
+For TOML inputs, set `"sourceLayout": "locale-toml"` in `runic.json`. `en.toml` supports root keys, dotted keys, nested tables and inline-table containers with MF2 string leaves. Identifier-safe path segments join with underscores for generated message IDs; collisions are rejected. Omitting the discriminator retains the legacy `{locale}/{message-id}.mf2` layout. See the [locale profile](../../specs/translations/locale-toml-v1.md).
 
 Inputs are copied by `TranslationSource`; pass normalized logical paths when stable diagnostic locations and fingerprints matter. Use `TranslationCompilerOptions` and cancellation for untrusted or interactive inputs rather than increasing the built-in size, depth, locale, key, value, and placeholder limits without a resource budget.
 

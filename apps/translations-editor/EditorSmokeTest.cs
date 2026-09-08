@@ -26,8 +26,10 @@ internal static class EditorSmokeTest
             // physical bytes is tested independently of the compiled MF2 pattern.
             string germanPath = Path.Combine(project, "DE.TOML");
             File.Move(Path.Combine(project, "de.toml"), germanPath);
-            const string originalGerman = "# German messages\r\napplication_title = 'Titel' # retain this comment\r\n";
+            const string originalGerman = "# German messages\r\n[application]\r\ntitle = 'Titel' # retain this comment\r\n[validation.form]\r\npending = 'Pflicht'\r\n";
             await File.WriteAllTextAsync(germanPath, originalGerman).ConfigureAwait(false);
+            string englishPath = Path.Combine(project, "en.toml");
+            await File.WriteAllTextAsync(englishPath, "[application]\r\ntitle = 'Title'\r\n[validation.form]\r\npending = 'Required'\r\n").ConfigureAwait(false);
             using var workspace = new EditorWorkspace(project);
             await File.WriteAllTextAsync(germanPath, "broken = [\n").ConfigureAwait(false);
             WorkspaceSnapshot malformed = await workspace.LoadAsync().ConfigureAwait(false);
@@ -37,12 +39,14 @@ internal static class EditorSmokeTest
             WorkspaceSnapshot initial = await workspace.LoadAsync().ConfigureAwait(false);
             Require(initial.Success && initial.Catalog?.Locales.Count == 2, "The TOML project was not loaded.");
             EditorDocument german = initial.Documents.Single(document => document.Path == "DE.TOML");
-            Require(german.Entries?.Single().Key == "application_title", "Logical message identity was lost.");
+            Require(german.Entries is { } initialEntries &&
+                initialEntries.Single(entry => entry.Key == "application_title").Content == "Titel" &&
+                initialEntries.Any(entry => entry.Key == "validation_form_pending"), "Logical message identity was lost.");
 
             EditorDocumentDraft draft = await workspace.TransformDocumentAsync(german.Path, german.Content,
                 "application_title", "Titel 🦊").ConfigureAwait(false);
-            Require(draft.Success && draft.Content.StartsWith("# German messages\r\n", StringComparison.Ordinal) &&
-                draft.Content.EndsWith(" # retain this comment\r\n", StringComparison.Ordinal),
+            Require(draft.Success && draft.Content.StartsWith("# German messages\r\n[application]\r\n", StringComparison.Ordinal) &&
+                draft.Content.EndsWith(" # retain this comment\r\n[validation.form]\r\npending = 'Pflicht'\r\n", StringComparison.Ordinal),
                 "The message transform did not preserve physical trivia.");
             EditorMessagePreview preview = await workspace.PreviewMessageAsync(
                 german.Path, draft.Content, "de", "application_title").ConfigureAwait(false);
@@ -52,16 +56,89 @@ internal static class EditorSmokeTest
             EditorOperationResult stale = await workspace.SaveAsync(german.Path, german.Content, german.Revision).ConfigureAwait(false);
             Require(!stale.Ok && stale.Kind == "conflict", "A stale physical revision overwrote another edit.");
 
-            TranslationWorkspaceTransaction.Commit(TranslationWorkspaceMutation.CreateKey(
-                new TranslationCreateKeyRequest(project, "editor-smoke", "validation_required", "Required")));
+            const string inlineGerman = "[inline]\r\nlabels = { nested = { primary = 'Inline', neighbor = 'Unverändert' } } # inline trivia\r\n";
+            await File.AppendAllTextAsync(germanPath, inlineGerman).ConfigureAwait(false);
+            await File.AppendAllTextAsync(englishPath,
+                "[inline]\r\nlabels = { nested = { primary = 'Inline', neighbor = 'Unchanged' } }\r\n").ConfigureAwait(false);
+            WorkspaceSnapshot inlineSnapshot = await workspace.LoadAsync().ConfigureAwait(false);
+            german = inlineSnapshot.Documents.Single(document => document.Path == "DE.TOML");
+            Require(inlineSnapshot.Success &&
+                german.Entries?.Single(entry => entry.Key == "inline_labels_nested_primary").Content == "Inline",
+                "The editor did not expose a nested inline-table leaf with its flattened identity.");
+            EditorDocumentDraft inlineDraft = await workspace.TransformDocumentAsync(german.Path, german.Content,
+                "inline_labels_nested_primary", "Inline geändert 🦊").ConfigureAwait(false);
+            Require(inlineDraft.Success && inlineDraft.Content.StartsWith(draft.Content, StringComparison.Ordinal) &&
+                inlineDraft.Content.Contains("labels = { nested = { primary = ", StringComparison.Ordinal) &&
+                inlineDraft.Content.EndsWith(", neighbor = 'Unverändert' } } # inline trivia\r\n", StringComparison.Ordinal),
+                "Editing an inline leaf changed its neighbors, enclosing tables, or physical trivia.");
+            Require((await workspace.SaveAsync(german.Path, inlineDraft.Content, german.Revision).ConfigureAwait(false)).Ok,
+                "The transformed inline-table document could not be saved.");
+            WorkspaceSnapshot inlineSaved = await workspace.LoadAsync().ConfigureAwait(false);
+            Require(inlineSaved.Success && inlineSaved.Documents.Single(document => document.Path == "DE.TOML")
+                .Entries?.Single(entry => entry.Key == "inline_labels_nested_primary").Content == "Inline geändert 🦊",
+                "The saved inline leaf lost its logical identity or value on reload.");
+
+            using (var mutations = new EditorSession(project))
+            {
+                await mutations.LoadAsync().ConfigureAwait(false);
+                var create = new EditorMutationRequest("create-key", null, null, null, null, null,
+                    "validation_form_added", "Added");
+                EditorMutationPreview createPreview = mutations.PreviewMutation(create);
+                Require(createPreview.Ok && createPreview.Files.Count == 2,
+                    "Creating a grouped key did not preview both locale documents.");
+                Require((await mutations.ApplyMutationAsync(create with { ConfirmationToken = createPreview.ConfirmationToken })
+                    .ConfigureAwait(false)).Ok, "Creating a grouped key through the editor failed.");
+                var rename = new EditorMutationRequest("rename-key", null, null, null, null,
+                    "validation_form_pending", "validation_form_required", null);
+                EditorMutationPreview renamePreview = mutations.PreviewMutation(rename);
+                Require(renamePreview.Ok, "Renaming a grouped key could not be previewed.");
+                Require((await mutations.ApplyMutationAsync(rename with { ConfirmationToken = renamePreview.ConfirmationToken })
+                    .ConfigureAwait(false)).Ok, "Renaming a grouped key through the editor failed.");
+            }
             WorkspaceSnapshot mutated = await workspace.LoadAsync().ConfigureAwait(false);
-            Require(mutated.Success && mutated.Documents.Single(document => document.Path == "DE.TOML").Entries?.Count == 2,
-                "Creating a key did not share the physical locale document.");
+            EditorDocument grouped = mutated.Documents.Single(document => document.Path == "DE.TOML");
+            Require(mutated.Success && grouped.Entries is { Count: 5 } groupedEntries &&
+                groupedEntries.Any(entry => entry.Key == "validation_form_required") &&
+                groupedEntries.Any(entry => entry.Key == "validation_form_added") &&
+                !groupedEntries.Any(entry => entry.Key == "validation_form_pending"),
+                "Grouped create and rename did not preserve flattened logical identity.");
+            Require(grouped.Content.Contains("[validation.form]", StringComparison.Ordinal) &&
+                !grouped.Content.Contains("validation_form_required =", StringComparison.Ordinal),
+                "The editor mutation did not retain readable nested TOML grouping.");
             Require(!Directory.EnumerateFiles(project, "*.mf2", SearchOption.AllDirectories).Any(), "TOML mutation created legacy files.");
 
+            const string savedRow = "[[notifications]]\r\n_id = 'saved'\r\ntitle = 'Gespeichert' # stable row comment\r\n";
+            const string dismissedRow = "[[notifications]]\r\n_id = 'dismissed'\r\ntitle = 'Verworfen'\r\n";
+            await File.AppendAllTextAsync(germanPath, savedRow + dismissedRow).ConfigureAwait(false);
+            await File.AppendAllTextAsync(englishPath,
+                "[[notifications]]\r\n_id = 'saved'\r\ntitle = 'Saved'\r\n[[notifications]]\r\n_id = 'dismissed'\r\ntitle = 'Dismissed'\r\n").ConfigureAwait(false);
+            WorkspaceSnapshot arraySnapshot = await workspace.LoadAsync().ConfigureAwait(false);
+            EditorDocument arrayDocument = arraySnapshot.Documents.Single(document => document.Path == "DE.TOML");
+            Require(arraySnapshot.Success && arrayDocument.Entries is { } arrayEntries &&
+                arrayEntries.Single(entry => entry.Key == "notifications_saved_title").Content == "Gespeichert" &&
+                !arrayEntries.Any(entry => entry.Key.EndsWith("__id", StringComparison.Ordinal)),
+                "Array rows did not expose stable message IDs without metadata.");
+            // Reorder actual rows on disk, then edit the same logical ID through
+            // the editor: row position must never choose the target message.
+            await File.WriteAllTextAsync(germanPath, grouped.Content + dismissedRow + savedRow).ConfigureAwait(false);
+            WorkspaceSnapshot reordered = await workspace.LoadAsync().ConfigureAwait(false);
+            german = reordered.Documents.Single(document => document.Path == "DE.TOML");
+            EditorDocumentDraft arrayDraft = await workspace.TransformDocumentAsync(german.Path, german.Content,
+                "notifications_saved_title", "Gespeichert nach Neuordnung").ConfigureAwait(false);
+            Require(reordered.Success && arrayDraft.Success &&
+                arrayDraft.Content.StartsWith(grouped.Content + dismissedRow, StringComparison.Ordinal) &&
+                arrayDraft.Content.Contains("_id = 'saved'\r\n", StringComparison.Ordinal) &&
+                arrayDraft.Content.EndsWith(" # stable row comment\r\n", StringComparison.Ordinal),
+                "Editing a reordered array row changed its identity, neighbor, or comment.");
+            Require((await workspace.SaveAsync(german.Path, arrayDraft.Content, german.Revision).ConfigureAwait(false)).Ok,
+                "The reordered array leaf could not be saved.");
+            WorkspaceSnapshot arraySaved = await workspace.LoadAsync().ConfigureAwait(false);
+            Require(arraySaved.Success && arraySaved.Documents.Single(document => document.Path == "DE.TOML")
+                .Entries?.Single(entry => entry.Key == "notifications_saved_title").Content == "Gespeichert nach Neuordnung",
+                "The saved array row lost its stable logical identity.");
+
             // A missing logical message must be inserted into its existing file.
-            string englishPath = Path.Combine(project, "en.toml");
-            await File.AppendAllTextAsync(englishPath, "only_source = 'Source'\n").ConfigureAwait(false);
+            await File.AppendAllTextAsync(englishPath, "[only]\r\nsource = 'Source'\r\n").ConfigureAwait(false);
             WorkspaceSnapshot incomplete = await workspace.LoadAsync().ConfigureAwait(false);
             german = incomplete.Documents.Single(document => document.Path == "DE.TOML");
             EditorDocumentDraft missing = await workspace.TransformDocumentAsync(german.Path, german.Content,
@@ -78,7 +155,7 @@ internal static class EditorSmokeTest
             foreach (XElement unit in xliff.Descendants(xliffNamespace + "unit"))
             {
                 string? key = unit.Attribute("id")?.Value;
-                if (key is "application_title" or "validation_required")
+                if (key is "application_title" or "validation_form_required")
                     unit.Descendants(xliffNamespace + "target").Single().Value = key == "application_title" ? "Importierter Titel" : "Erforderlich";
             }
             xliff.Save(xliffPath);
@@ -116,7 +193,7 @@ internal static class EditorSmokeTest
             using var session = new EditorSession(project);
             WorkspaceSnapshot complete = await session.LoadAsync().ConfigureAwait(false);
             german = complete.Documents.Single(document => document.Path == "DE.TOML");
-            Require(complete.Success && german.Entries?.Single(entry => entry.Key == "validation_required").Content == "Erforderlich",
+            Require(complete.Success && german.Entries?.Single(entry => entry.Key == "validation_form_required").Content == "Erforderlich",
                 "The grouped imported messages did not compile.");
             draft = await session.TransformDocumentAsync(german.Path, german.Content, "application_title", "Rückgängig").ConfigureAwait(false);
             Require((await session.SaveAsync(german.Path, draft.Content, german.Revision).ConfigureAwait(false)).Ok, "Session save failed.");
@@ -125,7 +202,7 @@ internal static class EditorSmokeTest
             Require((await session.RedoAsync().ConfigureAwait(false)).Ok && await File.ReadAllTextAsync(germanPath).ConfigureAwait(false) == draft.Content,
                 "Redo did not restore the complete physical file.");
 
-            Console.WriteLine("PASS: editor TOML messages, trivia, revisions, grouped XLIFF conflicts, and physical undo/redo.");
+            Console.WriteLine("PASS: editor nested TOML messages, grouped create/rename, trivia, revisions, grouped XLIFF conflicts, and physical undo/redo.");
             return 0;
         }
         catch (Exception exception)

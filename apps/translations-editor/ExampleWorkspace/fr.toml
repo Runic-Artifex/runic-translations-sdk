@@ -1,4 +1,17 @@
-common_cancel = "Annuler\n"
-common_save = "Enregistrer\n"
-dashboard_welcome = ".input {$name :string}\nBon retour, {$name}\n"
-files_selected = ".input {$count :integer select=plural}\n.match $count\none {{Un fichier sélectionné}}\n* {{{$count} fichiers sélectionnés}}\n"
+[common]
+cancel = 'Annuler'
+save = 'Enregistrer'
+
+[dashboard]
+welcome = '''
+.input {$name :string}
+Bon retour, {$name}
+'''
+
+[files]
+selected = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Un fichier sélectionné}}
+* {{{$count} fichiers sélectionnés}}
+'''

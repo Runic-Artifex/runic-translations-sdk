@@ -2,3 +2,10 @@ Greeting = '''
 .input {$name :string}
 Hello {$name}
 '''
+
+# The installed analyzer must resolve grouped paths through the bundled parser.
+[ui.notifications]
+Greeting = '''
+.input {$name :string}
+Welcome {$name}
+'''

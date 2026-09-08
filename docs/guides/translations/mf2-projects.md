@@ -28,29 +28,90 @@ messages:
 ```
 
 Locale files are siblings of `runic.json`; each filename is its locale tag. Add
-`locales` to reject undeclared locales. Keys must be identifier-safe message IDs.
-Values are TOML strings containing MF2, for example in `translations/en.toml`:
+`locales` to reject undeclared locales. Group related messages with standard TOML
+tables, nested tables, dotted keys or inline tables. Values remain MF2 strings, for example in
+`translations/en.toml`:
 
 ```toml
-application_title = 'Runic application'
-validation_required = '''
+[application]
+title = 'Runic application'
+
+[validation]
+required = '''
 .input {$field :string}
 The field {$field} is required.
 '''
+
+[documents.actions]
+save = 'Save document'
+
+[documents]
+count = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One document}}
+* {{{$count} documents}}
+'''
 ```
 
-Use the Runic TOML 1.1 profile: a flat key/value document with keys matching
-`[A-Za-z_][A-Za-z0-9_]*`. Tables, dotted keys (including quoted keys containing
-dots), arrays, non-string values and duplicate keys are rejected. Literal TOML
-strings keep MF2 braces and backslashes readable; basic strings use TOML escaping.
-MF2 remains the message
-language, including parameters and plural selectors.
+The Runic TOML 1.1 profile joins key-path segments with underscores for the logical
+message ID. `[application] title` becomes `application_title`, and
+`[documents.actions] save` becomes `documents_actions_save`. The dotted assignment
+`documents.actions.save = 'Save document'` at the document root is an equivalent
+alternative to the nested table. Inline tables offer compact groups with the same
+mapping, for example:
+
+```toml
+[documents]
+actions = { save = 'Save', cancel = 'Cancel' }
+```
+
+This produces `documents_actions_save` and `documents_actions_cancel`, just as
+`[documents.actions]` with `save` and `cancel` entries would. Table containers may
+nest recursively; every message leaf must be an MF2 string. Prefer section tables
+for long catalogs and use inline tables for optional compact groups. Existing flat
+keys remain supported.
+
+Each segment must match `[A-Za-z_][A-Za-z0-9_]*`. Flattened IDs must be unique:
+`a_b.c`, `a.b_c` and the flat key `a_b_c` all produce `a_b_c`, so a document
+containing more than one of them is rejected. Duplicate TOML keys, scalar or mixed
+arrays and non-string message leaves are rejected. A quoted segment
+containing a literal dot is not an identifier-safe segment.
+
+Prefer named section tables for authoring and generated catalogs. Arrays of tables
+are optional and use a Runic
+mapping rule in addition to TOML syntax:
+
+```toml
+[[notifications]]
+_id = 'saved'
+title = 'Document saved'
+```
+
+This maps the message to `notifications_saved_title`. Every row requires an `_id`
+string matching the identifier-segment rule, unique within its array. Keep this
+stable ID identical across locales; row reordering does not change message IDs.
+Only an immediate array-row `_id` is metadata, excluded from message payloads and
+translation; `_id` inside an ordinary table remains a message key. Nested arrays
+of tables belong to their actual enclosing parent row. Inline arrays of tables
+use the same mapping: `notifications = [{ _id = 'saved', title = 'Document saved' }]`
+at the document root is equivalent to the example above. An empty array `[]`
+represents an empty group. The same flattened-ID collision rules apply. This
+profile does not treat arbitrary TOML values as messages; scalar and mixed arrays
+are not message groups.
+
+Prefer multiline literal strings for readable MF2 parameters and plurals. Literal
+strings preserve MF2 braces and backslashes; basic strings use TOML escaping.
+TOML groups messages; MF2 supplies formatting and selection. There is no separate
+TOML matching language.
 
 ```ts
 import { m } from 'virtual:runic-translations/app';
 
 m.application_title();
 m.validation_required({ field: 'email' });
+m.documents_actions_save();
+m.documents_count({ count: 2 });
 ```
 
 The decoded string values use MessageFormat 2 syntax. The v1 compiler accepts plain

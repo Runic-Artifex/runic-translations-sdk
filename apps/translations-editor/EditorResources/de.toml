@@ -1,754 +1,1099 @@
-app_add_message = "Nachricht hinzufügen\n"
-app_advanced = "Varianten\n"
-app_all = "Alle\n"
-app_approve_translations = "Übersetzungen freigeben\n"
-app_default_locale = "Ausgangssprache\n"
-app_diagnostics = "Diagnosen\n"
-app_eyebrow = "Runic Translations Editor\n"
-app_invalid = "Behebe die Validierungsfehler vor dem Speichern\n"
-app_mark_for_review = "Zur Überprüfung markieren\n"
-app_message_bulk_actions = "Massenaktionen für Nachrichten\n"
-app_message_filters = "Nachrichtenfilter\n"
-app_messages = "Nachrichten\n"
-app_missing = "Fehlend\n"
-app_missing_translation = "Fehlende Übersetzung\n"
-app_no_matching_messages = "Keine passenden Nachrichten\n"
-app_no_results = "Keine Nachrichten passen zu dieser Ansicht\n"
-app_no_selection = "Wähle eine Nachricht aus, um sie zu übersetzen\n"
-app_raw = "Quelldatei\n"
-app_reload = "Neu laden\n"
-app_review = "Überprüfung\n"
-app_save = "Dokument speichern\n"
-app_saved = "Gespeichert\n"
-app_saving = "Speichern…\n"
-app_search = "Nachrichten suchen…\n"
-app_simple = "Übersetzung\n"
-app_stale = "Veraltet\n"
-app_structured = "Strukturiert\n"
-app_title = "Übersetzungen\n"
-app_translated = "Übersetzt\n"
-app_unsaved = "Ungespeicherte Änderungen\n"
-app_valid = "Bereit zum Speichern\n"
-app_visible_messages = "Sichtbare Nachrichten\n"
-app_workspace = "Arbeitsbereich\n"
-ui_a11y_toggle_sidebar = "Seitenleiste umschalten\n"
-ui_artifact_preview_aria_label = "Vorschau des kompilierten Artefakts\n"
-ui_artifact_preview_as_generated = "Wie erzeugt\n"
-ui_artifact_preview_close = "Vorschau des kompilierten Artefakts schließen\n"
-ui_artifact_preview_compiling = "Aktueller Entwurf wird kompiliert…\n"
-ui_artifact_preview_description = "Darstellung der kompilierten Nachricht direkt im Editor. Dabei wird keine externe Anwendung gestartet.\n"
-ui_artifact_preview_edit_to_preview = "Bearbeiten Sie die Nachricht, um eine Artefaktvorschau zu erstellen.\n"
-ui_artifact_preview_no_simulation = "keine Simulation\n"
-ui_artifact_preview_note = "Beide Spalten durchlaufen dieselbe compiler-normalisierte AST-Pipeline; Markup bleibt semantische Daten und wird niemals als HTML interpretiert.\n"
-ui_artifact_preview_pseudo_localization = "Pseudolokalisierung\n"
-ui_artifact_preview_rtl = "RTL\n"
-ui_artifact_preview_simulated = "Simuliert\n"
-ui_artifact_preview_title = "Vorschau des kompilierten Artefakts\n"
-ui_artifact_preview_untransformed = "unverändert\n"
-ui_command_palette_commands_aria_label = "Befehle\n"
-ui_command_palette_description = "Editorbefehle suchen und ausführen\n"
-ui_command_palette_no_matches = "Kein passender Befehl.\n"
-ui_command_palette_placeholder = "Befehl eingeben…\n"
-ui_command_palette_search_aria_label = "Befehle suchen\n"
-ui_command_palette_title = "Befehlspalette\n"
-ui_common_cancel = "Abbrechen\n"
-ui_common_close = "Schließen\n"
-ui_common_name = "Name\n"
-ui_common_type = "Typ\n"
-ui_composer_add_case = "Fall hinzufügen\n"
-ui_composer_add_custom_case = "Benutzerdefinierten Fall hinzufügen\n"
-ui_composer_add_exact_number_case = "Fall für exakte Zahl hinzufügen\n"
-ui_composer_add_formatter = "Formatierer hinzufügen\n"
-ui_composer_add_input = "Eingabe hinzufügen\n"
-ui_composer_add_plural_forms = "Pluralformen hinzufügen\n"
-ui_composer_add_selection_rule = "Auswahlregel hinzufügen\n"
-ui_composer_add_translation_case = "Übersetzungsfall hinzufügen\n"
-ui_composer_advanced_structure = "Erweiterte Struktur\n"
-ui_composer_advanced_structure_description = "Eingaben, Formatierer und Auswahlregeln, die von den obigen Übersetzungen verwendet werden.\n"
-ui_composer_apply_source = "Quelle anwenden\n"
-ui_composer_case_already_exists = "Dieser Fall existiert bereits.\n"
-ui_composer_cases = "Fälle\n"
-ui_composer_choose_when_used = "Wählen Sie, wann diese Übersetzung verwendet wird\n"
-ui_composer_chooses_by = "Wählt nach\n"
-ui_composer_compiler_default = "Compilerstandard\n"
-ui_composer_custom_case_description = "Geben Sie den exakten Wert ein, der diese Übersetzung auswählen soll.\n"
-ui_composer_custom_value = "Benutzerdefinierter Wert…\n"
-ui_composer_default_format = "Standardformat\n"
-ui_composer_default_translation = "Standardübersetzung\n"
-ui_composer_down = "nach unten\n"
-ui_composer_equals_label = "gleich ist\n"
-ui_composer_exact_case_description = "Geben Sie die Zahl ein, die diese Übersetzung anstelle der normalen Pluralform des Gebietsschemas auswählen soll.\n"
-ui_composer_exact_number = "Exakte Zahl…\n"
-ui_composer_exact_number_hint = "Verwenden Sie =0 für eine exakte Zahl.\n"
-ui_composer_exact_or_custom_match = "Exakte oder benutzerdefinierte Übereinstimmung\n"
-ui_composer_exactly = "Genau\n"
-ui_composer_fallback = "Rückfall\n"
-ui_composer_form = "Form\n"
-ui_composer_format = "Format\n"
-ui_composer_formatter = "Formatierer\n"
-ui_composer_input = "Eingabe\n"
-ui_composer_inputs = "Eingaben\n"
-ui_composer_inputs_description = "Von Anwendungscode bereitgestellte Werte. Übersetzende fügen sie ein durch Eingabe von\n"
-ui_composer_is = "ist\n"
-ui_composer_message_source = "Nachrichtenquelle\n"
-ui_composer_move = "Verschieben\n"
-ui_composer_number_form = "Zahlenform\n"
-ui_composer_number_form_of = "Verwendet für die Zahlenform der Sprache von\n"
-ui_composer_numeric = "Numerisch\n"
-ui_composer_one_translation = "Eine Übersetzung wird in jeder Situation verwendet\n"
-ui_composer_ordinal = "Ordinal\n"
-ui_composer_ordinal_form_of = "Verwendet für die Ordinalform der Sprache von\n"
-ui_composer_other = "Andere\n"
-ui_composer_plural = "Plural\n"
-ui_composer_plural_forms_description = "Wenn sich die Formulierung mit einer Zahl ändert, fügen Sie Pluralformen hinzu und übersetzen Sie jeden Fall separat.\n"
-ui_composer_plural_message = "Pluralnachricht\n"
-ui_composer_remove = "Entfernen\n"
-ui_composer_remove_formatter = "Formatierer entfernen\n"
-ui_composer_remove_input = "Eingabe entfernen\n"
-ui_composer_remove_selector = "Auswahlregel entfernen\n"
-ui_composer_required_fallback = "Erforderlicher Rückfall\n"
-ui_composer_required_fallback_description = "Jede strukturierte Nachricht benötigt diesen abschließenden Rückfall. Deshalb kann die Zuordnungsregel nicht geändert oder entfernt werden.\n"
-ui_composer_required_fallback_title = "Die Rückfallübersetzung ist erforderlich\n"
-ui_composer_reusable_formatters = "Wiederverwendbare Formatierer\n"
-ui_composer_reusable_formatters_description = "Optionale benannte Formate für Daten, Zahlen, relative Zeit und weitere typisierte Werte.\n"
-ui_composer_rule_name = "Regelname\n"
-ui_composer_selection_rules = "Auswahlregeln\n"
-ui_composer_selection_rules_description = "Regeln bestimmen, welcher Übersetzungsfall für eine bestimmte Eingabe verwendet wird.\n"
-ui_composer_shown_whenever_used = "Wird angezeigt, sobald diese Nachricht verwendet wird.\n"
-ui_composer_singular_form_of = "Verwendet für die Singularform der Sprache von\n"
-ui_composer_structured_case_description = "Dieser Fall enthält Formatierung oder semantisches Markup. Bearbeiten Sie die Inhaltsblöcke unten.\n"
-ui_composer_structured_message_source = "Strukturierte Nachrichtenquelle\n"
-ui_composer_structured_message_source_description = "Ein Ausweichweg für die exakte Bearbeitung der MF2-Quelle.\n"
-ui_composer_toggle_advanced_structure = "Erweiterte Struktur umschalten\n"
-ui_composer_translate_message = "Nachricht übersetzen\n"
-ui_composer_translation = "Übersetzung\n"
-ui_composer_translation_for = "Übersetzung für\n"
-ui_composer_unit = "Einheit\n"
-ui_composer_up = "nach oben\n"
-ui_composer_used_for_every = "Verwendet für jeden\n"
-ui_composer_uses_input = "Verwendet Eingabe\n"
-ui_composer_value = "Wert\n"
-ui_composer_value_without_specific = "Wert ohne spezifischere Übersetzung\n"
-ui_composer_variables_become_chips = "werden zu geschützten, prüfbaren Chips im Satz.\n"
-ui_composer_when = "Wenn\n"
-ui_composer_when_used = "Wann wird diese Übersetzung verwendet?\n"
-ui_composer_write_naturally = "Schreiben Sie natürlich. Variablen wie\n"
-ui_confirm_apply_review = "Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um diesen Prüfdatenimport anzuwenden?\n"
-ui_confirm_apply_xliff = "Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um diesen XLIFF-Import anzuwenden?\n"
-ui_confirm_change_workspace = "Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um diese strukturelle Arbeitsbereichsänderung vorzunehmen?\n"
-ui_confirm_create_project = "Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um ein neues Projekt zu erstellen?\n"
-ui_confirm_external_merge = "Nicht gespeicherte Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um die externe Datei neu zu laden und den zusammengeführten Dokumententwurf zu behalten?\n"
-ui_confirm_open_workspace = "Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um einen anderen Arbeitsbereich zu öffnen?\n"
-ui_confirm_reload_workspace = "Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um den Arbeitsbereich neu zu laden?\n"
-ui_count_affected_files = ".input {$count :integer select=plural}\n.match $count\none {{Eine betroffene Datei}}\n* {{{$count} betroffene Dateien}}\n"
-ui_count_cases = ".input {$count :integer select=plural}\n.match $count\none {{Ein Fall}}\n* {{{$count} Fälle}}\n"
-ui_count_catalogs_found = ".input {$count :integer select=plural}\n.match $count\none {{Unter diesem Verzeichnis wurde ein Katalog gefunden.}}\n* {{Unter diesem Verzeichnis wurden {$count} Kataloge gefunden.}}\n"
-ui_count_characters = ".input {$count :integer select=plural}\n.match $count\none {{Ein Zeichen}}\n* {{{$count} Zeichen}}\n"
-ui_count_errors = ".input {$count :integer select=plural}\n.match $count\none {{ein Fehler}}\n* {{{$count} Fehler}}\n"
-ui_count_exported_files = ".input {$count :integer select=plural}\n.match $count\none {{Eine Datei exportiert.}}\n* {{{$count} Dateien exportiert.}}\n"
-ui_count_exported_reviews = ".input {$count :integer select=plural}\n.input {$path :string}\n.match $count\none {{Ein Prüfeintrag nach {$path} exportiert.}}\n* {{{$count} Prüfeinträge nach {$path} exportiert.}}\n"
-ui_count_files_attention = ".input {$count :integer select=plural}\n.match $count\none {{Eine Datei muss geprüft werden.}}\n* {{{$count} Dateien müssen geprüft werden.}}\n"
-ui_count_locales = ".input {$count :integer select=plural}\n.match $count\none {{eine Sprache}}\n* {{{$count} Sprachen}}\n"
-ui_count_malformed_files = ".input {$count :integer select=plural}\n.match $count\none {{Eine fehlerhafte Datei}}\n* {{{$count} fehlerhafte Dateien}}\n"
-ui_count_messages = ".input {$count :integer select=plural}\n.match $count\none {{eine Nachricht}}\n* {{{$count} Nachrichten}}\n"
-ui_count_project_locales = ".input {$count :integer select=plural}\n.input {$version :integer}\n.match $count\none {{Eine Sprache · Schema v{$version}}}\n* {{{$count} Sprachen · Schema v{$version}}}\n"
-ui_count_project_summary = ".input {$languages :integer select=plural}\n.input {$files :integer select=plural}\n.match $languages $files\none one {{Eine Sprache · eine Datei · vom Compiler geprüft}}\none * {{Eine Sprache · {$files} Dateien · vom Compiler geprüft}}\n* one {{{$languages} Sprachen · eine Datei · vom Compiler geprüft}}\n* * {{{$languages} Sprachen · {$files} Dateien · vom Compiler geprüft}}\n"
-ui_count_quality_summary = ".input {$findings :integer select=plural}\n.input {$messages :integer select=plural}\n.match $findings $messages\none one {{Ein Befund in einer Nachricht. Die CSV-Spalten folgen der Berichtsreihenfolge.}}\none * {{Ein Befund in {$messages} Nachrichten. Die CSV-Spalten folgen der Berichtsreihenfolge.}}\n* one {{{$findings} Befunde in einer Nachricht. Die CSV-Spalten folgen der Berichtsreihenfolge.}}\n* * {{{$findings} Befunde in {$messages} Nachrichten. Die CSV-Spalten folgen der Berichtsreihenfolge.}}\n"
-ui_count_recovered_drafts = ".input {$count :integer select=plural}\n.match $count\none {{Ein Dokumententwurf wurde im lokalen Anwendungsspeicher gefunden.}}\n* {{{$count} Dokumententwürfe wurden im lokalen Anwendungsspeicher gefunden.}}\n"
-ui_count_recovery_journal = ".input {$count :integer select=plural}\n.input {$catalog :string}\n.match $count\none {{Das Journal für {$catalog} enthält eine Datei. Vor weiteren Änderungen muss die Wiederherstellung abgeschlossen werden.}}\n* {{Das Journal für {$catalog} enthält {$count} Dateien. Vor weiteren Änderungen muss die Wiederherstellung abgeschlossen werden.}}\n"
-ui_count_resource_variants = ".input {$count :integer select=plural}\n.match $count\none {{Strukturierte Nachricht · eine Variante}}\n* {{Strukturierte Nachricht · {$count} Varianten}}\n"
-ui_count_review_marked = ".input {$count :integer select=plural}\n.input {$state :string}\n.match $count\none {{Eine sichtbare Nachricht wurde als „{$state}“ markiert. Speichern Sie die Workflow-Änderungen, um sie zu übernehmen.}}\n* {{{$count} sichtbare Nachrichten wurden als „{$state}“ markiert. Speichern Sie die Workflow-Änderungen, um sie zu übernehmen.}}\n"
-ui_count_state_bytes = ".input {$count :integer select=plural}\n.match $count\none {{Ein Byte}}\n* {{{$count} Bytes}}\n"
-ui_count_state_drafts = ".input {$count :integer select=plural}\n.match $count\none {{Ein Wiederherstellungsentwurf}}\n* {{{$count} Wiederherstellungsentwürfe}}\n"
-ui_count_state_entries = ".input {$count :integer select=plural}\n.match $count\none {{Ein Eintrag}}\n* {{{$count} Einträge}}\n"
-ui_count_state_preferences = ".input {$count :integer select=plural}\n.match $count\none {{Eine Einstellung}}\n* {{{$count} Einstellungen}}\n"
-ui_count_state_recent = ".input {$count :integer select=plural}\n.match $count\none {{Ein Eintrag für ein zuletzt verwendetes Projekt}}\n* {{{$count} Einträge für zuletzt verwendete Projekte}}\n"
-ui_count_state_removed = ".input {$count :integer select=plural}\n.match $count\none {{Ein lokaler Editorzustandseintrag wurde entfernt.}}\n* {{{$count} lokale Editorzustandseinträge wurden entfernt.}}\n"
-ui_count_warnings = ".input {$count :integer select=plural}\n.match $count\none {{Eine Warnung}}\n* {{{$count} Warnungen}}\n"
-ui_editor_mode_editing_mode = "Bearbeitungsmodus\n"
-ui_feedback_change_failed = "Die Arbeitsbereichsänderung konnte nicht übernommen werden.\n"
-ui_feedback_change_invalid = "Die Änderung ist ungültig.\n"
-ui_feedback_clear_state_confirm = "Gespeicherte Editoreinstellungen, zuletzt verwendete Projekte und Wiederherstellungsentwürfe aus diesem Benutzerprofil entfernen? Arbeitsbereichsdateien und aktuell im Arbeitsspeicher geöffnete Inhalte bleiben unverändert.\n"
-ui_feedback_deleted_merge = ".input {$path :string}\n{{Die extern gelöschte Datei „{$path}“ kann keinen zusammengeführten Entwurf aufnehmen.}}\n"
-ui_feedback_diagnostics_copied = "Pfad des Diagnosepakets kopiert.\n"
-ui_feedback_diagnostics_copy_failed = "Der Pfad des Diagnosepakets konnte nicht kopiert werden. Wählen Sie ihn unten aus und kopieren Sie ihn manuell.\n"
-ui_feedback_diagnostics_delete_confirm = "Dieses bereinigte Diagnosepaket löschen? Arbeitsbereichsdateien und Editorzustand bleiben unverändert.\n"
-ui_feedback_diagnostics_delete_failed = "Das Diagnosepaket konnte nicht gelöscht werden.\n"
-ui_feedback_diagnostics_deleted = "Diagnosepaket gelöscht.\n"
-ui_feedback_diagnostics_failed = "Das Diagnosepaket konnte nicht erstellt werden.\n"
-ui_feedback_diagnostics_open_failed = "Der Speicherort des Diagnosepakets konnte nicht geöffnet werden.\n"
-ui_feedback_diagnostics_opened = "Speicherort des Diagnosepakets geöffnet.\n"
-ui_feedback_diagnostics_saved = "Bereinigte Diagnosedaten wurden im Anwendungsdatenverzeichnis dieses Benutzers gespeichert.\n"
-ui_feedback_discard_repair = "Nicht gespeicherten Reparaturtext verwerfen?\n"
-ui_feedback_locale_duplicate = "Jede Sprache muss ein anderes Sprachkürzel verwenden.\n"
-ui_feedback_locale_required = "Jede Sprache benötigt ein Sprachkürzel.\n"
-ui_feedback_namespace_required = "Namensraum und Klassenname sind erforderlich.\n"
-ui_feedback_newer_draft = "Der frühere Entwurf wurde gespeichert; Ihre neuere Änderung ist weiterhin geöffnet.\n"
-ui_feedback_no_resource = "Für diese Sprache ist kein bearbeitbares Ressourcendokument vorhanden.\n"
-ui_feedback_preview_failed = "Der Compiler konnte keine Vorschau erstellen.\n"
-ui_feedback_project_created = "Projekt erstellt\n"
-ui_feedback_project_directory_required = "Wählen Sie ein neues Verzeichnis und geben Sie eine Katalog-ID ein.\n"
-ui_feedback_project_failed = "Das Projekt konnte nicht erstellt werden.\n"
-ui_feedback_project_invalid = "Das geplante Projekt ist ungültig.\n"
-ui_feedback_recovery_completed = "Unterbrochene Änderung abgeschlossen\n"
-ui_feedback_recovery_failed = "Die Wiederherstellung des Arbeitsbereichs ist fehlgeschlagen.\n"
-ui_feedback_recovery_reload = "Wiederherstellung abgeschlossen; laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren.\n"
-ui_feedback_recovery_rollback = "Unterbrochene Änderung zurückgesetzt\n"
-ui_feedback_redo_failed = "Die gespeicherte Änderung konnte nicht wiederholt werden.\n"
-ui_feedback_redo_saved = "Gespeicherte Änderung wiederholt\n"
-ui_feedback_repair_failed = "Das reparierte Dokument konnte nicht gespeichert werden.\n"
-ui_feedback_repair_invalid = "Das Dokument ist weiterhin ungültig.\n"
-ui_feedback_repair_open_confirm = "Nicht gespeicherten Reparaturtext verwerfen und ein anderes Dokument öffnen?\n"
-ui_feedback_review_applied = "Prüfdatenimport angewendet.\n"
-ui_feedback_review_failed = "Der Prüfdatenimport konnte nicht angewendet werden.\n"
-ui_feedback_review_save_failed = "Die Prüfdaten konnten nicht gespeichert werden.\n"
-ui_feedback_save_failed = ".input {$kind :string}\n{{Speichern fehlgeschlagen ({$kind}).}}\n"
-ui_feedback_state_load_failed = ".input {$error :string}\n{{Der benutzerspezifische Editorzustand konnte nicht geladen werden. {$error}}}\n"
-ui_feedback_state_recovered = "Ein unlesbarer lokaler Editorzustand wurde wiederhergestellt; gespeicherte Einstellungen und Wiederherstellungsentwürfe wurden zurückgesetzt.\n"
-ui_feedback_undo_failed = "Die gespeicherte Änderung konnte nicht rückgängig gemacht werden.\n"
-ui_feedback_undo_saved = "Gespeicherte Änderung rückgängig gemacht\n"
-ui_feedback_workflow_saved = "Workflow-Begleitdatei gespeichert\n"
-ui_feedback_workspace_directory_required = "Geben Sie ein Arbeitsbereichsverzeichnis ein.\n"
-ui_feedback_workspace_open_failed = "Der Arbeitsbereich konnte nicht geöffnet werden.\n"
-ui_feedback_workspace_updated = "Arbeitsbereich aktualisiert\n"
-ui_feedback_xliff_applied = "XLIFF-Import angewendet.\n"
-ui_feedback_xliff_failed = "Der XLIFF-Import konnte nicht angewendet werden.\n"
-ui_inline_after_text = "nach Text\n"
-ui_inline_after_text_index = ".input {$index :integer}\n{{nach Text {$index}}}\n"
-ui_inline_after_variable = "nach Variable\n"
-ui_inline_after_variable_name = ".input {$name :string}\n{{nach Variable {$name}}}\n"
-ui_inline_at_beginning = "am Anfang\n"
-ui_inline_click_to_inspect = "Zum Prüfen klicken.\n"
-ui_inline_close_name_settings = ".input {$name :string}\n{{Einstellungen für {$name} schließen}}\n"
-ui_inline_close_variable_settings = "Variableneinstellungen schließen\n"
-ui_inline_compiler_default = "Compilerstandard\n"
-ui_inline_create_variable = "Neue Variable erstellen\n"
-ui_inline_default_format = "Standardformat\n"
-ui_inline_earlier = "weiter nach vorn\n"
-ui_inline_from_this_translation = "aus dieser Übersetzung\n"
-ui_inline_insert = "Einfügen\n"
-ui_inline_insert_at = ".input {$position :string}\n{{Bei {$position} einfügen}}\n"
-ui_inline_later = "weiter nach hinten\n"
-ui_inline_move = "Verschieben\n"
-ui_inline_move_name_earlier = ".input {$name :string}\n{{{$name} nach vorne verschieben}}\n"
-ui_inline_move_name_later = ".input {$name :string}\n{{{$name} nach hinten verschieben}}\n"
-ui_inline_move_variable_earlier = "Variable weiter nach vorn verschieben\n"
-ui_inline_move_variable_later = "Variable weiter nach hinten verschieben\n"
-ui_inline_open_settings = "Einstellungen öffnen.\n"
-ui_inline_remove = "Entfernen\n"
-ui_inline_remove_name = ".input {$name :string}\n{{{$name} aus dieser Übersetzung entfernen}}\n"
-ui_inline_remove_variable = "Variable aus dieser Übersetzung entfernen\n"
-ui_inline_settings = "Einstellungen\n"
-ui_inline_text = "Text\n"
-ui_inline_text_index = ".input {$label :string}\n.input {$index :integer}\n{{{$label}, Text {$index}}}\n"
-ui_inline_type = "Typ\n"
-ui_inline_variable = "Variable\n"
-ui_inline_variable_inspect = ".input {$name :string}\n{{Variable {$name}. Zum Prüfen anklicken.}}\n"
-ui_inline_variable_settings = ".input {$name :string}\n{{Variable {$name}. Einstellungen öffnen.}}\n"
-ui_inline_write_text = "Text schreiben…\n"
-ui_interchange_absent_from_import = "im Import nicht vorhanden\n"
-ui_interchange_added = "hinzugefügt\n"
-ui_interchange_apply_review_once = "Diesen Prüfimport einmal anwenden\n"
-ui_interchange_apply_xliff_once = "Diesen XLIFF-Import einmal anwenden\n"
-ui_interchange_before_after = "Vorher → nachher\n"
-ui_interchange_bytes = "Bytes\n"
-ui_interchange_change = "Änderung\n"
-ui_interchange_changed = "geändert\n"
-ui_interchange_default_layer = "Standardschicht\n"
-ui_interchange_description = "Exportieren Sie portables XLIFF 2.1 oder Prüf-JSON und prüfen Sie jeden Import vor Änderungen am Arbeitsbereich. Exportpfade bleiben im geöffneten Arbeitsbereich; Importpfade können absolut oder arbeitsbereichsrelativ sein.\n"
-ui_interchange_export_directory = "Exportverzeichnis\n"
-ui_interchange_export_review_json = "Prüf-JSON exportieren\n"
-ui_interchange_export_xliff = "XLIFF exportieren\n"
-ui_interchange_exported = "Exportiert\n"
-ui_interchange_files = "Dateien\n"
-ui_interchange_first_changes_only = "Nur die ersten 256 Änderungen werden angezeigt; die obigen Anzahlen enthalten den gesamten Import.\n"
-ui_interchange_import_refusal = "Import abgelehnt\n"
-ui_interchange_key = "Schlüssel\n"
-ui_interchange_locale = "Gebietsschema\n"
-ui_interchange_non_semantic_notes = "Nicht-semantische Exporthinweise\n"
-ui_interchange_preview_review_import = "Prüfimport prüfen\n"
-ui_interchange_preview_xliff_import = "XLIFF-Import prüfen\n"
-ui_interchange_review_description = "Überträgt Workflowstatus, Anmerkungen und Freigabequellennachweise, ohne Übersetzungstext zu ersetzen. Lokale Terminologie bleibt lokal im Arbeitsbereich.\n"
-ui_interchange_review_entries = "Prüfeinträge\n"
-ui_interchange_review_export_failed = "Prüf-JSON-Export fehlgeschlagen.\n"
-ui_interchange_review_export_path = "Prüf-JSON-Pfad\n"
-ui_interchange_review_file_to_import = "Zu importierende Prüf-JSON-Datei\n"
-ui_interchange_review_import_refused = "Der Prüfimport wurde abgelehnt.\n"
-ui_interchange_review_title = "Prüfworkflow-JSON\n"
-ui_interchange_semantic_loss = "Semantischer Austauschverlust\n"
-ui_interchange_state = "Status\n"
-ui_interchange_summary = ".input {$added :integer}\n.input {$changed :integer}\n.input {$removed :integer}\n{{Hinzugefügt: {$added} · geändert: {$changed} · im Import nicht vorhanden: {$removed}}}\n"
-ui_interchange_target = "Ziel\n"
-ui_interchange_title = "Austausch\n"
-ui_interchange_to = "nach\n"
-ui_interchange_xliff_description = "Der Export schreibt ein Dokument für das Zielgebietsschema. Der Import zeigt zuerst die vorgeschlagenen Text- und Prüfstatusänderungen.\n"
-ui_interchange_xliff_export_failed = "XLIFF-Export fehlgeschlagen.\n"
-ui_interchange_xliff_file_to_import = "Zu importierende XLIFF-Datei\n"
-ui_interchange_xliff_import_refused = "Der XLIFF-Import wurde abgelehnt.\n"
-ui_interchange_xliff_title = "XLIFF-2.1-Übersetzungsdateien\n"
-ui_loading = "Wird geladen\n"
-ui_locale_coverage = "Gebietsschema-Abdeckung\n"
-ui_locale_falls_back_to = "Fällt zurück auf\n"
-ui_locale_languages = "Sprachen\n"
-ui_locale_manage = "Sprachen verwalten\n"
-ui_locale_no_language = "keine Sprache\n"
-ui_locale_none = "keine\n"
-ui_locale_source = "Quelle\n"
-ui_locale_source_language = "Ausgangssprache\n"
-ui_locale_translated = "übersetzt\n"
-ui_message_heading_delete = "Löschen\n"
-ui_message_heading_delete_title = "Diese Nachricht löschen\n"
-ui_message_heading_duplicate = "Duplizieren\n"
-ui_message_heading_duplicate_title = "Diese Nachricht duplizieren\n"
-ui_message_heading_falls_back_to = "fällt zurück auf\n"
-ui_message_heading_rename = "Umbenennen\n"
-ui_message_heading_rename_title = "Diese Nachricht umbenennen oder verschieben\n"
-ui_message_toolbar_search_messages = "Nachrichten suchen\n"
-ui_page_about_bundle_no_upload = "Die Anwendung lädt dieses Paket niemals hoch. Das Teilen ist eine ausdrückliche Aktion außerhalb des Editors.\n"
-ui_page_about_bytes = "Bytes\n"
-ui_page_about_clear_local_state = "Lokalen Status löschen\n"
-ui_page_about_clear_local_state_note = "Das Löschen betrifft nur künftige Wiederherstellungen und Starts; Arbeitsbereichsdateien werden nicht geändert und die aktuell in diesem Fenster geöffnete Arbeit wird nicht verworfen.\n"
-ui_page_about_copy_path = "Pfad kopieren\n"
-ui_page_about_create_bundle = "Diagnosepaket erstellen\n"
-ui_page_about_creating_bundle = "Paket wird erstellt…\n"
-ui_page_about_delete_bundle = "Paket löschen\n"
-ui_page_about_description = "Anwendungsinformationen und datenschutzsichere Diagnosen.\n"
-ui_page_about_development_build = "Entwicklungsbuild\n"
-ui_page_about_diagnostic_bundle = "Diagnosepaket\n"
-ui_page_about_diagnostic_bundle_description = "Die ZIP-Datei enthält Versions- und Laufzeitinformationen, Katalogzahlen und gruppierte Diagnose-IDs. Arbeitsbereichspfade, Dateinamen, Nachrichtenquelltexte und Übersetzungen sind ausgeschlossen."
-ui_page_about_diagnostic_bundle_path = "Pfad zum Diagnosepaket\n"
-ui_page_about_diagnostic_bundle_title = "Bereinigtes Diagnosepaket\n"
-ui_page_about_entries = "Einträge\n"
-ui_page_about_license_note = "Runic Translations ist unter der MIT-Lizenz lizenziert. Die paketierte Anwendung enthält LICENSE.txt und THIRD-PARTY-NOTICES.md.\n"
-ui_page_about_local_state = "Lokaler Editorstatus\n"
-ui_page_about_local_state_description = "Nur im Anwendungsprofil dieses Benutzers gespeichert. Die Prüfung zeigt niemals Pfade oder Entwurfstext an.\n"
-ui_page_about_preferences = "Einstellungen\n"
-ui_page_about_product = "Runic Translations Editor\n"
-ui_page_about_reading = "Anwendungsinformationen werden gelesen…\n"
-ui_page_about_recent_project_records = "Datensätze zu zuletzt verwendeten Projekten\n"
-ui_page_about_recovered_unreadable = "aus einem nicht lesbaren Datensatz wiederhergestellt\n"
-ui_page_about_recovery_draft_records = "Wiederherstellungsentwürfe\n"
-ui_page_about_reveal_location = "Speicherort anzeigen\n"
-ui_page_about_runtime = "Laufzeit\n"
-ui_page_about_runtime_identifier = "Laufzeitkennung\n"
-ui_page_about_source_revision = "Quellrevision\n"
-ui_page_about_system = "System\n"
-ui_page_about_update_channel = "Update-Kanal\n"
-ui_page_about_version = "Version\n"
-ui_page_back = "Zurück\n"
-ui_page_browse = "Durchsuchen…\n"
-ui_page_cancel = "Abbrechen\n"
-ui_page_choosing = "Wird ausgewählt…\n"
-ui_page_close = "Schließen\n"
-ui_page_continue = "Weiter\n"
-ui_page_creating = "Wird erstellt…\n"
-ui_page_discard = "Verwerfen\n"
-ui_page_done = "Fertig\n"
-ui_page_empty_selection_description = "Wählen Sie in der Seitenleiste eine Nachricht aus, um ihre Übersetzung zu prüfen oder zu bearbeiten.\n"
-ui_page_errors = "Fehler\n"
-ui_page_external_changes_compare_merge = "Vergleichen / zusammenführen\n"
-ui_page_external_changes_reload_files = "Dateien neu laden\n"
-ui_page_external_changes_reload_latest = "Laden Sie neu, um die neuesten Versionen zu lesen.\n"
-ui_page_external_changes_title = "Dateien wurden außerhalb des Editors geändert\n"
-ui_page_external_changes_unsaved_intact = "Ihre lokalen Entwürfe, Reparaturtexte und Workflow-Änderungen sind weiterhin vorhanden.\n"
-ui_page_external_compare_current_disk = "Aktueller Datenträger\n"
-ui_page_external_compare_deleted_externally = "Datei wurde extern gelöscht.\n"
-ui_page_external_compare_description = "Vergleichen Sie die Editorbasis mit der aktuellen Datei und behalten oder führen Sie die Änderung zusammen.\n"
-ui_page_external_compare_editor_base = "Editorbasis\n"
-ui_page_external_compare_merged_draft = "Zusammengeführter Entwurf\n"
-ui_page_external_compare_not_previously_loaded = "Datei wurde zuvor nicht geladen.\n"
-ui_page_external_compare_reload_keep_merged = "Basis neu laden und zusammengeführten Entwurf behalten\n"
-ui_page_fatal_could_not_open = "Dieser Übersetzungsarbeitsbereich konnte nicht geöffnet werden\n"
-ui_page_fatal_no_catalog = "Es wurde kein Runic-Translations-Katalog gefunden.\n"
-ui_page_fatal_open_another_workspace = "Anderen Arbeitsbereich öffnen\n"
-ui_page_fatal_recovery_refresh = "Wiederherstellung abgeschlossen; laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren.\n"
-ui_page_fatal_recovery_reload_required = "Wiederherstellung abgeschlossen; erneutes Laden erforderlich\n"
-ui_page_file = "Datei\n"
-ui_page_files = "Dateien\n"
-ui_page_healthy = "Fehlerfrei\n"
-ui_page_interchange = "Austausch\n"
-ui_page_interface_language = "Oberflächensprache\n"
-ui_page_keep_current_view = "Aktuelle Ansicht beibehalten\n"
-ui_page_locales = "Sprachen\n"
-ui_page_messages = "Nachrichten\n"
-ui_page_meta_description = "Ein fokussierter Desktop-Editor für Runic-Translations-Arbeitsbereiche\n"
-ui_page_mutation_add_language = "Sprache hinzufügen\n"
-ui_page_mutation_affected = "betroffen\n"
-ui_page_mutation_change_fallback = "Rückfall ändern\n"
-ui_page_mutation_change_fallback_relationships = "Rückfallbeziehungen ändern\n"
-ui_page_mutation_checking = "Wird geprüft…\n"
-ui_page_mutation_commit = "Änderung übernehmen\n"
-ui_page_mutation_committing = "Wird übernommen…\n"
-ui_page_mutation_copy_starter_values = "Anfangswerte kopieren von\n"
-ui_page_mutation_copy_starter_values_description = "Kopierter Text hält den neuen Katalog compiler-valid und kann anschließend übersetzt werden.\n"
-ui_page_mutation_delete = "Löschen\n"
-ui_page_mutation_delete_description = "Die Nachricht wird aus jeder Sprache und Ebene entfernt. Die Vorschau unten zeigt jede Datei, die geändert wird.\n"
-ui_page_mutation_delete_message = "Nachricht löschen\n"
-ui_page_mutation_description = "Compiler-gestützte Arbeitsbereichsänderung. Prüfen Sie die betroffenen Dateien vor dem Übernehmen.\n"
-ui_page_mutation_duplicate_key = "Schlüssel duplizieren\n"
-ui_page_mutation_duplicate_message = "Nachricht duplizieren\n"
-ui_page_mutation_existing_key = "Vorhandener Schlüssel\n"
-ui_page_mutation_fallback = "Rückfall\n"
-ui_page_mutation_files_deleted = "Dateien werden gelöscht\n"
-ui_page_mutation_files_deleted_description = "Alle Ressourcendokumente für diese Sprache werden nach Bestätigung der Vorschau gelöscht.\n"
-ui_page_mutation_initial_text = "Anfangstext\n"
-ui_page_mutation_initial_text_description = "Der Anfangswert wird jeder Sprache hinzugefügt, damit strikte Projekte gültig bleiben.\n"
-ui_page_mutation_initial_text_placeholder = "Jetzt bezahlen\n"
-ui_page_mutation_invalid = "Änderung ist ungültig\n"
-ui_page_mutation_irreversible_confirm = "Ich verstehe, dass diese Arbeitsbereichsänderung nicht rückgängig gemacht werden kann.\n"
-ui_page_mutation_irreversible_description = "Sie ist von der lokalen Rückgängig-Historie ausgeschlossen. Prüfen Sie die aufgeführten Dateien, bevor Sie fortfahren.\n"
-ui_page_mutation_language = "Sprache\n"
-ui_page_mutation_language_operation = "Sprachvorgang\n"
-ui_page_mutation_language_to_remove = "Zu entfernende Sprache\n"
-ui_page_mutation_layer = "Ebene\n"
-ui_page_mutation_message_key = "Nachrichtenschlüssel\n"
-ui_page_mutation_message_key_description = "Verwenden Sie Punkte, um Nachrichten in Gruppen zu organisieren.\n"
-ui_page_mutation_new_key_group_path = "Neuer Schlüssel oder Gruppenpfad\n"
-ui_page_mutation_new_locale_tag = "Neues Sprach-Tag\n"
-ui_page_mutation_operation_preview = "Vorgangsvorschau\n"
-ui_page_mutation_preview = "Änderung vorschauen\n"
-ui_page_mutation_redirect_fallbacks = "Abhängige Rückfälle umleiten auf\n"
-ui_page_mutation_remove_language = "Sprache entfernen\n"
-ui_page_mutation_rename_description = "Die Änderung wird in jeder Sprache und Ebene angewendet, in der die Quellnachricht vorhanden ist.\n"
-ui_page_mutation_rename_move_message = "Nachricht umbenennen oder verschieben\n"
-ui_page_no_document = "kein Dokument\n"
-ui_page_open = "Öffnen\n"
-ui_page_open_project_action = "Arbeitsbereich öffnen\n"
-ui_page_open_project_description = "Kataloge werden innerhalb dieser Arbeitsbereichsgrenze gesucht. Wenn mehrere gefunden werden, wählen Sie einen aus.\n"
-ui_page_open_project_title = "Übersetzungsprojekt öffnen\n"
-ui_page_opening = "Wird geöffnet…\n"
-ui_page_preview_compiling = "Wird kompiliert…\n"
-ui_page_preview_compiling_draft = "Der aktuelle Entwurf wird kompiliert…\n"
-ui_page_preview_description = "Verwendet dieselben Regeln wie die generierte Anwendungsnachricht\n"
-ui_page_preview_edit_to_build = "Bearbeiten Sie die Nachricht, um eine Vorschau zu erstellen.\n"
-ui_page_preview_pseudo_active = "Pseudo-Lokalisierungssimulation ist aktiv.\n"
-ui_page_preview_rtl_active = "Rechts-nach-links-Simulation ist aktiv.\n"
-ui_page_preview_safe_markup = "Semantisches Markup wird als Datenbaum angezeigt. Namen und Attribute werden niemals als vertrauenswürdiges HTML interpretiert.\n"
-ui_page_preview_title = "Vorschau\n"
-ui_page_preview_unavailable = "Nicht verfügbar\n"
-ui_page_project_notes = "Projektnotizen\n"
-ui_page_project_wizard_add_language = "Weitere Sprache hinzufügen\n"
-ui_page_project_wizard_add_starter = "Anfangsnachricht hinzufügen\n"
-ui_page_project_wizard_add_starter_description = "Erstellen Sie Application.Name in jeder Sprache.\n"
-ui_page_project_wizard_additional_language = "Zusätzliche Sprache\n"
-ui_page_project_wizard_canonical_source = "Kanonische Quelle\n"
-ui_page_project_wizard_catalog_id = "Katalog-ID\n"
-ui_page_project_wizard_catalog_id_description = "Kleinbuchstaben, Zahlen, Punkte und Bindestriche.\n"
-ui_page_project_wizard_code_namespace = "Code-Namensraum\n"
-ui_page_project_wizard_compiler_validated = "compiler-validiert\n"
-ui_page_project_wizard_create_project = "Projekt erstellen\n"
-ui_page_project_wizard_default = "Standard\n"
-ui_page_project_wizard_description = "Erstellen Sie compiler-valide Übersetzungen, ohne ein vorhandenes Verzeichnis zu überschreiben.\n"
-ui_page_project_wizard_directory = "Verzeichnis\n"
-ui_page_project_wizard_directory_description = "Geben Sie einen absoluten oder einen zum Editorprozess relativen Pfad ein.\n"
-ui_page_project_wizard_enable_esm = "ESM-Ausgabe aktivieren\n"
-ui_page_project_wizard_enable_esm_description = "Erzeugen Sie tree-shakeable Module für TypeScript- und Browseranwendungen.\n"
-ui_page_project_wizard_files_to_create = "Zu erstellende Dateien\n"
-ui_page_project_wizard_generated_api = "Generierte API und Ausgabe\n"
-ui_page_project_wizard_generated_api_description = "Diese Standardwerte funktionieren für die meisten .NET- und ESM-Nutzer.\n"
-ui_page_project_wizard_generated_class = "Generierte Klasse\n"
-ui_page_project_wizard_initial_layer = "Anfangsebene\n"
-ui_page_project_wizard_invalid = "Projekt ist ungültig\n"
-ui_page_project_wizard_language_description = "Eine Sprache wird vollständig unterstützt. Fügen Sie Übersetzungen jetzt oder später hinzu.\n"
-ui_page_project_wizard_languages = "Sprachen\n"
-ui_page_project_wizard_new_directory = "Neues Projektverzeichnis\n"
-ui_page_project_wizard_no_overwrite = "Der Editor erstellt ein neues Verzeichnis und überschreibt nie ein vorhandenes.\n"
-ui_page_project_wizard_ready_create = "Bereit zum Erstellen\n"
-ui_page_project_wizard_remove_locale = "Sprache entfernen\n"
-ui_page_project_wizard_row = "Zeile\n"
-ui_page_project_wizard_source = "Quelle\n"
-ui_page_project_wizard_source_default = "Quell-/Standardsprache\n"
-ui_page_project_wizard_step_languages = "Sprachen\n"
-ui_page_project_wizard_step_project = "Projekt\n"
-ui_page_project_wizard_step_review = "Prüfen\n"
-ui_page_project_wizard_step_settings = "Einstellungen\n"
-ui_page_project_wizard_steps_aria_label = "Schritte zur Projekterstellung\n"
-ui_page_project_wizard_title = "Neues Übersetzungsprojekt\n"
-ui_page_project_wizard_where_live = "Wo sollen die Übersetzungen liegen?\n"
-ui_page_project_wizard_which_languages = "Welche Sprachen verwendet dieses Projekt?\n"
-ui_page_quality_csv_aria_label = "CSV-Qualitätsbericht\n"
-ui_page_quality_csv_order = "CSV ist nach Schlüssel und Befundart sortiert.\n"
-ui_page_quality_findings_across = "Ergebnisse in\n"
-ui_page_quality_report = "Qualitätsbericht\n"
-ui_page_quality_title = "Qualität\n"
-ui_page_recovered_drafts_restore = "Entwürfe wiederherstellen\n"
-ui_page_recovered_drafts_title = "Nicht gespeicherte Arbeit wurde wiederhergestellt\n"
-ui_page_recovery_complete = "Geplante Änderung abschließen\n"
-ui_page_recovery_eyebrow = "Arbeitsbereich wiederherstellen\n"
-ui_page_recovery_journal_for = "Das Wiederherstellungsjournal für\n"
-ui_page_recovery_journal_note = "Beide Optionen verwenden das begrenzte lokale Journal. Es wird erst nach erfolgreicher Wiederherstellung entfernt.\n"
-ui_page_recovery_lists = "enthält\n"
-ui_page_recovery_no_further_editing = "Bis zur Behebung sind keine weiteren Änderungen möglich.\n"
-ui_page_recovery_recovering = "Wird wiederhergestellt…\n"
-ui_page_recovery_restore_before = "Dateien vor der Änderung wiederherstellen\n"
-ui_page_recovery_title = "Eine unterbrochene Änderung benötigt Ihre Entscheidung\n"
-ui_page_repair_description = "Bearbeiten Sie den Quelltext unten. Der kanonische Compiler muss ihn akzeptieren, bevor er die Datei ersetzen kann."
-ui_page_repair_document_aria_label = "Fehlerhaftes Quelldokument"
-ui_page_repair_failed = "Reparatur fehlgeschlagen\n"
-ui_page_repair_validate_save = "Validieren und speichern\n"
-ui_page_resource_document = "Ressourcendokument\n"
-ui_page_terminology_add_term = "Begriff hinzufügen\n"
-ui_page_terminology_description = "Begriffe bleiben in der optionalen versionierten Begleitdatei und werden lokal geprüft. Es wird nichts an einen Dienst gesendet.\n"
-ui_page_terminology_empty = "Noch keine Terminologieeinträge.\n"
-ui_page_terminology_locale = "Sprache\n"
-ui_page_terminology_locale_placeholder = "Optional, z. B. de\n"
-ui_page_terminology_no_note = "Kein Hinweis\n"
-ui_page_terminology_note = "Hinweis\n"
-ui_page_terminology_note_placeholder = "Optionale Verwendungshinweise\n"
-ui_page_terminology_preferred = "Bevorzugte Übersetzung\n"
-ui_page_terminology_preferred_placeholder = "Speichern\n"
-ui_page_terminology_remove_term = "Begriff entfernen\n"
-ui_page_terminology_save_workflow = "Workflow speichern\n"
-ui_page_terminology_source_placeholder = "Speichern\n"
-ui_page_terminology_source_term = "Quellbegriff\n"
-ui_page_terminology_title = "Projektterminologie\n"
-ui_page_validating = "Wird validiert…\n"
-ui_page_welcome_catalogs_below = "Kataloge unterhalb dieser Arbeitsbereichsgrenze gefunden.\n"
-ui_page_welcome_choose_catalog = "Übersetzungskatalog auswählen\n"
-ui_page_welcome_create_project = "Neues Projekt erstellen\n"
-ui_page_welcome_eyebrow = "Arbeitsbereich einrichten\n"
-ui_page_welcome_files_need_attention = "Dateien benötigen Aufmerksamkeit\n"
-ui_page_welcome_found = "Wir haben\n"
-ui_page_welcome_open_or_create = "Öffnen Sie einen vorhandenen Arbeitsbereich oder erstellen Sie ein compiler-valides Projekt von Grund auf.\n"
-ui_page_welcome_open_project = "Übersetzungsprojekt öffnen\n"
-ui_page_welcome_open_repair_editor = "Reparatureditor öffnen\n"
-ui_page_welcome_recent_projects = "Zuletzt verwendete Projekte\n"
-ui_page_welcome_repair_malformed_json = "Fehlerhaften Quelltext reparieren"
-ui_page_welcome_scan = "Durchsuchen\n"
-ui_page_welcome_stored_local_profile = "Nur in Ihrem lokalen Anwendungsprofil gespeichert\n"
-ui_page_welcome_traversal_note = "Die Suche bleibt innerhalb dieser Grenze und ignoriert Links, Abhängigkeiten und erzeugte Ausgabe.\n"
-ui_page_workspace_directory = "Arbeitsbereichsverzeichnis\n"
-ui_palette_about_diagnostics_information = "Informationen und Diagnose\n"
-ui_palette_approve_message = "Nachricht freigeben\n"
-ui_palette_approve_visible_messages = "Sichtbare Nachrichten freigeben\n"
-ui_palette_create_new_project = "Neues Projekt erstellen…\n"
-ui_palette_create_sanitized_diagnostic_bundle = "Bereinigtes Diagnosepaket erstellen\n"
-ui_palette_disable_pseudo_localization_simulation = "Pseudolokalisierung deaktivieren\n"
-ui_palette_discard_workflow_changes = "Workflow-Änderungen verwerfen\n"
-ui_palette_enable_pseudo_localization_simulation = "Pseudolokalisierung aktivieren\n"
-ui_palette_focus_message_search = "Nachrichtensuche fokussieren\n"
-ui_palette_group_document = "Dokument\n"
-ui_palette_group_help = "Hilfe\n"
-ui_palette_group_review = "Prüfung\n"
-ui_palette_group_view = "Ansicht\n"
-ui_palette_group_workspace = "Arbeitsbereich\n"
-ui_palette_hide_compiled_artifact_preview = "Vorschau des kompilierten Artefakts ausblenden\n"
-ui_palette_import_or_export_interchange_files = "Austauschdateien importieren oder exportieren…\n"
-ui_palette_interface_language_deutsch = "Oberflächensprache · Deutsch\n"
-ui_palette_interface_language_english = "Oberflächensprache · English\n"
-ui_palette_language = ".input {$locale :string}\n{{Sprache · {$locale}}}\n"
-ui_palette_mark_message_as_draft = "Nachricht als Entwurf markieren\n"
-ui_palette_mark_message_as_needs_review = "Nachricht zur Prüfung markieren\n"
-ui_palette_mark_message_as_translated = "Nachricht als übersetzt markieren\n"
-ui_palette_mark_visible_messages_needs_review = "Sichtbare Nachrichten zur Prüfung markieren\n"
-ui_palette_open_another_workspace = "Anderen Arbeitsbereich öffnen…\n"
-ui_palette_open_project_terminology = "Projektterminologie öffnen…\n"
-ui_palette_open_quality_report = "Qualitätsbericht öffnen…\n"
-ui_palette_redo_saved_change = "Gespeicherte Änderung wiederholen\n"
-ui_palette_reload_workspace_files = "Arbeitsbereichsdateien neu laden\n"
-ui_palette_save_document = "Dokument speichern\n"
-ui_palette_save_workflow_changes = "Workflow-Änderungen speichern\n"
-ui_palette_show_compiled_artifact_preview = "Vorschau des kompilierten Artefakts anzeigen\n"
-ui_palette_simulate_right_to_left_layout = "Rechts-nach-links-Layout simulieren\n"
-ui_palette_simulate_right_to_left_layout_off = "Simulation des Rechts-nach-links-Layouts ausschalten\n"
-ui_palette_switch_to_raw_json_mode = "Zum Quelltextmodus wechseln\n"
-ui_palette_switch_to_translation_mode = "Zum Übersetzungsmodus wechseln\n"
-ui_palette_theme = ".input {$theme :string}\n{{Darstellung · {$theme}}}\n"
-ui_palette_theme_dark = "Dunkel\n"
-ui_palette_theme_light = "Hell\n"
-ui_palette_theme_system = "System\n"
-ui_palette_toggle_languages_section = "Sprachbereich ein- oder ausblenden\n"
-ui_palette_toggle_messages_section = "Nachrichtenbereich ein- oder ausblenden\n"
-ui_palette_undo_saved_change = "Gespeicherte Änderung rückgängig machen\n"
-ui_pattern_add = "Hinzufügen\n"
-ui_pattern_add_content = "Inhalt hinzufügen\n"
-ui_pattern_attribute_name = "Attributname\n"
-ui_pattern_attributes = "Attribute\n"
-ui_pattern_children_description = "Kinder · als sichere semantische Daten dargestellt\n"
-ui_pattern_compiler_default = "Compilerstandard\n"
-ui_pattern_content_type = "Inhaltstyp\n"
-ui_pattern_declaration = "Deklaration\n"
-ui_pattern_declaration_chip = "Deklarations-Chip\n"
-ui_pattern_format = "Format\n"
-ui_pattern_formatted_declaration = "Formatierte Deklaration\n"
-ui_pattern_formatter = "Formatierer\n"
-ui_pattern_inline_formatter = "Inline-Formatierer\n"
-ui_pattern_input = "Eingabe\n"
-ui_pattern_input_chip = "Eingabe-Chip\n"
-ui_pattern_markup = "Markup\n"
-ui_pattern_move_content_down = "Inhalt nach unten verschieben\n"
-ui_pattern_move_content_up = "Inhalt nach oben verschieben\n"
-ui_pattern_numeric = "Numerisch\n"
-ui_pattern_protected_input = "Geschützte Eingabe\n"
-ui_pattern_remove = "Entfernen\n"
-ui_pattern_remove_content = "Inhalt entfernen\n"
-ui_pattern_remove_name = ".input {$name :string}\n{{{$name} entfernen}}\n"
-ui_pattern_semantic_markup = "Semantisches Markup\n"
-ui_pattern_semantic_name = "Semantischer Name\n"
-ui_pattern_text = "Text\n"
-ui_pattern_text_content = "Textinhalt\n"
-ui_pattern_unit = "Einheit\n"
-ui_pattern_value_for = "Wert für\n"
-ui_pattern_value_for_name = ".input {$name :string}\n{{Wert für {$name}}}\n"
-ui_preview_sample = "Beispiel\n"
-ui_project_current = "Aktuelles Projekt\n"
-ui_project_label = "Projekt\n"
-ui_project_new = "Neues Projekt\n"
-ui_project_open_workspace = "Arbeitsbereich öffnen\n"
-ui_project_recent = "Zuletzt verwendete Projekte\n"
-ui_project_remove_locale = ".input {$locale :string}\n{{Sprache {$locale} entfernen}}\n"
-ui_project_schema = "Schema\n"
-ui_quality_bidi_controls = "Die Übersetzung enthält unsichtbare bidirektionale Steuerzeichen.\n"
-ui_quality_bidi_mixed = "Die Übersetzung mischt links- und rechtsläufige Textabschnitte; prüfen Sie sie mit der Rechts-nach-links-Simulation.\n"
-ui_quality_identical = "Die Übersetzung ist mit dem Ausgangstext identisch.\n"
-ui_quality_missing = "Die Übersetzung fehlt.\n"
-ui_quality_report_locale = ".input {$locale :string}\n{{Qualitätsbericht für {$locale}}}\n"
-ui_quality_stale = "Der Ausgangstext wurde nach dem Speichern dieses Prüfstatus geändert.\n"
-ui_quality_terminology = ".input {$term :string}\n{{Der bevorzugte Begriff „{$term}“ fehlt.}}\n"
-ui_quality_whitespace = "Die Übersetzung enthält führende oder abschließende Leerzeichen.\n"
-ui_resource_not_translated = "Nicht übersetzt\n"
-ui_review_state_approved = "freigegeben\n"
-ui_review_state_draft = "Entwurf\n"
-ui_review_state_needs_review = "zu prüfen\n"
-ui_review_state_translated = "übersetzt\n"
-ui_settings_about_diagnostics = "Info und Diagnose\n"
-ui_settings_appearance = "Erscheinungsbild\n"
-ui_settings_color_theme = "Farbthema\n"
-ui_settings_dark = "Dunkel\n"
-ui_settings_editor_settings = "Editoreinstellungen\n"
-ui_settings_ember = "Glut\n"
-ui_settings_english = "Englisch\n"
-ui_settings_fjord = "Fjord\n"
-ui_settings_german = "Deutsch\n"
-ui_settings_interface_language = "Oberflächensprache\n"
-ui_settings_light = "Hell\n"
-ui_settings_localization_simulation = "Lokalisierungssimulation\n"
-ui_settings_moss = "Moos\n"
-ui_settings_pseudo_localization = "Pseudolokalisierung\n"
-ui_settings_right_to_left = "Rechts-nach-links-Layout\n"
-ui_settings_runic_gold = "Runisches Gold\n"
-ui_settings_summary = ".input {$appearance :string}\n.input {$locale :string}\n{{Editoreinstellungen, {$appearance}, Oberflächensprache {$locale}}}\n"
-ui_settings_system = "System\n"
-ui_sidebar_panel_shares = ".input {$languages :integer}\n.input {$messages :integer}\n{{Sprachen {$languages} %, Nachrichten {$messages} %}}\n"
-ui_sidebar_panels_languages = "Sprachen\n"
-ui_sidebar_panels_languages_panel = "Sprachenbereich\n"
-ui_sidebar_panels_messages = "Nachrichten\n"
-ui_sidebar_panels_messages_panel = "Nachrichtenbereich\n"
-ui_sidebar_panels_resize = "Sprachen und Nachrichten größenändern\n"
-ui_sidebar_panels_resize_title = "Zum Ändern der Größe ziehen · Doppelklick zum Zurücksetzen\n"
-ui_terminology_remove_source = ".input {$term :string}\n{{Begriff {$term} entfernen}}\n"
-ui_toolbar_discard_workflow = "Workflowänderungen verwerfen\n"
-ui_toolbar_open_navigation = "Editornavigation öffnen\n"
-ui_toolbar_redo = "Wiederholen\n"
-ui_toolbar_redo_saved_change = "Gespeicherte Änderung wiederherstellen\n"
-ui_toolbar_save_workflow = "Workflow speichern\n"
-ui_toolbar_saving_workflow = "Workflow wird gespeichert…\n"
-ui_toolbar_undo = "Rückgängig\n"
-ui_toolbar_undo_saved_change = "Gespeicherte Änderung rückgängig machen\n"
-ui_translation_editor_add_translation = "Diese Übersetzung hinzufügen…\n"
-ui_translation_editor_characters = "Zeichen\n"
-ui_translation_editor_format_json = "Quelltext-Leerraum vereinheitlichen"
-ui_translation_editor_raw_change_description = "Änderungen hier betreffen das vollständige Ressourcendokument.\n"
-ui_validation_compiler = "Compiler\n"
-ui_validation_errors = "Fehler\n"
-ui_validation_schema = "Schema\n"
-ui_validation_validating = "Wird validiert\n"
-ui_validation_validating_with_compiler = "Validierung mit dem Runic-Compiler…\n"
-ui_validation_warnings = "Warnungen\n"
-ui_workflow_approved = "Freigegeben\n"
-ui_workflow_draft = "Entwurf\n"
-ui_workflow_empty_suggestions_privacy = "Terminologie, Prüfanmerkungen, Quellkontext und Vorschläge aus dem Übersetzungsspeicher bleiben im Arbeitsbereich. Netzwerkanbieter sind standardmäßig deaktiviert und benötigen eine ausdrückliche künftige Arbeitsbereichsrichtlinie, bevor sie Text erhalten dürfen.\n"
-ui_workflow_local_translation_memory = "Lokaler Übersetzungsspeicher\n"
-ui_workflow_needs_review = "Prüfung erforderlich\n"
-ui_workflow_no_issues = "Keine Probleme gefunden\n"
-ui_workflow_quality_checks = "Qualitätsprüfungen\n"
-ui_workflow_quality_report = "Qualitätsbericht\n"
-ui_workflow_reviewer_note = "Anmerkung für Übersetzung / Prüfung\n"
-ui_workflow_reviewer_note_placeholder = "Optionaler Kontext für die nächste Prüfung…\n"
-ui_workflow_source_changed = "Quelle geändert\n"
-ui_workflow_status = "Status\n"
-ui_workflow_suggestions_privacy = "Vorschläge vergleichen nur Übersetzungen aus diesem Arbeitsbereich. Netzwerkanbieter sind deaktiviert und kein Übersetzungstext verlässt diese Anwendung.\n"
-ui_workflow_terminology = "Terminologie\n"
-ui_workflow_title = "Workflow\n"
-ui_workflow_translated = "Übersetzt\n"
-ui_workflow_unsaved_changes = "Ungespeicherte Workflowänderungen\n"
-ui_workspace_issues = "Probleme im Arbeitsbereich\n"
-ui_workspace_malformed = "fehlerhafte\n"
-ui_workspace_repair = "Reparieren\n"
-ui_workspace_review_notes_unavailable = "Prüfanmerkungen nicht verfügbar\n"
-ui_sidebar_title = 'Seitenleiste'
-ui_sidebar_description = 'Zeigt die mobile Seitenleiste an.'
-ui_backend_picker_unavailable = "Es ist keine native Ordnerauswahl verfügbar. Geben Sie stattdessen das Arbeitsbereichsverzeichnis ein."
-ui_backend_picker_start = "Die native Ordnerauswahl konnte nicht gestartet werden."
-ui_backend_bundle_size = "Das Diagnosepaket hat seine Größenbegrenzung überschritten."
-ui_backend_bundle_create = "Das Diagnosepaket konnte nicht erstellt werden."
-ui_backend_bundle_missing = "Dieses Diagnosepaket ist in diesem Benutzerprofil nicht mehr verfügbar."
-ui_backend_bundle_reveal_unsupported = "Das Anzeigen von Diagnosepaketen wird auf dieser Plattform nicht unterstützt."
-ui_backend_bundle_reveal = "Der Speicherort des Diagnosepakets konnte nicht geöffnet werden."
-ui_backend_bundle_delete = "Das Diagnosepaket konnte nicht gelöscht werden."
-ui_backend_recovery_change = "Stellen Sie die unterbrochene Transaktion wieder her, bevor Sie weitere Änderungen vornehmen."
-ui_backend_confirm_change = "Prüfen Sie die Vorschau dieser destruktiven Änderung erneut und bestätigen Sie die betroffenen Dateien."
-ui_backend_recovery_mode = "Der Wiederherstellungsmodus muss „complete“ oder „rollback“ sein."
-ui_backend_recovery_save = "Stellen Sie die unterbrochene Transaktion wieder her, bevor Sie ein Dokument speichern."
-ui_backend_recovery_review = "Stellen Sie die unterbrochene Transaktion wieder her, bevor Sie Workflow-Daten speichern."
-ui_backend_confirm_import = "Prüfen Sie die Importvorschau erneut, um ein gültiges Bestätigungstoken zu erhalten."
-ui_backend_select_catalog_mutation = "Wählen Sie einen Katalog aus, bevor Sie Sprachen oder Schlüssel ändern."
-ui_backend_recovery_history = "Stellen Sie die unterbrochene Transaktion wieder her, bevor Sie den Verlauf ändern."
-ui_backend_no_undo = "Es gibt keine gespeicherte Änderung, die rückgängig gemacht werden kann."
-ui_backend_no_redo = "Es gibt keine gespeicherte Änderung, die wiederholt werden kann."
-ui_backend_history_unsupported = "Der gespeicherte Verlaufseintrag wird nicht unterstützt."
-ui_backend_history_document = "Das gespeicherte Dokument konnte nicht geändert werden."
-ui_backend_history_sidecar = "Die Workflow-Begleitdatei wurde nach diesem Vorgang geändert; der Verlauf wurde gelöscht."
-ui_backend_not_message_document = "Dieses Dokument enthält keine Übersetzungsnachrichten."
-ui_backend_encoding = "Das Dokument enthält Text, der nicht als UTF-8 kodiert werden kann."
-ui_backend_draft_validation = "Der Entwurf enthält Validierungsfehler."
-ui_backend_select_catalog_review = "Wählen Sie einen Katalog aus, bevor Sie Prüfdaten speichern."
-ui_backend_select_catalog_review_change = "Wählen Sie einen Katalog aus, bevor Sie Prüfdaten ändern."
-ui_backend_sidecar_history_conflict = "Die Editorzustands-Begleitdatei wurde auf dem Datenträger geändert. Laden Sie sie neu, bevor Sie den Verlauf ändern."
-ui_backend_xliff_compile = "Der XLIFF-Export erfordert einen erfolgreich kompilierten Katalog."
-ui_backend_review_compile = "Der Prüfdatenexport erfordert einen erfolgreich kompilierten Katalog."
-ui_backend_import_compile = "Der geöffnete Katalog lässt sich nicht kompilieren. Beheben Sie die gemeldeten Fehler vor dem Import."
-ui_backend_import_file_changed = "Die importierte Datei wurde nach der Vorschau geändert. Prüfen Sie sie erneut."
-ui_backend_import_catalog_changed = "Der Katalog wurde auf dem Datenträger geändert. Prüfen Sie die Importvorschau erneut."
-ui_backend_import_sidecar_changed = "Die Workflow-Begleitdatei wurde auf dem Datenträger geändert. Prüfen Sie die Importvorschau erneut."
-ui_backend_review_file_changed = "Die Prüfdatei wurde nach der Vorschau geändert. Importieren Sie sie erneut."
-ui_backend_project_required = "Der Arbeitsbereich muss translations/runic.json oder runic.json und Übersetzungsquelldateien enthalten."
-ui_backend_project_config_missing = "Das Runic-Übersetzungsprojekt enthält keine runic.json-Datei."
-ui_backend_path_relative = "Arbeitsbereichspfade müssen relativ sein."
-ui_backend_path_escape = "Der angeforderte Pfad liegt außerhalb des Arbeitsbereichs."
-ui_backend_path_link = "Übersetzungsquellen dürfen keine symbolischen Links sein."
-ui_backend_config_required = "Der Arbeitsbereich enthält keine runic.json-Datei."
-ui_backend_document_size = "Das Übersetzungsdokument überschreitet die Größenbegrenzung des Compilers."
-ui_backend_committed_reload = "Die Änderung wurde übernommen. Laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren."
-ui_backend_recovered_reload = "Die Wiederherstellung ist abgeschlossen. Laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren."
-ui_backend_saved_reload = "Das Dokument wurde gespeichert. Laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren."
-ui_backend_workspace_missing = ".input {$path :string}\n{{Der Übersetzungsarbeitsbereich „{$path}“ ist nicht vorhanden.}}"
-ui_backend_document_missing = ".input {$path :string}\n{{„{$path}“ ist nicht mehr vorhanden.}}"
-ui_backend_document_conflict = ".input {$path :string}\n{{„{$path}“ wurde auf dem Datenträger geändert. Laden Sie die Datei neu, bevor Sie Ihren Entwurf speichern.}}"
-ui_backend_import_document_conflict = ".input {$path :string}\n{{„{$path}“ wurde auf dem Datenträger geändert. Prüfen Sie die Importvorschau erneut.}}"
-ui_backend_unknown_mutation = ".input {$kind :string}\n{{Unbekannte Editoränderung „{$kind}“.}}"
-ui_backend_source_outside_project = ".input {$path :string}\n{{„{$path}“ ist keine Übersetzungsquelle in diesem Projekt.}}"
-ui_backend_external_error = ".input {$detail :string}\n{{Der Vorgang konnte nicht abgeschlossen werden. Technische Details: {$detail}}}"
-ui_backend_import_not_applied = "Der Import wurde nicht angewendet."
-ui_backend_import_partial = "Der Import konnte nach einem Schreibfehler nicht zurückgesetzt werden. Laden Sie den Arbeitsbereich neu und prüfen Sie die betroffenen Übersetzungsdateien."
-ui_backend_refusal_1 = ".input {$value1 :string}\n.input {$value2 :string}\n{{Die Ausgangssprache „{$value1}“ des Dokuments stimmt nicht mit der Standardsprache „{$value2}“ des Katalogs überein.}}"
-ui_backend_refusal_2 = ".input {$value1 :string}\n.input {$value2 :string}\n{{Das importierte Dokument definiert „{$value1}“, das nicht zum Katalog „{$value2}“ gehört.}}"
-ui_backend_refusal_3 = ".input {$value1 :string}\n.input {$value2 :string}\n{{Die Prüfdatei ist für den Katalog „{$value1}“ bestimmt, geöffnet ist jedoch „{$value2}“.}}"
-ui_backend_refusal_4 = ".input {$value1 :string}\n.input {$value2 :string}\n{{Die Prüfdatei verweist auf „{$value1}“, das nicht zum Katalog „{$value2}“ gehört.}}"
-ui_backend_refusal_5 = ".input {$value1 :string}\n{{Die Prüfdatei verweist auf die Sprache „{$value1}“, die im geöffneten Katalog nicht definiert ist.}}"
-ui_backend_refusal_6 = ".input {$value1 :string}\n{{Der XLIFF-Ausgangstext für „{$value1}“ stimmt nicht mit dem geöffneten Katalog überein und kann nicht angewendet werden.}}"
-ui_backend_refusal_7 = ".input {$value1 :string}\n.input {$value2 :string}\n{{Das Dokument ist für den Katalog „{$value1}“ bestimmt, geöffnet ist jedoch „{$value2}“.}}"
-ui_backend_refusal_8 = ".input {$value1 :string}\n{{Das Dokument ist für die Sprache „{$value1}“ bestimmt, die im geöffneten Katalog nicht definiert ist.}}"
-ui_backend_refusal_9 = ".input {$value1 :string}\n{{Das Dokument ist für die Standardsprache „{$value1}“ bestimmt. Diese enthält den kanonischen Ausgangstext und kann nicht über XLIFF importiert werden.}}"
-ui_backend_refusal_10 = ".input {$value1 :string}\n.input {$value2 :string}\n{{Der freigegebene Prüfeintrag „{$value1}“ ({$value2}) wurde für einen anderen Stand des Ausgangskatalogs erstellt.}}"
-ui_backend_history_document_conflict = "Das gespeicherte Dokument wurde nach diesem Vorgang geändert; der Verlauf wurde gelöscht."
-ui_backend_recovery_required = "Eine unterbrochene Arbeitsbereichstransaktion muss wiederhergestellt werden."
-ui_backend_preview_key_missing = ".input {$key :string}\n{{Die kompilierte Sprache enthält keine Nachricht „{$key}“.}}"
-ui_backend_invalid_json = "Das Dokument enthält kein gültiges JSON."
-ui_backend_history_save = ".input {$path :string}\n{{{$path} speichern}}"
-ui_backend_history_review = "Workflow speichern"
-ui_backend_duplicate_sample = ".input {$key :string}\n.input {$locale :string}\n.input {$sample :string}\n{{Der Prüfeintrag „{$key}“ ({$locale}) enthält den Beispielschlüssel „{$sample}“ mehrfach.}}"
-ui_host_not_initialized = "Die Verbindung zum gehosteten Editor wurde noch nicht initialisiert."
-ui_host_loopback_required = "Öffnen Sie den Editor über seine lokale Serveradresse."
-ui_host_capability_unavailable = "Der Editorserver konnte seine Verbindungseinstellungen nicht bereitstellen."
-ui_host_capability_invalid = "Der Editorserver hat ungültige Verbindungseinstellungen bereitgestellt."
+[app]
+add_message = 'Nachricht hinzufügen'
+advanced = 'Varianten'
+all = 'Alle'
+approve_translations = 'Übersetzungen freigeben'
+default_locale = 'Ausgangssprache'
+diagnostics = 'Diagnosen'
+eyebrow = 'Runic Translations Editor'
+invalid = 'Behebe die Validierungsfehler vor dem Speichern'
+mark_for_review = 'Zur Überprüfung markieren'
+message_bulk_actions = 'Massenaktionen für Nachrichten'
+message_filters = 'Nachrichtenfilter'
+messages = 'Nachrichten'
+missing = 'Fehlend'
+missing_translation = 'Fehlende Übersetzung'
+no_matching_messages = 'Keine passenden Nachrichten'
+no_results = 'Keine Nachrichten passen zu dieser Ansicht'
+no_selection = 'Wähle eine Nachricht aus, um sie zu übersetzen'
+raw = 'Quelldatei'
+reload = 'Neu laden'
+review = 'Überprüfung'
+save = 'Dokument speichern'
+saved = 'Gespeichert'
+saving = 'Speichern…'
+search = 'Nachrichten suchen…'
+simple = 'Übersetzung'
+stale = 'Veraltet'
+structured = 'Strukturiert'
+title = 'Übersetzungen'
+translated = 'Übersetzt'
+unsaved = 'Ungespeicherte Änderungen'
+valid = 'Bereit zum Speichern'
+visible_messages = 'Sichtbare Nachrichten'
+workspace = 'Arbeitsbereich'
+
+[ui]
+loading = 'Wird geladen'
+
+[ui.a11y]
+toggle_sidebar = 'Seitenleiste umschalten'
+
+[ui.artifact]
+preview_aria_label = 'Vorschau des kompilierten Artefakts'
+preview_as_generated = 'Wie erzeugt'
+preview_close = 'Vorschau des kompilierten Artefakts schließen'
+preview_compiling = 'Aktueller Entwurf wird kompiliert…'
+preview_description = 'Darstellung der kompilierten Nachricht direkt im Editor. Dabei wird keine externe Anwendung gestartet.'
+preview_edit_to_preview = 'Bearbeiten Sie die Nachricht, um eine Artefaktvorschau zu erstellen.'
+preview_no_simulation = 'keine Simulation'
+preview_note = 'Beide Spalten durchlaufen dieselbe compiler-normalisierte AST-Pipeline; Markup bleibt semantische Daten und wird niemals als HTML interpretiert.'
+preview_pseudo_localization = 'Pseudolokalisierung'
+preview_rtl = 'RTL'
+preview_simulated = 'Simuliert'
+preview_title = 'Vorschau des kompilierten Artefakts'
+preview_untransformed = 'unverändert'
+
+[ui.backend]
+bundle_create = 'Das Diagnosepaket konnte nicht erstellt werden.'
+bundle_delete = 'Das Diagnosepaket konnte nicht gelöscht werden.'
+bundle_missing = 'Dieses Diagnosepaket ist in diesem Benutzerprofil nicht mehr verfügbar.'
+bundle_reveal = 'Der Speicherort des Diagnosepakets konnte nicht geöffnet werden.'
+bundle_reveal_unsupported = 'Das Anzeigen von Diagnosepaketen wird auf dieser Plattform nicht unterstützt.'
+bundle_size = 'Das Diagnosepaket hat seine Größenbegrenzung überschritten.'
+committed_reload = 'Die Änderung wurde übernommen. Laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren.'
+config_required = 'Der Arbeitsbereich enthält keine runic.json-Datei.'
+confirm_change = 'Prüfen Sie die Vorschau dieser destruktiven Änderung erneut und bestätigen Sie die betroffenen Dateien.'
+confirm_import = 'Prüfen Sie die Importvorschau erneut, um ein gültiges Bestätigungstoken zu erhalten.'
+document_conflict = '''
+.input {$path :string}
+{{„{$path}“ wurde auf dem Datenträger geändert. Laden Sie die Datei neu, bevor Sie Ihren Entwurf speichern.}}
+'''
+document_missing = '''
+.input {$path :string}
+{{„{$path}“ ist nicht mehr vorhanden.}}
+'''
+document_size = 'Das Übersetzungsdokument überschreitet die Größenbegrenzung des Compilers.'
+draft_validation = 'Der Entwurf enthält Validierungsfehler.'
+duplicate_sample = '''
+.input {$key :string}
+.input {$locale :string}
+.input {$sample :string}
+{{Der Prüfeintrag „{$key}“ ({$locale}) enthält den Beispielschlüssel „{$sample}“ mehrfach.}}
+'''
+encoding = 'Das Dokument enthält Text, der nicht als UTF-8 kodiert werden kann.'
+external_error = '''
+.input {$detail :string}
+{{Der Vorgang konnte nicht abgeschlossen werden. Technische Details: {$detail}}}
+'''
+history_document = 'Das gespeicherte Dokument konnte nicht geändert werden.'
+history_document_conflict = 'Das gespeicherte Dokument wurde nach diesem Vorgang geändert; der Verlauf wurde gelöscht.'
+history_review = 'Workflow speichern'
+history_save = '''
+.input {$path :string}
+{{{$path} speichern}}
+'''
+history_sidecar = 'Die Workflow-Begleitdatei wurde nach diesem Vorgang geändert; der Verlauf wurde gelöscht.'
+history_unsupported = 'Der gespeicherte Verlaufseintrag wird nicht unterstützt.'
+import_catalog_changed = 'Der Katalog wurde auf dem Datenträger geändert. Prüfen Sie die Importvorschau erneut.'
+import_compile = 'Der geöffnete Katalog lässt sich nicht kompilieren. Beheben Sie die gemeldeten Fehler vor dem Import.'
+import_document_conflict = '''
+.input {$path :string}
+{{„{$path}“ wurde auf dem Datenträger geändert. Prüfen Sie die Importvorschau erneut.}}
+'''
+import_file_changed = 'Die importierte Datei wurde nach der Vorschau geändert. Prüfen Sie sie erneut.'
+import_not_applied = 'Der Import wurde nicht angewendet.'
+import_partial = 'Der Import konnte nach einem Schreibfehler nicht zurückgesetzt werden. Laden Sie den Arbeitsbereich neu und prüfen Sie die betroffenen Übersetzungsdateien.'
+import_sidecar_changed = 'Die Workflow-Begleitdatei wurde auf dem Datenträger geändert. Prüfen Sie die Importvorschau erneut.'
+invalid_json = 'Das Dokument enthält kein gültiges JSON.'
+no_redo = 'Es gibt keine gespeicherte Änderung, die wiederholt werden kann.'
+no_undo = 'Es gibt keine gespeicherte Änderung, die rückgängig gemacht werden kann.'
+not_message_document = 'Dieses Dokument enthält keine Übersetzungsnachrichten.'
+path_escape = 'Der angeforderte Pfad liegt außerhalb des Arbeitsbereichs.'
+path_link = 'Übersetzungsquellen dürfen keine symbolischen Links sein.'
+path_relative = 'Arbeitsbereichspfade müssen relativ sein.'
+picker_start = 'Die native Ordnerauswahl konnte nicht gestartet werden.'
+picker_unavailable = 'Es ist keine native Ordnerauswahl verfügbar. Geben Sie stattdessen das Arbeitsbereichsverzeichnis ein.'
+preview_key_missing = '''
+.input {$key :string}
+{{Die kompilierte Sprache enthält keine Nachricht „{$key}“.}}
+'''
+project_config_missing = 'Das Runic-Übersetzungsprojekt enthält keine runic.json-Datei.'
+project_required = 'Der Arbeitsbereich muss translations/runic.json oder runic.json und Übersetzungsquelldateien enthalten.'
+recovered_reload = 'Die Wiederherstellung ist abgeschlossen. Laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren.'
+recovery_change = 'Stellen Sie die unterbrochene Transaktion wieder her, bevor Sie weitere Änderungen vornehmen.'
+recovery_history = 'Stellen Sie die unterbrochene Transaktion wieder her, bevor Sie den Verlauf ändern.'
+recovery_mode = 'Der Wiederherstellungsmodus muss „complete“ oder „rollback“ sein.'
+recovery_required = 'Eine unterbrochene Arbeitsbereichstransaktion muss wiederhergestellt werden.'
+recovery_review = 'Stellen Sie die unterbrochene Transaktion wieder her, bevor Sie Workflow-Daten speichern.'
+recovery_save = 'Stellen Sie die unterbrochene Transaktion wieder her, bevor Sie ein Dokument speichern.'
+refusal_1 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{Die Ausgangssprache „{$value1}“ des Dokuments stimmt nicht mit der Standardsprache „{$value2}“ des Katalogs überein.}}
+'''
+refusal_10 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{Der freigegebene Prüfeintrag „{$value1}“ ({$value2}) wurde für einen anderen Stand des Ausgangskatalogs erstellt.}}
+'''
+refusal_2 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{Das importierte Dokument definiert „{$value1}“, das nicht zum Katalog „{$value2}“ gehört.}}
+'''
+refusal_3 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{Die Prüfdatei ist für den Katalog „{$value1}“ bestimmt, geöffnet ist jedoch „{$value2}“.}}
+'''
+refusal_4 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{Die Prüfdatei verweist auf „{$value1}“, das nicht zum Katalog „{$value2}“ gehört.}}
+'''
+refusal_5 = '''
+.input {$value1 :string}
+{{Die Prüfdatei verweist auf die Sprache „{$value1}“, die im geöffneten Katalog nicht definiert ist.}}
+'''
+refusal_6 = '''
+.input {$value1 :string}
+{{Der XLIFF-Ausgangstext für „{$value1}“ stimmt nicht mit dem geöffneten Katalog überein und kann nicht angewendet werden.}}
+'''
+refusal_7 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{Das Dokument ist für den Katalog „{$value1}“ bestimmt, geöffnet ist jedoch „{$value2}“.}}
+'''
+refusal_8 = '''
+.input {$value1 :string}
+{{Das Dokument ist für die Sprache „{$value1}“ bestimmt, die im geöffneten Katalog nicht definiert ist.}}
+'''
+refusal_9 = '''
+.input {$value1 :string}
+{{Das Dokument ist für die Standardsprache „{$value1}“ bestimmt. Diese enthält den kanonischen Ausgangstext und kann nicht über XLIFF importiert werden.}}
+'''
+review_compile = 'Der Prüfdatenexport erfordert einen erfolgreich kompilierten Katalog.'
+review_file_changed = 'Die Prüfdatei wurde nach der Vorschau geändert. Importieren Sie sie erneut.'
+saved_reload = 'Das Dokument wurde gespeichert. Laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren.'
+select_catalog_mutation = 'Wählen Sie einen Katalog aus, bevor Sie Sprachen oder Schlüssel ändern.'
+select_catalog_review = 'Wählen Sie einen Katalog aus, bevor Sie Prüfdaten speichern.'
+select_catalog_review_change = 'Wählen Sie einen Katalog aus, bevor Sie Prüfdaten ändern.'
+sidecar_history_conflict = 'Die Editorzustands-Begleitdatei wurde auf dem Datenträger geändert. Laden Sie sie neu, bevor Sie den Verlauf ändern.'
+source_outside_project = '''
+.input {$path :string}
+{{„{$path}“ ist keine Übersetzungsquelle in diesem Projekt.}}
+'''
+unknown_mutation = '''
+.input {$kind :string}
+{{Unbekannte Editoränderung „{$kind}“.}}
+'''
+workspace_missing = '''
+.input {$path :string}
+{{Der Übersetzungsarbeitsbereich „{$path}“ ist nicht vorhanden.}}
+'''
+xliff_compile = 'Der XLIFF-Export erfordert einen erfolgreich kompilierten Katalog.'
+
+[ui.command]
+palette_commands_aria_label = 'Befehle'
+palette_description = 'Editorbefehle suchen und ausführen'
+palette_no_matches = 'Kein passender Befehl.'
+palette_placeholder = 'Befehl eingeben…'
+palette_search_aria_label = 'Befehle suchen'
+palette_title = 'Befehlspalette'
+
+[ui.common]
+cancel = 'Abbrechen'
+close = 'Schließen'
+name = 'Name'
+type = 'Typ'
+
+[ui.composer]
+add_case = 'Fall hinzufügen'
+add_custom_case = 'Benutzerdefinierten Fall hinzufügen'
+add_exact_number_case = 'Fall für exakte Zahl hinzufügen'
+add_formatter = 'Formatierer hinzufügen'
+add_input = 'Eingabe hinzufügen'
+add_plural_forms = 'Pluralformen hinzufügen'
+add_selection_rule = 'Auswahlregel hinzufügen'
+add_translation_case = 'Übersetzungsfall hinzufügen'
+advanced_structure = 'Erweiterte Struktur'
+advanced_structure_description = 'Eingaben, Formatierer und Auswahlregeln, die von den obigen Übersetzungen verwendet werden.'
+apply_source = 'Quelle anwenden'
+case_already_exists = 'Dieser Fall existiert bereits.'
+cases = 'Fälle'
+choose_when_used = 'Wählen Sie, wann diese Übersetzung verwendet wird'
+chooses_by = 'Wählt nach'
+compiler_default = 'Compilerstandard'
+custom_case_description = 'Geben Sie den exakten Wert ein, der diese Übersetzung auswählen soll.'
+custom_value = 'Benutzerdefinierter Wert…'
+default_format = 'Standardformat'
+default_translation = 'Standardübersetzung'
+down = 'nach unten'
+equals_label = 'gleich ist'
+exact_case_description = 'Geben Sie die Zahl ein, die diese Übersetzung anstelle der normalen Pluralform des Gebietsschemas auswählen soll.'
+exact_number = 'Exakte Zahl…'
+exact_number_hint = 'Verwenden Sie =0 für eine exakte Zahl.'
+exact_or_custom_match = 'Exakte oder benutzerdefinierte Übereinstimmung'
+exactly = 'Genau'
+fallback = 'Rückfall'
+form = 'Form'
+format = 'Format'
+formatter = 'Formatierer'
+input = 'Eingabe'
+inputs = 'Eingaben'
+inputs_description = 'Von Anwendungscode bereitgestellte Werte. Übersetzende fügen sie ein durch Eingabe von'
+is = 'ist'
+message_source = 'Nachrichtenquelle'
+move = 'Verschieben'
+number_form = 'Zahlenform'
+number_form_of = 'Verwendet für die Zahlenform der Sprache von'
+numeric = 'Numerisch'
+one_translation = 'Eine Übersetzung wird in jeder Situation verwendet'
+ordinal = 'Ordinal'
+ordinal_form_of = 'Verwendet für die Ordinalform der Sprache von'
+other = 'Andere'
+plural = 'Plural'
+plural_forms_description = 'Wenn sich die Formulierung mit einer Zahl ändert, fügen Sie Pluralformen hinzu und übersetzen Sie jeden Fall separat.'
+plural_message = 'Pluralnachricht'
+remove = 'Entfernen'
+remove_formatter = 'Formatierer entfernen'
+remove_input = 'Eingabe entfernen'
+remove_selector = 'Auswahlregel entfernen'
+required_fallback = 'Erforderlicher Rückfall'
+required_fallback_description = 'Jede strukturierte Nachricht benötigt diesen abschließenden Rückfall. Deshalb kann die Zuordnungsregel nicht geändert oder entfernt werden.'
+required_fallback_title = 'Die Rückfallübersetzung ist erforderlich'
+reusable_formatters = 'Wiederverwendbare Formatierer'
+reusable_formatters_description = 'Optionale benannte Formate für Daten, Zahlen, relative Zeit und weitere typisierte Werte.'
+rule_name = 'Regelname'
+selection_rules = 'Auswahlregeln'
+selection_rules_description = 'Regeln bestimmen, welcher Übersetzungsfall für eine bestimmte Eingabe verwendet wird.'
+shown_whenever_used = 'Wird angezeigt, sobald diese Nachricht verwendet wird.'
+singular_form_of = 'Verwendet für die Singularform der Sprache von'
+structured_case_description = 'Dieser Fall enthält Formatierung oder semantisches Markup. Bearbeiten Sie die Inhaltsblöcke unten.'
+structured_message_source = 'Strukturierte Nachrichtenquelle'
+structured_message_source_description = 'Ein Ausweichweg für die exakte Bearbeitung der MF2-Quelle.'
+toggle_advanced_structure = 'Erweiterte Struktur umschalten'
+translate_message = 'Nachricht übersetzen'
+translation = 'Übersetzung'
+translation_for = 'Übersetzung für'
+unit = 'Einheit'
+up = 'nach oben'
+used_for_every = 'Verwendet für jeden'
+uses_input = 'Verwendet Eingabe'
+value = 'Wert'
+value_without_specific = 'Wert ohne spezifischere Übersetzung'
+variables_become_chips = 'werden zu geschützten, prüfbaren Chips im Satz.'
+when = 'Wenn'
+when_used = 'Wann wird diese Übersetzung verwendet?'
+write_naturally = 'Schreiben Sie natürlich. Variablen wie'
+
+[ui.confirm]
+apply_review = 'Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um diesen Prüfdatenimport anzuwenden?'
+apply_xliff = 'Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um diesen XLIFF-Import anzuwenden?'
+change_workspace = 'Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um diese strukturelle Arbeitsbereichsänderung vorzunehmen?'
+create_project = 'Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um ein neues Projekt zu erstellen?'
+external_merge = 'Nicht gespeicherte Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um die externe Datei neu zu laden und den zusammengeführten Dokumententwurf zu behalten?'
+open_workspace = 'Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um einen anderen Arbeitsbereich zu öffnen?'
+reload_workspace = 'Nicht gespeicherte Dokumententwürfe, Reparaturtexte sowie Workflow- und Terminologieänderungen verwerfen, um den Arbeitsbereich neu zu laden?'
+
+[ui.count]
+affected_files = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Eine betroffene Datei}}
+* {{{$count} betroffene Dateien}}
+'''
+cases = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Ein Fall}}
+* {{{$count} Fälle}}
+'''
+catalogs_found = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Unter diesem Verzeichnis wurde ein Katalog gefunden.}}
+* {{Unter diesem Verzeichnis wurden {$count} Kataloge gefunden.}}
+'''
+characters = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Ein Zeichen}}
+* {{{$count} Zeichen}}
+'''
+errors = '''
+.input {$count :integer select=plural}
+.match $count
+one {{ein Fehler}}
+* {{{$count} Fehler}}
+'''
+exported_files = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Eine Datei exportiert.}}
+* {{{$count} Dateien exportiert.}}
+'''
+exported_reviews = '''
+.input {$count :integer select=plural}
+.input {$path :string}
+.match $count
+one {{Ein Prüfeintrag nach {$path} exportiert.}}
+* {{{$count} Prüfeinträge nach {$path} exportiert.}}
+'''
+files_attention = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Eine Datei muss geprüft werden.}}
+* {{{$count} Dateien müssen geprüft werden.}}
+'''
+locales = '''
+.input {$count :integer select=plural}
+.match $count
+one {{eine Sprache}}
+* {{{$count} Sprachen}}
+'''
+malformed_files = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Eine fehlerhafte Datei}}
+* {{{$count} fehlerhafte Dateien}}
+'''
+messages = '''
+.input {$count :integer select=plural}
+.match $count
+one {{eine Nachricht}}
+* {{{$count} Nachrichten}}
+'''
+project_locales = '''
+.input {$count :integer select=plural}
+.input {$version :integer}
+.match $count
+one {{Eine Sprache · Schema v{$version}}}
+* {{{$count} Sprachen · Schema v{$version}}}
+'''
+project_summary = '''
+.input {$languages :integer select=plural}
+.input {$files :integer select=plural}
+.match $languages $files
+one one {{Eine Sprache · eine Datei · vom Compiler geprüft}}
+one * {{Eine Sprache · {$files} Dateien · vom Compiler geprüft}}
+* one {{{$languages} Sprachen · eine Datei · vom Compiler geprüft}}
+* * {{{$languages} Sprachen · {$files} Dateien · vom Compiler geprüft}}
+'''
+quality_summary = '''
+.input {$findings :integer select=plural}
+.input {$messages :integer select=plural}
+.match $findings $messages
+one one {{Ein Befund in einer Nachricht. Die CSV-Spalten folgen der Berichtsreihenfolge.}}
+one * {{Ein Befund in {$messages} Nachrichten. Die CSV-Spalten folgen der Berichtsreihenfolge.}}
+* one {{{$findings} Befunde in einer Nachricht. Die CSV-Spalten folgen der Berichtsreihenfolge.}}
+* * {{{$findings} Befunde in {$messages} Nachrichten. Die CSV-Spalten folgen der Berichtsreihenfolge.}}
+'''
+recovered_drafts = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Ein Dokumententwurf wurde im lokalen Anwendungsspeicher gefunden.}}
+* {{{$count} Dokumententwürfe wurden im lokalen Anwendungsspeicher gefunden.}}
+'''
+recovery_journal = '''
+.input {$count :integer select=plural}
+.input {$catalog :string}
+.match $count
+one {{Das Journal für {$catalog} enthält eine Datei. Vor weiteren Änderungen muss die Wiederherstellung abgeschlossen werden.}}
+* {{Das Journal für {$catalog} enthält {$count} Dateien. Vor weiteren Änderungen muss die Wiederherstellung abgeschlossen werden.}}
+'''
+resource_variants = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Strukturierte Nachricht · eine Variante}}
+* {{Strukturierte Nachricht · {$count} Varianten}}
+'''
+review_marked = '''
+.input {$count :integer select=plural}
+.input {$state :string}
+.match $count
+one {{Eine sichtbare Nachricht wurde als „{$state}“ markiert. Speichern Sie die Workflow-Änderungen, um sie zu übernehmen.}}
+* {{{$count} sichtbare Nachrichten wurden als „{$state}“ markiert. Speichern Sie die Workflow-Änderungen, um sie zu übernehmen.}}
+'''
+state_bytes = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Ein Byte}}
+* {{{$count} Bytes}}
+'''
+state_drafts = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Ein Wiederherstellungsentwurf}}
+* {{{$count} Wiederherstellungsentwürfe}}
+'''
+state_entries = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Ein Eintrag}}
+* {{{$count} Einträge}}
+'''
+state_preferences = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Eine Einstellung}}
+* {{{$count} Einstellungen}}
+'''
+state_recent = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Ein Eintrag für ein zuletzt verwendetes Projekt}}
+* {{{$count} Einträge für zuletzt verwendete Projekte}}
+'''
+state_removed = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Ein lokaler Editorzustandseintrag wurde entfernt.}}
+* {{{$count} lokale Editorzustandseinträge wurden entfernt.}}
+'''
+warnings = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Eine Warnung}}
+* {{{$count} Warnungen}}
+'''
+
+[ui.editor]
+mode_editing_mode = 'Bearbeitungsmodus'
+
+[ui.feedback]
+change_failed = 'Die Arbeitsbereichsänderung konnte nicht übernommen werden.'
+change_invalid = 'Die Änderung ist ungültig.'
+clear_state_confirm = 'Gespeicherte Editoreinstellungen, zuletzt verwendete Projekte und Wiederherstellungsentwürfe aus diesem Benutzerprofil entfernen? Arbeitsbereichsdateien und aktuell im Arbeitsspeicher geöffnete Inhalte bleiben unverändert.'
+deleted_merge = '''
+.input {$path :string}
+{{Die extern gelöschte Datei „{$path}“ kann keinen zusammengeführten Entwurf aufnehmen.}}
+'''
+diagnostics_copied = 'Pfad des Diagnosepakets kopiert.'
+diagnostics_copy_failed = 'Der Pfad des Diagnosepakets konnte nicht kopiert werden. Wählen Sie ihn unten aus und kopieren Sie ihn manuell.'
+diagnostics_delete_confirm = 'Dieses bereinigte Diagnosepaket löschen? Arbeitsbereichsdateien und Editorzustand bleiben unverändert.'
+diagnostics_delete_failed = 'Das Diagnosepaket konnte nicht gelöscht werden.'
+diagnostics_deleted = 'Diagnosepaket gelöscht.'
+diagnostics_failed = 'Das Diagnosepaket konnte nicht erstellt werden.'
+diagnostics_open_failed = 'Der Speicherort des Diagnosepakets konnte nicht geöffnet werden.'
+diagnostics_opened = 'Speicherort des Diagnosepakets geöffnet.'
+diagnostics_saved = 'Bereinigte Diagnosedaten wurden im Anwendungsdatenverzeichnis dieses Benutzers gespeichert.'
+discard_repair = 'Nicht gespeicherten Reparaturtext verwerfen?'
+locale_duplicate = 'Jede Sprache muss ein anderes Sprachkürzel verwenden.'
+locale_required = 'Jede Sprache benötigt ein Sprachkürzel.'
+namespace_required = 'Namensraum und Klassenname sind erforderlich.'
+newer_draft = 'Der frühere Entwurf wurde gespeichert; Ihre neuere Änderung ist weiterhin geöffnet.'
+no_resource = 'Für diese Sprache ist kein bearbeitbares Ressourcendokument vorhanden.'
+preview_failed = 'Der Compiler konnte keine Vorschau erstellen.'
+project_created = 'Projekt erstellt'
+project_directory_required = 'Wählen Sie ein neues Verzeichnis und geben Sie eine Katalog-ID ein.'
+project_failed = 'Das Projekt konnte nicht erstellt werden.'
+project_invalid = 'Das geplante Projekt ist ungültig.'
+recovery_completed = 'Unterbrochene Änderung abgeschlossen'
+recovery_failed = 'Die Wiederherstellung des Arbeitsbereichs ist fehlgeschlagen.'
+recovery_reload = 'Wiederherstellung abgeschlossen; laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren.'
+recovery_rollback = 'Unterbrochene Änderung zurückgesetzt'
+redo_failed = 'Die gespeicherte Änderung konnte nicht wiederholt werden.'
+redo_saved = 'Gespeicherte Änderung wiederholt'
+repair_failed = 'Das reparierte Dokument konnte nicht gespeichert werden.'
+repair_invalid = 'Das Dokument ist weiterhin ungültig.'
+repair_open_confirm = 'Nicht gespeicherten Reparaturtext verwerfen und ein anderes Dokument öffnen?'
+review_applied = 'Prüfdatenimport angewendet.'
+review_failed = 'Der Prüfdatenimport konnte nicht angewendet werden.'
+review_save_failed = 'Die Prüfdaten konnten nicht gespeichert werden.'
+save_failed = '''
+.input {$kind :string}
+{{Speichern fehlgeschlagen ({$kind}).}}
+'''
+state_load_failed = '''
+.input {$error :string}
+{{Der benutzerspezifische Editorzustand konnte nicht geladen werden. {$error}}}
+'''
+state_recovered = 'Ein unlesbarer lokaler Editorzustand wurde wiederhergestellt; gespeicherte Einstellungen und Wiederherstellungsentwürfe wurden zurückgesetzt.'
+undo_failed = 'Die gespeicherte Änderung konnte nicht rückgängig gemacht werden.'
+undo_saved = 'Gespeicherte Änderung rückgängig gemacht'
+workflow_saved = 'Workflow-Begleitdatei gespeichert'
+workspace_directory_required = 'Geben Sie ein Arbeitsbereichsverzeichnis ein.'
+workspace_open_failed = 'Der Arbeitsbereich konnte nicht geöffnet werden.'
+workspace_updated = 'Arbeitsbereich aktualisiert'
+xliff_applied = 'XLIFF-Import angewendet.'
+xliff_failed = 'Der XLIFF-Import konnte nicht angewendet werden.'
+
+[ui.host]
+capability_invalid = 'Der Editorserver hat ungültige Verbindungseinstellungen bereitgestellt.'
+capability_unavailable = 'Der Editorserver konnte seine Verbindungseinstellungen nicht bereitstellen.'
+loopback_required = 'Öffnen Sie den Editor über seine lokale Serveradresse.'
+not_initialized = 'Die Verbindung zum gehosteten Editor wurde noch nicht initialisiert.'
+
+[ui.inline]
+after_text = 'nach Text'
+after_text_index = '''
+.input {$index :integer}
+{{nach Text {$index}}}
+'''
+after_variable = 'nach Variable'
+after_variable_name = '''
+.input {$name :string}
+{{nach Variable {$name}}}
+'''
+at_beginning = 'am Anfang'
+click_to_inspect = 'Zum Prüfen klicken.'
+close_name_settings = '''
+.input {$name :string}
+{{Einstellungen für {$name} schließen}}
+'''
+close_variable_settings = 'Variableneinstellungen schließen'
+compiler_default = 'Compilerstandard'
+create_variable = 'Neue Variable erstellen'
+default_format = 'Standardformat'
+earlier = 'weiter nach vorn'
+from_this_translation = 'aus dieser Übersetzung'
+insert = 'Einfügen'
+insert_at = '''
+.input {$position :string}
+{{Bei {$position} einfügen}}
+'''
+later = 'weiter nach hinten'
+move = 'Verschieben'
+move_name_earlier = '''
+.input {$name :string}
+{{{$name} nach vorne verschieben}}
+'''
+move_name_later = '''
+.input {$name :string}
+{{{$name} nach hinten verschieben}}
+'''
+move_variable_earlier = 'Variable weiter nach vorn verschieben'
+move_variable_later = 'Variable weiter nach hinten verschieben'
+open_settings = 'Einstellungen öffnen.'
+remove = 'Entfernen'
+remove_name = '''
+.input {$name :string}
+{{{$name} aus dieser Übersetzung entfernen}}
+'''
+remove_variable = 'Variable aus dieser Übersetzung entfernen'
+settings = 'Einstellungen'
+text = 'Text'
+text_index = '''
+.input {$label :string}
+.input {$index :integer}
+{{{$label}, Text {$index}}}
+'''
+type = 'Typ'
+variable = 'Variable'
+variable_inspect = '''
+.input {$name :string}
+{{Variable {$name}. Zum Prüfen anklicken.}}
+'''
+variable_settings = '''
+.input {$name :string}
+{{Variable {$name}. Einstellungen öffnen.}}
+'''
+write_text = 'Text schreiben…'
+
+[ui.interchange]
+absent_from_import = 'im Import nicht vorhanden'
+added = 'hinzugefügt'
+apply_review_once = 'Diesen Prüfimport einmal anwenden'
+apply_xliff_once = 'Diesen XLIFF-Import einmal anwenden'
+before_after = 'Vorher → nachher'
+bytes = 'Bytes'
+change = 'Änderung'
+changed = 'geändert'
+default_layer = 'Standardschicht'
+description = 'Exportieren Sie portables XLIFF 2.1 oder Prüf-JSON und prüfen Sie jeden Import vor Änderungen am Arbeitsbereich. Exportpfade bleiben im geöffneten Arbeitsbereich; Importpfade können absolut oder arbeitsbereichsrelativ sein.'
+export_directory = 'Exportverzeichnis'
+export_review_json = 'Prüf-JSON exportieren'
+export_xliff = 'XLIFF exportieren'
+exported = 'Exportiert'
+files = 'Dateien'
+first_changes_only = 'Nur die ersten 256 Änderungen werden angezeigt; die obigen Anzahlen enthalten den gesamten Import.'
+import_refusal = 'Import abgelehnt'
+key = 'Schlüssel'
+locale = 'Gebietsschema'
+non_semantic_notes = 'Nicht-semantische Exporthinweise'
+preview_review_import = 'Prüfimport prüfen'
+preview_xliff_import = 'XLIFF-Import prüfen'
+review_description = 'Überträgt Workflowstatus, Anmerkungen und Freigabequellennachweise, ohne Übersetzungstext zu ersetzen. Lokale Terminologie bleibt lokal im Arbeitsbereich.'
+review_entries = 'Prüfeinträge'
+review_export_failed = 'Prüf-JSON-Export fehlgeschlagen.'
+review_export_path = 'Prüf-JSON-Pfad'
+review_file_to_import = 'Zu importierende Prüf-JSON-Datei'
+review_import_refused = 'Der Prüfimport wurde abgelehnt.'
+review_title = 'Prüfworkflow-JSON'
+semantic_loss = 'Semantischer Austauschverlust'
+state = 'Status'
+summary = '''
+.input {$added :integer}
+.input {$changed :integer}
+.input {$removed :integer}
+{{Hinzugefügt: {$added} · geändert: {$changed} · im Import nicht vorhanden: {$removed}}}
+'''
+target = 'Ziel'
+title = 'Austausch'
+to = 'nach'
+xliff_description = 'Der Export schreibt ein Dokument für das Zielgebietsschema. Der Import zeigt zuerst die vorgeschlagenen Text- und Prüfstatusänderungen.'
+xliff_export_failed = 'XLIFF-Export fehlgeschlagen.'
+xliff_file_to_import = 'Zu importierende XLIFF-Datei'
+xliff_import_refused = 'Der XLIFF-Import wurde abgelehnt.'
+xliff_title = 'XLIFF-2.1-Übersetzungsdateien'
+
+[ui.locale]
+coverage = 'Gebietsschema-Abdeckung'
+falls_back_to = 'Fällt zurück auf'
+languages = 'Sprachen'
+manage = 'Sprachen verwalten'
+no_language = 'keine Sprache'
+none = 'keine'
+source = 'Quelle'
+source_language = 'Ausgangssprache'
+translated = 'übersetzt'
+
+[ui.message]
+heading_delete = 'Löschen'
+heading_delete_title = 'Diese Nachricht löschen'
+heading_duplicate = 'Duplizieren'
+heading_duplicate_title = 'Diese Nachricht duplizieren'
+heading_falls_back_to = 'fällt zurück auf'
+heading_rename = 'Umbenennen'
+heading_rename_title = 'Diese Nachricht umbenennen oder verschieben'
+toolbar_search_messages = 'Nachrichten suchen'
+
+[ui.page]
+about_bundle_no_upload = 'Die Anwendung lädt dieses Paket niemals hoch. Das Teilen ist eine ausdrückliche Aktion außerhalb des Editors.'
+about_bytes = 'Bytes'
+about_clear_local_state = 'Lokalen Status löschen'
+about_clear_local_state_note = 'Das Löschen betrifft nur künftige Wiederherstellungen und Starts; Arbeitsbereichsdateien werden nicht geändert und die aktuell in diesem Fenster geöffnete Arbeit wird nicht verworfen.'
+about_copy_path = 'Pfad kopieren'
+about_create_bundle = 'Diagnosepaket erstellen'
+about_creating_bundle = 'Paket wird erstellt…'
+about_delete_bundle = 'Paket löschen'
+about_description = 'Anwendungsinformationen und datenschutzsichere Diagnosen.'
+about_development_build = 'Entwicklungsbuild'
+about_diagnostic_bundle = 'Diagnosepaket'
+about_diagnostic_bundle_description = 'Die ZIP-Datei enthält Versions- und Laufzeitinformationen, Katalogzahlen und gruppierte Diagnose-IDs. Arbeitsbereichspfade, Dateinamen, Nachrichtenquelltexte und Übersetzungen sind ausgeschlossen.'
+about_diagnostic_bundle_path = 'Pfad zum Diagnosepaket'
+about_diagnostic_bundle_title = 'Bereinigtes Diagnosepaket'
+about_entries = 'Einträge'
+about_license_note = 'Runic Translations ist unter der MIT-Lizenz lizenziert. Die paketierte Anwendung enthält LICENSE.txt und THIRD-PARTY-NOTICES.md.'
+about_local_state = 'Lokaler Editorstatus'
+about_local_state_description = 'Nur im Anwendungsprofil dieses Benutzers gespeichert. Die Prüfung zeigt niemals Pfade oder Entwurfstext an.'
+about_preferences = 'Einstellungen'
+about_product = 'Runic Translations Editor'
+about_reading = 'Anwendungsinformationen werden gelesen…'
+about_recent_project_records = 'Datensätze zu zuletzt verwendeten Projekten'
+about_recovered_unreadable = 'aus einem nicht lesbaren Datensatz wiederhergestellt'
+about_recovery_draft_records = 'Wiederherstellungsentwürfe'
+about_reveal_location = 'Speicherort anzeigen'
+about_runtime = 'Laufzeit'
+about_runtime_identifier = 'Laufzeitkennung'
+about_source_revision = 'Quellrevision'
+about_system = 'System'
+about_update_channel = 'Update-Kanal'
+about_version = 'Version'
+back = 'Zurück'
+browse = 'Durchsuchen…'
+cancel = 'Abbrechen'
+choosing = 'Wird ausgewählt…'
+close = 'Schließen'
+continue = 'Weiter'
+creating = 'Wird erstellt…'
+discard = 'Verwerfen'
+done = 'Fertig'
+empty_selection_description = 'Wählen Sie in der Seitenleiste eine Nachricht aus, um ihre Übersetzung zu prüfen oder zu bearbeiten.'
+errors = 'Fehler'
+external_changes_compare_merge = 'Vergleichen / zusammenführen'
+external_changes_reload_files = 'Dateien neu laden'
+external_changes_reload_latest = 'Laden Sie neu, um die neuesten Versionen zu lesen.'
+external_changes_title = 'Dateien wurden außerhalb des Editors geändert'
+external_changes_unsaved_intact = 'Ihre lokalen Entwürfe, Reparaturtexte und Workflow-Änderungen sind weiterhin vorhanden.'
+external_compare_current_disk = 'Aktueller Datenträger'
+external_compare_deleted_externally = 'Datei wurde extern gelöscht.'
+external_compare_description = 'Vergleichen Sie die Editorbasis mit der aktuellen Datei und behalten oder führen Sie die Änderung zusammen.'
+external_compare_editor_base = 'Editorbasis'
+external_compare_merged_draft = 'Zusammengeführter Entwurf'
+external_compare_not_previously_loaded = 'Datei wurde zuvor nicht geladen.'
+external_compare_reload_keep_merged = 'Basis neu laden und zusammengeführten Entwurf behalten'
+fatal_could_not_open = 'Dieser Übersetzungsarbeitsbereich konnte nicht geöffnet werden'
+fatal_no_catalog = 'Es wurde kein Runic-Translations-Katalog gefunden.'
+fatal_open_another_workspace = 'Anderen Arbeitsbereich öffnen'
+fatal_recovery_refresh = 'Wiederherstellung abgeschlossen; laden Sie den Arbeitsbereich neu, um ihn zu aktualisieren.'
+fatal_recovery_reload_required = 'Wiederherstellung abgeschlossen; erneutes Laden erforderlich'
+file = 'Datei'
+files = 'Dateien'
+healthy = 'Fehlerfrei'
+interchange = 'Austausch'
+interface_language = 'Oberflächensprache'
+keep_current_view = 'Aktuelle Ansicht beibehalten'
+locales = 'Sprachen'
+messages = 'Nachrichten'
+meta_description = 'Ein fokussierter Desktop-Editor für Runic-Translations-Arbeitsbereiche'
+mutation_add_language = 'Sprache hinzufügen'
+mutation_affected = 'betroffen'
+mutation_change_fallback = 'Rückfall ändern'
+mutation_change_fallback_relationships = 'Rückfallbeziehungen ändern'
+mutation_checking = 'Wird geprüft…'
+mutation_commit = 'Änderung übernehmen'
+mutation_committing = 'Wird übernommen…'
+mutation_copy_starter_values = 'Anfangswerte kopieren von'
+mutation_copy_starter_values_description = 'Kopierter Text hält den neuen Katalog compiler-valid und kann anschließend übersetzt werden.'
+mutation_delete = 'Löschen'
+mutation_delete_description = 'Die Nachricht wird aus jeder Sprache und Ebene entfernt. Die Vorschau unten zeigt jede Datei, die geändert wird.'
+mutation_delete_message = 'Nachricht löschen'
+mutation_description = 'Compiler-gestützte Arbeitsbereichsänderung. Prüfen Sie die betroffenen Dateien vor dem Übernehmen.'
+mutation_duplicate_key = 'Schlüssel duplizieren'
+mutation_duplicate_message = 'Nachricht duplizieren'
+mutation_existing_key = 'Vorhandener Schlüssel'
+mutation_fallback = 'Rückfall'
+mutation_files_deleted = 'Dateien werden gelöscht'
+mutation_files_deleted_description = 'Alle Ressourcendokumente für diese Sprache werden nach Bestätigung der Vorschau gelöscht.'
+mutation_initial_text = 'Anfangstext'
+mutation_initial_text_description = 'Der Anfangswert wird jeder Sprache hinzugefügt, damit strikte Projekte gültig bleiben.'
+mutation_initial_text_placeholder = 'Jetzt bezahlen'
+mutation_invalid = 'Änderung ist ungültig'
+mutation_irreversible_confirm = 'Ich verstehe, dass diese Arbeitsbereichsänderung nicht rückgängig gemacht werden kann.'
+mutation_irreversible_description = 'Sie ist von der lokalen Rückgängig-Historie ausgeschlossen. Prüfen Sie die aufgeführten Dateien, bevor Sie fortfahren.'
+mutation_language = 'Sprache'
+mutation_language_operation = 'Sprachvorgang'
+mutation_language_to_remove = 'Zu entfernende Sprache'
+mutation_layer = 'Ebene'
+mutation_message_key = 'Nachrichtenschlüssel'
+mutation_message_key_description = 'Verwenden Sie Punkte, um Nachrichten in Gruppen zu organisieren.'
+mutation_new_key_group_path = 'Neuer Schlüssel oder Gruppenpfad'
+mutation_new_locale_tag = 'Neues Sprach-Tag'
+mutation_operation_preview = 'Vorgangsvorschau'
+mutation_preview = 'Änderung vorschauen'
+mutation_redirect_fallbacks = 'Abhängige Rückfälle umleiten auf'
+mutation_remove_language = 'Sprache entfernen'
+mutation_rename_description = 'Die Änderung wird in jeder Sprache und Ebene angewendet, in der die Quellnachricht vorhanden ist.'
+mutation_rename_move_message = 'Nachricht umbenennen oder verschieben'
+no_document = 'kein Dokument'
+open = 'Öffnen'
+open_project_action = 'Arbeitsbereich öffnen'
+open_project_description = 'Kataloge werden innerhalb dieser Arbeitsbereichsgrenze gesucht. Wenn mehrere gefunden werden, wählen Sie einen aus.'
+open_project_title = 'Übersetzungsprojekt öffnen'
+opening = 'Wird geöffnet…'
+preview_compiling = 'Wird kompiliert…'
+preview_compiling_draft = 'Der aktuelle Entwurf wird kompiliert…'
+preview_description = 'Verwendet dieselben Regeln wie die generierte Anwendungsnachricht'
+preview_edit_to_build = 'Bearbeiten Sie die Nachricht, um eine Vorschau zu erstellen.'
+preview_pseudo_active = 'Pseudo-Lokalisierungssimulation ist aktiv.'
+preview_rtl_active = 'Rechts-nach-links-Simulation ist aktiv.'
+preview_safe_markup = 'Semantisches Markup wird als Datenbaum angezeigt. Namen und Attribute werden niemals als vertrauenswürdiges HTML interpretiert.'
+preview_title = 'Vorschau'
+preview_unavailable = 'Nicht verfügbar'
+project_notes = 'Projektnotizen'
+project_wizard_add_language = 'Weitere Sprache hinzufügen'
+project_wizard_add_starter = 'Anfangsnachricht hinzufügen'
+project_wizard_add_starter_description = 'Erstellen Sie Application.Name in jeder Sprache.'
+project_wizard_additional_language = 'Zusätzliche Sprache'
+project_wizard_canonical_source = 'Kanonische Quelle'
+project_wizard_catalog_id = 'Katalog-ID'
+project_wizard_catalog_id_description = 'Kleinbuchstaben, Zahlen, Punkte und Bindestriche.'
+project_wizard_code_namespace = 'Code-Namensraum'
+project_wizard_compiler_validated = 'compiler-validiert'
+project_wizard_create_project = 'Projekt erstellen'
+project_wizard_default = 'Standard'
+project_wizard_description = 'Erstellen Sie compiler-valide Übersetzungen, ohne ein vorhandenes Verzeichnis zu überschreiben.'
+project_wizard_directory = 'Verzeichnis'
+project_wizard_directory_description = 'Geben Sie einen absoluten oder einen zum Editorprozess relativen Pfad ein.'
+project_wizard_enable_esm = 'ESM-Ausgabe aktivieren'
+project_wizard_enable_esm_description = 'Erzeugen Sie tree-shakeable Module für TypeScript- und Browseranwendungen.'
+project_wizard_files_to_create = 'Zu erstellende Dateien'
+project_wizard_generated_api = 'Generierte API und Ausgabe'
+project_wizard_generated_api_description = 'Diese Standardwerte funktionieren für die meisten .NET- und ESM-Nutzer.'
+project_wizard_generated_class = 'Generierte Klasse'
+project_wizard_initial_layer = 'Anfangsebene'
+project_wizard_invalid = 'Projekt ist ungültig'
+project_wizard_language_description = 'Eine Sprache wird vollständig unterstützt. Fügen Sie Übersetzungen jetzt oder später hinzu.'
+project_wizard_languages = 'Sprachen'
+project_wizard_new_directory = 'Neues Projektverzeichnis'
+project_wizard_no_overwrite = 'Der Editor erstellt ein neues Verzeichnis und überschreibt nie ein vorhandenes.'
+project_wizard_ready_create = 'Bereit zum Erstellen'
+project_wizard_remove_locale = 'Sprache entfernen'
+project_wizard_row = 'Zeile'
+project_wizard_source = 'Quelle'
+project_wizard_source_default = 'Quell-/Standardsprache'
+project_wizard_step_languages = 'Sprachen'
+project_wizard_step_project = 'Projekt'
+project_wizard_step_review = 'Prüfen'
+project_wizard_step_settings = 'Einstellungen'
+project_wizard_steps_aria_label = 'Schritte zur Projekterstellung'
+project_wizard_title = 'Neues Übersetzungsprojekt'
+project_wizard_where_live = 'Wo sollen die Übersetzungen liegen?'
+project_wizard_which_languages = 'Welche Sprachen verwendet dieses Projekt?'
+quality_csv_aria_label = 'CSV-Qualitätsbericht'
+quality_csv_order = 'CSV ist nach Schlüssel und Befundart sortiert.'
+quality_findings_across = 'Ergebnisse in'
+quality_report = 'Qualitätsbericht'
+quality_title = 'Qualität'
+recovered_drafts_restore = 'Entwürfe wiederherstellen'
+recovered_drafts_title = 'Nicht gespeicherte Arbeit wurde wiederhergestellt'
+recovery_complete = 'Geplante Änderung abschließen'
+recovery_eyebrow = 'Arbeitsbereich wiederherstellen'
+recovery_journal_for = 'Das Wiederherstellungsjournal für'
+recovery_journal_note = 'Beide Optionen verwenden das begrenzte lokale Journal. Es wird erst nach erfolgreicher Wiederherstellung entfernt.'
+recovery_lists = 'enthält'
+recovery_no_further_editing = 'Bis zur Behebung sind keine weiteren Änderungen möglich.'
+recovery_recovering = 'Wird wiederhergestellt…'
+recovery_restore_before = 'Dateien vor der Änderung wiederherstellen'
+recovery_title = 'Eine unterbrochene Änderung benötigt Ihre Entscheidung'
+repair_description = 'Bearbeiten Sie den Quelltext unten. Der kanonische Compiler muss ihn akzeptieren, bevor er die Datei ersetzen kann.'
+repair_document_aria_label = 'Fehlerhaftes Quelldokument'
+repair_failed = 'Reparatur fehlgeschlagen'
+repair_validate_save = 'Validieren und speichern'
+resource_document = 'Ressourcendokument'
+terminology_add_term = 'Begriff hinzufügen'
+terminology_description = 'Begriffe bleiben in der optionalen versionierten Begleitdatei und werden lokal geprüft. Es wird nichts an einen Dienst gesendet.'
+terminology_empty = 'Noch keine Terminologieeinträge.'
+terminology_locale = 'Sprache'
+terminology_locale_placeholder = 'Optional, z. B. de'
+terminology_no_note = 'Kein Hinweis'
+terminology_note = 'Hinweis'
+terminology_note_placeholder = 'Optionale Verwendungshinweise'
+terminology_preferred = 'Bevorzugte Übersetzung'
+terminology_preferred_placeholder = 'Speichern'
+terminology_remove_term = 'Begriff entfernen'
+terminology_save_workflow = 'Workflow speichern'
+terminology_source_placeholder = 'Speichern'
+terminology_source_term = 'Quellbegriff'
+terminology_title = 'Projektterminologie'
+validating = 'Wird validiert…'
+welcome_catalogs_below = 'Kataloge unterhalb dieser Arbeitsbereichsgrenze gefunden.'
+welcome_choose_catalog = 'Übersetzungskatalog auswählen'
+welcome_create_project = 'Neues Projekt erstellen'
+welcome_eyebrow = 'Arbeitsbereich einrichten'
+welcome_files_need_attention = 'Dateien benötigen Aufmerksamkeit'
+welcome_found = 'Wir haben'
+welcome_open_or_create = 'Öffnen Sie einen vorhandenen Arbeitsbereich oder erstellen Sie ein compiler-valides Projekt von Grund auf.'
+welcome_open_project = 'Übersetzungsprojekt öffnen'
+welcome_open_repair_editor = 'Reparatureditor öffnen'
+welcome_recent_projects = 'Zuletzt verwendete Projekte'
+welcome_repair_malformed_json = 'Fehlerhaften Quelltext reparieren'
+welcome_scan = 'Durchsuchen'
+welcome_stored_local_profile = 'Nur in Ihrem lokalen Anwendungsprofil gespeichert'
+welcome_traversal_note = 'Die Suche bleibt innerhalb dieser Grenze und ignoriert Links, Abhängigkeiten und erzeugte Ausgabe.'
+workspace_directory = 'Arbeitsbereichsverzeichnis'
+
+[ui.palette]
+about_diagnostics_information = 'Informationen und Diagnose'
+approve_message = 'Nachricht freigeben'
+approve_visible_messages = 'Sichtbare Nachrichten freigeben'
+create_new_project = 'Neues Projekt erstellen…'
+create_sanitized_diagnostic_bundle = 'Bereinigtes Diagnosepaket erstellen'
+disable_pseudo_localization_simulation = 'Pseudolokalisierung deaktivieren'
+discard_workflow_changes = 'Workflow-Änderungen verwerfen'
+enable_pseudo_localization_simulation = 'Pseudolokalisierung aktivieren'
+focus_message_search = 'Nachrichtensuche fokussieren'
+group_document = 'Dokument'
+group_help = 'Hilfe'
+group_review = 'Prüfung'
+group_view = 'Ansicht'
+group_workspace = 'Arbeitsbereich'
+hide_compiled_artifact_preview = 'Vorschau des kompilierten Artefakts ausblenden'
+import_or_export_interchange_files = 'Austauschdateien importieren oder exportieren…'
+interface_language_deutsch = 'Oberflächensprache · Deutsch'
+interface_language_english = 'Oberflächensprache · English'
+language = '''
+.input {$locale :string}
+{{Sprache · {$locale}}}
+'''
+mark_message_as_draft = 'Nachricht als Entwurf markieren'
+mark_message_as_needs_review = 'Nachricht zur Prüfung markieren'
+mark_message_as_translated = 'Nachricht als übersetzt markieren'
+mark_visible_messages_needs_review = 'Sichtbare Nachrichten zur Prüfung markieren'
+open_another_workspace = 'Anderen Arbeitsbereich öffnen…'
+open_project_terminology = 'Projektterminologie öffnen…'
+open_quality_report = 'Qualitätsbericht öffnen…'
+redo_saved_change = 'Gespeicherte Änderung wiederholen'
+reload_workspace_files = 'Arbeitsbereichsdateien neu laden'
+save_document = 'Dokument speichern'
+save_workflow_changes = 'Workflow-Änderungen speichern'
+show_compiled_artifact_preview = 'Vorschau des kompilierten Artefakts anzeigen'
+simulate_right_to_left_layout = 'Rechts-nach-links-Layout simulieren'
+simulate_right_to_left_layout_off = 'Simulation des Rechts-nach-links-Layouts ausschalten'
+switch_to_raw_json_mode = 'Zum Quelltextmodus wechseln'
+switch_to_translation_mode = 'Zum Übersetzungsmodus wechseln'
+theme = '''
+.input {$theme :string}
+{{Darstellung · {$theme}}}
+'''
+theme_dark = 'Dunkel'
+theme_light = 'Hell'
+theme_system = 'System'
+toggle_languages_section = 'Sprachbereich ein- oder ausblenden'
+toggle_messages_section = 'Nachrichtenbereich ein- oder ausblenden'
+undo_saved_change = 'Gespeicherte Änderung rückgängig machen'
+
+[ui.pattern]
+add = 'Hinzufügen'
+add_content = 'Inhalt hinzufügen'
+attribute_name = 'Attributname'
+attributes = 'Attribute'
+children_description = 'Kinder · als sichere semantische Daten dargestellt'
+compiler_default = 'Compilerstandard'
+content_type = 'Inhaltstyp'
+declaration = 'Deklaration'
+declaration_chip = 'Deklarations-Chip'
+format = 'Format'
+formatted_declaration = 'Formatierte Deklaration'
+formatter = 'Formatierer'
+inline_formatter = 'Inline-Formatierer'
+input = 'Eingabe'
+input_chip = 'Eingabe-Chip'
+markup = 'Markup'
+move_content_down = 'Inhalt nach unten verschieben'
+move_content_up = 'Inhalt nach oben verschieben'
+numeric = 'Numerisch'
+protected_input = 'Geschützte Eingabe'
+remove = 'Entfernen'
+remove_content = 'Inhalt entfernen'
+remove_name = '''
+.input {$name :string}
+{{{$name} entfernen}}
+'''
+semantic_markup = 'Semantisches Markup'
+semantic_name = 'Semantischer Name'
+text = 'Text'
+text_content = 'Textinhalt'
+unit = 'Einheit'
+value_for = 'Wert für'
+value_for_name = '''
+.input {$name :string}
+{{Wert für {$name}}}
+'''
+
+[ui.preview]
+sample = 'Beispiel'
+
+[ui.project]
+current = 'Aktuelles Projekt'
+label = 'Projekt'
+new = 'Neues Projekt'
+open_workspace = 'Arbeitsbereich öffnen'
+recent = 'Zuletzt verwendete Projekte'
+remove_locale = '''
+.input {$locale :string}
+{{Sprache {$locale} entfernen}}
+'''
+schema = 'Schema'
+
+[ui.quality]
+bidi_controls = 'Die Übersetzung enthält unsichtbare bidirektionale Steuerzeichen.'
+bidi_mixed = 'Die Übersetzung mischt links- und rechtsläufige Textabschnitte; prüfen Sie sie mit der Rechts-nach-links-Simulation.'
+identical = 'Die Übersetzung ist mit dem Ausgangstext identisch.'
+missing = 'Die Übersetzung fehlt.'
+report_locale = '''
+.input {$locale :string}
+{{Qualitätsbericht für {$locale}}}
+'''
+stale = 'Der Ausgangstext wurde nach dem Speichern dieses Prüfstatus geändert.'
+terminology = '''
+.input {$term :string}
+{{Der bevorzugte Begriff „{$term}“ fehlt.}}
+'''
+whitespace = 'Die Übersetzung enthält führende oder abschließende Leerzeichen.'
+
+[ui.resource]
+not_translated = 'Nicht übersetzt'
+
+[ui.review]
+state_approved = 'freigegeben'
+state_draft = 'Entwurf'
+state_needs_review = 'zu prüfen'
+state_translated = 'übersetzt'
+
+[ui.settings]
+about_diagnostics = 'Info und Diagnose'
+appearance = 'Erscheinungsbild'
+color_theme = 'Farbthema'
+dark = 'Dunkel'
+editor_settings = 'Editoreinstellungen'
+ember = 'Glut'
+english = 'Englisch'
+fjord = 'Fjord'
+german = 'Deutsch'
+interface_language = 'Oberflächensprache'
+light = 'Hell'
+localization_simulation = 'Lokalisierungssimulation'
+moss = 'Moos'
+pseudo_localization = 'Pseudolokalisierung'
+right_to_left = 'Rechts-nach-links-Layout'
+runic_gold = 'Runisches Gold'
+summary = '''
+.input {$appearance :string}
+.input {$locale :string}
+{{Editoreinstellungen, {$appearance}, Oberflächensprache {$locale}}}
+'''
+system = 'System'
+
+[ui.sidebar]
+description = 'Zeigt die mobile Seitenleiste an.'
+panel_shares = '''
+.input {$languages :integer}
+.input {$messages :integer}
+{{Sprachen {$languages} %, Nachrichten {$messages} %}}
+'''
+panels_languages = 'Sprachen'
+panels_languages_panel = 'Sprachenbereich'
+panels_messages = 'Nachrichten'
+panels_messages_panel = 'Nachrichtenbereich'
+panels_resize = 'Sprachen und Nachrichten größenändern'
+panels_resize_title = 'Zum Ändern der Größe ziehen · Doppelklick zum Zurücksetzen'
+title = 'Seitenleiste'
+
+[ui.terminology]
+remove_source = '''
+.input {$term :string}
+{{Begriff {$term} entfernen}}
+'''
+
+[ui.toolbar]
+discard_workflow = 'Workflowänderungen verwerfen'
+open_navigation = 'Editornavigation öffnen'
+redo = 'Wiederholen'
+redo_saved_change = 'Gespeicherte Änderung wiederherstellen'
+save_workflow = 'Workflow speichern'
+saving_workflow = 'Workflow wird gespeichert…'
+undo = 'Rückgängig'
+undo_saved_change = 'Gespeicherte Änderung rückgängig machen'
+
+[ui.translation]
+editor_add_translation = 'Diese Übersetzung hinzufügen…'
+editor_characters = 'Zeichen'
+editor_format_json = 'Quelltext-Leerraum vereinheitlichen'
+editor_raw_change_description = 'Änderungen hier betreffen das vollständige Ressourcendokument.'
+
+[ui.validation]
+compiler = 'Compiler'
+errors = 'Fehler'
+schema = 'Schema'
+validating = 'Wird validiert'
+validating_with_compiler = 'Validierung mit dem Runic-Compiler…'
+warnings = 'Warnungen'
+
+[ui.workflow]
+approved = 'Freigegeben'
+draft = 'Entwurf'
+empty_suggestions_privacy = 'Terminologie, Prüfanmerkungen, Quellkontext und Vorschläge aus dem Übersetzungsspeicher bleiben im Arbeitsbereich. Netzwerkanbieter sind standardmäßig deaktiviert und benötigen eine ausdrückliche künftige Arbeitsbereichsrichtlinie, bevor sie Text erhalten dürfen.'
+local_translation_memory = 'Lokaler Übersetzungsspeicher'
+needs_review = 'Prüfung erforderlich'
+no_issues = 'Keine Probleme gefunden'
+quality_checks = 'Qualitätsprüfungen'
+quality_report = 'Qualitätsbericht'
+reviewer_note = 'Anmerkung für Übersetzung / Prüfung'
+reviewer_note_placeholder = 'Optionaler Kontext für die nächste Prüfung…'
+source_changed = 'Quelle geändert'
+status = 'Status'
+suggestions_privacy = 'Vorschläge vergleichen nur Übersetzungen aus diesem Arbeitsbereich. Netzwerkanbieter sind deaktiviert und kein Übersetzungstext verlässt diese Anwendung.'
+terminology = 'Terminologie'
+title = 'Workflow'
+translated = 'Übersetzt'
+unsaved_changes = 'Ungespeicherte Workflowänderungen'
+
+[ui.workspace]
+issues = 'Probleme im Arbeitsbereich'
+malformed = 'fehlerhafte'
+repair = 'Reparieren'
+review_notes_unavailable = 'Prüfanmerkungen nicht verfügbar'

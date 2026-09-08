@@ -35,7 +35,7 @@ internal static class BuildIntegrationTests
         string projectPath = Path.Combine(custom, "runic.json");
         string project = File.ReadAllText(projectPath).Replace("\"schemaVersion\":1,", "\"schemaVersion\":1,\"sourceLayout\":\"locale-toml\",", StringComparison.Ordinal);
         File.WriteAllText(projectPath, project);
-        File.WriteAllText(Path.Combine(custom, "en.ToMl"), "Hello = 'Hello'\n");
+        File.WriteAllText(Path.Combine(custom, "en.ToMl"), "[ui.dialog]\nHello = 'Hello'\n");
         string consumerPath = temporary.Resolve("Consumer.csproj");
         string consumer = File.ReadAllText(consumerPath);
         int lastImport = consumer.LastIndexOf("<Import Project=", StringComparison.Ordinal);
@@ -50,12 +50,12 @@ internal static class BuildIntegrationTests
         Assert.Equal(0, unchanged.ExitCode, unchanged.Combined);
         Assert.Equal(firstWrite, File.GetLastWriteTimeUtc(stamp), "unchanged TOML build regenerated");
         Thread.Sleep(1_200);
-        File.WriteAllText(Path.Combine(custom, "en.ToMl"), "Hello = 'Welcome'\n");
+        File.WriteAllText(Path.Combine(custom, "en.ToMl"), "[ui.dialog]\nHello = 'Welcome'\n");
         ProcessResult edited = Build(temporary, noRestore: true);
         Assert.Equal(0, edited.ExitCode, edited.Combined);
         Assert.Contains("Welcome", File.ReadAllText(Path.Combine(output, "minimal.en.locale-v2.json")));
         string german = Path.Combine(custom, "de.TOML");
-        File.WriteAllText(german, "Hello = 'Hallo'\n");
+        File.WriteAllText(german, "[ui.dialog]\nHello = 'Hallo'\n");
         File.SetLastWriteTimeUtc(german, firstWrite.AddMinutes(-1));
         ProcessResult added = Build(temporary, noRestore: true);
         Assert.Equal(0, added.ExitCode, added.Combined);

@@ -22,7 +22,7 @@ if (urlOrPrepare === "--prepare") {
   }, null, 2) + "\n");
   for (const [locale, cancel, save] of [["de", "Abbrechen", "Speichern"], ["en", "Cancel", "Save"], ["fr", "Annuler", "Enregistrer"]]) {
     await writeFile(join(workspace, `${locale}.toml`), preservedComment +
-      `common_cancel = '${cancel}'\r\n# A comment between two logical messages.\r\ncommon_save = '${save}'${inlineComment}`);
+      `[common]\r\ncancel = '${cancel}'\r\n# A comment between two logical messages.\r\nsave = '${save}'${inlineComment}`);
   }
   console.log(`prepared real-host TOML fixture: ${workspace}`);
   process.exit(0);
@@ -161,7 +161,8 @@ try {
     "The second transform must consume the first transform's complete physical file.");
   const savedBytes = await readFile(diskPath, "utf8");
   assert.ok(savedBytes.includes("Queued cancel from the real editor") && savedBytes.includes("Queued save from the real editor"));
-  assert.ok(savedBytes.startsWith(preservedComment));
+  assert.ok(savedBytes.startsWith(preservedComment + "[common]\r\n"));
+  assert.ok(!/^common_(cancel|save)\s*=/m.test(savedBytes), "Logical IDs must not replace grouped TOML keys.");
   assert.ok(savedBytes.includes(inlineComment));
   assert.ok(savedBytes.includes("# A comment between two logical messages.\r\n"));
   assert.ok(!savedBytes.replaceAll("\r\n", "").includes("\n"), "Unchanged CRLF convention must survive.");
@@ -170,7 +171,7 @@ try {
   await waitFor(async () => (await editor().inputValue()) === "Queued cancel from the real editor", "first edit survives page reload");
   await select("common_save");
   assert.equal(await editor().inputValue(), "Queued save from the real editor");
-  console.log("PASS: real UI queues two logical TOML keys, saves one physical file, preserves comments/CRLF, and reloads both edits.");
+  console.log("PASS: real UI queues two grouped TOML keys, saves one physical file, preserves comments/CRLF, and reloads both edits.");
 
   stage = "external-file-conflict";
   await select("common_cancel");
@@ -199,7 +200,7 @@ try {
   console.log("PASS: real external revision conflict retains disk bytes and draft; stored conflict notice switches EN/DE.");
 
   stage = "malformed-toml-repair";
-  await writeFile(diskPath, 'common_cancel = "unterminated\n');
+  await writeFile(diskPath, '[common]\ncancel = "unterminated\n');
   await reloadFiles();
   await page.getByRole("button", { name: "Repair de.toml", exact: true }).click();
   const repair = page.getByRole("dialog");

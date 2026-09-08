@@ -26,6 +26,8 @@ internal static class GeneratorTests
 
     internal static void Register(TestRunner runner)
     {
+        runner.Add("grouped TOML paths preserve typed legacy accessors", GroupedTomlGenerationCompiles);
+        runner.Add("grouped TOML collisions reject ambiguous generated identifiers", GroupedTomlCollisions);
         runner.Add("locale TOML incremental membership updates generated catalogs", TomlMembershipChanges);
         runner.Add("locale TOML generates matching compilable source", TomlGenerationCompiles);
         runner.Add("locale TOML diagnostics retain physical document identity", TomlDiagnosticLocation);
@@ -45,6 +47,38 @@ internal static class GeneratorTests
 
     private static TestInput MessageInput(string text = Message, string path = "C:/repo/translations/en/FilesDeleted.mf2") =>
         new(path, "Mf2", text);
+
+    private static void GroupedTomlGenerationCompiles()
+    {
+        string project = Project.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"sourceLayout\": \"locale-toml\",", StringComparison.Ordinal);
+        GeneratorRun legacy = GeneratorTestHost.Run(ProjectInput(), MessageInput(Message, "C:/repo/translations/en/ui_dialog_FilesDeleted.mf2"));
+        string value = " = \u0027\u0027\u0027\n" + Message + "\u0027\u0027\u0027\n";
+        string[] documents =
+        [
+            "# Dialog messages\n[ui.dialog]\nFilesDeleted" + value,
+            "ui.dialog.FilesDeleted" + value,
+            "[ui]\ndialog.FilesDeleted" + value,
+            "ui_dialog_FilesDeleted" + value,
+        ];
+        foreach (string document in documents)
+        {
+            GeneratorRun run = GeneratorTestHost.Run(ProjectInput(project), new TestInput("C:/repo/translations/en.toml", "Toml", document));
+            Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+            Diagnostic[] errors = run.Compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
+            Assert.Equal(0, errors.Length, string.Join("\n", errors.Select(static error => error.ToString())));
+            Assert.Equal(Serialize(legacy), Serialize(run), "nested/dotted/flat paths preserve typed accessors and message bytes");
+        }
+    }
+
+    private static void GroupedTomlCollisions()
+    {
+        string project = Project.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"sourceLayout\": \"locale-toml\",", StringComparison.Ordinal);
+        GeneratorRun run = GeneratorTestHost.Run(ProjectInput(project),
+            new TestInput("C:/repo/translations/en.toml", "Toml", "ui_Greeting = 'Hello'\n[ui]\nGreeting = 'Hallo'\n"));
+        Assert.True(run.SingleResult.Diagnostics.Any(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error &&
+            diagnostic.Location.GetLineSpan().Path == "translations/en.toml"), "group collision did not identify physical TOML input");
+        Assert.Equal(0, run.SingleResult.GeneratedSources.Length, "ambiguous grouped identifiers generated source");
+    }
 
     private static void TomlMembershipChanges()
     {

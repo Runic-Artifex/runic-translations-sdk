@@ -1,1 +1,2 @@
-application_title = "__CLASS_NAME__\n"
+[application]
+title = '__CLASS_NAME__'

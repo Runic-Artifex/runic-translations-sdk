@@ -340,13 +340,9 @@ public static class TranslationWorkspaceMutation
             if (!legacy.Success) throw Error("The legacy project is invalid: " + string.Join("; ", legacy.Diagnostics.Select(item => item.Message)));
             foreach (Locale locale in Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
             {
-                var text = new StringBuilder();
-                foreach (FileState file in Messages.Where(file => file.Locale == locale.Tag).OrderBy(file => file.MessageId, StringComparer.Ordinal))
-                {
-                    TranslationLocaleWriter.RequireKey(file.MessageId);
-                    text.Append(file.MessageId).Append(" = ").Append(TranslationLocaleWriter.EncodeValue(Utf8.GetString(file.Bytes))).Append('\n');
-                }
-                Create($"{ProjectPrefix}{locale.Tag}.toml", Utf8.GetBytes(text.ToString()));
+                byte[] bytes = TranslationLocaleWriter.Render(Messages.Where(file => file.Locale == locale.Tag)
+                    .Select(file => new KeyValuePair<string, string>(file.MessageId, Utf8.GetString(file.Bytes))));
+                Create($"{ProjectPrefix}{locale.Tag}.toml", bytes);
             }
             foreach (FileState file in Messages) Delete(file);
             config["sourceLayout"] = "locale-toml";

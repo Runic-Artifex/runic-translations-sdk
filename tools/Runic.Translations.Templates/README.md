@@ -47,7 +47,7 @@ dotnet new runic-translations \
   --className AppText
 ```
 
-The item template creates `translations/runic.json` and a default-locale TOML file such as `translations/en.toml`. Each flat key maps to an MF2 string value. Add the matching `Runic.Translations` and `Runic.Translations.Build` packages; the build discovers the conventional directory without MSBuild items.
+The item template creates `translations/runic.json` and a default-locale TOML file such as `translations/en.toml`. TOML tables group MF2 string values: `[application] title` generates the logical message ID `application_title`. Nested tables, dotted keys and inline tables use the same underscore-joined mapping; colliding IDs are rejected. Add the matching `Runic.Translations` and `Runic.Translations.Build` packages; the build discovers the conventional directory without MSBuild items.
 
 Choose the project template for a complete .NET and ESM setup. Choose the item template when a project already owns package versions and build configuration. Use `runic-translations init` when you need multiple locales, explicit fallback edges, or optional starter content in one command.
 

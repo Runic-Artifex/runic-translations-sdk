@@ -25,7 +25,13 @@ translations/
 
 Declare the catalog, C# names, and base locale once in `translations/runic.json`.
 Set `sourceLayout` to `"locale-toml"`; locale tags come from the TOML filenames.
-Each locale file contains entries such as `application_title = 'Runic application'`.
+Group messages with TOML tables, for example:
+
+```toml
+[application]
+title = 'Runic application'
+```
+
 See the [TOML locale project convention](mf2-projects.md)
 for the complete config and supported authoring syntax. Add `.runic/` to
 `.gitignore` when Vite owns generation.
@@ -55,7 +61,8 @@ import { m } from 'virtual:runic-translations/app';
 document.querySelector('#app')!.textContent = m.application_title();
 ```
 
-Message keys are identifier-safe, so normal calls use property access.
+TOML key-path segments join with underscores: `[application] title` produces
+`m.application_title()`. Nested tables, dotted keys and inline tables use the same mapping.
 
 ## 5. Validate in CI
 

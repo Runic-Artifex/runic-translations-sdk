@@ -2,7 +2,9 @@
 
 Runic Translations uses `runic.json` project schema 1 with an explicit source
 layout. New projects set `sourceLayout: "locale-toml"` and store MF2 string values
-under flat message keys in sibling `{locale}.toml` files. Projects without the
+in sibling `{locale}.toml` files. Section tables, nested tables, dotted keys and inline tables group
+messages; identifier-safe path segments join with underscores into logical IDs.
+Flat keys remain supported, and collisions after joining are rejected. Projects without the
 field retain the historical `{locale}/{message_id}.mf2` layout for legacy reading
 and migration. Mixed layouts are rejected. JSON catalog manifests and JSON
 resource documents are not accepted authoring formats.

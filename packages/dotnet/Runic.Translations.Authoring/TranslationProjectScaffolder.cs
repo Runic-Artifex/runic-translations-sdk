@@ -36,7 +36,7 @@ public static class TranslationProjectScaffolder
         };
         {
             byte[] starter = request.IncludeStarterMessage
-                ? Utf8.GetBytes("application_title = " + TranslationLocaleWriter.EncodeValue(RequireValue(request.ClassName, "class name") + "\n") + "\n")
+                ? TranslationLocaleWriter.Render([new KeyValuePair<string, string>("application_title", RequireValue(request.ClassName, "class name"))])
                 : [];
             for (int index = 0; index < locales.Count; index++)
                 files.Add(new TranslationProjectFile($"{locales[index].Tag}.toml", starter));

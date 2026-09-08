@@ -9,6 +9,7 @@ internal static class CliIntegrationTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Add("CLI grouped TOML preserves flattened artifact contracts", GroupedTomlPreservesArtifacts);
         runner.Add("CLI migration previews then preserves generated semantics", MigrationPreservesSemantics);
         runner.Add("CLI help and invalid invocation use stable exit codes", HelpAndUsageExitCodes);
         runner.Add("CLI init creates and validates a one-locale TOML project", InitCreatesOneLocaleProject);
@@ -17,6 +18,20 @@ internal static class CliIntegrationTests
         runner.Add("CLI init supports an empty TOML project", InitWithoutStarterIsValid);
         runner.Add("CLI project mode validates and generates conventional MF2", ProjectModeValidatesAndGenerates);
         runner.Add("CLI schema writes exact bundled versioned schemas", SchemaWritesExactSchemas);
+    }
+
+    private static void GroupedTomlPreservesArtifacts()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations"));
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), "{\"schemaVersion\":1,\"sourceLayout\":\"locale-toml\",\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}\n");
+        string locale = temporary.Resolve("translations", "en.toml");
+        File.WriteAllText(locale, "ui_dialog_Greeting = 'Hello'\n");
+        ProcessResult flat = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated");
+        Assert.Equal(0, flat.ExitCode, flat.Combined);
+        File.WriteAllText(locale, "# Dialog copy\n[ui.dialog]\nGreeting = 'Hello'\n");
+        ProcessResult grouped = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "generated");
+        Assert.Equal(0, grouped.ExitCode, grouped.Combined);
     }
 
     private static void MigrationPreservesSemantics()

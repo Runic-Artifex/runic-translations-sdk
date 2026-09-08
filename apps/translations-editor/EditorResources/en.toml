@@ -1,754 +1,1099 @@
-app_add_message = "Add message\n"
-app_advanced = "Variants\n"
-app_all = "All\n"
-app_approve_translations = "Approve translations\n"
-app_default_locale = "Source locale\n"
-app_diagnostics = "Diagnostics\n"
-app_eyebrow = "Runic Translations Editor\n"
-app_invalid = "Resolve validation errors before saving\n"
-app_mark_for_review = "Mark for review\n"
-app_message_bulk_actions = "Message bulk actions\n"
-app_message_filters = "Message filters\n"
-app_messages = "Messages\n"
-app_missing = "Missing\n"
-app_missing_translation = "Missing translation\n"
-app_no_matching_messages = "No matching messages\n"
-app_no_results = "No messages match this view\n"
-app_no_selection = "Choose a message to start translating\n"
-app_raw = "Source\n"
-app_reload = "Reload\n"
-app_review = "Review\n"
-app_save = "Save document\n"
-app_saved = "Saved\n"
-app_saving = "Saving…\n"
-app_search = "Search messages…\n"
-app_simple = "Translation\n"
-app_stale = "Stale\n"
-app_structured = "Structured\n"
-app_title = "Translations\n"
-app_translated = "Translated\n"
-app_unsaved = "Unsaved changes\n"
-app_valid = "Ready to save\n"
-app_visible_messages = "Visible messages\n"
-app_workspace = "Workspace\n"
-ui_a11y_toggle_sidebar = "Toggle sidebar\n"
-ui_artifact_preview_aria_label = "Compiled artifact preview\n"
-ui_artifact_preview_as_generated = "As generated\n"
-ui_artifact_preview_close = "Close compiled artifact preview\n"
-ui_artifact_preview_compiling = "Compiling the current draft…\n"
-ui_artifact_preview_description = "In-editor rendering of the compiled message output. This never launches an external application.\n"
-ui_artifact_preview_edit_to_preview = "Edit the message to build an artifact preview.\n"
-ui_artifact_preview_no_simulation = "no simulation\n"
-ui_artifact_preview_note = "Both columns run the same compiler-normalized AST pipeline; markup stays semantic data and is never interpreted as HTML.\n"
-ui_artifact_preview_pseudo_localization = "pseudo-localization\n"
-ui_artifact_preview_rtl = "RTL\n"
-ui_artifact_preview_simulated = "Simulated\n"
-ui_artifact_preview_title = "Compiled artifact preview\n"
-ui_artifact_preview_untransformed = "untransformed\n"
-ui_command_palette_commands_aria_label = "Commands\n"
-ui_command_palette_description = "Search editor commands and run them\n"
-ui_command_palette_no_matches = "No matching command.\n"
-ui_command_palette_placeholder = "Type a command…\n"
-ui_command_palette_search_aria_label = "Search commands\n"
-ui_command_palette_title = "Command palette\n"
-ui_common_cancel = "Cancel\n"
-ui_common_close = "Close\n"
-ui_common_name = "Name\n"
-ui_common_type = "Type\n"
-ui_composer_add_case = "Add case\n"
-ui_composer_add_custom_case = "Add a custom case\n"
-ui_composer_add_exact_number_case = "Add an exact-number case\n"
-ui_composer_add_formatter = "Add formatter\n"
-ui_composer_add_input = "Add input\n"
-ui_composer_add_plural_forms = "Add plural forms\n"
-ui_composer_add_selection_rule = "Add selection rule\n"
-ui_composer_add_translation_case = "Add translation case\n"
-ui_composer_advanced_structure = "Advanced structure\n"
-ui_composer_advanced_structure_description = "Inputs, formatters, and selection rules used by the translations above.\n"
-ui_composer_apply_source = "Apply source\n"
-ui_composer_case_already_exists = "This case already exists.\n"
-ui_composer_cases = "cases\n"
-ui_composer_choose_when_used = "Choose when this translation is used\n"
-ui_composer_chooses_by = "Chooses by\n"
-ui_composer_compiler_default = "Compiler default\n"
-ui_composer_custom_case_description = "Enter the exact value that should select this translation.\n"
-ui_composer_custom_value = "Custom value…\n"
-ui_composer_default_format = "Default format\n"
-ui_composer_default_translation = "Default translation\n"
-ui_composer_down = "down\n"
-ui_composer_equals_label = "equals\n"
-ui_composer_exact_case_description = "Enter the number that should select this translation instead of the locale’s normal plural form.\n"
-ui_composer_exact_number = "Exact number…\n"
-ui_composer_exact_number_hint = "Use =0 for an exact number.\n"
-ui_composer_exact_or_custom_match = "Exact or custom match\n"
-ui_composer_exactly = "Exactly\n"
-ui_composer_fallback = "Fallback\n"
-ui_composer_form = "form\n"
-ui_composer_format = "Format\n"
-ui_composer_formatter = "Formatter\n"
-ui_composer_input = "Input\n"
-ui_composer_inputs = "Inputs\n"
-ui_composer_inputs_description = "Values supplied by application code. Translators insert them by typing\n"
-ui_composer_is = "is\n"
-ui_composer_message_source = "Message source\n"
-ui_composer_move = "Move\n"
-ui_composer_number_form = "Number form\n"
-ui_composer_number_form_of = "Used for the language’s number form of\n"
-ui_composer_numeric = "Numeric\n"
-ui_composer_one_translation = "One translation is used in every situation\n"
-ui_composer_ordinal = "ordinal\n"
-ui_composer_ordinal_form_of = "Used for the language’s ordinal form of\n"
-ui_composer_other = "Other\n"
-ui_composer_plural = "plural\n"
-ui_composer_plural_forms_description = "If wording changes with a number, add plural forms and translate each case separately.\n"
-ui_composer_plural_message = "Plural message\n"
-ui_composer_remove = "Remove\n"
-ui_composer_remove_formatter = "Remove formatter\n"
-ui_composer_remove_input = "Remove input\n"
-ui_composer_remove_selector = "Remove selector\n"
-ui_composer_required_fallback = "Required fallback\n"
-ui_composer_required_fallback_description = "Every structured message needs this final fallback, so its matching rule cannot be changed or removed.\n"
-ui_composer_required_fallback_title = "The fallback translation is required\n"
-ui_composer_reusable_formatters = "Reusable formatters\n"
-ui_composer_reusable_formatters_description = "Optional named formats for dates, numbers, relative time, and other typed values.\n"
-ui_composer_rule_name = "Rule name\n"
-ui_composer_selection_rules = "Selection rules\n"
-ui_composer_selection_rules_description = "Rules decide which translation case is used for a given input.\n"
-ui_composer_shown_whenever_used = "Shown whenever this message is used.\n"
-ui_composer_singular_form_of = "Used for the language’s singular form of\n"
-ui_composer_structured_case_description = "This case contains formatting or semantic markup. Edit its content blocks below.\n"
-ui_composer_structured_message_source = "Structured message source\n"
-ui_composer_structured_message_source_description = "An escape hatch for exact MF2 source editing.\n"
-ui_composer_toggle_advanced_structure = "Toggle advanced structure\n"
-ui_composer_translate_message = "Translate the message\n"
-ui_composer_translation = "translation\n"
-ui_composer_translation_for = "Translation for\n"
-ui_composer_unit = "Unit\n"
-ui_composer_up = "up\n"
-ui_composer_used_for_every = "Used for every\n"
-ui_composer_uses_input = "Uses input\n"
-ui_composer_value = "Value\n"
-ui_composer_value_without_specific = "value without a more specific translation\n"
-ui_composer_variables_become_chips = "become protected, inspectable chips in the sentence.\n"
-ui_composer_when = "When\n"
-ui_composer_when_used = "When is this translation used?\n"
-ui_composer_write_naturally = "Write naturally. Variables such as\n"
-ui_confirm_apply_review = "Discard unsaved document drafts, repair text, and workflow/terminology changes to apply this review import?\n"
-ui_confirm_apply_xliff = "Discard unsaved document drafts, repair text, and workflow/terminology changes to apply this XLIFF import?\n"
-ui_confirm_change_workspace = "Discard unsaved document drafts, repair text, and workflow/terminology changes to make this structural workspace change?\n"
-ui_confirm_create_project = "Discard unsaved document drafts, repair text, and workflow/terminology changes to create a new project?\n"
-ui_confirm_external_merge = "Discard unsaved repair text and workflow/terminology changes to reload the external file and keep the merged document draft?\n"
-ui_confirm_open_workspace = "Discard unsaved document drafts, repair text, and workflow/terminology changes to open another workspace?\n"
-ui_confirm_reload_workspace = "Discard unsaved document drafts, repair text, and workflow/terminology changes to reload the workspace?\n"
-ui_count_affected_files = ".input {$count :integer select=plural}\n.match $count\none {{One affected file}}\n* {{{$count} affected files}}\n"
-ui_count_cases = ".input {$count :integer select=plural}\n.match $count\none {{One case}}\n* {{{$count} cases}}\n"
-ui_count_catalogs_found = ".input {$count :integer select=plural}\n.match $count\none {{Found one catalog below this directory.}}\n* {{Found {$count} catalogs below this directory.}}\n"
-ui_count_characters = ".input {$count :integer select=plural}\n.match $count\none {{One character}}\n* {{{$count} characters}}\n"
-ui_count_errors = ".input {$count :integer select=plural}\n.match $count\none {{one error}}\n* {{{$count} errors}}\n"
-ui_count_exported_files = ".input {$count :integer select=plural}\n.match $count\none {{Exported one file.}}\n* {{Exported {$count} files.}}\n"
-ui_count_exported_reviews = ".input {$count :integer select=plural}\n.input {$path :string}\n.match $count\none {{Exported one review entry to {$path}.}}\n* {{Exported {$count} review entries to {$path}.}}\n"
-ui_count_files_attention = ".input {$count :integer select=plural}\n.match $count\none {{One file needs attention.}}\n* {{{$count} files need attention.}}\n"
-ui_count_locales = ".input {$count :integer select=plural}\n.match $count\none {{one locale}}\n* {{{$count} locales}}\n"
-ui_count_malformed_files = ".input {$count :integer select=plural}\n.match $count\none {{One malformed file}}\n* {{{$count} malformed files}}\n"
-ui_count_messages = ".input {$count :integer select=plural}\n.match $count\none {{one message}}\n* {{{$count} messages}}\n"
-ui_count_project_locales = ".input {$count :integer select=plural}\n.input {$version :integer}\n.match $count\none {{One locale · schema v{$version}}}\n* {{{$count} locales · schema v{$version}}}\n"
-ui_count_project_summary = ".input {$languages :integer select=plural}\n.input {$files :integer select=plural}\n.match $languages $files\none one {{One language · one file · compiler validated}}\none * {{One language · {$files} files · compiler validated}}\n* one {{{$languages} languages · one file · compiler validated}}\n* * {{{$languages} languages · {$files} files · compiler validated}}\n"
-ui_count_quality_summary = ".input {$findings :integer select=plural}\n.input {$messages :integer select=plural}\n.match $findings $messages\none one {{One finding across one message. CSV columns follow the report order.}}\none * {{One finding across {$messages} messages. CSV columns follow the report order.}}\n* one {{{$findings} findings across one message. CSV columns follow the report order.}}\n* * {{{$findings} findings across {$messages} messages. CSV columns follow the report order.}}\n"
-ui_count_recovered_drafts = ".input {$count :integer select=plural}\n.match $count\none {{One document draft was found in local application storage.}}\n* {{{$count} document drafts were found in local application storage.}}\n"
-ui_count_recovery_journal = ".input {$count :integer select=plural}\n.input {$catalog :string}\n.match $count\none {{The journal for {$catalog} lists one file. No further editing is allowed until it is resolved.}}\n* {{The journal for {$catalog} lists {$count} files. No further editing is allowed until it is resolved.}}\n"
-ui_count_resource_variants = ".input {$count :integer select=plural}\n.match $count\none {{Structured message · one variant}}\n* {{Structured message · {$count} variants}}\n"
-ui_count_review_marked = ".input {$count :integer select=plural}\n.input {$state :string}\n.match $count\none {{One visible message marked {$state}. Save workflow changes to commit.}}\n* {{{$count} visible messages marked {$state}. Save workflow changes to commit.}}\n"
-ui_count_state_bytes = ".input {$count :integer select=plural}\n.match $count\none {{One byte}}\n* {{{$count} bytes}}\n"
-ui_count_state_drafts = ".input {$count :integer select=plural}\n.match $count\none {{One recovery-draft record}}\n* {{{$count} recovery-draft records}}\n"
-ui_count_state_entries = ".input {$count :integer select=plural}\n.match $count\none {{One entry}}\n* {{{$count} entries}}\n"
-ui_count_state_preferences = ".input {$count :integer select=plural}\n.match $count\none {{One preference}}\n* {{{$count} preferences}}\n"
-ui_count_state_recent = ".input {$count :integer select=plural}\n.match $count\none {{One recent-project record}}\n* {{{$count} recent-project records}}\n"
-ui_count_state_removed = ".input {$count :integer select=plural}\n.match $count\none {{Removed one local editor-state entry.}}\n* {{Removed {$count} local editor-state entries.}}\n"
-ui_count_warnings = ".input {$count :integer select=plural}\n.match $count\none {{One warning}}\n* {{{$count} warnings}}\n"
-ui_editor_mode_editing_mode = "Editing mode\n"
-ui_feedback_change_failed = "The workspace change could not be committed.\n"
-ui_feedback_change_invalid = "The change is not valid.\n"
-ui_feedback_clear_state_confirm = "Remove the editor's saved preferences, recent-project list, and crash-recovery drafts from this user profile? Workspace files and currently open in-memory work will not be changed.\n"
-ui_feedback_deleted_merge = ".input {$path :string}\n{{The externally deleted file '{$path}' cannot receive a merged draft.}}\n"
-ui_feedback_diagnostics_copied = "Copied the diagnostic bundle path.\n"
-ui_feedback_diagnostics_copy_failed = "The diagnostic bundle path could not be copied. Select it below and copy it manually.\n"
-ui_feedback_diagnostics_delete_confirm = "Delete this sanitized diagnostic bundle? This does not affect workspace files or editor state.\n"
-ui_feedback_diagnostics_delete_failed = "The diagnostic bundle could not be deleted.\n"
-ui_feedback_diagnostics_deleted = "Deleted the diagnostic bundle.\n"
-ui_feedback_diagnostics_failed = "The diagnostic bundle could not be created.\n"
-ui_feedback_diagnostics_open_failed = "The diagnostic bundle location could not be opened.\n"
-ui_feedback_diagnostics_opened = "Opened the diagnostic bundle location.\n"
-ui_feedback_diagnostics_saved = "Sanitized diagnostics were saved in this user's application-data directory.\n"
-ui_feedback_discard_repair = "Discard unsaved repair text?\n"
-ui_feedback_locale_duplicate = "Each language must use a different locale tag.\n"
-ui_feedback_locale_required = "Every language needs a locale tag.\n"
-ui_feedback_namespace_required = "Namespace and class name are required.\n"
-ui_feedback_newer_draft = "Saved the earlier draft; your newer edit is still open.\n"
-ui_feedback_no_resource = "This locale has no resource document to edit.\n"
-ui_feedback_preview_failed = "The compiler could not build a preview.\n"
-ui_feedback_project_created = "Project created\n"
-ui_feedback_project_directory_required = "Choose a new directory and enter a catalog ID.\n"
-ui_feedback_project_failed = "The project could not be created.\n"
-ui_feedback_project_invalid = "The proposed project is invalid.\n"
-ui_feedback_recovery_completed = "Interrupted change completed\n"
-ui_feedback_recovery_failed = "Workspace recovery failed.\n"
-ui_feedback_recovery_reload = "Recovery completed; reload the workspace to refresh it.\n"
-ui_feedback_recovery_rollback = "Interrupted change rolled back\n"
-ui_feedback_redo_failed = "The saved change could not be redone.\n"
-ui_feedback_redo_saved = "Saved change redone\n"
-ui_feedback_repair_failed = "The repaired document could not be saved.\n"
-ui_feedback_repair_invalid = "The document is still invalid.\n"
-ui_feedback_repair_open_confirm = "Discard unsaved repair text and open another document?\n"
-ui_feedback_review_applied = "Review import applied.\n"
-ui_feedback_review_failed = "The review import could not be applied.\n"
-ui_feedback_review_save_failed = "Review data could not be saved.\n"
-ui_feedback_save_failed = ".input {$kind :string}\n{{Save failed ({$kind}).}}\n"
-ui_feedback_state_load_failed = ".input {$error :string}\n{{The per-user editor state could not be loaded. {$error}}}\n"
-ui_feedback_state_recovered = "Recovered from an unreadable local editor-state record; saved preferences and recovery drafts were reset.\n"
-ui_feedback_undo_failed = "The saved change could not be undone.\n"
-ui_feedback_undo_saved = "Saved change undone\n"
-ui_feedback_workflow_saved = "Workflow sidecar saved\n"
-ui_feedback_workspace_directory_required = "Enter a workspace directory.\n"
-ui_feedback_workspace_open_failed = "The workspace could not be opened.\n"
-ui_feedback_workspace_updated = "Workspace updated\n"
-ui_feedback_xliff_applied = "XLIFF import applied.\n"
-ui_feedback_xliff_failed = "The XLIFF import could not be applied.\n"
-ui_inline_after_text = "after text\n"
-ui_inline_after_text_index = ".input {$index :integer}\n{{after text {$index}}}\n"
-ui_inline_after_variable = "after variable\n"
-ui_inline_after_variable_name = ".input {$name :string}\n{{after variable {$name}}}\n"
-ui_inline_at_beginning = "at the beginning\n"
-ui_inline_click_to_inspect = "Click to inspect.\n"
-ui_inline_close_name_settings = ".input {$name :string}\n{{Close {$name} settings}}\n"
-ui_inline_close_variable_settings = "Close variable settings\n"
-ui_inline_compiler_default = "Compiler default\n"
-ui_inline_create_variable = "Create new variable\n"
-ui_inline_default_format = "Default format\n"
-ui_inline_earlier = "earlier\n"
-ui_inline_from_this_translation = "from this translation\n"
-ui_inline_insert = "Insert\n"
-ui_inline_insert_at = ".input {$position :string}\n{{Insert {$position}}}\n"
-ui_inline_later = "later\n"
-ui_inline_move = "Move\n"
-ui_inline_move_name_earlier = ".input {$name :string}\n{{Move {$name} earlier}}\n"
-ui_inline_move_name_later = ".input {$name :string}\n{{Move {$name} later}}\n"
-ui_inline_move_variable_earlier = "Move variable earlier\n"
-ui_inline_move_variable_later = "Move variable later\n"
-ui_inline_open_settings = "Open settings.\n"
-ui_inline_remove = "Remove\n"
-ui_inline_remove_name = ".input {$name :string}\n{{Remove {$name} from this translation}}\n"
-ui_inline_remove_variable = "Remove variable from this translation\n"
-ui_inline_settings = "settings\n"
-ui_inline_text = "Text\n"
-ui_inline_text_index = ".input {$label :string}\n.input {$index :integer}\n{{{$label}, text {$index}}}\n"
-ui_inline_type = "type\n"
-ui_inline_variable = "Variable\n"
-ui_inline_variable_inspect = ".input {$name :string}\n{{Variable {$name}. Click to inspect.}}\n"
-ui_inline_variable_settings = ".input {$name :string}\n{{Variable {$name}. Open settings.}}\n"
-ui_inline_write_text = "Write text…\n"
-ui_interchange_absent_from_import = "absent from the import\n"
-ui_interchange_added = "added\n"
-ui_interchange_apply_review_once = "Apply this review import once\n"
-ui_interchange_apply_xliff_once = "Apply this XLIFF import once\n"
-ui_interchange_before_after = "Before → after\n"
-ui_interchange_bytes = "bytes\n"
-ui_interchange_change = "Change\n"
-ui_interchange_changed = "changed\n"
-ui_interchange_default_layer = "default layer\n"
-ui_interchange_description = "Export portable XLIFF 2.1 or review JSON, then preview every import before it can change the workspace. Export paths stay inside the open workspace; import paths may be absolute or workspace-relative.\n"
-ui_interchange_export_directory = "Export directory\n"
-ui_interchange_export_review_json = "Export review JSON\n"
-ui_interchange_export_xliff = "Export XLIFF\n"
-ui_interchange_exported = "Exported\n"
-ui_interchange_files = "files\n"
-ui_interchange_first_changes_only = "Only the first 256 changes are displayed; the counts above include the entire import.\n"
-ui_interchange_import_refusal = "Import refusal\n"
-ui_interchange_key = "Key\n"
-ui_interchange_locale = "Locale\n"
-ui_interchange_non_semantic_notes = "Non-semantic export notes\n"
-ui_interchange_preview_review_import = "Preview review import\n"
-ui_interchange_preview_xliff_import = "Preview XLIFF import\n"
-ui_interchange_review_description = "Moves workflow state, notes, and approved-source evidence without replacing translation text. Local terminology remains local to the workspace.\n"
-ui_interchange_review_entries = "review entries\n"
-ui_interchange_review_export_failed = "Review JSON export failed.\n"
-ui_interchange_review_export_path = "Review JSON path\n"
-ui_interchange_review_file_to_import = "Review JSON file to import\n"
-ui_interchange_review_import_refused = "The review import was refused.\n"
-ui_interchange_review_title = "Review workflow JSON\n"
-ui_interchange_semantic_loss = "Semantic interchange loss\n"
-ui_interchange_state = "State\n"
-ui_interchange_summary = ".input {$added :integer}\n.input {$changed :integer}\n.input {$removed :integer}\n{{Added: {$added} · changed: {$changed} · absent from import: {$removed}}}\n"
-ui_interchange_target = "Target\n"
-ui_interchange_title = "Interchange\n"
-ui_interchange_to = "to\n"
-ui_interchange_xliff_description = "Export writes one target-locale document. Import always shows the proposed text and review-state changes first.\n"
-ui_interchange_xliff_export_failed = "XLIFF export failed.\n"
-ui_interchange_xliff_file_to_import = "XLIFF file to import\n"
-ui_interchange_xliff_import_refused = "The XLIFF import was refused.\n"
-ui_interchange_xliff_title = "XLIFF 2.1 translation files\n"
-ui_loading = "Loading\n"
-ui_locale_coverage = "Locale coverage\n"
-ui_locale_falls_back_to = "Falls back to\n"
-ui_locale_languages = "Languages\n"
-ui_locale_manage = "Manage languages\n"
-ui_locale_no_language = "no language\n"
-ui_locale_none = "none\n"
-ui_locale_source = "source\n"
-ui_locale_source_language = "Source language\n"
-ui_locale_translated = "translated\n"
-ui_message_heading_delete = "Delete\n"
-ui_message_heading_delete_title = "Delete this message\n"
-ui_message_heading_duplicate = "Duplicate\n"
-ui_message_heading_duplicate_title = "Duplicate this message\n"
-ui_message_heading_falls_back_to = "falls back to\n"
-ui_message_heading_rename = "Rename\n"
-ui_message_heading_rename_title = "Rename or move this message\n"
-ui_message_toolbar_search_messages = "Search messages\n"
-ui_page_about_bundle_no_upload = "The application never uploads this bundle. Sharing it is an explicit action outside the editor.\n"
-ui_page_about_bytes = "bytes\n"
-ui_page_about_clear_local_state = "Clear local state\n"
-ui_page_about_clear_local_state_note = "Clearing affects only future recovery and launches; it does not modify workspace files or discard the work currently open in this window.\n"
-ui_page_about_copy_path = "Copy path\n"
-ui_page_about_create_bundle = "Create diagnostic bundle\n"
-ui_page_about_creating_bundle = "Creating bundle…\n"
-ui_page_about_delete_bundle = "Delete bundle\n"
-ui_page_about_description = "Application information and privacy-safe diagnostics.\n"
-ui_page_about_development_build = "development build\n"
-ui_page_about_diagnostic_bundle = "Diagnostic bundle\n"
-ui_page_about_diagnostic_bundle_description = "The zip contains version/runtime information, catalog counts, and grouped diagnostic IDs. It excludes workspace paths, file names, message source, and translations."
-ui_page_about_diagnostic_bundle_path = "Diagnostic bundle path\n"
-ui_page_about_diagnostic_bundle_title = "Sanitized diagnostic bundle\n"
-ui_page_about_entries = "entries\n"
-ui_page_about_license_note = "Runic Translations is MIT licensed. The packaged application includes LICENSE.txt and THIRD-PARTY-NOTICES.md.\n"
-ui_page_about_local_state = "Local editor state\n"
-ui_page_about_local_state_description = "Stored only in this user’s application profile. The inspection never reveals paths or draft text.\n"
-ui_page_about_preferences = "preferences\n"
-ui_page_about_product = "Runic Translations Editor\n"
-ui_page_about_reading = "Reading application information…\n"
-ui_page_about_recent_project_records = "recent-project records\n"
-ui_page_about_recovered_unreadable = "recovered from an unreadable record\n"
-ui_page_about_recovery_draft_records = "recovery-draft records\n"
-ui_page_about_reveal_location = "Reveal location\n"
-ui_page_about_runtime = "Runtime\n"
-ui_page_about_runtime_identifier = "Runtime identifier\n"
-ui_page_about_source_revision = "Source revision\n"
-ui_page_about_system = "System\n"
-ui_page_about_update_channel = "Update channel\n"
-ui_page_about_version = "Version\n"
-ui_page_back = "Back\n"
-ui_page_browse = "Browse…\n"
-ui_page_cancel = "Cancel\n"
-ui_page_choosing = "Choosing…\n"
-ui_page_close = "Close\n"
-ui_page_continue = "Continue\n"
-ui_page_creating = "Creating…\n"
-ui_page_discard = "Discard\n"
-ui_page_done = "Done\n"
-ui_page_empty_selection_description = "Choose a message from the sidebar to review or edit its translation.\n"
-ui_page_errors = "errors\n"
-ui_page_external_changes_compare_merge = "Compare / merge\n"
-ui_page_external_changes_reload_files = "Reload files\n"
-ui_page_external_changes_reload_latest = "Reload to read the latest versions.\n"
-ui_page_external_changes_title = "Files changed outside the editor\n"
-ui_page_external_changes_unsaved_intact = "Your local drafts, repair text, and workflow changes are still intact.\n"
-ui_page_external_compare_current_disk = "Current disk\n"
-ui_page_external_compare_deleted_externally = "File was deleted externally.\n"
-ui_page_external_compare_description = "Compare the editor base with the current file, then keep or merge the change.\n"
-ui_page_external_compare_editor_base = "Editor base\n"
-ui_page_external_compare_merged_draft = "Merged draft\n"
-ui_page_external_compare_not_previously_loaded = "File was not previously loaded.\n"
-ui_page_external_compare_reload_keep_merged = "Reload base and keep merged draft\n"
-ui_page_fatal_could_not_open = "Could not open this translation workspace\n"
-ui_page_fatal_no_catalog = "No Runic Translations catalog was found.\n"
-ui_page_fatal_open_another_workspace = "Open another workspace\n"
-ui_page_fatal_recovery_refresh = "Recovery completed; reload the workspace to refresh it.\n"
-ui_page_fatal_recovery_reload_required = "Recovery completed; reload required\n"
-ui_page_file = "file\n"
-ui_page_files = "files\n"
-ui_page_healthy = "Healthy\n"
-ui_page_interchange = "Interchange\n"
-ui_page_interface_language = "Interface language\n"
-ui_page_keep_current_view = "Keep current view\n"
-ui_page_locales = "locales\n"
-ui_page_messages = "messages\n"
-ui_page_meta_description = "A focused desktop editor for Runic Translations workspaces\n"
-ui_page_mutation_add_language = "Add a language\n"
-ui_page_mutation_affected = "affected\n"
-ui_page_mutation_change_fallback = "Change a fallback\n"
-ui_page_mutation_change_fallback_relationships = "Change fallback relationships\n"
-ui_page_mutation_checking = "Checking…\n"
-ui_page_mutation_commit = "Commit change\n"
-ui_page_mutation_committing = "Committing…\n"
-ui_page_mutation_copy_starter_values = "Copy starter values from\n"
-ui_page_mutation_copy_starter_values_description = "Copied text keeps the new catalog compiler-valid and can then be translated.\n"
-ui_page_mutation_delete = "Delete\n"
-ui_page_mutation_delete_description = "The message will be removed from every locale and layer. The preview below lists every file that will change.\n"
-ui_page_mutation_delete_message = "Delete a message\n"
-ui_page_mutation_description = "Compiler-backed workspace change. Review the affected files before committing.\n"
-ui_page_mutation_duplicate_key = "Duplicate key\n"
-ui_page_mutation_duplicate_message = "Duplicate a message\n"
-ui_page_mutation_existing_key = "Existing key\n"
-ui_page_mutation_fallback = "Fallback\n"
-ui_page_mutation_files_deleted = "Files will be deleted\n"
-ui_page_mutation_files_deleted_description = "All resource documents for this locale will be deleted after the preview is confirmed.\n"
-ui_page_mutation_initial_text = "Initial text\n"
-ui_page_mutation_initial_text_description = "The initial value is added to every language so strict projects stay valid.\n"
-ui_page_mutation_initial_text_placeholder = "Pay now\n"
-ui_page_mutation_invalid = "Change is not valid\n"
-ui_page_mutation_irreversible_confirm = "I understand this workspace change cannot be undone.\n"
-ui_page_mutation_irreversible_description = "It is excluded from the local undo history. Review the listed files before continuing.\n"
-ui_page_mutation_language = "Language\n"
-ui_page_mutation_language_operation = "Language operation\n"
-ui_page_mutation_language_to_remove = "Language to remove\n"
-ui_page_mutation_layer = "Layer\n"
-ui_page_mutation_message_key = "Message key\n"
-ui_page_mutation_message_key_description = "Use dots to organize messages into groups.\n"
-ui_page_mutation_new_key_group_path = "New key or group path\n"
-ui_page_mutation_new_locale_tag = "New locale tag\n"
-ui_page_mutation_operation_preview = "Operation preview\n"
-ui_page_mutation_preview = "Preview change\n"
-ui_page_mutation_redirect_fallbacks = "Redirect dependent fallbacks to\n"
-ui_page_mutation_remove_language = "Remove a language\n"
-ui_page_mutation_rename_description = "The change is applied across every locale and layer where the source message exists.\n"
-ui_page_mutation_rename_move_message = "Rename or move a message\n"
-ui_page_no_document = "no document\n"
-ui_page_open = "Open\n"
-ui_page_open_project_action = "Open workspace\n"
-ui_page_open_project_description = "Catalogs are discovered below this workspace boundary. You will choose one if several are found.\n"
-ui_page_open_project_title = "Open translation project\n"
-ui_page_opening = "Opening…\n"
-ui_page_preview_compiling = "Compiling…\n"
-ui_page_preview_compiling_draft = "Compiling the current draft…\n"
-ui_page_preview_description = "Uses the same rules as the generated application message\n"
-ui_page_preview_edit_to_build = "Edit the message to build a preview.\n"
-ui_page_preview_pseudo_active = "Pseudo-localization simulation is active.\n"
-ui_page_preview_rtl_active = "Right-to-left simulation is active.\n"
-ui_page_preview_safe_markup = "Semantic markup is displayed as a data tree. Names and attributes are never interpreted as trusted HTML.\n"
-ui_page_preview_title = "Preview\n"
-ui_page_preview_unavailable = "Unavailable\n"
-ui_page_project_notes = "Project notes\n"
-ui_page_project_wizard_add_language = "Add another language\n"
-ui_page_project_wizard_add_starter = "Add a starter message\n"
-ui_page_project_wizard_add_starter_description = "Create Application.Name in every language.\n"
-ui_page_project_wizard_additional_language = "Additional language\n"
-ui_page_project_wizard_canonical_source = "Canonical source\n"
-ui_page_project_wizard_catalog_id = "Catalog ID\n"
-ui_page_project_wizard_catalog_id_description = "Lowercase letters, numbers, dots, and hyphens.\n"
-ui_page_project_wizard_code_namespace = "Code namespace\n"
-ui_page_project_wizard_compiler_validated = "compiler validated\n"
-ui_page_project_wizard_create_project = "Create project\n"
-ui_page_project_wizard_default = "Default\n"
-ui_page_project_wizard_description = "Create compiler-valid translations without overwriting an existing directory.\n"
-ui_page_project_wizard_directory = "Directory\n"
-ui_page_project_wizard_directory_description = "Enter an absolute path or a path relative to the editor process.\n"
-ui_page_project_wizard_enable_esm = "Enable ESM output\n"
-ui_page_project_wizard_enable_esm_description = "Generate tree-shakeable modules for TypeScript and browser applications.\n"
-ui_page_project_wizard_files_to_create = "Files to create\n"
-ui_page_project_wizard_generated_api = "Generated API and output\n"
-ui_page_project_wizard_generated_api_description = "These defaults work for most .NET and ESM consumers.\n"
-ui_page_project_wizard_generated_class = "Generated class\n"
-ui_page_project_wizard_initial_layer = "Initial layer\n"
-ui_page_project_wizard_invalid = "Project is not valid\n"
-ui_page_project_wizard_language_description = "One language is fully supported. Add translations now or later.\n"
-ui_page_project_wizard_languages = "languages\n"
-ui_page_project_wizard_new_directory = "New project directory\n"
-ui_page_project_wizard_no_overwrite = "The editor creates a new directory and never overwrites an existing one.\n"
-ui_page_project_wizard_ready_create = "Ready to create\n"
-ui_page_project_wizard_remove_locale = "Remove locale\n"
-ui_page_project_wizard_row = "row\n"
-ui_page_project_wizard_source = "source\n"
-ui_page_project_wizard_source_default = "Source/default language\n"
-ui_page_project_wizard_step_languages = "Languages\n"
-ui_page_project_wizard_step_project = "Project\n"
-ui_page_project_wizard_step_review = "Review\n"
-ui_page_project_wizard_step_settings = "Settings\n"
-ui_page_project_wizard_steps_aria_label = "Project creation steps\n"
-ui_page_project_wizard_title = "New translation project\n"
-ui_page_project_wizard_where_live = "Where should the translations live?\n"
-ui_page_project_wizard_which_languages = "Which languages does this project use?\n"
-ui_page_quality_csv_aria_label = "Quality report CSV\n"
-ui_page_quality_csv_order = "CSV is ordered by key and finding kind.\n"
-ui_page_quality_findings_across = "findings across\n"
-ui_page_quality_report = "quality report\n"
-ui_page_quality_title = "Quality\n"
-ui_page_recovered_drafts_restore = "Restore drafts\n"
-ui_page_recovered_drafts_title = "Unsaved work was recovered\n"
-ui_page_recovery_complete = "Complete the planned change\n"
-ui_page_recovery_eyebrow = "Workspace recovery\n"
-ui_page_recovery_journal_for = "The recovery journal for\n"
-ui_page_recovery_journal_note = "Both choices use the bounded local journal. The journal is removed only after recovery succeeds.\n"
-ui_page_recovery_lists = "lists\n"
-ui_page_recovery_no_further_editing = "No further editing is allowed until it is resolved.\n"
-ui_page_recovery_recovering = "Recovering…\n"
-ui_page_recovery_restore_before = "Restore files from before the change\n"
-ui_page_recovery_title = "An interrupted change needs your decision\n"
-ui_page_repair_description = "Edit the source below. The canonical compiler must accept it before it can replace the file."
-ui_page_repair_document_aria_label = "Malformed source document"
-ui_page_repair_failed = "Repair failed\n"
-ui_page_repair_validate_save = "Validate and save\n"
-ui_page_resource_document = "Resource document\n"
-ui_page_terminology_add_term = "Add term\n"
-ui_page_terminology_description = "Terms stay in the optional versioned sidecar and are checked locally. Nothing is sent to a service.\n"
-ui_page_terminology_empty = "No terminology entries yet.\n"
-ui_page_terminology_locale = "Locale\n"
-ui_page_terminology_locale_placeholder = "Optional, e.g. de\n"
-ui_page_terminology_no_note = "No note\n"
-ui_page_terminology_note = "Note\n"
-ui_page_terminology_note_placeholder = "Optional usage guidance\n"
-ui_page_terminology_preferred = "Preferred translation\n"
-ui_page_terminology_preferred_placeholder = "Speichern\n"
-ui_page_terminology_remove_term = "Remove term\n"
-ui_page_terminology_save_workflow = "Save workflow\n"
-ui_page_terminology_source_placeholder = "Save\n"
-ui_page_terminology_source_term = "Source term\n"
-ui_page_terminology_title = "Project terminology\n"
-ui_page_validating = "Validating…\n"
-ui_page_welcome_catalogs_below = "catalogs below this workspace boundary.\n"
-ui_page_welcome_choose_catalog = "Choose a translation catalog\n"
-ui_page_welcome_create_project = "Create new project\n"
-ui_page_welcome_eyebrow = "Workspace onboarding\n"
-ui_page_welcome_files_need_attention = "files need attention\n"
-ui_page_welcome_found = "We found\n"
-ui_page_welcome_open_or_create = "Open an existing workspace or create a compiler-valid project from scratch.\n"
-ui_page_welcome_open_project = "Open a translation project\n"
-ui_page_welcome_open_repair_editor = "Open repair editor\n"
-ui_page_welcome_recent_projects = "Recent projects\n"
-ui_page_welcome_repair_malformed_json = "Repair malformed source"
-ui_page_welcome_scan = "Scan\n"
-ui_page_welcome_stored_local_profile = "Stored only in your local application profile\n"
-ui_page_welcome_traversal_note = "Traversal stays inside this boundary and ignores links, dependencies, and generated output.\n"
-ui_page_workspace_directory = "Workspace directory\n"
-ui_palette_about_diagnostics_information = "About & diagnostics information\n"
-ui_palette_approve_message = "Approve message\n"
-ui_palette_approve_visible_messages = "Approve visible messages\n"
-ui_palette_create_new_project = "Create new project…\n"
-ui_palette_create_sanitized_diagnostic_bundle = "Create sanitized diagnostic bundle\n"
-ui_palette_disable_pseudo_localization_simulation = "Disable pseudo-localization simulation\n"
-ui_palette_discard_workflow_changes = "Discard workflow changes\n"
-ui_palette_enable_pseudo_localization_simulation = "Enable pseudo-localization simulation\n"
-ui_palette_focus_message_search = "Focus message search\n"
-ui_palette_group_document = "Document\n"
-ui_palette_group_help = "Help\n"
-ui_palette_group_review = "Review\n"
-ui_palette_group_view = "View\n"
-ui_palette_group_workspace = "Workspace\n"
-ui_palette_hide_compiled_artifact_preview = "Hide compiled artifact preview\n"
-ui_palette_import_or_export_interchange_files = "Import or export interchange files…\n"
-ui_palette_interface_language_deutsch = "Interface language · Deutsch\n"
-ui_palette_interface_language_english = "Interface language · English\n"
-ui_palette_language = ".input {$locale :string}\n{{Language · {$locale}}}\n"
-ui_palette_mark_message_as_draft = "Mark message as draft\n"
-ui_palette_mark_message_as_needs_review = "Mark message as needs review\n"
-ui_palette_mark_message_as_translated = "Mark message as translated\n"
-ui_palette_mark_visible_messages_needs_review = "Mark visible messages needs review\n"
-ui_palette_open_another_workspace = "Open another workspace…\n"
-ui_palette_open_project_terminology = "Open project terminology…\n"
-ui_palette_open_quality_report = "Open quality report…\n"
-ui_palette_redo_saved_change = "Redo saved change\n"
-ui_palette_reload_workspace_files = "Reload workspace files\n"
-ui_palette_save_document = "Save document\n"
-ui_palette_save_workflow_changes = "Save workflow changes\n"
-ui_palette_show_compiled_artifact_preview = "Show compiled artifact preview\n"
-ui_palette_simulate_right_to_left_layout = "Simulate right-to-left layout\n"
-ui_palette_simulate_right_to_left_layout_off = "Simulate right-to-left layout off\n"
-ui_palette_switch_to_raw_json_mode = "Switch to source mode\n"
-ui_palette_switch_to_translation_mode = "Switch to translation mode\n"
-ui_palette_theme = ".input {$theme :string}\n{{Theme · {$theme}}}\n"
-ui_palette_theme_dark = "Dark\n"
-ui_palette_theme_light = "Light\n"
-ui_palette_theme_system = "System\n"
-ui_palette_toggle_languages_section = "Toggle languages section\n"
-ui_palette_toggle_messages_section = "Toggle messages section\n"
-ui_palette_undo_saved_change = "Undo saved change\n"
-ui_pattern_add = "Add\n"
-ui_pattern_add_content = "Add content\n"
-ui_pattern_attribute_name = "Attribute name\n"
-ui_pattern_attributes = "Attributes\n"
-ui_pattern_children_description = "Children · rendered as safe semantic data\n"
-ui_pattern_compiler_default = "compiler default\n"
-ui_pattern_content_type = "Content type\n"
-ui_pattern_declaration = "Declaration\n"
-ui_pattern_declaration_chip = "Declaration chip\n"
-ui_pattern_format = "Format\n"
-ui_pattern_formatted_declaration = "Formatted declaration\n"
-ui_pattern_formatter = "Formatter\n"
-ui_pattern_inline_formatter = "Inline formatter\n"
-ui_pattern_input = "Input\n"
-ui_pattern_input_chip = "Input chip\n"
-ui_pattern_markup = "Markup\n"
-ui_pattern_move_content_down = "Move content down\n"
-ui_pattern_move_content_up = "Move content up\n"
-ui_pattern_numeric = "Numeric\n"
-ui_pattern_protected_input = "Protected input\n"
-ui_pattern_remove = "Remove\n"
-ui_pattern_remove_content = "Remove content\n"
-ui_pattern_remove_name = ".input {$name :string}\n{{Remove {$name}}}\n"
-ui_pattern_semantic_markup = "Semantic markup\n"
-ui_pattern_semantic_name = "Semantic name\n"
-ui_pattern_text = "Text\n"
-ui_pattern_text_content = "Text content\n"
-ui_pattern_unit = "Unit\n"
-ui_pattern_value_for = "Value for\n"
-ui_pattern_value_for_name = ".input {$name :string}\n{{Value for {$name}}}\n"
-ui_preview_sample = "Sample\n"
-ui_project_current = "Current project\n"
-ui_project_label = "Project\n"
-ui_project_new = "New project\n"
-ui_project_open_workspace = "Open workspace\n"
-ui_project_recent = "Recent projects\n"
-ui_project_remove_locale = ".input {$locale :string}\n{{Remove language {$locale}}}\n"
-ui_project_schema = "schema\n"
-ui_quality_bidi_controls = "Translation contains invisible bidirectional control characters.\n"
-ui_quality_bidi_mixed = "Translation mixes left-to-right and right-to-left runs; verify it under right-to-left simulation.\n"
-ui_quality_identical = "Translation is identical to the source.\n"
-ui_quality_missing = "Translation is missing.\n"
-ui_quality_report_locale = ".input {$locale :string}\n{{{$locale} quality report}}\n"
-ui_quality_stale = "Source changed after this review state was recorded.\n"
-ui_quality_terminology = ".input {$term :string}\n{{Preferred term '{$term}' is missing.}}\n"
-ui_quality_whitespace = "Translation has leading or trailing whitespace.\n"
-ui_resource_not_translated = "Not translated\n"
-ui_review_state_approved = "approved\n"
-ui_review_state_draft = "draft\n"
-ui_review_state_needs_review = "needs review\n"
-ui_review_state_translated = "translated\n"
-ui_settings_about_diagnostics = "About & diagnostics\n"
-ui_settings_appearance = "Appearance\n"
-ui_settings_color_theme = "Color theme\n"
-ui_settings_dark = "Dark\n"
-ui_settings_editor_settings = "Editor settings\n"
-ui_settings_ember = "Ember\n"
-ui_settings_english = "English\n"
-ui_settings_fjord = "Fjord\n"
-ui_settings_german = "Deutsch\n"
-ui_settings_interface_language = "Interface language\n"
-ui_settings_light = "Light\n"
-ui_settings_localization_simulation = "Localization simulation\n"
-ui_settings_moss = "Moss\n"
-ui_settings_pseudo_localization = "Pseudo-localization\n"
-ui_settings_right_to_left = "Right-to-left layout\n"
-ui_settings_runic_gold = "Runic Gold\n"
-ui_settings_summary = ".input {$appearance :string}\n.input {$locale :string}\n{{Editor settings, {$appearance}, interface language {$locale}}}\n"
-ui_settings_system = "System\n"
-ui_sidebar_panel_shares = ".input {$languages :integer}\n.input {$messages :integer}\n{{Languages {$languages}%, messages {$messages}%}}\n"
-ui_sidebar_panels_languages = "Languages\n"
-ui_sidebar_panels_languages_panel = "Languages panel\n"
-ui_sidebar_panels_messages = "Messages\n"
-ui_sidebar_panels_messages_panel = "Messages panel\n"
-ui_sidebar_panels_resize = "Resize Languages and Messages\n"
-ui_sidebar_panels_resize_title = "Drag to resize · Double-click to reset\n"
-ui_terminology_remove_source = ".input {$term :string}\n{{Remove term {$term}}}\n"
-ui_toolbar_discard_workflow = "Discard workflow changes\n"
-ui_toolbar_open_navigation = "Open editor navigation\n"
-ui_toolbar_redo = "Redo\n"
-ui_toolbar_redo_saved_change = "Redo saved change\n"
-ui_toolbar_save_workflow = "Save workflow\n"
-ui_toolbar_saving_workflow = "Saving workflow…\n"
-ui_toolbar_undo = "Undo\n"
-ui_toolbar_undo_saved_change = "Undo saved change\n"
-ui_translation_editor_add_translation = "Add this translation…\n"
-ui_translation_editor_characters = "characters\n"
-ui_translation_editor_format_json = "Normalize source whitespace"
-ui_translation_editor_raw_change_description = "Changes here affect the complete resource document.\n"
-ui_validation_compiler = "compiler\n"
-ui_validation_errors = "errors\n"
-ui_validation_schema = "schema\n"
-ui_validation_validating = "Validating\n"
-ui_validation_validating_with_compiler = "Validating with the Runic compiler…\n"
-ui_validation_warnings = "warnings\n"
-ui_workflow_approved = "Approved\n"
-ui_workflow_draft = "Draft\n"
-ui_workflow_empty_suggestions_privacy = "Terminology, review notes, source context, and translation-memory suggestions stay in the workspace. Network providers are disabled by default and require an explicit future workspace policy before they can receive text.\n"
-ui_workflow_local_translation_memory = "Local translation memory\n"
-ui_workflow_needs_review = "Needs review\n"
-ui_workflow_no_issues = "No issues found\n"
-ui_workflow_quality_checks = "Quality checks\n"
-ui_workflow_quality_report = "Quality report\n"
-ui_workflow_reviewer_note = "Translator / reviewer note\n"
-ui_workflow_reviewer_note_placeholder = "Optional context for the next reviewer…\n"
-ui_workflow_source_changed = "Source changed\n"
-ui_workflow_status = "Status\n"
-ui_workflow_suggestions_privacy = "Suggestions compare only translations already in this workspace. Network providers are disabled and no translation text leaves this application.\n"
-ui_workflow_terminology = "Terminology\n"
-ui_workflow_title = "Workflow\n"
-ui_workflow_translated = "Translated\n"
-ui_workflow_unsaved_changes = "Unsaved workflow changes\n"
-ui_workspace_issues = "Workspace issues\n"
-ui_workspace_malformed = "malformed\n"
-ui_workspace_repair = "Repair\n"
-ui_workspace_review_notes_unavailable = "Review notes unavailable\n"
-ui_sidebar_title = 'Sidebar'
-ui_sidebar_description = 'Displays the mobile sidebar.'
-ui_backend_picker_unavailable = "No native folder picker is available. Enter the workspace directory instead."
-ui_backend_picker_start = "The native folder picker could not be started."
-ui_backend_bundle_size = "The diagnostic bundle exceeded its size limit."
-ui_backend_bundle_create = "The diagnostic bundle could not be created."
-ui_backend_bundle_missing = "That diagnostic bundle is no longer available in this user profile."
-ui_backend_bundle_reveal_unsupported = "Revealing diagnostic bundles is not supported on this platform."
-ui_backend_bundle_reveal = "The diagnostic bundle location could not be opened."
-ui_backend_bundle_delete = "The diagnostic bundle could not be deleted."
-ui_backend_recovery_change = "Recover the interrupted transaction before making another change."
-ui_backend_confirm_change = "Preview this destructive change again and confirm the exact affected files."
-ui_backend_recovery_mode = "Recovery mode must be 'complete' or 'rollback'."
-ui_backend_recovery_save = "Recover the interrupted transaction before saving a document."
-ui_backend_recovery_review = "Recover the interrupted transaction before saving workflow data."
-ui_backend_confirm_import = "Preview this import again to obtain a valid confirmation token."
-ui_backend_select_catalog_mutation = "Select a catalog before changing locales or keys."
-ui_backend_recovery_history = "Recover the interrupted transaction before changing history."
-ui_backend_no_undo = "There is no saved change to undo."
-ui_backend_no_redo = "There is no saved change to redo."
-ui_backend_history_unsupported = "The saved history entry is unsupported."
-ui_backend_history_document = "The saved document could not be changed."
-ui_backend_history_sidecar = "The workflow sidecar changed after this operation; history was cleared."
-ui_backend_not_message_document = "This document does not contain translation messages."
-ui_backend_encoding = "The document contains text that cannot be encoded as UTF-8."
-ui_backend_draft_validation = "The draft contains validation errors."
-ui_backend_select_catalog_review = "Select a catalog before saving review data."
-ui_backend_select_catalog_review_change = "Select a catalog before changing review data."
-ui_backend_sidecar_history_conflict = "The editor-state sidecar changed on disk. Reload before changing history."
-ui_backend_xliff_compile = "XLIFF export requires a successfully compiled catalog."
-ui_backend_review_compile = "Review export requires a successfully compiled catalog."
-ui_backend_import_compile = "The open catalog does not compile; fix the reported errors before importing."
-ui_backend_import_file_changed = "The imported file changed after it was previewed. Review it again."
-ui_backend_import_catalog_changed = "The catalog changed on disk. Preview the import again."
-ui_backend_import_sidecar_changed = "The workflow sidecar changed on disk. Preview the import again."
-ui_backend_review_file_changed = "The review file changed after it was previewed. Import it again."
-ui_backend_project_required = "The workspace must contain translations/runic.json or runic.json and translation source files."
-ui_backend_project_config_missing = "The Runic translation project has no runic.json file."
-ui_backend_path_relative = "Workspace paths must be relative."
-ui_backend_path_escape = "The requested path escapes the workspace."
-ui_backend_path_link = "Translation sources cannot be symbolic links."
-ui_backend_config_required = "The workspace does not contain runic.json."
-ui_backend_document_size = "The translation document exceeds the compiler size limit."
-ui_backend_committed_reload = "The change was committed; reload the workspace to refresh it."
-ui_backend_recovered_reload = "Recovery completed; reload the workspace to refresh it."
-ui_backend_saved_reload = "The document was saved; reload the workspace to refresh it."
-ui_backend_workspace_missing = ".input {$path :string}\n{{The translation workspace '{$path}' does not exist.}}"
-ui_backend_document_missing = ".input {$path :string}\n{{'{$path}' no longer exists.}}"
-ui_backend_document_conflict = ".input {$path :string}\n{{'{$path}' changed on disk. Reload before saving your draft.}}"
-ui_backend_import_document_conflict = ".input {$path :string}\n{{'{$path}' changed on disk. Preview the import again.}}"
-ui_backend_unknown_mutation = ".input {$kind :string}\n{{Unknown editor mutation '{$kind}'.}}"
-ui_backend_source_outside_project = ".input {$path :string}\n{{'{$path}' is not a translation source in this project.}}"
-ui_backend_external_error = ".input {$detail :string}\n{{The operation could not be completed. Technical details: {$detail}}}"
-ui_backend_import_not_applied = "The import was not applied."
-ui_backend_import_partial = "The import could not be rolled back after a write failed. Reload the workspace and review the affected translation files."
-ui_backend_refusal_1 = ".input {$value1 :string}\n.input {$value2 :string}\n{{The document source locale '{$value1}' does not match the catalog default locale '{$value2}'.}}"
-ui_backend_refusal_2 = ".input {$value1 :string}\n.input {$value2 :string}\n{{The imported document defines '{$value1}', which is not part of catalog '{$value2}'.}}"
-ui_backend_refusal_3 = ".input {$value1 :string}\n.input {$value2 :string}\n{{The review file targets catalog '{$value1}' but the open catalog is '{$value2}'.}}"
-ui_backend_refusal_4 = ".input {$value1 :string}\n.input {$value2 :string}\n{{The review file references '{$value1}', which is not part of catalog '{$value2}'.}}"
-ui_backend_refusal_5 = ".input {$value1 :string}\n{{The review file references locale '{$value1}', which the open catalog does not define.}}"
-ui_backend_refusal_6 = ".input {$value1 :string}\n{{The XLIFF source for '{$value1}' does not match the open catalog and cannot be applied.}}"
-ui_backend_refusal_7 = ".input {$value1 :string}\n.input {$value2 :string}\n{{The document targets catalog '{$value1}' but the open catalog is '{$value2}'.}}"
-ui_backend_refusal_8 = ".input {$value1 :string}\n{{The document targets locale '{$value1}', which the open catalog does not define.}}"
-ui_backend_refusal_9 = ".input {$value1 :string}\n{{The document targets default locale '{$value1}', which is canonical source text and cannot be imported through XLIFF.}}"
-ui_backend_refusal_10 = ".input {$value1 :string}\n.input {$value2 :string}\n{{The approved review entry '{$value1}' ({$value2}) was created for a different source catalog revision.}}"
-ui_backend_history_document_conflict = "The saved document changed after this operation; history was cleared."
-ui_backend_recovery_required = "An interrupted workspace transaction requires recovery."
-ui_backend_preview_key_missing = ".input {$key :string}\n{{The compiled locale has no message '{$key}'.}}"
-ui_backend_invalid_json = "The document is not valid JSON."
-ui_backend_history_save = ".input {$path :string}\n{{Save {$path}}}"
-ui_backend_history_review = "Save workflow"
-ui_backend_duplicate_sample = ".input {$key :string}\n.input {$locale :string}\n.input {$sample :string}\n{{The review entry '{$key}' ({$locale}) lists the sample key '{$sample}' more than once.}}"
-ui_host_not_initialized = "Hosted editor connection has not been initialized."
-ui_host_loopback_required = "Open the editor using its local server address."
-ui_host_capability_unavailable = "The editor server could not provide its connection settings."
-ui_host_capability_invalid = "The editor server provided invalid connection settings."
+[app]
+add_message = 'Add message'
+advanced = 'Variants'
+all = 'All'
+approve_translations = 'Approve translations'
+default_locale = 'Source locale'
+diagnostics = 'Diagnostics'
+eyebrow = 'Runic Translations Editor'
+invalid = 'Resolve validation errors before saving'
+mark_for_review = 'Mark for review'
+message_bulk_actions = 'Message bulk actions'
+message_filters = 'Message filters'
+messages = 'Messages'
+missing = 'Missing'
+missing_translation = 'Missing translation'
+no_matching_messages = 'No matching messages'
+no_results = 'No messages match this view'
+no_selection = 'Choose a message to start translating'
+raw = 'Source'
+reload = 'Reload'
+review = 'Review'
+save = 'Save document'
+saved = 'Saved'
+saving = 'Saving…'
+search = 'Search messages…'
+simple = 'Translation'
+stale = 'Stale'
+structured = 'Structured'
+title = 'Translations'
+translated = 'Translated'
+unsaved = 'Unsaved changes'
+valid = 'Ready to save'
+visible_messages = 'Visible messages'
+workspace = 'Workspace'
+
+[ui]
+loading = 'Loading'
+
+[ui.a11y]
+toggle_sidebar = 'Toggle sidebar'
+
+[ui.artifact]
+preview_aria_label = 'Compiled artifact preview'
+preview_as_generated = 'As generated'
+preview_close = 'Close compiled artifact preview'
+preview_compiling = 'Compiling the current draft…'
+preview_description = 'In-editor rendering of the compiled message output. This never launches an external application.'
+preview_edit_to_preview = 'Edit the message to build an artifact preview.'
+preview_no_simulation = 'no simulation'
+preview_note = 'Both columns run the same compiler-normalized AST pipeline; markup stays semantic data and is never interpreted as HTML.'
+preview_pseudo_localization = 'pseudo-localization'
+preview_rtl = 'RTL'
+preview_simulated = 'Simulated'
+preview_title = 'Compiled artifact preview'
+preview_untransformed = 'untransformed'
+
+[ui.backend]
+bundle_create = 'The diagnostic bundle could not be created.'
+bundle_delete = 'The diagnostic bundle could not be deleted.'
+bundle_missing = 'That diagnostic bundle is no longer available in this user profile.'
+bundle_reveal = 'The diagnostic bundle location could not be opened.'
+bundle_reveal_unsupported = 'Revealing diagnostic bundles is not supported on this platform.'
+bundle_size = 'The diagnostic bundle exceeded its size limit.'
+committed_reload = 'The change was committed; reload the workspace to refresh it.'
+config_required = 'The workspace does not contain runic.json.'
+confirm_change = 'Preview this destructive change again and confirm the exact affected files.'
+confirm_import = 'Preview this import again to obtain a valid confirmation token.'
+document_conflict = '''
+.input {$path :string}
+{{'{$path}' changed on disk. Reload before saving your draft.}}
+'''
+document_missing = '''
+.input {$path :string}
+{{'{$path}' no longer exists.}}
+'''
+document_size = 'The translation document exceeds the compiler size limit.'
+draft_validation = 'The draft contains validation errors.'
+duplicate_sample = '''
+.input {$key :string}
+.input {$locale :string}
+.input {$sample :string}
+{{The review entry '{$key}' ({$locale}) lists the sample key '{$sample}' more than once.}}
+'''
+encoding = 'The document contains text that cannot be encoded as UTF-8.'
+external_error = '''
+.input {$detail :string}
+{{The operation could not be completed. Technical details: {$detail}}}
+'''
+history_document = 'The saved document could not be changed.'
+history_document_conflict = 'The saved document changed after this operation; history was cleared.'
+history_review = 'Save workflow'
+history_save = '''
+.input {$path :string}
+{{Save {$path}}}
+'''
+history_sidecar = 'The workflow sidecar changed after this operation; history was cleared.'
+history_unsupported = 'The saved history entry is unsupported.'
+import_catalog_changed = 'The catalog changed on disk. Preview the import again.'
+import_compile = 'The open catalog does not compile; fix the reported errors before importing.'
+import_document_conflict = '''
+.input {$path :string}
+{{'{$path}' changed on disk. Preview the import again.}}
+'''
+import_file_changed = 'The imported file changed after it was previewed. Review it again.'
+import_not_applied = 'The import was not applied.'
+import_partial = 'The import could not be rolled back after a write failed. Reload the workspace and review the affected translation files.'
+import_sidecar_changed = 'The workflow sidecar changed on disk. Preview the import again.'
+invalid_json = 'The document is not valid JSON.'
+no_redo = 'There is no saved change to redo.'
+no_undo = 'There is no saved change to undo.'
+not_message_document = 'This document does not contain translation messages.'
+path_escape = 'The requested path escapes the workspace.'
+path_link = 'Translation sources cannot be symbolic links.'
+path_relative = 'Workspace paths must be relative.'
+picker_start = 'The native folder picker could not be started.'
+picker_unavailable = 'No native folder picker is available. Enter the workspace directory instead.'
+preview_key_missing = '''
+.input {$key :string}
+{{The compiled locale has no message '{$key}'.}}
+'''
+project_config_missing = 'The Runic translation project has no runic.json file.'
+project_required = 'The workspace must contain translations/runic.json or runic.json and translation source files.'
+recovered_reload = 'Recovery completed; reload the workspace to refresh it.'
+recovery_change = 'Recover the interrupted transaction before making another change.'
+recovery_history = 'Recover the interrupted transaction before changing history.'
+recovery_mode = "Recovery mode must be 'complete' or 'rollback'."
+recovery_required = 'An interrupted workspace transaction requires recovery.'
+recovery_review = 'Recover the interrupted transaction before saving workflow data.'
+recovery_save = 'Recover the interrupted transaction before saving a document.'
+refusal_1 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{The document source locale '{$value1}' does not match the catalog default locale '{$value2}'.}}
+'''
+refusal_10 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{The approved review entry '{$value1}' ({$value2}) was created for a different source catalog revision.}}
+'''
+refusal_2 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{The imported document defines '{$value1}', which is not part of catalog '{$value2}'.}}
+'''
+refusal_3 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{The review file targets catalog '{$value1}' but the open catalog is '{$value2}'.}}
+'''
+refusal_4 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{The review file references '{$value1}', which is not part of catalog '{$value2}'.}}
+'''
+refusal_5 = '''
+.input {$value1 :string}
+{{The review file references locale '{$value1}', which the open catalog does not define.}}
+'''
+refusal_6 = '''
+.input {$value1 :string}
+{{The XLIFF source for '{$value1}' does not match the open catalog and cannot be applied.}}
+'''
+refusal_7 = '''
+.input {$value1 :string}
+.input {$value2 :string}
+{{The document targets catalog '{$value1}' but the open catalog is '{$value2}'.}}
+'''
+refusal_8 = '''
+.input {$value1 :string}
+{{The document targets locale '{$value1}', which the open catalog does not define.}}
+'''
+refusal_9 = '''
+.input {$value1 :string}
+{{The document targets default locale '{$value1}', which is canonical source text and cannot be imported through XLIFF.}}
+'''
+review_compile = 'Review export requires a successfully compiled catalog.'
+review_file_changed = 'The review file changed after it was previewed. Import it again.'
+saved_reload = 'The document was saved; reload the workspace to refresh it.'
+select_catalog_mutation = 'Select a catalog before changing locales or keys.'
+select_catalog_review = 'Select a catalog before saving review data.'
+select_catalog_review_change = 'Select a catalog before changing review data.'
+sidecar_history_conflict = 'The editor-state sidecar changed on disk. Reload before changing history.'
+source_outside_project = '''
+.input {$path :string}
+{{'{$path}' is not a translation source in this project.}}
+'''
+unknown_mutation = '''
+.input {$kind :string}
+{{Unknown editor mutation '{$kind}'.}}
+'''
+workspace_missing = '''
+.input {$path :string}
+{{The translation workspace '{$path}' does not exist.}}
+'''
+xliff_compile = 'XLIFF export requires a successfully compiled catalog.'
+
+[ui.command]
+palette_commands_aria_label = 'Commands'
+palette_description = 'Search editor commands and run them'
+palette_no_matches = 'No matching command.'
+palette_placeholder = 'Type a command…'
+palette_search_aria_label = 'Search commands'
+palette_title = 'Command palette'
+
+[ui.common]
+cancel = 'Cancel'
+close = 'Close'
+name = 'Name'
+type = 'Type'
+
+[ui.composer]
+add_case = 'Add case'
+add_custom_case = 'Add a custom case'
+add_exact_number_case = 'Add an exact-number case'
+add_formatter = 'Add formatter'
+add_input = 'Add input'
+add_plural_forms = 'Add plural forms'
+add_selection_rule = 'Add selection rule'
+add_translation_case = 'Add translation case'
+advanced_structure = 'Advanced structure'
+advanced_structure_description = 'Inputs, formatters, and selection rules used by the translations above.'
+apply_source = 'Apply source'
+case_already_exists = 'This case already exists.'
+cases = 'cases'
+choose_when_used = 'Choose when this translation is used'
+chooses_by = 'Chooses by'
+compiler_default = 'Compiler default'
+custom_case_description = 'Enter the exact value that should select this translation.'
+custom_value = 'Custom value…'
+default_format = 'Default format'
+default_translation = 'Default translation'
+down = 'down'
+equals_label = 'equals'
+exact_case_description = 'Enter the number that should select this translation instead of the locale’s normal plural form.'
+exact_number = 'Exact number…'
+exact_number_hint = 'Use =0 for an exact number.'
+exact_or_custom_match = 'Exact or custom match'
+exactly = 'Exactly'
+fallback = 'Fallback'
+form = 'form'
+format = 'Format'
+formatter = 'Formatter'
+input = 'Input'
+inputs = 'Inputs'
+inputs_description = 'Values supplied by application code. Translators insert them by typing'
+is = 'is'
+message_source = 'Message source'
+move = 'Move'
+number_form = 'Number form'
+number_form_of = 'Used for the language’s number form of'
+numeric = 'Numeric'
+one_translation = 'One translation is used in every situation'
+ordinal = 'ordinal'
+ordinal_form_of = 'Used for the language’s ordinal form of'
+other = 'Other'
+plural = 'plural'
+plural_forms_description = 'If wording changes with a number, add plural forms and translate each case separately.'
+plural_message = 'Plural message'
+remove = 'Remove'
+remove_formatter = 'Remove formatter'
+remove_input = 'Remove input'
+remove_selector = 'Remove selector'
+required_fallback = 'Required fallback'
+required_fallback_description = 'Every structured message needs this final fallback, so its matching rule cannot be changed or removed.'
+required_fallback_title = 'The fallback translation is required'
+reusable_formatters = 'Reusable formatters'
+reusable_formatters_description = 'Optional named formats for dates, numbers, relative time, and other typed values.'
+rule_name = 'Rule name'
+selection_rules = 'Selection rules'
+selection_rules_description = 'Rules decide which translation case is used for a given input.'
+shown_whenever_used = 'Shown whenever this message is used.'
+singular_form_of = 'Used for the language’s singular form of'
+structured_case_description = 'This case contains formatting or semantic markup. Edit its content blocks below.'
+structured_message_source = 'Structured message source'
+structured_message_source_description = 'An escape hatch for exact MF2 source editing.'
+toggle_advanced_structure = 'Toggle advanced structure'
+translate_message = 'Translate the message'
+translation = 'translation'
+translation_for = 'Translation for'
+unit = 'Unit'
+up = 'up'
+used_for_every = 'Used for every'
+uses_input = 'Uses input'
+value = 'Value'
+value_without_specific = 'value without a more specific translation'
+variables_become_chips = 'become protected, inspectable chips in the sentence.'
+when = 'When'
+when_used = 'When is this translation used?'
+write_naturally = 'Write naturally. Variables such as'
+
+[ui.confirm]
+apply_review = 'Discard unsaved document drafts, repair text, and workflow/terminology changes to apply this review import?'
+apply_xliff = 'Discard unsaved document drafts, repair text, and workflow/terminology changes to apply this XLIFF import?'
+change_workspace = 'Discard unsaved document drafts, repair text, and workflow/terminology changes to make this structural workspace change?'
+create_project = 'Discard unsaved document drafts, repair text, and workflow/terminology changes to create a new project?'
+external_merge = 'Discard unsaved repair text and workflow/terminology changes to reload the external file and keep the merged document draft?'
+open_workspace = 'Discard unsaved document drafts, repair text, and workflow/terminology changes to open another workspace?'
+reload_workspace = 'Discard unsaved document drafts, repair text, and workflow/terminology changes to reload the workspace?'
+
+[ui.count]
+affected_files = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One affected file}}
+* {{{$count} affected files}}
+'''
+cases = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One case}}
+* {{{$count} cases}}
+'''
+catalogs_found = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Found one catalog below this directory.}}
+* {{Found {$count} catalogs below this directory.}}
+'''
+characters = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One character}}
+* {{{$count} characters}}
+'''
+errors = '''
+.input {$count :integer select=plural}
+.match $count
+one {{one error}}
+* {{{$count} errors}}
+'''
+exported_files = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Exported one file.}}
+* {{Exported {$count} files.}}
+'''
+exported_reviews = '''
+.input {$count :integer select=plural}
+.input {$path :string}
+.match $count
+one {{Exported one review entry to {$path}.}}
+* {{Exported {$count} review entries to {$path}.}}
+'''
+files_attention = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One file needs attention.}}
+* {{{$count} files need attention.}}
+'''
+locales = '''
+.input {$count :integer select=plural}
+.match $count
+one {{one locale}}
+* {{{$count} locales}}
+'''
+malformed_files = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One malformed file}}
+* {{{$count} malformed files}}
+'''
+messages = '''
+.input {$count :integer select=plural}
+.match $count
+one {{one message}}
+* {{{$count} messages}}
+'''
+project_locales = '''
+.input {$count :integer select=plural}
+.input {$version :integer}
+.match $count
+one {{One locale · schema v{$version}}}
+* {{{$count} locales · schema v{$version}}}
+'''
+project_summary = '''
+.input {$languages :integer select=plural}
+.input {$files :integer select=plural}
+.match $languages $files
+one one {{One language · one file · compiler validated}}
+one * {{One language · {$files} files · compiler validated}}
+* one {{{$languages} languages · one file · compiler validated}}
+* * {{{$languages} languages · {$files} files · compiler validated}}
+'''
+quality_summary = '''
+.input {$findings :integer select=plural}
+.input {$messages :integer select=plural}
+.match $findings $messages
+one one {{One finding across one message. CSV columns follow the report order.}}
+one * {{One finding across {$messages} messages. CSV columns follow the report order.}}
+* one {{{$findings} findings across one message. CSV columns follow the report order.}}
+* * {{{$findings} findings across {$messages} messages. CSV columns follow the report order.}}
+'''
+recovered_drafts = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One document draft was found in local application storage.}}
+* {{{$count} document drafts were found in local application storage.}}
+'''
+recovery_journal = '''
+.input {$count :integer select=plural}
+.input {$catalog :string}
+.match $count
+one {{The journal for {$catalog} lists one file. No further editing is allowed until it is resolved.}}
+* {{The journal for {$catalog} lists {$count} files. No further editing is allowed until it is resolved.}}
+'''
+resource_variants = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Structured message · one variant}}
+* {{Structured message · {$count} variants}}
+'''
+review_marked = '''
+.input {$count :integer select=plural}
+.input {$state :string}
+.match $count
+one {{One visible message marked {$state}. Save workflow changes to commit.}}
+* {{{$count} visible messages marked {$state}. Save workflow changes to commit.}}
+'''
+state_bytes = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One byte}}
+* {{{$count} bytes}}
+'''
+state_drafts = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One recovery-draft record}}
+* {{{$count} recovery-draft records}}
+'''
+state_entries = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One entry}}
+* {{{$count} entries}}
+'''
+state_preferences = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One preference}}
+* {{{$count} preferences}}
+'''
+state_recent = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One recent-project record}}
+* {{{$count} recent-project records}}
+'''
+state_removed = '''
+.input {$count :integer select=plural}
+.match $count
+one {{Removed one local editor-state entry.}}
+* {{Removed {$count} local editor-state entries.}}
+'''
+warnings = '''
+.input {$count :integer select=plural}
+.match $count
+one {{One warning}}
+* {{{$count} warnings}}
+'''
+
+[ui.editor]
+mode_editing_mode = 'Editing mode'
+
+[ui.feedback]
+change_failed = 'The workspace change could not be committed.'
+change_invalid = 'The change is not valid.'
+clear_state_confirm = "Remove the editor's saved preferences, recent-project list, and crash-recovery drafts from this user profile? Workspace files and currently open in-memory work will not be changed."
+deleted_merge = '''
+.input {$path :string}
+{{The externally deleted file '{$path}' cannot receive a merged draft.}}
+'''
+diagnostics_copied = 'Copied the diagnostic bundle path.'
+diagnostics_copy_failed = 'The diagnostic bundle path could not be copied. Select it below and copy it manually.'
+diagnostics_delete_confirm = 'Delete this sanitized diagnostic bundle? This does not affect workspace files or editor state.'
+diagnostics_delete_failed = 'The diagnostic bundle could not be deleted.'
+diagnostics_deleted = 'Deleted the diagnostic bundle.'
+diagnostics_failed = 'The diagnostic bundle could not be created.'
+diagnostics_open_failed = 'The diagnostic bundle location could not be opened.'
+diagnostics_opened = 'Opened the diagnostic bundle location.'
+diagnostics_saved = "Sanitized diagnostics were saved in this user's application-data directory."
+discard_repair = 'Discard unsaved repair text?'
+locale_duplicate = 'Each language must use a different locale tag.'
+locale_required = 'Every language needs a locale tag.'
+namespace_required = 'Namespace and class name are required.'
+newer_draft = 'Saved the earlier draft; your newer edit is still open.'
+no_resource = 'This locale has no resource document to edit.'
+preview_failed = 'The compiler could not build a preview.'
+project_created = 'Project created'
+project_directory_required = 'Choose a new directory and enter a catalog ID.'
+project_failed = 'The project could not be created.'
+project_invalid = 'The proposed project is invalid.'
+recovery_completed = 'Interrupted change completed'
+recovery_failed = 'Workspace recovery failed.'
+recovery_reload = 'Recovery completed; reload the workspace to refresh it.'
+recovery_rollback = 'Interrupted change rolled back'
+redo_failed = 'The saved change could not be redone.'
+redo_saved = 'Saved change redone'
+repair_failed = 'The repaired document could not be saved.'
+repair_invalid = 'The document is still invalid.'
+repair_open_confirm = 'Discard unsaved repair text and open another document?'
+review_applied = 'Review import applied.'
+review_failed = 'The review import could not be applied.'
+review_save_failed = 'Review data could not be saved.'
+save_failed = '''
+.input {$kind :string}
+{{Save failed ({$kind}).}}
+'''
+state_load_failed = '''
+.input {$error :string}
+{{The per-user editor state could not be loaded. {$error}}}
+'''
+state_recovered = 'Recovered from an unreadable local editor-state record; saved preferences and recovery drafts were reset.'
+undo_failed = 'The saved change could not be undone.'
+undo_saved = 'Saved change undone'
+workflow_saved = 'Workflow sidecar saved'
+workspace_directory_required = 'Enter a workspace directory.'
+workspace_open_failed = 'The workspace could not be opened.'
+workspace_updated = 'Workspace updated'
+xliff_applied = 'XLIFF import applied.'
+xliff_failed = 'The XLIFF import could not be applied.'
+
+[ui.host]
+capability_invalid = 'The editor server provided invalid connection settings.'
+capability_unavailable = 'The editor server could not provide its connection settings.'
+loopback_required = 'Open the editor using its local server address.'
+not_initialized = 'Hosted editor connection has not been initialized.'
+
+[ui.inline]
+after_text = 'after text'
+after_text_index = '''
+.input {$index :integer}
+{{after text {$index}}}
+'''
+after_variable = 'after variable'
+after_variable_name = '''
+.input {$name :string}
+{{after variable {$name}}}
+'''
+at_beginning = 'at the beginning'
+click_to_inspect = 'Click to inspect.'
+close_name_settings = '''
+.input {$name :string}
+{{Close {$name} settings}}
+'''
+close_variable_settings = 'Close variable settings'
+compiler_default = 'Compiler default'
+create_variable = 'Create new variable'
+default_format = 'Default format'
+earlier = 'earlier'
+from_this_translation = 'from this translation'
+insert = 'Insert'
+insert_at = '''
+.input {$position :string}
+{{Insert {$position}}}
+'''
+later = 'later'
+move = 'Move'
+move_name_earlier = '''
+.input {$name :string}
+{{Move {$name} earlier}}
+'''
+move_name_later = '''
+.input {$name :string}
+{{Move {$name} later}}
+'''
+move_variable_earlier = 'Move variable earlier'
+move_variable_later = 'Move variable later'
+open_settings = 'Open settings.'
+remove = 'Remove'
+remove_name = '''
+.input {$name :string}
+{{Remove {$name} from this translation}}
+'''
+remove_variable = 'Remove variable from this translation'
+settings = 'settings'
+text = 'Text'
+text_index = '''
+.input {$label :string}
+.input {$index :integer}
+{{{$label}, text {$index}}}
+'''
+type = 'type'
+variable = 'Variable'
+variable_inspect = '''
+.input {$name :string}
+{{Variable {$name}. Click to inspect.}}
+'''
+variable_settings = '''
+.input {$name :string}
+{{Variable {$name}. Open settings.}}
+'''
+write_text = 'Write text…'
+
+[ui.interchange]
+absent_from_import = 'absent from the import'
+added = 'added'
+apply_review_once = 'Apply this review import once'
+apply_xliff_once = 'Apply this XLIFF import once'
+before_after = 'Before → after'
+bytes = 'bytes'
+change = 'Change'
+changed = 'changed'
+default_layer = 'default layer'
+description = 'Export portable XLIFF 2.1 or review JSON, then preview every import before it can change the workspace. Export paths stay inside the open workspace; import paths may be absolute or workspace-relative.'
+export_directory = 'Export directory'
+export_review_json = 'Export review JSON'
+export_xliff = 'Export XLIFF'
+exported = 'Exported'
+files = 'files'
+first_changes_only = 'Only the first 256 changes are displayed; the counts above include the entire import.'
+import_refusal = 'Import refusal'
+key = 'Key'
+locale = 'Locale'
+non_semantic_notes = 'Non-semantic export notes'
+preview_review_import = 'Preview review import'
+preview_xliff_import = 'Preview XLIFF import'
+review_description = 'Moves workflow state, notes, and approved-source evidence without replacing translation text. Local terminology remains local to the workspace.'
+review_entries = 'review entries'
+review_export_failed = 'Review JSON export failed.'
+review_export_path = 'Review JSON path'
+review_file_to_import = 'Review JSON file to import'
+review_import_refused = 'The review import was refused.'
+review_title = 'Review workflow JSON'
+semantic_loss = 'Semantic interchange loss'
+state = 'State'
+summary = '''
+.input {$added :integer}
+.input {$changed :integer}
+.input {$removed :integer}
+{{Added: {$added} · changed: {$changed} · absent from import: {$removed}}}
+'''
+target = 'Target'
+title = 'Interchange'
+to = 'to'
+xliff_description = 'Export writes one target-locale document. Import always shows the proposed text and review-state changes first.'
+xliff_export_failed = 'XLIFF export failed.'
+xliff_file_to_import = 'XLIFF file to import'
+xliff_import_refused = 'The XLIFF import was refused.'
+xliff_title = 'XLIFF 2.1 translation files'
+
+[ui.locale]
+coverage = 'Locale coverage'
+falls_back_to = 'Falls back to'
+languages = 'Languages'
+manage = 'Manage languages'
+no_language = 'no language'
+none = 'none'
+source = 'source'
+source_language = 'Source language'
+translated = 'translated'
+
+[ui.message]
+heading_delete = 'Delete'
+heading_delete_title = 'Delete this message'
+heading_duplicate = 'Duplicate'
+heading_duplicate_title = 'Duplicate this message'
+heading_falls_back_to = 'falls back to'
+heading_rename = 'Rename'
+heading_rename_title = 'Rename or move this message'
+toolbar_search_messages = 'Search messages'
+
+[ui.page]
+about_bundle_no_upload = 'The application never uploads this bundle. Sharing it is an explicit action outside the editor.'
+about_bytes = 'bytes'
+about_clear_local_state = 'Clear local state'
+about_clear_local_state_note = 'Clearing affects only future recovery and launches; it does not modify workspace files or discard the work currently open in this window.'
+about_copy_path = 'Copy path'
+about_create_bundle = 'Create diagnostic bundle'
+about_creating_bundle = 'Creating bundle…'
+about_delete_bundle = 'Delete bundle'
+about_description = 'Application information and privacy-safe diagnostics.'
+about_development_build = 'development build'
+about_diagnostic_bundle = 'Diagnostic bundle'
+about_diagnostic_bundle_description = 'The zip contains version/runtime information, catalog counts, and grouped diagnostic IDs. It excludes workspace paths, file names, message source, and translations.'
+about_diagnostic_bundle_path = 'Diagnostic bundle path'
+about_diagnostic_bundle_title = 'Sanitized diagnostic bundle'
+about_entries = 'entries'
+about_license_note = 'Runic Translations is MIT licensed. The packaged application includes LICENSE.txt and THIRD-PARTY-NOTICES.md.'
+about_local_state = 'Local editor state'
+about_local_state_description = 'Stored only in this user’s application profile. The inspection never reveals paths or draft text.'
+about_preferences = 'preferences'
+about_product = 'Runic Translations Editor'
+about_reading = 'Reading application information…'
+about_recent_project_records = 'recent-project records'
+about_recovered_unreadable = 'recovered from an unreadable record'
+about_recovery_draft_records = 'recovery-draft records'
+about_reveal_location = 'Reveal location'
+about_runtime = 'Runtime'
+about_runtime_identifier = 'Runtime identifier'
+about_source_revision = 'Source revision'
+about_system = 'System'
+about_update_channel = 'Update channel'
+about_version = 'Version'
+back = 'Back'
+browse = 'Browse…'
+cancel = 'Cancel'
+choosing = 'Choosing…'
+close = 'Close'
+continue = 'Continue'
+creating = 'Creating…'
+discard = 'Discard'
+done = 'Done'
+empty_selection_description = 'Choose a message from the sidebar to review or edit its translation.'
+errors = 'errors'
+external_changes_compare_merge = 'Compare / merge'
+external_changes_reload_files = 'Reload files'
+external_changes_reload_latest = 'Reload to read the latest versions.'
+external_changes_title = 'Files changed outside the editor'
+external_changes_unsaved_intact = 'Your local drafts, repair text, and workflow changes are still intact.'
+external_compare_current_disk = 'Current disk'
+external_compare_deleted_externally = 'File was deleted externally.'
+external_compare_description = 'Compare the editor base with the current file, then keep or merge the change.'
+external_compare_editor_base = 'Editor base'
+external_compare_merged_draft = 'Merged draft'
+external_compare_not_previously_loaded = 'File was not previously loaded.'
+external_compare_reload_keep_merged = 'Reload base and keep merged draft'
+fatal_could_not_open = 'Could not open this translation workspace'
+fatal_no_catalog = 'No Runic Translations catalog was found.'
+fatal_open_another_workspace = 'Open another workspace'
+fatal_recovery_refresh = 'Recovery completed; reload the workspace to refresh it.'
+fatal_recovery_reload_required = 'Recovery completed; reload required'
+file = 'file'
+files = 'files'
+healthy = 'Healthy'
+interchange = 'Interchange'
+interface_language = 'Interface language'
+keep_current_view = 'Keep current view'
+locales = 'locales'
+messages = 'messages'
+meta_description = 'A focused desktop editor for Runic Translations workspaces'
+mutation_add_language = 'Add a language'
+mutation_affected = 'affected'
+mutation_change_fallback = 'Change a fallback'
+mutation_change_fallback_relationships = 'Change fallback relationships'
+mutation_checking = 'Checking…'
+mutation_commit = 'Commit change'
+mutation_committing = 'Committing…'
+mutation_copy_starter_values = 'Copy starter values from'
+mutation_copy_starter_values_description = 'Copied text keeps the new catalog compiler-valid and can then be translated.'
+mutation_delete = 'Delete'
+mutation_delete_description = 'The message will be removed from every locale and layer. The preview below lists every file that will change.'
+mutation_delete_message = 'Delete a message'
+mutation_description = 'Compiler-backed workspace change. Review the affected files before committing.'
+mutation_duplicate_key = 'Duplicate key'
+mutation_duplicate_message = 'Duplicate a message'
+mutation_existing_key = 'Existing key'
+mutation_fallback = 'Fallback'
+mutation_files_deleted = 'Files will be deleted'
+mutation_files_deleted_description = 'All resource documents for this locale will be deleted after the preview is confirmed.'
+mutation_initial_text = 'Initial text'
+mutation_initial_text_description = 'The initial value is added to every language so strict projects stay valid.'
+mutation_initial_text_placeholder = 'Pay now'
+mutation_invalid = 'Change is not valid'
+mutation_irreversible_confirm = 'I understand this workspace change cannot be undone.'
+mutation_irreversible_description = 'It is excluded from the local undo history. Review the listed files before continuing.'
+mutation_language = 'Language'
+mutation_language_operation = 'Language operation'
+mutation_language_to_remove = 'Language to remove'
+mutation_layer = 'Layer'
+mutation_message_key = 'Message key'
+mutation_message_key_description = 'Use dots to organize messages into groups.'
+mutation_new_key_group_path = 'New key or group path'
+mutation_new_locale_tag = 'New locale tag'
+mutation_operation_preview = 'Operation preview'
+mutation_preview = 'Preview change'
+mutation_redirect_fallbacks = 'Redirect dependent fallbacks to'
+mutation_remove_language = 'Remove a language'
+mutation_rename_description = 'The change is applied across every locale and layer where the source message exists.'
+mutation_rename_move_message = 'Rename or move a message'
+no_document = 'no document'
+open = 'Open'
+open_project_action = 'Open workspace'
+open_project_description = 'Catalogs are discovered below this workspace boundary. You will choose one if several are found.'
+open_project_title = 'Open translation project'
+opening = 'Opening…'
+preview_compiling = 'Compiling…'
+preview_compiling_draft = 'Compiling the current draft…'
+preview_description = 'Uses the same rules as the generated application message'
+preview_edit_to_build = 'Edit the message to build a preview.'
+preview_pseudo_active = 'Pseudo-localization simulation is active.'
+preview_rtl_active = 'Right-to-left simulation is active.'
+preview_safe_markup = 'Semantic markup is displayed as a data tree. Names and attributes are never interpreted as trusted HTML.'
+preview_title = 'Preview'
+preview_unavailable = 'Unavailable'
+project_notes = 'Project notes'
+project_wizard_add_language = 'Add another language'
+project_wizard_add_starter = 'Add a starter message'
+project_wizard_add_starter_description = 'Create Application.Name in every language.'
+project_wizard_additional_language = 'Additional language'
+project_wizard_canonical_source = 'Canonical source'
+project_wizard_catalog_id = 'Catalog ID'
+project_wizard_catalog_id_description = 'Lowercase letters, numbers, dots, and hyphens.'
+project_wizard_code_namespace = 'Code namespace'
+project_wizard_compiler_validated = 'compiler validated'
+project_wizard_create_project = 'Create project'
+project_wizard_default = 'Default'
+project_wizard_description = 'Create compiler-valid translations without overwriting an existing directory.'
+project_wizard_directory = 'Directory'
+project_wizard_directory_description = 'Enter an absolute path or a path relative to the editor process.'
+project_wizard_enable_esm = 'Enable ESM output'
+project_wizard_enable_esm_description = 'Generate tree-shakeable modules for TypeScript and browser applications.'
+project_wizard_files_to_create = 'Files to create'
+project_wizard_generated_api = 'Generated API and output'
+project_wizard_generated_api_description = 'These defaults work for most .NET and ESM consumers.'
+project_wizard_generated_class = 'Generated class'
+project_wizard_initial_layer = 'Initial layer'
+project_wizard_invalid = 'Project is not valid'
+project_wizard_language_description = 'One language is fully supported. Add translations now or later.'
+project_wizard_languages = 'languages'
+project_wizard_new_directory = 'New project directory'
+project_wizard_no_overwrite = 'The editor creates a new directory and never overwrites an existing one.'
+project_wizard_ready_create = 'Ready to create'
+project_wizard_remove_locale = 'Remove locale'
+project_wizard_row = 'row'
+project_wizard_source = 'source'
+project_wizard_source_default = 'Source/default language'
+project_wizard_step_languages = 'Languages'
+project_wizard_step_project = 'Project'
+project_wizard_step_review = 'Review'
+project_wizard_step_settings = 'Settings'
+project_wizard_steps_aria_label = 'Project creation steps'
+project_wizard_title = 'New translation project'
+project_wizard_where_live = 'Where should the translations live?'
+project_wizard_which_languages = 'Which languages does this project use?'
+quality_csv_aria_label = 'Quality report CSV'
+quality_csv_order = 'CSV is ordered by key and finding kind.'
+quality_findings_across = 'findings across'
+quality_report = 'quality report'
+quality_title = 'Quality'
+recovered_drafts_restore = 'Restore drafts'
+recovered_drafts_title = 'Unsaved work was recovered'
+recovery_complete = 'Complete the planned change'
+recovery_eyebrow = 'Workspace recovery'
+recovery_journal_for = 'The recovery journal for'
+recovery_journal_note = 'Both choices use the bounded local journal. The journal is removed only after recovery succeeds.'
+recovery_lists = 'lists'
+recovery_no_further_editing = 'No further editing is allowed until it is resolved.'
+recovery_recovering = 'Recovering…'
+recovery_restore_before = 'Restore files from before the change'
+recovery_title = 'An interrupted change needs your decision'
+repair_description = 'Edit the source below. The canonical compiler must accept it before it can replace the file.'
+repair_document_aria_label = 'Malformed source document'
+repair_failed = 'Repair failed'
+repair_validate_save = 'Validate and save'
+resource_document = 'Resource document'
+terminology_add_term = 'Add term'
+terminology_description = 'Terms stay in the optional versioned sidecar and are checked locally. Nothing is sent to a service.'
+terminology_empty = 'No terminology entries yet.'
+terminology_locale = 'Locale'
+terminology_locale_placeholder = 'Optional, e.g. de'
+terminology_no_note = 'No note'
+terminology_note = 'Note'
+terminology_note_placeholder = 'Optional usage guidance'
+terminology_preferred = 'Preferred translation'
+terminology_preferred_placeholder = 'Speichern'
+terminology_remove_term = 'Remove term'
+terminology_save_workflow = 'Save workflow'
+terminology_source_placeholder = 'Save'
+terminology_source_term = 'Source term'
+terminology_title = 'Project terminology'
+validating = 'Validating…'
+welcome_catalogs_below = 'catalogs below this workspace boundary.'
+welcome_choose_catalog = 'Choose a translation catalog'
+welcome_create_project = 'Create new project'
+welcome_eyebrow = 'Workspace onboarding'
+welcome_files_need_attention = 'files need attention'
+welcome_found = 'We found'
+welcome_open_or_create = 'Open an existing workspace or create a compiler-valid project from scratch.'
+welcome_open_project = 'Open a translation project'
+welcome_open_repair_editor = 'Open repair editor'
+welcome_recent_projects = 'Recent projects'
+welcome_repair_malformed_json = 'Repair malformed source'
+welcome_scan = 'Scan'
+welcome_stored_local_profile = 'Stored only in your local application profile'
+welcome_traversal_note = 'Traversal stays inside this boundary and ignores links, dependencies, and generated output.'
+workspace_directory = 'Workspace directory'
+
+[ui.palette]
+about_diagnostics_information = 'About & diagnostics information'
+approve_message = 'Approve message'
+approve_visible_messages = 'Approve visible messages'
+create_new_project = 'Create new project…'
+create_sanitized_diagnostic_bundle = 'Create sanitized diagnostic bundle'
+disable_pseudo_localization_simulation = 'Disable pseudo-localization simulation'
+discard_workflow_changes = 'Discard workflow changes'
+enable_pseudo_localization_simulation = 'Enable pseudo-localization simulation'
+focus_message_search = 'Focus message search'
+group_document = 'Document'
+group_help = 'Help'
+group_review = 'Review'
+group_view = 'View'
+group_workspace = 'Workspace'
+hide_compiled_artifact_preview = 'Hide compiled artifact preview'
+import_or_export_interchange_files = 'Import or export interchange files…'
+interface_language_deutsch = 'Interface language · Deutsch'
+interface_language_english = 'Interface language · English'
+language = '''
+.input {$locale :string}
+{{Language · {$locale}}}
+'''
+mark_message_as_draft = 'Mark message as draft'
+mark_message_as_needs_review = 'Mark message as needs review'
+mark_message_as_translated = 'Mark message as translated'
+mark_visible_messages_needs_review = 'Mark visible messages needs review'
+open_another_workspace = 'Open another workspace…'
+open_project_terminology = 'Open project terminology…'
+open_quality_report = 'Open quality report…'
+redo_saved_change = 'Redo saved change'
+reload_workspace_files = 'Reload workspace files'
+save_document = 'Save document'
+save_workflow_changes = 'Save workflow changes'
+show_compiled_artifact_preview = 'Show compiled artifact preview'
+simulate_right_to_left_layout = 'Simulate right-to-left layout'
+simulate_right_to_left_layout_off = 'Simulate right-to-left layout off'
+switch_to_raw_json_mode = 'Switch to source mode'
+switch_to_translation_mode = 'Switch to translation mode'
+theme = '''
+.input {$theme :string}
+{{Theme · {$theme}}}
+'''
+theme_dark = 'Dark'
+theme_light = 'Light'
+theme_system = 'System'
+toggle_languages_section = 'Toggle languages section'
+toggle_messages_section = 'Toggle messages section'
+undo_saved_change = 'Undo saved change'
+
+[ui.pattern]
+add = 'Add'
+add_content = 'Add content'
+attribute_name = 'Attribute name'
+attributes = 'Attributes'
+children_description = 'Children · rendered as safe semantic data'
+compiler_default = 'compiler default'
+content_type = 'Content type'
+declaration = 'Declaration'
+declaration_chip = 'Declaration chip'
+format = 'Format'
+formatted_declaration = 'Formatted declaration'
+formatter = 'Formatter'
+inline_formatter = 'Inline formatter'
+input = 'Input'
+input_chip = 'Input chip'
+markup = 'Markup'
+move_content_down = 'Move content down'
+move_content_up = 'Move content up'
+numeric = 'Numeric'
+protected_input = 'Protected input'
+remove = 'Remove'
+remove_content = 'Remove content'
+remove_name = '''
+.input {$name :string}
+{{Remove {$name}}}
+'''
+semantic_markup = 'Semantic markup'
+semantic_name = 'Semantic name'
+text = 'Text'
+text_content = 'Text content'
+unit = 'Unit'
+value_for = 'Value for'
+value_for_name = '''
+.input {$name :string}
+{{Value for {$name}}}
+'''
+
+[ui.preview]
+sample = 'Sample'
+
+[ui.project]
+current = 'Current project'
+label = 'Project'
+new = 'New project'
+open_workspace = 'Open workspace'
+recent = 'Recent projects'
+remove_locale = '''
+.input {$locale :string}
+{{Remove language {$locale}}}
+'''
+schema = 'schema'
+
+[ui.quality]
+bidi_controls = 'Translation contains invisible bidirectional control characters.'
+bidi_mixed = 'Translation mixes left-to-right and right-to-left runs; verify it under right-to-left simulation.'
+identical = 'Translation is identical to the source.'
+missing = 'Translation is missing.'
+report_locale = '''
+.input {$locale :string}
+{{{$locale} quality report}}
+'''
+stale = 'Source changed after this review state was recorded.'
+terminology = '''
+.input {$term :string}
+{{Preferred term '{$term}' is missing.}}
+'''
+whitespace = 'Translation has leading or trailing whitespace.'
+
+[ui.resource]
+not_translated = 'Not translated'
+
+[ui.review]
+state_approved = 'approved'
+state_draft = 'draft'
+state_needs_review = 'needs review'
+state_translated = 'translated'
+
+[ui.settings]
+about_diagnostics = 'About & diagnostics'
+appearance = 'Appearance'
+color_theme = 'Color theme'
+dark = 'Dark'
+editor_settings = 'Editor settings'
+ember = 'Ember'
+english = 'English'
+fjord = 'Fjord'
+german = 'Deutsch'
+interface_language = 'Interface language'
+light = 'Light'
+localization_simulation = 'Localization simulation'
+moss = 'Moss'
+pseudo_localization = 'Pseudo-localization'
+right_to_left = 'Right-to-left layout'
+runic_gold = 'Runic Gold'
+summary = '''
+.input {$appearance :string}
+.input {$locale :string}
+{{Editor settings, {$appearance}, interface language {$locale}}}
+'''
+system = 'System'
+
+[ui.sidebar]
+description = 'Displays the mobile sidebar.'
+panel_shares = '''
+.input {$languages :integer}
+.input {$messages :integer}
+{{Languages {$languages}%, messages {$messages}%}}
+'''
+panels_languages = 'Languages'
+panels_languages_panel = 'Languages panel'
+panels_messages = 'Messages'
+panels_messages_panel = 'Messages panel'
+panels_resize = 'Resize Languages and Messages'
+panels_resize_title = 'Drag to resize · Double-click to reset'
+title = 'Sidebar'
+
+[ui.terminology]
+remove_source = '''
+.input {$term :string}
+{{Remove term {$term}}}
+'''
+
+[ui.toolbar]
+discard_workflow = 'Discard workflow changes'
+open_navigation = 'Open editor navigation'
+redo = 'Redo'
+redo_saved_change = 'Redo saved change'
+save_workflow = 'Save workflow'
+saving_workflow = 'Saving workflow…'
+undo = 'Undo'
+undo_saved_change = 'Undo saved change'
+
+[ui.translation]
+editor_add_translation = 'Add this translation…'
+editor_characters = 'characters'
+editor_format_json = 'Normalize source whitespace'
+editor_raw_change_description = 'Changes here affect the complete resource document.'
+
+[ui.validation]
+compiler = 'compiler'
+errors = 'errors'
+schema = 'schema'
+validating = 'Validating'
+validating_with_compiler = 'Validating with the Runic compiler…'
+warnings = 'warnings'
+
+[ui.workflow]
+approved = 'Approved'
+draft = 'Draft'
+empty_suggestions_privacy = 'Terminology, review notes, source context, and translation-memory suggestions stay in the workspace. Network providers are disabled by default and require an explicit future workspace policy before they can receive text.'
+local_translation_memory = 'Local translation memory'
+needs_review = 'Needs review'
+no_issues = 'No issues found'
+quality_checks = 'Quality checks'
+quality_report = 'Quality report'
+reviewer_note = 'Translator / reviewer note'
+reviewer_note_placeholder = 'Optional context for the next reviewer…'
+source_changed = 'Source changed'
+status = 'Status'
+suggestions_privacy = 'Suggestions compare only translations already in this workspace. Network providers are disabled and no translation text leaves this application.'
+terminology = 'Terminology'
+title = 'Workflow'
+translated = 'Translated'
+unsaved_changes = 'Unsaved workflow changes'
+
+[ui.workspace]
+issues = 'Workspace issues'
+malformed = 'malformed'
+repair = 'Repair'
+review_notes_unavailable = 'Review notes unavailable'
