@@ -37,4 +37,7 @@
     <None Include="..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
   <Import Project="../../eng/build/translations.targets" />
+  <ItemGroup>
+    <ProjectReference Include="../../packages/dotnet/Runic.CommandLine.Spectre/Runic.CommandLine.Spectre.csproj" />
+  </ItemGroup>
 </Project>

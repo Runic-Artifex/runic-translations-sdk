@@ -67,16 +67,16 @@ public static class TranslationsToolCommandModule
             cancellationToken);
     }
 
-    [Command("init")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    [Command("init", Description = "Create a translation project and starter catalogs.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Init([FromServices] ITranslationsToolCommandOperations operations, [Option("--directory", Required = true)] string directory, [Option("--catalog", Required = true)] string catalog, [Option("--default-locale", Required = true)] string defaultLocale, [Option("--namespace", Required = true)] string codeNamespace, [Option("--class", Required = true)] string className, [Option("--locale", AllowMultipleValues = true)] IReadOnlyList<string> locales, [Option("--no-starter")] bool noStarter) => operations.Execute(new("init", Directory: directory, Catalog: catalog, DefaultLocale: defaultLocale, Namespace: codeNamespace, ClassName: className, Locales: locales, NoStarter: noStarter));
 
-    [Command("migrate")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    [Command("migrate", Description = "Migrate an existing translations project.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Migrate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project, [Option("--dry-run")] bool dryRun) => operations.Execute(new("migrate", Project: project, DryRun: dryRun));
 
-    [Command("validate")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    [Command("validate", Description = "Validate catalogs and report translation diagnostics.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Validate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project) => operations.Execute(new("validate", Project: project));
 
-    [Command("generate")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    [Command("generate", Description = "Generate translation artifacts.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Generate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project, [Option("--output", Required = true)] string output, [Option("--emit-csharp")] bool csharp, [Option("--emit-json")] bool json, [Option("--emit-typescript")] bool typescript, [Option("--emit-template-manifest")] bool manifest, [Option("--emit-esm")] bool esm, [Option("--emit-cpp")] bool cpp) => operations.Execute(new("generate", Project: project, Output: output, EmitCSharp: csharp, EmitJson: json, EmitTypeScript: typescript, EmitTemplateManifest: manifest, EmitEsm: esm, EmitCpp: cpp));
 
     [Command("verify")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]

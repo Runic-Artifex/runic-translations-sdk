@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Runic.CommandLine;
+using Runic.CommandLine.Spectre;
 using Runic.Translations.Tooling;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
@@ -13,6 +14,7 @@ namespace Runic.Translations.Tool;
 
 internal static class Program
 {
+    private static readonly ICommandConsole PresentationConsole = new SpectreCommandConsole();
     private const int Success = 0;
     private const int DiagnosticFailure = 1;
     private const int InvocationFailure = 2;
@@ -22,13 +24,49 @@ internal static class Program
         try
         {
             List<string> expanded = CommandLine.ExpandResponseFiles(arguments);
-            ParseOutcome parsed = PortableCommandSyntaxAdapter.Instance.Parse(
-                TranslationsToolCommandModule.CreateCatalog(),
-                expanded.ToArray(),
-                new ParseSettings(transportOutputOptionName: "--runic-output"));
+            return new CommandApp(TranslationsToolCommandModule.CreateCatalog())
+            {
+                Name = "runic-translations",
+                Version = "0.2",
+                Console = PresentationConsole,
+                ParseSettings = new ParseSettings(Environment.GetEnvironmentVariable(CommandOutputClassifier.EnvironmentVariableName), transportOutputOptionName: "--runic-output"),
+                ScopeFactory = ToolExecutionScopeFactory.Instance,
+                ExitCodePolicy = ToolExitCodePolicy.Instance,
+                OutcomeSink = new ToolExecutionSink(),
+                PresentFrameworkRequest = static (parsed, _, _) => ValueTask.FromResult(PresentFramework(parsed)),
+            }.RunAsync(expanded.ToArray()).GetAwaiter().GetResult();
+        }
+        catch (ToolOutputException exception)
+        {
+            return Fatal("RCLI9001", "tool-output", $"error {exception.Message}", DiagnosticFailure);
+        }
+        catch (ToolDiagnosticException exception)
+        {
+            return Fatal("RCLI9002", "tool-diagnostic", exception.Message, DiagnosticFailure);
+        }
+        catch (ToolUsageException exception)
+        {
+            return Fatal("RCLI9003", "tool-usage", exception.Message, InvocationFailure, true);
+        }
+        catch (TranslationAuthoringException exception)
+        {
+            return Fatal("RCLI9004", "authoring", exception.Message, InvocationFailure);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return Fatal("RCLI9005", "io", exception.Message, InvocationFailure);
+        }
+        catch (Exception exception)
+        {
+            return Fatal("RCLI9006", "internal", $"internal failure: {exception.Message}", InvocationFailure);
+        }
+    }
+
+    private static int PresentFramework(ParseOutcome parsed)
+    {
             if (parsed.Kind == ParseOutcomeKind.Help)
             {
-                Present(parsed, "runic-translations", Success, new(UsageText(), string.Empty), null, []);
+                Present(parsed, "runic-translations", Success, new(CommandHelpFormatter.Format(TranslationsToolCommandModule.CreateCatalog(), "runic-translations", parsed.HelpRequest!.Path, "--runic-output"), string.Empty), null, []);
                 return Success;
             }
 
@@ -65,36 +103,7 @@ internal static class Program
                 return InvocationFailure;
             }
 
-            var sink = new ToolExecutionSink();
-            _ = new CommandExecutor(ToolExecutionScopeFactory.Instance, ToolExitCodePolicy.Instance).ExecuteAsync(
-                new CommandExecutionRequest(parsed.Invocation!, SystemConsole.Instance, CultureInfo.InvariantCulture, "runic-translations"),
-                sink).AsTask().GetAwaiter().GetResult();
-            return sink.ExitCode;
-        }
-        catch (ToolOutputException exception)
-        {
-            return Fatal("RCLI9001", "tool-output", $"error {exception.Message}", DiagnosticFailure);
-        }
-        catch (ToolDiagnosticException exception)
-        {
-            return Fatal("RCLI9002", "tool-diagnostic", exception.Message, DiagnosticFailure);
-        }
-        catch (ToolUsageException exception)
-        {
-            return Fatal("RCLI9003", "tool-usage", exception.Message, InvocationFailure, true);
-        }
-        catch (TranslationAuthoringException exception)
-        {
-            return Fatal("RCLI9004", "authoring", exception.Message, InvocationFailure);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
-        {
-            return Fatal("RCLI9005", "io", exception.Message, InvocationFailure);
-        }
-        catch (Exception exception)
-        {
-            return Fatal("RCLI9006", "internal", $"internal failure: {exception.Message}", InvocationFailure);
-        }
+        return InvocationFailure;
     }
 
     private static string FormatDiagnostic(CommandDiagnostic diagnostic) => diagnostic.Code switch
@@ -134,7 +143,7 @@ internal static class Program
                 : $"runic-translations: {message}\n";
         TranslationsToolCommandModule.PresentAsync(
             CommandOutputMode.Human,
-            SystemConsole.Instance,
+            PresentationConsole,
             CultureInfo.InvariantCulture,
             "runic-translations",
             exitCode,
@@ -164,7 +173,7 @@ internal static class Program
         TranslationsToolFailurePresentation failurePresentation = TranslationsToolFailurePresentation.Standard) =>
         TranslationsToolCommandModule.PresentAsync(
             OutputMode(parsed),
-            SystemConsole.Instance,
+            PresentationConsole,
             CultureInfo.InvariantCulture,
             command,
             exitCode,
@@ -535,19 +544,6 @@ internal sealed class ToolExitCodePolicy : IExitCodePolicy
         CommandExitCategory.Usage or CommandExitCategory.Unavailable or CommandExitCategory.HostFailure => 2,
         _ => 1,
     };
-}
-
-internal sealed class SystemConsole : ICommandConsole
-{
-    internal static SystemConsole Instance { get; } = new();
-    public bool IsInteractive => !Console.IsInputRedirected && !Console.IsOutputRedirected;
-    public bool IsInputRedirected => Console.IsInputRedirected;
-    public bool IsOutputRedirected => Console.IsOutputRedirected;
-    public bool IsErrorRedirected => Console.IsErrorRedirected;
-    public ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken) => ValueTask.FromResult(Console.ReadLine());
-    public ValueTask WriteOutAsync(ReadOnlyMemory<char> value, CancellationToken cancellationToken) => new(Console.Out.WriteAsync(value, cancellationToken));
-    public ValueTask WriteOutBytesAsync(ReadOnlyMemory<byte> value, CancellationToken cancellationToken) => Console.OpenStandardOutput().WriteAsync(value, cancellationToken);
-    public ValueTask WriteErrorAsync(ReadOnlyMemory<char> value, CancellationToken cancellationToken) => new(Console.Error.WriteAsync(value, cancellationToken));
 }
 
 internal sealed class ToolDiagnosticException : Exception

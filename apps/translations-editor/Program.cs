@@ -57,47 +57,34 @@ internal static class Program
             return 0;
         }
         bool bareInvocation = args.Length == 0;
-        var console = new ProcessCommandConsole();
         CommandCatalog catalog = EditorCommandModule.CreateCatalog();
-        ParseOutcome parse = PortableCommandSyntaxAdapter.Instance.Parse(
-            catalog,
-            bareInvocation ? ["edit"] : args,
-            new ParseSettings(
-                Environment.GetEnvironmentVariable(CommandOutputClassifier.EnvironmentVariableName),
-                transportOutputOptionName: "--runic-output"));
-
-        switch (parse.Kind)
+        return await new CommandApp(catalog)
         {
-            case ParseOutcomeKind.Help:
-                await console.WriteOutAsync(HelpText.AsMemory(), CancellationToken.None).ConfigureAwait(false);
+            Name = "runic-translations-editor",
+            Version = VersionText(),
+            Console = new Runic.CommandLine.Spectre.SpectreCommandConsole(),
+            ParseSettings = new ParseSettings(Environment.GetEnvironmentVariable(CommandOutputClassifier.EnvironmentVariableName), transportOutputOptionName: "--runic-output"),
+            ExitCodePolicy = EditorExitCodePolicy.Instance,
+            OutcomeSink = new EditorOutcomeSink(),
+            CreateScopeFactory = invocation => new EditorExecutionScopeFactory(new EditorCommandLineOperations(
+                args, opensPackagedExample: bareInvocation || (!catalog.TryGetCommand(args[0], out _) && invocation.Arguments.Count == 0))),
+            PresentFrameworkRequest = async (parse, console, cancellationToken) =>
+            {
+                if (parse.Kind == ParseOutcomeKind.Error)
+                {
+                    await PresentParseFailureAsync(parse, console).ConfigureAwait(false);
+                    return UsageFailureExitCode;
+                }
+                string text = parse.Kind == ParseOutcomeKind.Version ? VersionText() :
+                    parse.HelpRequest!.Path.Count == 0 ? HelpText : CommandHelpFormatter.Format(catalog, "runic-translations-editor", parse.HelpRequest.Path, "--runic-output");
+                if (parse.OutputClassification?.Mode == CommandOutputMode.Json)
+                    await CommandOutputDispatcher.DispatchAsync(CommandOutputMode.Json, console, CultureInfo.InvariantCulture,
+                        CommandResponse.Succeeded("runic-translations-editor", parse.Kind == ParseOutcomeKind.Version ? "version" : "help", CommandResultCodecs.String.PayloadType, text),
+                        CommandResultCodecs.String, cancellationToken).ConfigureAwait(false);
+                else await console.WriteOutAsync(text.AsMemory(), cancellationToken).ConfigureAwait(false);
                 return SuccessExitCode;
-            case ParseOutcomeKind.Version:
-                await console.WriteOutAsync(VersionText().AsMemory(), CancellationToken.None).ConfigureAwait(false);
-                return SuccessExitCode;
-            case ParseOutcomeKind.Error:
-                await PresentParseFailureAsync(parse, console).ConfigureAwait(false);
-                return UsageFailureExitCode;
-        }
-
-        if (parse.Invocation is null)
-            return UsageFailureExitCode;
-
-        // Parser-derived legacy default: the catalog resolves an explicit leading verb
-        // itself, positional workspaces surface as parsed argument bindings, and a
-        // verb-less option-only form falls back to the packaged example like a bare one.
-        bool hasExplicitVerb = !bareInvocation && catalog.TryGetCommand(args[0], out _);
-        bool hasPositional = parse.Invocation.Arguments.Count > 0;
-        var operations = new EditorCommandLineOperations(
-            args,
-            opensPackagedExample: bareInvocation || (!hasExplicitVerb && !hasPositional));
-        CommandExecutionResult result = await new CommandExecutor(
-                new EditorExecutionScopeFactory(operations),
-                EditorExitCodePolicy.Instance)
-            .ExecuteAsync(
-                new CommandExecutionRequest(parse.Invocation, console, CultureInfo.InvariantCulture, "runic-translations-editor"),
-                new EditorOutcomeSink())
-            .ConfigureAwait(false);
-        return result.ExitCode;
+            },
+        }.RunAsync(bareInvocation ? ["edit"] : args).ConfigureAwait(false);
     }
 
     private static string VersionText()
@@ -626,17 +613,4 @@ internal sealed partial class EditorHostedWebServer : IAsyncDisposable
     // The test build supplies this partial method. An unimplemented private
     // partial method and its invocation are erased from production builds.
     static partial void MapTestFixtures(WebApplication application);
-}
-
-/// <summary>Writes editor command output through the process console streams.</summary>
-internal sealed class ProcessCommandConsole : ICommandConsole
-{
-    public bool IsInteractive => !Console.IsInputRedirected && !Console.IsOutputRedirected;
-    public bool IsInputRedirected => Console.IsInputRedirected;
-    public bool IsOutputRedirected => Console.IsOutputRedirected;
-    public bool IsErrorRedirected => Console.IsErrorRedirected;
-    public ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken) => ValueTask.FromResult(Console.ReadLine());
-    public ValueTask WriteOutAsync(ReadOnlyMemory<char> value, CancellationToken cancellationToken) { Console.Out.Write(value.Span); return ValueTask.CompletedTask; }
-    public ValueTask WriteOutBytesAsync(ReadOnlyMemory<byte> value, CancellationToken cancellationToken) { Console.OpenStandardOutput().Write(value.Span); return ValueTask.CompletedTask; }
-    public ValueTask WriteErrorAsync(ReadOnlyMemory<char> value, CancellationToken cancellationToken) { Console.Error.Write(value.Span); return ValueTask.CompletedTask; }
 }

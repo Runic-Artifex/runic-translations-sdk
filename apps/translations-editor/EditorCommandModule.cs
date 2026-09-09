@@ -72,7 +72,7 @@ internal static class EditorCommandModule
     }
 
     /// <summary>Opens the interactive editor workspace; this is the root fallback for bare invocations.</summary>
-    [Command("edit")]
+    [Command("edit", Description = "Open the translations editor.")]
     [DefaultCommand]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
     public static Task<CommandOutcome<EditorCommandResult>> Edit(
@@ -98,7 +98,7 @@ internal static class EditorCommandModule
     /// Validates one workspace headlessly without opening the editor.
     /// Editor-only options (<c>--webview</c>, <c>--smoke-test</c>) are rejected with a usage error.
     /// </summary>
-    [Command("validate")]
+    [Command("validate", Description = "Validate the selected workspace.")]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
     public static Task<CommandOutcome<EditorCommandResult>> Validate(
         [FromServices] IEditorCommandOperations operations,
@@ -115,7 +115,7 @@ internal static class EditorCommandModule
             context.OutputMode));
 
     /// <summary>Creates the privacy-bounded diagnostic ZIP for explicit local support collection.</summary>
-    [Command("diagnostics")]
+    [Command("diagnostics", Description = "Report workspace diagnostics.")]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
     public static Task<CommandOutcome<EditorCommandResult>> Diagnostics(
         [FromServices] IEditorCommandOperations operations,
@@ -126,7 +126,7 @@ internal static class EditorCommandModule
             "diagnostics", workspace, workspacePath, false, false, false, context.OutputMode));
 
     /// <summary>Exports XLIFF documents or portable review JSON from one workspace.</summary>
-    [Command("export")]
+    [Command("export", Description = "Export translations for review.")]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
     public static Task<CommandOutcome<EditorCommandResult>> Export(
         [FromServices] IEditorCommandOperations operations,
@@ -140,7 +140,7 @@ internal static class EditorCommandModule
             Format: format, Output: output));
 
     /// <summary>Reports the reviewable diff and refusals for an XLIFF or review JSON import without writing files.</summary>
-    [Command("report")]
+    [Command("report", Description = "Preview an import without applying changes.")]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
     public static Task<CommandOutcome<EditorCommandResult>> Report(
         [FromServices] IEditorCommandOperations operations,
@@ -154,7 +154,7 @@ internal static class EditorCommandModule
             Format: format, Source: source));
 
     /// <summary>Previews and, only with <c>--apply</c>, commits one XLIFF or review JSON import.</summary>
-    [Command("import")]
+    [Command("import", Description = "Apply reviewed translation changes.")]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
     public static Task<CommandOutcome<EditorCommandResult>> Import(
         [FromServices] IEditorCommandOperations operations,
@@ -172,7 +172,7 @@ internal static class EditorCommandModule
     /// Hosts the editor over an HTTP + WebSocket bridge without a native window;
     /// the same session stack as <c>edit</c>, served to browsers at a loopback URL.
     /// </summary>
-    [Command("serve")]
+    [Command("serve", Description = "Serve the editor in a browser.")]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
     public static Task<CommandOutcome<EditorCommandResult>> Serve(
         [FromServices] IEditorCommandOperations operations,

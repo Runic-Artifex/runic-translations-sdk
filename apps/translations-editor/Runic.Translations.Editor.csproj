@@ -131,4 +131,7 @@
 
   <Import Project="$(RunicSdkRoot)packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets"
           Condition="'$(RunicSdkRoot)' != ''" />
+  <ItemGroup>
+    <ProjectReference Include="../../packages/dotnet/Runic.CommandLine.Spectre/Runic.CommandLine.Spectre.csproj" />
+  </ItemGroup>
 </Project>
