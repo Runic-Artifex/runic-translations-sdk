@@ -37,6 +37,7 @@ internal sealed class EditorDesktopHost : IApplicationHost
             PackagedUiResourceName);
         _host = new DesktopApplicationHost(new DesktopApplicationHostOptions
         {
+            Host = new DesktopHostOptions { Linux = new() { EmbeddedBackend = LinuxEmbeddedBackend.Gtk3WebKit41 } },
             Title = "Runic Translations Editor",
             Surface = new DesktopSurfaceOptions
             {

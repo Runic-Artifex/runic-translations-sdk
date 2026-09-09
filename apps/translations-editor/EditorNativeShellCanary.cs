@@ -26,10 +26,10 @@ internal static class EditorNativeShellCanary
                 typeof(EditorDesktopHost).Assembly,
                 EditorDesktopHost.PackagedUiResourceName);
             bool highContrast = DesktopPlatform.IsHighContrast;
-            bool webViewAvailable = DesktopPlatform.IsEmbeddedWindowAvailable;
+            bool webViewAvailable = DesktopPlatform.GetAvailability(null, new LinuxDesktopOptions { EmbeddedBackend = LinuxEmbeddedBackend.Gtk3WebKit41 }).Presentations.Any(static presentation => presentation.Browser == BrowserKind.Embedded && presentation.IsAvailable);
             using var editorSession = new EditorSession(workspacePath);
             var dispatcher = new EditorBridgeDispatcher(new EditorBridgeHandler(editorSession));
-            await using DesktopHost host = await DesktopHost.StartAsync(cancellationToken: cancellationToken)
+            await using DesktopHost host = await DesktopHost.StartAsync(new DesktopHostOptions { Linux = new() { EmbeddedBackend = LinuxEmbeddedBackend.Gtk3WebKit41 } }, cancellationToken)
                 .ConfigureAwait(false);
             await using DesktopSurface surface = await host.CreateSurfaceAsync(
                 new DesktopSurfaceOptions
