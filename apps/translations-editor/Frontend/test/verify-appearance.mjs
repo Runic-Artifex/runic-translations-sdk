@@ -23,7 +23,7 @@ globalThis.document = {
       contains: (name) => classes.has(name),
     },
     dataset: {},
-    style: {},
+    style: { setProperty(name, value) { this[name] = value; }, removeProperty(name) { delete this[name]; } },
   },
 };
 
@@ -33,6 +33,7 @@ const write = (key, value) => stored.set(key, String(value));
 
 const {
   applyAppearance,
+  setDesktopAppearance,
   readAppearance,
   saveAppearance,
   themeModes,
@@ -62,6 +63,20 @@ for (const palette of themePalettes) {
 stored.set("runic-translations.theme-mode", "sepia");
 stored.set("runic-translations.theme-palette", "unknown");
 assert.deepEqual(readAppearance(read), { mode: "dark", palette: "runic" });
+
+setDesktopAppearance({ colorScheme: 1, accentColor: { red: 0.5, green: 0, blue: 1 }, highContrast: true, reducedMotion: true });
+systemDark = true;
+applyAppearance("system", "fjord");
+assert.equal(classes.has("dark"), false, "native light preference overrides stale browser dark preference");
+assert.equal(document.documentElement.dataset.highContrast, "true");
+assert.equal(document.documentElement.dataset.reducedMotion, "true");
+assert.equal(document.documentElement.style["--desktop-accent"], "rgb(128 0 255)");
+applyAppearance("dark", "moss");
+assert.equal(classes.has("dark"), true, "explicit mode wins over native preference");
+assert.equal(document.documentElement.dataset.theme, "moss");
+setDesktopAppearance(null);
+applyAppearance("system", "fjord");
+assert.equal(classes.has("dark"), true, "backend loss restores browser preference");
 
 const css = await readFile(new URL("../src/routes/layout.css", import.meta.url), "utf8");
 const requiredTokens = [

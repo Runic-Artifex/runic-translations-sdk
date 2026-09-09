@@ -31,6 +31,19 @@
     <NoWarn>$(NoWarn);CS0436</NoWarn>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">Windows</RunicNativeProvider>
+    <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">MacOS</RunicNativeProvider>
+    <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))">Linux</RunicNativeProvider>
+    <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">Linux</RunicNativeProvider>
+    <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">Windows</RunicNativeProvider>
+    <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">MacOS</RunicNativeProvider>
+    <DefineConstants>$(DefineConstants);RUNIC_PLATFORM_$(RunicNativeProvider)</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../packages/dotnet/Runic.Platform.$(RunicNativeProvider)/Runic.Platform.$(RunicNativeProvider).csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <AssemblyMetadata Include="RunicUpdateChannel" Value="$(RunicEditorUpdateChannel)" />
     <AssemblyMetadata Include="RepositoryCommit" Value="$(SourceRevisionId)" Condition="'$(SourceRevisionId)' != ''" />

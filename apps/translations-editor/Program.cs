@@ -48,7 +48,18 @@ internal static class Program
         Exit codes: 0 success; 1 validation failure; 2 usage failure.
         """ + "\n";
 
-    public static async Task<int> Main(string[] args)
+    public static int Main(string[] args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        if (args.Length > 0 && args[0] is "validate" or "diagnostics" or "export" or "report" or "import" or "serve" or "help" or "--help" or "-h" or "--version" or "manual-replacement-preflight")
+            return RunAsync(args).GetAwaiter().GetResult();
+        int exitCode = 0;
+        // Preferences and embedded windows both need AppKit's process-main-thread queue.
+        Runic.Desktop.DesktopEventLoop.Run(async () => exitCode = await RunAsync(args).ConfigureAwait(false));
+        return exitCode;
+    }
+
+    private static async Task<int> RunAsync(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
         if (args.Length > 0 && args[0] == "manual-replacement-preflight")

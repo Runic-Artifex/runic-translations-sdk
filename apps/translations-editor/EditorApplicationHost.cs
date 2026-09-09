@@ -1,3 +1,13 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Runic.Platform;
+#if RUNIC_PLATFORM_Linux
+using SelectedProvider = Runic.Platform.Linux.LinuxPlatformProvider;
+#elif RUNIC_PLATFORM_Windows
+using SelectedProvider = Runic.Platform.Windows.WindowsPlatformProvider;
+#elif RUNIC_PLATFORM_MacOS
+using SelectedProvider = Runic.Platform.MacOS.MacOSPlatformProvider;
+#endif
 using Runic.Application;
 using Runic.Application.Desktop;
 using Runic.Desktop;
@@ -18,6 +28,8 @@ internal sealed class EditorDesktopHost : IApplicationHost
     private readonly string _workspacePath;
     private readonly bool _useWebView;
     private DesktopApplicationHost? _host;
+    private IDesktopSettings? _settings;
+    private static readonly Dictionary<string, string> NoCache = new() { ["Cache-Control"] = "no-store" };
 
     public EditorDesktopHost(string workspacePath, bool useWebView)
     {
@@ -35,16 +47,27 @@ internal sealed class EditorDesktopHost : IApplicationHost
         AssetArchiveSource assets = AssetArchive.ReadEmbedded(
             typeof(EditorDesktopHost).Assembly,
             PackagedUiResourceName);
+        _settings = SelectedProvider.CreateSettings();
+        var content = assets.ToDesktopContentHandler(new DesktopAssetOptions { EnableSinglePageApplicationFallback = true });
         _host = new DesktopApplicationHost(new DesktopApplicationHostOptions
         {
             Host = new DesktopHostOptions { Linux = new() { EmbeddedBackend = LinuxEmbeddedBackend.Gtk3WebKit41 } },
             Title = "Runic Translations Editor",
             Surface = new DesktopSurfaceOptions
             {
-                ContentHandler = assets.ToDesktopContentHandler(new DesktopAssetOptions
+                ContentHandler = async (request, token) =>
                 {
-                    EnableSinglePageApplicationFallback = true,
-                }),
+                    if (request.Path != "/runic-desktop-appearance.json") return await content(request, token);
+                    if (request.Method != "GET") return ContentResponse.Text("Method not allowed", "text/plain", 405);
+                    try
+                    {
+                        var result = await _settings.ReadAsync(token);
+                        return result is PlatformResult<DesktopAppearance>.Success appearance
+                            ? new ContentResponse(JsonSerializer.SerializeToUtf8Bytes(appearance.Value, EditorAppearanceJson.Default.DesktopAppearance), "application/json", headers: NoCache)
+                            : new ContentResponse("null"u8.ToArray(), "application/json", headers: NoCache);
+                    }
+                    catch (ObjectDisposedException) { return ContentResponse.Text("Stopping", "text/plain", 503); }
+                },
             },
             Window = new DesktopWindowOptions
             {
@@ -66,6 +89,7 @@ internal sealed class EditorDesktopHost : IApplicationHost
         }
         catch
         {
+            await _settings.DisposeAsync().ConfigureAwait(false);
             await _host.DisposeAsync().ConfigureAwait(false);
             _host = null;
             throw;
@@ -75,12 +99,20 @@ internal sealed class EditorDesktopHost : IApplicationHost
     public ValueTask WaitForShutdownAsync(CancellationToken cancellationToken) =>
         _host?.WaitForShutdownAsync(cancellationToken) ?? ValueTask.CompletedTask;
 
-    public ValueTask StopAsync(CancellationToken cancellationToken) =>
-        _host?.StopAsync(cancellationToken) ?? ValueTask.CompletedTask;
+    public async ValueTask StopAsync(CancellationToken cancellationToken)
+    {
+        if (_settings is not null) await _settings.DisposeAsync().ConfigureAwait(false);
+        if (_host is not null) await _host.StopAsync(cancellationToken).ConfigureAwait(false);
+    }
 
     public async ValueTask DisposeAsync()
     {
+        if (_settings is not null) await _settings.DisposeAsync().ConfigureAwait(false);
         if (_host is not null) await _host.DisposeAsync().ConfigureAwait(false);
         _host = null;
     }
 }
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(DesktopAppearance))]
+internal sealed partial class EditorAppearanceJson : JsonSerializerContext;
