@@ -41,6 +41,7 @@ public sealed class Rmf2Workspace
         if (Revision(path) != expectedRevision) throw new TranslationAuthoringException("The resource buffer revision changed.");
         var source = new TranslationSource(path, content); _sources[path] = source; _syntax[path] = Rmf2ResourceReader.Read(source);
     }
+    public Rmf2LanguageService LanguageService => Rmf2LanguageService.Create(_project);
     public TranslationCompilation Validate() => TranslationCompiler.CompileProject(_project, _sources.Values);
 
     public TranslationWorkspaceTransactionPlan RenameLocal(string path, string key, string name, string newName) =>

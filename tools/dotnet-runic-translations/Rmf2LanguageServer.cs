@@ -53,7 +53,7 @@ internal sealed class Rmf2LanguageServer
             _encoding = encodings?.Select(v => v!.GetValue<string>()).FirstOrDefault(v => v is "utf-8" or "utf-16" or "utf-32") ?? "utf-16";
             return new JsonObject { ["capabilities"] = new JsonObject {
                 ["positionEncoding"] = _encoding, ["textDocumentSync"] = 2, ["documentSymbolProvider"] = true,
-                ["foldingRangeProvider"] = true, ["hoverProvider"] = true, ["definitionProvider"] = true,
+                ["referencesProvider"] = true, ["foldingRangeProvider"] = true, ["hoverProvider"] = true, ["definitionProvider"] = true,
                 ["documentFormattingProvider"] = true, ["renameProvider"] = true,
                 ["executeCommandProvider"] = new JsonObject { ["commands"] = new JsonArray("runic.extractGroup", "runic.inlineResource") },
                 ["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("$", ":", "#", "/", "=") },
@@ -134,8 +134,34 @@ internal sealed class Rmf2LanguageServer
         if (method == "textDocument/hover")
         {
             if (entry is null) return null;
+            if (entry.MessageSyntax is { } messageSyntax)
+            {
+                string? description = Workspace(new Uri(uri).LocalPath).LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte));
+                if (description is not null) return new JsonObject { ["contents"] = new JsonObject { ["kind"] = "plaintext", ["value"] = description } };
+            }
             string content = string.Join('.', entry.Path) + "\n\n" + string.Join("\n", entry.Comments) + "\n" + string.Join("\n", entry.Properties);
             return new JsonObject { ["contents"] = new JsonObject { ["kind"] = "plaintext", ["value"] = content }, ["range"] = Range(buffer, entry.NameLocation) };
+        }
+        if (method is "textDocument/definition" or "textDocument/references" && entry?.MessageSyntax is { } symbolSyntax)
+        {
+            int messageByte = MessageOffset(entry, atByte);
+            string? symbol = symbolSyntax.Declarations.Select(d => d.Name)
+                .Concat(symbolSyntax.Tokens.Where(t => t.Kind == Mf2SyntaxTokenKind.Variable).Select(t => t.Value))
+                .Distinct(StringComparer.Ordinal).FirstOrDefault(name => symbolSyntax.VariableReferences(name).Any(location => location.StartByte <= messageByte && messageByte < location.StartByte + location.LengthBytes));
+            if (symbol is not null)
+            {
+                var declaration = symbolSyntax.Declarations.FirstOrDefault(d => d.Name == symbol);
+                bool includeDeclaration = args["context"]?["includeDeclaration"]?.GetValue<bool>() ?? true;
+                var locations = method == "textDocument/definition"
+                    ? declaration is null ? Array.Empty<TextSourceLocation>() : new[] { declaration.NameLocation }
+                    : symbolSyntax.VariableReferences(symbol).Where(location => includeDeclaration || declaration is null || location.StartByte != declaration.NameLocation.StartByte).ToArray();
+                return new JsonArray(locations.Select(location => (JsonNode)new JsonObject { ["uri"] = uri,
+                    ["range"] = new JsonObject {
+                        ["start"] = Position(buffer.Text, Utf8.GetCharCount(buffer.Syntax.Source.GetUtf8Bytes().AsSpan(0, entry.MessageByteMap[location.StartByte]))),
+                        ["end"] = Position(buffer.Text, Utf8.GetCharCount(buffer.Syntax.Source.GetUtf8Bytes().AsSpan(0, entry.MessageByteMap[location.StartByte + location.LengthBytes]))),
+                    } }).ToArray());
+            }
+            if (method == "textDocument/references") return new JsonArray();
         }
         if (method == "textDocument/definition")
         {
@@ -147,15 +173,19 @@ internal sealed class Rmf2LanguageServer
         if (method == "textDocument/completion")
         {
             var labels = new HashSet<string>(StringComparer.Ordinal) { ":string", ":integer", ":number", ":date", ":time", ":datetime", ":runic:uuid", ":runic:boolean", ":runic:relative-time", "one", "two", "few", "many", "zero", "*" };
-            foreach (string tag in new[] { "strong", "em", "bold", "italic", "code", "br", "link", "action", "icon" }) { labels.Add("#" + tag); labels.Add("/" + tag); }
-            if (entry?.Message is string message)
-            {
-                foreach (Match match in Regex.Matches(message, "\\$[A-Za-z_][A-Za-z0-9_]*")) labels.Add(match.Value);
-                foreach (Match match in Regex.Matches(message, "ref=([A-Za-z_][A-Za-z0-9_-]*)")) labels.Add("ref=" + match.Groups[1].Value);
-            }
-            return new JsonArray(labels.Order(StringComparer.Ordinal).Select(label => (JsonNode)new JsonObject { ["label"] = label, ["kind"] = 14 }).ToArray());
+            var completions = Workspace(new Uri(uri).LocalPath).LanguageService.Complete(entry?.MessageSyntax, entry is null ? 0 : MessageOffset(entry, atByte));
+            var items = completions.ToDictionary(item => item.Label, item => item.Detail, StringComparer.Ordinal);
+            foreach (string label in labels) items.TryAdd(label, "RMF2 execution profile");
+            return new JsonArray(items.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => (JsonNode)new JsonObject { ["label"] = item.Key, ["detail"] = item.Value, ["kind"] = 14 }).ToArray());
         }
         return null;
+    }
+    private static int MessageOffset(Rmf2ResourceNode entry, int physicalByte)
+    {
+        if (entry.MessageByteMap.Count == 0 || physicalByte < entry.MessageByteMap[0]) return -1;
+        int index = 0;
+        while (index + 1 < entry.MessageByteMap.Count && entry.MessageByteMap[index + 1] <= physicalByte) index++;
+        return index;
     }
     private Rmf2Workspace Workspace(string path)
     {

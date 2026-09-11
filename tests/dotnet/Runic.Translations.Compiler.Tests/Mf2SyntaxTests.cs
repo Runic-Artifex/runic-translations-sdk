@@ -9,6 +9,7 @@ internal static class Mf2SyntaxTests
 {
     internal static void Register(TestRunner runner)
     {
+        runner.Add("RMF2 language service uses project contracts and semantic variables", LanguageService);
         runner.Add("RMF2 literal locals and aliases remain internal to the caller contract", LiteralLocals);
         runner.Add("MF2 syntax preserves unsupported expressions and exact Unicode/CRLF token spans", Lossless);
         runner.Add("MF2 syntax preserves declarations selectors and variant order", Declarations);
@@ -16,6 +17,23 @@ internal static class Mf2SyntaxTests
         runner.Add("MF2 syntax distinguishes literal/variable options and valueless attributes", Properties);
     }
     private static Mf2SyntaxDocument Read(string text) => Mf2SyntaxReader.Read(new TranslationSource("message.mf2", Encoding.UTF8.GetBytes(text)));
+    private static void LanguageService()
+    {
+        const string project = """
+        {"markup":{"contracts":[{"name":"app:badge","kind":"standalone","children":"none","plainText":"omit","options":{"tone":{"type":"enum","values":["good","bad"],"literalOnly":true}}}],"aliases":{"badge":"app:badge"}}}
+        """;
+        var service = Rmf2LanguageService.Create(new TranslationSource("runic.json", Encoding.UTF8.GetBytes(project)));
+        Assert.Equal(0, service.Diagnostics.Count);
+        var syntax = Read(".local $label = {|$fake|}\n{{{#badge tone=good/} {$label} {$name}}}");
+        int position = Encoding.UTF8.GetByteCount(Encoding.UTF8.GetString(syntax.Source.GetUtf8Bytes()).Split("tone=")[0]);
+        var items = service.Complete(syntax, position);
+        Assert.True(items.Any(i => i.Label == "#badge") && items.All(i => i.Label != "/badge"), "Standalone alias completions are incorrect.");
+        Assert.True(items.Any(i => i.Label == "$label") && items.All(i => i.Label != "$fake"), "Literal text leaked into symbol completion.");
+        Assert.True(items.All(i => i.Label != "tone="), "An existing option was suggested twice.");
+        Assert.True(service.Hover(syntax, position)!.Contains("literal only", StringComparison.Ordinal), "Option hover lost its contract.");
+        var incomplete = Read("{#badge }");
+        Assert.True(service.Complete(incomplete, 3).Any(i => i.Label == "tone=" && i.Detail.Contains("good, bad", StringComparison.Ordinal)), "Missing custom enum option.");
+    }
     private static void LiteralLocals()
     {
         var compilation = TranslationCompiler.CompileProject(Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("x =\n  .local $literal = {|Hello|}\n  .local $alias = {$literal}\n  {{{$alias} {$name}}}"))]);

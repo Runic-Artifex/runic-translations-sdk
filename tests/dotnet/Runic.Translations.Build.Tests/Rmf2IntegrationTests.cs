@@ -101,6 +101,14 @@ internal static class Rmf2IntegrationTests
             doc = Document(); doc["version"] = 2;
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Hello\n" }) });
             Send("textDocument/rename", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["newName"] = "greeting" }, 2);
+            doc = Document(); doc["version"] = 3;
+            Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = {#link ref=help}Help{/link} {$name} |$literal|\n" }) });
+            Send("textDocument/completion", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 8 } }, 4);
+            Send("textDocument/hover", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 7 } }, 5);
+            doc = Document(); doc["version"] = 4;
+            Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x =\n  .local $label = {|Help|}\n  {{{$label}}}\n" }) });
+            Send("textDocument/definition", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 2, ["character"] = 7 } }, 6);
+            Send("textDocument/references", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 2, ["character"] = 7 }, ["context"] = new JsonObject { ["includeDeclaration"] = false } }, 7);
             Send("shutdown", new JsonObject(), 3); Send("exit", new JsonObject()); process.StandardInput.Close();
             if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
             Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
@@ -116,6 +124,17 @@ internal static class Rmf2IntegrationTests
             Assert.Equal(encoding == "utf-8" ? 9 : encoding == "utf-16" ? 7 : 6, diagnostic["range"]!["start"]!["character"]!.GetValue<int>());
             var rename = frames.Single(n => n["id"]?.ToString() == "2")["result"]!["documentChanges"]![0]!;
             Assert.Equal(2, rename["textDocument"]!["version"]!.GetValue<int>()); Assert.Contains("greeting = Hello", rename["edits"]![0]!["newText"]!.ToString());
+            var completion = frames.Single(n => n["id"]?.ToString() == "4")["result"]!.AsArray();
+            Assert.True(completion.Any(n => n!["label"]!.ToString() == "$name"), "Missing semantic input completion.");
+            Assert.True(completion.All(n => n!["label"]!.ToString() != "$literal" && n["label"]!.ToString() != "/br"), "Invalid completion leaked into LSP.");
+            Assert.Contains("interactive", frames.Single(n => n["id"]?.ToString() == "5")["result"]!["contents"]!["value"]!.ToString());
+            var definition = frames.Single(n => n["id"]?.ToString() == "6")["result"]!.AsArray();
+            Assert.Equal(1, definition.Count);
+            Assert.Equal(1, definition[0]!["range"]!["start"]!["line"]!.GetValue<int>());
+            Assert.Equal(9, definition[0]!["range"]!["start"]!["character"]!.GetValue<int>());
+            var references = frames.Single(n => n["id"]?.ToString() == "7")["result"]!.AsArray();
+            Assert.Equal(1, references.Count);
+            Assert.Equal(2, references[0]!["range"]!["start"]!["line"]!.GetValue<int>());
         }
     }
 }

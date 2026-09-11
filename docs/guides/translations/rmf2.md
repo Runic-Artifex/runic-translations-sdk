@@ -186,6 +186,12 @@ mount configuration; it is not exposed as an automatic file operation.
 The stdio LSP implements incremental changes, UTF-8/16/32 position negotiation,
 recoverable diagnostics, flat document symbols, folding, formatting, basic
 completion/hover, logical definitions, and versioned resource rename edits.
+The compiler-owned `Rmf2LanguageService` supplies registered custom tags and aliases,
+missing markup options, enum values and literal-only/default/required constraints
+in completion details and hover. Standalone tags do not offer closing tags.
+Variable suggestions use semantic tokens rather than literal text. Definitions
+and references for message variables stay within the current message; catalog-wide
+input navigation remains pending.
 Local-variable rename uses parsed symbol locations and rejects capture of an
 existing variable. Quoted literals and ordinary message text are preserved.
 `runic.extractGroup` and `runic.inlineResource` return `WorkspaceEdit` results;
@@ -234,7 +240,7 @@ The following accepted proposal features remain incomplete:
   The bounded executor still rejects variable-valued formatter options,
   expression annotations and formatted literal locals. Full MF2 execution is
   outside the core milestone.
-- Full project-aware LSP option/slot completion, fallback and type hover,
+- Project-aware formatter-option and slot-value completion, fallback and inferred-type hover,
   example previews, catalog-wide input rename, asynchronous cancellation, persistent
   dependency indexes, and automatic configuration edits during mounted renames.
 - Toolkit-specific native renderers, framework SSR/hydration adapters, richer

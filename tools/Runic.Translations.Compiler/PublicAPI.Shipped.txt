@@ -365,6 +365,25 @@ type sealed class Runic.Translations.Compiler.Mf2VariantSyntax : System.IEquatab
   property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
   property System.Collections.Generic.IReadOnlyList<System.String> Keys { get; init; }
 
+type sealed class Runic.Translations.Compiler.Rmf2Completion : System.IEquatable<Runic.Translations.Compiler.Rmf2Completion>
+  ctor Runic.Translations.Compiler.Rmf2Completion(System.String Label, System.String Detail)
+  method Runic.Translations.Compiler.Rmf2Completion <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Rmf2Completion other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Label, out System.String Detail)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Rmf2Completion left, Runic.Translations.Compiler.Rmf2Completion right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Rmf2Completion left, Runic.Translations.Compiler.Rmf2Completion right)
+  property System.String Detail { get; init; }
+  property System.String Label { get; init; }
+
+type sealed class Runic.Translations.Compiler.Rmf2LanguageService
+  method System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2Completion> Complete(Runic.Translations.Compiler.Mf2SyntaxDocument syntax, System.Int32 byteOffset)
+  method System.String Hover(Runic.Translations.Compiler.Mf2SyntaxDocument syntax, System.Int32 byteOffset)
+  method static Runic.Translations.Compiler.Rmf2LanguageService Create(Runic.Translations.Compiler.TranslationSource project, System.Threading.CancellationToken cancellationToken = default)
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic> Diagnostics { get; }
+
 type sealed class Runic.Translations.Compiler.Rmf2ResourceDocument
   property Runic.Translations.Compiler.TranslationSource Source { get; }
   property System.Boolean Success { get; }
