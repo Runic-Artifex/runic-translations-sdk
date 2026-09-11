@@ -274,4 +274,5 @@ badge in two locales. Verify variant-dependent slots, standalone icons, literal
 and variable options, native/web behavior, SSR hydration, external-pack rejection,
 and meaningful plain-text projection. Benchmark repeated simple and rich message
 rendering for allocations and time, with one representative feature split. This
-design has not yet been implemented or benchmarked.
+proposal originally preceded implementation. Current implementation, measurements
+and platform limitations are tracked in [RMF2 validation](rmf2-validation.md).

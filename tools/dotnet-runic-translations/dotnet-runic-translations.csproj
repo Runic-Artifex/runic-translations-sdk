@@ -16,6 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" />
     <ProjectReference Include="../../packages/dotnet/Runic.CommandLine/Runic.CommandLine.csproj" />
     <ProjectReference Include="..\..\packages\dotnet\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />
     <ProjectReference Include="..\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" />

@@ -24,6 +24,7 @@ internal sealed class Rmf2LanguageServer
     private string _encoding = "utf-16";
     private bool _shutdown;
     private bool _fileOperations;
+    private bool _configurationSync;
     private readonly List<string> _workspaceRoots = new();
     private static readonly UTF8Encoding Utf8 = new(false, true);
     internal Rmf2LanguageServer(Stream input, Stream output) { _input = input; _output = output; }
@@ -55,7 +56,7 @@ internal sealed class Rmf2LanguageServer
                         if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result });
                     }
                 }
-                catch (Exception error) when (error is ContentModifiedException or OperationCanceledException or ArgumentException or InvalidOperationException or TranslationAuthoringException or KeyNotFoundException or IOException or System.Text.Json.JsonException)
+                catch (Exception error) when (error is ContentModifiedException or OperationCanceledException or ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or TranslationAuthoringException or KeyNotFoundException or IOException or FormatException or OverflowException or TranslationFormatException or System.Text.Json.JsonException)
                 {
                     if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["error"] = new JsonObject { ["code"] = error is ContentModifiedException ? -32801 : error is OperationCanceledException ? -32800 : -32602, ["message"] = error is ContentModifiedException ? "Document content changed while the request was pending." : error is OperationCanceledException ? "Request cancelled." : error.Message } });
                 }
@@ -84,17 +85,19 @@ internal sealed class Rmf2LanguageServer
                     revision = _latestRevision;
                     if (request["id"] is { } id) pending[id.ToJsonString()] = source;
                 }
-                queue.Add((request, source, revision));
+                while (!queue.TryAdd((request, source, revision), 100))
+                    if (worker.IsCompleted) { source.Dispose(); worker.GetAwaiter().GetResult(); throw new IOException("Language server worker stopped."); }
                 if (method == "exit") break;
             }
         }
-        finally { queue.CompleteAdding(); }
+        finally { queue.CompleteAdding(); worker.GetAwaiter().GetResult(); }
         return worker.GetAwaiter().GetResult();
     }
     private JsonNode? Handle(string method, JsonObject args)
     {
         if (method == "initialize")
         {
+            _configurationSync = args["initializationOptions"]?["runicConfigurationSync"]?.GetValue<bool>() == true;
             if (args["workspaceFolders"] is JsonArray folders)
                 foreach (var folder in folders) _workspaceRoots.Add(new Uri(folder!["uri"]!.GetValue<string>()).LocalPath);
             else if (args["rootUri"] is JsonValue rootUri) _workspaceRoots.Add(new Uri(rootUri.GetValue<string>()).LocalPath);
@@ -106,7 +109,7 @@ internal sealed class Rmf2LanguageServer
                 ["semanticTokensProvider"] = new JsonObject { ["legend"] = new JsonObject { ["tokenTypes"] = new JsonArray("namespace", "property", "variable", "function", "keyword", "string", "comment", "type"), ["tokenModifiers"] = new JsonArray() }, ["full"] = true },
                 ["referencesProvider"] = true, ["foldingRangeProvider"] = true, ["hoverProvider"] = true, ["definitionProvider"] = true,
                 ["documentFormattingProvider"] = true, ["renameProvider"] = true,
-                ["executeCommandProvider"] = new JsonObject { ["commands"] = new JsonArray("runic.extractGroup", "runic.inlineResource", "runic.preview", "runic.renameInput", "runic.renameSlot") },
+                ["executeCommandProvider"] = new JsonObject { ["commands"] = new JsonArray("runic.extractGroup", "runic.inlineResource", "runic.preview", "runic.renameInput", "runic.renameSlot", "runic.renameResource", "runic.renderPreview") },
                 ["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("$", ":", "#", "/", "=") },
             }, ["serverInfo"] = new JsonObject { ["name"] = "Runic RMF2", ["version"] = "1" } };
         }
@@ -118,18 +121,21 @@ internal sealed class Rmf2LanguageServer
             JsonArray arguments = args["arguments"]!.AsArray();
             string sourceUri = arguments[0]!.GetValue<string>(); string sourcePath = new Uri(sourceUri).LocalPath;
             var workspace = Workspace(sourcePath);
-            if (command == "runic.preview")
+            if (command is "runic.preview" or "runic.renderPreview")
             {
                 string key = arguments[1]!.GetValue<string>(), locale = arguments[2]!.GetValue<string>();
                 var compilation = workspace.Validate();
                 if (!compilation.Success) throw new TranslationAuthoringException(string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
                 var catalog = compilation.Catalogs.Single();
+                if (command == "runic.renderPreview") return Rmf2Preview.Render(catalog, key, locale, arguments[3]!.AsObject());
                 var artifact = JsonNode.Parse(TranslationOutputRenderer.RenderLocaleJson(catalog, locale).Text)!;
                 var message = artifact["messages"]?[key] ?? throw new TranslationAuthoringException("Unknown preview message.");
                 var examples = workspace.Documents.SelectMany(doc => doc.Nodes.Where(node => !node.IsGroup && string.Join('_', workspace.LogicalPath(doc.Source.Path, node)) == key))
                     .SelectMany(node => node.Properties.Where(value => value.StartsWith("example ", StringComparison.Ordinal)).Select(value => JsonNode.Parse(value.Substring(8))));
                 return new JsonObject { ["key"] = key, ["locale"] = locale, ["ast"] = message.DeepClone(), ["markup"] = JsonNode.Parse(catalog.Rmf2MarkupContract!), ["examples"] = new JsonArray(examples.ToArray()) };
             }
+            if (command == "runic.renameResource")
+                return WorkspaceEdit(workspace.Rename(arguments[1]!.AsArray().Select(value => value!.GetValue<string>()).ToArray(), arguments[2]!.GetValue<string>()));
             if (command == "runic.renameSlot")
                 return WorkspaceEdit(workspace.RenameSlot(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>(), arguments[3]!.GetValue<string>()));
             if (command == "runic.renameInput")
@@ -163,6 +169,7 @@ internal sealed class Rmf2LanguageServer
             }
             Update(uri, text, version); return null;
         }
+        if (Path.GetFileName(new Uri(uri).LocalPath) == "runic.json") return null;
         if (method == "textDocument/semanticTokens/full") return SemanticTokens(buffer);
         if (method == "textDocument/documentSymbol")
             return new JsonArray(buffer.Syntax.Nodes.Select(node => (JsonNode)new JsonObject {
@@ -182,13 +189,33 @@ internal sealed class Rmf2LanguageServer
         int offset = args["position"] is JsonNode position ? Offset(buffer.Text, position) : 0;
         int atByte = Utf8.GetByteCount(buffer.Text.AsSpan(0, offset));
         Rmf2ResourceNode? entry = buffer.Syntax.Nodes.LastOrDefault(n => n.Location.StartByte <= atByte && atByte <= n.Location.StartByte + n.Location.LengthBytes);
+        if (method == "runic/message")
+        {
+            if (entry is null) throw new TranslationAuthoringException("Place the cursor inside a resource or group.");
+            string sourcePath = new Uri(uri).LocalPath; var workspace = Workspace(sourcePath);
+            var locals = entry.MessageSyntax?.Declarations.Where(declaration => declaration.Kind == "local").Select(declaration => declaration.Name).ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>();
+            var inputs = entry.MessageSyntax?.Tokens.Where(token => token.Kind == Mf2SyntaxTokenKind.Variable && !locals.Contains(token.Value)).Select(token => token.Value).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal) ?? Enumerable.Empty<string>();
+            var slots = entry.MessageSyntax?.Expressions.SelectMany(expression => expression.Options.Where(option => option.Name == "ref" && option.Value is { Kind: not Mf2OperandKind.Variable })).Select(option => option.Value!.Value).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal) ?? Enumerable.Empty<string>();
+            return new JsonObject {
+                ["key"] = string.Join('_', workspace.LogicalPath(sourcePath, entry)), ["localKey"] = entry.Key, ["isGroup"] = entry.IsGroup,
+                ["logicalPath"] = new JsonArray(workspace.LogicalPath(sourcePath, entry).Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
+                ["path"] = new JsonArray(entry.Path.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
+                ["locale"] = Path.GetFileNameWithoutExtension(sourcePath),
+                ["locales"] = new JsonArray(workspace.Documents.Select(document => Path.GetFileNameWithoutExtension(document.Source.Path)).Distinct(StringComparer.OrdinalIgnoreCase).Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
+                ["inputs"] = new JsonArray(inputs.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
+                ["slots"] = new JsonArray(slots.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
+            };
+        }
         if (method == "textDocument/rename")
         {
             if (entry is null) throw new InvalidOperationException("The position is not on a resource symbol.");
             string path = new Uri(uri).LocalPath; var workspace = Workspace(path);
             TranslationWorkspaceTransactionPlan plan;
             if (atByte >= entry.NameLocation.StartByte && atByte <= entry.NameLocation.StartByte + entry.NameLocation.LengthBytes)
+            {
+                RequireResourceOnlyWorkspace(path);
                 plan = workspace.Rename(workspace.LogicalPath(path, entry), args["newName"]!.GetValue<string>());
+            }
             else
             {
                 var syntax = entry.MessageSyntax;
@@ -202,13 +229,25 @@ internal sealed class Rmf2LanguageServer
         if (method == "textDocument/hover")
         {
             if (entry is null) return null;
-            if (entry.MessageSyntax is { } messageSyntax)
+            string path = new Uri(uri).LocalPath; var workspace = Workspace(path);
+            string key = string.Join('_', workspace.LogicalPath(path, entry));
+            string content = entry.MessageSyntax is { } messageSyntax ? workspace.LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte)) ?? key : key;
+            var compiled = workspace.Validate();
+            if (compiled.Success && !entry.IsGroup)
             {
-                string? description = Workspace(new Uri(uri).LocalPath).LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte));
-                if (description is not null) return new JsonObject { ["contents"] = new JsonObject { ["kind"] = "plaintext", ["value"] = description } };
+                var catalog = compiled.Catalogs.Single();
+                string locale = Path.GetFileNameWithoutExtension(path);
+                var value = catalog.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
+                if (value is not null)
+                {
+                    content += "\nContent locale: " + Path.GetFileNameWithoutExtension(value.SourceLocation.Path);
+                    if (value.Placeholders.Count > 0) content += "\nInputs: " + string.Join(", ", value.Placeholders.Select(input => "$" + input.Name + ": " + input.Type + (input.Format.Length == 0 ? "" : " (" + input.Format + ")")));
+                }
+                var fallback = catalog.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
+                if (fallback is not null) content += "\nFallback: " + fallback;
             }
-            string content = string.Join('.', entry.Path) + "\n\n" + string.Join("\n", entry.Comments) + "\n" + string.Join("\n", entry.Properties);
-            return new JsonObject { ["contents"] = new JsonObject { ["kind"] = "plaintext", ["value"] = content }, ["range"] = Range(buffer, entry.NameLocation) };
+            content += "\n" + string.Join("\n", entry.Comments) + "\n" + string.Join("\n", entry.Properties);
+            return new JsonObject { ["contents"] = new JsonObject { ["kind"] = "plaintext", ["value"] = content } };
         }
         if (method is "textDocument/definition" or "textDocument/references" && entry?.MessageSyntax is { } symbolSyntax)
         {
@@ -258,6 +297,36 @@ internal sealed class Rmf2LanguageServer
         while (index + 1 < entry.MessageByteMap.Count && entry.MessageByteMap[index + 1] <= physicalByte) index++;
         return index;
     }
+    private void RequireResourceOnlyWorkspace(string path)
+    {
+        // Native application-language services own call sites. Never return a partial F2 edit.
+        string root = _workspaceRoots.Where(value => IsWithin(value, path)).OrderByDescending(value => value.Length).FirstOrDefault()
+            ?? throw new TranslationAuthoringException("Rename requires an explicit workspace root. Use Rename Resource in Resource Sources for an intentionally bounded edit.");
+        var directories = new Stack<string>(); directories.Push(root);
+        int visited = 0;
+        while (directories.Count > 0)
+        {
+            _requestCancellation.ThrowIfCancellationRequested();
+            foreach (string entry in Directory.EnumerateFileSystemEntries(directories.Pop()))
+            {
+                if (++visited > 100_000) throw new TranslationAuthoringException("Workspace is too large to establish safe rename scope. Use Rename Resource in Resource Sources explicitly.");
+                if (Path.GetFileName(entry) is ".git" or "node_modules" or "bin" or "obj" or "dist" or "artifacts" or ".cache" or ".direnv" or ".vs") continue;
+                var attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0) throw new TranslationAuthoringException("Rename refused: linked workspace sources cannot be safely indexed. Use Rename Resource in Resource Sources explicitly.");
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    if (Path.GetFileName(entry) is not (".git" or "node_modules" or "bin" or "obj" or "dist" or "artifacts" or ".cache" or ".direnv" or ".vs")) directories.Push(entry);
+                }
+                else if (Path.GetExtension(entry).ToLowerInvariant() is ".cs" or ".ts" or ".tsx" or ".js" or ".jsx" or ".svelte" or ".toml" or ".resx" or ".razor" or ".xaml" or ".cpp" or ".h")
+                    throw new TranslationAuthoringException("Rename refused: this workspace contains application or legacy sources whose references Runic cannot safely rewrite. Use the native language refactor, or explicitly choose Rename Resource in Resource Sources and update call sites separately.");
+            }
+        }
+    }
+    private static bool IsWithin(string root, string path)
+    {
+        string relative = Path.GetRelativePath(root, path);
+        return !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+    }
     private Rmf2Workspace Workspace(string path)
     {
         _requestCancellation.ThrowIfCancellationRequested();
@@ -266,20 +335,24 @@ internal sealed class Rmf2LanguageServer
         if (directory is null)
             directory = _workspaceRoots.SelectMany(root => new[] { root, Path.Combine(root, "translations") }).FirstOrDefault(root => File.Exists(Path.Combine(root, "runic.json")));
         if (directory is null) throw new InvalidOperationException("No runic.json project was found in the resource ancestors or workspace translations directory.");
-        CompilerInputs inputs = InputFiles.ReadProject(directory);
+        string projectPath = Path.Combine(directory, "runic.json");
+        _buffers.TryGetValue(new Uri(projectPath).AbsoluteUri, out var projectBuffer);
+        CompilerInputs inputs = InputFiles.ReadProject(directory, projectBuffer is null ? null : new TranslationSource(projectPath, Utf8.GetBytes(projectBuffer.Text)));
         var sources = inputs.Messages.Select(s => new TranslationSource(Path.GetFullPath(s.Path), s.GetUtf8Bytes())).ToDictionary(s => s.Path, StringComparer.Ordinal);
         foreach (var pair in _buffers)
         {
             string file = new Uri(pair.Key).LocalPath;
-            if (sources.ContainsKey(file)) sources[file] = new TranslationSource(file, Utf8.GetBytes(pair.Value.Text));
+            if (sources.ContainsKey(file) || (Path.GetExtension(file).Equals(".rmf2", StringComparison.OrdinalIgnoreCase) && inputs.SourceRoots?.Any(sourceRoot => IsWithin(sourceRoot, file)) == true)) sources[file] = new TranslationSource(file, Utf8.GetBytes(pair.Value.Text));
         }
         string root = directory;
         foreach (string file in sources.Keys)
-            while (Path.GetRelativePath(root, file).StartsWith("../", StringComparison.Ordinal)) root = Path.GetDirectoryName(root)!;
+            while (!IsWithin(root, file)) root = Path.GetDirectoryName(root)!;
         return _syntaxCache.Create(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()), sources.Values, _requestCancellation);
     }
     private JsonObject WorkspaceEdit(TranslationWorkspaceTransactionPlan plan)
     {
+        if (!_configurationSync && plan.Edits.Any(edit => Path.GetFileName(edit.RelativePath) == "runic.json"))
+            throw new TranslationAuthoringException("Refactor refused: this client does not synchronize unsaved runic.json buffers. Use the Translations Editor or VS Code for configuration-changing transactions.");
         var edits = new JsonArray();
         foreach (var edit in plan.Edits)
         {
@@ -300,11 +373,16 @@ internal sealed class Rmf2LanguageServer
     {
         if (Utf8.GetByteCount(text) > 8 * 1024 * 1024) throw new ArgumentException("Document exceeds RMF2 byte limit.");
         if (!_buffers.ContainsKey(uri) && _buffers.Count >= 256) throw new ArgumentException("Too many open resource buffers.");
-        var syntax = Rmf2ResourceReader.Analyze(new TranslationSource(new Uri(uri).LocalPath, Utf8.GetBytes(text)));
+        bool configuration = Path.GetFileName(new Uri(uri).LocalPath) == "runic.json";
+        if (!configuration && !Path.GetExtension(new Uri(uri).LocalPath).Equals(".rmf2", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("The RMF2 language server supports .rmf2 resources and runic.json synchronization; use the native service for application and legacy sources.");
+        var syntax = Rmf2ResourceReader.Analyze(new TranslationSource(new Uri(uri).LocalPath, configuration ? Array.Empty<byte>() : Utf8.GetBytes(text)));
         var buffer = new Buffer(text, version, syntax); _buffers[uri] = buffer;
         IReadOnlyList<TranslationDiagnostic> catalogDiagnostics = Array.Empty<TranslationDiagnostic>();
         try { catalogDiagnostics = Workspace(new Uri(uri).LocalPath).Validate().Diagnostics; }
-        catch (Exception error) when (error is InvalidOperationException or IOException or System.Text.Json.JsonException or TranslationAuthoringException) { /* Recoverable syntax remains available while the project cannot compile. */ }
+        catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or System.Text.Json.JsonException or TranslationAuthoringException) {
+            if (configuration) catalogDiagnostics = TranslationCompiler.CompileProject(new TranslationSource(new Uri(uri).LocalPath, Utf8.GetBytes(text)), Array.Empty<TranslationSource>()).Diagnostics;
+        }
         foreach (var pair in _buffers)
         {
             var current = pair.Value;
@@ -361,7 +439,7 @@ internal sealed class Rmf2LanguageServer
     }
     private JsonObject Range(Buffer buffer, TextSourceLocation location)
     {
-        byte[] bytes = buffer.Syntax.Source.GetUtf8Bytes();
+        byte[] bytes = Utf8.GetBytes(buffer.Text);
         int from = Utf8.GetCharCount(bytes.AsSpan(0, location.StartByte)), to = Utf8.GetCharCount(bytes.AsSpan(0, location.StartByte + location.LengthBytes));
         return new JsonObject { ["start"] = Position(buffer.Text, from), ["end"] = Position(buffer.Text, to) };
     }

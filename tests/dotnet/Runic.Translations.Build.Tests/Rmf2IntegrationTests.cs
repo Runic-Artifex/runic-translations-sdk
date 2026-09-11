@@ -118,7 +118,7 @@ internal static class Rmf2IntegrationTests
                 }
             }
             JsonObject Document() => new() { ["uri"] = uri };
-            Send("initialize", new JsonObject { ["capabilities"] = new JsonObject { ["general"] = new JsonObject { ["positionEncodings"] = new JsonArray(encoding) } } }, 1);
+            Send("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Resolve(".")).AbsoluteUri, ["capabilities"] = new JsonObject { ["general"] = new JsonObject { ["positionEncodings"] = new JsonArray(encoding) } } }, 1);
             var doc = Document(); doc["version"] = 1; doc["text"] = "x = 😀 {unfinished\n";
             Send("textDocument/didOpen", new JsonObject { ["textDocument"] = doc });
             Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = Document() }, 23);
@@ -151,9 +151,26 @@ internal static class Rmf2IntegrationTests
             doc = Document(); doc["version"] = 6;
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Current\n" }) });
             Send("textDocument/semanticTokens/full", new JsonObject { ["textDocument"] = Document() }, 22);
+            Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = germanUri } });
+            string frenchUri = new Uri(temporary.Resolve("fr.rmf2")).AbsoluteUri;
+            Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = frenchUri, ["version"] = 1, ["text"] = "x = Bonjour\n" } });
+            Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.preview", ["arguments"] = new JsonArray(frenchUri, "x", "fr") }, 24);
+            File.WriteAllText(temporary.Resolve("App.cs"), "class App { }\n");
+            Send("textDocument/rename", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["newName"] = "unsafe" }, 25);
+            Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renameResource", ["arguments"] = new JsonArray(uri, new JsonArray("x"), "intentional") }, 26);
+            Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = frenchUri } });
+            File.WriteAllText(temporary.Resolve("runic.json"), Project[..^1] + """, "markup":{"slots":{"x":{"retry":{"min":1,"max":1}}}}}""");
+            File.WriteAllText(temporary.Resolve("de.rmf2"), "x = {#action ref=retry}Retry{/action}\n");
+            doc = Document(); doc["version"] = 7;
+            Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = {#action ref=retry}Retry{/action}\n" }) });
+            Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renameResource", ["arguments"] = new JsonArray(uri, new JsonArray("x"), "requiresConfig") }, 27);
             Send("shutdown", new JsonObject(), 3); Send("exit", new JsonObject()); process.StandardInput.Close();
             if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
             Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
+            Assert.Contains("Bonjour", frames.Single(frame => frame["id"]?.ToString() == "24")["result"]!.ToJsonString());
+            Assert.Contains("Rename refused", frames.Single(frame => frame["id"]?.ToString() == "25")["error"]!["message"]!.ToString());
+            Assert.Contains("intentional", frames.Single(frame => frame["id"]?.ToString() == "26")["result"]!.ToJsonString());
+            Assert.Contains("does not synchronize", frames.Single(frame => frame["id"]?.ToString() == "27")["error"]!["message"]!.ToString());
             var tokens = frames.Single(frame => frame["id"]?.ToString() == "21")["result"]!["data"]!.AsArray();
             Assert.True(tokens.Count > 0 && tokens.Count % 5 == 0, "Semantic highlighting did not return LSP token tuples.");
             Assert.Equal(4, frames.Single(n => n["id"]?.ToString() == "20")["result"]!["ast"]!["astVersion"]!.GetValue<int>());

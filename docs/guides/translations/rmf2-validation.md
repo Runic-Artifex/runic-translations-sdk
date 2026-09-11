@@ -40,6 +40,32 @@ native controls, custom badge options, meaningful icon accessibility and stale
 callback deactivation after replacing content. No Windows runtime result is
 implied by a successful cross-build.
 
+## IDE and language-service checks
+
+VS Code's isolated extension-host check passes activation, native symbol and
+definition providers, example/runtime preview, malformed-input recovery,
+versioned resource/configuration rename, unsaved restart and refusal of partial
+application renames. The shared LSP integration suite covers all three position
+encodings, cancellation, stale requests and new unsaved resources. The editor's
+shared preview-model extraction passes Svelte type checking.
+
+```sh
+dotnet build tools/dotnet-runic-translations
+cd tools/vscode-runic-translations
+bun run check
+bun run test
+bun run build
+bun run test:host
+bun run package
+```
+
+The Visual Studio client cross-builds against its pinned 17.14 SDK with zero
+warnings/errors. Its VSIX packaging verifies metadata asset paths, TextMate
+grammar and archive integrity, and excludes host-owned DLLs. See its
+[Windows integration procedure](../../../tools/visualstudio-runic-translations/README.md).
+MEF activation, keyboard commands and native preview in Visual Studio remain
+unverified on this Linux host.
+
 ## Representative measurements
 
 Reproduce the bounded, warm-loop measurements with:

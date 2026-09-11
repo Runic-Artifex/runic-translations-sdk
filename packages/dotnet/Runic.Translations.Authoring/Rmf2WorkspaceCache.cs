@@ -15,12 +15,12 @@ public sealed class Rmf2WorkspaceCache
     /// <summary>Creates a bounded cache owned by one authoring session.</summary>
     public Rmf2WorkspaceCache(int capacity = 256)
     {
-        if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
+        ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
         _capacity = capacity;
     }
     /// <summary>Creates a fresh revisioned workspace while sharing immutable syntax for unchanged source bytes.</summary>
     public Rmf2Workspace Create(string root, TranslationSource project, IEnumerable<TranslationSource> sources, CancellationToken cancellationToken = default) =>
-        new(root, project, sources, cancellationToken, this);
+        new(root, project, sources, this, cancellationToken);
 
     internal Rmf2ResourceDocument Read(TranslationSource source, CancellationToken cancellationToken)
     {

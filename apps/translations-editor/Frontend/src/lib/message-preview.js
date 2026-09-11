@@ -1,7 +1,7 @@
 /**
  * Executes the compiler-normalized locale AST used by the generated ESM dynamic runtime.
  * The result is semantic data only. Callers must never turn markup names into HTML.
- * @param {import("./message-composer").MessageArtifact} ast
+ * @param {import("./message-model").MessageArtifact} ast
  * @param {string} locale
  * @param {Record<string, string>} samples
  * @returns {{ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] }}
@@ -44,8 +44,8 @@ export function flattenPreview(nodes) {
 }
 
 /**
- * @param {import("./message-composer").ArtifactNode[]} nodes
- * @param {Record<string, import("./message-composer").ArtifactInput>} descriptors
+ * @param {import("./message-model").ArtifactNode[]} nodes
+ * @param {Record<string, import("./message-model").ArtifactInput>} descriptors
  * @param {Record<string, unknown>} inputs
  * @param {string} locale
  * @returns {PreviewNode[]}
@@ -94,7 +94,7 @@ function parseSample(name, type, value) {
   return value;
 }
 
-/** @param {Record<string, unknown>} inputs @param {string} name @param {import("./message-composer").ArtifactInput} descriptor @param {string} locale */
+/** @param {Record<string, unknown>} inputs @param {string} name @param {import("./message-model").ArtifactInput} descriptor @param {string} locale */
 function formatInput(inputs, name, descriptor, locale) {
   const value = inputs[name];
   const format = descriptor.format;

@@ -1,0 +1,128 @@
+{
+  "name": "runic-translations",
+  "displayName": "Runic RMF2 Translations",
+  "description": "RMF2 resource authoring through the project-local Runic language server.",
+  "version": "0.0.1",
+  "preview": true,
+  "publisher": "runic-artifex",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Runic-Artifex/runic-sdk",
+    "directory": "tools/vscode-runic-translations"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onLanguage:rmf2"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "The language server runs the workspace's local .NET tool."
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "rmf2",
+        "aliases": [
+          "Runic MF2",
+          "RMF2"
+        ],
+        "extensions": [
+          ".rmf2"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rmf2",
+        "scopeName": "source.rmf2",
+        "path": "./syntaxes/rmf2.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "runicTranslations.restart",
+        "title": "Runic: Restart Language Server"
+      },
+      {
+        "command": "runicTranslations.preview",
+        "title": "Runic: Preview Message"
+      },
+      {
+        "command": "runicTranslations.renameInput",
+        "title": "Runic: Rename Input in Resource Sources"
+      },
+      {
+        "command": "runicTranslations.renameSlot",
+        "title": "Runic: Rename Slot in Resource Sources"
+      },
+      {
+        "command": "runicTranslations.extractGroup",
+        "title": "Runic: Extract Group to Directory"
+      },
+      {
+        "command": "runicTranslations.inlineResource",
+        "title": "Runic: Inline Resource into Ancestor"
+      },
+      {
+        "command": "runicTranslations.renameResource",
+        "title": "Runic: Rename Resource in Resource Sources"
+      }
+    ],
+    "configuration": {
+      "title": "Runic Translations",
+      "properties": {
+        "runicTranslations.dotnetPath": {
+          "type": "string",
+          "default": "dotnet",
+          "scope": "machine-overridable",
+          "description": "Executable used for the project-local Runic .NET tool."
+        },
+        "runicTranslations.serverAssembly": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Optional compiled Runic tool DLL, relative to the workspace. Empty uses dotnet tool run runic-translations."
+        },
+        "runicTranslations.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "bun build src/extension.ts --target=node --format=cjs --external=vscode --outfile=dist/extension.cjs && node package-assets.mjs",
+    "check": "tsc --noEmit",
+    "test": "bun test test/unit.test.ts",
+    "test:host": "node test/run-host.mjs",
+    "package": "bun run build && node -e \"require('node:fs').mkdirSync('artifacts',{recursive:true})\" && vsce package --no-dependencies --out artifacts/runic-translations.vsix"
+  },
+  "dependencies": {
+    "vscode-languageclient": "9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.100.0",
+    "@types/node": "24.13.3",
+    "typescript": "6.0.3",
+    "@vscode/vsce": "3.6.2"
+  },
+  "packageManager": "bun@1.4.2"
+}

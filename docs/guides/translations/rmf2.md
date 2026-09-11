@@ -141,14 +141,19 @@ The DOM adapter uses text nodes, semantic emphasis, links, buttons and explicit
 icon accessibility; it never creates HTML from translation strings. Rendering
 does not activate actions. Application adapters own routes, callbacks and assets.
 Occurrences use the generated message ID, variant index, and node path; static and
-external-pack formatting produce the same identities. SSR integrations must
-still use matching source/contract versions and supply their own hydration adapter.
+external-pack formatting produce the same identities. The Svelte `./inline` entry point supplies a structural factory and
+`LocalizedInline` component for SSR and hydration. It preserves occurrence keys,
+native controls, custom snippets and callback teardown; use matching
+source/contract versions on server and client.
 
 .NET exposes `Rmf2InlineRenderer`, typed `InlineLinkBinding`,
 `InlineActionBinding`, `InlineIconBinding`, and semantic `InlineMarkupRun` trees.
 Construct the renderer once from the generated `Rmf2MarkupContract` constant.
 Native toolkits map those runs to their own controls and accessibility APIs.
-This is a headless native API, not a shipped toolkit-specific renderer.
+`Runic.Translations.Wpf` maps them to native inline controls and automation peers,
+with explicit custom factories and callback deactivation when replacing or
+clearing content. Its maintained Windows consumer cross-compiles on Linux;
+Windows UI execution remains pending.
 
 Plain-text conversion is explicit. `br` becomes LF, link labels are retained
 (with optional destination annotation), meaningful icons require a localized
@@ -180,11 +185,12 @@ rolling back and regenerate output for the chosen layout.
 `Rmf2Workspace` accepts unsaved buffers and revisions. Rename, format,
 extract-group, and inline-resource produce validated transaction plans. Extracting
 a documented group leaves its authoritative declaration and metadata in place.
-Rename of namespaces supplied by explicit mounts currently requires editing the
-mount configuration; it is not exposed as an automatic file operation.
+Mounted namespace renames update configuration while preserving physical roots.
+Resource moves/duplicates/deletes and slot renames update affected slot contracts;
+locale add/remove/fallback operations validate the complete fallback graph.
 
 The stdio LSP implements incremental changes, UTF-8/16/32 position negotiation,
-recoverable diagnostics, flat document symbols, folding, formatting, basic
+recoverable diagnostics, flat document symbols, folding, formatting, contract-aware
 completion/hover, logical definitions, and versioned resource rename edits.
 The compiler-owned `Rmf2LanguageService` supplies registered custom tags and aliases,
 missing markup options, enum values and literal-only/default/required constraints
@@ -194,21 +200,38 @@ references for caller inputs span translations of the same logical resource,
 including mounted files and unsaved buffers. Locals remain scoped to their own
 message, and same-named translation locals are excluded from caller-input results.
 Definitions return explicit declarations; an implicitly used input has no
-declaration target unless another translation declares it. Application call-site
-navigation remains pending.
+declaration target unless another translation declares it. Application call-site navigation remains owned by native language services;
+Runic's resource references are intentionally scoped to catalog sources.
 Local-variable rename uses parsed symbol locations and rejects capture of an
 existing variable. Quoted literals and ordinary message text are preserved.
 `runic.extractGroup` and `runic.inlineResource` return `WorkspaceEdit` results;
 the client applies them. File-changing commands require client create/delete
-capabilities. Cancellation notifications are accepted, but expensive requests are
-currently synchronous. Open-buffer updates reparse only the changed physical
-resource; refactoring validates the complete catalog.
+capabilities. A separate reader processes cancellation while one worker owns
+request state; cancelled and stale requests return protocol errors rather than
+obsolete edits. A bounded cache reuses byte-identical syntax across workspace
+requests. New unsaved RMF2 files participate in their configured source roots.
+Refactors validate the complete catalog.
+
+`runic.preview` returns normalized artifacts and examples; `runic.renderPreview`
+executes the verified .NET plan with inert functional bindings. Hover adds
+compiled input types and content/fallback locales when validation succeeds.
+Explicit `runic.renameInput`, `runic.renameSlot` and `runic.renameResource`
+commands return resource-source transactions. Normal resource F2 refuses
+workspaces containing application/legacy sources or unindexable links instead of
+silently omitting call sites. Configuration-changing edits require a client that
+synchronizes `runic.json` through `runicConfigurationSync` initialization options.
 
 The editor discovers recursive resources and mounted namespaces, exposes logical
 rows backed by physical files, edits message values, creates missing translations
 in the corresponding locale file, previews and validates through the shared
-compiler, and preserves physical revisions. Advanced structural refactor UI and
-contract-aware rich preview controls are not yet exposed.
+compiler, and preserves physical revisions. Structural create/move/rename/
+duplicate/delete and locale/fallback workflows use shared transactions, and rich
+preview controls render the normalized inline tree.
+
+The [VS Code extension](../../../tools/vscode-runic-translations/README.md) and
+[Visual Studio extension](../../../tools/visualstudio-runic-translations/README.md)
+package this language server with native IDE navigation and preview commands.
+Their READMEs describe configuration, supported refactor scope and host checks.
 
 ## Versions and remaining proposal work
 
@@ -232,29 +255,19 @@ options produce `RTR0065` rather than being silently ignored or clamped.
 tokens, expression operands, options, attributes, declarations, selectors and
 variant keys with UTF-8 spans. Unknown functions and overlapping markup survive
 this syntax pass. The balanced-inline check separately reports `RTR0061`;
-expression syntax diagnostics use `RTR0066`. This is an initial data-model slice,
-not yet a complete MF2 grammar validator. Unformatted literal locals and their
-plain aliases fold into output without becoming caller inputs. Formatting or
-selecting a constant local remains an explicit unsupported capability.
+expression syntax diagnostics use `RTR0066`, and data-model errors use `RTR0067`.
+The deterministic grammar pass retains full variant, key and pattern spans,
+Unicode names, declarations, literals, options and annotations. Unformatted
+literal locals and their plain aliases fold into output without becoming caller
+inputs. Syntax support remains distinct from the bounded executor.
 
-The following accepted proposal features remain incomplete:
+Remaining limits are explicit: variable-valued formatter options, expression
+annotations, formatted literal operands/locals and quoted wildcard execution are
+rejected by the execution profile. C++ RMF2, terms and group-atomic fallback are
+separate follow-ons. Arbitrary rich XLIFF is outside the accepted text-profile
+scope; exports report semantic loss. Application-language call-site refactors
+are delegated or refused, never implemented as blind text replacement.
 
-- Complete MF2 grammar validation and full variant-body spans in the shared
-  syntax model; further separation of caller-contract and backend diagnostics.
-  The bounded executor still rejects variable-valued formatter options,
-  expression annotations and formatted literal locals. Full MF2 execution is
-  outside the core milestone.
-- Project-aware formatter-option and slot-value completion, fallback and inferred-type hover,
-  example previews, catalog-wide input rename, asynchronous cancellation, persistent
-  dependency indexes, and automatic configuration edits during mounted renames.
-- Toolkit-specific native renderers, framework SSR/hydration adapters, richer
-  accessibility policies, pre-resolved renderer dispatch and allocation benchmarks.
-- RMF2 structural editor commands and lossless rich XLIFF/Message Resources
-  interchange. The existing text-only interchange loss reporting remains in force.
-- C++ execution of RMF2, terms, and group-atomic fallback.
-
-These are implementation limits, not claims that the accepted proposals are fully
-delivered. No package or repository release version changes with this work.
-
-The [continuation checklist](rmf2-delivery.md) orders the remaining implementation
-work, with VS Code and Visual Studio integrations as the final two deliverables.
+The [continuation checklist](rmf2-delivery.md) records completion and the two
+remaining Windows host checks. No package or repository release version changes
+with this work.

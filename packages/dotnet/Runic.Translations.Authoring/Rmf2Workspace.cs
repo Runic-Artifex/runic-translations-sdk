@@ -29,8 +29,8 @@ public sealed class Rmf2Workspace
     private static readonly UTF8Encoding Utf8 = new(false, true);
     public Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources) : this(root, project, sources, CancellationToken.None) { }
     public Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources, CancellationToken cancellationToken)
-        : this(root, project, sources, cancellationToken, null) { }
-    internal Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources, CancellationToken cancellationToken, Rmf2WorkspaceCache? cache)
+        : this(root, project, sources, null, cancellationToken) { }
+    internal Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources, Rmf2WorkspaceCache? cache, CancellationToken cancellationToken)
     {
         _cancellationToken = cancellationToken; cancellationToken.ThrowIfCancellationRequested();
         _root = Path.GetFullPath(root); _project = project;

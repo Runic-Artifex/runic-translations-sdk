@@ -6,13 +6,13 @@ using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tool;
 
-internal sealed record CompilerInputs(TranslationSource Project, IReadOnlyList<TranslationSource> Messages);
+internal sealed record CompilerInputs(TranslationSource Project, IReadOnlyList<TranslationSource> Messages, IReadOnlyList<string>? SourceRoots = null);
 
 internal static class InputFiles
 {
     private const int MaximumDocumentBytes = 8 * 1024 * 1024;
 
-    internal static CompilerInputs ReadProject(string projectPath)
+    internal static CompilerInputs ReadProject(string projectPath, TranslationSource? projectOverride = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectPath);
         string currentDirectory = Path.GetFullPath(Environment.CurrentDirectory);
@@ -25,7 +25,7 @@ internal static class InputFiles
 
         string root = Path.GetDirectoryName(configPath)!;
         var messages = new List<TranslationSource>();
-        TranslationSource project = ReadSource(configPath, DisplayPath(configPath, currentDirectory));
+        TranslationSource project = projectOverride ?? ReadSource(configPath, DisplayPath(configPath, currentDirectory));
         JsonDocument config;
         try { config = JsonDocument.Parse(project.GetUtf8Bytes()); }
         catch (JsonException) { return new CompilerInputs(project, messages); }
@@ -50,7 +50,7 @@ internal static class InputFiles
                 string.Equals(Path.GetExtension(candidate), ".toml", StringComparison.OrdinalIgnoreCase))
                 messages.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
         messages.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
-        return new CompilerInputs(project, messages);
+        return new CompilerInputs(project, messages, roots);
     }
 
     private static TranslationSource ReadSource(string fullPath, string displayPath)

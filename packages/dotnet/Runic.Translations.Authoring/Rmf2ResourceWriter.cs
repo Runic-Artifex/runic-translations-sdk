@@ -12,6 +12,7 @@ namespace Runic.Translations.Authoring;
 /// <summary>Source-preserving resource edits shared by the editor, CLI and language server.</summary>
 public static class Rmf2ResourceWriter
 {
+    private static readonly string[] FunctionalNames = ["link", "action", "icon", "runic:link", "runic:action", "runic:icon"];
     private static readonly UTF8Encoding Utf8 = new(false, true);
     private static readonly Regex Identifier = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
 
@@ -62,7 +63,7 @@ public static class Rmf2ResourceWriter
     {
         if (!Identifier.IsMatch(newName)) throw new TranslationAuthoringException("Slot names must be identifiers.");
         var node = Require(source).Nodes.Single(n => !n.IsGroup && n.Key == key);
-        var functional = new HashSet<string>(new[] { "link", "action", "icon", "runic:link", "runic:action", "runic:icon" }, StringComparer.Ordinal);
+        var functional = new HashSet<string>(FunctionalNames, StringComparer.Ordinal);
         if (project is not null)
         {
             using var config = JsonDocument.Parse(project.GetUtf8Bytes());

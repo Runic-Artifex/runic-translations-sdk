@@ -1,0 +1,15 @@
+{
+  "name":"Runic MF2", "scopeName":"source.rmf2", "fileTypes":["rmf2"],
+  "patterns":[
+    {"name":"comment.line.number-sign.rmf2","match":"^\\s*#.*$"},
+    {"name":"storage.type.annotation.rmf2","match":"^\\s*@[A-Za-z][A-Za-z0-9_-]*"},
+    {"name":"entity.name.namespace.rmf2","match":"^\\s*[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\{\\s*$)"},
+    {"name":"entity.name.function.resource.rmf2","match":"^\\s*[A-Za-z_][A-Za-z0-9_]*(?=\\s*=)"},
+    {"name":"keyword.control.rmf2","match":"\\.(?:input|local|match)\\b"},
+    {"name":"string.quoted.other.rmf2","begin":"\\|","end":"\\|","patterns":[{"name":"constant.character.escape.rmf2","match":"\\\\[\\\\|]"}]},
+    {"name":"variable.other.rmf2","match":"\\$[^\\s{}|:=@/]+"},
+    {"name":"entity.name.type.rmf2","match":"(?<=\\{)[#/][^\\s{}=/]+"},
+    {"name":"support.function.rmf2","match":":[A-Za-z_][A-Za-z0-9_:-]*"},
+    {"name":"constant.character.escape.rmf2","match":"\\\\[\\\\{}|]"}
+  ]
+}

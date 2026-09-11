@@ -1,0 +1,55 @@
+const assert = require('node:assert/strict');
+const vscode = require('vscode');
+exports.run = async function () {
+  const root = vscode.workspace.workspaceFolders[0].uri;
+  const en = vscode.Uri.joinPath(root, 'en.rmf2');
+  const document = await vscode.workspace.openTextDocument(en);
+  const editor = await vscode.window.showTextDocument(document);
+  const extension = vscode.extensions.getExtension('runic-artifex.runic-translations');
+  assert.ok(extension);
+  const api = await extension.activate(); const client = await api.ready(en);
+  const position = document.positionAt(document.getText().indexOf('payment ='));
+  editor.selection = new vscode.Selection(position, position);
+  const symbols = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', en);
+  assert.ok(symbols.some(symbol => symbol.name === 'payment'));
+  const info = await client.sendRequest('runic/message', { textDocument: { uri: en.toString() }, position });
+  assert.equal(info.key, 'payment'); assert.ok(info.slots.includes('retry'));
+  const definitions = await vscode.commands.executeCommand('vscode.executeDefinitionProvider', en, position);
+  assert.equal(definitions.length, 2);
+  const preview = await client.sendRequest('workspace/executeCommand', { command: 'runic.preview', arguments: [en.toString(), 'payment', 'de'] });
+  assert.equal(preview.ast.astVersion, 4); assert.ok(preview.examples.length > 0);
+  const rendered = await client.sendRequest('workspace/executeCommand', {command: 'runic.renderPreview', arguments: [en.toString(), 'payment', 'en', {count: '1', tone: 'positive'}]});
+  assert.ok(JSON.stringify(rendered.runs).includes('runic:action'));
+  assert.ok(JSON.stringify(rendered.runs).includes('positive'));
+  await assert.rejects(client.sendRequest('workspace/executeCommand', {command: 'runic.renderPreview', arguments: [en.toString(), 'payment', 'en', {count: 'invalid', tone: 'positive'}]}));
+  const config = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(root, 'runic.json'));
+  await vscode.window.showTextDocument(config);
+  await vscode.window.showTextDocument(document);
+  const rename = await vscode.commands.executeCommand('vscode.executeDocumentRenameProvider', en, position, 'receipt');
+  assert.ok(rename.size >= 3, 'Rename must include source locales and slot configuration');
+  assert.equal(await vscode.workspace.applyEdit(rename), true);
+  assert.ok(config.isDirty && config.getText().includes('receipt'), 'Configuration was not included in the unsaved transaction');
+  const nextPosition = document.positionAt(document.getText().indexOf('receipt ='));
+  const changed = await client.sendRequest('runic/message', { textDocument: { uri: en.toString() }, position: nextPosition });
+  assert.equal(changed.key, 'receipt');
+  const nextPreview = await client.sendRequest('workspace/executeCommand', { command: 'runic.preview', arguments: [en.toString(), 'receipt', 'en'] });
+  assert.equal(nextPreview.ast.astVersion, 4, 'Unsaved runic.json was not used to validate the renamed contract');
+  await vscode.commands.executeCommand('runicTranslations.restart');
+  const restarted = await api.ready(en);
+  const afterRestart = await restarted.sendRequest('runic/message', { textDocument: { uri: en.toString() }, position: nextPosition });
+  assert.equal(afterRestart.key, 'receipt', 'Restart lost an unsaved resource');
+  const app = vscode.Uri.joinPath(root, 'app.cs');
+  await vscode.workspace.fs.writeFile(app, Buffer.from('class App { }'));
+  await assert.rejects(restarted.sendRequest('textDocument/rename', { textDocument: {uri: en.toString()}, position: nextPosition, newName: 'unsafe' }), /Rename refused/);
+  const explicit = await restarted.sendRequest('workspace/executeCommand', {command: 'runic.renameResource', arguments: [en.toString(), ['receipt'], 'confirmed']});
+  assert.ok(explicit.documentChanges.length >= 3);
+  assert.ok(!JSON.stringify(explicit).includes('app.cs'));
+  await vscode.workspace.saveAll(false);
+  require('node:fs').writeFileSync(process.env.RUNIC_VSCODE_RESULT_FILE, JSON.stringify({passed:true,message:'PASS VS Code extension-host assertions.'}));
+  console.log('PASS VS Code activation, native providers, preview, versioned config/source edits and restart.');
+};
+const execute = exports.run;
+exports.run = async () => {
+  try { await execute(); }
+  catch (error) { require('node:fs').writeFileSync(process.env.RUNIC_VSCODE_RESULT_FILE, JSON.stringify({ passed: false, message: error.stack || String(error) })); throw error; }
+};
