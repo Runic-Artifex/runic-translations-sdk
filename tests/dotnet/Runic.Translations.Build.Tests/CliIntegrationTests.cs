@@ -83,16 +83,20 @@ internal static class CliIntegrationTests
         using TemporaryDirectory temporary = new();
         ProcessResult help = TestFixture.RunTool(temporary, "--help");
         Assert.Equal(0, help.ExitCode);
-        Assert.Contains("validate --project", help.StandardOutput);
+        Assert.Contains("validate  Validate catalogs", help.StandardOutput);
         Assert.False(help.StandardOutput.Contains("--documents", StringComparison.Ordinal), "Help still advertises removed document inputs.");
-        Assert.Contains("Exit codes: 0", help.StandardOutput);
 
         ProcessResult namedHelp = TestFixture.RunTool(temporary, "help");
         Assert.Equal(0, namedHelp.ExitCode, namedHelp.Combined);
-        Assert.Contains("validate --project", namedHelp.StandardOutput);
+        Assert.Equal(help.StandardOutput, namedHelp.StandardOutput);
 
-        AssertUsageFailure(temporary, "help does not accept additional arguments.", "help", "validate");
-        AssertUsageFailure(temporary, "a command is required.");
+        ProcessResult commandHelp = TestFixture.RunTool(temporary, "help", "validate");
+        Assert.Equal(0, commandHelp.ExitCode, commandHelp.Combined);
+        Assert.Contains("runic-translations validate", commandHelp.StandardOutput);
+        Assert.Contains("--project", commandHelp.StandardOutput);
+        ProcessResult empty = TestFixture.RunTool(temporary);
+        Assert.Equal(0, empty.ExitCode, empty.Combined);
+        Assert.Equal(help.StandardOutput, empty.StandardOutput);
         AssertUsageFailure(temporary, "unknown command 'unknown-command'.", "unknown-command");
         AssertUsageFailure(temporary, "unknown option or positional argument '--bogus'.", "validate", "--bogus");
         AssertUsageFailure(temporary, "unknown option or positional argument '--bogus'.", "schema", "--bogus");
