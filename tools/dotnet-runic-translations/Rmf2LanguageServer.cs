@@ -150,16 +150,18 @@ internal sealed class Rmf2LanguageServer
                 .Distinct(StringComparer.Ordinal).FirstOrDefault(name => symbolSyntax.VariableReferences(name).Any(location => location.StartByte <= messageByte && messageByte < location.StartByte + location.LengthBytes));
             if (symbol is not null)
             {
-                var declaration = symbolSyntax.Declarations.FirstOrDefault(d => d.Name == symbol);
                 bool includeDeclaration = args["context"]?["includeDeclaration"]?.GetValue<bool>() ?? true;
-                var locations = method == "textDocument/definition"
-                    ? declaration is null ? Array.Empty<TextSourceLocation>() : new[] { declaration.NameLocation }
-                    : symbolSyntax.VariableReferences(symbol).Where(location => includeDeclaration || declaration is null || location.StartByte != declaration.NameLocation.StartByte).ToArray();
-                return new JsonArray(locations.Select(location => (JsonNode)new JsonObject { ["uri"] = uri,
-                    ["range"] = new JsonObject {
-                        ["start"] = Position(buffer.Text, Utf8.GetCharCount(buffer.Syntax.Source.GetUtf8Bytes().AsSpan(0, entry.MessageByteMap[location.StartByte]))),
-                        ["end"] = Position(buffer.Text, Utf8.GetCharCount(buffer.Syntax.Source.GetUtf8Bytes().AsSpan(0, entry.MessageByteMap[location.StartByte + location.LengthBytes]))),
-                    } }).ToArray());
+                var references = Workspace(new Uri(uri).LocalPath).VariableReferences(new Uri(uri).LocalPath, entry.Key, symbol);
+                var selected = references.Where(reference => method == "textDocument/definition" ? reference.IsDeclaration : includeDeclaration || !reference.IsDeclaration);
+                return new JsonArray(selected.Select(reference => {
+                    var bytes = reference.Document.Source.GetUtf8Bytes();
+                    string text = Utf8.GetString(bytes);
+                    return (JsonNode)new JsonObject { ["uri"] = new Uri(reference.Document.Source.Path).AbsoluteUri,
+                        ["range"] = new JsonObject {
+                            ["start"] = Position(text, Utf8.GetCharCount(bytes.AsSpan(0, reference.Resource.MessageByteMap[reference.Location.StartByte]))),
+                            ["end"] = Position(text, Utf8.GetCharCount(bytes.AsSpan(0, reference.Resource.MessageByteMap[reference.Location.StartByte + reference.Location.LengthBytes]))),
+                        } };
+                }).ToArray());
             }
             if (method == "textDocument/references") return new JsonArray();
         }

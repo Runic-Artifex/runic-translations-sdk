@@ -34,5 +34,6 @@ list does not silently promote them into prerequisites.
 Implemented continuation slices: lossless tokens and expression/declaration
 projections, separate inline-profile validation, unformatted literal-local and
 alias folding, semantic local rename through the workspace and LSP, shared
-project-markup completion/hover, and message-variable definitions/references. Items
+project-markup completion/hover, and catalog-wide input definitions/references
+with message-local scoping. Items
 1–3 remain open for their remaining grammar, execution and catalog-wide work.

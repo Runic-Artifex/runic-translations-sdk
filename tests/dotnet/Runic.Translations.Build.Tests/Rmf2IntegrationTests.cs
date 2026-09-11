@@ -83,6 +83,7 @@ internal static class Rmf2IntegrationTests
             using TemporaryDirectory temporary = new();
             File.WriteAllText(temporary.Resolve("runic.json"), Project);
             File.WriteAllText(temporary.Resolve("en.rmf2"), "x = Hello\n");
+            File.WriteAllText(temporary.Resolve("de.rmf2"), "x = Hello\n");
             string uri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
             var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
             start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
@@ -105,6 +106,11 @@ internal static class Rmf2IntegrationTests
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = {#link ref=help}Help{/link} {$name} |$literal|\n" }) });
             Send("textDocument/completion", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 8 } }, 4);
             Send("textDocument/hover", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 7 } }, 5);
+            string germanUri = new Uri(temporary.Resolve("de.rmf2")).AbsoluteUri;
+            Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = germanUri, ["version"] = 1, ["text"] = "x =\n  .input {$name :string}\n  {{Hallo {$name}}}\n" } });
+            int inputColumn = "x = {#link ref=help}Help{/link} {$name} |$literal|".IndexOf("$name", StringComparison.Ordinal) + 1;
+            Send("textDocument/references", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = inputColumn }, ["context"] = new JsonObject { ["includeDeclaration"] = true } }, 8);
+            Send("textDocument/definition", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = inputColumn } }, 9);
             doc = Document(); doc["version"] = 4;
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x =\n  .local $label = {|Help|}\n  {{{$label}}}\n" }) });
             Send("textDocument/definition", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 2, ["character"] = 7 } }, 6);
@@ -122,7 +128,7 @@ internal static class Rmf2IntegrationTests
             Assert.Equal(encoding, frames.Single(n => n["id"]?.ToString() == "1")["result"]!["capabilities"]!["positionEncoding"]!.ToString());
             var diagnostic = frames.First(n => n["method"]?.ToString() == "textDocument/publishDiagnostics")["params"]!["diagnostics"]![0]!;
             Assert.Equal(encoding == "utf-8" ? 9 : encoding == "utf-16" ? 7 : 6, diagnostic["range"]!["start"]!["character"]!.GetValue<int>());
-            var rename = frames.Single(n => n["id"]?.ToString() == "2")["result"]!["documentChanges"]![0]!;
+            var rename = frames.Single(n => n["id"]?.ToString() == "2")["result"]!["documentChanges"]!.AsArray().Single(n => n!["textDocument"]?["uri"]?.ToString() == uri)!;
             Assert.Equal(2, rename["textDocument"]!["version"]!.GetValue<int>()); Assert.Contains("greeting = Hello", rename["edits"]![0]!["newText"]!.ToString());
             var completion = frames.Single(n => n["id"]?.ToString() == "4")["result"]!.AsArray();
             Assert.True(completion.Any(n => n!["label"]!.ToString() == "$name"), "Missing semantic input completion.");
@@ -135,6 +141,12 @@ internal static class Rmf2IntegrationTests
             var references = frames.Single(n => n["id"]?.ToString() == "7")["result"]!.AsArray();
             Assert.Equal(1, references.Count);
             Assert.Equal(2, references[0]!["range"]!["start"]!["line"]!.GetValue<int>());
+            var catalogReferences = frames.Single(n => n["id"]?.ToString() == "8")["result"]!.AsArray();
+            Assert.Equal(3, catalogReferences.Count);
+            Assert.Equal(2, catalogReferences.Count(n => n!["uri"]!.ToString() == germanUri));
+            var catalogDefinition = frames.Single(n => n["id"]?.ToString() == "9")["result"]!.AsArray();
+            Assert.Equal(1, catalogDefinition.Count);
+            Assert.Equal(germanUri, catalogDefinition[0]!["uri"]!.ToString());
         }
     }
 }

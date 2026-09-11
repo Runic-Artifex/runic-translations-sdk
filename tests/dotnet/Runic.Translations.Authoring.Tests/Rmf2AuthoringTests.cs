@@ -10,6 +10,7 @@ internal static class Rmf2AuthoringTests
 {
     internal static void Register(TestRunner runner)
     {
+        runner.Add("RMF2 input references follow logical resources without capturing translation locals", References);
         runner.Add("RMF2 local rename changes semantic references without touching literal text", LocalRename);
         runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
         runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
@@ -17,6 +18,30 @@ internal static class Rmf2AuthoringTests
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     private static TranslationSource Project(string layout = "rmf2-v1") => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"" + layout + "\"}");
+    private static void References()
+    {
+        var en = Source("en.rmf2", "shop {\n  title =\n    .input {$name :string}\n    {{Hello {$name}}}\n}\nother = {$name}\n");
+        var de = Source("shop/de.rmf2", "title = 😀 {$name} {|$name|}\nother = {$name}\n");
+        var fr = Source("shop/fr.rmf2", "title =\n  .local $name = {|Bonjour|}\n  {{{$name}}}\n");
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [en, de, fr]);
+        var references = workspace.VariableReferences("en.rmf2", "shop_title", "name");
+        Assert.Equal(3, references.Count);
+        Assert.Equal(1, references.Count(r => r.IsDeclaration));
+        Assert.True(references.All(r => r.Document.Source.Path != "shop/fr.rmf2"), "A local in another translation was captured.");
+        foreach (var reference in references)
+        {
+            int start = reference.Resource.MessageByteMap[reference.Location.StartByte];
+            int end = reference.Resource.MessageByteMap[reference.Location.StartByte + reference.Location.LengthBytes];
+            Assert.Equal("$name", Encoding.UTF8.GetString(reference.Document.Source.GetUtf8Bytes(), start, end - start));
+        }
+        Assert.Equal(2, workspace.VariableReferences("shop/fr.rmf2", "title", "name").Count);
+        workspace.Update("shop/de.rmf2", Encoding.UTF8.GetBytes("title = Hallo\n"), workspace.Revision("shop/de.rmf2"));
+        Assert.Equal(2, workspace.VariableReferences("en.rmf2", "shop_title", "name").Count);
+        var config = System.Text.Json.Nodes.JsonNode.Parse(Project().GetUtf8Bytes())!;
+        config["sourceRoots"] = System.Text.Json.Nodes.JsonNode.Parse("[{\"path\":\"base\",\"namespace\":[\"shop\"]},{\"path\":\"localized\",\"namespace\":[\"shop\"]}]");
+        var mounted = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", config.ToJsonString()), [Source("base/en.rmf2", "title = {$name}\n"), Source("localized/de.rmf2", "title = {$name}\n")]);
+        Assert.Equal(2, mounted.VariableReferences("base/en.rmf2", "title", "name").Count);
+    }
     private static void LocalRename()
     {
         const string text = "message =\n  .input {$input :string}\n  .local $alias = {$input}\n  {{Hello {$alias}, literal {|$alias|} and plain $alias}}\nother = {$alias}\n";

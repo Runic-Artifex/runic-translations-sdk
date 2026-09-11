@@ -10,6 +10,9 @@ using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Authoring;
 
+/// <summary>A semantic variable occurrence with an extracted-message location and its physical resource map.</summary>
+public sealed record Rmf2VariableReference(Rmf2ResourceDocument Document, Rmf2ResourceNode Resource, TextSourceLocation Location, bool IsDeclaration);
+
 /// <summary>A revisioned catalog of disk snapshots or unsaved buffers. Only affected physical files are reparsed.</summary>
 public sealed class Rmf2Workspace
 {
@@ -43,6 +46,28 @@ public sealed class Rmf2Workspace
     }
     public Rmf2LanguageService LanguageService => Rmf2LanguageService.Create(_project);
     public TranslationCompilation Validate() => TranslationCompiler.CompileProject(_project, _sources.Values);
+
+    /// <summary>Finds locals in one message, or caller inputs across translations of the same logical resource.</summary>
+    public IReadOnlyList<Rmf2VariableReference> VariableReferences(string path, string key, string name)
+    {
+        var origin = _syntax[path].Nodes.Single(n => !n.IsGroup && n.Key == key);
+        if (origin.MessageSyntax!.VariableReferences(name).Count == 0) return Array.Empty<Rmf2VariableReference>();
+        bool local = origin.MessageSyntax.Declarations.Any(d => d.Kind == "local" && d.Name == name);
+        var logical = LogicalPath(path, origin);
+        var result = new List<Rmf2VariableReference>();
+        foreach (var document in Documents)
+        foreach (var resource in document.Nodes.Where(n => !n.IsGroup))
+        {
+            if (local ? document.Source.Path != path || resource.Key != key : !LogicalPath(document.Source.Path, resource).SequenceEqual(logical, StringComparer.Ordinal)) continue;
+            var syntax = resource.MessageSyntax!;
+            // The same spelling can name a translation-local value rather than this caller input.
+            if (!local && syntax.Declarations.Any(d => d.Kind == "local" && d.Name == name)) continue;
+            var declarations = syntax.Declarations.Where(d => d.Name == name).Select(d => d.NameLocation.StartByte).ToHashSet();
+            foreach (var location in syntax.VariableReferences(name))
+                result.Add(new Rmf2VariableReference(document, resource, location, declarations.Contains(location.StartByte)));
+        }
+        return result.AsReadOnly();
+    }
 
     public TranslationWorkspaceTransactionPlan RenameLocal(string path, string key, string name, string newName) =>
         Plan(new Dictionary<string, byte[]?>(StringComparer.Ordinal) { [path] = Rmf2ResourceWriter.RenameLocal(_sources[path], key, name, newName) });

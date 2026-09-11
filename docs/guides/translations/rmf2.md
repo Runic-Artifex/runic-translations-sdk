@@ -189,9 +189,13 @@ completion/hover, logical definitions, and versioned resource rename edits.
 The compiler-owned `Rmf2LanguageService` supplies registered custom tags and aliases,
 missing markup options, enum values and literal-only/default/required constraints
 in completion details and hover. Standalone tags do not offer closing tags.
-Variable suggestions use semantic tokens rather than literal text. Definitions
-and references for message variables stay within the current message; catalog-wide
-input navigation remains pending.
+Variable suggestions use semantic tokens rather than literal text. Definitions and
+references for caller inputs span translations of the same logical resource,
+including mounted files and unsaved buffers. Locals remain scoped to their own
+message, and same-named translation locals are excluded from caller-input results.
+Definitions return explicit declarations; an implicitly used input has no
+declaration target unless another translation declares it. Application call-site
+navigation remains pending.
 Local-variable rename uses parsed symbol locations and rejects capture of an
 existing variable. Quoted literals and ordinary message text are preserved.
 `runic.extractGroup` and `runic.inlineResource` return `WorkspaceEdit` results;
