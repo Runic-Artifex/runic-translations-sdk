@@ -4,8 +4,9 @@ namespace Runic.Translations.Compiler.Tests;
 
 internal static class Program
 {
-    public static int Main()
+    public static int Main(string[] args)
     {
+        if (args.Length == 1 && args[0] == "--rmf2-benchmark") return Rmf2MarkupTests.Benchmark();
         TestRunner runner = new();
         RuntimeContractTests.Register(runner);
         CompilerTests.Register(runner);

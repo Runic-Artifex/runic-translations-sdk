@@ -1,0 +1,55 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Windows;
+using System.Windows.Automation.Peers;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using Runic.Translations;
+using Runic.Translations.Compiler;
+using Runic.Translations.Compiler.Generation;
+using Runic.Translations.Wpf;
+
+internal static class Program
+{
+    [STAThread]
+    private static int Main()
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "payment");
+        var compiled = TranslationCompiler.CompileProject(Source("runic.json"), [Source("en.rmf2"), Source("de.rmf2")]);
+        Require(compiled.Success, string.Join("; ", compiled.Diagnostics.Select(d => d.Message)));
+        var catalog = compiled.Catalogs.Single();
+        var key = new TranslationKey("checkout", 0, "payment");
+        var arguments = new[] { new TranslationPackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Plain), new TranslationPackArgumentContract("tone", TextArgumentType.String, TextArgumentFormat.None) };
+        var contract = new TranslationPackContract("checkout", "en", catalog.Fingerprint,
+            [new TranslationPackMessageContract(key, arguments), new TranslationPackMessageContract(new TranslationKey("checkout", 1, "plain"), [])], 4, catalog.Rmf2MarkupContract);
+        var verified = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(TranslationOutputRenderer.RenderLocaleJson(catalog, "en").GetUtf8Bytes()), contract).AsTask().GetAwaiter().GetResult();
+        var runtime = new CompiledTranslationCatalog("checkout", "en",
+            [new CompiledTranslationDefinition("payment", [new TranslationPlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain), new TranslationPlaceholderDescriptor("tone", TextArgumentType.String, TextArgumentFormat.None)]), new CompiledTranslationDefinition("plain", [])],
+            [new CompiledTranslationLocale("en", null, verified.Messages.Select(message => new CompiledTranslationValue(message.Key.Id, "", message.Message!)).ToArray())]);
+        var content = new CompiledTranslationSnapshot(runtime, "en").FormatContent(key, [new TextArgument("count", 1), new TextArgument("tone", "positive")]);
+        int calls = 0;
+        var slots = new Dictionary<string, InlineMarkupBinding> {
+            ["terms"] = new InlineLinkBinding(new Uri("https://example.test/terms")), ["privacy"] = new InlineLinkBinding(new Uri("https://example.test/privacy")),
+            ["retry"] = new InlineActionBinding(() => calls++), ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock { Text = "★" }), false, _ => "Star"),
+        };
+        var renderer = new WpfInlineRenderer(catalog.Rmf2MarkupContract!, _ => { }, new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (run, children) => { Require(run.Options["tone"] == "positive", "Badge lost its options."); var span = new Span(); span.Inlines.AddRange(children); return span; } });
+        var target = new TextBlock();
+        renderer.SetContent(target, "payment", content, slots);
+        Require(calls == 0 && target.Language.IetfLanguageTag == "en", "Rendering activated an action or lost locale.");
+        var containers = target.Inlines.OfType<InlineUIContainer>().ToArray();
+        var button = containers.Select(item => item.Child).OfType<Button>().Single();
+        var icon = containers.Select(item => item.Child).OfType<Decorator>().Single();
+        var peer = UIElementAutomationPeer.CreatePeerForElement(icon)!;
+        Require(peer.GetName() == "Star" && peer.IsContentElement(), "Meaningful icon accessibility was lost.");
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Action did not fire once.");
+        renderer.SetContent(target, "payment", content, slots);
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Detached action remained active.");
+        WpfInlineRenderer.ClearContent(target); Require(target.Inlines.Count == 0, "Clear did not dispose content.");
+        Console.WriteLine("PASS WPF payment consumer, custom badge, icon accessibility and callback lifetime.");
+        return 0;
+        TranslationSource Source(string name) => new(Path.Combine(directory, name), File.ReadAllBytes(Path.Combine(directory, name)));
+    }
+    private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
+}

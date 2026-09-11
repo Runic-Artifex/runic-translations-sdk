@@ -10,6 +10,12 @@ internal static class Rmf2AuthoringTests
 {
     internal static void Register(TestRunner runner)
     {
+        runner.Add("RMF2 syntax cache reuses only unchanged bounded source snapshots", SyntaxCache);
+        runner.Add("RMF2 locale mutations validate fallback graphs and preserve physical namespaces", Locales);
+        runner.Add("RMF2 resource renames and duplicates retain conditional slot contracts", SlotContracts);
+        runner.Add("RMF2 input rename updates parameter and example metadata without altering literal text", InputRename);
+        runner.Add("RMF2 message mutations retain metadata and validate the complete catalog", ResourceMutations);
+        runner.Add("RMF2 mounted namespace rename preserves configuration trivia and physical roots", MountedRename);
         runner.Add("RMF2 input references follow logical resources without capturing translation locals", References);
         runner.Add("RMF2 local rename changes semantic references without touching literal text", LocalRename);
         runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
@@ -18,6 +24,80 @@ internal static class Rmf2AuthoringTests
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     private static TranslationSource Project(string layout = "rmf2-v1") => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"" + layout + "\"}");
+    private static void SyntaxCache()
+    {
+        var cache = new Rmf2WorkspaceCache(1);
+        var original = cache.Create(Path.GetTempPath(), Project(), [Source("en.rmf2", "x = One\n")]).Documents[0];
+        var same = cache.Create(Path.GetTempPath(), Project(), [Source("en.rmf2", "x = One\n")]).Documents[0];
+        Assert.True(ReferenceEquals(original, same), "Unchanged syntax was reparsed.");
+        var changed = cache.Create(Path.GetTempPath(), Project(), [Source("en.rmf2", "x = Two\n")]).Documents[0];
+        Assert.True(!ReferenceEquals(original, changed), "Changed source reused stale syntax.");
+        cache.Create(Path.GetTempPath(), Project(), [Source("de.rmf2", "x = Zwei\n")]);
+        Assert.True(!ReferenceEquals(changed, cache.Create(Path.GetTempPath(), Project(), [Source("en.rmf2", "x = Two\n")]).Documents[0]), "Syntax cache exceeded its capacity.");
+    }
+    private static void Locales()
+    {
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [Source("shop/en.rmf2", "title = Shop\n")]);
+        var add = workspace.AddLocale("de", copyFrom: "en");
+        Assert.True(add.Edits.Any(edit => edit.RelativePath == "shop/de.rmf2"), "Locale copy lost the physical namespace.");
+        var config = new TranslationSource("runic.json", add.Edits.Single(edit => edit.RelativePath == "runic.json").GetUtf8Bytes()!);
+        var sources = new[] { Source("shop/en.rmf2", "title = Shop\n"), new TranslationSource("shop/de.rmf2", add.Edits.Single(edit => edit.RelativePath == "shop/de.rmf2").GetUtf8Bytes()!) };
+        var updated = new Rmf2Workspace(Path.GetTempPath(), config, sources);
+        Assert.True(updated.SetFallback("de", "en").Compilation.Success, "Valid fallback rejected.");
+        Assert.True(updated.RemoveLocale("de").Edits.Any(edit => edit.RelativePath == "shop/de.rmf2" && edit.Kind == TranslationWorkspaceEditKind.Delete), "Locale removal missed a physical file.");
+        Assert.Throws<TranslationAuthoringException>(() => updated.RemoveLocale("en"), "fallback");
+        Assert.Throws<TranslationAuthoringException>(() => updated.SetFallback("de", "de"), "fallback");
+    }
+    private static void SlotContracts()
+    {
+        string config = Encoding.UTF8.GetString(Project().GetUtf8Bytes()).TrimEnd('}') + ",\"markup\":{\"slots\":{\"shop_payment\":{\"retry\":{\"min\":0,\"max\":1}}}}}";
+        const string message = "shop {\n  payment =\n    .input {$state :string}\n    .match $state\n    yes {{{#action ref=retry}Retry{/action}}}\n    * {{Ready}}\n}\n";
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", config), [Source("en.rmf2", message)]);
+        Assert.True(workspace.RenameSlot("en.rmf2", "shop_payment", "retry", "again").Compilation.Success, "Slot rename lost its conditional bounds.");
+        Assert.True(workspace.Rename(["shop"], "cart").Compilation.Success, "Group rename lost a conditional slot contract.");
+        Assert.True(workspace.MutateResource(["shop", "payment"], ["checkout"], true).Compilation.Success, "Duplicate lost a conditional slot contract.");
+        Assert.True(workspace.MutateResource(["shop", "payment"], ["checkout"]).Compilation.Success, "Move lost a conditional slot contract.");
+    }
+    private static void InputRename()
+    {
+        const string text = "# 😀 Greeting\r\n@param $name - Person\r\n@example { \"name\" : \"$name\" }\r\nx = Hello {$name} {|$name|}\r\nother = {$name}\r\n";
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [Source("en.rmf2", text), Source("de.rmf2", "x = Hallo {$name}\nother = {$name}\n")]);
+        var plan = workspace.RenameInput("en.rmf2", "x", "name", "person");
+        Assert.Equal(2, plan.Edits.Count);
+        string changed = Encoding.UTF8.GetString(plan.Edits.Single(e => e.RelativePath == "en.rmf2").GetUtf8Bytes()!);
+        Assert.True(changed.Contains("@param $person - Person", StringComparison.Ordinal), "Parameter metadata was not renamed.");
+        Assert.True(changed.Contains("{ \"person\" : \"$name\" }", StringComparison.Ordinal), "Example key or literal value was changed incorrectly.");
+        Assert.True(changed.Contains("Hello {$person} {|$name|}\r\nother = {$name}", StringComparison.Ordinal), "Input rename changed literal text or another resource.");
+    }
+    private static void ResourceMutations()
+    {
+        var source = Source("en.rmf2", "shop {\n  # Greeting\n  @param $name - Person\n  title = Hello {$name}\n}\nother = Keep\n");
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [source]);
+        foreach (bool duplicate in new[] { false, true })
+        {
+            var plan = workspace.MutateResource(["shop", "title"], ["account", "greeting"], duplicate);
+            var document = Rmf2ResourceReader.Read(new TranslationSource("en.rmf2", plan.Edits[0].GetUtf8Bytes()!));
+            var added = document.Nodes.Single(n => n.Key == "account_greeting");
+            Assert.Equal("Greeting", added.Comments[0]);
+            Assert.Equal("param $name - Person", added.Properties[0]);
+            Assert.Equal(duplicate, document.Nodes.Any(n => n.Key == "shop_title"));
+            Assert.True(plan.Compilation.Success, "Message move or duplicate failed validation.");
+        }
+        Assert.True(workspace.MutateResource(["shop", "title"], null).Compilation.Success, "Message deletion failed.");
+        Assert.True(workspace.CreateResource("en.rmf2", ["new", "message"], "New").Compilation.Success, "Message creation failed.");
+    }
+    private static void MountedRename()
+    {
+        string config = Encoding.UTF8.GetString(Project().GetUtf8Bytes()).TrimEnd('}') + ",\r\n  \"sourceRoots\":[{\"path\":\"base\",\"namespace\":[\"shop\"]},{\"path\":\"localized\",\"namespace\":[\"shop\"]}]}";
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", config), [Source("base/cart/en.rmf2", "title = Cart\n"), Source("localized/cart/de.rmf2", "title = Warenkorb\n")]);
+        var plan = workspace.Rename(["shop"], "store");
+        Assert.Equal(1, plan.Edits.Count);
+        Assert.Equal("runic.json", plan.Edits[0].RelativePath);
+        Assert.Equal(config.Replace("\"shop\"", "\"store\"", StringComparison.Ordinal), Encoding.UTF8.GetString(plan.Edits[0].GetUtf8Bytes()!));
+        Assert.True(plan.Compilation.Success, "Mounted namespace rename failed validation.");
+        var directory = workspace.Rename(["shop", "cart"], "basket");
+        Assert.True(directory.Edits.Any(e => e.RelativePath == "base/basket/en.rmf2") && directory.Edits.Any(e => e.RelativePath == "localized/basket/de.rmf2"), "Mounted directory rename moved the wrong roots.");
+    }
     private static void References()
     {
         var en = Source("en.rmf2", "shop {\n  title =\n    .input {$name :string}\n    {{Hello {$name}}}\n}\nother = {$name}\n");

@@ -88,19 +88,43 @@ internal static class Rmf2IntegrationTests
             var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
             start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
             using var process = Process.Start(start)!;
-            var output = process.StandardOutput.ReadToEndAsync(); var errors = process.StandardError.ReadToEndAsync();
+            var frames = new List<JsonNode>(); var frameGate = new object();
+            var output = Task.Run(() => {
+                var stream = process.StandardOutput.BaseStream;
+                while (true)
+                {
+                    var header = new List<byte>(); int value;
+                    while ((value = stream.ReadByte()) >= 0) { header.Add((byte)value); if (header.Count >= 4 && header.TakeLast(4).SequenceEqual(new byte[] { 13, 10, 13, 10 })) break; }
+                    if (value < 0) return;
+                    int size = int.Parse(Encoding.ASCII.GetString(header.ToArray()).Substring(16).Trim(), System.Globalization.CultureInfo.InvariantCulture);
+                    byte[] payload = new byte[size]; stream.ReadExactly(payload);
+                    lock (frameGate) { frames.Add(JsonNode.Parse(payload)!); System.Threading.Monitor.PulseAll(frameGate); }
+                }
+            });
+            var errors = process.StandardError.ReadToEndAsync();
             void Send(string method, JsonObject args, int? id = null)
             {
                 var request = new JsonObject { ["jsonrpc"] = "2.0", ["method"] = method, ["params"] = args };
                 if (id.HasValue) request["id"] = id.Value;
                 string json = request.ToJsonString(); process.StandardInput.Write("Content-Length: " + Encoding.UTF8.GetByteCount(json) + "\r\n\r\n" + json); process.StandardInput.Flush();
+                if (id is > 0 and < 100)
+                {
+                    var deadline = Stopwatch.StartNew();
+                    lock (frameGate) while (!frames.Any(frame => frame["id"]?.ToString() == id.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+                    {
+                        if (deadline.Elapsed.TotalSeconds > 10) throw new TimeoutException("LSP response was not received.");
+                        System.Threading.Monitor.Wait(frameGate, 100);
+                    }
+                }
             }
             JsonObject Document() => new() { ["uri"] = uri };
             Send("initialize", new JsonObject { ["capabilities"] = new JsonObject { ["general"] = new JsonObject { ["positionEncodings"] = new JsonArray(encoding) } } }, 1);
             var doc = Document(); doc["version"] = 1; doc["text"] = "x = 😀 {unfinished\n";
             Send("textDocument/didOpen", new JsonObject { ["textDocument"] = doc });
+            Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = Document() }, 23);
             doc = Document(); doc["version"] = 2;
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Hello\n" }) });
+            Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.preview", ["arguments"] = new JsonArray(uri, "x", "en") }, 20);
             Send("textDocument/rename", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["newName"] = "greeting" }, 2);
             doc = Document(); doc["version"] = 3;
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = {#link ref=help}Help{/link} {$name} |$literal|\n" }) });
@@ -115,16 +139,24 @@ internal static class Rmf2IntegrationTests
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x =\n  .local $label = {|Help|}\n  {{{$label}}}\n" }) });
             Send("textDocument/definition", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 2, ["character"] = 7 } }, 6);
             Send("textDocument/references", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 2, ["character"] = 7 }, ["context"] = new JsonObject { ["includeDeclaration"] = false } }, 7);
+            Send("textDocument/semanticTokens/full", new JsonObject { ["textDocument"] = Document() }, 21);
+            for (int requestId = 100; requestId < 116; requestId++)
+                Send("textDocument/completion", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 2, ["character"] = 7 } }, requestId);
+            for (int requestId = 100; requestId < 116; requestId++)
+                Send("$/cancelRequest", new JsonObject { ["id"] = requestId });
+            doc = Document(); doc["version"] = 5;
+            Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Hello\n" + string.Join('\n', Enumerable.Range(0, 1000).Select(index => "item_" + index + " = Value")) }) });
+            for (int requestId = 200; requestId < 216; requestId++)
+                Send("textDocument/semanticTokens/full", new JsonObject { ["textDocument"] = Document() }, requestId);
+            doc = Document(); doc["version"] = 6;
+            Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Current\n" }) });
+            Send("textDocument/semanticTokens/full", new JsonObject { ["textDocument"] = Document() }, 22);
             Send("shutdown", new JsonObject(), 3); Send("exit", new JsonObject()); process.StandardInput.Close();
             if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
             Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
-            var frames = new List<JsonNode>(); byte[] bytes = Encoding.UTF8.GetBytes(output.Result); int offset = 0;
-            while (offset < bytes.Length)
-            {
-                int end = offset; while (!(bytes[end] == 13 && bytes[end + 1] == 10 && bytes[end + 2] == 13 && bytes[end + 3] == 10)) end++;
-                int size = int.Parse(Encoding.ASCII.GetString(bytes, offset + 16, end - offset - 16), System.Globalization.CultureInfo.InvariantCulture); offset = end + 4;
-                frames.Add(JsonNode.Parse(bytes.AsSpan(offset, size))!); offset += size;
-            }
+            var tokens = frames.Single(frame => frame["id"]?.ToString() == "21")["result"]!["data"]!.AsArray();
+            Assert.True(tokens.Count > 0 && tokens.Count % 5 == 0, "Semantic highlighting did not return LSP token tuples.");
+            Assert.Equal(4, frames.Single(n => n["id"]?.ToString() == "20")["result"]!["ast"]!["astVersion"]!.GetValue<int>());
             Assert.Equal(encoding, frames.Single(n => n["id"]?.ToString() == "1")["result"]!["capabilities"]!["positionEncoding"]!.ToString());
             var diagnostic = frames.First(n => n["method"]?.ToString() == "textDocument/publishDiagnostics")["params"]!["diagnostics"]![0]!;
             Assert.Equal(encoding == "utf-8" ? 9 : encoding == "utf-16" ? 7 : 6, diagnostic["range"]!["start"]!["character"]!.GetValue<int>());
@@ -147,6 +179,11 @@ internal static class Rmf2IntegrationTests
             var catalogDefinition = frames.Single(n => n["id"]?.ToString() == "9")["result"]!.AsArray();
             Assert.Equal(1, catalogDefinition.Count);
             Assert.Equal(germanUri, catalogDefinition[0]!["uri"]!.ToString());
+            Assert.Equal("6", frames.Single(frame => frame["id"]?.ToString() == "22")["result"]!["resultId"]!.GetValue<string>());
+            Assert.True(frames.Any(frame => int.TryParse(frame["id"]?.ToString(), out int id) && id >= 200 && id < 216 && frame["error"]?["code"]?.GetValue<int>() == -32801), "Obsolete pending requests were not rejected.");
+            var cancelledBatch = frames.Where(n => int.TryParse(n["id"]?.ToString(), out int value) && value >= 100 && value < 116).ToArray();
+            Assert.Equal(16, cancelledBatch.Length);
+            Assert.True(cancelledBatch.Any(n => n["error"]?["code"]?.GetValue<int>() == -32800), "Cancellation was not processed while requests were queued.");
         }
     }
 }

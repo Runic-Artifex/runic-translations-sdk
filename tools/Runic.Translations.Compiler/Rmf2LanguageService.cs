@@ -24,8 +24,13 @@ public sealed class Rmf2LanguageService
     }
     /// <summary>Offers registered tags and semantic variables; an expression adds its contract options.</summary>
     public IReadOnlyList<Rmf2Completion> Complete(Mf2SyntaxDocument? syntax, int byteOffset)
+        => Complete(syntax, byteOffset, null);
+    /// <summary>Adds base-message functional slots to the local syntax and registry completions.</summary>
+    public IReadOnlyList<Rmf2Completion> Complete(Mf2SyntaxDocument? syntax, int byteOffset, Mf2SyntaxDocument? baseSyntax)
     {
         var items = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (string function in new[] { "string", "integer", "number", "date", "time", "datetime", "runic:uuid", "runic:boolean", "runic:relative-time" })
+            items[":" + function] = "rmf2-execution-v1 · options: " + Mf2MessageParser.FunctionOptions(function);
         foreach (var pair in _registry.Contracts) Tag(pair.Key, pair.Value);
         foreach (var pair in _registry.Aliases) Tag(pair.Key, _registry.Contracts[pair.Value]);
         if (syntax is not null)
@@ -35,10 +40,21 @@ public sealed class Rmf2LanguageService
             foreach (var declaration in syntax.Declarations)
                 items["$" + declaration.Name] = DescribeVariable(syntax, declaration.Name);
             var expression = syntax.Expressions.FirstOrDefault(e => Contains(e.Location, byteOffset));
+            if (expression?.Function is string functionName)
+                foreach (string option in Mf2MessageParser.FunctionOptions(functionName).Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    if (!expression.Options.Any(p => p.Name == option)) items[option + "="] = ":" + functionName + " · literal formatter option";
             if (expression?.MarkupName is string name && Resolve(name) is { } contract && expression.MarkupKind != Mf2MarkupKind.Close)
             {
                 foreach (var option in contract.Options)
+                {
                     if (!expression.Options.Any(p => p.Name == option.Key)) items[option.Key + "="] = DescribeOption(option.Value);
+                    if (expression.Options.Any(p => p.Name == option.Key && p.Location.StartByte <= byteOffset && byteOffset <= p.Location.StartByte + p.Location.LengthBytes))
+                        foreach (string value in option.Value.Values) items[value] = option.Key + " · " + DescribeOption(option.Value);
+                }
+                if (baseSyntax is not null && expression.Options.Any(p => p.Name == "ref" && p.Location.StartByte <= byteOffset && byteOffset <= p.Location.StartByte + p.Location.LengthBytes))
+                    foreach (var original in baseSyntax.Expressions.Where(e => e.MarkupName is not null && Resolve(e.MarkupName)?.Name == contract.Name))
+                        foreach (var property in original.Options.Where(p => p.Name == "ref" && p.Value is { Kind: not Mf2OperandKind.Variable }))
+                            items[property.Value!.Value] = contract.Name + " · base-message functional slot";
                 if (contract.Name is "runic:link" or "runic:action" or "runic:icon" && !expression.Options.Any(p => p.Name == "ref"))
                     items["ref="] = "Static functional slot ID";
             }

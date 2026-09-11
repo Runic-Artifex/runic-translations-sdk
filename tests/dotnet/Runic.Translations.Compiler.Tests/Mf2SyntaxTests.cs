@@ -9,6 +9,8 @@ internal static class Mf2SyntaxTests
 {
     internal static void Register(TestRunner runner)
     {
+        runner.Add("MF2 grammar and data-model errors remain separate from backend limits", Grammar);
+        runner.Add("RMF2 lowers multiline expressions and quoted variant keys through the shared model", Lowering);
         runner.Add("RMF2 language service uses project contracts and semantic variables", LanguageService);
         runner.Add("RMF2 literal locals and aliases remain internal to the caller contract", LiteralLocals);
         runner.Add("MF2 syntax preserves unsupported expressions and exact Unicode/CRLF token spans", Lossless);
@@ -17,6 +19,32 @@ internal static class Mf2SyntaxTests
         runner.Add("MF2 syntax distinguishes literal/variable options and valueless attributes", Properties);
     }
     private static Mf2SyntaxDocument Read(string text) => Mf2SyntaxReader.Read(new TranslationSource("message.mf2", Encoding.UTF8.GetBytes(text)));
+    private static void Grammar()
+    {
+        foreach (string value in new[] { "{{unterminated", "{{ok}} trailing", ".bogus {{x}}", ".local $a = {|x|}", "{$1bad}", "{$a:number}", "{$a :number@note}", "{#}", "text }", "{x option=1}", "{$a @note=$b}", "{|bad\\q|}" })
+            Assert.True(!Read(value).Success, "Invalid MF2 syntax accepted: " + value);
+        foreach (string value in new[] { "{$😀}", "{$a.b}", "{+literal}", ".local\n$word = {\n|Hi|\n} {{Hello {$word}}}", "{#x @note}{/x @note}" })
+            Assert.True(Read(value).Success, "Valid MF2 syntax rejected: " + value);
+        Assert.Equal(0, Mf2SyntaxReader.ValidateDataModel(Read(".match $name\n|*| {{Literal}}\n* {{Other}}")).Count);
+        var variants = Read(".match $name\n|first last| {{😀}}\n* {{Other}}");
+        var variant = variants.Variants[0];
+        Assert.Equal("|first last| {{😀}}", Encoding.UTF8.GetString(variants.Source.GetUtf8Bytes(), variant.Location.StartByte, variant.Location.LengthBytes));
+        Assert.Equal("{{😀}}", Encoding.UTF8.GetString(variants.Source.GetUtf8Bytes(), variant.PatternLocation.StartByte, variant.PatternLocation.LengthBytes));
+        foreach (string value in new[] { ".local $x = {$later} .local $later = {1} {{x}}", ".input {$x} .input {$x} {{x}}", ".match $x\na {{A}}", ".match $x\na {{A}} a {{Again}} * {{Other}}" })
+        {
+            var syntax = Read(value); Assert.True(syntax.Success, "Data-model constraint rejected by syntax parser.");
+            Assert.True(Mf2SyntaxReader.ValidateDataModel(syntax).Any(d => d.Id == "RTR0067"), "Missing data-model diagnostic.");
+        }
+    }
+    private static void Lowering()
+    {
+        const string text = "message =\n  .input {\n    $name :string\n  }\n  .match $name\n  |first last| {{Found {bare} {|a\\|b|}}}\n  * {{Other}}\n";
+        var result = TranslationCompiler.CompileProject(Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(text))]);
+        Assert.True(result.Success, string.Join(";", result.Diagnostics.Select(d => d.Message)));
+        var variant = result.Catalogs[0].CanonicalResources[0].Message.Variants[0];
+        Assert.Equal("first last", variant.Matches["name"]);
+        Assert.Equal("Found bare a|b", string.Concat(variant.Pattern.Nodes.OfType<CompiledMessageText>().Select(n => n.Value)));
+    }
     private static void LanguageService()
     {
         const string project = """
@@ -31,6 +59,9 @@ internal static class Mf2SyntaxTests
         Assert.True(items.Any(i => i.Label == "$label") && items.All(i => i.Label != "$fake"), "Literal text leaked into symbol completion.");
         Assert.True(items.All(i => i.Label != "tone="), "An existing option was suggested twice.");
         Assert.True(service.Hover(syntax, position)!.Contains("literal only", StringComparison.Ordinal), "Option hover lost its contract.");
+        Assert.True(service.Complete(syntax, position + 5).Any(item => item.Label == "good"), "Missing allowed option values.");
+        var link = Read("{#link ref=terms}Terms{/link}");
+        Assert.True(service.Complete(link, 15, link).Any(item => item.Label == "terms"), "Missing base-message slot completion.");
         var incomplete = Read("{#badge }");
         Assert.True(service.Complete(incomplete, 3).Any(i => i.Label == "tone=" && i.Detail.Contains("good, bad", StringComparison.Ordinal)), "Missing custom enum option.");
     }
@@ -42,6 +73,10 @@ internal static class Mf2SyntaxTests
         Assert.Equal("name", compilation.Catalogs[0].CanonicalResources[0].Placeholders[0].Name);
         var output = Runic.Translations.Compiler.Generation.TranslationOutputRenderer.RenderLocaleJson(compilation.Catalogs[0], "en").Text;
         Assert.True(output.Contains("Hello", StringComparison.Ordinal), "Literal local value was lost.");
+        var formattedAlias = TranslationCompiler.CompileProject(Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("x =\n  .input {$name :string}\n  .local $alias = {$name}\n  {{{$alias :string}}}"))]);
+        Assert.True(formattedAlias.Success, string.Join(";", formattedAlias.Diagnostics.Select(d => d.Message)));
+        Assert.Equal(1, formattedAlias.Catalogs[0].CanonicalResources[0].Placeholders.Count);
+        Assert.Equal("name", formattedAlias.Catalogs[0].CanonicalResources[0].Placeholders[0].Name);
         var unsupported = TranslationCompiler.CompileProject(Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("x =\n  .local $literal = {42}\n  .local $formatted = {$literal :number}\n  {{{$formatted}}}"))]);
         Assert.True(!unsupported.Success && unsupported.Diagnostics.Any(d => d.Id == "RTR0065"), "Formatting a constant alias must not create a caller input.");
     }

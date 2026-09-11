@@ -56,3 +56,15 @@ if (inferred.kind !== "text" || inferred.value !== "Welcome back, Viktor") {
 }
 
 console.log("PASS: editor preview matches the normalized ESM AST semantics and keeps hostile markup inert.");
+
+const rmf2 = {
+  astVersion: 4, contentLocale: "en",
+  inputs: { count: { type: "int", format: "plain" }, tone: { type: "string", format: "none" } },
+  selectors: [{ name: "count", input: "count", function: "plural" }],
+  variants: [
+    { matches: { count: "*" }, nodes: [{ kind: "text", value: "Fallback" }] },
+    { matches: { count: "0" }, nodes: [{ kind: "markup", name: "shop:badge", standalone: false, attributes: { tone: "tone" }, variableOptions: ["tone"], children: [{ kind: "text", value: "Empty" }] }] },
+  ],
+};
+const result = executeMessagePreview(rmf2, "de", { count: "0", tone: "positive" });
+if (result.kind !== "content" || result.nodes[0].attributes.tone !== "positive" || flattenPreview(result.nodes) !== "Empty") throw new Error("RMF2 exact numeric selection or dynamic markup options diverged.");

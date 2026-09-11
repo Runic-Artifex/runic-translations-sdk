@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InlinePreview from "$lib/InlinePreview.svelte";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import type { SimulationPreviewNode, UiDirection } from "$lib/simulation";
   import { getUiText } from "$lib/ui-text";
@@ -37,19 +38,7 @@
 </script>
 
 {#snippet artifactNodes(nodes: SimulationPreviewNode[])}
-  {#each nodes as node, index (index)}
-    {#if node.kind === "text"}
-      <span class="artifact-text">{node.value}</span>
-    {:else}
-      <span class="artifact-element">
-        <span class="artifact-element-label">{node.name}</span>
-        {#if Object.keys(node.attributes).length > 0}
-          <span class="artifact-attributes">{Object.entries(node.attributes).map(([name, value]) => name + "=" + value).join(" · ")}</span>
-        {/if}
-        <span class="artifact-children">{@render artifactNodes(node.children)}</span>
-      </span>
-    {/if}
-  {/each}
+  <InlinePreview {nodes} />
 {/snippet}
 
 {#if open}
@@ -161,19 +150,6 @@
   }
   .artifact-canvas p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .artifact-placeholder { color: var(--muted-foreground); font-size: 0.65rem; }
-  .artifact-text, .artifact-children { display: inline; }
-  .artifact-element {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.25rem;
-    border: 1px solid color-mix(in oklch, var(--primary) 40%, var(--border));
-    border-radius: 0.35rem;
-    padding: 0.24rem 0.35rem;
-    background: color-mix(in oklch, var(--primary) 8%, var(--card));
-  }
-  .artifact-element-label { color: var(--primary); font: 0.52rem ui-monospace, monospace; }
-  .artifact-attributes { color: var(--muted-foreground); font: 0.48rem ui-monospace, monospace; }
   .artifact-note {
     margin: 0;
     padding: 0.55rem 0.9rem;

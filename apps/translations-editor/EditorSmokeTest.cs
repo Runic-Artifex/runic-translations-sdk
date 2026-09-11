@@ -202,6 +202,7 @@ internal static class EditorSmokeTest
             Require((await session.RedoAsync().ConfigureAwait(false)).Ok && await File.ReadAllTextAsync(germanPath).ConfigureAwait(false) == draft.Content,
                 "Redo did not restore the complete physical file.");
 
+            await RunRmf2Async(Path.Combine(container, "rmf2")).ConfigureAwait(false);
             Console.WriteLine("PASS: editor nested TOML messages, grouped create/rename, trivia, revisions, grouped XLIFF conflicts, and physical undo/redo.");
             return 0;
         }
@@ -215,6 +216,38 @@ internal static class EditorSmokeTest
             try { if (Directory.Exists(container)) Directory.Delete(container, recursive: true); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    private static async Task RunRmf2Async(string root)
+    {
+        Directory.CreateDirectory(Path.Combine(root, "shop"));
+        Directory.CreateDirectory(Path.Combine(root, "accounts"));
+        await File.WriteAllTextAsync(Path.Combine(root, "runic.json"), """
+        {"schemaVersion":1,"catalog":"rmf2-smoke","sourceLayout":"rmf2-v1","baseLocale":"en","code":{"namespace":"Smoke","className":"Text"},"sourceRoots":[{"path":"shop","namespace":["shop"]},{"path":"accounts","namespace":["account"]}]}
+        """);
+        await File.WriteAllTextAsync(Path.Combine(root, "shop", "en.rmf2"), "title = Shop\n");
+        await File.WriteAllTextAsync(Path.Combine(root, "accounts", "en.rmf2"), "# Profile heading\ntitle = Account\n");
+        using var session = new EditorSession(root);
+        Require((await session.LoadAsync()).Success, "Mounted RMF2 editor catalog failed to load.");
+        await Apply(new("create-key", null, null, null, null, null, "account.profile", "Profile"));
+        Require((await File.ReadAllTextAsync(Path.Combine(root, "accounts", "en.rmf2"))).Contains("profile = Profile", StringComparison.Ordinal), "RMF2 creation chose the wrong mount.");
+        await Apply(new("rename-key", null, null, null, null, "account_title", "account.heading", null));
+        Require((await File.ReadAllTextAsync(Path.Combine(root, "accounts", "en.rmf2"))).Contains("# Profile heading", StringComparison.Ordinal), "RMF2 rename discarded metadata.");
+        await Apply(new("add-locale", "de", "en", null, "en", null, null, null));
+        Require(File.Exists(Path.Combine(root, "accounts", "de.rmf2")) && File.Exists(Path.Combine(root, "shop", "de.rmf2")), "RMF2 locale creation missed a mount.");
+        await Apply(new("set-fallback", "de", "en", null, null, null, null, null));
+        await Apply(new("duplicate-key", null, null, null, null, "account_heading", "account.copy", null));
+        await Apply(new("delete-key", null, null, null, null, "account_copy", null, null));
+        await Apply(new("remove-locale", "de", null, "en", null, null, null, null));
+        Require(!File.Exists(Path.Combine(root, "accounts", "de.rmf2")), "RMF2 locale removal left a source behind.");
+        Console.WriteLine("PASS: editor mounted RMF2 create, rename, duplicate, delete, locale and fallback transactions.");
+        async Task Apply(EditorMutationRequest request)
+        {
+            var preview = session.PreviewMutation(request);
+            Require(preview.Ok, "RMF2 mutation preview failed: " + request.Kind + " " + preview.Message);
+            var result = await session.ApplyMutationAsync(request with { ConfirmationToken = preview.ConfirmationToken });
+            Require(result.Ok, "RMF2 mutation failed: " + request.Kind + " " + result.Message);
         }
     }
 

@@ -316,6 +316,7 @@ type sealed class Runic.Translations.Compiler.Mf2SyntaxDocument
 
 type static class Runic.Translations.Compiler.Mf2SyntaxReader
   method static Runic.Translations.Compiler.Mf2SyntaxDocument Read(Runic.Translations.Compiler.TranslationSource source, Runic.Translations.Compiler.TranslationCompilerOptions options = null, System.Threading.CancellationToken cancellationToken = default)
+  method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic> ValidateDataModel(Runic.Translations.Compiler.Mf2SyntaxDocument syntax)
   method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic> ValidateInlineProfile(Runic.Translations.Compiler.Mf2SyntaxDocument syntax)
 
 type sealed class Runic.Translations.Compiler.Mf2SyntaxToken : System.IEquatable<Runic.Translations.Compiler.Mf2SyntaxToken>
@@ -363,6 +364,8 @@ type sealed class Runic.Translations.Compiler.Mf2VariantSyntax : System.IEquatab
   method static System.Boolean op_Equality(Runic.Translations.Compiler.Mf2VariantSyntax left, Runic.Translations.Compiler.Mf2VariantSyntax right)
   method static System.Boolean op_Inequality(Runic.Translations.Compiler.Mf2VariantSyntax left, Runic.Translations.Compiler.Mf2VariantSyntax right)
   property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
+  property Runic.Translations.Compiler.TextSourceLocation PatternLocation { get; init; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TextSourceLocation> KeyLocations { get; init; }
   property System.Collections.Generic.IReadOnlyList<System.String> Keys { get; init; }
 
 type sealed class Runic.Translations.Compiler.Rmf2Completion : System.IEquatable<Runic.Translations.Compiler.Rmf2Completion>
@@ -380,6 +383,7 @@ type sealed class Runic.Translations.Compiler.Rmf2Completion : System.IEquatable
 
 type sealed class Runic.Translations.Compiler.Rmf2LanguageService
   method System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2Completion> Complete(Runic.Translations.Compiler.Mf2SyntaxDocument syntax, System.Int32 byteOffset)
+  method System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2Completion> Complete(Runic.Translations.Compiler.Mf2SyntaxDocument syntax, System.Int32 byteOffset, Runic.Translations.Compiler.Mf2SyntaxDocument baseSyntax)
   method System.String Hover(Runic.Translations.Compiler.Mf2SyntaxDocument syntax, System.Int32 byteOffset)
   method static Runic.Translations.Compiler.Rmf2LanguageService Create(Runic.Translations.Compiler.TranslationSource project, System.Threading.CancellationToken cancellationToken = default)
   property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic> Diagnostics { get; }

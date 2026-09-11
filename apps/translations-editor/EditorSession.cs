@@ -555,6 +555,8 @@ internal sealed class EditorSession : IDisposable
     {
         string catalogId = workspace.CatalogId
             ?? throw new EditorUserException(EditorNotice.Create("ui_backend_select_catalog_mutation"));
+        var rmf2 = workspace.PlanRmf2Mutation(request);
+        if (rmf2 is not null) return rmf2;
         return request.Kind switch
         {
             "add-locale" => TranslationWorkspaceMutation.AddLocale(new TranslationAddLocaleRequest(

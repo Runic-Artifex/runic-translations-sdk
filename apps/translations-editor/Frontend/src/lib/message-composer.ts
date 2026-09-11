@@ -42,9 +42,10 @@ export type ArtifactNode =
   | { kind: "text"; value: string }
   | { kind: "input"; input: string }
   | { kind: "format"; input: string; function: FormatFunction; format: string; unit?: string; numeric?: string }
-  | { kind: "markup"; name: string; attributes: Record<string, string>; children: ArtifactNode[] };
+  | { kind: "markup"; name: string; attributes: Record<string, string>; children: ArtifactNode[]; standalone?: boolean; variableOptions?: string[]; annotations?: Record<string, string> };
 export interface MessageArtifact {
-  astVersion: 2;
+  astVersion: 2 | 4;
+  contentLocale?: string;
   inputs: Record<string, ArtifactInput>;
   selectors: ArtifactSelector[];
   variants: Array<{ matches: Record<string, string>; nodes: ArtifactNode[] }>;

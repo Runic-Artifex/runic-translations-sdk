@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Runic.Translations.Compiler;
 
@@ -54,6 +55,57 @@ public static class Rmf2ResourceWriter
         if (syntax.VariableReferences(newName).Count != 0) throw new TranslationAuthoringException("Rename would capture an existing variable.");
         var edits = syntax.VariableReferences(name).Select(location => (node.MessageByteMap[location.StartByte], node.MessageByteMap[location.StartByte + location.LengthBytes] - node.MessageByteMap[location.StartByte], Utf8.GetBytes("$" + newName)));
         return Replace(source.GetUtf8Bytes(), edits);
+    }
+
+    /// <summary>Renames explicit functional slot references without replacing message text or variable options.</summary>
+    public static byte[] RenameSlot(TranslationSource source, string key, string name, string newName, TranslationSource? project = null)
+    {
+        if (!Identifier.IsMatch(newName)) throw new TranslationAuthoringException("Slot names must be identifiers.");
+        var node = Require(source).Nodes.Single(n => !n.IsGroup && n.Key == key);
+        var functional = new HashSet<string>(new[] { "link", "action", "icon", "runic:link", "runic:action", "runic:icon" }, StringComparer.Ordinal);
+        if (project is not null)
+        {
+            using var config = JsonDocument.Parse(project.GetUtf8Bytes());
+            if (config.RootElement.TryGetProperty("markup", out var markup) && markup.TryGetProperty("aliases", out var aliases))
+                foreach (var alias in aliases.EnumerateObject())
+                    if (alias.Value.GetString() is "runic:link" or "runic:action" or "runic:icon") functional.Add(alias.Name);
+        }
+        var references = node.MessageSyntax!.Expressions.Where(expression => expression.MarkupName is not null && functional.Contains(expression.MarkupName) && expression.MarkupKind != Mf2MarkupKind.Close)
+            .SelectMany(expression => expression.Options.Where(option => option.Name == "ref" && option.Value is { Kind: not Mf2OperandKind.Variable })).Select(option => option.Value!).ToArray();
+        if (name != newName && references.Any(value => value.Value == newName)) throw new TranslationAuthoringException("The target slot already exists in this message.");
+        var edits = references.Where(value => value.Value == name).Select(value => (node.MessageByteMap[value.Location.StartByte], node.MessageByteMap[value.Location.StartByte + value.Location.LengthBytes] - node.MessageByteMap[value.Location.StartByte], Utf8.GetBytes(value.Quoted ? "|" + newName + "|" : newName)));
+        return Replace(source.GetUtf8Bytes(), edits);
+    }
+
+    /// <summary>Renames a caller input and its parameter/example metadata without replacing literal message text.</summary>
+    public static byte[] RenameInput(TranslationSource source, string key, string name, string newName)
+    {
+        if (!Identifier.IsMatch(newName)) throw new TranslationAuthoringException("Input names must be identifiers.");
+        var node = Require(source).Nodes.Single(n => !n.IsGroup && n.Key == key);
+        var syntax = node.MessageSyntax!;
+        if (!syntax.Success || syntax.Declarations.Any(d => d.Kind == "local" && d.Name == name)) throw new TranslationAuthoringException("Select a valid caller input.");
+        if (name == newName) return source.GetUtf8Bytes();
+        if (syntax.VariableReferences(newName).Count != 0) throw new TranslationAuthoringException("Rename would capture an existing variable.");
+        var edits = syntax.VariableReferences(name).Select(location => (node.MessageByteMap[location.StartByte], node.MessageByteMap[location.StartByte + location.LengthBytes] - node.MessageByteMap[location.StartByte], Utf8.GetBytes("$" + newName))).ToList();
+        byte[] bytes = source.GetUtf8Bytes();
+        string metadata = Utf8.GetString(bytes, node.Location.StartByte, node.NameLocation.StartByte - node.Location.StartByte);
+        int offset = node.Location.StartByte;
+        foreach (string line in metadata.Split('\n'))
+        {
+            var parameter = Regex.Match(line, @"^[ ]*@param[ ]+\$([A-Za-z_][A-Za-z0-9_]*)");
+            if (parameter.Success && parameter.Groups[1].Value == name)
+                edits.Add((offset + Utf8.GetByteCount(line.AsSpan(0, parameter.Groups[1].Index)), Utf8.GetByteCount(name), Utf8.GetBytes(newName)));
+            var example = Regex.Match(line, @"^[ ]*@example[ ]+");
+            if (example.Success)
+            {
+                byte[] json = Utf8.GetBytes(line.Substring(example.Length)); var reader = new Utf8JsonReader(json);
+                while (reader.Read())
+                    if (reader.TokenType == JsonTokenType.PropertyName && reader.CurrentDepth == 1 && reader.ValueTextEquals(name))
+                        edits.Add((offset + Utf8.GetByteCount(line.AsSpan(0, example.Length)) + (int)reader.TokenStartIndex, reader.HasValueSequence ? throw new TranslationAuthoringException("Unexpected segmented JSON input.") : reader.ValueSpan.Length + 2, Utf8.GetBytes(JsonSerializer.Serialize(newName))));
+            }
+            offset += Utf8.GetByteCount(line) + 1;
+        }
+        return Replace(bytes, edits);
     }
 
     public static byte[] Rename(TranslationSource source, IReadOnlyList<string> path, string name)

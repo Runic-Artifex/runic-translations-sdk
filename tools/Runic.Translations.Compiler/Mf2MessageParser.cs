@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -20,7 +21,7 @@ internal sealed class Mf2ParsedMessage
     internal PlaceholderModel[] Placeholders { get; }
 }
 
-internal static class Mf2MessageParser
+internal static partial class Mf2MessageParser
 {
     private static readonly Regex Variable = new Regex("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
     private static readonly Regex Option = new Regex("([A-Za-z_][A-Za-z0-9_-]*)=([^\\s]+)", RegexOptions.CultureInvariant);
@@ -58,10 +59,14 @@ internal static class Mf2MessageParser
             var syntax = sourceSyntax ?? Mf2SyntaxReader.Read(source, options, cancellationToken);
             foreach (var diagnostic in syntax.Diagnostics) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
             if (!syntax.Success) return null;
+            var model = Mf2SyntaxReader.ValidateDataModel(syntax);
+            foreach (var diagnostic in model) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+            if (model.Count > 0) return null;
             var profile = Mf2SyntaxReader.ValidateInlineProfile(syntax);
             foreach (var diagnostic in profile) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
             if (profile.Count > 0) return null;
-            ValidateRmf2Capabilities(text, source, diagnostics);
+            ValidateRmf2Capabilities(syntax, source, diagnostics);
+            return LowerRmf2(syntax, diagnostics, options);
         }
         var declarations = new Dictionary<string, Declaration>(StringComparer.Ordinal);
         int offset = 0;
@@ -133,30 +138,32 @@ internal static class Mf2MessageParser
 
     // RMF2 has its own explicit execution profile. Never accept an option and silently
     // ignore it or clamp it into another meaning in the existing compact backends.
-    private static void ValidateRmf2Capabilities(string text, TranslationSource source, DiagnosticBag diagnostics)
+    private static void ValidateRmf2Capabilities(Mf2SyntaxDocument syntax, TranslationSource source, DiagnosticBag diagnostics)
     {
-        foreach (Match expression in Regex.Matches(text, @"\{\s*\$[A-Za-z_][A-Za-z0-9_]*\s*([^{}]*)\}"))
+        foreach (var token in syntax.Tokens.Where(t => t.Kind == Mf2SyntaxTokenKind.Variable && !Variable.IsMatch(t.Value)))
+            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, "This backend requires ASCII caller and local identifiers.", token.Location);
+        if (syntax.Match is { } match && match.Selectors.Distinct(StringComparer.Ordinal).Count() != match.Selectors.Count)
+            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, "Repeated selector identities are not executable in this profile.", match.Location);
+        foreach (var variant in syntax.Variants.Where(v => v.Keys.Any(key => key == "|*|")))
+            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, "A quoted wildcard key is not executable in this profile.", variant.Location);
+        foreach (var expression in syntax.Expressions)
         {
-            string tail = expression.Groups[1].Value.Trim();
-            if (tail.Length == 0) continue;
-            Match function = Regex.Match(tail, @"^:([A-Za-z_][A-Za-z0-9_:-]*)(.*)$", RegexOptions.Singleline);
-            if (!function.Success) { Unsupported("Expression annotations are not executable in this profile."); continue; }
-            string name = function.Groups[1].Value;
-            string allowed = name switch {
-                "string" => "select", "integer" => "select useGrouping", "number" => "select style minimumFractionDigits maximumFractionDigits",
-                "date" or "time" or "datetime" or "runic:uuid" => "style", "runic:boolean" => "select",
-                "runic:relative-time" => "unit numeric", _ => "",
-            };
+            if (expression.MarkupKind != Mf2MarkupKind.None)
+            {
+                if (expression.MarkupKind == Mf2MarkupKind.Close && (expression.Options.Count != 0 || expression.Attributes.Count != 0)) Unsupported("Closing-tag properties are not supported by the inline backend.");
+                continue;
+            }
+            if (expression.Attributes.Count != 0) Unsupported("Expression annotations are not executable in this profile.");
+            if (expression.Function is not string name) continue;
+            if (expression.Operand?.Kind != Mf2OperandKind.Variable) Unsupported("Formatted literal and function-only expressions are not executable in this profile.");
+            string allowed = FunctionOptions(name);
             if (allowed.Length == 0) { Unsupported("Unsupported execution function ':" + name + "'."); continue; }
             var values = new Dictionary<string, string>(StringComparer.Ordinal);
-            string rest = function.Groups[2].Value.Trim();
-            foreach (string token in rest.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            foreach (var option in expression.Options)
             {
-                int equals = token.IndexOf('=');
-                if (equals < 1) { Unsupported("Unsupported function option or annotation."); continue; }
-                string key = token.Substring(0, equals), value = UnquoteLiteral(token.Substring(equals + 1));
-                if (Array.IndexOf(allowed.Split(' '), key) < 0 || !values.TryAdd(key, value) || value.StartsWith('$'))
-                    Unsupported("Unknown, duplicate or dynamic function option '" + key + "'.");
+                if (Array.IndexOf(allowed.Split(' '), option.Name) < 0 || option.Value is null || option.Value.Kind == Mf2OperandKind.Variable)
+                    Unsupported("Unknown or dynamic function option '" + option.Name + "'.");
+                else values.TryAdd(option.Name, option.Value.Value);
             }
             foreach (var option in values)
             {
@@ -177,10 +184,13 @@ internal static class Mf2MessageParser
             if (values.ContainsKey("minimumFractionDigits") || values.ContainsKey("maximumFractionDigits"))
                 if (!values.TryGetValue("minimumFractionDigits", out string? min) || !values.TryGetValue("maximumFractionDigits", out string? max) || min != max)
                     Unsupported("This backend supports fixed precision only; minimumFractionDigits and maximumFractionDigits must both be present and equal.");
-            void Unsupported(string message) => diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, message, source,
-                new ByteSpan(StrictJsonParser.StrictUtf8.GetByteCount(text.AsSpan(0, expression.Index)), StrictJsonParser.StrictUtf8.GetByteCount(expression.Value)));
+            void Unsupported(string message) => diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, message, expression.Location);
         }
     }
+    internal static string FunctionOptions(string name) => name switch {
+        "string" => "select", "integer" => "select useGrouping", "number" => "select style minimumFractionDigits maximumFractionDigits",
+        "date" or "time" or "datetime" or "runic:uuid" => "style", "runic:boolean" => "select", "runic:relative-time" => "unit numeric", _ => "",
+    };
 
     private static CompiledMessagePattern? ParseMatch(
         string body,
@@ -373,7 +383,8 @@ internal static class Mf2MessageParser
         Dictionary<string, Declaration> declarations,
         HashSet<string> usedInputs,
         TranslationSource source,
-        DiagnosticBag diagnostics)
+        DiagnosticBag diagnostics,
+        bool resolveAliases = false)
     {
         if (!expression.StartsWith('$'))
         {
@@ -400,7 +411,7 @@ internal static class Mf2MessageParser
         }
         if (tail.StartsWith(':'))
         {
-            declaration = ParseFunction(name, name, tail, source, diagnostics);
+            declaration = ParseFunction(name, resolveAliases ? ResolveDeclaration(name, declarations).Input : name, tail, source, diagnostics);
             if (declarations.TryGetValue(name, out Declaration? existing) &&
                 (existing.Type != declaration.Type || existing.Format != declaration.Format))
                 Error(diagnostics, source, "RTR0041", "MF2 variable '" + name + "' has conflicting format declarations.");

@@ -7,6 +7,7 @@
  * @returns {{ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] }}
  */
 export function executeMessagePreview(ast, locale, samples) {
+  locale = ast.contentLocale ?? locale;
   /** @type {Record<string, unknown>} */
   const inputs = {};
   for (const [name, descriptor] of Object.entries(ast.inputs)) {
@@ -19,8 +20,17 @@ export function executeMessagePreview(ast, locale, samples) {
     if (selector.function === "ordinal") return new Intl.PluralRules(locale, { type: "ordinal" }).select(Number(value));
     return String(value);
   });
-  const variant = ast.variants.find((candidate) => ast.selectors.every((selector, index) =>
-    candidate.matches[selector.name] === "*" || candidate.matches[selector.name] === selected[index]));
+  const candidates = ast.variants.map((variant, order) => ({ variant, order, ranks: ast.selectors.map((selector, index) => {
+    const key = variant.matches[selector.name];
+    if (key === "*") return 2;
+    if (key === String(inputs[selector.input])) return 0;
+    return key === selected[index] ? 1 : 3;
+  }) })).filter(candidate => candidate.ranks.every(rank => rank < 3));
+  candidates.sort((left, right) => {
+    for (let index = 0; index < left.ranks.length; index++) if (left.ranks[index] !== right.ranks[index]) return left.ranks[index] - right.ranks[index];
+    return left.order - right.order;
+  });
+  const variant = candidates[0]?.variant;
   if (variant === undefined) throw new RangeError("No variant matches these sample values.");
   const nodes = contentNodes(variant.nodes, ast.inputs, inputs, locale);
   return hasMarkup(nodes)
@@ -46,7 +56,7 @@ function contentNodes(nodes, descriptors, inputs, locale) {
       return {
         kind: "element",
         name: node.name,
-        attributes: { ...node.attributes },
+        attributes: Object.fromEntries(Object.entries(node.attributes).map(([key, value]) => [key, node.variableOptions?.includes(key) ? String(inputs[value]) : value])),
         children: contentNodes(node.children, descriptors, inputs, locale),
       };
     }

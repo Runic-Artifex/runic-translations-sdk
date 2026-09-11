@@ -1422,6 +1422,41 @@ internal sealed class EditorWorkspace : IDisposable
         return ReadEntries(document);
     }
 
+    internal TranslationWorkspaceTransactionPlan? PlanRmf2Mutation(EditorMutationRequest request)
+    {
+        string? config = FindMf2ProjectConfig();
+        if (config is null) return null;
+        using var document = JsonDocument.Parse(File.ReadAllBytes(config));
+        if (StringProperty(document.RootElement, "sourceLayout") != "rmf2-v1") return null;
+        var state = ReadStateAsync(null, null, CancellationToken.None).GetAwaiter().GetResult();
+        var sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && file.Path.EndsWith(".rmf2", StringComparison.Ordinal)).Select(file => Source(file.Path, file.Content)).ToArray();
+        var workspace = new Rmf2Workspace(_root, new TranslationSource(Path.GetRelativePath(_root, config).Replace('\\', '/'), File.ReadAllBytes(config)), sources);
+        if (request.Kind == "add-locale") return workspace.AddLocale(request.Locale ?? "", request.Fallback, request.CopyFromLocale);
+        if (request.Kind == "remove-locale") return workspace.RemoveLocale(request.Locale ?? "", request.ReplacementFallback);
+        if (request.Kind == "set-fallback") return workspace.SetFallback(request.Locale ?? "", request.Fallback);
+        string[] Target() => (request.TargetKey ?? "").Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (request.Kind == "create-key")
+        {
+            string locale = document.RootElement.GetProperty("baseLocale").GetString()!;
+            string path = sources.Where(source => Path.GetFileNameWithoutExtension(source.Path) == locale).Select(source => source.Path).Order(StringComparer.Ordinal).FirstOrDefault(path => {
+                try { workspace.LocalPath(path, Target()); return true; }
+                catch (TranslationAuthoringException) { return false; }
+            })
+                ?? throw new TranslationAuthoringException("No base-locale source can contain this logical path. Choose a path within an existing source namespace.");
+            return workspace.CreateResource(path, Target(), request.InitialValue ?? "");
+        }
+        var origin = workspace.Documents.SelectMany(file => file.Nodes.Where(node => !node.IsGroup).Select(node => (file, node)))
+            .FirstOrDefault(item => string.Join('_', workspace.LogicalPath(item.file.Source.Path, item.node)) == request.SourceKey);
+        if (origin.node is null) throw new TranslationAuthoringException("Select an existing RMF2 resource.");
+        var logical = workspace.LogicalPath(origin.file.Source.Path, origin.node);
+        return request.Kind switch {
+            "rename-key" => workspace.MutateResource(logical, Target()),
+            "duplicate-key" => workspace.MutateResource(logical, Target(), duplicate: true),
+            "delete-key" => workspace.MutateResource(logical, null),
+            _ => throw new TranslationAuthoringException("This operation is not available for RMF2 resources."),
+        };
+    }
+
     private Rmf2Workspace Rmf2Catalog()
     {
         string config = FindMf2ProjectConfig() ?? throw new TranslationAuthoringException("No project configuration found.");

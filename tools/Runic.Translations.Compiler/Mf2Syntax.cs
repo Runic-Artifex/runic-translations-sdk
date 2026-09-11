@@ -23,7 +23,11 @@ public sealed record Mf2ExpressionSyntax(Mf2OperandSyntax? Operand, string? Func
     Mf2MarkupKind MarkupKind, IReadOnlyList<Mf2PropertySyntax> Options, IReadOnlyList<Mf2PropertySyntax> Attributes,
     TextSourceLocation Location);
 /// <summary>A declaration retains its expression and exact source symbol.</summary>
-public sealed record Mf2VariantSyntax(IReadOnlyList<string> Keys, TextSourceLocation Location);
+public sealed record Mf2VariantSyntax(IReadOnlyList<string> Keys, TextSourceLocation Location)
+{
+    public TextSourceLocation PatternLocation { get; init; } = Location;
+    public IReadOnlyList<TextSourceLocation> KeyLocations { get; init; } = Array.Empty<TextSourceLocation>();
+}
 public sealed record Mf2MatchSyntax(IReadOnlyList<string> Selectors, TextSourceLocation Location);
 public sealed record Mf2DeclarationSyntax(string Kind, string Name, TextSourceLocation NameLocation,
     Mf2ExpressionSyntax Expression, TextSourceLocation Location);
@@ -52,16 +56,8 @@ public sealed class Mf2SyntaxDocument
             Add(expression.Operand);
             foreach (var property in expression.Options.Concat(expression.Attributes)) Add(property.Value);
         }
-        if (Match is not null)
-        {
-            string text = StrictJsonParser.StrictUtf8.GetString(Source.Bytes, Match.Location.StartByte, Match.Location.LengthBytes);
-            foreach (Match variable in Regex.Matches(text, @"\$[^\s]+"))
-                if (variable.Value.Substring(1) == name)
-                {
-                    int from = Match.Location.StartByte + StrictJsonParser.StrictUtf8.GetByteCount(text.AsSpan(0, variable.Index));
-                    found[from] = DiagnosticBag.Location(Source, new ByteSpan(from, StrictJsonParser.StrictUtf8.GetByteCount(variable.Value)));
-                }
-        }
+        foreach (var token in Tokens)
+            if (token.Kind == Mf2SyntaxTokenKind.Variable && token.Value == name) found[token.Location.StartByte] = token.Location;
         return Array.AsReadOnly(found.Values.OrderBy(location => location.StartByte).ToArray());
         void Add(Mf2OperandSyntax? operand) { if (operand?.Kind == Mf2OperandKind.Variable && operand.Value == name) found[operand.Location.StartByte] = operand.Location; }
     }
@@ -75,6 +71,46 @@ public static class Mf2SyntaxReader
     {
         ArgumentNullException.ThrowIfNull(source); options ??= new TranslationCompilerOptions();
         return new Reader(source, options, cancellationToken).Read();
+    }
+    /// <summary>Checks declaration and matcher constraints independently of syntax and target support.</summary>
+    public static IReadOnlyList<TranslationDiagnostic> ValidateDataModel(Mf2SyntaxDocument syntax)
+    {
+        ArgumentNullException.ThrowIfNull(syntax);
+        var diagnostics = new DiagnosticBag();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var locals = syntax.Declarations.Where(d => d.Kind == "local").Select(d => d.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var declaration in syntax.Declarations)
+        {
+            if (seen.Contains(declaration.Name)) Error("Duplicate declaration '" + declaration.Name + "'.", declaration.NameLocation);
+            foreach (var token in syntax.Tokens.Where(t => t.Kind == Mf2SyntaxTokenKind.Variable && t.Location.StartByte >= declaration.Expression.Location.StartByte && t.Location.StartByte < declaration.Expression.Location.StartByte + declaration.Expression.Location.LengthBytes))
+                if (locals.Contains(token.Value) && !seen.Contains(token.Value)) Error("Local '" + token.Value + "' is referenced before its declaration.", token.Location);
+            seen.Add(declaration.Name);
+        }
+        if (syntax.Match is { } match)
+        {
+            var variants = new HashSet<string>(StringComparer.Ordinal); bool fallback = false;
+            foreach (var variant in syntax.Variants)
+            {
+                if (variant.Keys.Count != match.Selectors.Count) Error("Variant key count must match selector count.", variant.Location);
+                string[] keys = variant.Keys.Select(key => key == "*" ? "wildcard" : "literal:" + DecodeVariantKey(key)).ToArray();
+                if (!variants.Add(string.Join("", keys.Select(key => key.Length + ":" + key)))) Error("Duplicate variant keys.", variant.Location);
+                fallback |= variant.Keys.Count == match.Selectors.Count && variant.Keys.All(key => key == "*");
+            }
+            if (!fallback) Error("A matcher requires a catch-all variant.", match.Location);
+        }
+        return Array.AsReadOnly(diagnostics.ToSortedArray());
+        void Error(string message, TextSourceLocation location) => diagnostics.Add("RTR0067", TranslationDiagnosticSeverity.Error, message, location);
+    }
+    private static string DecodeVariantKey(string raw)
+    {
+        if (!raw.StartsWith('|')) return raw.Normalize(NormalizationForm.FormC);
+        var value = new StringBuilder();
+        for (int i = 1; i < raw.Length - 1; i++)
+        {
+            if (raw[i] == '\\') i++;
+            value.Append(raw[i]);
+        }
+        return value.ToString().Normalize(NormalizationForm.FormC);
     }
     /// <summary>Validates Runic's balanced inline profile without changing the MF2 syntax tree.</summary>
     public static IReadOnlyList<TranslationDiagnostic> ValidateInlineProfile(Mf2SyntaxDocument syntax)
@@ -126,84 +162,122 @@ public static class Mf2SyntaxReader
             _bytes = new int[_text.Length + 1];
             for (int i = 0, b = 0; i < _text.Length;) { Rune rune = Rune.GetRuneAt(_text, i); for (int j = 0; j < rune.Utf16SequenceLength; j++) _bytes[i + j] = b; i += rune.Utf16SequenceLength; b += rune.Utf8SequenceLength; _bytes[i] = b; }
             for (int i = 0; i < _text.Length; i++) if (_text[i] == '\n') _lineStarts.Add(i + 1);
+            Space();
+            bool complex = Starts(".") || Starts("{{");
+            while (Starts(".input") || Starts(".local")) { ReadDeclaration(); Space(); }
+            if (Starts(".match")) ReadMatcher();
+            else if (Starts("{{")) ReadPattern(true);
+            else if (complex) { Error("A complex message requires a quoted pattern or matcher.", _at, _at); Recover(); }
+            else ReadPattern(false);
+            if (complex) { Space(); if (_at < _text.Length) { Error("Unexpected content after the complex message.", _at, _at + 1); Recover(); } }
+            return Result();
+        }
+        private void ReadDeclaration()
+        {
+            int start = _at; bool input = Starts(".input"); _at += 6;
+            Token(Mf2SyntaxTokenKind.Text, start); bool separated = Space();
+            Mf2OperandSyntax? symbol = null;
+            if (!input)
+            {
+                if (!separated) Error("A local declaration requires whitespace before its variable.", start, _at);
+                symbol = Operand();
+                if (symbol.Kind != Mf2OperandKind.Variable) Error("A local declaration requires a variable.", start, _at);
+                Space(); int equals = _at;
+                if (Starts("=")) { _at++; Token(Mf2SyntaxTokenKind.Equals, equals); }
+                else Error("A local declaration requires '='.", _at, _at);
+                Space();
+            }
+            if (!Starts("{") || Starts("{{")) { Error("A declaration requires an expression.", _at, _at); Recover(); return; }
+            ReadExpression(); var expression = _expressions[^1];
+            if (input) symbol = expression.Operand;
+            if (symbol?.Kind != Mf2OperandKind.Variable || expression.MarkupKind != Mf2MarkupKind.None)
+            { Error("Invalid declaration expression.", start, _at); return; }
+            _declarations.Add(new Mf2DeclarationSyntax(input ? "input" : "local", symbol.Value, symbol.Location, expression, Location(start, _at)));
+        }
+        private void ReadMatcher()
+        {
+            int start = _at; _at += 6; Token(Mf2SyntaxTokenKind.Text, start);
+            var selectors = new List<string>();
+            while (true)
+            {
+                bool separated = Space();
+                if (!Starts("$")) { if (!separated) Error("A matcher requires whitespace before its variants.", _at, _at); break; }
+                if (!separated) Error("Selectors require whitespace.", _at, _at);
+                selectors.Add(Operand().Value);
+            }
+            if (selectors.Count == 0) Error("A matcher requires variable selectors.", start, _at);
+            _match = new Mf2MatchSyntax(selectors.AsReadOnly(), Location(start, _at));
+            while (_at < _text.Length)
+            {
+                _cancellation.ThrowIfCancellationRequested(); int variantStart = _at;
+                var keys = new List<string>(); var locations = new List<TextSourceLocation>();
+                while (_at < _text.Length && !Starts("{{"))
+                {
+                    int keyStart = _at;
+                    if (Starts("*")) { _at++; Token(Mf2SyntaxTokenKind.Literal, keyStart); }
+                    else { var key = Operand(); if (key.Kind == Mf2OperandKind.Variable) Error("Variant keys must be literals.", keyStart, _at); }
+                    if (_at == keyStart) { Recover(); break; }
+                    keys.Add(_text.Substring(keyStart, _at - keyStart)); locations.Add(Location(keyStart, _at));
+                    bool separated = Space();
+                    if (!separated && !Starts("{{")) { Error("Variant keys require whitespace.", _at, _at); Recover(); break; }
+                }
+                if (keys.Count == 0) Error("A variant requires keys.", variantStart, _at);
+                if (!Starts("{{")) { Error("A variant requires a quoted pattern.", _at, _at); break; }
+                int patternStart = _at; ReadPattern(true);
+                _variants.Add(new Mf2VariantSyntax(keys.AsReadOnly(), Location(variantStart, _at)) { PatternLocation = Location(patternStart, _at), KeyLocations = locations.AsReadOnly() });
+                Space();
+            }
+            if (_variants.Count == 0) Error("A matcher requires variants.", start, _at);
+        }
+        private void ReadPattern(bool quoted)
+        {
+            int opening = _at;
+            if (quoted) { _at += 2; Token(Mf2SyntaxTokenKind.PatternStart, opening); }
             while (_at < _text.Length)
             {
                 _cancellation.ThrowIfCancellationRequested(); int start = _at;
-                if (Starts("{{")) { _at += 2; Token(Mf2SyntaxTokenKind.PatternStart, start); }
-                else if (Starts("}}")) { _at += 2; Token(Mf2SyntaxTokenKind.PatternEnd, start); }
-                else if (_text[_at] == '{') ReadExpression();
-                else
+                if (quoted && Starts("}}")) { _at += 2; Token(Mf2SyntaxTokenKind.PatternEnd, start); return; }
+                if (Starts("{")) { ReadExpression(); continue; }
+                do
                 {
-                    do { if (_text[_at] == '\\' && _at + 1 < _text.Length) _at++; _at++; }
-                    while (_at < _text.Length && _text[_at] != '{' && !Starts("}}"));
-                    Token(Mf2SyntaxTokenKind.Text, start);
-                }
-            }
-            // Only declaration prefixes directly preceding an expression qualify. Text in
-            // quoted patterns is preserved as text, even when it resembles a directive.
-            int quotedDepth = 0;
-            var expressionsByByte = _expressions.ToDictionary(e => e.Location.StartByte);
-            foreach (var token in _tokens)
-            {
-                if (quotedDepth == 0 && token.Kind == Mf2SyntaxTokenKind.Text)
-                {
-                    var matchLine = Regex.Match(token.Raw, @"(?m)^[ \t]*\.match[ \t]+([^\r\n]*)");
-                    if (matchLine.Success)
+                    char ch = _text[_at++];
+                    if (ch == '\\')
                     {
-                        var selectors = matchLine.Groups[1].Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-                        int tokenStart = Array.BinarySearch(_bytes, token.Location.StartByte);
-                        _match = new Mf2MatchSyntax(Array.AsReadOnly(selectors.Select(v => v.TrimStart('$')).ToArray()), Location(tokenStart + matchLine.Index, tokenStart + matchLine.Index + matchLine.Length));
+                        if (_at >= _text.Length || _text[_at] is not ('\\' or '{' or '}' or '|')) Error("Invalid MF2 escape.", _at - 1, _at);
+                        if (_at < _text.Length) _at++;
                     }
-                }
-                if (token.Kind == Mf2SyntaxTokenKind.PatternStart)
-                {
-                    if (quotedDepth == 0 && _match is not null && token.Location.StartByte > _match.Location.StartByte)
-                    {
-                        int patternPosition = Array.BinarySearch(_bytes, token.Location.StartByte);
-                        int patternLineStart = _text.LastIndexOf('\n', Math.Max(0, patternPosition - 1)) + 1;
-                        string keys = _text.Substring(patternLineStart, patternPosition - patternLineStart).Trim();
-                        var values = Regex.Matches(keys, @"\|(?:\\.|[^|])*\||[^\s]+").Select(m => m.Value).ToArray();
-                        _variants.Add(new Mf2VariantSyntax(Array.AsReadOnly(values), Location(patternLineStart, patternPosition)));
-                    }
-                    quotedDepth++;
-                }
-                if (token.Kind == Mf2SyntaxTokenKind.PatternEnd) quotedDepth--;
-                if (quotedDepth != 0 || token.Kind != Mf2SyntaxTokenKind.ExpressionStart) continue;
-                var expression = expressionsByByte[token.Location.StartByte];
-                int position = Array.BinarySearch(_bytes, token.Location.StartByte), lineStart = _text.LastIndexOf('\n', Math.Max(0, position - 1)) + 1;
-                string prefix = _text.Substring(lineStart, position - lineStart);
-                Match match = Regex.Match(prefix, @"^\s*\.(input|local)\b\s*(?:\$([^\s=]+)\s*=\s*)?$");
-                if (!match.Success) continue;
-                string kind = match.Groups[1].Value;
-                string? name = kind == "input" ? expression.Operand?.Kind == Mf2OperandKind.Variable ? expression.Operand.Value : null : match.Groups[2].Value;
-                if (string.IsNullOrEmpty(name)) { Error("Declaration requires a variable name.", lineStart, position); continue; }
-                TextSourceLocation nameLocation = kind == "input" ? expression.Operand!.Location : Location(lineStart + match.Groups[2].Index - 1, lineStart + match.Groups[2].Index + match.Groups[2].Length);
-                _declarations.Add(new Mf2DeclarationSyntax(kind, name, nameLocation, expression, DiagnosticBag.Location(_source, new ByteSpan(_bytes[lineStart], expression.Location.StartByte + expression.Location.LengthBytes - _bytes[lineStart]))));
+                    else if (ch is '\0' or '}') Error("This pattern character must be escaped or removed.", _at - 1, _at);
+                } while (_at < _text.Length && !Starts("{") && !(quoted && Starts("}}")));
+                Token(Mf2SyntaxTokenKind.Text, start);
             }
-            return Result();
+            if (quoted) Error("Unterminated quoted pattern.", opening, Math.Min(opening + 2, _text.Length));
         }
+        private void Recover() { int start = _at; _at = _text.Length; if (_at > start) Token(Mf2SyntaxTokenKind.Invalid, start); }
         private void ReadExpression()
         {
             int start = _at++; Token(Mf2SyntaxTokenKind.ExpressionStart, start); Space();
             Mf2OperandSyntax? operand = null; string? function = null, markup = null; var kind = Mf2MarkupKind.None;
             var options = new List<Mf2PropertySyntax>(); var attributes = new List<Mf2PropertySyntax>();
             if (_at < _text.Length && _text[_at] is '#' or '/')
-            { int mark = _at; kind = _text[_at++] == '#' ? Mf2MarkupKind.Open : Mf2MarkupKind.Close; markup = Name(); Token(kind == Mf2MarkupKind.Open ? Mf2SyntaxTokenKind.MarkupOpen : Mf2SyntaxTokenKind.MarkupClose, mark, markup); }
+            { int mark = _at; kind = _text[_at++] == '#' ? Mf2MarkupKind.Open : Mf2MarkupKind.Close; markup = Name(true); Token(kind == Mf2MarkupKind.Open ? Mf2SyntaxTokenKind.MarkupOpen : Mf2SyntaxTokenKind.MarkupClose, mark, markup); }
             else if (_at < _text.Length && _text[_at] is not (':' or '}' or '@')) operand = Operand();
-            Space();
-            if (kind == Mf2MarkupKind.None && _at < _text.Length && _text[_at] == ':') { int from = _at++; function = Name(); Token(Mf2SyntaxTokenKind.Function, from, function); }
+            bool separated = Space();
+            if (kind == Mf2MarkupKind.None && _at < _text.Length && _text[_at] == ':') { int from = _at++; function = Name(true); if (operand is not null && !separated) Error("A function requires whitespace after its operand.", from, _at); Token(Mf2SyntaxTokenKind.Function, from, function); separated = false; }
             while (_at < _text.Length && _text[_at] != '}')
             {
-                _cancellation.ThrowIfCancellationRequested(); Space(); if (_at == _text.Length || _text[_at] == '}') break;
+                _cancellation.ThrowIfCancellationRequested(); separated = Space() || separated; if (_at == _text.Length || _text[_at] == '}') break;
                 int from = _at;
                 if (_text[_at] == '/' && kind == Mf2MarkupKind.Open) { _at++; kind = Mf2MarkupKind.Standalone; Token(Mf2SyntaxTokenKind.Standalone, from); Space(); if (_at < _text.Length && _text[_at] != '}') Error("Standalone marker must end the expression.", from, _at); continue; }
+                if (!separated) Error("Options and attributes require whitespace.", from, from);
+                separated = false;
                 bool attribute = _text[_at] == '@'; if (attribute) _at++;
-                string name = Name();
+                string name = Name(true);
                 if (_at == from || (attribute && _at == from + 1)) { _at = Math.Max(_at, from + 1); Token(Mf2SyntaxTokenKind.Invalid, from); Error("Expected an option or attribute name.", from, _at); continue; }
-                Token(attribute ? Mf2SyntaxTokenKind.Attribute : Mf2SyntaxTokenKind.Name, from, name); Space();
+                Token(attribute ? Mf2SyntaxTokenKind.Attribute : Mf2SyntaxTokenKind.Name, from, name); separated = Space();
                 Mf2OperandSyntax? value = null;
-                if (_at < _text.Length && _text[_at] == '=') { int equals = _at++; Token(Mf2SyntaxTokenKind.Equals, equals); Space(); value = Operand(); }
+                if (_at < _text.Length && _text[_at] == '=') { int equals = _at++; Token(Mf2SyntaxTokenKind.Equals, equals); Space(); value = Operand(); separated = false; if (attribute && value.Kind == Mf2OperandKind.Variable) Error("Attribute values must be literals.", from, _at); }
                 else if (!attribute) Error("Options require a value.", from, _at);
+                if (!attribute && (attributes.Count != 0 || (kind == Mf2MarkupKind.None && function is null))) Error("Options must follow a function or markup name and precede attributes.", from, _at);
                 var target = attribute ? attributes : options;
                 if (target.Any(p => p.Name == name)) Error("Duplicate " + (attribute ? "attribute" : "option") + " '" + name + "'.", from, _at);
                 target.Add(new Mf2PropertySyntax(name, value, attribute, Location(from, _at)));
@@ -223,27 +297,43 @@ public static class Mf2SyntaxReader
                 while (_at < _text.Length)
                 {
                     char ch = _text[_at++]; if (ch == '|') { closed = true; break; }
-                    if (ch == '\\' && _at < _text.Length) ch = _text[_at++]; value.Append(ch);
+                    if (ch == '\\') { if (_at >= _text.Length || _text[_at] is not ('\\' or '{' or '}' or '|')) Error("Invalid MF2 escape.", _at - 1, _at); if (_at < _text.Length) ch = _text[_at++]; } if (ch == '\0') Error("NULL is not allowed in a literal.", _at - 1, _at); value.Append(ch);
                 }
                 if (!closed) Error("Unterminated quoted literal.", start, _at);
             }
             else if (_at < _text.Length && _text[_at] == '$') { _at++; value.Append(Name()); kind = Mf2OperandKind.Variable; }
             else
             {
-                while (_at < _text.Length && !char.IsWhiteSpace(_text[_at]) && _text[_at] is not ('}' or '{' or '@' or '=' or '/')) value.Append(_text[_at++]);
+                while (_at < _text.Length && NameChar(Rune.GetRuneAt(_text, _at).Value)) { Rune rune = Rune.GetRuneAt(_text, _at); value.Append(rune.ToString()); _at += rune.Utf16SequenceLength; }
                 if (Regex.IsMatch(value.ToString(), @"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$")) kind = Mf2OperandKind.Number;
             }
             if (start == _at || (kind == Mf2OperandKind.Variable && value.Length == 0)) Error("Expected a literal or variable operand.", start, _at);
             Token(kind == Mf2OperandKind.Variable ? Mf2SyntaxTokenKind.Variable : Mf2SyntaxTokenKind.Literal, start, value.ToString());
             return new Mf2OperandSyntax(kind, value.ToString(), quoted, Location(start, _at));
         }
-        private string Name()
+        private string Name(bool qualified = false)
         {
             int start = _at;
-            while (_at < _text.Length && (char.IsLetterOrDigit(_text[_at]) || _text[_at] is '_' or '-' or ':' || char.GetUnicodeCategory(_text[_at]) is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark)) _at++;
-            return _text.Substring(start, _at - start);
+            if (_at < _text.Length && Bidi(_text[_at])) _at++;
+            int nameStart = _at;
+            if (_at < _text.Length && NameStart(Rune.GetRuneAt(_text, _at).Value)) _at += Rune.GetRuneAt(_text, _at).Utf16SequenceLength;
+            else Error("Expected an MF2 name.", start, _at);
+            while (_at < _text.Length && NameChar(Rune.GetRuneAt(_text, _at).Value)) _at += Rune.GetRuneAt(_text, _at).Utf16SequenceLength;
+            string result = _text.Substring(nameStart, _at - nameStart);
+            if (_at < _text.Length && Bidi(_text[_at])) _at++;
+            if (qualified && Starts(":")) { _at++; result += ":" + Name(); }
+            return result.Normalize(NormalizationForm.FormC);
         }
-        private void Space() { int start = _at; while (_at < _text.Length && char.IsWhiteSpace(_text[_at])) _at++; if (_at > start) Token(Mf2SyntaxTokenKind.Whitespace, start); }
+        private static bool NameStart(int c) => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or '+' or '_' or >= 0xA1 and <= 0x61B or >= 0x61D and <= 0x167F or >= 0x1681 and <= 0x1FFF or >= 0x200B and <= 0x200D or >= 0x2010 and <= 0x2027 or >= 0x2030 and <= 0x205E or >= 0x2060 and <= 0x2065 or >= 0x206A and <= 0x2FFF or >= 0x3001 and <= 0xD7FF or >= 0xE000 and <= 0xFDCF or >= 0xFDF0 and <= 0xFFFD || (c >= 0x10000 && c <= 0x10FFFD && (c & 0xFFFF) <= 0xFFFD);
+        private static bool NameChar(int c) => NameStart(c) || c is >= '0' and <= '9' or '-' or '.';
+        private static bool Bidi(char c) => c is '\u061c' or '\u200e' or '\u200f' or >= '\u2066' and <= '\u2069';
+        private bool Space()
+        {
+            int start = _at; bool required = false;
+            while (_at < _text.Length && (_text[_at] is ' ' or '\t' or '\r' or '\n' or '\u3000' || Bidi(_text[_at]))) { required |= !Bidi(_text[_at]); _at++; }
+            if (_at > start) Token(Mf2SyntaxTokenKind.Whitespace, start);
+            return required;
+        }
         private bool Starts(string value) => _text.AsSpan(_at).StartsWith(value, StringComparison.Ordinal);
         private void Token(Mf2SyntaxTokenKind kind, int from, string? value = null) { string raw = _text.Substring(from, _at - from); _tokens.Add(new Mf2SyntaxToken(kind, raw, value ?? raw, Location(from, _at))); }
         private TextSourceLocation Location(int from, int to)

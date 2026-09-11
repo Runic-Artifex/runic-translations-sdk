@@ -22,7 +22,10 @@
     "expressionAnnotations": false,
     "variableMarkupOptions": true,
     "markupAnnotations": true,
-    "unpairedMarkupDataModel": false,
+    "unpairedMarkupDataModel": true,
+    "balancedInlineExecutionRequired": true,
+    "multilineExpressions": true,
+    "quotedVariantKeys": true,
     "standaloneMarkup": true,
     "defaultNumericCardinalSelection": true
   },

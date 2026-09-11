@@ -1,4 +1,5 @@
 <script lang="ts">
+  import InlinePreview from "$lib/InlinePreview.svelte";
   import { onMount } from "svelte";
   import { m } from "virtual:runic-translations/editor";
 
@@ -1742,19 +1743,7 @@
 <svelte:window onkeydown={handleKeyboard} onbeforeunload={protectDraft} />
 
 {#snippet previewNodes(nodes: PreviewNode[])}
-  {#each nodes as node, index (index)}
-    {#if node.kind === "text"}
-      <span class="preview-text">{node.value}</span>
-    {:else}
-      <span class="preview-element">
-        <span class="preview-element-label">{node.name}</span>
-        {#if Object.keys(node.attributes).length > 0}
-          <span class="preview-attributes">{Object.entries(node.attributes).map(([name, value]) => name + "=" + value).join(" · ")}</span>
-        {/if}
-        <span class="preview-children">{@render previewNodes(node.children)}</span>
-      </span>
-    {/if}
-  {/each}
+  <InlinePreview {nodes} />
 {/snippet}
 
 {#if externalChanges.length > 0}
@@ -2575,10 +2564,7 @@
   .preview-canvas p { margin: 0; white-space: pre-wrap; }
   .preview-placeholder { color: var(--muted-foreground); font-size: .65rem; }
   .preview-error { color: var(--destructive); font-size: .65rem; }
-  .safe-content, .preview-children { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .2rem; }
-  .preview-element { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .25rem; border: 1px solid color-mix(in oklch, var(--primary) 40%, var(--border)); border-radius: .35rem; padding: .24rem .35rem; background: color-mix(in oklch, var(--primary) 10%, var(--card)); }
-  .preview-element-label { color: var(--primary); font: .52rem ui-monospace, monospace; }
-  .preview-attributes { color: var(--muted-foreground); font: .48rem ui-monospace, monospace; }
+  .safe-content { display: block; }
   .safe-note { margin: 0; border-top: 1px solid var(--border); padding: .55rem .9rem; color: var(--muted-foreground); font-size: .55rem; }
   .loading-shell, .fatal-shell, .recovery-shell { display: grid; place-content: center; place-items: center; height: 100vh; padding: 2rem; color: var(--muted-foreground); text-align: center; background: radial-gradient(circle at center, color-mix(in oklch, var(--primary) 10%, var(--background)), var(--background) 65%); }
   .loading-shell { gap: 1.5rem; }

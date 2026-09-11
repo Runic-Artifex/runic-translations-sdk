@@ -147,5 +147,56 @@ internal static class Rmf2MarkupTests
         }
         finally { Directory.Delete(root, true); }
     }
+    internal static int Benchmark()
+    {
+        const int iterations = 10000;
+        var catalog = Compile(Payment, Contracts).Catalogs[0];
+        var key = new TranslationKey("app", 0, "payment");
+        var contract = new TranslationPackContract("app", "en", catalog.Fingerprint,
+            [new TranslationPackMessageContract(key, [new TranslationPackArgumentContract("tone", TextArgumentType.String, TextArgumentFormat.None)])], 4, catalog.Rmf2MarkupContract);
+        var verified = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(TranslationOutputRenderer.RenderLocaleJson(catalog, "en").GetUtf8Bytes()), contract).AsTask().GetAwaiter().GetResult();
+        var runtime = new CompiledTranslationCatalog("app", "en",
+            [new CompiledTranslationDefinition("payment", [new TranslationPlaceholderDescriptor("tone", TextArgumentType.String, TextArgumentFormat.None)]), new CompiledTranslationDefinition("plain", [])],
+            [new CompiledTranslationLocale("en", null, [new CompiledTranslationValue(0, "", verified.Messages[0].Message!), new CompiledTranslationValue(1, "Payment details")])]);
+        var snapshot = new CompiledTranslationSnapshot(runtime, "en");
+        var renderer = new Rmf2InlineRenderer(catalog.Rmf2MarkupContract!);
+        var slots = new System.Collections.Generic.Dictionary<string, InlineMarkupBinding> {
+            ["terms"] = new InlineLinkBinding(new Uri("https://example.test/terms")), ["privacy"] = new InlineLinkBinding(new Uri("https://example.test/privacy")),
+            ["retry"] = new InlineActionBinding(() => { }), ["star"] = new InlineIconBinding(new object(), false, _ => "Star"),
+        };
+        TextArgument[] arguments = [new("tone", "positive")];
+        var content = snapshot.FormatContent(key, arguments);
+        Measure("dotnet-plain-message", () => snapshot.Format(new TranslationKey("app", 1, "plain"), []), iterations);
+        Measure("dotnet-rich-content", () => snapshot.FormatContent(key, arguments), iterations);
+        Measure("dotnet-linked-rich-render", () => renderer.Render("payment", content, slots), iterations);
+        var large = Source("en.rmf2", string.Join("\n", Enumerable.Range(0, 1000).Select(index => "message_" + index + " = Hello {$name}")));
+        Measure("resource-parse-1000-messages", () => Rmf2ResourceReader.Read(large), 30);
+        string root = Path.Combine(Path.GetTempPath(), "runic-rmf2-benchmark-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
+        try
+        {
+            foreach (var output in TranslationOutputRenderer.RenderEsmModules(Compile(Payment + "\nplain = Payment details", Contracts).Catalogs[0]))
+            { string path = Path.Combine(root, output.RelativePath); Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllBytes(path, output.GetUtf8Bytes()); }
+            File.WriteAllText(Path.Combine(root, "benchmark.mjs"), """
+                import {m} from './app.esm/messages.js';
+                import {createInlineRenderer,defineMarkup,enumOption,bindMarkup,linkBinding,actionBinding,iconBinding} from './app.esm/runtime.js';
+                const badge=defineMarkup({name:'shop:badge',kind:'paired',children:'inline',interactive:false,plainText:'children',options:{tone:enumOption(['neutral','positive'],'neutral')}});
+                const renderer=createInlineRenderer({text:value=>value,element:node=>node},[bindMarkup(badge,node=>node)]);
+                const slots={terms:linkBinding({href:'/terms'}),privacy:linkBinding({href:'/privacy'}),retry:actionBinding({onActivate:()=>{}}),star:iconBinding({asset:{},decorative:false,accessibleName:()=> 'Star'})};
+                const content=m.payment({tone:'positive'});
+                function measure(name,fn){for(let i=0;i<1000;i++)fn();const start=performance.now();let value;for(let i=0;i<10000;i++)value=fn();console.log(JSON.stringify({name,iterations:10000,microsecondsPerOperation:(performance.now()-start)*1000/10000,runtime:Bun.version}));if(value===undefined)throw new Error('Missing result');}
+                measure('esm-plain-message',()=>m.plain());measure('esm-rich-content',()=>m.payment({tone:'positive'}));measure('esm-linked-rich-render',()=>renderer.render(content,{slots}));
+                """);
+            using var process = Process.Start(new ProcessStartInfo("bun", "benchmark.mjs") { WorkingDirectory = root })!; process.WaitForExit(); return process.ExitCode;
+        }
+        finally { Directory.Delete(root, true); }
+        static void Measure(string name, Func<object> action, int count)
+        {
+            for (int i = 0; i < Math.Min(count, 1000); i++) GC.KeepAlive(action());
+            long before = GC.GetAllocatedBytesForCurrentThread(); var watch = Stopwatch.StartNew();
+            for (int i = 0; i < count; i++) GC.KeepAlive(action());
+            watch.Stop(); long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new { name, iterations = count, microsecondsPerOperation = watch.Elapsed.TotalMicroseconds / count, bytesPerOperation = allocated / (double)count, runtime = Environment.Version.ToString() }));
+        }
+    }
     private static string Errors(TranslationCompilation result) => string.Join("\n", result.Diagnostics.Select(d => d.Message));
 }
