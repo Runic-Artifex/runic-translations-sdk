@@ -19,6 +19,6 @@ function visit(name, from = import.meta.dirname) {
   for (const child of Object.keys(manifest.dependencies ?? {})) visit(child, folder);
 }
 visit('vscode-languageclient');
-writeFileSync(join(import.meta.dirname, 'THIRD-PARTY-NOTICES.md'), notices.join(''));
+writeFileSync(join(import.meta.dirname, 'THIRD-PARTY-NOTICES.md'), notices.join('').trimEnd() + '\n');
 // vscode-languageclient uses this asset when a POSIX server does not shut down gracefully.
 copyFileSync(join(dirname(require.resolve('vscode-languageclient/package.json')), 'lib/node/terminateProcess.sh'), join(import.meta.dirname, 'dist/terminateProcess.sh'));

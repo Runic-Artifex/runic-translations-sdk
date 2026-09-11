@@ -48,4 +48,3 @@ export interface MessageArtifact {
   selectors: ArtifactSelector[];
   variants: Array<{ matches: Record<string, string>; nodes: ArtifactNode[] }>;
 }
-
