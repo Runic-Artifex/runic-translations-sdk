@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+  <Commands package="guidRunicPackage">
+    <Groups>
+      <Group guid="guidRunicCommands" id="RunicGroup" priority="0x0700"><Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_TOOLS" /></Group>
+    </Groups>
+    <Buttons>
+      <Button guid="guidRunicCommands" id="Preview" priority="0x0100" type="Button">
+        <Parent guid="guidRunicCommands" id="RunicGroup" />
+        <Strings><ButtonText>Runic: Preview Message</ButtonText><CommandName>RunicPreviewMessage</CommandName></Strings>
+      </Button>
+      <Button guid="guidRunicCommands" id="Restart" priority="0x0101" type="Button">
+        <Parent guid="guidRunicCommands" id="RunicGroup" />
+        <Strings><ButtonText>Runic: Restart Language Server</ButtonText><CommandName>RunicRestartLanguageServer</CommandName></Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+  <Symbols>
+    <GuidSymbol name="guidRunicPackage" value="{38646832-a96f-4fd1-b33a-108353a854da}" />
+    <GuidSymbol name="guidRunicCommands" value="{f381baca-8a08-46bd-8a1e-e2c7c4972886}">
+      <IDSymbol name="RunicGroup" value="0x1020" /><IDSymbol name="Preview" value="0x100" /><IDSymbol name="Restart" value="0x101" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

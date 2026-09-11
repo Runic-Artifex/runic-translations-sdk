@@ -10,6 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../packages/dotnet/Runic.Translations.Build/Runic.Translations.Build.csproj"
+                      ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\tools\dotnet-runic-translations\dotnet-runic-translations.csproj"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>

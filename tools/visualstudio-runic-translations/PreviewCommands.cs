@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -8,52 +7,10 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
-using Microsoft.VisualStudio.Text;
-using Microsoft.VisualStudio.Text.Editor;
-using Microsoft.VisualStudio.Utilities;
 using Newtonsoft.Json.Linq;
 using Span = System.Windows.Documents.Span;
 
 namespace Runic.Translations.VisualStudio;
-
-[Export(typeof(IKeyProcessorProvider)), Name("Runic RMF2 commands"), ContentType("rmf2"), TextViewRole(PredefinedTextViewRoles.Document)]
-internal sealed class PreviewCommands : IKeyProcessorProvider
-{
-    [Import] internal RunicLanguageClient Client = null!;
-    [Import] internal ITextDocumentFactoryService Documents = null!;
-    public KeyProcessor GetAssociatedProcessor(IWpfTextView view) => new Commands(view, Client, Documents);
-
-    private sealed class Commands : KeyProcessor
-    {
-        private readonly IWpfTextView view;
-        private readonly RunicLanguageClient client;
-        private readonly ITextDocumentFactoryService documents;
-        internal Commands(IWpfTextView view, RunicLanguageClient client, ITextDocumentFactoryService documents)
-        { this.view = view; this.client = client; this.documents = documents; }
-        public override void KeyDown(KeyEventArgs args)
-        {
-            if (Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Alt) || args.Key is not (Key.P or Key.R)) return;
-            args.Handled = true;
-            _ = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.RunAsync(async () => {
-                try
-                {
-                    if (args.Key == Key.R) { await client.RestartAsync(); return; }
-                    if (!documents.TryGetTextDocument(view.TextBuffer, out ITextDocument document)) throw new InvalidOperationException("Save the resource before previewing it.");
-                    var point = view.Caret.Position.BufferPosition;
-                    var line = point.GetContainingLine();
-                    string uri = new Uri(document.FilePath).AbsoluteUri;
-                    var info = await client.RequestAsync("runic/message", new { textDocument = new { uri }, position = new { line = line.LineNumber, character = point.Position - line.Start.Position } }, CancellationToken.None);
-                    if (info.Value<bool>("isGroup")) throw new InvalidOperationException("Place the cursor inside a message to preview it.");
-                    var preview = new PreviewWindow(client, uri, info);
-                    preview.Owner = Window.GetWindow(view.VisualElement);
-                    preview.Show();
-                    await preview.LoadAsync();
-                }
-                catch (Exception error) { MessageBox.Show(error.Message, "Runic Translations", MessageBoxButton.OK, MessageBoxImage.Error); }
-            });
-        }
-    }
-}
 
 internal sealed class PreviewWindow : Window
 {

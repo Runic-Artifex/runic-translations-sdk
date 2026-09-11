@@ -10,6 +10,7 @@ internal static class CompiledMessageTests
     public static void Register(TestRunner runner)
     {
         runner.Add("snapshot executes generated message AST without parsing compatibility patterns", DirectAst);
+        runner.Add("snapshot formats a zero-input compiled variant without a literal cache entry", ZeroInputVariant);
         runner.Add("compiled AST executes multiple selectors formats relative time and safe markup", StructuredAst);
         runner.Add("plural selector matches the shared v2 cross-runtime corpus", PluralCorpus);
         runner.Add("relative-time formatter matches the shared v2 cross-runtime corpus", RelativeTimeCorpus);
@@ -40,6 +41,16 @@ internal static class CompiledMessageTests
         var key = new TranslationKey("ast", 0, "Files");
         Assert.Equal("One file", snapshot.Format(key, [new TextArgument("count", 1)]));
         Assert.Equal("3 files", snapshot.Format(key, [new TextArgument("count", 3)]));
+    }
+
+    private static void ZeroInputVariant()
+    {
+        var message = new CompiledTextMessage([], [],
+            [new CompiledTextMessageVariant([], [new CompiledTextMessageNode(CompiledTextMessageNodeKind.Text, "Payment details")])]);
+        var catalog = new CompiledTranslationCatalog("ast", "en",
+            [new CompiledTranslationDefinition("Plain", [])],
+            [new CompiledTranslationLocale("en", null, [new CompiledTranslationValue(0, "", message)])]);
+        Assert.Equal("Payment details", new CompiledTranslationSnapshot(catalog, "en").Format(new TranslationKey("ast", 0, "Plain"), []));
     }
 
     private static void StructuredAst()

@@ -17,8 +17,8 @@ internal static class Rmf2Preview
         TextArgumentType Type(CompiledTextPlaceholder p) => Enum.Parse<TextArgumentType>(p.Type == TranslationArgumentType.Boolean ? "Bool" : p.Type.ToString(), true);
         TextArgumentFormat Format(CompiledTextPlaceholder p) => p.Format.Length == 0 ? TextArgumentFormat.None : Enum.Parse<TextArgumentFormat>(p.Format, true);
         var contracts = catalog.CanonicalResources.Select(resource => new TranslationPackMessageContract(new TranslationKey(catalog.Id, resource.Id, resource.Key), resource.Placeholders.Select(p => new TranslationPackArgumentContract(p.Name, Type(p), Format(p))).ToArray())).ToArray();
-        var contract = new TranslationPackContract(catalog.Id, catalog.DefaultLocale, catalog.Fingerprint, contracts, 4, catalog.Rmf2MarkupContract);
         var locales = catalog.Locales.Where(value => value.Tag == locale || value.Tag == catalog.DefaultLocale).Select(value => {
+            var contract = new TranslationPackContract(catalog.Id, value.Tag, catalog.Fingerprint, contracts, 4, catalog.Rmf2MarkupContract);
             var verified = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(TranslationOutputRenderer.RenderLocaleJson(catalog, value.Tag).GetUtf8Bytes()), contract).AsTask().GetAwaiter().GetResult();
             return new CompiledTranslationLocale(value.Tag, value.Tag == catalog.DefaultLocale ? null : catalog.DefaultLocale, verified.Messages.Select(message => new CompiledTranslationValue(message.Key.Id, "", message.Message!)).ToArray());
         }).ToArray();
@@ -39,7 +39,11 @@ internal static class Rmf2Preview
                 _ => throw new ArgumentException("Unsupported preview input type."),
             };
         }).ToArray();
-        var content = new CompiledTranslationSnapshot(runtime, locale).FormatContent(new TranslationKey(catalog.Id, definition.Id, key), arguments);
+        var snapshot = new CompiledTranslationSnapshot(runtime, locale);
+        var resourceKey = new TranslationKey(catalog.Id, definition.Id, key);
+        if (!definition.ProducesStructuredContent)
+            return new JsonObject { ["key"] = key, ["locale"] = locale, ["runs"] = new JsonArray(new JsonObject { ["text"] = snapshot.Format(resourceKey, arguments) }) };
+        var content = snapshot.FormatContent(resourceKey, arguments);
         var bindings = definition.Slots.ToDictionary(slot => slot.Key, slot => slot.Value switch {
             "runic:link" => (InlineMarkupBinding)new InlineLinkBinding(new Uri("https://example.invalid/")),
             "runic:action" => new InlineActionBinding(() => { }),

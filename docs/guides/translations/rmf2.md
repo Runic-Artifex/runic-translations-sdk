@@ -152,8 +152,8 @@ Construct the renderer once from the generated `Rmf2MarkupContract` constant.
 Native toolkits map those runs to their own controls and accessibility APIs.
 `Runic.Translations.Wpf` maps them to native inline controls and automation peers,
 with explicit custom factories and callback deactivation when replacing or
-clearing content. Its maintained Windows consumer cross-compiles on Linux;
-Windows UI execution remains pending.
+clearing content. Its maintained Windows consumer passes native execution and accessibility
+checks in an interactive Windows 11 desktop session, and cross-compiles on Linux.
 
 Plain-text conversion is explicit. `br` becomes LF, link labels are retained
 (with optional destination annotation), meaningful icons require a localized
@@ -269,5 +269,5 @@ scope; exports report semantic loss. Application-language call-site refactors
 are delegated or refused, never implemented as blind text replacement.
 
 The [continuation checklist](rmf2-delivery.md) records completion and the two
-remaining Windows host checks. No package or repository release version changes
+native Windows host results. No package or repository release version changes
 with this work.

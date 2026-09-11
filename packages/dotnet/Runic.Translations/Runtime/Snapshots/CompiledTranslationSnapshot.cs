@@ -141,9 +141,9 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
             return Missing(key);
         }
 
-        if (arguments.IsEmpty && _definitions[index].PlaceholderArray.Length == 0)
+        if (arguments.IsEmpty && _definitions[index].PlaceholderArray.Length == 0 && _noArgumentText[index] is string literal)
         {
-            return _noArgumentText[index]!;
+            return literal;
         }
 
         ValidateArguments(_definitions[index], arguments);

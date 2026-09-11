@@ -34,11 +34,11 @@ On Windows, run the maintained WPF payment consumer:
 dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests
 ```
 
-Its Linux cross-compilation passes. WPF control execution and automation-peer
-assertions have not been run on Linux; they require Windows. The test verifies
-native controls, custom badge options, meaningful icon accessibility and stale
-callback deactivation after replacing content. No Windows runtime result is
-implied by a successful cross-build.
+The native test passed on Windows 11 build 26200 with .NET SDK 10.0.400
+on 2026-09-11, in the signed-in desktop session through the maintained Windows
+UI Automation runner. It verifies native controls, custom badge options,
+meaningful icon accessibility and stale callback deactivation after replacing
+content. Linux cross-compilation also passes.
 
 ## IDE and language-service checks
 
@@ -59,12 +59,21 @@ bun run test:host
 bun run package
 ```
 
-The Visual Studio client cross-builds against its pinned 17.14 SDK with zero
-warnings/errors. Its VSIX packaging verifies metadata asset paths, TextMate
-grammar and archive integrity, and excludes host-owned DLLs. See its
-[Windows integration procedure](../../../tools/visualstudio-runic-translations/README.md).
-MEF activation, keyboard commands and native preview in Visual Studio remain
-unverified on this Linux host.
+The Visual Studio client builds against its pinned 17.14 SDK with zero
+warnings/errors on Linux and with Visual Studio's native MSBuild on Windows.
+The official VSSDK packaging targets generate installer metadata; the archive
+verifier checks declared assets, TextMate grammar and exclusion of host DLLs.
+Installation and native host checks passed on Windows 11 build 26200,
+Visual Studio Community 2026 18.8.2, on 2026-09-11 in an isolated `RunicRmf2`
+profile. The maintained [native interaction test](../../../tools/visualstudio-runic-translations/test/native-host.ps1)
+checks registered commands, inert rich content, invalid-number recovery, locale
+selection and unsaved text after server restart. The 2022 host is API-targeted
+but was not separately run.
+
+The focused RMF2 CLI/LSP suite passes 5/5 on Windows and Linux, including plain
+and rich German runtime previews. The runtime suite passes 175/175, including a
+zero-input compiled variant regression. See the [Windows integration procedure](../../../tools/visualstudio-runic-translations/README.md)
+for build, installation and interactive-session execution.
 
 ## Representative measurements
 

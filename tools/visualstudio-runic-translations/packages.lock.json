@@ -114,6 +114,16 @@
           "System.Runtime.CompilerServices.Unsafe": "6.0.0"
         }
       },
+      "Microsoft.VSSDK.BuildTools": {
+        "type": "Direct",
+        "requested": "[17.14.2142, )",
+        "resolved": "17.14.2142",
+        "contentHash": "iF5b5Nu0/h72U5WLujhuJ8SFxNyM5ua7gPeeNdYuhZwv2G4Mr1YyOgXF8ymhLfyq/iJtUvkZPA/pTYilvxN6RA==",
+        "dependencies": {
+          "Microsoft.VisualStudio.SDK.Analyzers": "17.7.79",
+          "Microsoft.VsSDK.CompatibilityAnalyzer": "17.14.2142"
+        }
+      },
       "MessagePack": {
         "type": "Transitive",
         "resolved": "2.5.192",
@@ -582,6 +592,11 @@
         "type": "Transitive",
         "resolved": "17.8.8",
         "contentHash": "rWXThIpyQd4YIXghNkiv2+VLvzS+MCMKVRDR0GAMlflsdo+YcAN2g2r5U1Ah98OFjQMRexTFtXQQ2LkajxZi3g=="
+      },
+      "Microsoft.VsSDK.CompatibilityAnalyzer": {
+        "type": "Transitive",
+        "resolved": "17.14.2142",
+        "contentHash": "t7lqlLlMLXG0SpM+b4t6Ou7E3KD7SEZQnKOBytaixSBLr+p6BRrdWNXXIQP49UjMJwpMMA0rdkSpZjkF8RfY5Q=="
       },
       "Microsoft.Win32.Registry": {
         "type": "Transitive",

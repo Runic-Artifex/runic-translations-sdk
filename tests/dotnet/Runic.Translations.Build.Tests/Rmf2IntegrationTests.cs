@@ -83,7 +83,7 @@ internal static class Rmf2IntegrationTests
             using TemporaryDirectory temporary = new();
             File.WriteAllText(temporary.Resolve("runic.json"), Project);
             File.WriteAllText(temporary.Resolve("en.rmf2"), "x = Hello\n");
-            File.WriteAllText(temporary.Resolve("de.rmf2"), "x = Hello\n");
+            File.WriteAllText(temporary.Resolve("de.rmf2"), "x = Guten Tag\n");
             string uri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
             var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
             start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
@@ -125,6 +125,8 @@ internal static class Rmf2IntegrationTests
             doc = Document(); doc["version"] = 2;
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Hello\n" }) });
             Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.preview", ["arguments"] = new JsonArray(uri, "x", "en") }, 20);
+            Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(uri, "x", "de", new JsonObject()) }, 28);
+            Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(new Uri(RepositoryPaths.Resolve("specs/translations/examples/rmf2/en.rmf2")).AbsoluteUri, "payment", "de", new JsonObject { ["count"] = "1", ["tone"] = "positive" }) }, 29);
             Send("textDocument/rename", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["newName"] = "greeting" }, 2);
             doc = Document(); doc["version"] = 3;
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = {#link ref=help}Help{/link} {$name} |$literal|\n" }) });
@@ -167,6 +169,8 @@ internal static class Rmf2IntegrationTests
             Send("shutdown", new JsonObject(), 3); Send("exit", new JsonObject()); process.StandardInput.Close();
             if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
             Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
+            Assert.Contains("Bereit", frames.Single(frame => frame["id"]?.ToString() == "29").ToJsonString());
+            Assert.Contains("Guten Tag", frames.Single(frame => frame["id"]?.ToString() == "28").ToJsonString());
             Assert.Contains("Bonjour", frames.Single(frame => frame["id"]?.ToString() == "24")["result"]!.ToJsonString());
             Assert.Contains("Rename refused", frames.Single(frame => frame["id"]?.ToString() == "25")["error"]!["message"]!.ToString());
             Assert.Contains("intentional", frames.Single(frame => frame["id"]?.ToString() == "26")["result"]!.ToJsonString());

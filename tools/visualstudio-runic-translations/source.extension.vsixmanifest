@@ -4,7 +4,7 @@
     <Identity Id="Runic.Artifex.Translations.Rmf2" Version="0.0.1" Language="en-US" Publisher="Runic Artifex" />
     <DisplayName>Runic RMF2 Translations</DisplayName>
     <Description xml:space="preserve">RMF2 diagnostics, navigation, resource refactoring and inert message preview through the project-local Runic language server. Development preview.</Description>
-    <License>LICENSE</License>
+    <License>LICENSE.txt</License>
   </Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.14,18.0)">
@@ -12,11 +12,12 @@
     </InstallationTarget>
   </Installation>
   <Dependencies />
-  <Prerequisites>
-    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.14,18.0)" DisplayName="Visual Studio core editor" />
-  </Prerequisites>
   <Assets>
     <Asset Type="Microsoft.VisualStudio.MefComponent" Path="Runic.Translations.VisualStudio.dll" />
     <Asset Type="Microsoft.VisualStudio.VsPackage" Path="Runic.pkgdef" />
+    <Asset Type="Microsoft.VisualStudio.VsPackage" Path="Runic.Translations.VisualStudio.pkgdef" />
   </Assets>
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.14,18.0)" DisplayName="Visual Studio core editor" />
+  </Prerequisites>
 </PackageManifest>

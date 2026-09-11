@@ -56,7 +56,7 @@ internal sealed class Rmf2LanguageServer
                         if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result });
                     }
                 }
-                catch (Exception error) when (error is ContentModifiedException or OperationCanceledException or ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or TranslationAuthoringException or KeyNotFoundException or IOException or FormatException or OverflowException or TranslationFormatException or System.Text.Json.JsonException)
+                catch (Exception error) when (error is ContentModifiedException or OperationCanceledException or ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or TranslationAuthoringException or KeyNotFoundException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException)
                 {
                     if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["error"] = new JsonObject { ["code"] = error is ContentModifiedException ? -32801 : error is OperationCanceledException ? -32800 : -32602, ["message"] = error is ContentModifiedException ? "Document content changed while the request was pending." : error is OperationCanceledException ? "Request cancelled." : error.Message } });
                 }
@@ -99,8 +99,8 @@ internal sealed class Rmf2LanguageServer
         {
             _configurationSync = args["initializationOptions"]?["runicConfigurationSync"]?.GetValue<bool>() == true;
             if (args["workspaceFolders"] is JsonArray folders)
-                foreach (var folder in folders) _workspaceRoots.Add(new Uri(folder!["uri"]!.GetValue<string>()).LocalPath);
-            else if (args["rootUri"] is JsonValue rootUri) _workspaceRoots.Add(new Uri(rootUri.GetValue<string>()).LocalPath);
+                foreach (var folder in folders) _workspaceRoots.Add(LocalPath(folder!["uri"]!.GetValue<string>()));
+            else if (args["rootUri"] is JsonValue rootUri) _workspaceRoots.Add(LocalPath(rootUri.GetValue<string>()));
             _fileOperations = args["capabilities"]?["workspace"]?["workspaceEdit"]?["resourceOperations"] is JsonArray operations && operations.Any(v => v?.GetValue<string>() == "create") && operations.Any(v => v?.GetValue<string>() == "delete");
             var encodings = args["capabilities"]?["general"]?["positionEncodings"] as JsonArray;
             _encoding = encodings?.Select(v => v!.GetValue<string>()).FirstOrDefault(v => v is "utf-8" or "utf-16" or "utf-32") ?? "utf-16";
@@ -119,7 +119,7 @@ internal sealed class Rmf2LanguageServer
         {
             string command = args["command"]!.GetValue<string>();
             JsonArray arguments = args["arguments"]!.AsArray();
-            string sourceUri = arguments[0]!.GetValue<string>(); string sourcePath = new Uri(sourceUri).LocalPath;
+            string sourceUri = arguments[0]!.GetValue<string>(); string sourcePath = LocalPath(sourceUri);
             var workspace = Workspace(sourcePath);
             if (command is "runic.preview" or "runic.renderPreview")
             {
@@ -143,7 +143,7 @@ internal sealed class Rmf2LanguageServer
             if (!_fileOperations) throw new InvalidOperationException("The client does not support the required file operations.");
             var plan = command switch {
                 "runic.extractGroup" => workspace.Extract(sourcePath, arguments[1]!.AsArray().Select(v => v!.GetValue<string>()).ToArray()),
-                "runic.inlineResource" => workspace.Inline(sourcePath, new Uri(arguments[1]!.GetValue<string>()).LocalPath),
+                "runic.inlineResource" => workspace.Inline(sourcePath, LocalPath(arguments[1]!.GetValue<string>())),
                 _ => throw new ArgumentException("Unknown RMF2 workspace command."),
             };
             return WorkspaceEdit(plan);
@@ -169,7 +169,7 @@ internal sealed class Rmf2LanguageServer
             }
             Update(uri, text, version); return null;
         }
-        if (Path.GetFileName(new Uri(uri).LocalPath) == "runic.json") return null;
+        if (Path.GetFileName(LocalPath(uri)) == "runic.json") return null;
         if (method == "textDocument/semanticTokens/full") return SemanticTokens(buffer);
         if (method == "textDocument/documentSymbol")
             return new JsonArray(buffer.Syntax.Nodes.Select(node => (JsonNode)new JsonObject {
@@ -192,7 +192,7 @@ internal sealed class Rmf2LanguageServer
         if (method == "runic/message")
         {
             if (entry is null) throw new TranslationAuthoringException("Place the cursor inside a resource or group.");
-            string sourcePath = new Uri(uri).LocalPath; var workspace = Workspace(sourcePath);
+            string sourcePath = LocalPath(uri); var workspace = Workspace(sourcePath);
             var locals = entry.MessageSyntax?.Declarations.Where(declaration => declaration.Kind == "local").Select(declaration => declaration.Name).ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>();
             var inputs = entry.MessageSyntax?.Tokens.Where(token => token.Kind == Mf2SyntaxTokenKind.Variable && !locals.Contains(token.Value)).Select(token => token.Value).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal) ?? Enumerable.Empty<string>();
             var slots = entry.MessageSyntax?.Expressions.SelectMany(expression => expression.Options.Where(option => option.Name == "ref" && option.Value is { Kind: not Mf2OperandKind.Variable })).Select(option => option.Value!.Value).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal) ?? Enumerable.Empty<string>();
@@ -209,7 +209,7 @@ internal sealed class Rmf2LanguageServer
         if (method == "textDocument/rename")
         {
             if (entry is null) throw new InvalidOperationException("The position is not on a resource symbol.");
-            string path = new Uri(uri).LocalPath; var workspace = Workspace(path);
+            string path = LocalPath(uri); var workspace = Workspace(path);
             TranslationWorkspaceTransactionPlan plan;
             if (atByte >= entry.NameLocation.StartByte && atByte <= entry.NameLocation.StartByte + entry.NameLocation.LengthBytes)
             {
@@ -229,7 +229,7 @@ internal sealed class Rmf2LanguageServer
         if (method == "textDocument/hover")
         {
             if (entry is null) return null;
-            string path = new Uri(uri).LocalPath; var workspace = Workspace(path);
+            string path = LocalPath(uri); var workspace = Workspace(path);
             string key = string.Join('_', workspace.LogicalPath(path, entry));
             string content = entry.MessageSyntax is { } messageSyntax ? workspace.LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte)) ?? key : key;
             var compiled = workspace.Validate();
@@ -258,7 +258,7 @@ internal sealed class Rmf2LanguageServer
             if (symbol is not null)
             {
                 bool includeDeclaration = args["context"]?["includeDeclaration"]?.GetValue<bool>() ?? true;
-                var references = Workspace(new Uri(uri).LocalPath).VariableReferences(new Uri(uri).LocalPath, entry.Key, symbol);
+                var references = Workspace(LocalPath(uri)).VariableReferences(LocalPath(uri), entry.Key, symbol);
                 var selected = references.Where(reference => method == "textDocument/definition" ? reference.IsDeclaration : includeDeclaration || !reference.IsDeclaration);
                 return new JsonArray(selected.Select(reference => {
                     var bytes = reference.Document.Source.GetUtf8Bytes();
@@ -275,14 +275,14 @@ internal sealed class Rmf2LanguageServer
         if (method == "textDocument/definition")
         {
             if (entry is null) return new JsonArray();
-            string path = new Uri(uri).LocalPath; var workspace = Workspace(path); var logical = workspace.LogicalPath(path, entry);
+            string path = LocalPath(uri); var workspace = Workspace(path); var logical = workspace.LogicalPath(path, entry);
             return new JsonArray(workspace.Documents.SelectMany(document => document.Nodes.Where(node => workspace.LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal))
                 .Select(node => (JsonNode)new JsonObject { ["uri"] = new Uri(document.Source.Path).AbsoluteUri, ["range"] = Range(new Buffer(Utf8.GetString(document.Source.GetUtf8Bytes()), 0, document), node.NameLocation) })).ToArray());
         }
         if (method == "textDocument/completion")
         {
             var labels = new HashSet<string>(StringComparer.Ordinal) { "one", "two", "few", "many", "zero", "*" };
-            string sourcePath = new Uri(uri).LocalPath; var workspace = Workspace(sourcePath);
+            string sourcePath = LocalPath(uri); var workspace = Workspace(sourcePath);
             var completions = entry is { IsGroup: false } ? workspace.Complete(sourcePath, entry.Key, MessageOffset(entry, atByte)) : workspace.LanguageService.Complete(null, 0);
             var items = completions.ToDictionary(item => item.Label, item => item.Detail, StringComparer.Ordinal);
             foreach (string label in labels) items.TryAdd(label, "RMF2 execution profile");
@@ -327,6 +327,9 @@ internal sealed class Rmf2LanguageServer
         string relative = Path.GetRelativePath(root, path);
         return !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
+    // TranslationSource uses portable separators, including on Windows. Buffer overlays
+    // must use the same key as disk sources or the workspace receives duplicates.
+    private static string LocalPath(string uri) => new Uri(uri).LocalPath.Replace('\\', '/');
     private Rmf2Workspace Workspace(string path)
     {
         _requestCancellation.ThrowIfCancellationRequested();
@@ -341,7 +344,7 @@ internal sealed class Rmf2LanguageServer
         var sources = inputs.Messages.Select(s => new TranslationSource(Path.GetFullPath(s.Path), s.GetUtf8Bytes())).ToDictionary(s => s.Path, StringComparer.Ordinal);
         foreach (var pair in _buffers)
         {
-            string file = new Uri(pair.Key).LocalPath;
+            string file = LocalPath(pair.Key);
             if (sources.ContainsKey(file) || (Path.GetExtension(file).Equals(".rmf2", StringComparison.OrdinalIgnoreCase) && inputs.SourceRoots?.Any(sourceRoot => IsWithin(sourceRoot, file)) == true)) sources[file] = new TranslationSource(file, Utf8.GetBytes(pair.Value.Text));
         }
         string root = directory;
@@ -373,21 +376,21 @@ internal sealed class Rmf2LanguageServer
     {
         if (Utf8.GetByteCount(text) > 8 * 1024 * 1024) throw new ArgumentException("Document exceeds RMF2 byte limit.");
         if (!_buffers.ContainsKey(uri) && _buffers.Count >= 256) throw new ArgumentException("Too many open resource buffers.");
-        bool configuration = Path.GetFileName(new Uri(uri).LocalPath) == "runic.json";
-        if (!configuration && !Path.GetExtension(new Uri(uri).LocalPath).Equals(".rmf2", StringComparison.OrdinalIgnoreCase))
+        bool configuration = Path.GetFileName(LocalPath(uri)) == "runic.json";
+        if (!configuration && !Path.GetExtension(LocalPath(uri)).Equals(".rmf2", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("The RMF2 language server supports .rmf2 resources and runic.json synchronization; use the native service for application and legacy sources.");
-        var syntax = Rmf2ResourceReader.Analyze(new TranslationSource(new Uri(uri).LocalPath, configuration ? Array.Empty<byte>() : Utf8.GetBytes(text)));
+        var syntax = Rmf2ResourceReader.Analyze(new TranslationSource(LocalPath(uri), configuration ? Array.Empty<byte>() : Utf8.GetBytes(text)));
         var buffer = new Buffer(text, version, syntax); _buffers[uri] = buffer;
         IReadOnlyList<TranslationDiagnostic> catalogDiagnostics = Array.Empty<TranslationDiagnostic>();
-        try { catalogDiagnostics = Workspace(new Uri(uri).LocalPath).Validate().Diagnostics; }
-        catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or System.Text.Json.JsonException or TranslationAuthoringException) {
-            if (configuration) catalogDiagnostics = TranslationCompiler.CompileProject(new TranslationSource(new Uri(uri).LocalPath, Utf8.GetBytes(text)), Array.Empty<TranslationSource>()).Diagnostics;
+        try { catalogDiagnostics = Workspace(LocalPath(uri)).Validate().Diagnostics; }
+        catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException) {
+            if (configuration) catalogDiagnostics = TranslationCompiler.CompileProject(new TranslationSource(LocalPath(uri), Utf8.GetBytes(text)), Array.Empty<TranslationSource>()).Diagnostics;
         }
         foreach (var pair in _buffers)
         {
             var current = pair.Value;
-            string path = new Uri(pair.Key).LocalPath;
-            var diagnostics = current.Syntax.Diagnostics.Concat(catalogDiagnostics.Where(d => Path.GetFullPath(d.Location.Path) == path))
+            string path = LocalPath(pair.Key);
+            var diagnostics = current.Syntax.Diagnostics.Concat(catalogDiagnostics.Where(d => Path.GetFullPath(d.Location.Path).Replace('\\', '/') == path))
                 .DistinctBy(d => (d.Id, d.Location.StartByte, d.Location.LengthBytes, d.Message));
             Publish(pair.Key, new JsonArray(diagnostics.Select(d => (JsonNode)new JsonObject {
                 ["range"] = Range(current, d.Location), ["severity"] = d.Severity == TranslationDiagnosticSeverity.Error ? 1 : 2,

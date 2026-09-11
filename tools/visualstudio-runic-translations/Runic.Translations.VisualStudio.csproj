@@ -1,4 +1,5 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
@@ -8,15 +9,32 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <CreateVsixContainer Condition="'$(OS)' == 'Windows_NT'">true</CreateVsixContainer>
+    <CreateVsixContainer Condition="'$(OS)' != 'Windows_NT'">false</CreateVsixContainer>
+    <DeployExtension>false</DeployExtension>
+    <UseCodebase>true</UseCodebase>
+    <GeneratePkgDefFile Condition="'$(OS)' == 'Windows_NT'">true</GeneratePkgDefFile>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="test/**/*.cs" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2142" PrivateAssets="all" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
     <PackageReference Include="Microsoft.VisualStudio.LanguageServer.Client" Version="17.14.60" />
     <PackageReference Include="Microsoft.VisualStudio.Shell.15.0" Version="17.14.40264" />
     <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="17.14.249" />
+    <VSCTCompile Include="Commands.vsct"><ResourceName>Menus.ctmenu</ResourceName></VSCTCompile>
+    <SuppressFromVsix Include="System.Text.Encodings.Web.dll" />
+    <Content Include="Runic.pkgdef" IncludeInVSIX="true" />
+    <Content Include="../vscode-runic-translations/syntaxes/rmf2.tmLanguage.json" Link="Grammars/rmf2.tmLanguage.json" IncludeInVSIX="true" />
+    <Content Include="../../LICENSE" Link="LICENSE.txt" TargetPath="LICENSE.txt" IncludeInVSIX="true" />
+    <Content Include="README.md" IncludeInVSIX="true" />
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
   </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+  <Import Project="$(VSToolsPath)/VSSDK/Microsoft.VsSDK.targets" Condition="'$(OS)' == 'Windows_NT'" />
 </Project>

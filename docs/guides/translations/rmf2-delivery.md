@@ -13,7 +13,7 @@ integrations. Completing a slice does not imply full Unicode MF2 execution.
 3. [x] Shared catalog language service: contract-aware completion/hover, examples,
    references and safe input/local/slot/resource refactors, mounted configuration
    edits, bounded syntax reuse, cancellation and stale-result suppression.
-4. [ ] Rendering integrations (implemented; Windows execution pending):
+4. [x] Rendering integrations:
    pre-resolved registry dispatch, web SSR/hydration,
    native toolkit adapters and accessibility/plain-text behavior, exercised with
    the payment consumer and representative allocation measurements.
@@ -27,8 +27,7 @@ integrations. Completing a slice does not imply full Unicode MF2 execution.
 7. [x] VS Code integration: packaged RMF2 language support, project-local language
    server lifecycle, syntax highlighting, diagnostics/navigation/refactoring and
    preview commands, configuration and extension-host integration tests.
-8. [ ] Visual Studio integration (implemented and packaged; Windows host check
-   pending): packaged RMF2 content type and language client,
+8. [x] Visual Studio integration: packaged RMF2 content type and language client,
    project-local server lifecycle, diagnostics/navigation/refactoring and preview
    commands, configuration and Windows integration verification.
 
@@ -45,11 +44,15 @@ rejection and semantic highlighting; Svelte SSR/hydration and a WPF adapter.
 Current focused results and reproducible measurements are in
 [RMF2 validation](rmf2-validation.md). Core, authoring, compiler, CLI/LSP, editor,
 Svelte browser and real VS Code host checks pass. Both IDE VSIX artifacts build.
-WPF and the Visual Studio client cross-compile without warnings; their native
-Windows execution checks remain open because this development host is Linux.
-The Visual Studio README provides the experimental-instance procedure. These
-are platform verification limits; neither successful packaging nor cross-building
-is recorded as a Windows host pass.
+Native Windows 11 verification now passes for the WPF payment consumer and
+Visual Studio 2026 18.8.2 in an isolated experimental profile. Native IDE checks
+cover registered preview/restart commands, inert rich content, invalid samples,
+locale switching and unsaved buffers across restart. The RMF2 CLI/LSP suite
+passes on both Windows and Linux; the runtime suite passes 175 checks.
+Windows execution exposed and fixed portable-path overlays, per-locale preview
+contracts, plain preview rendering and zero-input compiled variant formatting.
+Visual Studio 2022 remains the compile-time API target; its own native host was
+not separately exercised.
 
 The IDE clients and their support matrices are documented in
 [VS Code](../../../tools/vscode-runic-translations/README.md) and
