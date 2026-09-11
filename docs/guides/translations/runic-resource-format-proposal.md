@@ -1,14 +1,22 @@
-# Runic resource format: design proposal
+# Runic MessageFormat 2 (.rmf2): design proposal
 
-Status: research and proposed direction, 10 September 2026. The syntax, extension,
-configuration concepts, and APIs below are illustrative; they are not implemented
-Runic features. This document does not change the existing TOML contract.
+Status: accepted design direction, 10 September 2026. The format is named Runic
+MessageFormat 2 (RMF2), with the `.rmf2` extension. The syntax, configuration
+concepts, and APIs below remain illustrative; they are not implemented Runic
+features. This document does not change the existing TOML contract.
+
+Canonical delivery scope and state are maintained in
+[roadmap W200](../../../../local-planning/content/records/initiatives/W200.md)
+and [decision D014](../../../../local-planning/content/records/decisions/D014.md).
+This document retains design detail; work-item records own implementation progress.
 
 ## Recommendation
 
 Build a small resource language around Unicode MessageFormat, with explicit nested
 groups, readable unquoted message entries, attached translator documentation, and
-optional directory namespaces. Use `.runic` as a provisional extension.
+optional directory namespaces. Use **Runic MessageFormat 2 (RMF2)** for the format
+name and **`.rmf2`** for resource files. RMF2 names the Runic resource container;
+the embedded message language remains Unicode MF2.
 
 Keep one logical catalog per locale regardless of its physical file layout. Keep
 MF2 as the message language: formatting, declarations, selection, and markup
@@ -66,7 +74,7 @@ execution also requires compiler, contract, and backend work.
 
 ## A concrete file
 
-`translations/en.runic`:
+`translations/en.rmf2`:
 
 ```text
 common {
@@ -195,8 +203,8 @@ The default layout stays small:
 ```text
 translations/
   runic.json
-  en.runic
-  de.runic
+  en.rmf2
+  de.rmf2
 ```
 
 An optional split layout can coexist with root entries:
@@ -204,23 +212,23 @@ An optional split layout can coexist with root entries:
 ```text
 translations/
   runic.json
-  en.runic
-  de.runic
+  en.rmf2
+  de.rmf2
   checkout/
-    en.runic
-    de.runic
+    en.rmf2
+    de.rmf2
     payment/
-      en.runic
-      de.runic
+      en.rmf2
+      de.rmf2
 ```
 
 **Directory segments contribute to the namespace; the locale filename does not.**
 
 | Physical source | Local structure | Logical path |
 | --- | --- | --- |
-| `translations/en.runic` | `checkout { cart { summary = ... } }` | `checkout.cart.summary` |
-| `translations/checkout/en.runic` | `cart { summary = ... }` | `checkout.cart.summary` |
-| `translations/checkout/cart/en.runic` | `summary = ...` | `checkout.cart.summary` |
+| `translations/en.rmf2` | `checkout { cart { summary = ... } }` | `checkout.cart.summary` |
+| `translations/checkout/en.rmf2` | `cart { summary = ... }` | `checkout.cart.summary` |
+| `translations/checkout/cart/en.rmf2` | `summary = ...` | `checkout.cart.summary` |
 
 These are alternative homes for the same message, not three definitions to load
 simultaneously. An extract-group refactor removes the enclosing groups when it
@@ -253,7 +261,7 @@ Proposed composition rules:
 
 For feature slices colocated with application code, add **explicit mounts in
 project configuration**. For example, mount `src/features/checkout/i18n` at
-`checkout`; `payment/en.runic` beneath that root adds `payment`. Overlapping
+`checkout`; `payment/en.rmf2` beneath that root adds `payment`. Overlapping
 discovery roots should be rejected unless the same physical source is explicitly
 deduplicated. Moving the feature directory then preserves its logical namespace
 as long as the configured mount stays the same. Config syntax needs its own
@@ -362,6 +370,9 @@ or deprecation notes. Keep volatile review history in the existing review system
 translator context belongs close to the message.
 
 ### Rich text and related UI messages: build on existing concepts
+
+See the [RMF2 markup proposal](rmf2-markup-proposal.md) for proposed default tags,
+typed application slots, custom markup contracts, renderer bindings, and scaling.
 
 MF2 markup identifies structured parts; it is not HTML and does not specify a
 renderer. Map named slots to application-owned components or native spans, with
