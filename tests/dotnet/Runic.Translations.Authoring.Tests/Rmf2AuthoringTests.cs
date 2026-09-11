@@ -10,12 +10,22 @@ internal static class Rmf2AuthoringTests
 {
     internal static void Register(TestRunner runner)
     {
+        runner.Add("RMF2 local rename changes semantic references without touching literal text", LocalRename);
         runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
         runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
         runner.Add("RMF2 TOML migration validates complete catalog and retains original source", Migration);
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     private static TranslationSource Project(string layout = "rmf2-v1") => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"" + layout + "\"}");
+    private static void LocalRename()
+    {
+        const string text = "message =\n  .input {$input :string}\n  .local $alias = {$input}\n  {{Hello {$alias}, literal {|$alias|} and plain $alias}}\nother = {$alias}\n";
+        var renamed = Rmf2ResourceWriter.RenameLocal(Source("en.rmf2", text), "message", "alias", "display");
+        string result = Encoding.UTF8.GetString(renamed);
+        Assert.True(result.Contains(".local $display = {$input}", StringComparison.Ordinal) && result.Contains("Hello {$display}", StringComparison.Ordinal), "Semantic local occurrences were not renamed.");
+        Assert.True(result.Contains("{|$alias|} and plain $alias", StringComparison.Ordinal) && result.Contains("other = {$alias}", StringComparison.Ordinal), "Local rename changed unrelated text.");
+        Assert.Throws<TranslationAuthoringException>(() => Rmf2ResourceWriter.RenameLocal(Source("en.rmf2", text), "message", "alias", "input"), "capture");
+    }
     private static void Format()
     {
         var source = Source("en.rmf2", "shop {\n    # Translator context\n    title =\n        {{First\n          Indented\n        }}\n}\n");

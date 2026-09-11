@@ -186,6 +186,8 @@ mount configuration; it is not exposed as an automatic file operation.
 The stdio LSP implements incremental changes, UTF-8/16/32 position negotiation,
 recoverable diagnostics, flat document symbols, folding, formatting, basic
 completion/hover, logical definitions, and versioned resource rename edits.
+Local-variable rename uses parsed symbol locations and rejects capture of an
+existing variable. Quoted literals and ordinary message text are preserved.
 `runic.extractGroup` and `runic.inlineResource` return `WorkspaceEdit` results;
 the client applies them. File-changing commands require client create/delete
 capabilities. Cancellation notifications are accepted, but expensive requests are
@@ -216,15 +218,24 @@ explicit in [rmf2-execution-v1.json](../../../specs/translations/rmf2-execution-
 The existing nine-family locale matrix still applies. Unsupported function
 options produce `RTR0065` rather than being silently ignored or clamped.
 
+`Rmf2ResourceNode.MessageSyntax` exposes the shared `Mf2SyntaxDocument`: original
+tokens, expression operands, options, attributes, declarations, selectors and
+variant keys with UTF-8 spans. Unknown functions and overlapping markup survive
+this syntax pass. The balanced-inline check separately reports `RTR0061`;
+expression syntax diagnostics use `RTR0066`. This is an initial data-model slice,
+not yet a complete MF2 grammar validator. Unformatted literal locals and their
+plain aliases fold into output without becoming caller inputs. Formatting or
+selecting a constant local remains an explicit unsupported capability.
+
 The following accepted proposal features remain incomplete:
 
-- A complete lossless MF2 syntax/data model, including general literal/local
-  evaluation, variable-valued formatter options, expression annotations, and
-  unpaired/overlapping markup before renderer-profile validation. The current
-  resource model preserves their raw body but the executor rejects unsupported
-  forms; some diagnostics still classify unsupported forms as syntax errors.
+- Complete MF2 grammar validation and full variant-body spans in the shared
+  syntax model; further separation of caller-contract and backend diagnostics.
+  The bounded executor still rejects variable-valued formatter options,
+  expression annotations and formatted literal locals. Full MF2 execution is
+  outside the core milestone.
 - Full project-aware LSP option/slot completion, fallback and type hover,
-  example previews, input/local rename, asynchronous cancellation, persistent
+  example previews, catalog-wide input rename, asynchronous cancellation, persistent
   dependency indexes, and automatic configuration edits during mounted renames.
 - Toolkit-specific native renderers, framework SSR/hydration adapters, richer
   accessibility policies, pre-resolved renderer dispatch and allocation benchmarks.
@@ -234,3 +245,6 @@ The following accepted proposal features remain incomplete:
 
 These are implementation limits, not claims that the accepted proposals are fully
 delivered. No package or repository release version changes with this work.
+
+The [continuation checklist](rmf2-delivery.md) orders the remaining implementation
+work, with VS Code and Visual Studio integrations as the final two deliverables.

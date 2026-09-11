@@ -83,7 +83,7 @@ public static partial class TranslationCompiler
                     diagnostics.Add("RTR0053", TranslationDiagnosticSeverity.Warning, "The enclosing directory prefix is repeated in this group; extraction normally removes it.", node.NameLocation);
                 var messageSource = new TranslationSource(source.Path, Encoding.UTF8.GetBytes(node.Message!));
                 var messageDiagnostics = new DiagnosticBag();
-                Mf2ParsedMessage? message = Mf2MessageParser.Parse(messageSource, messageDiagnostics, options, cancellationToken, rmf2: true);
+                Mf2ParsedMessage? message = Mf2MessageParser.Parse(messageSource, messageDiagnostics, options, cancellationToken, rmf2: true, sourceSyntax: node.MessageSyntax);
                 foreach (TranslationDiagnostic diagnostic in messageDiagnostics.Items)
                 {
                     int from = node.MessageByteMap[Math.Min(diagnostic.Location.StartByte, node.MessageByteMap.Count - 1)];

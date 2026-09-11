@@ -43,6 +43,9 @@ public sealed class Rmf2Workspace
     }
     public TranslationCompilation Validate() => TranslationCompiler.CompileProject(_project, _sources.Values);
 
+    public TranslationWorkspaceTransactionPlan RenameLocal(string path, string key, string name, string newName) =>
+        Plan(new Dictionary<string, byte[]?>(StringComparer.Ordinal) { [path] = Rmf2ResourceWriter.RenameLocal(_sources[path], key, name, newName) });
+
     public TranslationWorkspaceTransactionPlan Rename(IReadOnlyList<string> logicalPath, string newName)
     {
         if (logicalPath.Count == 0 || !System.Text.RegularExpressions.Regex.IsMatch(newName, "^[A-Za-z_][A-Za-z0-9_]*$")) throw new TranslationAuthoringException("A resource path and identifier are required.");

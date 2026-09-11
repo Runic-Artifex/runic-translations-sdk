@@ -29,7 +29,7 @@ internal static class Mf2MessageParser
         TranslationSource source,
         DiagnosticBag diagnostics,
         TranslationCompilerOptions options,
-        CancellationToken cancellationToken, bool rmf2 = false)
+        CancellationToken cancellationToken, bool rmf2 = false, Mf2SyntaxDocument? sourceSyntax = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (source.Bytes.Length > options.MaximumDocumentBytes)
@@ -53,7 +53,16 @@ internal static class Mf2MessageParser
         if (StrictJsonParser.StrictUtf8.GetByteCount(text) > options.MaximumValueBytes)
             Error(diagnostics, source, "RTR0022", "MF2 message value exceeds the configured byte limit.");
 
-        if (rmf2) ValidateRmf2Capabilities(text, source, diagnostics);
+        if (rmf2)
+        {
+            var syntax = sourceSyntax ?? Mf2SyntaxReader.Read(source, options, cancellationToken);
+            foreach (var diagnostic in syntax.Diagnostics) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+            if (!syntax.Success) return null;
+            var profile = Mf2SyntaxReader.ValidateInlineProfile(syntax);
+            foreach (var diagnostic in profile) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+            if (profile.Count > 0) return null;
+            ValidateRmf2Capabilities(text, source, diagnostics);
+        }
         var declarations = new Dictionary<string, Declaration>(StringComparer.Ordinal);
         int offset = 0;
         while (TryReadLine(text, offset, out string line, out int next))
@@ -72,7 +81,7 @@ internal static class Mf2MessageParser
             }
             if (trimmed.StartsWith(".local", StringComparison.Ordinal))
             {
-                ReadLocal(trimmed, declarations, source, diagnostics);
+                ReadLocal(trimmed, declarations, source, diagnostics, rmf2);
                 offset = next;
                 continue;
             }
@@ -111,7 +120,7 @@ internal static class Mf2MessageParser
         var included = new HashSet<string>(StringComparer.Ordinal);
         foreach (Declaration declaration in declarations.Values)
         {
-            if ((!rmf2 && !usedInputs.Contains(declaration.Input)) || !included.Add(declaration.Input)) continue;
+            if (declaration.Constant is not null || (!rmf2 && !usedInputs.Contains(declaration.Input)) || !included.Add(declaration.Input)) continue;
             placeholders.Add(new PlaceholderModel(declaration.Input, declaration.Type, declaration.Format,
                 new ByteSpan(0, 0), new ByteSpan(0, 0), new ByteSpan(0, 0)));
         }
@@ -201,6 +210,7 @@ internal static class Mf2MessageParser
             if (!selectorTokens[index].StartsWith('$') || selectors.Exists(s => s.Name == name))
             { Error(diagnostics, source, "RTR0041", "MF2 selectors must be distinct variables."); return null; }
             Declaration declaration = ResolveDeclaration(name, declarations);
+            if (declaration.Constant is not null) { Error(diagnostics, source, "RTR0065", "Constant local selectors are not executable in this backend profile."); return null; }
             usedInputs.Add(declaration.Input);
             selectors.Add(new CompiledMessageSelector(name, declaration.Input, declaration.Selector ?? "exact"));
         }
@@ -383,6 +393,11 @@ internal static class Mf2MessageParser
         }
         string tail = expression.Substring(end).Trim();
         Declaration declaration;
+        if (declarations.TryGetValue(name, out var constant) && constant.Constant is not null)
+        {
+            if (tail.Length != 0) { Error(diagnostics, source, "RTR0065", "Formatting literal locals is not executable in this backend profile."); return null; }
+            return new CompiledMessageText(constant.Constant);
+        }
         if (tail.StartsWith(':'))
         {
             declaration = ParseFunction(name, name, tail, source, diagnostics);
@@ -420,12 +435,25 @@ internal static class Mf2MessageParser
             Error(diagnostics, source, "RTR0041", "Duplicate MF2 declaration for '" + name + "'.");
     }
 
-    private static void ReadLocal(string line, Dictionary<string, Declaration> declarations, TranslationSource source, DiagnosticBag diagnostics)
+    private static void ReadLocal(string line, Dictionary<string, Declaration> declarations, TranslationSource source, DiagnosticBag diagnostics, bool rmf2)
     {
         int equals = line.IndexOf('=');
         int open = line.IndexOf('{', equals + 1);
         int close = line.LastIndexOf('}');
         string left = equals < 0 ? string.Empty : line.Substring(".local".Length, equals - ".local".Length).Trim().TrimStart('$');
+        if (rmf2 && Variable.IsMatch(left) && open >= 0 && close > open)
+        {
+            var literalSyntax = Mf2SyntaxReader.Read(new TranslationSource(source.Path, Encoding.UTF8.GetBytes(line.Substring(open, close - open + 1))));
+            var expression = literalSyntax.Expressions.Count == 1 ? literalSyntax.Expressions[0] : null;
+            if (literalSyntax.Success && expression?.Operand is { Kind: not Mf2OperandKind.Variable } operandSyntax)
+            {
+                if (expression.Function is not null || expression.Attributes.Count != 0)
+                { Error(diagnostics, source, "RTR0065", "Formatted or attributed literal locals require an unsupported backend capability."); return; }
+                if (!declarations.TryAdd(left, new Declaration(left, left, TranslationArgumentType.String, "none", "string", null, null, null) { Constant = operandSyntax.Value }))
+                    Error(diagnostics, source, "RTR0041", "Duplicate MF2 declaration for '" + left + "'.");
+                return;
+            }
+        }
         if (!Variable.IsMatch(left) || open < 0 || close <= open ||
             !TrySplitVariable(line.Substring(open + 1, close - open - 1).Trim(), out string input, out string tail))
         {
@@ -433,8 +461,13 @@ internal static class Mf2MessageParser
             return;
         }
         Declaration operand = ResolveDeclaration(input, declarations);
+        if (rmf2 && operand.Constant is not null && tail.Length != 0)
+        {
+            Error(diagnostics, source, "RTR0065", "Formatted or attributed constant aliases require an unsupported backend capability.");
+            return;
+        }
         Declaration declaration = tail.Length == 0
-            ? new Declaration(left, operand.Input, operand.Type, operand.Format, operand.Function, operand.Selector, operand.Unit, operand.Numeric)
+            ? new Declaration(left, operand.Input, operand.Type, operand.Format, operand.Function, operand.Selector, operand.Unit, operand.Numeric) { Constant = operand.Constant }
             : ParseFunction(left, operand.Input, tail, source, diagnostics);
         if (!declarations.TryAdd(left, declaration))
             Error(diagnostics, source, "RTR0041", "Duplicate MF2 declaration for '" + left + "'.");
@@ -602,7 +635,8 @@ internal static class Mf2MessageParser
             if (variable)
             {
                 Declaration input = ResolveDeclaration(item, declarations);
-                options[key] = input.Input; variableOptions.Add(key); inputs.Add(input.Input);
+                if (input.Constant is not null) options[key] = input.Constant;
+                else { options[key] = input.Input; variableOptions.Add(key); inputs.Add(input.Input); }
             }
         }
         return true;
@@ -674,6 +708,7 @@ internal static class Mf2MessageParser
             Numeric = numeric;
         }
 
+        internal string? Constant { get; init; }
         internal string Name { get; }
         internal string Input { get; }
         internal TranslationArgumentType Type { get; }

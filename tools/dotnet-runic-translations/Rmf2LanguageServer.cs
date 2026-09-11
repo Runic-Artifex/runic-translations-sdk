@@ -117,11 +117,17 @@ internal sealed class Rmf2LanguageServer
         if (method == "textDocument/rename")
         {
             if (entry is null) throw new InvalidOperationException("The position is not on a resource symbol.");
-            // Resource renames never text-replace application inputs or MF2 locals.
-            if (atByte < entry.NameLocation.StartByte || atByte > entry.NameLocation.StartByte + entry.NameLocation.LengthBytes)
-                throw new InvalidOperationException("Resource rename requires a resource key or group name.");
             string path = new Uri(uri).LocalPath; var workspace = Workspace(path);
-            var plan = workspace.Rename(workspace.LogicalPath(path, entry), args["newName"]!.GetValue<string>());
+            TranslationWorkspaceTransactionPlan plan;
+            if (atByte >= entry.NameLocation.StartByte && atByte <= entry.NameLocation.StartByte + entry.NameLocation.LengthBytes)
+                plan = workspace.Rename(workspace.LogicalPath(path, entry), args["newName"]!.GetValue<string>());
+            else
+            {
+                var syntax = entry.MessageSyntax;
+                var local = syntax?.Declarations.FirstOrDefault(d => d.Kind == "local" && syntax.VariableReferences(d.Name).Any(location => entry.MessageByteMap[location.StartByte] <= atByte && atByte < entry.MessageByteMap[location.StartByte + location.LengthBytes]));
+                if (local is null) throw new InvalidOperationException("Rename requires a resource symbol or an MF2 local; caller-input changes require a catalog-wide plan.");
+                plan = workspace.RenameLocal(path, entry.Key, local.Name, args["newName"]!.GetValue<string>());
+            }
             if (!_fileOperations && plan.Edits.Any(e => e.Kind != TranslationWorkspaceEditKind.Replace)) throw new InvalidOperationException("Rename requires client file-operation support.");
             return WorkspaceEdit(plan);
         }

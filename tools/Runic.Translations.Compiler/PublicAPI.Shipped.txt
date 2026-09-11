@@ -213,6 +213,158 @@ type static class Runic.Translations.Compiler.Generation.TranslationOutputRender
   method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Generation.TranslationGeneratedOutput> RenderCpp(Runic.Translations.Compiler.CompiledTextCatalog catalog)
   method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Generation.TranslationGeneratedOutput> RenderEsmModules(Runic.Translations.Compiler.CompiledTextCatalog catalog)
 
+type sealed class Runic.Translations.Compiler.Mf2DeclarationSyntax : System.IEquatable<Runic.Translations.Compiler.Mf2DeclarationSyntax>
+  ctor Runic.Translations.Compiler.Mf2DeclarationSyntax(System.String Kind, System.String Name, Runic.Translations.Compiler.TextSourceLocation NameLocation, Runic.Translations.Compiler.Mf2ExpressionSyntax Expression, Runic.Translations.Compiler.TextSourceLocation Location)
+  method Runic.Translations.Compiler.Mf2DeclarationSyntax <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Mf2DeclarationSyntax other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Kind, out System.String Name, out Runic.Translations.Compiler.TextSourceLocation NameLocation, out Runic.Translations.Compiler.Mf2ExpressionSyntax Expression, out Runic.Translations.Compiler.TextSourceLocation Location)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Mf2DeclarationSyntax left, Runic.Translations.Compiler.Mf2DeclarationSyntax right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Mf2DeclarationSyntax left, Runic.Translations.Compiler.Mf2DeclarationSyntax right)
+  property Runic.Translations.Compiler.Mf2ExpressionSyntax Expression { get; init; }
+  property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
+  property Runic.Translations.Compiler.TextSourceLocation NameLocation { get; init; }
+  property System.String Kind { get; init; }
+  property System.String Name { get; init; }
+
+type sealed class Runic.Translations.Compiler.Mf2ExpressionSyntax : System.IEquatable<Runic.Translations.Compiler.Mf2ExpressionSyntax>
+  ctor Runic.Translations.Compiler.Mf2ExpressionSyntax(Runic.Translations.Compiler.Mf2OperandSyntax Operand, System.String Function, System.String MarkupName, Runic.Translations.Compiler.Mf2MarkupKind MarkupKind, System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax> Options, System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax> Attributes, Runic.Translations.Compiler.TextSourceLocation Location)
+  method Runic.Translations.Compiler.Mf2ExpressionSyntax <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Mf2ExpressionSyntax other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out Runic.Translations.Compiler.Mf2OperandSyntax Operand, out System.String Function, out System.String MarkupName, out Runic.Translations.Compiler.Mf2MarkupKind MarkupKind, out System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax> Options, out System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax> Attributes, out Runic.Translations.Compiler.TextSourceLocation Location)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Mf2ExpressionSyntax left, Runic.Translations.Compiler.Mf2ExpressionSyntax right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Mf2ExpressionSyntax left, Runic.Translations.Compiler.Mf2ExpressionSyntax right)
+  property Runic.Translations.Compiler.Mf2MarkupKind MarkupKind { get; init; }
+  property Runic.Translations.Compiler.Mf2OperandSyntax Operand { get; init; }
+  property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax> Attributes { get; init; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax> Options { get; init; }
+  property System.String Function { get; init; }
+  property System.String MarkupName { get; init; }
+
+type enum Runic.Translations.Compiler.Mf2MarkupKind : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const Runic.Translations.Compiler.Mf2MarkupKind Close = 2
+  field const Runic.Translations.Compiler.Mf2MarkupKind None = 0
+  field const Runic.Translations.Compiler.Mf2MarkupKind Open = 1
+  field const Runic.Translations.Compiler.Mf2MarkupKind Standalone = 3
+
+type sealed class Runic.Translations.Compiler.Mf2MatchSyntax : System.IEquatable<Runic.Translations.Compiler.Mf2MatchSyntax>
+  ctor Runic.Translations.Compiler.Mf2MatchSyntax(System.Collections.Generic.IReadOnlyList<System.String> Selectors, Runic.Translations.Compiler.TextSourceLocation Location)
+  method Runic.Translations.Compiler.Mf2MatchSyntax <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Mf2MatchSyntax other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<System.String> Selectors, out Runic.Translations.Compiler.TextSourceLocation Location)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Mf2MatchSyntax left, Runic.Translations.Compiler.Mf2MatchSyntax right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Mf2MatchSyntax left, Runic.Translations.Compiler.Mf2MatchSyntax right)
+  property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
+  property System.Collections.Generic.IReadOnlyList<System.String> Selectors { get; init; }
+
+type enum Runic.Translations.Compiler.Mf2OperandKind : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const Runic.Translations.Compiler.Mf2OperandKind Number = 1
+  field const Runic.Translations.Compiler.Mf2OperandKind String = 2
+  field const Runic.Translations.Compiler.Mf2OperandKind Variable = 0
+
+type sealed class Runic.Translations.Compiler.Mf2OperandSyntax : System.IEquatable<Runic.Translations.Compiler.Mf2OperandSyntax>
+  ctor Runic.Translations.Compiler.Mf2OperandSyntax(Runic.Translations.Compiler.Mf2OperandKind Kind, System.String Value, System.Boolean Quoted, Runic.Translations.Compiler.TextSourceLocation Location)
+  method Runic.Translations.Compiler.Mf2OperandSyntax <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Mf2OperandSyntax other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out Runic.Translations.Compiler.Mf2OperandKind Kind, out System.String Value, out System.Boolean Quoted, out Runic.Translations.Compiler.TextSourceLocation Location)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Mf2OperandSyntax left, Runic.Translations.Compiler.Mf2OperandSyntax right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Mf2OperandSyntax left, Runic.Translations.Compiler.Mf2OperandSyntax right)
+  property Runic.Translations.Compiler.Mf2OperandKind Kind { get; init; }
+  property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
+  property System.Boolean Quoted { get; init; }
+  property System.String Value { get; init; }
+
+type sealed class Runic.Translations.Compiler.Mf2PropertySyntax : System.IEquatable<Runic.Translations.Compiler.Mf2PropertySyntax>
+  ctor Runic.Translations.Compiler.Mf2PropertySyntax(System.String Name, Runic.Translations.Compiler.Mf2OperandSyntax Value, System.Boolean IsAttribute, Runic.Translations.Compiler.TextSourceLocation Location)
+  method Runic.Translations.Compiler.Mf2PropertySyntax <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Mf2PropertySyntax other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Name, out Runic.Translations.Compiler.Mf2OperandSyntax Value, out System.Boolean IsAttribute, out Runic.Translations.Compiler.TextSourceLocation Location)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Mf2PropertySyntax left, Runic.Translations.Compiler.Mf2PropertySyntax right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Mf2PropertySyntax left, Runic.Translations.Compiler.Mf2PropertySyntax right)
+  property Runic.Translations.Compiler.Mf2OperandSyntax Value { get; init; }
+  property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
+  property System.Boolean IsAttribute { get; init; }
+  property System.String Name { get; init; }
+
+type sealed class Runic.Translations.Compiler.Mf2SyntaxDocument
+  method System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TextSourceLocation> VariableReferences(System.String name)
+  property Runic.Translations.Compiler.Mf2MatchSyntax Match { get; }
+  property Runic.Translations.Compiler.TranslationSource Source { get; }
+  property System.Boolean Success { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2DeclarationSyntax> Declarations { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2ExpressionSyntax> Expressions { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2SyntaxToken> Tokens { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2VariantSyntax> Variants { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic> Diagnostics { get; }
+
+type static class Runic.Translations.Compiler.Mf2SyntaxReader
+  method static Runic.Translations.Compiler.Mf2SyntaxDocument Read(Runic.Translations.Compiler.TranslationSource source, Runic.Translations.Compiler.TranslationCompilerOptions options = null, System.Threading.CancellationToken cancellationToken = default)
+  method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic> ValidateInlineProfile(Runic.Translations.Compiler.Mf2SyntaxDocument syntax)
+
+type sealed class Runic.Translations.Compiler.Mf2SyntaxToken : System.IEquatable<Runic.Translations.Compiler.Mf2SyntaxToken>
+  ctor Runic.Translations.Compiler.Mf2SyntaxToken(Runic.Translations.Compiler.Mf2SyntaxTokenKind Kind, System.String Raw, System.String Value, Runic.Translations.Compiler.TextSourceLocation Location)
+  method Runic.Translations.Compiler.Mf2SyntaxToken <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Mf2SyntaxToken other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out Runic.Translations.Compiler.Mf2SyntaxTokenKind Kind, out System.String Raw, out System.String Value, out Runic.Translations.Compiler.TextSourceLocation Location)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Mf2SyntaxToken left, Runic.Translations.Compiler.Mf2SyntaxToken right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Mf2SyntaxToken left, Runic.Translations.Compiler.Mf2SyntaxToken right)
+  property Runic.Translations.Compiler.Mf2SyntaxTokenKind Kind { get; init; }
+  property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
+  property System.String Raw { get; init; }
+  property System.String Value { get; init; }
+
+type enum Runic.Translations.Compiler.Mf2SyntaxTokenKind : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Attribute = 9
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Equals = 13
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind ExpressionEnd = 5
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind ExpressionStart = 4
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Function = 8
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Invalid = 15
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Literal = 7
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind MarkupClose = 11
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind MarkupOpen = 10
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Name = 14
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind PatternEnd = 3
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind PatternStart = 2
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Standalone = 12
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Text = 0
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Variable = 6
+  field const Runic.Translations.Compiler.Mf2SyntaxTokenKind Whitespace = 1
+
+type sealed class Runic.Translations.Compiler.Mf2VariantSyntax : System.IEquatable<Runic.Translations.Compiler.Mf2VariantSyntax>
+  ctor Runic.Translations.Compiler.Mf2VariantSyntax(System.Collections.Generic.IReadOnlyList<System.String> Keys, Runic.Translations.Compiler.TextSourceLocation Location)
+  method Runic.Translations.Compiler.Mf2VariantSyntax <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Mf2VariantSyntax other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.Collections.Generic.IReadOnlyList<System.String> Keys, out Runic.Translations.Compiler.TextSourceLocation Location)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Mf2VariantSyntax left, Runic.Translations.Compiler.Mf2VariantSyntax right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Mf2VariantSyntax left, Runic.Translations.Compiler.Mf2VariantSyntax right)
+  property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
+  property System.Collections.Generic.IReadOnlyList<System.String> Keys { get; init; }
+
 type sealed class Runic.Translations.Compiler.Rmf2ResourceDocument
   property Runic.Translations.Compiler.TranslationSource Source { get; }
   property System.Boolean Success { get; }
@@ -220,6 +372,7 @@ type sealed class Runic.Translations.Compiler.Rmf2ResourceDocument
   property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic> Diagnostics { get; }
 
 type sealed class Runic.Translations.Compiler.Rmf2ResourceNode
+  property Runic.Translations.Compiler.Mf2SyntaxDocument MessageSyntax { get; }
   property Runic.Translations.Compiler.TextSourceLocation Location { get; }
   property Runic.Translations.Compiler.TextSourceLocation NameLocation { get; }
   property System.Boolean IsGroup { get; }

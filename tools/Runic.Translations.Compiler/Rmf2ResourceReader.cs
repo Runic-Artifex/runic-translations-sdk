@@ -17,6 +17,8 @@ public sealed class Rmf2ResourceNode
     public IReadOnlyList<string> Path { get; }
     public string Key => string.Join("_", Path);
     public string? Message { get; }
+    /// <summary>The MF2 source/data model before execution-profile lowering. Null for groups.</summary>
+    public Mf2SyntaxDocument? MessageSyntax { get; internal set; }
     public bool IsGroup => Message is null;
     public IReadOnlyList<string> Comments { get; }
     public IReadOnlyList<string> Properties { get; }
@@ -55,7 +57,7 @@ public static class Rmf2ResourceReader
         {
             if (node.Message is null || node.MessageByteMap.Count == 0) continue;
             var messageDiagnostics = new DiagnosticBag();
-            Mf2MessageParser.Parse(new TranslationSource(source.Path, Encoding.UTF8.GetBytes(node.Message)), messageDiagnostics, options, cancellationToken, rmf2: true);
+            Mf2MessageParser.Parse(new TranslationSource(source.Path, Encoding.UTF8.GetBytes(node.Message)), messageDiagnostics, options, cancellationToken, rmf2: true, sourceSyntax: node.MessageSyntax);
             foreach (var item in messageDiagnostics.Items)
             {
                 int from = node.MessageByteMap[Math.Min(item.Location.StartByte, node.MessageByteMap.Count - 1)];
@@ -190,6 +192,7 @@ public static class Rmf2ResourceReader
             if (!isGroup) map.Add(map.Count == 0 ? bytes[at + trim.Length] : bytes[extentEnd > 0 && text[extentEnd - 1] == '\n' ? (extentEnd > 1 && text[extentEnd - 2] == '\r' ? extentEnd - 2 : extentEnd - 1) : extentEnd]);
             var node = new Rmf2ResourceNode(path, isGroup ? null : body.ToString(), comments.ToArray(), properties.ToArray(),
                 Location(at, at + match.Groups[1].Length), Location(statementStart, extentEnd), map.ToArray());
+            if (!isGroup) node.MessageSyntax = Mf2SyntaxReader.Read(new TranslationSource(source.Path, Encoding.UTF8.GetBytes(node.Message!)), options, cancellationToken);
             nodes.Add(node);
             foreach (string property in properties)
             {

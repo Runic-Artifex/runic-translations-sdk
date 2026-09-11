@@ -15,6 +15,7 @@
     "nestedResources": true,
     "sourceRootMounts": true,
     "variableAliasLocals": true,
+    "unformattedLiteralLocals": true,
     "literalTextOperands": true,
     "literalFormatterOperands": false,
     "variableFormatterOptions": false,

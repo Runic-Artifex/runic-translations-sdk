@@ -43,6 +43,19 @@ public static class Rmf2ResourceWriter
         byte[] result = Utf8.GetBytes(output.ToString()); Require(new TranslationSource(source.Path, result)); return result;
     }
 
+    /// <summary>Renames a local using parsed symbol locations, preserving literal text and other messages.</summary>
+    public static byte[] RenameLocal(TranslationSource source, string key, string name, string newName)
+    {
+        if (!Identifier.IsMatch(newName)) throw new TranslationAuthoringException("Local names must be identifiers.");
+        var node = Require(source).Nodes.Single(n => !n.IsGroup && n.Key == key);
+        var syntax = node.MessageSyntax!;
+        if (!syntax.Success || !syntax.Declarations.Any(d => d.Kind == "local" && d.Name == name)) throw new TranslationAuthoringException("No valid local declaration was found.");
+        if (name == newName) return source.GetUtf8Bytes();
+        if (syntax.VariableReferences(newName).Count != 0) throw new TranslationAuthoringException("Rename would capture an existing variable.");
+        var edits = syntax.VariableReferences(name).Select(location => (node.MessageByteMap[location.StartByte], node.MessageByteMap[location.StartByte + location.LengthBytes] - node.MessageByteMap[location.StartByte], Utf8.GetBytes("$" + newName)));
+        return Replace(source.GetUtf8Bytes(), edits);
+    }
+
     public static byte[] Rename(TranslationSource source, IReadOnlyList<string> path, string name)
     {
         if (!Identifier.IsMatch(name)) throw new TranslationAuthoringException("RMF2 names must be identifiers.");
