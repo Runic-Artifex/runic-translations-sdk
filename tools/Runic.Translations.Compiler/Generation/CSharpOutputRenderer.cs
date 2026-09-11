@@ -104,6 +104,13 @@ internal static class CSharpOutputRenderer
         writer.Line("public const string ContractFingerprint = " + GenerationSupport.CSharpString(catalog.Fingerprint) + ";");
         writer.Line("/// <summary>The generated-code/runtime ABI version.</summary>");
         writer.Line("public const int RuntimeAbiVersion = 1;");
+        if (catalog.Rmf2MarkupContract is not null)
+        {
+            writer.Line("/// <summary>The versioned language-neutral markup and slot contract.</summary>");
+            writer.Line("public const string Rmf2MarkupContract = " + GenerationSupport.CSharpString(catalog.Rmf2MarkupContract) + ";");
+            writer.Line("/// <summary>The required additive RMF2 runtime ABI.</summary>");
+            writer.Line("public const int Rmf2RuntimeAbiVersion = global::Runic.Translations.TranslationsCompatibility.Rmf2RuntimeAbiVersion;");
+        }
         writer.Line("/// <summary>The generator contract version that emitted this source.</summary>");
         writer.Line("public const int GeneratorVersion = 1;");
         writer.Blank();
@@ -393,7 +400,7 @@ internal static class CSharpOutputRenderer
         {
             writer.Line("new global::Runic.Translations.CompiledTextMessage(");
             writer.Indent();
-            WriteMessageNodes(writer, message.Nodes, ")");
+            WriteMessageNodes(writer, message.Nodes, message.Rmf2 ? ", rmf2: true, contentLocale: " + GenerationSupport.CSharpString(message.ContentLocale!) + ")" : ")");
             writer.Unindent();
             return;
         }
@@ -437,7 +444,7 @@ internal static class CSharpOutputRenderer
             writer.Unindent();
         }
         writer.Unindent();
-        writer.Line("})");
+        writer.Line(message.Rmf2 ? "}, rmf2: true, contentLocale: " + GenerationSupport.CSharpString(message.ContentLocale!) + ")" : "})");
         writer.Unindent();
     }
 
@@ -469,18 +476,20 @@ internal static class CSharpOutputRenderer
         }
         else if (node is CompiledMessageMarkup markup)
         {
-            writer.Line("new global::Runic.Translations.CompiledTextMessageNode(global::Runic.Translations.CompiledTextMessageNodeKind.MarkupStart, " +
+            writer.Line("new global::Runic.Translations.CompiledTextMessageNode(global::Runic.Translations.CompiledTextMessageNodeKind." + (markup.Rmf2 && markup.Standalone ? "MarkupStandalone" : "MarkupStart") + ", " +
                 GenerationSupport.CSharpString(markup.Name) + ", attributes: new global::Runic.Translations.CompiledTextMarkupProperty[]");
             writer.Line("{");
             writer.Indent();
+            foreach (KeyValuePair<string, string> annotation in markup.Annotations)
+                writer.Line("new global::Runic.Translations.CompiledTextMarkupProperty(" + GenerationSupport.CSharpString("@" + annotation.Key) + ", " + GenerationSupport.CSharpString(annotation.Value) + ") { IsAnnotation = true },");
             foreach (KeyValuePair<string, string> attribute in markup.Attributes)
             {
-                writer.Line("new global::Runic.Translations.CompiledTextMarkupProperty(" + GenerationSupport.CSharpString(attribute.Key) + ", " + GenerationSupport.CSharpString(attribute.Value) + "),");
+                writer.Line("new global::Runic.Translations.CompiledTextMarkupProperty(" + GenerationSupport.CSharpString(attribute.Key) + ", " + GenerationSupport.CSharpString(attribute.Value) + ")" + (markup.Rmf2 && markup.VariableOptions.Contains(attribute.Key) ? " { IsVariable = true }" : "") + ",");
             }
             writer.Unindent();
             writer.Line("}),");
             for (int index = 0; index < markup.Children.Count; index++) WriteMessageNode(writer, markup.Children[index]);
-            writer.Line("new global::Runic.Translations.CompiledTextMessageNode(global::Runic.Translations.CompiledTextMessageNodeKind.MarkupEnd, " + GenerationSupport.CSharpString(markup.Name) + "),");
+            if (!markup.Rmf2 || !markup.Standalone) writer.Line("new global::Runic.Translations.CompiledTextMessageNode(global::Runic.Translations.CompiledTextMessageNodeKind.MarkupEnd, " + GenerationSupport.CSharpString(markup.Name) + "),");
         }
     }
 
@@ -565,7 +574,7 @@ internal static class CSharpOutputRenderer
         }
         writer.Unindent();
         writer.Line("},");
-        writer.Line(catalog.MessageGrammarVersion + ");");
+        writer.Line(catalog.MessageGrammarVersion + (catalog.Rmf2MarkupContract is null ? ");" : ", " + GenerationSupport.CSharpString(catalog.Rmf2MarkupContract) + ");"));
         writer.Unindent();
     }
 

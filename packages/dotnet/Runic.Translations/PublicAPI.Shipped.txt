@@ -12,12 +12,16 @@ type readonly struct Runic.Translations.CompiledTextMarkupProperty : System.IEqu
   method System.Void Deconstruct(out System.String Name, out System.String Value)
   method static System.Boolean op_Equality(Runic.Translations.CompiledTextMarkupProperty left, Runic.Translations.CompiledTextMarkupProperty right)
   method static System.Boolean op_Inequality(Runic.Translations.CompiledTextMarkupProperty left, Runic.Translations.CompiledTextMarkupProperty right)
+  property System.Boolean IsAnnotation { get; init; }
+  property System.Boolean IsVariable { get; init; }
   property System.String Name { get; init; }
   property System.String Value { get; init; }
 
 type sealed class Runic.Translations.CompiledTextMessage
   ctor Runic.Translations.CompiledTextMessage(System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageNode> nodes)
+  ctor Runic.Translations.CompiledTextMessage(System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageNode> nodes, System.Boolean rmf2, System.String contentLocale = null)
   ctor Runic.Translations.CompiledTextMessage(System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageNode> nodes, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageSelector> selectors, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageVariant> variants)
+  ctor Runic.Translations.CompiledTextMessage(System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageNode> nodes, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageSelector> selectors, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageVariant> variants, System.Boolean rmf2, System.String contentLocale = null)
   property System.ReadOnlyMemory<Runic.Translations.CompiledTextMessageNode> Nodes { get; }
   property System.ReadOnlyMemory<Runic.Translations.CompiledTextMessageSelector> Selectors { get; }
   property System.ReadOnlyMemory<Runic.Translations.CompiledTextMessageVariant> Variants { get; }
@@ -36,6 +40,7 @@ type enum Runic.Translations.CompiledTextMessageNodeKind : System.Int32, System.
   field const Runic.Translations.CompiledTextMessageNodeKind Format = 2
   field const Runic.Translations.CompiledTextMessageNodeKind Input = 1
   field const Runic.Translations.CompiledTextMessageNodeKind MarkupEnd = 5
+  field const Runic.Translations.CompiledTextMessageNodeKind MarkupStandalone = 6
   field const Runic.Translations.CompiledTextMessageNodeKind MarkupStart = 4
   field const Runic.Translations.CompiledTextMessageNodeKind RelativeTime = 3
   field const Runic.Translations.CompiledTextMessageNodeKind Text = 0
@@ -155,8 +160,76 @@ type interface Runic.Translations.ITranslationSnapshot
 type interface Runic.Translations.ITranslationSnapshotFactory
   method System.Threading.Tasks.ValueTask<Runic.Translations.ITranslationSnapshot> CreateSnapshotAsync(Runic.Translations.CompiledTranslationCatalog catalog, System.String canonicalLocale, Runic.Translations.ITextValueFormatter valueFormatter, System.Threading.CancellationToken cancellationToken)
 
+type sealed class Runic.Translations.InlineActionBinding : Runic.Translations.InlineMarkupBinding, System.IEquatable<Runic.Translations.InlineActionBinding>, System.IEquatable<Runic.Translations.InlineMarkupBinding>
+  ctor Runic.Translations.InlineActionBinding(System.Action Activate)
+  method Runic.Translations.InlineActionBinding <Clone>$() [System.Runtime.CompilerServices.PreserveBaseOverridesAttribute]
+  method System.Boolean Equals(Runic.Translations.InlineActionBinding other)
+  method System.Boolean Equals(Runic.Translations.InlineMarkupBinding other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.Action Activate)
+  method static System.Boolean op_Equality(Runic.Translations.InlineActionBinding left, Runic.Translations.InlineActionBinding right)
+  method static System.Boolean op_Inequality(Runic.Translations.InlineActionBinding left, Runic.Translations.InlineActionBinding right)
+  property System.Action Activate { get; init; }
+
+type sealed class Runic.Translations.InlineIconBinding : Runic.Translations.InlineMarkupBinding, System.IEquatable<Runic.Translations.InlineIconBinding>, System.IEquatable<Runic.Translations.InlineMarkupBinding>
+  ctor Runic.Translations.InlineIconBinding(System.Object Asset, System.Boolean Decorative, System.Func<System.String,System.String> AccessibleName = null)
+  method Runic.Translations.InlineIconBinding <Clone>$() [System.Runtime.CompilerServices.PreserveBaseOverridesAttribute]
+  method System.Boolean Equals(Runic.Translations.InlineIconBinding other)
+  method System.Boolean Equals(Runic.Translations.InlineMarkupBinding other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.Object Asset, out System.Boolean Decorative, out System.Func<System.String,System.String> AccessibleName)
+  method static System.Boolean op_Equality(Runic.Translations.InlineIconBinding left, Runic.Translations.InlineIconBinding right)
+  method static System.Boolean op_Inequality(Runic.Translations.InlineIconBinding left, Runic.Translations.InlineIconBinding right)
+  property System.Boolean Decorative { get; init; }
+  property System.Func<System.String,System.String> AccessibleName { get; init; }
+  property System.Object Asset { get; init; }
+
+type sealed class Runic.Translations.InlineLinkBinding : Runic.Translations.InlineMarkupBinding, System.IEquatable<Runic.Translations.InlineLinkBinding>, System.IEquatable<Runic.Translations.InlineMarkupBinding>
+  ctor Runic.Translations.InlineLinkBinding(System.Uri Destination)
+  method Runic.Translations.InlineLinkBinding <Clone>$() [System.Runtime.CompilerServices.PreserveBaseOverridesAttribute]
+  method System.Boolean Equals(Runic.Translations.InlineLinkBinding other)
+  method System.Boolean Equals(Runic.Translations.InlineMarkupBinding other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.Uri Destination)
+  method static System.Boolean op_Equality(Runic.Translations.InlineLinkBinding left, Runic.Translations.InlineLinkBinding right)
+  method static System.Boolean op_Inequality(Runic.Translations.InlineLinkBinding left, Runic.Translations.InlineLinkBinding right)
+  property System.Uri Destination { get; init; }
+
+type abstract class Runic.Translations.InlineMarkupBinding : System.IEquatable<Runic.Translations.InlineMarkupBinding>
+  method Runic.Translations.InlineMarkupBinding <Clone>$()
+  method System.Boolean Equals(Runic.Translations.InlineMarkupBinding other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method static System.Boolean op_Equality(Runic.Translations.InlineMarkupBinding left, Runic.Translations.InlineMarkupBinding right)
+  method static System.Boolean op_Inequality(Runic.Translations.InlineMarkupBinding left, Runic.Translations.InlineMarkupBinding right)
+
+type sealed class Runic.Translations.InlineMarkupRun : System.IEquatable<Runic.Translations.InlineMarkupRun>
+  ctor Runic.Translations.InlineMarkupRun(System.String Name, System.String Text, System.Collections.Generic.IReadOnlyList<Runic.Translations.InlineMarkupRun> Children, System.Collections.Generic.IReadOnlyDictionary<System.String,System.String> Options, Runic.Translations.InlineMarkupBinding Binding, System.Boolean Standalone)
+  method Runic.Translations.InlineMarkupRun <Clone>$()
+  method System.Boolean Equals(Runic.Translations.InlineMarkupRun other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Name, out System.String Text, out System.Collections.Generic.IReadOnlyList<Runic.Translations.InlineMarkupRun> Children, out System.Collections.Generic.IReadOnlyDictionary<System.String,System.String> Options, out Runic.Translations.InlineMarkupBinding Binding, out System.Boolean Standalone)
+  method static System.Boolean op_Equality(Runic.Translations.InlineMarkupRun left, Runic.Translations.InlineMarkupRun right)
+  method static System.Boolean op_Inequality(Runic.Translations.InlineMarkupRun left, Runic.Translations.InlineMarkupRun right)
+  property Runic.Translations.InlineMarkupBinding Binding { get; init; }
+  property System.Boolean Standalone { get; init; }
+  property System.Collections.Generic.IReadOnlyDictionary<System.String,System.String> Options { get; init; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.InlineMarkupRun> Children { get; init; }
+  property System.String Name { get; init; }
+  property System.String Text { get; init; }
+
 type sealed class Runic.Translations.LocalizedTextContent
   property System.ReadOnlyMemory<Runic.Translations.LocalizedTextContentNode> Nodes { get; }
+  property System.String Locale { get; }
 
 type sealed class Runic.Translations.LocalizedTextContentNode
   property Runic.Translations.LocalizedTextContentNodeKind Kind { get; }
@@ -166,6 +239,7 @@ type sealed class Runic.Translations.LocalizedTextContentNode
 type enum Runic.Translations.LocalizedTextContentNodeKind : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   field System.Int32 value__
   field const Runic.Translations.LocalizedTextContentNodeKind ElementEnd = 2
+  field const Runic.Translations.LocalizedTextContentNodeKind ElementStandalone = 3
   field const Runic.Translations.LocalizedTextContentNodeKind ElementStart = 1
   field const Runic.Translations.LocalizedTextContentNodeKind Text = 0
 
@@ -174,6 +248,11 @@ type enum Runic.Translations.MissingTranslationPolicy : System.Int32, System.ICo
   field const Runic.Translations.MissingTranslationPolicy ReturnKey = 1
   field const Runic.Translations.MissingTranslationPolicy ReturnMarker = 2
   field const Runic.Translations.MissingTranslationPolicy Throw = 0
+
+type sealed class Runic.Translations.Rmf2InlineRenderer
+  ctor Runic.Translations.Rmf2InlineRenderer(System.String contractJson)
+  method System.Collections.Generic.IReadOnlyList<Runic.Translations.InlineMarkupRun> Render(System.String key, Runic.Translations.LocalizedTextContent content, System.Collections.Generic.IReadOnlyDictionary<System.String,Runic.Translations.InlineMarkupBinding> slots = null)
+  method System.String ToPlainText(System.String key, Runic.Translations.LocalizedTextContent content, System.Collections.Generic.IReadOnlyDictionary<System.String,Runic.Translations.InlineMarkupBinding> slots = null, System.Boolean allowActionLabels = false, System.Boolean annotateLinkDestinations = false)
 
 type readonly struct Runic.Translations.TextArgument
   ctor Runic.Translations.TextArgument(System.String name, System.Boolean value, Runic.Translations.TextArgumentFormat format = Lower)
@@ -296,11 +375,13 @@ type readonly struct Runic.Translations.TranslationPackArgumentContract : System
 
 type sealed class Runic.Translations.TranslationPackContract
   ctor Runic.Translations.TranslationPackContract(System.String catalog, System.String locale, System.String contractFingerprint, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> messages, System.Int32 messageGrammarVersion = 1)
+  ctor Runic.Translations.TranslationPackContract(System.String catalog, System.String locale, System.String contractFingerprint, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> messages, System.Int32 messageGrammarVersion, System.String rmf2MarkupContract)
   property System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> Messages { get; }
   property System.Int32 MessageGrammarVersion { get; }
   property System.String Catalog { get; }
   property System.String ContractFingerprint { get; }
   property System.String Locale { get; }
+  property System.String Rmf2MarkupContract { get; }
 
 type sealed class Runic.Translations.TranslationPackException : System.Exception, System.Runtime.Serialization.ISerializable
   ctor Runic.Translations.TranslationPackException(System.String message)
@@ -411,6 +492,7 @@ type static class Runic.Translations.TranslationTransport
 
 type static class Runic.Translations.TranslationsCompatibility
   field const System.Int32 MessageGrammarVersion = 2
+  field const System.Int32 Rmf2RuntimeAbiVersion = 1
   field const System.Int32 RuntimeAbiVersion = 1
 
 type enum Runic.Translations.UnsupportedLocalePolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable

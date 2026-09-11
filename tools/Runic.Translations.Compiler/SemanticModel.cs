@@ -68,6 +68,8 @@ internal sealed class ResourceModel
         Key = key; Pattern = pattern; Message = message; Description = description; Since = since; DeprecatedReason = deprecatedReason;
         Tags = tags; Placeholders = placeholders; Source = source; KeySpan = keySpan; PathSpan = pathSpan; ValueSpan = valueSpan;
     }
+    internal bool Rmf2 { get; init; }
+    internal IReadOnlyDictionary<string, string> Slots { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
     internal string Key { get; }
     internal string Pattern { get; }
     internal CompiledMessagePattern Message { get; }

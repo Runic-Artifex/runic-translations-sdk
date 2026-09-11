@@ -10,6 +10,8 @@ public static class TranslationOutputRenderer
     public const int LocaleArtifactVersion = 1;
     /// <summary>The locale artifact version carrying normalized message AST v2.</summary>
     public const int LocaleArtifactV2Version = 2;
+    /// <summary>The RMF2 locale artifact version carrying inline contracts and effective locales.</summary>
+    public const int LocaleArtifactV4Version = 4;
 
     /// <summary>The writer version of the template-manifest edge contract.</summary>
     public const int TemplateManifestVersion = 1;

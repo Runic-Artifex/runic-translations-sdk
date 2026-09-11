@@ -1,11 +1,15 @@
 # RMF2 markup: defaults, bindings, and extensions
 
-Status: accepted design direction, 10 September 2026. All APIs below are illustrative, not
-implemented APIs. This extends the [RMF2 proposal](runic-resource-format-proposal.md).
+Status: accepted design direction, 10 September 2026. APIs below illustrate the design; the
+implementation guide records the delivered subset. This extends the [RMF2 proposal](runic-resource-format-proposal.md).
 
 Canonical delivery scope and state are maintained in
 [roadmap W200](../../../../local-planning/content/records/initiatives/W200.md)
 and [decision D014](../../../../local-planning/content/records/decisions/D014.md).
+
+Implementation status: the [RMF2 guide](rmf2.md) records the implemented subset,
+version boundaries, and remaining proposal work. The examples below remain design
+illustrations rather than a complete API reference.
 
 ## Direction
 

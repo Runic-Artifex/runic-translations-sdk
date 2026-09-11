@@ -40,8 +40,12 @@ internal sealed class CompiledMessageMarkup : CompiledMessageNode
 {
     internal CompiledMessageMarkup(string name, IReadOnlyDictionary<string, string> attributes, IReadOnlyList<CompiledMessageNode> children)
     { Name = name; Attributes = attributes; Children = children; }
-    internal string Name { get; }
-    internal IReadOnlyDictionary<string, string> Attributes { get; }
+    internal string Name { get; set; }
+    internal bool Standalone { get; init; }
+    internal bool Rmf2 { get; set; }
+    internal HashSet<string> VariableOptions { get; init; } = new(StringComparer.Ordinal);
+    internal IReadOnlyDictionary<string, string> Annotations { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+    internal IReadOnlyDictionary<string, string> Attributes { get; set; }
     internal IReadOnlyList<CompiledMessageNode> Children { get; }
 }
 
@@ -62,15 +66,18 @@ internal sealed class CompiledMessagePattern
         Variants = variants;
     }
 
+    internal bool Rmf2 { get; set; }
+    internal string? ContentLocale { get; set; }
     internal IReadOnlyList<CompiledMessageNode> Nodes { get; }
     internal IReadOnlyList<CompiledMessageSelector> Selectors { get; }
     internal IReadOnlyList<CompiledMessageVariant> Variants { get; }
     internal bool IsVariant => Variants.Count != 0;
+    internal bool StructuredOutput { get; set; }
     internal bool HasMarkup
     {
         get
         {
-            if (ContainsMarkup(Nodes)) return true;
+            if (StructuredOutput || ContainsMarkup(Nodes)) return true;
             for (int index = 0; index < Variants.Count; index++) if (ContainsMarkup(Variants[index].Pattern.Nodes)) return true;
             return false;
         }

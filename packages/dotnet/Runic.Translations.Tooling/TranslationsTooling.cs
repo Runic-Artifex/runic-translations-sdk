@@ -18,6 +18,16 @@ public static class TranslationsTooling
         CancellationToken cancellationToken = default) =>
         TranslationCompiler.CompileMf2Project(project, messages, options, cancellationToken);
 
+    /// <summary>Builds versioned RMF2 artifacts using the canonical compiler writer.</summary>
+    public static IReadOnlyList<TranslationGeneratedOutput> BuildRmf2LocalePacks(TranslationCompilation compilation)
+    {
+        ArgumentNullException.ThrowIfNull(compilation);
+        if (!compilation.Success || compilation.Catalogs.Count != 1 || compilation.Catalogs[0].MessageGrammarVersion != 4)
+            throw new LocalePackBuildException("RMF2-COMPILATION", "RMF2 pack build requires one successful RMF2 catalog.");
+        var catalog = compilation.Catalogs[0];
+        return catalog.Locales.OrderBy(locale => locale.Tag, StringComparer.Ordinal).Select(locale => TranslationOutputRenderer.RenderLocaleJson(catalog, locale.Tag)).ToArray();
+    }
+
     /// <summary>Builds the canonical bytes-first locale-pack-v2 artifacts for one successful MF2 project.</summary>
     public static LocalePackV2BuildResult BuildLocalePackV2(TranslationCompilation compilation)
     {

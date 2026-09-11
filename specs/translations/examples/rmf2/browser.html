@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>RMF2 payment example</title>
+<body><label>Language <select id="locale"><option>en</option><option>de</option></select></label>
+<p id="payment"></p><p id="status" role="status"></p>
+<script type="module">
+import {m} from './generated/checkout.esm/messages.js';
+import {createDomInlineRenderer,linkBinding,actionBinding,iconBinding,defineMarkup,enumOption,bindMarkup} from './generated/checkout.esm/runtime.js';
+const badge=defineMarkup({name:'shop:badge',kind:'paired',children:'inline',interactive:false,plainText:'children',options:{tone:enumOption(['neutral','positive'],'neutral')}});
+const renderer=createDomInlineRenderer(document,[bindMarkup(badge,({children,options})=>{
+  const node=document.createElement('span'); node.style.fontWeight=options.tone==='positive'?'bold':'normal'; node.append(...children); return node;
+})]);
+const slots={terms:linkBinding({href:'/terms'}),privacy:linkBinding({href:'/privacy'}),retry:actionBinding({onActivate:()=>document.querySelector('#status').textContent='Retry requested'}),star:iconBinding({asset:doc=>{const n=doc.createElement('span');n.textContent='★';return n;},decorative:false,accessibleName:locale=>locale==='de'?'Stern':'Star'})};
+function render(){const locale=document.querySelector('#locale').value;document.documentElement.lang=locale;document.querySelector('#payment').replaceChildren(...renderer.render(m.payment({count:1,tone:'positive'},{locale}),{slots}));}
+document.querySelector('#locale').addEventListener('change',render);render();
+</script></body></html>

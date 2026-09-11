@@ -12,6 +12,8 @@ public enum LocalizedTextContentNodeKind
     ElementStart,
     /// <summary>End of a named semantic element.</summary>
     ElementEnd,
+    /// <summary>A standalone RMF2 element, distinct from an empty pair.</summary>
+    ElementStandalone,
 }
 
 /// <summary>One immutable node in safe structured localized output.</summary>
@@ -39,11 +41,15 @@ public sealed class LocalizedTextContent
 {
     private readonly LocalizedTextContentNode[] _nodes;
 
-    internal LocalizedTextContent(IReadOnlyList<LocalizedTextContentNode> nodes)
+    internal LocalizedTextContent(IReadOnlyList<LocalizedTextContentNode> nodes, string locale = "en")
     {
+        Locale = locale;
         _nodes = new LocalizedTextContentNode[nodes.Count];
         for (int index = 0; index < nodes.Count; index++) _nodes[index] = nodes[index];
     }
+
+    /// <summary>The effective content locale, including whole-message fallback.</summary>
+    public string Locale { get; }
 
     /// <summary>The balanced semantic node stream.</summary>
     public ReadOnlyMemory<LocalizedTextContentNode> Nodes => (LocalizedTextContentNode[])_nodes.Clone();

@@ -3,74 +3,324 @@
   "$id": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
   "title": "Runic Translations project v1",
   "type": "object",
-  "required": ["schemaVersion", "catalog", "code", "baseLocale"],
+  "required": [
+    "schemaVersion",
+    "catalog",
+    "code",
+    "baseLocale"
+  ],
   "properties": {
-    "$schema": { "const": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json" },
-    "schemaVersion": { "const": 1 },
-    "sourceLayout": {
-      "const": "locale-toml",
-      "description": "TOML 1.1 locale files with table and dotted-key grouping beside runic.json. Omit for legacy locale/message-id.mf2 files."
+    "$schema": {
+      "const": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json"
     },
-    "catalog": { "$ref": "#/$defs/id" },
-    "code": { "$ref": "#/$defs/code" },
-    "baseLocale": { "$ref": "#/$defs/localeTag" },
+    "schemaVersion": {
+      "const": 1
+    },
+    "sourceLayout": {
+      "enum": [
+        "locale-toml",
+        "rmf2-v1"
+      ],
+      "description": "locale-toml keeps TOML locale files beside runic.json; rmf2-v1 discovers grouped .rmf2 files with directory namespaces. Omit for legacy MF2 files."
+    },
+    "sourceRoots": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "namespace"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "namespace": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/identifier"
+            }
+          }
+        }
+      }
+    },
+    "catalog": {
+      "$ref": "#/$defs/id"
+    },
+    "code": {
+      "$ref": "#/$defs/code"
+    },
+    "baseLocale": {
+      "$ref": "#/$defs/localeTag"
+    },
     "locales": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
       "items": {
         "oneOf": [
-          { "$ref": "#/$defs/localeTag" },
-          { "$ref": "#/$defs/locale" }
+          {
+            "$ref": "#/$defs/localeTag"
+          },
+          {
+            "$ref": "#/$defs/locale"
+          }
         ]
       }
     },
-    "validation": { "$ref": "#/$defs/validation" },
-    "runtime": { "$ref": "#/$defs/runtime" }
+    "validation": {
+      "$ref": "#/$defs/validation"
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "markup": {
+      "type": "object",
+      "properties": {
+        "contracts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*$"
+              },
+              "kind": {
+                "enum": [
+                  "paired",
+                  "standalone"
+                ]
+              },
+              "children": {
+                "enum": [
+                  "inline",
+                  "none"
+                ]
+              },
+              "interactive": {
+                "type": "boolean"
+              },
+              "plainText": {
+                "enum": [
+                  "children",
+                  "lineBreak",
+                  "alternateText",
+                  "explicit",
+                  "omit"
+                ]
+              },
+              "options": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "enum"
+                      ]
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1
+                    },
+                    "default": {
+                      "type": "string"
+                    },
+                    "literalOnly": {
+                      "type": "boolean"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "children",
+              "interactive",
+              "plainText"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "aliases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "slots": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                }
+              },
+              "required": [
+                "min",
+                "max"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false,
   "unevaluatedProperties": false,
   "$defs": {
-    "id": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" },
-    "identifier": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
-    "namespace": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$" },
-    "localeTag": { "type": "string", "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+    },
+    "localeTag": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+    },
     "locale": {
       "type": "object",
-      "required": ["tag"],
+      "required": [
+        "tag"
+      ],
       "properties": {
-        "tag": { "$ref": "#/$defs/localeTag" },
-        "fallback": { "$ref": "#/$defs/localeTag" }
+        "tag": {
+          "$ref": "#/$defs/localeTag"
+        },
+        "fallback": {
+          "$ref": "#/$defs/localeTag"
+        }
       },
       "additionalProperties": false
     },
     "code": {
       "type": "object",
-      "required": ["namespace", "className"],
+      "required": [
+        "namespace",
+        "className"
+      ],
       "properties": {
-        "namespace": { "$ref": "#/$defs/namespace" },
-        "className": { "$ref": "#/$defs/identifier" },
-        "visibility": { "enum": ["public", "internal"] }
+        "namespace": {
+          "$ref": "#/$defs/namespace"
+        },
+        "className": {
+          "$ref": "#/$defs/identifier"
+        },
+        "visibility": {
+          "enum": [
+            "public",
+            "internal"
+          ]
+        }
       },
       "additionalProperties": false
     },
-    "policy": { "enum": ["allow", "warning", "error"] },
+    "policy": {
+      "enum": [
+        "allow",
+        "warning",
+        "error"
+      ]
+    },
     "validation": {
       "type": "object",
       "properties": {
-        "translationCompleteness": { "$ref": "#/$defs/policy" },
-        "extraLocaleKeys": { "$ref": "#/$defs/policy" },
-        "emptyValues": { "$ref": "#/$defs/policy" }
+        "translationCompleteness": {
+          "$ref": "#/$defs/policy"
+        },
+        "extraLocaleKeys": {
+          "$ref": "#/$defs/policy"
+        },
+        "emptyValues": {
+          "$ref": "#/$defs/policy"
+        }
       },
       "additionalProperties": false
     },
     "runtime": {
       "type": "object",
       "properties": {
-        "unsupportedLocale": { "enum": ["exact", "parentsThenDefault", "default"] },
-        "missingKey": { "enum": ["throw", "returnKey", "returnMarker"] }
+        "unsupportedLocale": {
+          "enum": [
+            "exact",
+            "parentsThenDefault",
+            "default"
+          ]
+        },
+        "missingKey": {
+          "enum": [
+            "throw",
+            "returnKey",
+            "returnMarker"
+          ]
+        }
       },
       "additionalProperties": false
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "required": [
+              "sourceRoots"
+            ]
+          },
+          {
+            "required": [
+              "markup"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "required": [
+          "sourceLayout"
+        ],
+        "properties": {
+          "sourceLayout": {
+            "const": "rmf2-v1"
+          }
+        }
+      }
+    }
+  ]
 }

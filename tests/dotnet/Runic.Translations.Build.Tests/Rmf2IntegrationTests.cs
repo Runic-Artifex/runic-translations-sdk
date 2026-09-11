@@ -1,0 +1,121 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json.Nodes;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace Runic.Translations.Build.Tests;
+
+internal static class Rmf2IntegrationTests
+{
+    internal static void Register(TestRunner runner)
+    {
+        runner.Add("RMF2 payment fixture generates and verifies all supported outputs", PaymentExample);
+        runner.Add("RMF2 CLI discovers feature mounts and produces version 4 packs", MountedCli);
+        runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
+        runner.Add("RMF2 migration previews and preserves backups", Migration);
+        runner.Add("RMF2 LSP negotiates Unicode positions and returns versioned rename edits", Lsp);
+    }
+    private const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en","sourceLayout":"rmf2-v1"}""";
+    private static void PaymentExample()
+    {
+        using TemporaryDirectory temporary = new();
+        string project = RepositoryPaths.Resolve("specs/translations/examples/rmf2");
+        var generate = TestFixture.RunTool(temporary, "generate", "--project", project, "--output", "generated");
+        Assert.Equal(0, generate.ExitCode, generate.Combined);
+        var verify = TestFixture.RunTool(temporary, "verify", "--project", project, "--output", "generated");
+        Assert.Equal(0, verify.ExitCode, verify.Combined);
+        string german = File.ReadAllText(temporary.Resolve("generated/checkout.de.locale-v4.json"));
+        Assert.Contains("account_heading", german); Assert.Contains("runic:action", german);
+    }
+    private static void MountedCli()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"", "\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", StringComparison.Ordinal));
+        File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = {#strong}Shop{/strong}\n");
+        var generated = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "out", "--emit-json", "--emit-esm");
+        Assert.Equal(0, generated.ExitCode, generated.Combined);
+        string json = File.ReadAllText(temporary.Resolve("out/app.en.locale-v4.json"));
+        Assert.Contains("shop_title", json); Assert.Contains("runic:strong", json);
+    }
+    private static void MountedBuild()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"", "\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", StringComparison.Ordinal));
+        File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = Shop\n");
+        string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
+        File.WriteAllText(temporary.Resolve("Consumer.proj"), $$"""
+            <Project><PropertyGroup><Configuration>Debug</Configuration></PropertyGroup>
+            <ItemGroup><TranslationProject Include="translations/runic.json" /></ItemGroup>
+            <Import Project="{{targets}}" />
+            <Target Name="Dump" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources">
+              <WriteLinesToFile File="sources.txt" Lines="@(TranslationMf2)" Overwrite="true" />
+            </Target></Project>
+            """);
+        var first = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
+        Assert.Equal(0, first.ExitCode, first.Combined); Assert.Contains("feature/en.rmf2", File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/'));
+        File.WriteAllText(temporary.Resolve("feature/de.rmf2"), "title = Laden\n");
+        var second = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
+        Assert.Equal(0, second.ExitCode, second.Combined); Assert.Contains("feature/de.rmf2", File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/'));
+    }
+    private static void Migration()
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("runic.json"), Project.Replace("rmf2-v1", "locale-toml", StringComparison.Ordinal));
+        const string before = "# original\n[shop]\ntitle='Shop'\n";
+        File.WriteAllText(temporary.Resolve("en.toml"), before);
+        var preview = TestFixture.RunTool(temporary, "migrate-rmf2", "--project", ".", "--dry-run");
+        Assert.Equal(0, preview.ExitCode, preview.Combined); Assert.False(File.Exists(temporary.Resolve("en.rmf2")), "Preview wrote files.");
+        var migrate = TestFixture.RunTool(temporary, "migrate-rmf2", "--project", ".");
+        Assert.Equal(0, migrate.ExitCode, migrate.Combined);
+        Assert.Equal(before, File.ReadAllText(temporary.Resolve("en.toml.bak")));
+        Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", ".").ExitCode);
+    }
+    private static void Lsp()
+    {
+        foreach (string encoding in new[] { "utf-8", "utf-16", "utf-32" })
+        {
+            using TemporaryDirectory temporary = new();
+            File.WriteAllText(temporary.Resolve("runic.json"), Project);
+            File.WriteAllText(temporary.Resolve("en.rmf2"), "x = Hello\n");
+            string uri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
+            var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
+            using var process = Process.Start(start)!;
+            var output = process.StandardOutput.ReadToEndAsync(); var errors = process.StandardError.ReadToEndAsync();
+            void Send(string method, JsonObject args, int? id = null)
+            {
+                var request = new JsonObject { ["jsonrpc"] = "2.0", ["method"] = method, ["params"] = args };
+                if (id.HasValue) request["id"] = id.Value;
+                string json = request.ToJsonString(); process.StandardInput.Write("Content-Length: " + Encoding.UTF8.GetByteCount(json) + "\r\n\r\n" + json); process.StandardInput.Flush();
+            }
+            JsonObject Document() => new() { ["uri"] = uri };
+            Send("initialize", new JsonObject { ["capabilities"] = new JsonObject { ["general"] = new JsonObject { ["positionEncodings"] = new JsonArray(encoding) } } }, 1);
+            var doc = Document(); doc["version"] = 1; doc["text"] = "x = 😀 {unfinished\n";
+            Send("textDocument/didOpen", new JsonObject { ["textDocument"] = doc });
+            doc = Document(); doc["version"] = 2;
+            Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Hello\n" }) });
+            Send("textDocument/rename", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["newName"] = "greeting" }, 2);
+            Send("shutdown", new JsonObject(), 3); Send("exit", new JsonObject()); process.StandardInput.Close();
+            if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
+            Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
+            var frames = new List<JsonNode>(); byte[] bytes = Encoding.UTF8.GetBytes(output.Result); int offset = 0;
+            while (offset < bytes.Length)
+            {
+                int end = offset; while (!(bytes[end] == 13 && bytes[end + 1] == 10 && bytes[end + 2] == 13 && bytes[end + 3] == 10)) end++;
+                int size = int.Parse(Encoding.ASCII.GetString(bytes, offset + 16, end - offset - 16), System.Globalization.CultureInfo.InvariantCulture); offset = end + 4;
+                frames.Add(JsonNode.Parse(bytes.AsSpan(offset, size))!); offset += size;
+            }
+            Assert.Equal(encoding, frames.Single(n => n["id"]?.ToString() == "1")["result"]!["capabilities"]!["positionEncoding"]!.ToString());
+            var diagnostic = frames.First(n => n["method"]?.ToString() == "textDocument/publishDiagnostics")["params"]!["diagnostics"]![0]!;
+            Assert.Equal(encoding == "utf-8" ? 9 : encoding == "utf-16" ? 7 : 6, diagnostic["range"]!["start"]!["character"]!.GetValue<int>());
+            var rename = frames.Single(n => n["id"]?.ToString() == "2")["result"]!["documentChanges"]![0]!;
+            Assert.Equal(2, rename["textDocument"]!["version"]!.GetValue<int>()); Assert.Contains("greeting = Hello", rename["edits"]![0]!["newText"]!.ToString());
+        }
+    }
+}

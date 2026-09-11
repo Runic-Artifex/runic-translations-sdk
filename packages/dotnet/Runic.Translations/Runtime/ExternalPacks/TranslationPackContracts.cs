@@ -132,7 +132,14 @@ public sealed class TranslationPackContract
         string contractFingerprint,
         IReadOnlyList<TranslationPackMessageContract> messages,
         int messageGrammarVersion = 1)
+        : this(catalog, locale, contractFingerprint, messages, messageGrammarVersion, null) { }
+
+    /// <summary>Creates a pack contract with the versioned RMF2 markup and slot manifest.</summary>
+    public TranslationPackContract(string catalog, string locale, string contractFingerprint,
+        IReadOnlyList<TranslationPackMessageContract> messages, int messageGrammarVersion, string? rmf2MarkupContract)
     {
+        if ((messageGrammarVersion == 4) != (rmf2MarkupContract is not null)) throw new ArgumentException("Grammar 4 requires an RMF2 markup contract.", nameof(rmf2MarkupContract));
+        Rmf2MarkupContract = rmf2MarkupContract;
         ArgumentNullException.ThrowIfNull(messages);
         if (!TranslationPackValidation.IsCatalog(catalog))
             throw new ArgumentException("The catalog identifier is invalid.", nameof(catalog));
@@ -140,7 +147,7 @@ public sealed class TranslationPackContract
             throw new ArgumentException("The locale must be a canonical structural BCP 47 tag.", nameof(locale));
         if (!TranslationPackValidation.IsFingerprint(contractFingerprint))
             throw new ArgumentException("The fingerprint must be lowercase sha256 hexadecimal text.", nameof(contractFingerprint));
-        if (messageGrammarVersion is not (1 or 2))
+        if (messageGrammarVersion is not (1 or 2 or 4))
             throw new ArgumentOutOfRangeException(nameof(messageGrammarVersion));
 
         Catalog = catalog;
@@ -174,6 +181,8 @@ public sealed class TranslationPackContract
     public string ContractFingerprint { get; }
     /// <summary>The message grammar expected in a matching locale artifact.</summary>
     public int MessageGrammarVersion { get; }
+    /// <summary>The trusted language-neutral manifest required before RMF2 pack activation.</summary>
+    public string? Rmf2MarkupContract { get; }
     /// <summary>The ordinal-sorted known message contracts.</summary>
     public IReadOnlyList<TranslationPackMessageContract> Messages => _messages;
 

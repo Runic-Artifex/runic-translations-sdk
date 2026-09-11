@@ -1,0 +1,7 @@
+payment =
+  .input {$count :integer}
+  .input {$tone :string}
+  .match $count
+  0 {{{#badge tone=$tone}Bereit{/badge}. {#link ref=privacy}Datenschutz{/link} und {#link ref=terms}Bedingungen{/link}. {#icon ref=star/}}}
+  * {{{#badge tone=$tone}Bereit{/badge}. {#link ref=privacy}Datenschutz{/link} und {#link ref=terms}Bedingungen{/link}. {#icon ref=star/} {#action ref=retry}Erneut versuchen{/action}}}
+plain = Zahlungsdetails

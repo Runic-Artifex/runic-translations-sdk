@@ -1,5 +1,10 @@
 <Project>
   <PropertyGroup>
+    <_Rmf2DiscoveryAssembly>$(MSBuildThisFileDirectory)../tools/net10.0/Runic.Translations.Build.dll</_Rmf2DiscoveryAssembly>
+    <_Rmf2DiscoveryAssembly Condition="!Exists('$(_Rmf2DiscoveryAssembly)')">$(MSBuildThisFileDirectory)../bin/$(Configuration)/net10.0/Runic.Translations.Build.dll</_Rmf2DiscoveryAssembly>
+  </PropertyGroup>
+  <UsingTask TaskName="Runic.Translations.Build.Rmf2SourceDiscovery" AssemblyFile="$(_Rmf2DiscoveryAssembly)" Condition="Exists('$(_Rmf2DiscoveryAssembly)')" />
+  <PropertyGroup>
     <_TranslationsBuildTargetsPath>$(MSBuildThisFileFullPath)</_TranslationsBuildTargetsPath>
 
     <_TranslationsEmitAny>false</_TranslationsEmitAny>
@@ -33,14 +38,17 @@
     <PropertyGroup>
       <_TranslationsSourceDiscoveryGlobs>@(TranslationProject->'%(RootDir)%(Directory)**/*')</_TranslationsSourceDiscoveryGlobs>
     </PropertyGroup>
-    <ItemGroup Condition="'@(TranslationProject)' != ''">
+    <Runic.Translations.Build.Rmf2SourceDiscovery Projects="@(TranslationProject)" Condition="'@(TranslationProject)' != '' and Exists('$(_Rmf2DiscoveryAssembly)')">
+      <Output TaskParameter="Sources" ItemName="_TranslationsDiscoveredSource" />
+    </Runic.Translations.Build.Rmf2SourceDiscovery>
+    <ItemGroup Condition="'@(TranslationProject)' != '' and !Exists('$(_Rmf2DiscoveryAssembly)')">
       <_TranslationsDiscoveredSource Include="$(_TranslationsSourceDiscoveryGlobs)" />
     </ItemGroup>
     <!-- MSBuild globs are case-sensitive on Linux. Match extensions after discovery
          with MSBuild's case-insensitive string comparison, matching the compiler contract. -->
     <ItemGroup Condition="'@(TranslationMf2)' == ''">
       <TranslationMf2 Include="@(_TranslationsDiscoveredSource)"
-                      Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.mf2'" />
+                      Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.mf2' or '%(_TranslationsDiscoveredSource.Extension)' == '.rmf2'" />
     </ItemGroup>
     <ItemGroup Condition="'@(TranslationToml)' == ''">
       <TranslationToml Include="@(_TranslationsDiscoveredSource)"

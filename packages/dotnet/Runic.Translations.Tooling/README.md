@@ -22,3 +22,7 @@ including locale-pack-v2 and locale-artifact-v2.
 
 The compiler and authoring assemblies are implementation parts of this package,
 not separately versioned products.
+
+## RMF2
+
+`CompileProject` also accepts RMF2 projects. `BuildRmf2LocalePacks` emits artifact 4; `BuildLocalePackV2` retains its version 2 contract. `Rmf2ResourceReader`, `Rmf2ResourceWriter` and `Rmf2Workspace` provide recoverable resources, explicit segment edits and revisioned transaction plans. The package includes the artifact 4 schema. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the supported subset and remaining interchange work.

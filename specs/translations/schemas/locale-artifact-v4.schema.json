@@ -1,0 +1,455 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/locale-artifact-v4.schema.json",
+  "title": "Runic RMF2 resolved locale artifact v4",
+  "type": "object",
+  "required": [
+    "artifactVersion",
+    "messageGrammarVersion",
+    "catalog",
+    "locale",
+    "contractFingerprint",
+    "messages",
+    "markupContract"
+  ],
+  "properties": {
+    "artifactVersion": {
+      "const": 4
+    },
+    "messageGrammarVersion": {
+      "const": 4
+    },
+    "catalog": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*$"
+    },
+    "locale": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+    },
+    "contractFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "messages": {
+      "type": "object",
+      "maxProperties": 50000,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/message"
+      }
+    },
+    "markupContract": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "contracts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "paired",
+                  "standalone"
+                ]
+              },
+              "interactive": {
+                "type": "boolean"
+              },
+              "plainText": {
+                "enum": [
+                  "children",
+                  "lineBreak",
+                  "alternateText",
+                  "explicit",
+                  "omit"
+                ]
+              },
+              "options": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "enum"
+                      ]
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "default": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "literalOnly": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "values",
+                    "default",
+                    "literalOnly"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "interactive",
+              "plainText",
+              "options"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "messages": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "runic:link",
+                        "runic:action",
+                        "runic:icon"
+                      ]
+                    },
+                    "min": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "max": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4096
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "min",
+                    "max"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "structured": {
+                "type": "boolean"
+              },
+              "contentLocales": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "slots",
+              "structured",
+              "contentLocales"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "version",
+        "contracts",
+        "messages"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "unevaluatedProperties": false,
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "type",
+        "format"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "int",
+            "number",
+            "bool",
+            "date",
+            "time",
+            "datetime",
+            "guid"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "selector": {
+      "type": "object",
+      "required": [
+        "name",
+        "input",
+        "function"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "input": {
+          "$ref": "#/$defs/name"
+        },
+        "function": {
+          "enum": [
+            "literal",
+            "plural",
+            "ordinal"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "message": {
+      "type": "object",
+      "required": [
+        "astVersion",
+        "inputs",
+        "selectors",
+        "variants",
+        "contentLocale"
+      ],
+      "properties": {
+        "astVersion": {
+          "const": 4
+        },
+        "inputs": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "$ref": "#/$defs/name"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/input"
+          }
+        },
+        "selectors": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/selector"
+          }
+        },
+        "variants": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/variant"
+          }
+        },
+        "contentLocale": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "variant": {
+      "type": "object",
+      "required": [
+        "matches",
+        "nodes"
+      ],
+      "properties": {
+        "matches": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "unevaluatedProperties": false
+    },
+    "node": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "input"
+          ],
+          "properties": {
+            "kind": {
+              "const": "input"
+            },
+            "input": {
+              "$ref": "#/$defs/name"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "input",
+            "function",
+            "format"
+          ],
+          "properties": {
+            "kind": {
+              "const": "format"
+            },
+            "input": {
+              "$ref": "#/$defs/name"
+            },
+            "function": {
+              "enum": [
+                "string",
+                "integer",
+                "number",
+                "date",
+                "time",
+                "datetime",
+                "uuid",
+                "relativeTime"
+              ]
+            },
+            "format": {
+              "type": "string"
+            },
+            "unit": {
+              "enum": [
+                "second",
+                "minute",
+                "hour",
+                "day",
+                "week",
+                "month",
+                "year"
+              ]
+            },
+            "numeric": {
+              "enum": [
+                "always",
+                "auto"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "name",
+            "attributes",
+            "children",
+            "standalone",
+            "annotations",
+            "variableOptions"
+          ],
+          "properties": {
+            "kind": {
+              "const": "markup"
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_-]*:[A-Za-z_][A-Za-z0-9_-]*$"
+            },
+            "attributes": {
+              "type": "object",
+              "propertyNames": {
+                "$ref": "#/$defs/name"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "children": {
+              "type": "array",
+              "maxItems": 4096,
+              "items": {
+                "$ref": "#/$defs/node"
+              }
+            },
+            "standalone": {
+              "type": "boolean"
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "variableOptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/name"
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

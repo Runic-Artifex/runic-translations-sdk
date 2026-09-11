@@ -376,3 +376,32 @@ test("locale TOML membership, config changes and invalid recovery regenerate wit
     await rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("RMF2 mounts watch new feature files outside the project directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-rmf2-"));
+  try {
+    const project = join(root, "translations"), feature = join(root, "feature"), output = join(root, "generated");
+    await mkdir(project); await mkdir(feature);
+    await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app", sourceLayout: "rmf2-v1", sourceRoots: [{ path: "../feature", namespace: ["shop"] }] }));
+    const english = join(feature, "en.rmf2"); await writeFile(english, "title = Shop\n");
+    const generated = join(output, "app.esm"); await mkdir(generated, {recursive:true});
+    await writeFile(join(generated, "messages.js"), "export {};\n");
+    await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\n`);
+    await writeGeneratedManifest(join(generated, "web-module-manifest-v1.json"), {
+      webModuleManifestVersion: 1, esmAbiVersion: 3, catalog: "app",
+      entrypoints: { messages: "messages.js", runtime: "runtime.js" }, assets: [{path:"messages.js"}, {path:"runtime.js"}],
+    });
+    const compiler = join(root,"compiler.mjs"); await writeFile(compiler,"process.exit(0);");
+    const plugin = runicTranslations({project,output,command:process.execPath,commandArguments:[compiler]});
+    const watcher = new EventEmitter(), watched = [], sent = new EventEmitter();
+    watcher.add = paths => watched.push(...(Array.isArray(paths) ? paths : [paths]));
+    const server = {watcher,httpServer:new EventEmitter(),ws:{send:value=>sent.emit("message",value)},moduleGraph:{getModuleById:()=>undefined,getModulesByFile:()=>new Set(),invalidateModule(){}}};
+    plugin.configureServer(server); await plugin.buildStart.call({addWatchFile:path=>watched.push(path)});
+    assert.ok(watched.includes(feature)); assert.ok(watched.includes(english));
+    const german = join(feature,"de.rmf2"); await writeFile(german,"title = Laden\n");
+    const change = new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error("RMF2 mount did not reload")),5000);sent.once("message",value=>{clearTimeout(timer);resolve(value);});});
+    watcher.emit("add",german); assert.equal((await change).type,"full-reload"); assert.ok(watched.includes(german));
+    server.httpServer.emit("close");
+  } finally { await rm(root,{recursive:true,force:true}); }
+});

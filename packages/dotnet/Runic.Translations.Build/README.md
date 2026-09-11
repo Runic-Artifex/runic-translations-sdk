@@ -67,3 +67,7 @@ This package is a public preview for .NET 10. Preview targets and properties may
 - [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
 Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE).
+
+## RMF2
+
+RMF2 projects opt in with `sourceLayout: "rmf2-v1"`. The bundled .NET MSBuild task discovers recursive `{locale}.rmf2` files and explicit `sourceRoots`, including membership changes. It uses the host Microsoft.Build.Framework assembly. Source-checkout imports require building this package first. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md).

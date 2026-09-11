@@ -128,6 +128,7 @@ type sealed class Runic.Translations.Compiler.CompiledTextCatalog
   property System.String DefaultLocale { get; }
   property System.String Fingerprint { get; }
   property System.String Id { get; }
+  property System.String Rmf2MarkupContract { get; }
 
 type sealed class Runic.Translations.Compiler.CompiledTextLayer
   property System.Int32 Priority { get; }
@@ -148,6 +149,7 @@ type sealed class Runic.Translations.Compiler.CompiledTranslation
   property Runic.Translations.Compiler.TextSourceLocation SourceLocation { get; }
   property System.Boolean IsTextInterchangeLossless { get; }
   property System.Boolean ProducesStructuredContent { get; }
+  property System.Collections.Generic.IReadOnlyDictionary<System.String,System.String> Slots { get; }
   property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.CompiledTextPlaceholder> Placeholders { get; }
   property System.Collections.Generic.IReadOnlyList<System.String> Tags { get; }
   property System.Int32 Id { get; }
@@ -196,6 +198,7 @@ type static class Runic.Translations.Compiler.Generation.TranslationOutputRender
   field const System.Int32 CppAbiVersion = 1
   field const System.Int32 EsmAbiVersion = 3
   field const System.Int32 LocaleArtifactV2Version = 2
+  field const System.Int32 LocaleArtifactV4Version = 4
   field const System.Int32 LocaleArtifactVersion = 1
   field const System.Int32 TemplateManifestVersion = 1
   field const System.Int32 TypeScriptContractVersion = 1
@@ -209,6 +212,27 @@ type static class Runic.Translations.Compiler.Generation.TranslationOutputRender
   method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderTypeScriptContract(Runic.Translations.Compiler.CompiledTextCatalog catalog)
   method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Generation.TranslationGeneratedOutput> RenderCpp(Runic.Translations.Compiler.CompiledTextCatalog catalog)
   method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Generation.TranslationGeneratedOutput> RenderEsmModules(Runic.Translations.Compiler.CompiledTextCatalog catalog)
+
+type sealed class Runic.Translations.Compiler.Rmf2ResourceDocument
+  property Runic.Translations.Compiler.TranslationSource Source { get; }
+  property System.Boolean Success { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2ResourceNode> Nodes { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic> Diagnostics { get; }
+
+type sealed class Runic.Translations.Compiler.Rmf2ResourceNode
+  property Runic.Translations.Compiler.TextSourceLocation Location { get; }
+  property Runic.Translations.Compiler.TextSourceLocation NameLocation { get; }
+  property System.Boolean IsGroup { get; }
+  property System.Collections.Generic.IReadOnlyList<System.Int32> MessageByteMap { get; }
+  property System.Collections.Generic.IReadOnlyList<System.String> Comments { get; }
+  property System.Collections.Generic.IReadOnlyList<System.String> Path { get; }
+  property System.Collections.Generic.IReadOnlyList<System.String> Properties { get; }
+  property System.String Key { get; }
+  property System.String Message { get; }
+
+type static class Runic.Translations.Compiler.Rmf2ResourceReader
+  method static Runic.Translations.Compiler.Rmf2ResourceDocument Analyze(Runic.Translations.Compiler.TranslationSource source, Runic.Translations.Compiler.TranslationCompilerOptions options = null, System.Threading.CancellationToken cancellationToken = default)
+  method static Runic.Translations.Compiler.Rmf2ResourceDocument Read(Runic.Translations.Compiler.TranslationSource source, Runic.Translations.Compiler.TranslationCompilerOptions options = null, System.Threading.CancellationToken cancellationToken = default)
 
 type sealed class Runic.Translations.Compiler.TextSourceLocation
   ctor Runic.Translations.Compiler.TextSourceLocation(System.String path, System.Int32 startByte, System.Int32 lengthBytes, System.Int32 line, System.Int32 column, System.Int32 endLine, System.Int32 endColumn)

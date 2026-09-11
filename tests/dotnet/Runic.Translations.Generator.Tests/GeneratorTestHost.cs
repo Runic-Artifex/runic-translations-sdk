@@ -52,11 +52,11 @@ internal static class GeneratorTestHost
             if (!IsRuntimeAssembly(path)) yield return MetadataReference.CreateFromFile(path);
         if (runtimeReferenceMode == RuntimeReferenceMode.Matching)
             yield return MetadataReference.CreateFromFile(typeof(TranslationKey).Assembly.Location);
-        else if (runtimeReferenceMode == RuntimeReferenceMode.Mismatched)
-            yield return MismatchedRuntimeReference(trustedAssemblies);
+        else if (runtimeReferenceMode is RuntimeReferenceMode.Mismatched or RuntimeReferenceMode.Legacy)
+            yield return MismatchedRuntimeReference(trustedAssemblies, runtimeReferenceMode == RuntimeReferenceMode.Legacy);
     }
 
-    private static PortableExecutableReference MismatchedRuntimeReference(string trustedAssemblies)
+    private static PortableExecutableReference MismatchedRuntimeReference(string trustedAssemblies, bool legacy)
     {
         SyntaxTree tree = CSharpSyntaxTree.ParseText("""
             namespace Runic.Translations;
@@ -64,7 +64,7 @@ internal static class GeneratorTestHost
             {
                 public const int RuntimeAbiVersion = 2;
             }
-            """);
+            """.Replace("= 2", legacy ? "= 1" : "= 2", StringComparison.Ordinal));
         CSharpCompilation compilation = CSharpCompilation.Create(
             "Runic.Translations",
             new[] { tree },
@@ -141,6 +141,7 @@ internal enum RuntimeReferenceMode
 {
     Matching,
     Mismatched,
+    Legacy,
     Missing,
 }
 

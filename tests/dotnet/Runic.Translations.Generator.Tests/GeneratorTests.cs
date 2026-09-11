@@ -26,6 +26,8 @@ internal static class GeneratorTests
 
     internal static void Register(TestRunner runner)
     {
+        runner.Add("RMF2 generation rejects a legacy runtime with an actionable diagnostic", Rmf2LegacyRuntime);
+        runner.Add("RMF2 generation compiles standalone markup caller contracts and pack v4", Rmf2GenerationCompiles);
         runner.Add("grouped TOML paths preserve typed legacy accessors", GroupedTomlGenerationCompiles);
         runner.Add("grouped TOML collisions reject ambiguous generated identifiers", GroupedTomlCollisions);
         runner.Add("locale TOML incremental membership updates generated catalogs", TomlMembershipChanges);
@@ -40,6 +42,24 @@ internal static class GeneratorTests
         runner.Add("mismatched runtime ABI reports RTR0024", MismatchedRuntimeAbi);
         runner.Add("missing runtime ABI reports RTR0024", MissingRuntimeAbi);
         runner.Add("Windows device hint stems are rejected before emission", WindowsDeviceHintStem);
+    }
+
+    private static void Rmf2LegacyRuntime()
+    {
+        string project = Project.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"sourceLayout\": \"rmf2-v1\",", StringComparison.Ordinal);
+        var run = GeneratorTestHost.Run(RuntimeReferenceMode.Legacy, ProjectInput(project), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "greeting = Hello"));
+        Assert.Equal("RTR0024", run.SingleResult.Diagnostics.Single().Id, "Additive RMF2 ABI diagnostic");
+        Assert.Equal(0, run.SingleResult.GeneratedSources.Length, "Legacy runtime received incompatible RMF2 source.");
+    }
+
+    private static void Rmf2GenerationCompiles()
+    {
+        string project = Project.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"sourceLayout\": \"rmf2-v1\",", StringComparison.Ordinal);
+        GeneratorRun run = GeneratorTestHost.Run(ProjectInput(project), new TestInput("C:/repo/translations/en.rmf2", "Rmf2",
+            "greeting = {#strong}Hello {$name}{/strong} {#icon ref=star/} {#link}Open{/link}\n"));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Diagnostic[] errors = run.Compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
+        Assert.Equal(0, errors.Length, string.Join("\n", errors.Select(d => d.ToString())));
     }
 
     private static TestInput ProjectInput(string text = Project, string path = "C:/repo/translations/runic.json") =>

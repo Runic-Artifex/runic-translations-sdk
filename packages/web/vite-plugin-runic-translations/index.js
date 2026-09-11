@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, lstatSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
@@ -21,6 +21,7 @@ export function runicTranslations(options = {}) {
   let manifestPath = project?.manifest ?? resolve(options.manifest);
   const compiler = project;
   const explicitSources = new Set((options.sourceFiles ?? []).map(path => resolve(path)));
+  let sourceRoots = project?.sourceRoots ?? (compiler ? [compiler.project] : []);
   let sourceFiles = new Set([...explicitSources, ...(project?.sourceFiles ?? [])]);
   let server;
   let cleanupWatcher;
@@ -37,6 +38,8 @@ export function runicTranslations(options = {}) {
       const current = readProject(compiler.config, compiler.output);
       manifestPath = current.manifest;
       sourceFiles = new Set([...explicitSources, ...current.sourceFiles]);
+      sourceRoots = current.sourceRoots;
+      server?.watcher.add(sourceRoots);
       server?.watcher.add([...sourceFiles]);
       return execFileAsync(compiler.command, argumentsValue, {
         cwd: compiler.cwd,
@@ -106,7 +109,7 @@ export function runicTranslations(options = {}) {
     if (path === compiler.config) return true;
     if (isWithin(compiler.output, path)) return false;
     // Include either authoring extension so mixed-layout inputs reach the compiler's diagnostics.
-    return explicitSources.has(path) || (isWithin(compiler.project, path) && /\.(mf2|toml)$/i.test(path));
+    return explicitSources.has(path) || (sourceRoots.some(root => isWithin(root, path)) && /\.(mf2|rmf2|toml)$/i.test(path));
   }
 
   function update(path, targetServer) {
@@ -137,7 +140,7 @@ export function runicTranslations(options = {}) {
 
     configureServer(value) {
       server = value;
-      if (compiler) server.watcher.add(compiler.project);
+      if (compiler) server.watcher.add(sourceRoots);
       const membershipChanged = path => {
         const pending = update(resolve(path), server);
         if (!pending) return;
@@ -235,23 +238,28 @@ function readProject(config, output) {
   }
   if (!settings || settings.schemaVersion !== 1 || typeof settings.catalog !== "string" || settings.catalog.length === 0)
     throw new Error("The Runic translation project must declare schemaVersion 1 and a catalog ID.");
-  if (settings.sourceLayout !== undefined && settings.sourceLayout !== "locale-toml")
+  if (settings.sourceLayout !== undefined && settings.sourceLayout !== "locale-toml" && settings.sourceLayout !== "rmf2-v1")
     throw new Error(`Unsupported Runic translation sourceLayout '${settings.sourceLayout}'.`);
   const project = dirname(config);
   const sourceFiles = [config];
   function discover(directory) {
+    if (lstatSync(directory).isSymbolicLink()) throw new Error("Translation source roots must not be symbolic links.");
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name);
       if (isWithin(output, path)) continue;
+      if (entry.isSymbolicLink()) throw new Error("Translation sources must not traverse symbolic links.");
       if (entry.isDirectory()) discover(path);
       else if (entry.isFile() && (settings.sourceLayout === "locale-toml"
-        ? directory === project && /\.toml$/i.test(path) : /\.mf2$/i.test(path))) sourceFiles.push(path);
+        ? directory === project && /\.toml$/i.test(path) : settings.sourceLayout === "rmf2-v1" ? /\.rmf2$/i.test(path) : /\.mf2$/i.test(path))) sourceFiles.push(path);
     }
   }
-  discover(project);
+  const roots = settings.sourceLayout === "rmf2-v1" && settings.sourceRoots
+    ? settings.sourceRoots.map(mount => resolve(project, mount.path)) : [project];
+  for (const root of roots) discover(root);
   return {
     manifest: contained(output, `${settings.catalog}.esm/web-module-manifest-v1.json`),
     sourceFiles: Object.freeze(sourceFiles.sort()),
+    sourceRoots: Object.freeze(roots),
   };
 }
 

@@ -20,10 +20,18 @@ public enum CompiledTextMessageNodeKind
     MarkupStart,
     /// <summary>Ends the most recently started semantic markup element.</summary>
     MarkupEnd,
+    /// <summary>A standalone RMF2 inline element.</summary>
+    MarkupStandalone,
 }
 
 /// <summary>One immutable semantic markup attribute.</summary>
-public readonly record struct CompiledTextMarkupProperty(string Name, string Value);
+public readonly record struct CompiledTextMarkupProperty(string Name, string Value)
+{
+    /// <summary>The value names an application input resolved for the selected variant.</summary>
+    public bool IsVariable { get; init; }
+    /// <summary>An MF2 annotation without formatting effects, separate from options.</summary>
+    public bool IsAnnotation { get; init; }
+}
 
 /// <summary>One immutable node in a compiled message pattern.</summary>
 public sealed class CompiledTextMessageNode
@@ -68,7 +76,7 @@ public sealed class CompiledTextMessageNode
         for (int index = 0; index < attributes.Count; index++)
         {
             CompiledTextMarkupProperty attribute = attributes[index];
-            if (!TranslationDataValidation.IsIdentifier(attribute.Name) || attribute.Value is null ||
+            if (!TranslationDataValidation.IsIdentifier(attribute.Name.TrimStart('@').Replace('-', '_')) || attribute.Value is null ||
                 (previous is not null && string.CompareOrdinal(previous, attribute.Name) >= 0))
                 throw new ArgumentException("Markup attributes must be unique ordinally ordered identifiers with non-null values.", nameof(attributes));
             result[index] = attribute;
@@ -147,12 +155,23 @@ public sealed class CompiledTextMessage
     {
     }
 
+    /// <summary>Creates a simple pattern using the explicit RMF2 execution profile.</summary>
+    public CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes, bool rmf2, string? contentLocale = null)
+        : this(nodes, Array.Empty<CompiledTextMessageSelector>(), Array.Empty<CompiledTextMessageVariant>(), rmf2, contentLocale) { }
+
     /// <summary>Creates a simple or selector-driven compiled message.</summary>
     public CompiledTextMessage(
         IReadOnlyList<CompiledTextMessageNode> nodes,
         IReadOnlyList<CompiledTextMessageSelector> selectors,
         IReadOnlyList<CompiledTextMessageVariant> variants)
+        : this(nodes, selectors, variants, false) { }
+
+    /// <summary>Creates a message with an explicit versioned RMF2 execution profile.</summary>
+    public CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes,
+        IReadOnlyList<CompiledTextMessageSelector> selectors, IReadOnlyList<CompiledTextMessageVariant> variants, bool rmf2, string? contentLocale = null)
     {
+        Rmf2 = rmf2;
+        ContentLocale = contentLocale;
         ArgumentNullException.ThrowIfNull(nodes);
         ArgumentNullException.ThrowIfNull(selectors);
         ArgumentNullException.ThrowIfNull(variants);
@@ -177,6 +196,8 @@ public sealed class CompiledTextMessage
     public ReadOnlyMemory<CompiledTextMessageVariant> Variants => (CompiledTextMessageVariant[])_variants.Clone();
 
     internal CompiledTextMessageNode[] NodeArray => _nodes;
+    internal bool Rmf2 { get; }
+    internal string? ContentLocale { get; }
     internal CompiledTextMessageSelector[] SelectorArray => _selectors;
     internal CompiledTextMessageVariant[] VariantArray => _variants;
     internal bool HasMarkup
@@ -196,7 +217,7 @@ public sealed class CompiledTextMessage
         {
             CompiledTextMessageNode node = nodes[index] ?? throw new ArgumentException("Compiled message nodes cannot contain null.", parameterName);
             if (!Enum.IsDefined(node.Kind)) throw new ArgumentException("Unknown compiled message node kind.", parameterName);
-            if (node.Kind != CompiledTextMessageNodeKind.Text && !TranslationDataValidation.IsIdentifier(node.Value))
+            if (node.Kind != CompiledTextMessageNodeKind.Text && !(node.Kind is CompiledTextMessageNodeKind.MarkupStart or CompiledTextMessageNodeKind.MarkupEnd or CompiledTextMessageNodeKind.MarkupStandalone ? Rmf2Name(node.Value) : TranslationDataValidation.IsIdentifier(node.Value)))
                 throw new ArgumentException("Compiled message input names must be identifiers.", parameterName);
             if (node.Kind == CompiledTextMessageNodeKind.RelativeTime &&
                 (node.Unit is not ("second" or "minute" or "hour" or "day" or "week" or "month" or "year") ||
@@ -240,6 +261,14 @@ public sealed class CompiledTextMessage
         return result;
     }
 
+    private static bool Rmf2Name(string value)
+    {
+        string[] parts = value.Split(':');
+        if (parts.Length > 2) return false;
+        foreach (string part in parts) if (!TranslationDataValidation.IsIdentifier(part.Replace('-', '_'))) return false;
+        return true;
+    }
+
     private static void ValidateMarkup(CompiledTextMessageNode[] nodes, string parameterName)
     {
         var names = new Stack<string>();
@@ -256,7 +285,7 @@ public sealed class CompiledTextMessage
     private static bool ContainsMarkup(CompiledTextMessageNode[] nodes)
     {
         for (int index = 0; index < nodes.Length; index++)
-            if (nodes[index].Kind is CompiledTextMessageNodeKind.MarkupStart or CompiledTextMessageNodeKind.MarkupEnd) return true;
+            if (nodes[index].Kind is CompiledTextMessageNodeKind.MarkupStart or CompiledTextMessageNodeKind.MarkupEnd or CompiledTextMessageNodeKind.MarkupStandalone) return true;
         return false;
     }
 }
@@ -310,7 +339,7 @@ internal static class CompiledTextMessageRuntime
         }
         CompiledTextMessageVariant[] variants = message.VariantArray;
         for (int index = 0; index < variants.Length; index++) if (!Mark(variants[index].NodeArray, descriptors, used)) return false;
-        for (int index = 0; index < used.Length; index++) if (!used[index]) return false;
+        if (!message.Rmf2) for (int index = 0; index < used.Length; index++) if (!used[index]) return false;
         return true;
     }
 
@@ -350,15 +379,28 @@ internal static class CompiledTextMessageRuntime
     internal static LocalizedTextContent FormatContent(CompiledTextMessage message, ReadOnlySpan<TextArgument> arguments,
         string locale, ITextValueFormatter formatter, int maximumOutputLength = TextPatternFormatter.DefaultMaximumOutputLength)
     {
+        locale = message.ContentLocale ?? locale;
         CompiledTextMessageNode[] nodes = message.VariantArray.Length == 0 ? message.NodeArray : SelectVariant(message, arguments, locale);
         var result = new List<LocalizedTextContentNode>();
         int outputLength = 0;
         for (int index = 0; index < nodes.Length; index++)
         {
             CompiledTextMessageNode node = nodes[index];
-            if (node.Kind == CompiledTextMessageNodeKind.MarkupStart)
+            if (node.Kind is CompiledTextMessageNodeKind.MarkupStart or CompiledTextMessageNodeKind.MarkupStandalone)
             {
-                result.Add(new LocalizedTextContentNode(LocalizedTextContentNodeKind.ElementStart, node.Value, node.AttributeArray));
+                var properties = new CompiledTextMarkupProperty[node.AttributeArray.Length];
+                for (int p = 0; p < properties.Length; p++)
+                {
+                    CompiledTextMarkupProperty property = node.AttributeArray[p];
+                    if (property.IsVariable)
+                    {
+                        int argument = FindArgument(arguments, property.Value);
+                        if (argument < 0) throw new TranslationFormatException("Missing markup input '" + property.Value + "'.");
+                        property = property with { Value = CanonicalValue(arguments[argument]), IsVariable = false };
+                    }
+                    properties[p] = property;
+                }
+                result.Add(new LocalizedTextContentNode(node.Kind == CompiledTextMessageNodeKind.MarkupStandalone ? LocalizedTextContentNodeKind.ElementStandalone : LocalizedTextContentNodeKind.ElementStart, node.Value, properties));
                 continue;
             }
             if (node.Kind == CompiledTextMessageNodeKind.MarkupEnd)
@@ -387,7 +429,7 @@ internal static class CompiledTextMessageRuntime
             if (outputLength > maximumOutputLength) throw new TranslationFormatException("Formatted text exceeds the configured output limit.");
             result.Add(new LocalizedTextContentNode(LocalizedTextContentNodeKind.Text, value));
         }
-        return new LocalizedTextContent(result);
+        return new LocalizedTextContent(result, locale);
     }
 
     internal static string RenderLiteral(CompiledTextMessage message)
@@ -420,7 +462,7 @@ internal static class CompiledTextMessageRuntime
             for (int selector = 0; selector < selectors.Length; selector++)
             {
                 string match = variants[variantIndex].MatchArray[selector];
-                matches &= match == "*" || match == selected[selector];
+                matches &= match == "*" || match == selected[selector] || (message.Rmf2 && selectors[selector].Kind != CompiledTextMessageSelectorKind.Literal && match == CanonicalValue(arguments[FindArgument(arguments, selectors[selector].Input)]));
             }
             if (matches) return variants[variantIndex].NodeArray;
         }
@@ -447,7 +489,13 @@ internal static class CompiledTextMessageRuntime
     {
         for (int index = 0; index < nodes.Length; index++)
         {
-            if (nodes[index].Kind is CompiledTextMessageNodeKind.Text or CompiledTextMessageNodeKind.MarkupStart or CompiledTextMessageNodeKind.MarkupEnd) continue;
+            if (nodes[index].Kind is CompiledTextMessageNodeKind.MarkupStart or CompiledTextMessageNodeKind.MarkupStandalone)
+            {
+                foreach (CompiledTextMarkupProperty option in nodes[index].AttributeArray)
+                    if (option.IsVariable) { int input = FindDescriptor(descriptors, option.Value); if (input < 0) return false; used[input] = true; }
+                continue;
+            }
+            if (nodes[index].Kind is CompiledTextMessageNodeKind.Text or CompiledTextMessageNodeKind.MarkupEnd) continue;
             int descriptor = FindDescriptor(descriptors, nodes[index].Value);
             if (descriptor < 0) return false;
             used[descriptor] = true;

@@ -9,7 +9,7 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceLayout" };
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceLayout", "sourceRoots", "markup" };
     private static readonly string[] ManifestMembers = { "$schema", "schemaVersion", "catalog", "code", "defaultLocale", "locales", "layers", "validation", "runtime", "outputs" };
     private static readonly string[] DocumentMembers = { "$schema", "schemaVersion", "catalog", "locale", "layer", "resources" };
     private static readonly string[] LeafMembers = { "$value", "$description", "$placeholders", "$since", "$deprecated", "$tags" };
@@ -181,16 +181,20 @@ public static partial class TranslationCompiler
             return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
 
         JsonProperty? layoutProperty = parsed.Root!.Property("sourceLayout");
-        bool toml = layoutProperty is not null;
-        if (toml && (layoutProperty!.Value.Kind != JsonKind.String || layoutProperty.Value.Text != "locale-toml"))
+        bool rmf2 = layoutProperty?.Value.Text == "rmf2-v1";
+        bool toml = layoutProperty?.Value.Text == "locale-toml";
+        if (layoutProperty is not null && !toml && !rmf2)
         {
-            diagnostics.Add("RTR0042", TranslationDiagnosticSeverity.Error, "Unsupported sourceLayout; expected 'locale-toml', or omit for legacy MF2.", project, layoutProperty.Value.Span);
+            diagnostics.Add("RTR0042", TranslationDiagnosticSeverity.Error, "Unsupported sourceLayout; expected 'locale-toml' or 'rmf2-v1', or omit for legacy MF2.", project, layoutProperty.Value.Span);
             return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
         }
+        if (!rmf2 && (parsed.Root!.Property("sourceRoots") is not null || parsed.Root.Property("markup") is not null))
+            diagnostics.Add("RTR0052", TranslationDiagnosticSeverity.Error, "sourceRoots and markup require sourceLayout rmf2-v1.", project, parsed.Root.Span);
         string projectDirectory = ProjectDirectory(project.Path);
         var documents = new List<DocumentModel>(messageSources.Length);
         var discoveredLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (int index = 0; index < messageSources.Length; index++)
+        if (rmf2) ReadRmf2Documents(projectDirectory, messageSources, parsed.Root!, manifest, documents, discoveredLocales, diagnostics, options, cancellationToken);
+        for (int index = 0; !rmf2 && index < messageSources.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             TranslationSource source = messageSources[index];
@@ -284,6 +288,12 @@ public static partial class TranslationCompiler
         CompiledTextCatalog? catalog = documents.Count == 0
             ? null
             : CompileCatalog(manifest, documents, diagnostics, options, cancellationToken);
+        if (rmf2 && catalog is not null)
+        {
+            catalog.MessageGrammarVersion = 4;
+            catalog.Rmf2MarkupContract = Rmf2ContractValidation.ValidateAndExport(catalog, parsed.Root!, project, diagnostics);
+            catalog.Fingerprint = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(catalog.Fingerprint + "\nrmf2-v1\n" + catalog.Rmf2MarkupContract)));
+        }
         return new TranslationCompilation(catalog is null ? Array.Empty<CompiledTextCatalog>() : new[] { catalog }, diagnostics.ToSortedArray());
     }
 
@@ -1586,6 +1596,11 @@ public static partial class TranslationCompiler
                 diagnostics.Add("RTR0009", TranslationDiagnosticSeverity.Error, "The effective default locale defines no canonical keys.", manifest.Source, manifest.DefaultLocaleSpan);
             return null;
         }
+        foreach (var item in canonical)
+            if (item.Value.Rmf2)
+                foreach (var translations in directByLocale.Values)
+                    if (translations.TryGetValue(item.Key, out ResourceModel? translated) && translated.Message.HasMarkup)
+                        item.Value.Message.StructuredOutput = true;
         string[] canonicalKeys = Keys(canonical);
         var ids = new Dictionary<string, int>(StringComparer.Ordinal);
         for (int i = 0; i < canonicalKeys.Length; i++) ids.Add(canonicalKeys[i], i);
@@ -1645,7 +1660,7 @@ public static partial class TranslationCompiler
                 current = current.Fallback is not null && localeByTag.TryGetValue(current.Fallback, out LocaleModel? next) ? next : null;
             }
             compiledLocales.Add(new CompiledTextLocale(locale.Tag, locale.Fallback,
-                CompileResources(direct, ids), CompileResources(resolved, ids)));
+                CompileResources(direct, ids, canonical), CompileResources(resolved, ids, canonical)));
         }
         IReadOnlyList<CompiledTranslation> canonicalResources = CompileResources(canonical, ids);
         string fingerprint = Fingerprint(manifest.Id, manifest.SchemaVersion, canonicalResources);
@@ -1656,16 +1671,17 @@ public static partial class TranslationCompiler
             manifest.SchemaVersion, manifest.SchemaVersion);
     }
 
-    private static CompiledTranslation[] CompileResources(Dictionary<string, ResourceModel> resources, Dictionary<string, int> ids)
+    private static CompiledTranslation[] CompileResources(Dictionary<string, ResourceModel> resources, Dictionary<string, int> ids, Dictionary<string, ResourceModel>? canonical = null)
     {
         var result = new List<CompiledTranslation>();
         foreach (KeyValuePair<string, ResourceModel> pair in SortedPairs(resources))
         {
             ResourceModel resource = pair.Value;
             var placeholders = new List<CompiledTextPlaceholder>();
-            for (int i = 0; i < resource.Placeholders.Length; i++) placeholders.Add(new CompiledTextPlaceholder(resource.Placeholders[i].Name, resource.Placeholders[i].Type, resource.Placeholders[i].Format));
+            PlaceholderModel[] inputs = resource.Rmf2 && canonical is not null && canonical.TryGetValue(pair.Key, out ResourceModel? sourceResource) ? sourceResource.Placeholders : resource.Placeholders;
+            for (int i = 0; i < inputs.Length; i++) placeholders.Add(new CompiledTextPlaceholder(inputs[i].Name, inputs[i].Type, inputs[i].Format));
             result.Add(new CompiledTranslation(ids.TryGetValue(pair.Key, out int id) ? id : -1, pair.Key, resource.Pattern, resource.Description,
-                resource.Since, resource.DeprecatedReason, (string[])resource.Tags.Clone(), placeholders.ToArray(), resource.KeyLocation ?? DiagnosticBag.Location(resource.Source, resource.KeySpan), resource.Message));
+                resource.Since, resource.DeprecatedReason, (string[])resource.Tags.Clone(), placeholders.ToArray(), resource.KeyLocation ?? DiagnosticBag.Location(resource.Source, resource.KeySpan), resource.Message) { Slots = resource.Slots });
         }
         return result.ToArray();
     }
@@ -1710,7 +1726,7 @@ public static partial class TranslationCompiler
                     .Append(JsonQuote(ArgumentTypeName(placeholder.Type))).Append(",\"format\":").Append(JsonQuote(placeholder.Format)).Append('}');
             }
             builder.Append("],\"selectors\":[");
-            for (int selectorIndex = 0; selectorIndex < resources[i].Message.Selectors.Count; selectorIndex++)
+            for (int selectorIndex = 0; selectorIndex < (resources[i].Message.Rmf2 ? 0 : resources[i].Message.Selectors.Count); selectorIndex++)
             {
                 if (selectorIndex != 0) builder.Append(',');
                 CompiledMessageSelector selector = resources[i].Message.Selectors[selectorIndex];
@@ -1907,6 +1923,17 @@ public static partial class TranslationCompiler
     private static bool SameContract(ResourceModel left, ResourceModel right, out ByteSpan mismatchSpan)
     {
         mismatchSpan = right.KeySpan;
+        if (left.Rmf2 && right.Rmf2)
+        {
+            foreach (var slot in right.Slots)
+                if (!left.Slots.TryGetValue(slot.Key, out string? kind) || kind != slot.Value) return false;
+            foreach (PlaceholderModel input in right.Placeholders)
+            {
+                PlaceholderModel? canonical = Array.Find(left.Placeholders, p => p.Name == input.Name);
+                if (canonical is null || (canonical.Type != input.Type && input.Type != TranslationArgumentType.String)) return false;
+            }
+            return true;
+        }
         if (left.Message.HasMarkup != right.Message.HasMarkup) { mismatchSpan = right.ValueSpan; return false; }
         if (left.Placeholders.Length != right.Placeholders.Length) return false;
         for (int i = 0; i < left.Placeholders.Length; i++)

@@ -217,20 +217,21 @@ public static class ArtifactInspector
                 return new ArtifactInspection("locale-pack-v2", null, null, null, null, content.Length, false, null, 0, 0, 0, 0, 0, findings);
             }
 
+            bool rmf2 = document.RootElement.TryGetProperty("artifactVersion", out var version) && TryInteger(version, out int number) && number == 4;
             Dictionary<string, JsonElement> root = ReadMembers(document.RootElement, findings,
-                ["artifactVersion", "messageGrammarVersion", "catalog", "locale", "contractFingerprint", "messages"]);
+                rmf2 ? ["artifactVersion", "messageGrammarVersion", "catalog", "locale", "contractFingerprint", "messages", "markupContract"] : ["artifactVersion", "messageGrammarVersion", "catalog", "locale", "contractFingerprint", "messages"]);
             if (root.Count != 0)
             {
                 if (TryInteger(root["artifactVersion"], out int artifactVersion))
                 {
                     formatVersion = artifactVersion;
-                    if (artifactVersion != 2)
+                    if (artifactVersion != (rmf2 ? 4 : 2))
                         findings.Add(PackFinding(TranslationPackReason.ArtifactVersionMismatch, "The external pack artifact version is unsupported."));
                 }
                 else findings.Add(PackFinding(TranslationPackReason.Malformed, "'artifactVersion' must be an integer."));
                 if (TryInteger(root["messageGrammarVersion"], out int grammarVersion))
                 {
-                    if (grammarVersion != 2)
+                    if (grammarVersion != (rmf2 ? 4 : 2))
                         findings.Add(PackFinding(TranslationPackReason.MessageGrammarVersionMismatch, "The external pack message grammar version is unsupported."));
                 }
                 else findings.Add(PackFinding(TranslationPackReason.Malformed, "'messageGrammarVersion' must be an integer."));
@@ -242,19 +243,19 @@ public static class ArtifactInspector
                 if (fingerprint is null || !IsFingerprint(fingerprint)) findings.Add(PackFinding(TranslationPackReason.Malformed, "The external pack contract fingerprint is invalid."));
                 if (root["messages"].ValueKind != JsonValueKind.Object)
                     findings.Add(PackFinding(TranslationPackReason.Malformed, "The external pack messages value must be an object."));
-                else messageCount = CountMessages(root["messages"], findings);
+                else messageCount = CountMessages(root["messages"], findings, rmf2);
             }
 
             // Rejection IDs mirror TranslationPackFailure.RejectionIdPrefix plus the stable
             // reason names shared by the .NET decoder and its generated ESM twin.
-            return new ArtifactInspection("locale-pack-v2", formatVersion, catalog, locale, null, content.Length,
+            return new ArtifactInspection(rmf2 ? "locale-artifact-v4" : "locale-pack-v2", formatVersion, catalog, locale, null, content.Length,
                 fingerprint is not null && IsFingerprint(fingerprint), fingerprint, messageCount, 0, 0, 0, 0,
                 findings.OrderBy(static finding => finding.Code, StringComparer.Ordinal)
                     .ThenBy(static finding => finding.Message, StringComparer.Ordinal).ToArray());
         }
     }
 
-    private static int CountMessages(JsonElement messages, List<ArtifactInspectionFinding> findings)
+    private static int CountMessages(JsonElement messages, List<ArtifactInspectionFinding> findings, bool rmf2)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
         int count = 0;
@@ -276,9 +277,9 @@ public static class ArtifactInspector
                 continue;
             }
 
-            Dictionary<string, JsonElement> fields = ReadMembers(property.Value, findings, ["astVersion", "inputs", "selectors", "variants"]);
+            Dictionary<string, JsonElement> fields = ReadMembers(property.Value, findings, rmf2 ? ["astVersion", "contentLocale", "inputs", "selectors", "variants"] : ["astVersion", "inputs", "selectors", "variants"]);
             if (fields.Count == 0) continue;
-            if (!TryInteger(fields["astVersion"], out int astVersion) || astVersion != 2)
+            if (!TryInteger(fields["astVersion"], out int astVersion) || astVersion != (rmf2 ? 4 : 2))
                 findings.Add(PackFinding(TranslationPackReason.Malformed, "Message '" + property.Name + "' has an unsupported AST version."));
             if (fields["inputs"].ValueKind != JsonValueKind.Object)
                 findings.Add(PackFinding(TranslationPackReason.Malformed, "A message input contract must be an object."));

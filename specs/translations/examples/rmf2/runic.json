@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "sourceLayout": "rmf2-v1",
+  "catalog": "checkout",
+  "code": {
+    "namespace": "Example",
+    "className": "CheckoutText"
+  },
+  "baseLocale": "en",
+  "markup": {
+    "contracts": [
+      {
+        "name": "shop:badge",
+        "kind": "paired",
+        "children": "inline",
+        "interactive": false,
+        "plainText": "children",
+        "options": {
+          "tone": {
+            "type": "enum",
+            "values": [
+              "neutral",
+              "positive"
+            ],
+            "default": "neutral"
+          }
+        }
+      }
+    ],
+    "aliases": {
+      "badge": "shop:badge"
+    },
+    "slots": {
+      "payment": {
+        "retry": {
+          "min": 0,
+          "max": 1
+        }
+      }
+    }
+  }
+}

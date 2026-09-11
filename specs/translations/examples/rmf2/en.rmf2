@@ -1,0 +1,11 @@
+# Checkout footer; routes, actions and icons are supplied by the application.
+@param $count - Number of failed attempts
+@param $tone - Application status token
+@example {"count":1,"tone":"positive"}
+payment =
+  .input {$count :integer}
+  .input {$tone :string}
+  .match $count
+  0 {{Read {#link ref=terms}terms{/link} and {#link ref=privacy}privacy{/link}. {#icon ref=star/} {#badge tone=$tone}Ready{/badge}}}
+  * {{Read {#link ref=terms}terms{/link} and {#link ref=privacy}privacy{/link}. {#action ref=retry}Retry{/action} {#icon ref=star/} {#badge tone=$tone}Ready{/badge}}}
+plain = Payment details

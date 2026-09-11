@@ -147,6 +147,28 @@ internal sealed class EditorWorkspace : IDisposable
                     content = StrictUtf8.GetString(TranslationLocaleWriter.Apply(Source(path, content), locale!,
                         [new TranslationLocaleEdit(exists ? TranslationLocaleEditKind.SetValue : TranslationLocaleEditKind.Add, key, value)]));
                 }
+                else if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+                {
+                    var source = Source(path, content);
+                    var nodes = Rmf2ResourceReader.Read(source, cancellationToken: cancellationToken).Nodes;
+                    var workspace = Rmf2Catalog();
+                    var existing = nodes.FirstOrDefault(node => !node.IsGroup && string.Join('_', workspace.LogicalPath(path, node)) == key);
+                    if (existing is not null) content = StrictUtf8.GetString(Rmf2ResourceWriter.SetMessage(source, existing.Key, value));
+                    else
+                    {
+                        var current = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
+                        IReadOnlyList<string>? logical = null;
+                        foreach (var file in current.Files.Where(f => f.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase)))
+                            foreach (var node in Rmf2ResourceReader.Read(Source(file.Path, file.Content), cancellationToken: cancellationToken).Nodes.Where(n => !n.IsGroup))
+                            {
+                                var candidate = workspace.LogicalPath(file.Path, node);
+                                if (string.Join('_', candidate) == key) { logical = candidate; break; }
+                            }
+                        // A new flat identifier stays flat; only an existing source symbol supplies hierarchy.
+                        var local = logical is null ? new[] { key } : workspace.LocalPath(path, logical);
+                        content = StrictUtf8.GetString(Rmf2ResourceWriter.AddMessage(source, local, value));
+                    }
+                }
                 else if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
                     content = value.EndsWith('\n') ? value : value + "\n";
                 else throw new EditorUserException(EditorNotice.Create("ui_backend_not_message_document"));
@@ -1039,7 +1061,14 @@ internal sealed class EditorWorkspace : IDisposable
         string projectRoot = Path.GetDirectoryName(configPath)!;
         string configRelativePath = NormalizeRelativePath(Path.GetRelativePath(_root, configPath));
         var paths = new List<string> { configPath };
-        paths.AddRange(EnumerateSourceFiles(projectRoot).Order(StringComparer.Ordinal));
+        var sourceRoots = new List<string>();
+        using (JsonDocument config = JsonDocument.Parse(replacementPath == configRelativePath && replacementContent is not null ? StrictUtf8.GetBytes(replacementContent) : File.ReadAllBytes(configPath)))
+        {
+            if (StringProperty(config.RootElement, "sourceLayout") == "rmf2-v1" && config.RootElement.TryGetProperty("sourceRoots", out var mounts))
+                foreach (var mount in mounts.EnumerateArray()) sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
+            else sourceRoots.Add(projectRoot);
+            foreach (string sourceRoot in sourceRoots) paths.AddRange(EnumerateSourceFiles(sourceRoot).Order(StringComparer.Ordinal));
+        }
         var files = new List<WorkspaceFile>(paths.Count);
         TranslationSource? projectSource = null;
         var messageSources = new List<TranslationSource>();
@@ -1074,7 +1103,7 @@ internal sealed class EditorWorkspace : IDisposable
             string projectBoundary = projectRoot.EndsWith(Path.DirectorySeparatorChar)
                 ? projectRoot
                 : projectRoot + Path.DirectorySeparatorChar;
-            if (!replacementFullPath.StartsWith(projectBoundary, StringComparison.Ordinal) ||
+            if (!sourceRoots.Any(root => replacementFullPath.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, StringComparison.Ordinal)) ||
                 !IsSourcePath(replacementPath))
                 throw new EditorUserException(EditorNotice.Create("ui_backend_source_outside_project", ("path", replacementPath)));
             string localPath = NormalizeRelativePath(Path.GetRelativePath(projectRoot, replacementFullPath));
@@ -1342,7 +1371,8 @@ internal sealed class EditorWorkspace : IDisposable
 
     private static bool IsSourcePath(string path) =>
         path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase) ||
-        path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase);
+        path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<string> EnumerateSourceFiles(string root)
     {
@@ -1367,7 +1397,7 @@ internal sealed class EditorWorkspace : IDisposable
         return File.ReadAllBytes(path);
     }
 
-    private static string? SourceLocale(string path) => path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase)
+    private static string? SourceLocale(string path) => (path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
         ? Path.GetFileNameWithoutExtension(path)
         : path.Contains('/', StringComparison.Ordinal) ? path[..path.IndexOf('/')] : null;
 
@@ -1377,13 +1407,25 @@ internal sealed class EditorWorkspace : IDisposable
         return StringProperty(document.RootElement, "sourceLayout") == "locale-toml";
     }
 
-    private static EditorMessageEntry[] ReadEntries(string path, string content, string? locale)
+    private EditorMessageEntry[] ReadEntries(string path, string content, string? locale)
     {
+        if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+        {
+            var workspace = Rmf2Catalog();
+            return Rmf2ResourceReader.Read(Source(path, content)).Nodes.Where(node => !node.IsGroup)
+                .Select(node => new EditorMessageEntry(string.Join('_', workspace.LogicalPath(path, node)), node.Message!, node.MessageByteMap[0], node.MessageByteMap[^1] - node.MessageByteMap[0])).ToArray();
+        }
         if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
             return [new EditorMessageEntry(Path.GetFileNameWithoutExtension(path), content, 0, StrictUtf8.GetByteCount(content))];
         if (!path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) || locale is null) return [];
         TranslationLocaleDocument document = TranslationLocaleReader.Read(Source(path, content), locale);
         return ReadEntries(document);
+    }
+
+    private Rmf2Workspace Rmf2Catalog()
+    {
+        string config = FindMf2ProjectConfig() ?? throw new TranslationAuthoringException("No project configuration found.");
+        return new Rmf2Workspace(_root, new TranslationSource(config, File.ReadAllBytes(config)), []);
     }
 
     private static EditorMessageEntry[] ReadEntries(TranslationLocaleDocument document) =>

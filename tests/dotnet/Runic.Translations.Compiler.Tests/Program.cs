@@ -14,6 +14,8 @@ internal static class Program
         SchemaV2Tests.Register(runner);
         Mf2ProjectTests.Register(runner);
         TomlProjectTests.Register(runner);
+        Rmf2Tests.Register(runner);
+        Rmf2MarkupTests.Register(runner);
         CapabilityMatrixTests.Register(runner);
         AnalysisTests.Register(runner);
         CorpusTests.Register(runner);

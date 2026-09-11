@@ -33,3 +33,11 @@ const mixedRows = buildRows({ ...snapshot, documents: [manifest, en, mixedCase] 
 assert.equal(mixedRows.find(row => row.key === "title").cells.de.entry.value, "Titel", "Supported case variants must expose logical entries");
 assert.equal(mixedRows.find(row => row.key === "save").cells.de.document.path, "DE.TOML", "Missing logical entries retain the actual physical filename");
 console.log("PASS: TOML physical document identity, logical entries, missing entries/locales, shared revision, and stale parse isolation.");
+
+const rmf2Manifest = {...manifest,content:JSON.stringify({sourceLayout:"rmf2-v1"})};
+const rmf2En = {...en,path:"feature/en.rmf2",entries:[entry("feature_title","Title")]};
+const unrelatedDe = {...de,path:"other/de.rmf2",entries:[entry("other_title","Anders")]};
+const rmf2Rows=buildRows({...snapshot,documents:[rmf2Manifest,rmf2En,unrelatedDe]},{});
+assert.equal(rmf2Rows.find(row=>row.key==="feature_title").cells.de.document.path,"feature/de.rmf2","A missing RMF2 translation uses the source physical namespace");
+assert.equal(rmf2Rows.find(row=>row.key==="feature_title").cells.fr.document.path,"feature/fr.rmf2");
+console.log("PASS: RMF2 split physical namespace is preserved for missing translations.");

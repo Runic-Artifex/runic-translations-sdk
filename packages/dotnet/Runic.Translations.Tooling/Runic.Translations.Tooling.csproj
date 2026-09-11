@@ -31,6 +31,7 @@
     <None Include="..\..\..\specs\translations\schemas\project-v1.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="..\..\..\specs\translations\schemas\locale-pack-v2.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="..\..\..\specs\translations\schemas\locale-artifact-v2.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="../../../specs/translations/schemas/locale-artifact-v4.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="../../../specs/translations/licenses/Tomlyn-LICENSE.txt" Pack="true" PackagePath="licenses" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />

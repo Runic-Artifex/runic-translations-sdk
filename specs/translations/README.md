@@ -14,7 +14,7 @@ diagnostic identities.
 | Authoring messages | MessageFormat 2 `.mf2` files |
 | Message grammar | MF2 with the documented Runic v1 profile |
 | Normalized message AST | 2 execution AST; 3 MF2-subset interchange AST |
-| Resolved locale artifact | 1 (grammar 1) and locale-pack-v2 (grammar 2) |
+| Resolved locale artifact | 1 (grammar 1), locale-pack-v2 (grammar 2), and RMF2 artifact 4 |
 | Runtime/generated-code ABI | 1 |
 | ESM ABI | 3 |
 | Transport contract | 1 |
@@ -77,3 +77,11 @@ pattern/descriptor parity, compiler limits, and generated identifier collisions.
 The supported authoring profile and project convention are documented in
 [`../../docs/guides/translations/mf2-projects.md`](../../docs/guides/translations/mf2-projects.md). `locale-pack-v2` is
 documented in [`../../docs/guides/translations/locale-pack-v2.md`](../../docs/guides/translations/locale-pack-v2.md).
+
+## RMF2 opt-in profile
+
+[`rmf2-execution-v1.json`](rmf2-execution-v1.json) pins the implemented MF2 subset.
+The [RMF2 guide](../../docs/guides/translations/rmf2.md) specifies resource composition,
+markup contracts, external artifact 4, migration, and remaining proposal work.
+RMF2 fingerprints include caller input/slot contracts, markup registries and effective
+locale mappings; source selector trees and physical file organization are excluded.

@@ -62,3 +62,7 @@ The plugin is a public preview for Vite `>=6 <9`. It accepts the supported web-m
 - [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
 Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE).
+
+## RMF2
+
+Project mode accepts `sourceLayout: "rmf2-v1"`, recursively discovers `.rmf2`, and watches all explicit `sourceRoots` for additions, edits and removals. It invokes the shared compiler and retains its diagnostic failures. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the generated inline renderer API.

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
 using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tool;
@@ -24,12 +25,32 @@ internal static class InputFiles
 
         string root = Path.GetDirectoryName(configPath)!;
         var messages = new List<TranslationSource>();
-        foreach (string candidate in EnumerateFilesWithoutReparsePoints(root, projectPath))
-            if (string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase) ||
+        TranslationSource project = ReadSource(configPath, DisplayPath(configPath, currentDirectory));
+        JsonDocument config;
+        try { config = JsonDocument.Parse(project.GetUtf8Bytes()); }
+        catch (JsonException) { return new CompilerInputs(project, messages); }
+        using var configLifetime = config;
+        var roots = new List<string> { root };
+        if (config.RootElement.TryGetProperty("sourceLayout", out JsonElement layout) && layout.ValueKind == JsonValueKind.String && layout.GetString() == "rmf2-v1" &&
+            config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
+        {
+            roots.Clear();
+            if (mounts.ValueKind != JsonValueKind.Array) return new CompilerInputs(project, messages);
+            foreach (JsonElement mount in mounts.EnumerateArray())
+            {
+                if (mount.ValueKind != JsonValueKind.Object || !mount.TryGetProperty("path", out JsonElement path) || path.ValueKind != JsonValueKind.String)
+                    return new CompilerInputs(project, messages);
+                roots.Add(Path.GetFullPath(path.GetString()!, root));
+            }
+        }
+        foreach (string sourceRoot in roots)
+        foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, projectPath))
+            if (string.Equals(Path.GetExtension(candidate), ".rmf2", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(Path.GetExtension(candidate), ".toml", StringComparison.OrdinalIgnoreCase))
                 messages.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
         messages.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
-        return new CompilerInputs(ReadSource(configPath, DisplayPath(configPath, currentDirectory)), messages);
+        return new CompilerInputs(project, messages);
     }
 
     private static TranslationSource ReadSource(string fullPath, string displayPath)

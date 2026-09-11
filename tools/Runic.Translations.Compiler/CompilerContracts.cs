@@ -189,8 +189,9 @@ public sealed class CompiledTextCatalog
         MessageGrammarVersion = messageGrammarVersion;
     }
 
+    public string? Rmf2MarkupContract { get; internal set; }
     public int SchemaVersion { get; }
-    public int MessageGrammarVersion { get; }
+    public int MessageGrammarVersion { get; internal set; }
     public string Id { get; }
     public string CodeNamespace { get; }
     public string ClassName { get; }
@@ -201,7 +202,7 @@ public sealed class CompiledTextCatalog
     public IReadOnlyList<CompiledTranslation> CanonicalResources { get; }
     public TranslationUnsupportedLocalePolicy UnsupportedLocale { get; }
     public TranslationMissingKeyPolicy MissingKey { get; }
-    public string Fingerprint { get; }
+    public string Fingerprint { get; internal set; }
 }
 
 public sealed class CompiledTextLayer
@@ -248,6 +249,7 @@ public sealed class CompiledTranslation
         IsTextInterchangeLossless = message.IsTextInterchangeLossless;
     }
 
+    public IReadOnlyDictionary<string, string> Slots { get; internal set; } = new Dictionary<string, string>(StringComparer.Ordinal);
     public int Id { get; }
     public string Key { get; }
     public string Pattern { get; }

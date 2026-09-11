@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Runic.CommandLine;
@@ -23,6 +24,7 @@ internal static class Program
     {
         try
         {
+            if (arguments.Length == 1 && arguments[0] == "lsp") return new Rmf2LanguageServer(Console.OpenStandardInput(), Console.OpenStandardOutput()).Run();
             List<string> expanded = CommandLine.ExpandResponseFiles(arguments);
             return new CommandApp(TranslationsToolCommandModule.CreateCatalog())
             {
@@ -344,15 +346,24 @@ internal static class Program
             return DiagnosticFailure;
         }
 
-        if (invocation.Command == ToolCommand.Migrate)
+        if (invocation.Command is ToolCommand.Migrate or ToolCommand.MigrateRmf2)
         {
             string supplied = Path.GetFullPath(invocation.ProjectPath!);
             string root = Directory.Exists(supplied) ? supplied : Path.GetDirectoryName(supplied)!;
-            TranslationWorkspaceTransactionPlan plan = TranslationWorkspaceMutation.MigrateToLocaleToml(root, compilation.Catalogs[0].Id);
+            TranslationWorkspaceTransactionPlan plan;
+            if (invocation.Command == ToolCommand.MigrateRmf2)
+            {
+                // InputFiles paths are relative to the process cwd; make their identity absolute before planning within the project root.
+                var workspace = new Rmf2Workspace(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()),
+                    inputs.Messages.Select(source => new TranslationSource(Path.GetFullPath(source.Path), source.GetUtf8Bytes())));
+                plan = workspace.MigrateToml(out var notes);
+                foreach (string note in notes) result.WriteOutputLine(note);
+            }
+            else plan = TranslationWorkspaceMutation.MigrateToLocaleToml(root, compilation.Catalogs[0].Id);
             foreach (TranslationWorkspaceEdit edit in plan.Edits)
                 result.WriteOutputLine($"{edit.Kind.ToString().ToLowerInvariant()} {edit.RelativePath}");
             if (!invocation.DryRun) TranslationWorkspaceTransaction.Commit(plan);
-            result.WriteOutputLine(invocation.DryRun ? "migration preview; no files written." : "migrated project to locale TOML.");
+            result.WriteOutputLine(invocation.DryRun ? "migration preview; no files written." : invocation.Command == ToolCommand.MigrateRmf2 ? "migrated project to RMF2." : "migrated project to locale TOML.");
             return Success;
         }
 
@@ -406,6 +417,8 @@ internal static class Program
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  runic-translations init --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [init-options]");
+        writer.WriteLine("  runic-translations lsp");
+        writer.WriteLine("  runic-translations migrate-rmf2 --project <translations-directory> [--dry-run]");
         writer.WriteLine("  runic-translations migrate --project <translations-directory> [--dry-run]");
         writer.WriteLine("  runic-translations validate --project <translations-directory>");
         writer.WriteLine("  runic-translations generate --project <translations-directory> --output <directory> [emit-switches]");
@@ -500,6 +513,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         ToolOperationResult result = request.Command switch
         {
             "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter),
+            "migrate-rmf2" => Program.Execute(new ToolInvocation(ToolCommand.MigrateRmf2, null, ToolEmission.None, null, request.Project, request.DryRun)),
             "migrate" => Program.Execute(new ToolInvocation(ToolCommand.Migrate, null, ToolEmission.None, null, request.Project, request.DryRun)),
             "validate" => ExecuteCompilation(request, ToolCommand.Validate, null, ToolEmission.None),
             "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp)),

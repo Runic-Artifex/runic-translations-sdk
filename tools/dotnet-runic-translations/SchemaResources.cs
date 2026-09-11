@@ -10,6 +10,7 @@ internal static class SchemaResources
     private static readonly (string FileName, string ResourceName)[] Schemas =
     [
         ("locale-artifact-v1.schema.json", "Runic.Translations.Tool.Schemas.locale-artifact-v1.schema.json"),
+        ("locale-artifact-v4.schema.json", "Runic.Translations.Tool.Schemas.locale-artifact-v4.schema.json"),
         ("locale-artifact-v2.schema.json", "Runic.Translations.Tool.Schemas.locale-artifact-v2.schema.json"),
         ("external-pack-v1.schema.json", "Runic.Translations.Tool.Schemas.external-pack-v1.schema.json"),
         ("template-manifest-v1.schema.json", "Runic.Translations.Tool.Schemas.template-manifest-v1.schema.json"),

@@ -18,7 +18,8 @@ internal static class Program
             XliffReportsStructuredMf2Loss();
             LocalePackUsesCanonicalCompilerBytes();
             ArtifactInspectionRecognizesGeneratedOutputs();
-            Console.WriteLine("RESULT 5/5 passed");
+            Rmf2PacksAndInspection();
+            Console.WriteLine("RESULT 6/6 passed");
             return 0;
         }
         catch (Exception exception)
@@ -96,6 +97,16 @@ internal static class Program
         ArtifactInspection interchange = ArtifactInspector.Inspect(xliff.Bytes);
         if (interchange.Kind != "xliff-2.1" || interchange.Findings.Count != 0)
             throw new InvalidOperationException("Artifact inspection did not recognize the generated XLIFF document.");
+    }
+
+    private static void Rmf2PacksAndInspection()
+    {
+        var compilation = TranslationsTooling.CompileProject(
+            Source("translations/runic.json", """{"schemaVersion":1,"sourceLayout":"rmf2-v1","catalog":"app","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en"}"""),
+            [Source("translations/en.rmf2", "hello = {#strong}Hello{/strong}")]);
+        var artifact = TranslationsTooling.BuildRmf2LocalePacks(compilation).Single();
+        var inspection = ArtifactInspector.Inspect(artifact.GetUtf8Bytes());
+        if (inspection.Kind != "locale-artifact-v4" || inspection.Findings.Count != 0) throw new InvalidOperationException("RMF2 artifact inspection failed.");
     }
 
     private static TranslationCompilation CompilePlainFixture() => Compile("Hello", "Hallo");

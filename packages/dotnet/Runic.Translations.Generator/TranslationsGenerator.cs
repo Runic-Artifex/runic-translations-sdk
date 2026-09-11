@@ -41,7 +41,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                     return;
                 }
 
-                Generate(productionContext, pair.Left);
+                Generate(productionContext, pair.Left, pair.Right.Rmf2Version);
             });
     }
 
@@ -65,10 +65,13 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 break;
             }
             if (compatibility is null) return RuntimeAbiState.Missing;
+            int rmf2Version = -1;
+            foreach (ISymbol member in compatibility.GetMembers("Rmf2RuntimeAbiVersion"))
+                if (member is IFieldSymbol marker && marker.HasConstantValue && marker.ConstantValue is int rmf2) rmf2Version = rmf2;
             foreach (ISymbol member in compatibility.GetMembers("RuntimeAbiVersion"))
             {
                 if (member is IFieldSymbol field && field.HasConstantValue && field.ConstantValue is int version)
-                    return new RuntimeAbiState(version);
+                    return new RuntimeAbiState(version, rmf2Version);
             }
 
             return RuntimeAbiState.Missing;
@@ -103,7 +106,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
 
         InputKind kind;
         if (string.Equals(kindValue, "Project", StringComparison.Ordinal)) kind = InputKind.Project;
-        else if (string.Equals(kindValue, "Mf2", StringComparison.Ordinal)) kind = InputKind.Mf2;
+        else if (string.Equals(kindValue, "Rmf2", StringComparison.Ordinal) || string.Equals(kindValue, "Mf2", StringComparison.Ordinal)) kind = InputKind.Mf2;
         else if (string.Equals(kindValue, "Toml", StringComparison.Ordinal)) kind = InputKind.Toml;
         else return default;
 
@@ -130,7 +133,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         return normalized.Length == 0 ? "." : normalized;
     }
 
-    private static void Generate(SourceProductionContext context, IEnumerable<GeneratorInput> inputs)
+    private static void Generate(SourceProductionContext context, IEnumerable<GeneratorInput> inputs, int rmf2Version)
     {
         var projects = new List<TranslationSource>();
         var messages = new List<TranslationSource>();
@@ -188,6 +191,12 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         {
             context.CancellationToken.ThrowIfCancellationRequested();
             CompiledTextCatalog catalog = compilation.Catalogs[catalogIndex];
+            if (catalog.MessageGrammarVersion == 4 && rmf2Version != 1)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Descriptor("RTR0024", DiagnosticSeverity.Error), Location.None,
+                    "RMF2 generated code requires the additive RMF2 runtime ABI version 1. Upgrade the runtime and generator together."));
+                continue;
+            }
             TranslationGeneratedOutput[] outputs =
             {
                 TranslationOutputRenderer.RenderCSharpKeys(catalog),
@@ -311,14 +320,15 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     {
         internal static readonly RuntimeAbiState Missing = new RuntimeAbiState(-1);
 
-        internal RuntimeAbiState(int version) => Version = version;
+        internal RuntimeAbiState(int version, int rmf2Version = -1) { Version = version; Rmf2Version = rmf2Version; }
+        internal int Rmf2Version { get; }
 
         internal int Version { get; }
         internal bool IsMissing => Version < 0;
         internal bool IsCompatible => Version == 1;
 
-        public bool Equals(RuntimeAbiState other) => Version == other.Version;
+        public bool Equals(RuntimeAbiState other) => Version == other.Version && Rmf2Version == other.Rmf2Version;
         public override bool Equals(object? obj) => obj is RuntimeAbiState other && Equals(other);
-        public override int GetHashCode() => Version;
+        public override int GetHashCode() => HashCode.Combine(Version, Rmf2Version);
     }
 }

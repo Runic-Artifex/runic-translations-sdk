@@ -20,7 +20,7 @@ internal static class EdgeOutputRenderer
         if (locale is null)
             throw new ArgumentException("Locale '" + localeTag + "' is not a declared canonical locale of catalog '" + catalog.Id + "'.", nameof(localeTag));
 
-        int artifactVersion = catalog.MessageGrammarVersion == 1
+        int artifactVersion = catalog.Rmf2MarkupContract is not null ? 4 : catalog.MessageGrammarVersion == 1
             ? TranslationOutputRenderer.LocaleArtifactVersion
             : TranslationOutputRenderer.LocaleArtifactV2Version;
         var json = new StringBuilder();
@@ -29,6 +29,7 @@ internal static class EdgeOutputRenderer
             .Append(",\"catalog\":").Append(GenerationSupport.JsonString(catalog.Id))
             .Append(",\"locale\":").Append(GenerationSupport.JsonString(locale.Tag))
             .Append(",\"contractFingerprint\":").Append(GenerationSupport.JsonString(catalog.Fingerprint))
+            .Append(catalog.Rmf2MarkupContract is null ? "" : ",\"markupContract\":" + catalog.Rmf2MarkupContract)
             .Append(",\"messages\":{");
         IReadOnlyList<CompiledTranslation> resources = GenerationSupport.OrderedResources(locale.ResolvedResources);
         for (int i = 0; i < resources.Count; i++)
@@ -57,7 +58,7 @@ internal static class EdgeOutputRenderer
 
     private static void WriteMessageAst(StringBuilder json, CompiledTranslation resource)
     {
-        json.Append("{\"astVersion\":2,\"inputs\":{");
+        json.Append(resource.Message.Rmf2 ? "{\"astVersion\":4,\"contentLocale\":" + GenerationSupport.JsonString(resource.Message.ContentLocale!) + ",\"inputs\":{" : "{\"astVersion\":2,\"inputs\":{");
         IReadOnlyList<CompiledTextPlaceholder> placeholders = GenerationSupport.OrderedPlaceholders(resource.Placeholders);
         for (int index = 0; index < placeholders.Count; index++)
         {
@@ -73,7 +74,7 @@ internal static class EdgeOutputRenderer
             CompiledMessageSelector selector = resource.Message.Selectors[index];
             json.Append("{\"name\":").Append(GenerationSupport.JsonString(selector.Name))
                 .Append(",\"input\":").Append(GenerationSupport.JsonString(selector.Input))
-                .Append(",\"function\":").Append(GenerationSupport.JsonString(selector.Function)).Append('}');
+                .Append(",\"function\":").Append(GenerationSupport.JsonString(selector.Function == "exact" ? "literal" : selector.Function)).Append('}');
         }
         json.Append("],\"variants\":[");
         if (resource.Message.IsVariant)
@@ -132,7 +133,14 @@ internal static class EdgeOutputRenderer
                     if (attributeIndex++ != 0) json.Append(',');
                     json.Append(GenerationSupport.JsonString(attribute.Key)).Append(':').Append(GenerationSupport.JsonString(attribute.Value));
                 }
-                json.Append("},\"children\":");
+                json.Append('}');
+                if (markup.Rmf2)
+                {
+                    json.Append(",\"standalone\":").Append(markup.Standalone ? "true" : "false");
+                    json.Append(",\"annotations\":").Append(System.Text.Json.JsonSerializer.Serialize(markup.Annotations));
+                    json.Append(",\"variableOptions\":").Append(System.Text.Json.JsonSerializer.Serialize(new SortedSet<string>(markup.VariableOptions, StringComparer.Ordinal)));
+                }
+                json.Append(",\"children\":");
                 WriteNodes(json, markup.Children);
                 json.Append('}');
             }
@@ -296,7 +304,8 @@ internal static class EdgeOutputRenderer
         {
             string locale = catalog.Locales[index].Tag;
             if (string.Equals(relativePath, catalog.Id + "." + locale + ".locale-v1.json", StringComparison.Ordinal) ||
-                string.Equals(relativePath, catalog.Id + "." + locale + ".locale-v2.json", StringComparison.Ordinal))
+                string.Equals(relativePath, catalog.Id + "." + locale + ".locale-v2.json", StringComparison.Ordinal) ||
+                string.Equals(relativePath, catalog.Id + "." + locale + ".locale-v4.json", StringComparison.Ordinal))
                 return locale;
         }
 

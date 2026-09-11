@@ -2,13 +2,17 @@
 
 Status: accepted design direction, 10 September 2026. The format is named Runic
 MessageFormat 2 (RMF2), with the `.rmf2` extension. The syntax, configuration
-concepts, and APIs below remain illustrative; they are not implemented Runic
-features. This document does not change the existing TOML contract.
+concepts, and APIs below remain design illustrations. See the implementation guide
+for the delivered subset and its limits. This document does not change the existing TOML contract.
 
 Canonical delivery scope and state are maintained in
 [roadmap W200](../../../../local-planning/content/records/initiatives/W200.md)
 and [decision D014](../../../../local-planning/content/records/decisions/D014.md).
 This document retains design detail; work-item records own implementation progress.
+
+Implementation status: the [RMF2 guide](rmf2.md) records the implemented subset,
+version boundaries, and remaining proposal work. The examples below remain design
+illustrations rather than a complete API reference.
 
 ## Recommendation
 

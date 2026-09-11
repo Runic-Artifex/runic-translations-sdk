@@ -73,6 +73,12 @@ public static class TranslationsToolCommandModule
     [Command("migrate", Description = "Migrate an existing translations project.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Migrate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project, [Option("--dry-run")] bool dryRun) => operations.Execute(new("migrate", Project: project, DryRun: dryRun));
 
+    [Command("migrate-rmf2", Description = "Migrate locale TOML to RMF2, retaining original backups.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    public static CommandOutcome<TranslationsToolCommandResult> MigrateRmf2([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project, [Option("--dry-run")] bool dryRun) => operations.Execute(new("migrate-rmf2", Project: project, DryRun: dryRun));
+
+    [Command("lsp", Description = "Run the RMF2 language server over standard input/output.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    public static CommandOutcome<TranslationsToolCommandResult> Lsp([FromServices] ITranslationsToolCommandOperations operations) => operations.Execute(new("lsp"));
+
     [Command("validate", Description = "Validate catalogs and report translation diagnostics.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Validate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project) => operations.Execute(new("validate", Project: project));
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
+using System.Linq;
 using System.Threading;
 
 namespace Runic.Translations;
@@ -24,10 +25,13 @@ internal static class TranslationPackV2Loader
                 CommentHandling = JsonCommentHandling.Disallow,
                 MaxDepth = limits.MaximumDepth,
             });
+            bool rmf2 = contract.MessageGrammarVersion == 4;
             Dictionary<string, JsonElement> root = Members(document.RootElement,
-                ["artifactVersion", "messageGrammarVersion", "catalog", "locale", "contractFingerprint", "messages"]);
-            if (Integer(root["artifactVersion"]) != 2) throw Error("The external pack artifact version is unsupported.", TranslationPackFailureReason.ArtifactVersionMismatch);
-            if (Integer(root["messageGrammarVersion"]) != 2 || contract.MessageGrammarVersion != 2)
+                rmf2 ? ["artifactVersion", "messageGrammarVersion", "catalog", "locale", "contractFingerprint", "messages", "markupContract"] : ["artifactVersion", "messageGrammarVersion", "catalog", "locale", "contractFingerprint", "messages"]);
+            Rmf2InlineRenderer? markup = rmf2 ? new Rmf2InlineRenderer(contract.Rmf2MarkupContract!) : null;
+            if (rmf2 && root["markupContract"].GetRawText() != contract.Rmf2MarkupContract) throw Error("The RMF2 markup contract differs from the trusted catalog.", TranslationPackFailureReason.ArgumentContractMismatch);
+            if (Integer(root["artifactVersion"]) != (rmf2 ? 4 : 2)) throw Error("The external pack artifact version is unsupported.", TranslationPackFailureReason.ArtifactVersionMismatch);
+            if (Integer(root["messageGrammarVersion"]) != contract.MessageGrammarVersion)
                 throw Error("The external pack message grammar version is unsupported.", TranslationPackFailureReason.MessageGrammarVersionMismatch);
             string catalog = String(root["catalog"]);
             string locale = String(root["locale"]);
@@ -46,7 +50,7 @@ internal static class TranslationPackV2Loader
                 if (messages.Count >= limits.MaximumMessages) throw Limit("The external pack exceeds the configured message limit.");
                 if (!contract.TryGetMessage(property.Name, out TranslationPackMessageContract messageContract))
                     throw Error("The external pack contains unknown message key '" + property.Name + "'.", TranslationPackFailureReason.UnknownKey);
-                messages.Add(ReadMessage(property.Value, messageContract, limits));
+                messages.Add(ReadMessage(property.Value, messageContract, limits, markup, locale));
             }
             messages.Sort(static (left, right) => string.CompareOrdinal(left.Key.Name, right.Key.Name));
             return new VerifiedExternalTranslationPack(catalog, locale, fingerprint, messages.ToArray());
@@ -54,6 +58,10 @@ internal static class TranslationPackV2Loader
         catch (TranslationPackException)
         {
             throw;
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
+        {
+            throw Error("The external pack contains an invalid normalized AST.", TranslationPackFailureReason.MalformedPattern);
         }
         catch (JsonException exception)
         {
@@ -64,21 +72,26 @@ internal static class TranslationPackV2Loader
     private static VerifiedTranslationPackMessage ReadMessage(
         JsonElement value,
         TranslationPackMessageContract contract,
-        TranslationPackLimits limits)
+        TranslationPackLimits limits, Rmf2InlineRenderer? markup, string locale)
     {
         if (contract.Arguments.Count > limits.MaximumArgumentsPerMessage)
             throw Limit("A message exceeds the configured argument limit.");
-        Dictionary<string, JsonElement> message = Members(value, ["astVersion", "inputs", "selectors", "variants"]);
-        if (Integer(message["astVersion"]) != 2) throw Error("Message '" + contract.Key.Name + "' has an unsupported AST version.");
+        Dictionary<string, JsonElement> message = Members(value, markup is null ? ["astVersion", "inputs", "selectors", "variants"] : ["astVersion", "contentLocale", "inputs", "selectors", "variants"]);
+        if (Integer(message["astVersion"]) != (markup is null ? 2 : 4)) throw Error("Message '" + contract.Key.Name + "' has an unsupported AST version.");
+        string? contentLocale = markup is null ? null : String(message["contentLocale"]);
+        if (markup is not null && contentLocale != markup.ExpectedLocale(contract.Key.Name, locale)) throw Error("RMF2 effective content locale mismatch.");
         ReadInputs(message["inputs"], contract);
         CompiledTextMessageSelector[] selectors = ReadSelectors(message["selectors"], contract);
-        CompiledTextMessageVariant[] variants = ReadVariants(message["variants"], contract, selectors, limits);
+        CompiledTextMessageVariant[] variants = ReadVariants(message["variants"], contract, selectors, limits, markup is not null);
         CompiledTextMessage compiled;
-        try { compiled = new CompiledTextMessage(Array.Empty<CompiledTextMessageNode>(), selectors, variants); }
+        try { compiled = new CompiledTextMessage(Array.Empty<CompiledTextMessageNode>(), selectors, variants, markup is not null, contentLocale); }
         catch (ArgumentException) { throw Error("Message '" + contract.Key.Name + "' contains an invalid normalized AST.", TranslationPackFailureReason.MalformedPattern); }
         TranslationPlaceholderDescriptor[] descriptors = Descriptors(contract.Arguments);
         if (!CompiledTextMessageRuntime.MatchesContract(compiled, descriptors))
             throw Error("Message '" + contract.Key.Name + "' does not match its generated argument contract.", TranslationPackFailureReason.ArgumentContractMismatch);
+        if (markup is not null)
+            try { markup.ValidatePlan(contract, compiled); }
+            catch (TranslationFormatException exception) { throw Error(exception.Message, TranslationPackFailureReason.ArgumentContractMismatch); }
         string compatibility = CompatibilityPattern(variants[^1].NodeArray);
         return new VerifiedTranslationPackMessage(contract.Key, compatibility, compiled);
     }
@@ -129,7 +142,7 @@ internal static class TranslationPackV2Loader
     }
 
     private static CompiledTextMessageVariant[] ReadVariants(JsonElement value, TranslationPackMessageContract contract,
-        CompiledTextMessageSelector[] selectors, TranslationPackLimits limits)
+        CompiledTextMessageSelector[] selectors, TranslationPackLimits limits, bool rmf2)
     {
         if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() < 1) throw Error("A message variant list is invalid.");
         if (value.GetArrayLength() > 256) throw Limit("A message exceeds the normalized variant limit.");
@@ -159,7 +172,7 @@ internal static class TranslationPackV2Loader
             catchAll |= all;
             int nodeCount = 0;
             int textBytes = 0;
-            CompiledTextMessageNode[] nodes = ReadNodes(fields["nodes"], contract, limits, 0, ref nodeCount, ref textBytes);
+            CompiledTextMessageNode[] nodes = ReadNodes(fields["nodes"], contract, limits, 0, ref nodeCount, ref textBytes, rmf2);
             variants.Add(new CompiledTextMessageVariant(matches, nodes));
         }
         if (!catchAll) throw Error("A normalized message requires a catch-all variant.");
@@ -167,7 +180,7 @@ internal static class TranslationPackV2Loader
     }
 
     private static CompiledTextMessageNode[] ReadNodes(JsonElement value, TranslationPackMessageContract contract,
-        TranslationPackLimits limits, int depth, ref int nodeCount, ref int textBytes)
+        TranslationPackLimits limits, int depth, ref int nodeCount, ref int textBytes, bool rmf2)
     {
         if (value.ValueKind != JsonValueKind.Array) throw Error("A message node list is invalid.");
         if (depth > 16) throw Limit("A message exceeds the normalized markup depth limit.");
@@ -219,20 +232,33 @@ internal static class TranslationPackV2Loader
             }
             else if (kind == "markup")
             {
-                Dictionary<string, JsonElement> fields = Members(item, ["kind", "name", "attributes", "children"]);
+                Dictionary<string, JsonElement> fields = Members(item, rmf2 ? ["kind", "name", "attributes", "children", "standalone", "annotations", "variableOptions"] : ["kind", "name", "attributes", "children"]);
                 string name = String(fields["name"]);
-                if (!TranslationPackValidation.IsIdentifier(name) || fields["attributes"].ValueKind != JsonValueKind.Object) throw Error("A markup node is invalid.");
+                if ((!rmf2 && !TranslationPackValidation.IsIdentifier(name)) || fields["attributes"].ValueKind != JsonValueKind.Object) throw Error("A markup node is invalid.");
                 var attributes = new List<CompiledTextMarkupProperty>();
                 var attributeNames = new HashSet<string>(StringComparer.Ordinal);
+                var variables = new HashSet<string>(StringComparer.Ordinal);
+                bool standalone = false;
+                if (rmf2)
+                {
+                    if (fields["standalone"].ValueKind is not (JsonValueKind.True or JsonValueKind.False) || fields["variableOptions"].ValueKind != JsonValueKind.Array || fields["annotations"].ValueKind != JsonValueKind.Object) throw Error("Invalid RMF2 markup representation.");
+                    standalone = fields["standalone"].GetBoolean();
+                    foreach (JsonElement option in fields["variableOptions"].EnumerateArray()) if (!variables.Add(String(option))) throw Error("Duplicate variable option.");
+                    foreach (JsonProperty annotation in fields["annotations"].EnumerateObject())
+                    { if (!attributeNames.Add("@" + annotation.Name)) throw Error("Duplicate annotation."); attributes.Add(new CompiledTextMarkupProperty("@" + annotation.Name, String(annotation.Value)) { IsAnnotation = true }); }
+                }
                 foreach (JsonProperty attribute in fields["attributes"].EnumerateObject())
                 {
                     if (!attributeNames.Add(attribute.Name) || !TranslationPackValidation.IsIdentifier(attribute.Name)) throw Error("A markup property is invalid or duplicated.");
-                    attributes.Add(new CompiledTextMarkupProperty(attribute.Name, String(attribute.Value)));
+                    attributes.Add(new CompiledTextMarkupProperty(attribute.Name, String(attribute.Value)) { IsVariable = variables.Contains(attribute.Name) });
                 }
+                if (variables.Any(variable => !attributeNames.Contains(variable))) throw Error("Variable option names an absent option.");
                 attributes.Sort(static (left, right) => string.CompareOrdinal(left.Name, right.Name));
-                nodes.Add(new CompiledTextMessageNode(CompiledTextMessageNodeKind.MarkupStart, name, attributes: attributes));
-                nodes.AddRange(ReadNodes(fields["children"], contract, limits, depth + 1, ref nodeCount, ref textBytes));
-                nodes.Add(new CompiledTextMessageNode(CompiledTextMessageNodeKind.MarkupEnd, name));
+                nodes.Add(new CompiledTextMessageNode(standalone ? CompiledTextMessageNodeKind.MarkupStandalone : CompiledTextMessageNodeKind.MarkupStart, name, attributes: attributes));
+                CompiledTextMessageNode[] children = ReadNodes(fields["children"], contract, limits, depth + 1, ref nodeCount, ref textBytes, rmf2);
+                if (standalone && children.Length > 0) throw Error("Standalone markup cannot have children.");
+                nodes.AddRange(children);
+                if (!standalone) nodes.Add(new CompiledTextMessageNode(CompiledTextMessageNodeKind.MarkupEnd, name));
             }
             else throw Error("A message node kind is unsupported.");
         }

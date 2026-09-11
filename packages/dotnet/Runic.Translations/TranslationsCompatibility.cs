@@ -8,4 +8,7 @@ public static class TranslationsCompatibility
 
     /// <summary>The ABI version embedded into generated C#.</summary>
     public const int RuntimeAbiVersion = 1;
+
+    /// <summary>The additive ABI for RMF2 standalone markup, options, and caller contracts.</summary>
+    public const int Rmf2RuntimeAbiVersion = 1;
 }

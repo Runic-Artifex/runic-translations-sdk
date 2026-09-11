@@ -29,7 +29,7 @@ internal static class Mf2MessageParser
         TranslationSource source,
         DiagnosticBag diagnostics,
         TranslationCompilerOptions options,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool rmf2 = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (source.Bytes.Length > options.MaximumDocumentBytes)
@@ -53,12 +53,13 @@ internal static class Mf2MessageParser
         if (StrictJsonParser.StrictUtf8.GetByteCount(text) > options.MaximumValueBytes)
             Error(diagnostics, source, "RTR0022", "MF2 message value exceeds the configured byte limit.");
 
+        if (rmf2) ValidateRmf2Capabilities(text, source, diagnostics);
         var declarations = new Dictionary<string, Declaration>(StringComparer.Ordinal);
         int offset = 0;
         while (TryReadLine(text, offset, out string line, out int next))
         {
             string trimmed = line.Trim();
-            if (trimmed.Length == 0 || trimmed.StartsWith("//", StringComparison.Ordinal))
+            if (trimmed.Length == 0 || (!rmf2 && trimmed.StartsWith("//", StringComparison.Ordinal)))
             {
                 offset = next;
                 continue;
@@ -78,13 +79,18 @@ internal static class Mf2MessageParser
             break;
         }
 
-        string body = text.Substring(Math.Min(offset, text.Length)).Trim();
+        string body = text.Substring(Math.Min(offset, text.Length));
+        if (!rmf2) body = body.Trim();
         if (body.Length == 0)
         {
             Error(diagnostics, source, "RTR0041", "MF2 message has no body.");
             return null;
         }
 
+        if (rmf2)
+            foreach (Declaration declaration in declarations.Values)
+                if (declaration.Selector is null && declaration.Type is TranslationArgumentType.Int or TranslationArgumentType.Number)
+                    declaration.Selector = "plural";
         var usedInputs = new HashSet<string>(StringComparer.Ordinal);
         CompiledMessagePattern? message;
         if (body.StartsWith(".match", StringComparison.Ordinal))
@@ -105,7 +111,7 @@ internal static class Mf2MessageParser
         var included = new HashSet<string>(StringComparer.Ordinal);
         foreach (Declaration declaration in declarations.Values)
         {
-            if (!usedInputs.Contains(declaration.Input) || !included.Add(declaration.Input)) continue;
+            if ((!rmf2 && !usedInputs.Contains(declaration.Input)) || !included.Add(declaration.Input)) continue;
             placeholders.Add(new PlaceholderModel(declaration.Input, declaration.Type, declaration.Format,
                 new ByteSpan(0, 0), new ByteSpan(0, 0), new ByteSpan(0, 0)));
         }
@@ -114,6 +120,57 @@ internal static class Mf2MessageParser
             Error(diagnostics, source, "RTR0022", "MF2 input count exceeds the configured limit.");
 
         return new Mf2ParsedMessage(text, message, placeholders.ToArray());
+    }
+
+    // RMF2 has its own explicit execution profile. Never accept an option and silently
+    // ignore it or clamp it into another meaning in the existing compact backends.
+    private static void ValidateRmf2Capabilities(string text, TranslationSource source, DiagnosticBag diagnostics)
+    {
+        foreach (Match expression in Regex.Matches(text, @"\{\s*\$[A-Za-z_][A-Za-z0-9_]*\s*([^{}]*)\}"))
+        {
+            string tail = expression.Groups[1].Value.Trim();
+            if (tail.Length == 0) continue;
+            Match function = Regex.Match(tail, @"^:([A-Za-z_][A-Za-z0-9_:-]*)(.*)$", RegexOptions.Singleline);
+            if (!function.Success) { Unsupported("Expression annotations are not executable in this profile."); continue; }
+            string name = function.Groups[1].Value;
+            string allowed = name switch {
+                "string" => "select", "integer" => "select useGrouping", "number" => "select style minimumFractionDigits maximumFractionDigits",
+                "date" or "time" or "datetime" or "runic:uuid" => "style", "runic:boolean" => "select",
+                "runic:relative-time" => "unit numeric", _ => "",
+            };
+            if (allowed.Length == 0) { Unsupported("Unsupported execution function ':" + name + "'."); continue; }
+            var values = new Dictionary<string, string>(StringComparer.Ordinal);
+            string rest = function.Groups[2].Value.Trim();
+            foreach (string token in rest.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            {
+                int equals = token.IndexOf('=');
+                if (equals < 1) { Unsupported("Unsupported function option or annotation."); continue; }
+                string key = token.Substring(0, equals), value = UnquoteLiteral(token.Substring(equals + 1));
+                if (Array.IndexOf(allowed.Split(' '), key) < 0 || !values.TryAdd(key, value) || value.StartsWith('$'))
+                    Unsupported("Unknown, duplicate or dynamic function option '" + key + "'.");
+            }
+            foreach (var option in values)
+            {
+                bool valid = option.Key switch {
+                    "select" => option.Value is "plural" or "ordinal" or "exact",
+                    "useGrouping" => option.Value is "always" or "never",
+                    "style" => name switch {
+                        "number" => option.Value is "decimal" or "percent",
+                        "runic:uuid" => option.Value is "d" or "n" or "b" or "p",
+                        _ => option.Value is "iso" or "short" or "long",
+                    },
+                    "minimumFractionDigits" or "maximumFractionDigits" => int.TryParse(option.Value, out int digits) && digits >= 0 && digits <= (values.GetValueOrDefault("style") == "percent" ? 4 : 6),
+                    "unit" => option.Value is "second" or "minute" or "hour" or "day" or "week" or "month" or "year",
+                    "numeric" => option.Value is "always" or "auto", _ => false,
+                };
+                if (!valid) Unsupported("Unsupported value for option '" + option.Key + "'.");
+            }
+            if (values.ContainsKey("minimumFractionDigits") || values.ContainsKey("maximumFractionDigits"))
+                if (!values.TryGetValue("minimumFractionDigits", out string? min) || !values.TryGetValue("maximumFractionDigits", out string? max) || min != max)
+                    Unsupported("This backend supports fixed precision only; minimumFractionDigits and maximumFractionDigits must both be present and equal.");
+            void Unsupported(string message) => diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, message, source,
+                new ByteSpan(StrictJsonParser.StrictUtf8.GetByteCount(text.AsSpan(0, expression.Index)), StrictJsonParser.StrictUtf8.GetByteCount(expression.Value)));
+        }
     }
 
     private static CompiledMessagePattern? ParseMatch(
@@ -141,6 +198,8 @@ internal static class Mf2MessageParser
                 Error(diagnostics, source, "RTR0041", "MF2 selector names must be variables.");
                 return null;
             }
+            if (!selectorTokens[index].StartsWith('$') || selectors.Exists(s => s.Name == name))
+            { Error(diagnostics, source, "RTR0041", "MF2 selectors must be distinct variables."); return null; }
             Declaration declaration = ResolveDeclaration(name, declarations);
             usedInputs.Add(declaration.Input);
             selectors.Add(new CompiledMessageSelector(name, declaration.Input, declaration.Selector ?? "exact"));
@@ -216,8 +275,9 @@ internal static class Mf2MessageParser
         Dictionary<string, Declaration> declarations,
         HashSet<string> usedInputs,
         TranslationSource source,
-        DiagnosticBag diagnostics)
+        DiagnosticBag diagnostics, int depth = 0)
     {
+        if (depth > 64) { Error(diagnostics, source, "RTR0022", "MF2 markup depth exceeds 64 levels."); return null; }
         var nodes = new List<CompiledMessageNode>();
         var text = new StringBuilder();
         while (position < pattern.Length)
@@ -239,7 +299,10 @@ internal static class Mf2MessageParser
             int close = FindExpressionEnd(pattern, position + 1);
             if (close < 0)
             {
-                Error(diagnostics, source, "RTR0041", "MF2 pattern contains an unterminated expression.");
+                string original = StrictJsonParser.StrictUtf8.GetString(source.Bytes);
+                int start = Math.Max(0, original.IndexOf(pattern, StringComparison.Ordinal)) + position;
+                diagnostics.Add("RTR0041", TranslationDiagnosticSeverity.Error, "MF2 pattern contains an unterminated expression.", source,
+                    new ByteSpan(StrictJsonParser.StrictUtf8.GetByteCount(original.AsSpan(0, start)), StrictJsonParser.StrictUtf8.GetByteCount(pattern.AsSpan(position))));
                 return null;
             }
             Flush(nodes, text);
@@ -263,19 +326,23 @@ internal static class Mf2MessageParser
                 int tab = declaration.IndexOf('\t');
                 int separator = space < 0 ? tab : tab < 0 ? space : Math.Min(space, tab);
                 string name = separator < 0 ? declaration : declaration.Substring(0, separator);
-                if (!Variable.IsMatch(name))
+                if (!Rmf2MarkupRegistry.Name.IsMatch(name))
                 {
                     Error(diagnostics, source, "RTR0041", "MF2 markup names must be identifiers.");
                     return null;
                 }
-                IReadOnlyDictionary<string, string> attributes = ParseAttributes(separator < 0 ? string.Empty : declaration.Substring(separator + 1));
+                var attributes = new SortedDictionary<string, string>(StringComparer.Ordinal);
+                var annotations = new SortedDictionary<string, string>(StringComparer.Ordinal);
+                var variableOptions = new HashSet<string>(StringComparer.Ordinal);
+                string properties = separator < 0 ? string.Empty : declaration.Substring(separator + 1);
+                if (!ReadMarkupProperties(properties, attributes, annotations, variableOptions, usedInputs, declarations, source, diagnostics)) return null;
                 CompiledMessageNode[] children = Array.Empty<CompiledMessageNode>();
                 if (!standalone)
                 {
-                    children = ParseNodes(pattern, ref position, name, declarations, usedInputs, source, diagnostics)!;
+                    children = ParseNodes(pattern, ref position, name, declarations, usedInputs, source, diagnostics, depth + 1)!;
                     if (children is null) return null;
                 }
-                nodes.Add(new CompiledMessageMarkup(name, attributes, children));
+                nodes.Add(new CompiledMessageMarkup(name, attributes, children) { Standalone = standalone, Annotations = annotations, VariableOptions = variableOptions });
                 continue;
             }
             CompiledMessageNode? node = ParseExpression(expression, declarations, usedInputs, source, diagnostics);
@@ -300,7 +367,10 @@ internal static class Mf2MessageParser
     {
         if (!expression.StartsWith('$'))
         {
-            Error(diagnostics, source, "RTR0041", "Runic's MF2 profile currently requires variable expressions.");
+            if ((expression.StartsWith('|') && expression.EndsWith('|')) ||
+                decimal.TryParse(expression, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
+                return new CompiledMessageText(UnquoteLiteral(expression));
+            Error(diagnostics, source, "RTR0065", "The selected execution backend does not support this MF2 operand/function combination.");
             return null;
         }
         int end = 1;
@@ -362,9 +432,10 @@ internal static class Mf2MessageParser
             Error(diagnostics, source, "RTR0041", "Invalid MF2 .local declaration.");
             return;
         }
+        Declaration operand = ResolveDeclaration(input, declarations);
         Declaration declaration = tail.Length == 0
-            ? Declaration.CreateInput(left, input, TranslationArgumentType.String, "none", null)
-            : ParseFunction(left, input, tail, source, diagnostics);
+            ? new Declaration(left, operand.Input, operand.Type, operand.Format, operand.Function, operand.Selector, operand.Unit, operand.Numeric)
+            : ParseFunction(left, operand.Input, tail, source, diagnostics);
         if (!declarations.TryAdd(left, declaration))
             Error(diagnostics, source, "RTR0041", "Duplicate MF2 declaration for '" + left + "'.");
     }
@@ -487,12 +558,55 @@ internal static class Mf2MessageParser
         return -1;
     }
 
-    private static Dictionary<string, string> ParseAttributes(string value)
+    private static bool ReadMarkupProperties(string value, SortedDictionary<string, string> options,
+        SortedDictionary<string, string> annotations, HashSet<string> variableOptions, HashSet<string> inputs,
+        Dictionary<string, Declaration> declarations, TranslationSource source, DiagnosticBag diagnostics)
     {
-        var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (Match match in Option.Matches(value))
-            attributes[match.Groups[1].Value.TrimStart('@')] = UnquoteLiteral(match.Groups[2].Value);
-        return attributes;
+        int at = 0;
+        while (at < value.Length)
+        {
+            SkipWhitespace(value, ref at); if (at == value.Length) break;
+            bool annotation = value[at] == '@'; if (annotation) at++;
+            int start = at;
+            while (at < value.Length && (char.IsAsciiLetterOrDigit(value[at]) || value[at] is '_' or '-')) at++;
+            string key = value.Substring(start, at - start);
+            if (key.Length == 0) return Invalid();
+            SkipWhitespace(value, ref at);
+            string item = ""; bool variable = false;
+            if (at < value.Length && value[at] == '=')
+            {
+                at++; SkipWhitespace(value, ref at); if (at == value.Length) return Invalid();
+                if (value[at] == '|')
+                {
+                    at++; var literal = new StringBuilder(); bool closed = false;
+                    while (at < value.Length)
+                    {
+                        char ch = value[at++];
+                        if (ch == '|') { closed = true; break; }
+                        if (ch == '\\' && at < value.Length) ch = value[at++];
+                        literal.Append(ch);
+                    }
+                    if (!closed) return Invalid();
+                    item = literal.ToString();
+                }
+                else
+                {
+                    start = at; while (at < value.Length && !char.IsWhiteSpace(value[at])) at++;
+                    item = value.Substring(start, at - start);
+                    variable = item.StartsWith('$');
+                    if (variable) { item = item.Substring(1); if (!Variable.IsMatch(item) || annotation) return Invalid(); }
+                }
+            }
+            else if (!annotation) return Invalid();
+            if (!(annotation ? annotations : options).TryAdd(key, item)) return Invalid();
+            if (variable)
+            {
+                Declaration input = ResolveDeclaration(item, declarations);
+                options[key] = input.Input; variableOptions.Add(key); inputs.Add(input.Input);
+            }
+        }
+        return true;
+        bool Invalid() { Error(diagnostics, source, "RTR0041", "Invalid or duplicate MF2 markup option/attribute."); return false; }
     }
 
     private static string? OptionValue(Dictionary<string, string> options, string name) =>
@@ -565,7 +679,7 @@ internal static class Mf2MessageParser
         internal TranslationArgumentType Type { get; }
         internal string Format { get; }
         internal string Function { get; }
-        internal string? Selector { get; }
+        internal string? Selector { get; set; }
         internal string? Unit { get; }
         internal string? Numeric { get; }
 

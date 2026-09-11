@@ -7,6 +7,7 @@ internal static class CppOutputRenderer
 {
     internal static IReadOnlyList<TranslationGeneratedOutput> Render(CompiledTextCatalog catalog)
     {
+        if (catalog.MessageGrammarVersion == 4) throw new NotSupportedException("The experimental C++ backend does not implement the RMF2 execution profile; select CSharp, ESM or JSON outputs.");
         ValidateExperimentalCapabilities(catalog);
         string stem = catalog.Id + ".translations-v1";
         return new[]

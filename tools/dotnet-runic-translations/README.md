@@ -70,3 +70,7 @@ This tool is a public preview for .NET 10. Preview commands and generated output
 - [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
 Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for bundled data attribution.
+
+## RMF2
+
+`sourceLayout: "rmf2-v1"` enables recursive resources and markup contracts. Use `migrate-rmf2 --project translations --dry-run` to preview TOML migration, then omit `--dry-run` to commit with original `.toml.bak` files. `lsp` starts the bounded stdio language service. See the [RMF2 guide](../../docs/guides/translations/rmf2.md) for capabilities and limits.
