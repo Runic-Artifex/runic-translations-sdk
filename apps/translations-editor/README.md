@@ -6,11 +6,14 @@ Translate and review the same MessageFormat 2 project that application builds co
 
 Runic Translations Editor is a companion to [Runic Translations](../../packages/dotnet/Runic.Translations/README.md). The editor manages workspaces; the compiler, schema, runtime, CLI, and language integrations are published by the SDK.
 
+See the [editor architecture](docs/architecture.md), [source-build and future
+archive guidance](docs/editor-distribution.md), and [usability-study protocol](docs/translator-usability-test.md).
+
 ## Availability and local commands
 
 Standalone Editor distributions are outside the SDK preview. Build the editor from
 source using the commands below. The examples here use the executable produced by
-that build; no public download or signing status is implied.
+that build; SDK package publication does not imply an Editor download.
 
 Open the directory containing `translations/runic.json`, or the translations
 directory itself. The editor uses the same compiler path as MSBuild and Vite.

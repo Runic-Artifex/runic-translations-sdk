@@ -1,14 +1,20 @@
-# Public-preview translator usability test
+# Translator usability study protocol
 
-This bounded test is the remaining human release gate for issue #4. Run it with three participants who translate software but did not contribute to the editor. One participant may be familiar with Runic Translations; at least two must not be.
+Use this bounded study to learn whether translators can perform the editor's core
+workflow without contributor knowledge. It is product research, not a release gate.
+A useful study has three participants who translate software but did not contribute
+to the editor; one may know Runic Translations and at least two should not.
 
 ## Build under test
 
-Record the release tag, archive name, SHA-256 digest, operating system, and whether the operating system displayed a trust warning. Participants receive only the GitHub release page and a small source-language brief. Do not give them a development checkout, Node.js, the .NET SDK, or package-registry credentials.
+Record the source revision or archive name and SHA-256 digest, operating system,
+and any trust warning. Give participants a prepared runnable build and a small
+source-language brief. Do not require them to use a development checkout, Node.js,
+the .NET SDK, or package-registry credentials.
 
 ## Tasks
 
-1. Find the correct archive, notice its signing status, verify its checksum, and start it.
+1. Start the supplied build and, when applicable, verify its documented checksum.
 2. Open the supplied workspace with the documented launcher.
 3. Find all incomplete German messages and translate a plain message.
 4. Translate a message with an input and a plural selector, then inspect its compiled preview.
@@ -16,10 +22,12 @@ Record the release tag, archive name, SHA-256 digest, operating system, and whet
 6. Mark the message reviewed, save, and identify the source diff and editor-state diff.
 7. Run the documented headless validation command.
 
-## Recording and release rule
+## Recording and follow-up
 
 For each task, record completion, time, wrong turns, help requested, unexpected terminology, and accessibility input method. Do not record translation text or customer paths in diagnostics.
 
-A finding blocks the preview when a participant cannot download or launch within the documented platform policy, invalid source is saved, the CI command disagrees with the editor, a source change is hidden or unexpectedly broad, or two participants cannot complete the core translate/validate/save path without contributor help. File each blocking finding separately, link it from issue #4, fix it, and repeat the affected task with a participant who did not see the original failure.
-
-The maintainer posts an anonymized results table to issue #4. This repository does not claim that the human test passed until that comment exists.
+Treat an inability to start the documented build, invalid-source save, disagreement
+between validation and the editor, hidden or unexpectedly broad source changes, or
+repeated inability to complete translate/validate/save without help as a concrete
+finding. Record the scenario and outcome without personal or workspace data, then
+use the finding to prioritize a focused fix or further research.

@@ -1,11 +1,10 @@
-# Runic Translations Wave B contract
+# Runic Translations kernel contract
 
-Wave B implements the R2, R3, and bounded R5 kernel tranche on top of the frozen
-Wave A source schemas, message grammar, compiler IR, fingerprint, and runtime ABI
-version 1. It does not change the meaning of a Wave A catalog or resource
-document.
+This contract defines the translations kernel on top of the frozen source
+schemas, message grammar, compiler IR, fingerprint, and runtime ABI version 1.
+It does not change the meaning of a version 1 catalog or resource document.
 
-The normative Wave B topics are split as follows:
+The normative topics are split as follows:
 
 - [runtime-semantics.md](runtime-semantics.md) defines locale selection,
   immutable snapshots, formatting, fallback, hot swap, and concurrency;
@@ -16,9 +15,9 @@ The normative Wave B topics are split as follows:
 - [external-packs.md](external-packs.md) defines untrusted-pack validation,
   integrity order, limits, cache rules, and failure atomicity;
 - [versioning-and-edges.md](versioning-and-edges.md) defines independent versions
-  and the policy for TypeScript, templates, hosting, and deferred Wave C work.
+  and the boundaries for TypeScript, templates, and hosting.
 
-The machine-readable [Wave B corpus](../corpus/wave-b/index.json) is the shared
+The machine-readable [conformance corpus](../corpus/wave-b/index.json) is the shared
 language-neutral compatibility input. The schemas are:
 
 | Contract | Writer version | File |
@@ -32,5 +31,5 @@ These schemas deliberately have no custom `$id`. A canonical schema URI remains
 blocked until the registry owns and publishes a domain. The standard draft URI
 declares the JSON Schema dialect only.
 
-All public identities use `Runic.Translations.*`. Retired planning names
-are not compatibility aliases.
+All public identities use `Runic.Translations.*`. Retired names are not
+compatibility aliases.

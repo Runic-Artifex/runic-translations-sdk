@@ -1,26 +1,27 @@
-# Editor distribution
+# Source builds and archive guidance
 
-Runic Translations Editor release candidates are self-contained archives for `linux-x64`, `win-x64`, and `osx-arm64`. Each archive contains the .NET runtime, Runic Desktop presentation host, required native WebView assets, the static SvelteKit application, launchers, an example workspace, the license, third-party notices, a per-file manifest, and a sibling SHA-256 checksum. Customer machines need no SDK, Node.js installation, package-registry authentication, or separate runtime.
+The supported way to use Runic Translations Editor is to build it from the SDK
+source, as described in the [editor README](../README.md). SDK package publication
+does not create an Editor archive.
 
-`eng/package-editor.ps1` performs a matching-OS publish twice, fixes archive order and timestamps, compares the exact archive digests, verifies the sibling checksum, extracts into a clean temporary directory, verifies every file against `package-manifest.json`, and runs executable plus public-launcher headless validation and the complete editor smoke workflow. Tests therefore exercise the artifact a customer downloads, not only the publish staging directory. The executable and manifest both carry the exact version, channel, source commit, and runtime identifier supplied by CI.
+If an archive is produced for `linux-x64`, `win-x64`, or `osx-arm64`, it should be
+self-contained: the .NET runtime, Runic Desktop presentation host, required native
+WebView assets, static SvelteKit application, launchers, example workspace, license,
+third-party notices, per-file manifest, and sibling SHA-256 checksum travel together.
+Users should not need an SDK, Node.js installation, package-registry authentication,
+or a separate runtime to start it.
 
-Every candidate also has a closed `release-staging` directory. It contains the
-release manifest and checksum set, copied package manifest, SPDX 2.3 artifact
-SBOM with its exact .NET/npm dependency and license inventory, provenance, and
-an upstream-attestation receipt template. The staging verifier rejects path
-traversal, links, unbounded paths, more than 10,000 payload files, payload files
-over 512 MiB, aggregate content over 2 GiB, duplicate checksums, and any
-unlisted file. Before any future, separately authorized publication decision,
-the release-set verifier requires exactly one Linux x64, Windows x64, and macOS
-arm64 archive, all from one source revision and tree. It then emits the exact
-central evidence artifact `distribution/Runic.Translations.Editor-<version>.zip`,
-independently recreates it from the same verified platform snapshots, and rejects
-any byte difference. It also emits a receipt template whose artifact path matches
-the organization collector.
+Archive verification should exercise the artifact a user receives, not only its
+staging directory: compare reproducible archive digests, verify its checksum,
+extract it into a clean directory, verify every file against `package-manifest.json`,
+and run executable, launcher, and editor-smoke validation. The executable and
+manifest should identify the version, channel, source revision, and runtime
+identifier used to build them.
 
 ## Download, trust, and updates
 
-No editor archive has been published yet. Unsigned preview workflow outputs are retained only as CI candidates and are not public downloads. A future public release will display `PREVIEW-NOTICE.md`, provide one platform archive and its same-named `.sha256` file, and bind its exact upstream GitHub attestation receipt into the organization release-evidence bundle.
+No public Editor archive is currently claimed. An archive should provide one
+same-named `.sha256` file and clear platform instructions.
 
 On Linux:
 
@@ -49,27 +50,28 @@ Expand-Archive .\Runic.Translations.Editor-1.0.0-preview.N-win-x64.zip
 .\Runic.Translations.Editor\runic-translations-editor.cmd edit C:\path\to\workspace
 ```
 
-The launcher accepts `edit [workspace]` and `validate [workspace]`; without arguments it edits the current directory. The workspace contains one conventional `runic.json` translation project.
+The launcher accepts `edit [workspace]` and `validate [workspace]`; without
+arguments it edits the current directory. A workspace contains one `runic.json`
+translation project, which can select legacy MF2, `locale-toml`, or `rmf2-v1`.
 
-## Release boundary
+## Availability and trust
 
-This repository is the only authority for editor archives and editor GitHub releases. The [Runic Translations](https://github.com/Runic-Artifex/runic-translations) repository publishes the compiler/runtime/tool packages consumed here, but does not package or release this application.
+This repository is the authority for Editor source and any Editor archive. The
+[Runic Translations](https://github.com/Runic-Artifex/runic-translations)
+repository publishes compiler/runtime/tool packages consumed here, but does not
+package or release this application.
 
-Preview archives, if considered after 1.0, are unsigned evaluation builds and
-update only by manually replacing the complete extracted application. The editor
-performs no update request and never changes itself. Through 1.0 there is no
-certificate acquisition, code signing, notarization, signed update metadata, or
-signing-oriented staging descriptor. The preview workflow cannot create
-releases, and any publication decision remains separately authorized.
+The editor performs no update request and never changes itself. Replacing an
+extracted archive is a manual action. No public signing, notarization, or automatic
+update capability is claimed.
 
 Windows may show an unknown-publisher warning. macOS Gatekeeper may prevent an
-unsigned application from starting under the machine's policy. The preview does
-not ask users to suppress those controls; use a source build when policy
-forbids unsigned software.
+unsigned archive from starting under the machine's policy. Do not bypass those
+controls; use a source build when policy forbids an unsigned archive.
 
 ## Validation and reviewable diffs
 
-The supported CI invocation from an extracted archive is:
+The validation invocation for an extracted archive or source-built launcher is:
 
 ```bash
 ./runic-translations-editor validate /path/to/workspace
@@ -81,7 +83,9 @@ Editor smoke tests apply identical key and review operations to two clean worksp
 
 The editor intentionally preserves a translator's MF2 formatting for direct document saves. Determinism means the same starting bytes and editor operation produce the same ending bytes; it does not mean every manually edited message is reformatted.
 
-Before declaring the public preview ready, maintainers must run the bounded [translator usability test](translator-usability-test.md) and post its anonymized results to the release issue. Automated smoke tests do not substitute for that human gate.
+The bounded [translator usability study](translator-usability-test.md) can reveal
+workflow and accessibility problems that automated smoke tests cannot. Its findings
+inform focused product work; it is not a release gate.
 
 ## Diagnostics and privacy
 

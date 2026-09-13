@@ -6,7 +6,7 @@ An `ITranslationSnapshot` is an immutable, thread-safe view of exactly one
 catalog and one resolved canonical locale. Construction performs these steps
 before the snapshot becomes observable:
 
-1. Canonicalize the requested locale using the Wave A locale rules.
+1. Canonicalize the requested locale using the source-contract locale rules.
 2. Apply the catalog's `unsupportedLocale` policy.
 3. Merge compiled direct values with an accepted external pack, if supplied.
 4. Resolve every canonical key independently through the declared fallback

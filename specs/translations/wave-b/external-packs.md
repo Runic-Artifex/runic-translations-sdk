@@ -23,7 +23,7 @@ Validation order is security-significant:
 1. Acquire bounded raw bytes from the caller interface.
 2. Invoke the optional integrity callback over the complete raw bytes.
 3. Parse strict UTF-8 JSON with duplicate detection and cancellation.
-4. Check artifact/grammar version, catalog, canonical locale, and Wave A contract
+4. Check artifact/grammar version, catalog, canonical locale, and source-contract
    fingerprint.
 5. Enforce known-key, pattern, descriptor, count, size, and depth rules.
 6. Build a complete immutable candidate snapshot with compiled fallback.

@@ -108,5 +108,5 @@ capacity and reuses only byte-identical resource snapshots.
 RMF2 source is the lossless representation for markup, declarations, variants
 and attached metadata. The existing closed XLIFF 2.1 text profile reports
 structured messages as semantic losses. It does not claim lossless interchange
-for arbitrary rich MF2, as scoped by W200-008. Review its loss report before
+for arbitrary rich MF2. Review its loss report before
 using a text-profile export for translation.

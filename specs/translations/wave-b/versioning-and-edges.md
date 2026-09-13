@@ -1,8 +1,8 @@
-# Versioning, ownership edges, and deferred work
+# Versioning and ownership edges
 
 The following integers are independent compatibility selectors:
 
-| Contract | Wave B writer |
+| Contract | Writer |
 |---|---:|
 | Catalog source schema | 1 |
 | Resource source schema | 1 |
@@ -16,7 +16,7 @@ Package SemVer is not a behavior selector. Readers may support multiple explicit
 versions, but writers emit exactly one documented version. An unsupported value
 fails; readers never infer, downgrade, or "best effort" an unknown version.
 
-The Wave A contract fingerprint remains the compatibility key for translated
+The source contract fingerprint remains the compatibility key for translated
 payloads. Adding, removing, renaming, or changing the placeholders of a canonical
 key changes the fingerprint. Changing translated pattern text alone does not.
 Changing generated namespace/class or catalog ID is an explicit source migration.
@@ -26,7 +26,7 @@ Changing generated namespace/class or catalog ID is an explicit source migration
 Runic Translations owns the bytes and schemas for locale, template, and asset
 metadata. Template, browser, and hosting systems may consume these versioned
 artifacts but do not redefine their properties, ordering, hash, or compatibility
-rules. This Wave does not edit template, web, or Hosting projects.
+rules. This contract does not edit template, web, or Hosting projects.
 
 The template manifest is value-free and contains stable keys, optional source
 metadata normalized to nullable fields, tags, and typed arguments. It authorizes
@@ -38,15 +38,14 @@ media type, and optional locale. A host may aggregate or copy listed assets but
 must verify their bytes and must not synthesize a different Runic Translations
 fingerprint. Host URL routing and deployment policy remain host-owned.
 
-The TypeScript filename and type projection are reserved edge artifacts. A full
-browser formatter, TypeScript packaging, template compiler integration, and host
-static-asset changes are Wave C/D work. React, Vue, and Svelte projections follow
-in Wave E; Angular- and ReactiveUI-specific projections follow in Wave F. Until the
-relevant tranche lands, .NET-resolved text is the authoritative cross-runtime
-formatting path.
+The TypeScript filename and type projection are reserved edge artifacts. This
+contract does not define a browser formatter, TypeScript packaging, template
+compiler integration, host static-asset changes, or framework-specific
+projections. .NET-resolved text is the authoritative cross-runtime formatting
+path.
 
-Also deferred to Wave C are plural/select/gender grammar, rich or trusted markup,
+Version 1 does not support plural/select/gender grammar, rich or trusted markup,
 automatic filesystem/network pack discovery, translation services, dynamic
 assembly scanning, runtime source JSON compilation, custom schema `$id` values,
-and new diagnostic identities. Any grammar or wire change begins with a new
-version plus corpus changes; it never extends version 1 in place.
+or new diagnostic identities. A grammar or wire change requires a new version
+and corpus changes; version 1 is never extended in place.

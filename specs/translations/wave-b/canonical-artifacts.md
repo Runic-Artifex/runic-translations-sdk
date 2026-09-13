@@ -1,6 +1,6 @@
 # Deterministic compiler outputs
 
-All generator, build, and CLI surfaces consume the same canonical Wave A IR.
+All generator, build, and CLI surfaces consume the same canonical source IR.
 For identical normalized inputs and options they produce byte-identical outputs
 independent of input enumeration, source partitioning, absolute paths, current
 directory, operating system, clock, current culture, username, or process ID.
@@ -18,7 +18,7 @@ Hint names compare ordinally. Generated C# enables nullable analysis, uses fully
 qualified framework names where ambiguity is possible, uses LF line endings,
 and ends with one LF. Groups mirror the resource hierarchy. Placeholder
 parameters and serialized contracts are ordered by ordinal placeholder name.
-Key IDs follow the Wave A ordinal dotted-key order.
+Key IDs follow the source contract's ordinal dotted-key order.
 
 Non-C# artifact names are relative safe names:
 
@@ -60,7 +60,7 @@ remain literal UTF-8. Solidus is not escaped.
 
 The locale-artifact and external-pack version 1 payloads are structurally and
 byte compatible. The complete emitted bytes have a separate asset SHA-256. The
-embedded `contractFingerprint` retains the frozen Wave A definition and excludes
+embedded `contractFingerprint` retains the frozen source-contract definition and excludes
 translations; it is not the hash of the artifact itself.
 
 Template and asset manifests use the property order shown in their schemas,
@@ -70,7 +70,7 @@ UTF-8 envelope. Their versions are independent from the locale artifact.
 ## Typed generated surface
 
 Generated keys expose stable dotted names and optimized integer IDs. Generated
-accessors are instance members over an explicit manager, use Wave A namespace
+accessors are instance members over an explicit manager, use source-contract namespace
 and class settings, and emit strongly typed parameters:
 
 | Descriptor | C# parameter |

@@ -233,7 +233,7 @@ The [VS Code extension](../../../tools/vscode-runic-translations/README.md) and
 package this language server with native IDE navigation and preview commands.
 Their READMEs describe configuration, supported refactor scope and host checks.
 
-## Versions and remaining proposal work
+## Versions and execution limits
 
 RMF2 uses resource syntax **1**, execution profile **rmf2-execution-v1**, markup
 contract/renderer ABI **1**, and normalized AST/resolved locale artifact **4**.
@@ -264,10 +264,9 @@ inputs. Syntax support remains distinct from the bounded executor.
 Remaining limits are explicit: variable-valued formatter options, expression
 annotations, formatted literal operands/locals and quoted wildcard execution are
 rejected by the execution profile. C++ RMF2, terms and group-atomic fallback are
-separate follow-ons. Arbitrary rich XLIFF is outside the accepted text-profile
+unsupported. Arbitrary rich XLIFF is outside the supported text-profile
 scope; exports report semantic loss. Application-language call-site refactors
 are delegated or refused, never implemented as blind text replacement.
 
-The [continuation checklist](rmf2-delivery.md) records completion and the two
-native Windows host results. No package or repository release version changes
-with this work.
+See [validation and measurements](rmf2-validation.md) for reproducible checks
+and the recorded native Windows host results.
