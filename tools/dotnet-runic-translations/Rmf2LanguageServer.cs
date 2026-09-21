@@ -31,7 +31,6 @@ internal sealed class Rmf2LanguageServer
     private readonly SortedSet<string> _diskProjectDirectories = new(StringComparer.Ordinal);
     private readonly SortedSet<string> _projectDirectories = new(StringComparer.Ordinal);
     private const int MaximumProjectIndexEntries = 100_000;
-    private int _projectIndexEntryLimit = MaximumProjectIndexEntries;
     private bool _globalDiagnosticsRefreshPending;
     private bool _projectIndexRescanPending;
     private static readonly UTF8Encoding Utf8 = new(false, true);
@@ -108,8 +107,6 @@ internal sealed class Rmf2LanguageServer
         if (method == "initialize")
         {
             _configurationSync = args["initializationOptions"]?["runicConfigurationSync"]?.GetValue<bool>() == true;
-            int? requestedIndexLimit = args["initializationOptions"]?["runicProjectIndexEntryLimit"]?.GetValue<int>();
-            _projectIndexEntryLimit = Math.Clamp(requestedIndexLimit ?? MaximumProjectIndexEntries, 1, MaximumProjectIndexEntries);
             if (args["workspaceFolders"] is JsonArray folders)
                 foreach (var folder in folders) _workspaceRoots.Add(LocalPath(folder!["uri"]!.GetValue<string>()));
             else if (args["rootUri"] is JsonValue rootUri) _workspaceRoots.Add(LocalPath(rootUri.GetValue<string>()));
@@ -376,7 +373,7 @@ internal sealed class Rmf2LanguageServer
     private void RefreshProjectIndex(bool rescanWorkspace)
     {
         if (rescanWorkspace)
-            ReplaceProjectIndex(_workspaceRoots, _diskProjectDirectories, _projectIndexEntryLimit, _revisionGate, null, _requestCancellation);
+            ReplaceProjectIndex(_workspaceRoots, _diskProjectDirectories, MaximumProjectIndexEntries, _revisionGate, null, _requestCancellation);
         _projectDirectories.Clear();
         _projectDirectories.UnionWith(_diskProjectDirectories);
         // Unsaved new configurations participate only when they are contained
