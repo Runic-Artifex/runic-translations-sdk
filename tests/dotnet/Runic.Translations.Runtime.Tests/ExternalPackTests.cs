@@ -17,6 +17,7 @@ internal static class ExternalPackTests
     {
         runner.Add("external pack verifies valid contract", VerifiesValid);
         runner.Add("external pack verifies and executes normalized grammar v2 AST", VerifiesVersion2);
+        runner.Add("RMF2 artifact-v4 headless renderer preserves policy and hides annotations", VerifiesRmf2ArtifactV4);
         runner.Add("external pack normalizes v2 structural bounds and unknown members", Version2StructuralFailures);
         runner.Add("external pack accepts subset and sorts messages", AcceptsSubsetAndSorts);
         runner.Add("external pack accepts arbitrary member order", AcceptsMemberOrder);
@@ -91,6 +92,26 @@ internal static class ExternalPackTests
         Assert.Equal("2 items for guest", snapshot.Format(new TranslationKey("app", 0, "Summary"),
             [new TextArgument("count", 2), new TextArgument("owner", "guest")]));
         await Assert.ThrowsAsync<TranslationPackException>(() => Verify(json.Replace("\"kind\":\"input\"", "\"kind\":\"script\"", StringComparison.Ordinal), contract));
+    }
+
+    private static async Task VerifiesRmf2ArtifactV4()
+    {
+        const string markupContract = "{\"version\":1,\"contracts\":{\"runic:strong\":{\"kind\":\"paired\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}}},\"messages\":{\"greeting\":{\"slots\":{},\"structured\":true,\"contentLocales\":{\"de\":\"de\"}}}}";
+        var key = new TranslationKey("app", 0, "greeting");
+        var contract = new TranslationPackContract("app", "de", Fingerprint,
+            [new TranslationPackMessageContract(key)], messageGrammarVersion: 4, rmf2MarkupContract: markupContract);
+        const string node = "{\"kind\":\"markup\",\"name\":\"runic:strong\",\"attributes\":{},\"standalone\":false,\"annotations\":{\"note\":\"internal\"},\"variableOptions\":[],\"children\":[{\"kind\":\"text\",\"value\":\"Extern\"}]}";
+        string json = "{\"artifactVersion\":4,\"messageGrammarVersion\":4,\"catalog\":\"app\",\"locale\":\"de\",\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"greeting\":{\"astVersion\":4,\"contentLocale\":\"de\",\"inputs\":{},\"selectors\":[],\"variants\":[{\"matches\":{},\"nodes\":[" + node + "]}]}},\"markupContract\":" + markupContract + "}";
+        VerifiedExternalTranslationPack verified = await Verify(json, contract);
+        CompiledTextMessage message = verified.Messages.Single().Message!;
+        var catalog = new CompiledTranslationCatalog("app", "de",
+            [new CompiledTranslationDefinition("greeting", Array.Empty<TranslationPlaceholderDescriptor>())],
+            [new CompiledTranslationLocale("de", null, [new CompiledTranslationValue(0, "", message)])]);
+        var content = new CompiledTranslationSnapshot(catalog, "de").FormatContent(key, Array.Empty<TextArgument>());
+        var renderer = new Rmf2InlineRenderer(markupContract);
+        InlineMarkupRun run = renderer.Render("greeting", content).Single();
+        Assert.False(run.Options.ContainsKey("@note"), "Compiler annotations leaked into headless renderer options.");
+        Assert.Equal("Extern", renderer.ToPlainText("greeting", content));
     }
 
     private static async Task Version2StructuralFailures()

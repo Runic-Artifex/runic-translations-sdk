@@ -107,6 +107,8 @@ function createInlineRendererCore(factory, bindings = [], allowUnboundCustom = f
     for (const [ref, requirement] of Object.entries(requirements)) if ((counts[ref] ?? 0) < requirement.min || (counts[ref] ?? 0) > requirement.max) throw new TypeError(`Slot multiplicity mismatch for '${ref}'.`);
     function materialize(node) {
       if (node.kind === "text") return factory.text(node.value);
+      const contract = rmf2Contract.contracts[node.name];
+      if (!custom.has(node.name) && !node.name.startsWith("runic:") && (contract?.plainText === "omit" || contract?.plainText === "lineBreak")) return contract.plainText === "lineBreak" ? "\n" : "";
       const element = { ...node, children: node.children.map(materialize) };
       return custom.has(node.name) ? custom.get(node.name)(element) : factory.element(element);
     }

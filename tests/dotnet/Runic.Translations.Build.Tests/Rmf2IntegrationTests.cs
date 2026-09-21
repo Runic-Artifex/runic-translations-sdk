@@ -15,6 +15,7 @@ internal static class Rmf2IntegrationTests
     internal static void Register(TestRunner runner)
     {
         runner.Add("RMF2 payment fixture generates and verifies all supported outputs", PaymentExample);
+        runner.Add("RMF2 --emit-cpp fails before creating output", CppEmissionIsUnsupported);
         runner.Add("RMF2 CLI discovers feature mounts and produces version 4 packs", MountedCli);
         runner.Add("RMF2 CLI project activation emits and verifies the cohesive v5 contract", ActivatedV5Cli);
         runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
@@ -37,6 +38,18 @@ internal static class Rmf2IntegrationTests
         Assert.Equal(0, verify.ExitCode, verify.Combined);
         string german = File.ReadAllText(temporary.Resolve("generated/checkout.de.locale-v4.json"));
         Assert.Contains("account_heading", german); Assert.Contains("runic:action", german);
+    }
+    private static void CppEmissionIsUnsupported()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations"));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project);
+        File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "hello = Hello\n");
+        ProcessResult result = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated", "--emit-cpp", "--runic-output", "json");
+        Assert.Equal(1, result.ExitCode, result.Combined);
+        Assert.Contains("RCLI9013", result.Combined);
+        Assert.Contains("--emit-cpp is not supported for RMF2 projects", result.Combined);
+        Assert.False(Directory.Exists(temporary.Resolve("generated")), "Unsupported RMF2 output created artifacts.");
     }
     private static void MountedCli()
     {

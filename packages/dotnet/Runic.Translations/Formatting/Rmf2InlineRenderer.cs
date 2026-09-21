@@ -210,7 +210,7 @@ public sealed class Rmf2InlineRenderer
         }
     }
 
-    /// <summary>Explicit projection; action labels require opt-in and meaningful icons require alternate text in the effective locale.</summary>
+    /// <summary>Explicit projection; action labels require opt-in, custom explicit/alternate-text policies require an adapter, and meaningful icons require alternate text in the effective locale.</summary>
     public string ToPlainText(string key, LocalizedTextContent content, IReadOnlyDictionary<string, InlineMarkupBinding>? slots = null,
         bool allowActionLabels = false, bool annotateLinkDestinations = false)
     {
@@ -221,6 +221,7 @@ public sealed class Rmf2InlineRenderer
         {
             if (run.Text is not null) { text.Append(run.Text); return; }
             Tag tag = _tags[run.Name];
+            if (tag.PlainText == "explicit" && run.Name != "runic:action") throw new TranslationFormatException("Custom markup requires an explicit plain-text adapter.");
             if (tag.PlainText == "explicit" && !allowActionLabels) throw new TranslationFormatException("This markup requires an explicit label-only projection policy.");
             if (tag.PlainText == "lineBreak") { text.Append('\n'); return; }
             if (run.Binding is InlineIconBinding icon)

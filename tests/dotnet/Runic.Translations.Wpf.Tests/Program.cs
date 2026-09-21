@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
@@ -34,7 +35,7 @@ internal static class Program
             ["terms"] = new InlineLinkBinding(new Uri("https://example.test/terms")), ["privacy"] = new InlineLinkBinding(new Uri("https://example.test/privacy")),
             ["retry"] = new InlineActionBinding(() => calls++), ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock { Text = "★" }), false, _ => "Star"),
         };
-        var renderer = new WpfInlineRenderer(catalog.Rmf2MarkupContract!, _ => { }, new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (run, children) => { Require(run.Options["tone"] == "positive", "Badge lost its options."); var span = new Span(); span.Inlines.AddRange(children); return span; } });
+        var renderer = new WpfInlineRenderer(catalog.Rmf2MarkupContract!, _ => { }, new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (run, children) => { Require(run.Options["tone"] == "positive", "Badge lost its options."); Require(!run.Options.ContainsKey("@note"), "Annotation leaked into WPF markup options."); var span = new Span(); span.Inlines.AddRange(children); return span; } });
         var target = new TextBlock();
         renderer.SetContent(target, "payment", content, slots);
         Require(calls == 0 && target.Language.IetfLanguageTag == "en", "Rendering activated an action or lost locale.");
@@ -43,13 +44,26 @@ internal static class Program
         var icon = containers.Select(item => item.Child).OfType<Decorator>().Single();
         var peer = UIElementAutomationPeer.CreatePeerForElement(icon)!;
         Require(peer.GetName() == "Star" && peer.IsContentElement(), "Meaningful icon accessibility was lost.");
+        var blankLabelSlots = new Dictionary<string, InlineMarkupBinding>(slots) {
+            ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock()), false, _ => " \t "),
+        };
+        bool rejectedBlankLabel = false;
+        try { renderer.SetContent(target, "payment", content, blankLabelSlots); }
+        catch (TranslationFormatException) { rejectedBlankLabel = true; }
+        Require(rejectedBlankLabel, "Whitespace meaningful icon alternate text was accepted.");
+        renderer.SetContent(target, "payment", content, slots);
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Action did not fire once.");
         renderer.SetContent(target, "payment", content, slots);
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Detached action remained active.");
         WpfInlineRenderer.ClearContent(target); Require(target.Inlines.Count == 0, "Clear did not dispose content.");
         Console.WriteLine("PASS WPF payment consumer, custom badge, icon accessibility and callback lifetime.");
         return 0;
-        TranslationSource Source(string name) => new(Path.Combine(directory, name), File.ReadAllBytes(Path.Combine(directory, name)));
+        TranslationSource Source(string name)
+        {
+            byte[] bytes = File.ReadAllBytes(Path.Combine(directory, name));
+            if (name == "en.rmf2") bytes = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes).Replace("{#badge tone=$tone}", "{#badge tone=$tone @note=|internal|}"));
+            return new TranslationSource(Path.Combine(directory, name), bytes);
+        }
     }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 }
