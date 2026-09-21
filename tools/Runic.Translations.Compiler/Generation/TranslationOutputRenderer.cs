@@ -48,6 +48,21 @@ public static class TranslationOutputRenderer
     public static TranslationGeneratedOutput RenderCSharpRegistration(CompiledTextCatalog catalog) =>
         CSharpOutputRenderer.RenderRegistration(RequireCatalog(catalog));
 
+    // The execution-v2 carrier is intentionally internal until every generated
+    // backend can be activated together. The source generator's explicit
+    // staged profile is the only production assembly allowed to consume it.
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpKeys(Rmf2ProjectV5 project) =>
+        Rmf2CSharpOutputRendererV5.RenderKeys(project ?? throw new ArgumentNullException(nameof(project)));
+
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpAccessors(Rmf2ProjectV5 project) =>
+        Rmf2CSharpOutputRendererV5.RenderAccessors(project ?? throw new ArgumentNullException(nameof(project)));
+
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpCatalogData(Rmf2ProjectV5 project) =>
+        Rmf2CSharpOutputRendererV5.RenderCatalogData(project ?? throw new ArgumentNullException(nameof(project)));
+
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpRegistration(Rmf2ProjectV5 project) =>
+        Rmf2CSharpOutputRendererV5.RenderRegistration(project ?? throw new ArgumentNullException(nameof(project)));
+
     /// <summary>Renders one declared locale as canonical compact JSON using resolved fallback values.</summary>
     public static TranslationGeneratedOutput RenderLocaleJson(CompiledTextCatalog catalog, string locale)
     {

@@ -155,7 +155,10 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
     {
         if (!TryGetKeyIndex(key, out int index) || _messages[index] is not CompiledTextMessage message)
             throw new TranslationNotFoundException("Structured translation was not found.");
-        if (!message.HasMarkup) throw new TranslationFormatException("The resource does not produce structured content.");
+        // A v5 caller contract is structured when any locale for the key uses
+        // markup. Plain locale variants must therefore remain consumable via
+        // that contract-wide FormatContent surface.
+        if (!message.HasMarkup && message.Rmf2V5 is null) throw new TranslationFormatException("The resource does not produce structured content.");
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
         return CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter);
     }
