@@ -1,11 +1,12 @@
 import * as vscode from "vscode";
 import { LanguageClient, type LanguageClientOptions, type WorkspaceEdit as ProtocolEdit } from "vscode-languageclient/node";
-import { serverLaunch } from "./server.js";
+import { serverLaunch, sourceWatchRoots } from "./server.js";
 import { previewHtml, type Preview } from "./preview.js";
+import { ForwardedWatchers } from "./watchers.js";
 
 interface MessageInfo { key: string; localKey: string; isGroup: boolean; path: string[]; logicalPath: string[]; locale: string; locales: string[]; inputs: string[]; slots: string[] }
 const clients = new Map<string, Promise<LanguageClient>>();
-const watchers = new Map<string, vscode.FileSystemWatcher>();
+const watchers = new Map<string, ForwardedWatchers<vscode.Uri>>();
 let output: vscode.OutputChannel;
 
 async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
@@ -18,15 +19,32 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
     pending = (async () => {
       const config = vscode.workspace.getConfiguration("runicTranslations", uri);
       const launch = serverLaunch(folder.uri.fsPath, config.get<string>("dotnetPath", "dotnet"), config.get<string>("serverAssembly", ""));
-      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, "**/{runic.json,*.rmf2}")); watchers.set(key, watcher);
+      // The manifest is also synchronized by the LSP and must be watched even
+      // when a project has no RMF2 files yet.
+      const manifestWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, "**/runic.json"));
+      let client: LanguageClient | undefined;
+      let started = false;
+      const forward = (uri: vscode.Uri, type: 1 | 2 | 3) => {
+        if (started) client?.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri: uri.toString(), type }] });
+      };
+      const watcher = new ForwardedWatchers(
+        manifestWatcher,
+        () => sourceWatchRoots(folder.uri.fsPath),
+        root => vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root), "**/*.rmf2")),
+        forward,
+      );
+      watchers.set(key, watcher);
       const options: LanguageClientOptions = {
         documentSelector: [{ scheme: "file", language: "rmf2", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/*.rmf2` }, { scheme: "file", language: "json", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/runic.json` }],
         workspaceFolder: folder, outputChannel: output,
         initializationOptions: { runicConfigurationSync: true },
-        synchronize: { fileEvents: watcher },
+        // Watchers are forwarded explicitly so a manifest refresh can replace
+        // external mount subscriptions after the client has started.
+        synchronize: {},
       };
-      const client = new LanguageClient("runicTranslations", `Runic: ${folder.name}`, { command: launch.command, args: launch.args, options: { cwd: launch.cwd } }, options);
+      client = new LanguageClient("runicTranslations", `Runic: ${folder.name}`, { command: launch.command, args: launch.args, options: { cwd: launch.cwd } }, options);
       await client.start();
+      started = true;
       return client;
     })();
     clients.set(key, pending);

@@ -505,6 +505,9 @@ test("RMF2 mounts watch new feature files outside the project directory", async 
     const german = join(feature,"de.rmf2"); await writeFile(german,"title = Laden\n");
     const change = new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error("RMF2 mount did not reload")),5000);sent.once("message",value=>{clearTimeout(timer);resolve(value);});});
     watcher.emit("add",german); assert.equal((await change).type,"full-reload"); assert.ok(watched.includes(german));
+    await rm(german);
+    const deletion = new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error("RMF2 mounted deletion did not reload")),5000);sent.once("message",value=>{clearTimeout(timer);resolve(value);});});
+    watcher.emit("unlink",german); assert.equal((await deletion).type,"full-reload");
     server.httpServer.emit("close");
   } finally { await rm(root,{recursive:true,force:true}); }
 });

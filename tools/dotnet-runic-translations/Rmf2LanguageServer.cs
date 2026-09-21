@@ -82,7 +82,7 @@ internal sealed class Rmf2LanguageServer
                 var source = new CancellationTokenSource();
                 long revision;
                 lock (gate) {
-                    if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose") _latestRevision++;
+                    if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose" or "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _latestRevision++;
                     revision = _latestRevision;
                     if (request["id"] is { } id) pending[id.ToJsonString()] = source;
                 }
@@ -115,7 +115,16 @@ internal sealed class Rmf2LanguageServer
             }, ["serverInfo"] = new JsonObject { ["name"] = "Runic RMF2", ["version"] = "1" } };
         }
         if (method == "shutdown") { _shutdown = true; return null; }
-        if (method is "initialized" or "$/cancelRequest" or "workspace/didChangeConfiguration") return null;
+        if (method is "initialized" or "$/cancelRequest") return null;
+        if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration")
+        {
+            // File watchers and configuration synchronization are notifications,
+            // but they still invalidate diagnostics for every open RMF2 buffer.
+            // Do this before looking for textDocument: workspace notifications
+            // intentionally have no document field.
+            RefreshDiagnostics();
+            return null;
+        }
         if (method == "workspace/executeCommand")
         {
             string command = args["command"]!.GetValue<string>();
@@ -387,6 +396,32 @@ internal sealed class Rmf2LanguageServer
         catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException) {
             if (configuration) catalogDiagnostics = TranslationCompiler.CompileProject(new TranslationSource(LocalPath(uri), Utf8.GetBytes(text)), Array.Empty<TranslationSource>()).Diagnostics;
         }
+        PublishDiagnostics(catalogDiagnostics);
+    }
+
+    private void RefreshDiagnostics()
+    {
+        if (_buffers.Count == 0) return;
+        // Open buffers are normally in one configured project.  Reuse the
+        // regular workspace validation path so a watched mounted source,
+        // deletion, or manifest change is reflected without requiring a
+        // synthetic textDocument/didChange notification.
+        string path = LocalPath(_buffers.Keys.First());
+        IReadOnlyList<TranslationDiagnostic> catalogDiagnostics = Array.Empty<TranslationDiagnostic>();
+        try { catalogDiagnostics = Workspace(path).Validate().Diagnostics; }
+        catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException)
+        {
+            if (Path.GetFileName(path).Equals("runic.json", StringComparison.OrdinalIgnoreCase))
+            {
+                var buffer = _buffers.Values.First();
+                catalogDiagnostics = TranslationCompiler.CompileProject(new TranslationSource(path, Utf8.GetBytes(buffer.Text)), Array.Empty<TranslationSource>()).Diagnostics;
+            }
+        }
+        PublishDiagnostics(catalogDiagnostics);
+    }
+
+    private void PublishDiagnostics(IReadOnlyList<TranslationDiagnostic> catalogDiagnostics)
+    {
         foreach (var pair in _buffers)
         {
             var current = pair.Value;

@@ -300,6 +300,7 @@ function readProject(config, output) {
   const project = dirname(config);
   const sourceFiles = [config];
   function discover(directory) {
+    ensureNoSymlinkAncestors(directory);
     if (lstatSync(directory).isSymbolicLink()) throw new Error("Translation source roots must not be symbolic links.");
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name);
@@ -321,6 +322,16 @@ function readProject(config, output) {
     sourceRoots: Object.freeze(roots),
     watchRoots: Object.freeze([...new Set([project, ...roots])]),
   };
+}
+
+function ensureNoSymlinkAncestors(path) {
+  let current = resolve(path);
+  while (true) {
+    if (lstatSync(current).isSymbolicLink()) throw new Error("Translation source roots must not traverse symbolic links.");
+    const parent = dirname(current);
+    if (parent === current) return;
+    current = parent;
+  }
 }
 
 function isWithin(root, path) {

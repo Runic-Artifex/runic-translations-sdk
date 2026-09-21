@@ -30,8 +30,10 @@ internal static class InputFiles
         try { config = JsonDocument.Parse(project.GetUtf8Bytes()); }
         catch (JsonException) { return new CompilerInputs(project, messages); }
         using var configLifetime = config;
+        string sourceLayout = config.RootElement.TryGetProperty("sourceLayout", out JsonElement layout) &&
+            layout.ValueKind == JsonValueKind.String ? layout.GetString() ?? string.Empty : string.Empty;
         var roots = new List<string> { root };
-        if (config.RootElement.TryGetProperty("sourceLayout", out JsonElement layout) && layout.ValueKind == JsonValueKind.String && layout.GetString() == "rmf2-v1" &&
+        if (sourceLayout == "rmf2-v1" &&
             config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
         {
             roots.Clear();
@@ -43,11 +45,15 @@ internal static class InputFiles
                 roots.Add(Path.GetFullPath(path.GetString()!, root));
             }
         }
+        string sourceExtension = sourceLayout switch
+        {
+            "rmf2-v1" => ".rmf2",
+            "locale-toml" => ".toml",
+            _ => ".mf2",
+        };
         foreach (string sourceRoot in roots)
         foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, projectPath))
-            if (string.Equals(Path.GetExtension(candidate), ".rmf2", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetExtension(candidate), ".toml", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Path.GetExtension(candidate), sourceExtension, StringComparison.OrdinalIgnoreCase))
                 messages.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
         messages.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         return new CompilerInputs(project, messages, roots);
@@ -64,6 +70,7 @@ internal static class InputFiles
 
     private static IEnumerable<string> EnumerateFilesWithoutReparsePoints(string root, string suppliedPath)
     {
+        ValidateNoReparseAncestors(root, suppliedPath);
         var pending = new SortedSet<string>(StringComparer.Ordinal) { Path.GetFullPath(root) };
         while (pending.Count != 0)
         {
@@ -82,15 +89,30 @@ internal static class InputFiles
         }
     }
 
+    private static void ValidateNoReparseAncestors(string path, string suppliedPath)
+    {
+        string? current = Path.GetFullPath(path);
+        while (current is not null)
+        {
+            if ((File.Exists(current) || Directory.Exists(current)) &&
+                (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                throw new ToolUsageException($"translation project '{NormalizePath(suppliedPath)}' traverses a symbolic link or reparse point.");
+            current = Path.GetDirectoryName(current);
+        }
+    }
+
     private static ToolDiagnosticException TooLarge(string displayPath) => new(
         $"{NormalizePath(displayPath)}(1,1,1,1): error RTR0022: Document exceeds the configured byte limit of {MaximumDocumentBytes} bytes.");
 
     private static string DisplayPath(string fullPath, string currentDirectory)
     {
         string relative = Path.GetRelativePath(currentDirectory, fullPath);
-        return !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            ? NormalizePath(relative)
-            : NormalizePath(fullPath);
+        // Keep all inputs in the same coordinate system as the project path.
+        // RMF2 mounts are explicitly allowed to be siblings/ancestors of the
+        // project, so replacing `../feature` with an absolute path would make
+        // the compiler's normalized mount identity impossible to match when
+        // the CLI is launched from inside the project directory.
+        return NormalizePath(relative);
     }
 
     private static string NormalizePath(string path) => path.Replace('\\', '/');

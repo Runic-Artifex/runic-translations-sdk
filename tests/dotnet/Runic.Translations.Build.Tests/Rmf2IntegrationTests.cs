@@ -17,9 +17,11 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 CLI discovers feature mounts and produces version 4 packs", MountedCli);
         runner.Add("RMF2 CLI project activation emits and verifies the cohesive v5 contract", ActivatedV5Cli);
         runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
+        runner.Add("RMF2 CLI re-discovers mounted add, change, rename, and delete", MountedCliMembership);
         runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
         runner.Add("RMF2 migration previews and preserves backups", Migration);
         runner.Add("RMF2 LSP negotiates Unicode positions and returns versioned rename edits", Lsp);
+        runner.Add("RMF2 LSP rescans watched files and configuration with unsaved overlays", LspWatchRescan);
     }
     private const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en","sourceLayout":"rmf2-v1"}""";
     private static void PaymentExample()
@@ -128,6 +130,27 @@ internal static class Rmf2IntegrationTests
             Assert.False(Directory.Exists(temporary.Resolve(output)), "empty v5 project emitted " + output);
         }
     }
+    private static void MountedCliMembership()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"", "\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", StringComparison.Ordinal));
+        string english = temporary.Resolve("feature/en.rmf2");
+        File.WriteAllText(english, "title = Shop\n");
+        Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "translations").ExitCode);
+        ProcessResult fromProjectDirectory = Processes.DotNet(temporary.Resolve("translations"), RepositoryPaths.ToolAssembly, "validate", "--project", ".");
+        Assert.Equal(0, fromProjectDirectory.ExitCode, fromProjectDirectory.Combined);
+        File.WriteAllText(english, "title = Store\n");
+        Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "translations").ExitCode);
+        string german = temporary.Resolve("feature/de.rmf2");
+        File.WriteAllText(german, "title = Laden\n");
+        Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "translations").ExitCode);
+        string french = temporary.Resolve("feature/fr.rmf2");
+        File.Move(german, french);
+        Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "translations").ExitCode);
+        File.Delete(french);
+        Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "translations").ExitCode);
+    }
     private static void MountedBuild()
     {
         using TemporaryDirectory temporary = new();
@@ -149,6 +172,9 @@ internal static class Rmf2IntegrationTests
         File.WriteAllText(temporary.Resolve("feature/de.rmf2"), "title = Laden\n");
         var second = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
         Assert.Equal(0, second.ExitCode, second.Combined); Assert.Contains("feature/de.rmf2", File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/'));
+        File.Delete(temporary.Resolve("feature/de.rmf2"));
+        var third = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
+        Assert.Equal(0, third.ExitCode, third.Combined); Assert.False(File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/').Contains("feature/de.rmf2", StringComparison.Ordinal), "Deleted mounted source remained in MSBuild discovery.");
     }
     private static void Migration()
     {
@@ -250,6 +276,18 @@ internal static class Rmf2IntegrationTests
             Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = frenchUri } });
             File.WriteAllText(temporary.Resolve("runic.json"), Project[..^1] + """, "markup":{"slots":{"x":{"retry":{"min":1,"max":1}}}}}""");
             File.WriteAllText(temporary.Resolve("de.rmf2"), "x = {#action ref=retry}Retry{/action}\n");
+            int publicationsBeforeWatch;
+            lock (frameGate) publicationsBeforeWatch = frames.Count(frame => frame["method"]?.ToString() == "textDocument/publishDiagnostics");
+            Send("workspace/didChangeWatchedFiles", new JsonObject {
+                ["changes"] = new JsonArray(new JsonObject { ["uri"] = new Uri(temporary.Resolve("runic.json")).AbsoluteUri, ["type"] = 2 }, new JsonObject { ["uri"] = new Uri(temporary.Resolve("de.rmf2")).AbsoluteUri, ["type"] = 2 }),
+            });
+            Send("workspace/didChangeConfiguration", new JsonObject { ["settings"] = new JsonObject { ["runicTranslations"] = new JsonObject { ["sourceLayout"] = "rmf2-v1" } } });
+            var watchDeadline = Stopwatch.StartNew();
+            lock (frameGate) while (frames.Count(frame => frame["method"]?.ToString() == "textDocument/publishDiagnostics") <= publicationsBeforeWatch)
+            {
+                if (watchDeadline.Elapsed.TotalSeconds > 10) throw new TimeoutException("LSP did not rescan after a workspace watch/configuration notification.");
+                System.Threading.Monitor.Wait(frameGate, 100);
+            }
             doc = Document(); doc["version"] = 7;
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = {#action ref=retry}Retry{/action}\n" }) });
             Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renameResource", ["arguments"] = new JsonArray(uri, new JsonArray("x"), "requiresConfig") }, 27);
@@ -308,5 +346,92 @@ internal static class Rmf2IntegrationTests
             Assert.Equal(16, cancelledBatch.Length);
             Assert.True(cancelledBatch.Any(n => n["error"]?["code"]?.GetValue<int>() == -32800), "Cancellation was not processed while requests were queued.");
         }
+    }
+
+    private static void LspWatchRescan()
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("runic.json"), Project);
+        string sourcePath = temporary.Resolve("en.rmf2");
+        File.WriteAllText(sourcePath, "title = Disk\n");
+        string uri = new Uri(sourcePath).AbsoluteUri;
+        var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
+        using var process = Process.Start(start)!;
+        var frames = new List<JsonNode>(); var frameGate = new object();
+        var output = Task.Run(() => {
+            var stream = process.StandardOutput.BaseStream;
+            while (true)
+            {
+                var header = new List<byte>(); int value;
+                while ((value = stream.ReadByte()) >= 0) { header.Add((byte)value); if (header.Count >= 4 && header.TakeLast(4).SequenceEqual(new byte[] { 13, 10, 13, 10 })) break; }
+                if (value < 0) return;
+                int size = int.Parse(Encoding.ASCII.GetString(header.ToArray()).Substring(16).Trim(), System.Globalization.CultureInfo.InvariantCulture);
+                byte[] payload = new byte[size]; stream.ReadExactly(payload);
+                lock (frameGate) { frames.Add(JsonNode.Parse(payload)!); System.Threading.Monitor.PulseAll(frameGate); }
+            }
+        });
+        var errors = process.StandardError.ReadToEndAsync();
+        void Send(string method, JsonObject args, int? id = null)
+        {
+            var request = new JsonObject { ["jsonrpc"] = "2.0", ["method"] = method, ["params"] = args };
+            if (id.HasValue) request["id"] = id.Value;
+            string json = request.ToJsonString(); process.StandardInput.Write("Content-Length: " + Encoding.UTF8.GetByteCount(json) + "\r\n\r\n" + json); process.StandardInput.Flush();
+            if (id is > 0 and < 100)
+            {
+                var deadline = Stopwatch.StartNew();
+                lock (frameGate) while (!frames.Any(frame => frame["id"]?.ToString() == id.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+                {
+                    if (deadline.Elapsed.TotalSeconds > 10) throw new TimeoutException("LSP response was not received.");
+                    System.Threading.Monitor.Wait(frameGate, 100);
+                }
+            }
+        }
+        int Publications()
+        {
+            lock (frameGate) return frames.Count(frame => frame["method"]?.ToString() == "textDocument/publishDiagnostics");
+        }
+        JsonObject LatestDiagnostics()
+        {
+            lock (frameGate) return frames.Last(frame => frame["method"]?.ToString() == "textDocument/publishDiagnostics").AsObject();
+        }
+        void WaitForPublication(int previous)
+        {
+            var deadline = Stopwatch.StartNew();
+            lock (frameGate) while (frames.Count(frame => frame["method"]?.ToString() == "textDocument/publishDiagnostics") <= previous)
+            {
+                if (deadline.Elapsed.TotalSeconds > 10) throw new TimeoutException("LSP did not publish diagnostics after a workspace notification.");
+                System.Threading.Monitor.Wait(frameGate, 100);
+            }
+        }
+
+        Send("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Resolve(".")).AbsoluteUri, ["capabilities"] = new JsonObject() }, 1);
+        Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = 1, ["text"] = "title = {unfinished\n" } });
+        // Fence the initial didOpen publication before testing each workspace
+        // notification independently; no earlier notification may satisfy the
+        // subsequent assertion.
+        Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } }, 2);
+        JsonObject initial = LatestDiagnostics();
+        string initialMessage = initial["params"]!["diagnostics"]![0]!["message"]!.GetValue<string>();
+        Assert.False(string.IsNullOrWhiteSpace(initialMessage), "The unsaved RMF2 overlay did not publish a diagnostic.");
+
+        File.WriteAllText(sourcePath, "title = Disk is now valid\n");
+        int beforeWatched = Publications();
+        Send("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray(new JsonObject { ["uri"] = uri, ["type"] = 2 }) });
+        Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } }, 3);
+        WaitForPublication(beforeWatched);
+        JsonObject watched = LatestDiagnostics();
+        Assert.Equal(initialMessage, watched["params"]!["diagnostics"]![0]!["message"]!.GetValue<string>());
+
+        int beforeConfiguration = Publications();
+        Send("workspace/didChangeConfiguration", new JsonObject { ["settings"] = new JsonObject { ["runicTranslations"] = new JsonObject { ["sourceLayout"] = "rmf2-v1" } } });
+        Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } }, 4);
+        WaitForPublication(beforeConfiguration);
+        JsonObject configured = LatestDiagnostics();
+        Assert.Equal(initialMessage, configured["params"]!["diagnostics"]![0]!["message"]!.GetValue<string>());
+
+        Send("shutdown", new JsonObject(), 5); Send("exit", new JsonObject()); process.StandardInput.Close();
+        if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
+        Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
     }
 }

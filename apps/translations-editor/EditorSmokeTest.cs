@@ -203,6 +203,7 @@ internal static class EditorSmokeTest
                 "Redo did not restore the complete physical file.");
 
             await RunRmf2Async(Path.Combine(container, "rmf2")).ConfigureAwait(false);
+            await RunMountedWatchReconciliationAsync(Path.Combine(container, "mounted-watch")).ConfigureAwait(false);
             Console.WriteLine("PASS: editor nested TOML messages, grouped create/rename, trivia, revisions, grouped XLIFF conflicts, and physical undo/redo.");
             return 0;
         }
@@ -287,6 +288,85 @@ internal static class EditorSmokeTest
             var result = await session.ApplyMutationAsync(request with { ConfirmationToken = preview.ConfirmationToken });
             Require(result.Ok, "RMF2 mutation failed: " + request.Kind + " " + result.Message);
         }
+    }
+
+    private static async Task RunMountedWatchReconciliationAsync(string root)
+    {
+        string project = Path.Combine(root, "translations");
+        string feature = Path.Combine(root, "feature");
+        Directory.CreateDirectory(project);
+        Directory.CreateDirectory(feature);
+        await File.WriteAllTextAsync(Path.Combine(project, "runic.json"), """
+            {"schemaVersion":1,"catalog":"mounted-watch","sourceLayout":"rmf2-v1","baseLocale":"en","code":{"namespace":"Smoke","className":"Text"},"sourceRoots":[{"path":"../feature","namespace":["shop"]}]}
+            """).ConfigureAwait(false);
+        string english = Path.Combine(feature, "en.rmf2");
+        await File.WriteAllTextAsync(english, "title = Shop\n").ConfigureAwait(false);
+
+        // The documented host shape is a common containing workspace: the
+        // project config is nested while its explicitly mounted root is a
+        // sibling. This keeps every watched path inside the workspace boundary.
+        using var workspace = new EditorWorkspace(root);
+        WorkspaceSnapshot loaded = await workspace.LoadAsync().ConfigureAwait(false);
+        Require(loaded.Success, "Mounted editor watch fixture did not load: " +
+            string.Join(" | ", loaded.Diagnostics.Select(static diagnostic => diagnostic.Message)));
+        await File.WriteAllTextAsync(english, "title = Store\n").ConfigureAwait(false);
+        EditorExternalChanges changed = await WaitForExternalChangesAsync(workspace, "change",
+            change => change.Changes.Any(item => item.Path == "feature/en.rmf2" && item.Exists)).ConfigureAwait(false);
+        Require(changed.Changes.Any(item => item.Path == "feature/en.rmf2" && item.Exists), "Mounted source change was not reconciled.");
+
+        string german = Path.Combine(feature, "de.rmf2");
+        await File.WriteAllTextAsync(german, "title = Laden\n").ConfigureAwait(false);
+        EditorExternalChanges added = await WaitForExternalChangesAsync(workspace, "add",
+            change => change.Changes.Any(item => item.Path == "feature/de.rmf2" && item.Exists)).ConfigureAwait(false);
+        Require(added.Changes.Any(item => item.Path == "feature/de.rmf2" && item.Exists), "Mounted source addition was not reconciled.");
+
+        string french = Path.Combine(feature, "fr.rmf2");
+        File.Move(german, french);
+        EditorExternalChanges renamed = await WaitForExternalChangesAsync(workspace, "rename",
+            change => change.Changes.Any(item => item.Path == "feature/de.rmf2" && !item.Exists) &&
+                      change.Changes.Any(item => item.Path == "feature/fr.rmf2" && item.Exists)).ConfigureAwait(false);
+        Require(renamed.Changes.Any(item => item.Path == "feature/de.rmf2" && !item.Exists) &&
+                renamed.Changes.Any(item => item.Path == "feature/fr.rmf2" && item.Exists), "Mounted source rename was not reconciled.");
+
+        File.Delete(french);
+        EditorExternalChanges deleted = await WaitForExternalChangesAsync(workspace, "delete",
+            change => change.Changes.Any(item => item.Path == "feature/fr.rmf2" && !item.Exists)).ConfigureAwait(false);
+        Require(deleted.Changes.Any(item => item.Path == "feature/fr.rmf2" && !item.Exists), "Mounted source deletion was not reconciled.");
+
+        string nested = Path.Combine(feature, "nested");
+        Directory.CreateDirectory(nested);
+        string nestedSource = Path.Combine(nested, "it.rmf2");
+        await File.WriteAllTextAsync(nestedSource, "title = Ciao\n").ConfigureAwait(false);
+        await WaitForExternalChangesAsync(workspace, "directory-add",
+            change => change.Changes.Any(item => item.Path == "feature/nested/it.rmf2" && item.Exists)).ConfigureAwait(false);
+        string moved = Path.Combine(feature, "moved");
+        Directory.Move(nested, moved);
+        EditorExternalChanges directoryRenamed = await WaitForExternalChangesAsync(workspace, "directory-rename",
+            change => change.Changes.Any(item => item.Path == "feature/nested/it.rmf2" && !item.Exists) &&
+                      change.Changes.Any(item => item.Path == "feature/moved/it.rmf2" && item.Exists)).ConfigureAwait(false);
+        Require(directoryRenamed.Changes.Any(item => item.Path == "feature/nested/it.rmf2" && !item.Exists) &&
+                directoryRenamed.Changes.Any(item => item.Path == "feature/moved/it.rmf2" && item.Exists),
+            "Mounted directory rename was not reconciled as an inventory change.");
+        Directory.Delete(moved, recursive: true);
+        EditorExternalChanges directoryDeleted = await WaitForExternalChangesAsync(workspace, "directory-delete",
+            change => change.Changes.Any(item => item.Path == "feature/moved/it.rmf2" && !item.Exists)).ConfigureAwait(false);
+        Require(directoryDeleted.Changes.Any(item => item.Path == "feature/moved/it.rmf2" && !item.Exists),
+            "Mounted directory deletion was not reconciled as an inventory change.");
+    }
+
+    private static async Task<EditorExternalChanges> WaitForExternalChangesAsync(
+        EditorWorkspace workspace,
+        string operation,
+        Func<EditorExternalChanges, bool> predicate)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            EditorExternalChanges changes = await workspace.CheckExternalChangesAsync().ConfigureAwait(false);
+            if (predicate(changes)) return changes;
+            await Task.Delay(50).ConfigureAwait(false);
+        }
+        throw new InvalidOperationException("Timed out waiting for mounted source watcher reconciliation (" + operation + ").");
     }
 
     private static void Require(bool condition, string message)
