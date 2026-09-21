@@ -209,7 +209,20 @@ internal static class BuildIntegrationTests
 
     private static void ExecutionProfileChangesReconcileArtifacts()
     {
-        using TemporaryDirectory temporary = CreateConsumer(generationEnabled: true);
+        using TemporaryDirectory temporary = CreateConsumer(
+            generationEnabled: true,
+            extraProperties: """
+                <TranslationsEmitJson>false</TranslationsEmitJson>
+                <TranslationsEmitTypeScript>false</TranslationsEmitTypeScript>
+                <TranslationsEmitTemplateManifest>false</TranslationsEmitTemplateManifest>
+                <TranslationsEmitEsm>false</TranslationsEmitEsm>
+                <TranslationsEmitCpp>false</TranslationsEmitCpp>
+                """);
+        // Simulate an inherited repository/CI preference. The consumer's explicit
+        // false values above request profile defaults rather than this ambient group.
+        File.WriteAllText(temporary.Resolve("Directory.Build.props"),
+            "<Project><PropertyGroup><TranslationsEmitTypeScript>true</TranslationsEmitTypeScript></PropertyGroup></Project>\n",
+            new UTF8Encoding(false));
         Directory.Delete(temporary.Resolve("translations", "en"), recursive: true);
         Directory.CreateDirectory(temporary.Resolve("feature"));
         string configPath = temporary.Resolve("translations", "runic.json");
@@ -360,7 +373,7 @@ internal static class BuildIntegrationTests
             generationEnabled: true,
             outputPath: "$(IntermediateOutputPath)$(TargetFramework)/linked-output/");
         string target = temporary.Resolve("link-target");
-        string link = temporary.Resolve("artifacts", "obj", "Debug", "net10.0", "linked-output");
+        string link = temporary.Resolve("artifacts", "obj", BuildConfiguration, "net10.0", "linked-output");
         Directory.CreateDirectory(target);
         Directory.CreateDirectory(Path.GetDirectoryName(link)!);
         try
@@ -468,11 +481,12 @@ internal static class BuildIntegrationTests
 
     private static ProcessResult Build(TemporaryDirectory temporary, bool noRestore = false)
     {
-        // Fixtures create their output paths in Debug. MSBuild otherwise inherits
-        // CONFIGURATION from CI and can build elsewhere, bypassing the test's link.
+        // Match the configuration that produced the test and its referenced build
+        // task/tool assemblies. Hard-coding Debug makes Release CI silently fall
+        // back to wildcard discovery, which cannot report executionProfile.
         string[] arguments = noRestore
-            ? ["build", "Consumer.csproj", "--configuration", "Debug", "--no-restore", "/nologo", "/v:minimal"]
-            : ["build", "Consumer.csproj", "--configuration", "Debug", "/nologo", "/v:minimal"];
+            ? ["build", "Consumer.csproj", "--configuration", BuildConfiguration, "--no-restore", "/nologo", "/v:minimal"]
+            : ["build", "Consumer.csproj", "--configuration", BuildConfiguration, "/nologo", "/v:minimal"];
         return Processes.DotNet(temporary.Path, arguments);
     }
 
@@ -481,7 +495,7 @@ internal static class BuildIntegrationTests
         "clean",
         "Consumer.csproj",
         "--configuration",
-        "Debug",
+        BuildConfiguration,
         "/nologo",
         "/v:minimal");
 
@@ -504,6 +518,8 @@ internal static class BuildIntegrationTests
         .ToArray();
 
     private static string XmlPath(string path) => path.Replace("&", "&amp;", StringComparison.Ordinal).Replace("\"", "&quot;", StringComparison.Ordinal);
+
+    private static string BuildConfiguration => new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
 
     private static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 }
