@@ -439,15 +439,29 @@ internal static class Rmf2IntegrationTests
     private static void LspWatchProjectIsolation()
     {
         using TemporaryDirectory temporary = new();
-        string one = temporary.Resolve("one"), two = temporary.Resolve("two");
-        Directory.CreateDirectory(one); Directory.CreateDirectory(two);
-        File.WriteAllText(Path.Combine(one, "runic.json"),
-            "{\"schemaVersion\":1,\"catalog\":\"one\",\"code\":{\"namespace\":\"Example\",\"className\":\"OneText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"rmf2-v1\",\"markup\":{\"slots\":{\"x\":{\"retry\":{\"min\":1,\"max\":1}}}}}");
-        File.WriteAllText(Path.Combine(two, "runic.json"),
-            "{\"schemaVersion\":1,\"catalog\":\"two\",\"code\":{\"namespace\":\"Example\",\"className\":\"TwoText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"rmf2-v1\",\"markup\":{\"slots\":{\"y\":{\"confirm\":{\"min\":1,\"max\":1}}}}}");
-        string onePath = Path.Combine(one, "en.rmf2"), twoPath = Path.Combine(two, "en.rmf2");
-        File.WriteAllText(onePath, "x = Disk one\n"); File.WriteAllText(twoPath, "y = Disk two\n");
+        string one = temporary.Resolve("one"), two = temporary.Resolve("two"), zeta = temporary.Resolve("zeta");
+        string sharedOne = temporary.Resolve("shared-one"), sharedTwo = temporary.Resolve("shared-two");
+        foreach (string directory in new[] { one, two, zeta, sharedOne, sharedTwo }) Directory.CreateDirectory(directory);
+        static string Config(string catalog, string className, string sourceRoot, string slot) =>
+            """{"schemaVersion":1,"catalog":"$catalog","code":{"namespace":"Example","className":"$class"},"baseLocale":"en","sourceLayout":"rmf2-v1","sourceRoots":[{"path":"../$root","namespace":[]}],"markup":{"slots":{"x":{"$slot":{"min":1,"max":1}}}}}"""
+                .Replace("$catalog", catalog, StringComparison.Ordinal)
+                .Replace("$class", className, StringComparison.Ordinal)
+                .Replace("$root", sourceRoot, StringComparison.Ordinal)
+                .Replace("$slot", slot, StringComparison.Ordinal);
+        string oneConfig = Config("one", "OneText", "shared-one", "retry");
+        string oneRemounted = Config("one", "OneText", "shared-two", "retry");
+        string twoConfig = Config("two", "TwoText", "shared-two", "confirm");
+        string twoRemounted = Config("two", "TwoText", "shared-one", "confirm");
+        File.WriteAllText(Path.Combine(one, "runic.json"), oneConfig);
+        File.WriteAllText(Path.Combine(two, "runic.json"), twoConfig);
+        // Equal-specificity ownership is deterministic: /one sorts before
+        // /zeta and therefore owns shared-one while both manifests are closed.
+        File.WriteAllText(Path.Combine(zeta, "runic.json"), Config("zeta", "ZetaText", "shared-one", "zeta"));
+        string onePath = Path.Combine(sharedOne, "en.rmf2"), twoPath = Path.Combine(sharedTwo, "en.rmf2");
+        File.WriteAllText(onePath, "x = Disk one\n"); File.WriteAllText(twoPath, "x = Disk two\n");
         string oneUri = new Uri(onePath).AbsoluteUri, twoUri = new Uri(twoPath).AbsoluteUri;
+        string oneConfigUri = new Uri(Path.Combine(one, "runic.json")).AbsoluteUri;
+        string twoConfigUri = new Uri(Path.Combine(two, "runic.json")).AbsoluteUri;
 
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
@@ -491,16 +505,14 @@ internal static class Rmf2IntegrationTests
                     .Select(diagnostic => diagnostic!["message"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray();
             }
         }
-        void AssertIsolated(string[] expectedOne, string[] expectedTwo, string operation)
+        void AssertMessages(string uri, string[] expected, string operation)
         {
-            string[] actualOne = Messages(oneUri), actualTwo = Messages(twoUri);
-            Assert.Equal(string.Join('|', expectedOne), string.Join('|', actualOne), operation + " changed or cleared project-one diagnostics.");
-            Assert.Equal(string.Join('|', expectedTwo), string.Join('|', actualTwo), operation + " changed or cleared project-two diagnostics.");
+            Assert.Equal(string.Join('|', expected), string.Join('|', Messages(uri)), operation);
         }
 
         Send("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Resolve(".")).AbsoluteUri, ["capabilities"] = new JsonObject() }, 1);
         Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri, ["version"] = 1, ["text"] = "x = Unsaved one\n" } });
-        Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri, ["version"] = 1, ["text"] = "y = Unsaved two\n" } });
+        Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri, ["version"] = 1, ["text"] = "x = Unsaved two\n" } });
         // A later didOpen revision may intentionally suppress the earlier
         // publication. Establish a complete grouped baseline explicitly.
         Send("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray() });
@@ -508,22 +520,45 @@ internal static class Rmf2IntegrationTests
         string[] initialOne = Messages(oneUri), initialTwo = Messages(twoUri);
         Assert.True(initialOne.Length > 0 && initialTwo.Length > 0, "Both projects must begin with distinct catalog diagnostics.");
         Assert.False(initialOne.SequenceEqual(initialTwo), "The two-project fixture did not produce distinguishable diagnostics.");
+        Assert.True(initialOne.Any(message => message.Contains("retry", StringComparison.Ordinal)), "Closed mounted project tie-breaking did not select project one.");
 
-        // Valid disk changes must not replace either unsaved overlay during a
-        // watched-file refresh, and one project's diagnostics must never be
-        // published as (or used to clear) the other project's diagnostics.
-        File.WriteAllText(onePath, "x = {#action ref=retry}One{/action}\n");
-        File.WriteAllText(twoPath, "y = {#action ref=confirm}Two{/action}\n");
+        // Remove the equal-specificity competitor and rebuild the closed
+        // manifest index. Ownership and unsaved overlays remain stable.
+        string zetaConfigPath = Path.Combine(zeta, "runic.json");
+        File.Delete(zetaConfigPath);
         Send("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray(
-            new JsonObject { ["uri"] = oneUri, ["type"] = 2 }, new JsonObject { ["uri"] = twoUri, ["type"] = 2 }) });
+            new JsonObject { ["uri"] = new Uri(zetaConfigPath).AbsoluteUri, ["type"] = 3 }) });
         Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri } }, 3);
-        AssertIsolated(initialOne, initialTwo, "watched-file refresh");
+        AssertMessages(oneUri, initialOne, "closed manifest reindex changed project-one diagnostics.");
+        AssertMessages(twoUri, initialTwo, "closed manifest reindex changed project-two diagnostics.");
 
-        Send("workspace/didChangeConfiguration", new JsonObject { ["settings"] = new JsonObject { ["runicTranslations"] = new JsonObject() } });
+        // Changing project one's open config removes shared-one and remounts
+        // shared-two. Every open buffer must be regrouped in the same pass.
+        Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneConfigUri, ["version"] = 1, ["text"] = oneConfig } });
+        Send("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneConfigUri, ["version"] = 2 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = oneRemounted }) });
         Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri } }, 4);
-        AssertIsolated(initialOne, initialTwo, "configuration refresh");
+        AssertMessages(oneUri, [], "removed source root retained stale diagnostics.");
+        AssertMessages(twoUri, initialOne, "remounted source did not move to project one.");
 
-        Send("shutdown", new JsonObject(), 5); Send("exit", new JsonObject()); process.StandardInput.Close();
+        // An unsaved project-two remount transfers shared-one to project two.
+        Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoConfigUri, ["version"] = 1, ["text"] = twoRemounted } });
+        Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri } }, 5);
+        AssertMessages(oneUri, initialTwo, "unsaved source-root remount did not assign project two.");
+        AssertMessages(twoUri, initialOne, "project-one remount lost ownership after project-two config opened.");
+
+        // Closing each config reverts to its disk mapping and must clear or
+        // restore diagnostics for every affected source buffer.
+        Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoConfigUri } });
+        Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri } }, 6);
+        AssertMessages(oneUri, [], "didClose retained project-two remount diagnostics.");
+        AssertMessages(twoUri, initialOne, "didClose disturbed the remaining project-one remount.");
+        Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneConfigUri } });
+        Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri } }, 7);
+        AssertMessages(oneUri, initialOne, "didClose did not restore project-one disk ownership.");
+        AssertMessages(twoUri, initialTwo, "didClose did not restore project-two disk ownership.");
+
+        Send("shutdown", new JsonObject(), 8); Send("exit", new JsonObject()); process.StandardInput.Close();
         if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
         Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
     }
