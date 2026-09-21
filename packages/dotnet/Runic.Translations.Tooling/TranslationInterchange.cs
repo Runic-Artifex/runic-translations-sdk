@@ -254,6 +254,30 @@ public static class TranslationInterchange
         TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(
             new TranslationSource("interchange/runic.json", Encoding.UTF8.GetBytes(project)), messages);
         if (!compilation.Success || compilation.Catalogs.Count != 1) throw new TranslationInterchangeException("XLIFF21-CONTRACT", "XLIFF target text or placeholder metadata does not satisfy the compiler contract.");
+        CompiledTextCatalog compiled = compilation.Catalogs[0];
+        if (compiled.CanonicalResources.Any(static resource => !resource.IsTextInterchangeLossless) ||
+            compiled.Locales.SelectMany(static locale => locale.DirectResources)
+                .Any(static resource => !resource.IsTextInterchangeLossless))
+            throw new TranslationInterchangeException("XLIFF21-STRUCTURED-IMPORT", "A structured Runic message cannot be imported from the XLIFF text profile.");
+        var canonical = compiled.CanonicalResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
+        var targets = compiled.Locales.Single(locale => string.Equals(locale.Tag, targetLocale, StringComparison.Ordinal))
+            .DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
+        foreach ((string key, ImportedUnit unit) in units)
+        {
+            if (!IsClosedTextSyntax(unit.SourcePattern) || !IsClosedTextSyntax(unit.Pattern) ||
+                !string.Equals(canonical[key].Pattern, unit.SourcePattern, StringComparison.Ordinal) ||
+                !targets.TryGetValue(key, out CompiledTranslation? target) ||
+                !string.Equals(target.Pattern, unit.Pattern, StringComparison.Ordinal))
+                throw new TranslationInterchangeException("XLIFF21-STRUCTURED-IMPORT", "A structured Runic message cannot be imported from the XLIFF text profile.");
+        }
+    }
+
+    private static bool IsClosedTextSyntax(string pattern)
+    {
+        Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(
+            new TranslationSource("interchange/message.mf2", Encoding.UTF8.GetBytes(pattern)));
+        return syntax.Success && syntax.Declarations.Count == 0 && syntax.Match is null && syntax.Variants.Count == 0 &&
+            !syntax.Tokens.Any(static token => token.Kind is Mf2SyntaxTokenKind.PatternStart or Mf2SyntaxTokenKind.PatternEnd);
     }
 
     private static string SerializePlaceholders(IReadOnlyList<TranslationInterchangePlaceholder> values)

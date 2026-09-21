@@ -65,7 +65,16 @@
   import { Spinner } from "$lib/components/ui/spinner/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import type { MessageArtifact } from "$lib/message-composer";
-  import { executeMessagePreview, parseRenderedMessagePreview } from "$lib/message-preview.js";
+  import {
+    createMessagePreviewRequest,
+    createMessagePreviewScheduler,
+    createPreviewSamples,
+    executeMessagePreview,
+    parseRenderedMessagePreview,
+    previewSampleOr,
+    routeMessagePreview,
+    withPreviewSample,
+  } from "$lib/message-preview.js";
   import {
     clearLocalEditorState,
     configureLocalEditorState,
@@ -109,9 +118,13 @@
   type MutationKind = EditorMutationRequest["kind"];
   type MessagePreviewResult = ReturnType<typeof executeMessagePreview>;
   type PreviewNode = Extract<MessagePreviewResult, { kind: "content" }>["nodes"][number];
-  type PreviewRequest = { path: string; content: string; locale: string; key: string };
+  type PreviewRequest = ReturnType<typeof createMessagePreviewRequest>;
 
   const bridge = createEditorBridge();
+  const previewScheduler = createMessagePreviewScheduler(
+    (callback, delay) => setTimeout(callback, delay),
+    (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  );
   configureLocalEditorState(bridge);
   let snapshot = $state.raw<WorkspaceSnapshot>();
   let drafts = $state<Record<string, string>>({});
@@ -189,11 +202,9 @@
   let previewBusy = $state(false);
   let previewError = $state<UiMessage>();
   let previewAst = $state.raw<MessageArtifact>();
-  let previewSamples = $state<Record<string, string>>({});
+  let previewSamples = $state.raw<Record<string, string>>(createPreviewSamples());
   let previewResult = $state.raw<MessagePreviewResult>();
   let previewRequest = $state.raw<PreviewRequest>();
-  let previewTimer: number | undefined;
-  let previewEpoch = 0;
   let reviewEntries = $state<EditorReviewEntry[]>([]);
   let terminology = $state<EditorTerminologyEntry[]>([]);
   let reviewRevision = $state<string>();
@@ -529,7 +540,10 @@
   }
 
   function installReview(next: WorkspaceSnapshot): void {
-    reviewEntries = structuredClone(next.review?.entries ?? []);
+    reviewEntries = (next.review?.entries ?? []).map((entry) => ({
+      ...structuredClone(entry),
+      samples: createPreviewSamples(entry.samples),
+    }));
     terminology = structuredClone(next.review?.terminology ?? []);
     reviewRevision = next.review?.revision;
     reviewDirty = false;
@@ -577,16 +591,16 @@
     validation = undefined;
     clientError = undefined;
     operationMessage = undefined;
-    configureEditor(undefined, nextKey, selectedLocale);
     selectedKey = nextKey;
+    configureEditor(undefined, nextKey, selectedLocale);
   }
 
   function selectLocale(locale: string): void {
     validation = undefined;
     clientError = undefined;
     operationMessage = undefined;
-    configureEditor(undefined, selectedKey, locale);
     selectedLocale = locale;
+    configureEditor(undefined, selectedKey, locale);
   }
 
   function chooseMode(nextMode: EditorMode): void {
@@ -602,9 +616,7 @@
     const document = cell?.document;
     selectedDocumentPath = document?.path ?? "";
     const sourceEntry = row?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry;
-    previewSamples = {
-      ...(reviewIndex.get(reviewIdentity(key, locale))?.samples ?? {}),
-    };
+    previewSamples = createPreviewSamples(reviewIndex.get(reviewIdentity(key, locale))?.samples);
     const nextMode = preferredMode ?? "translation";
     mode = nextMode;
     if (nextMode === "raw") {
@@ -617,8 +629,10 @@
     previewResult = undefined;
     previewRequest = undefined;
     previewError = undefined;
+    previewScheduler.cancel();
+    previewBusy = false;
     if (nextMode === "translation" && document !== undefined) {
-      schedulePreview(document.path, drafts[document.path] ?? document.content);
+      schedulePreview(document.path, drafts[document.path] ?? document.content, key, locale);
     }
   }
 
@@ -659,6 +673,7 @@
     if (typeof resourceValue !== "string") return;
     const path = document.path;
     const key = selectedKey;
+    const locale = selectedLocale;
     const workspaceRoot = snapshot?.root;
     const workspaceVersion = workspaceGeneration;
     const identity = `${path}\u0000${key}`;
@@ -681,62 +696,73 @@
       setDraft(path, result.content);
       persistDrafts();
       validation = result;
-      if (selectedDocumentPath === path && selectedKey === key) schedulePreview(path, result.content);
+      if (selectedDocumentPath === path && selectedKey === key && selectedLocale === locale) {
+        schedulePreview(path, result.content, key, locale);
+      }
     }).catch((error) => { clientError = errorNotice(error); });
     transformQueues.set(path, pending);
     void pending.finally(() => { if (transformQueues.get(path) === pending) transformQueues.delete(path); });
   }
 
-  function schedulePreview(path: string, content: string): void {
-    if (previewTimer !== undefined) window.clearTimeout(previewTimer);
-    const epoch = ++previewEpoch;
-    const request = { path, content, locale: selectedLocale, key: selectedKey };
+  function schedulePreview(path: string, content: string, key: string, locale: string): void {
+    const request = createMessagePreviewRequest(path, content, key, locale);
     previewRequest = request;
     previewBusy = true;
-    previewTimer = window.setTimeout(() => {
-      void bridge.previewMessage(request.path, request.content, request.locale, request.key).then(async (result) => {
-        if (epoch !== previewEpoch) return;
+    previewScheduler.schedule(450, (epoch) => {
+      void routeMessagePreview(
+        (requestPath, requestContent, requestLocale, requestKey, samplesJson) =>
+          bridge.previewMessage(requestPath, requestContent, requestLocale, requestKey, samplesJson),
+        request,
+        previewSamples,
+        defaultSample,
+        () => previewScheduler.isCurrent(epoch),
+      ).then((routed) => {
+        if (!previewScheduler.isCurrent(epoch)) return;
+        const result = routed.initial;
         if (!result.success || result.astJson === undefined || result.locale === undefined) {
           previewAst = undefined;
           previewResult = undefined;
           previewError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
           return;
         }
-        const ast = JSON.parse(result.astJson) as MessageArtifact;
+        const ast = routed.ast as MessageArtifact;
         previewAst = ast;
-        const samples: Record<string, string> = {};
-        for (const [name, descriptor] of previewInputEntries(ast)) {
-          samples[name] = previewSamples[name] ?? defaultSample(descriptor.type);
-        }
-        previewSamples = samples;
+        previewSamples = routed.samples;
         previewError = undefined;
-        if (ast.astVersion === 5) await renderCompilerPreview(request, epoch);
-        else renderLocalPreview(result.locale);
+        if (ast.astVersion === 5) {
+          const rendered = routed.rendered;
+          if (!rendered?.success || rendered.renderedJson === undefined) {
+            previewResult = undefined;
+            previewError = rendered?.diagnostics[0]?.notice ?? rendered?.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
+            return;
+          }
+          previewResult = parseRenderedMessagePreview(rendered.renderedJson);
+        } else {
+          renderLocalPreview(result.locale);
+        }
       }).catch((error) => {
-        if (epoch === previewEpoch) previewError = errorNotice(error);
+        if (previewScheduler.isCurrent(epoch)) previewError = errorNotice(error);
       }).finally(() => {
-        if (epoch === previewEpoch) previewBusy = false;
+        if (previewScheduler.isCurrent(epoch)) previewBusy = false;
       });
-    }, 450);
+    });
   }
 
   function updatePreviewSample(name: string, value: string): void {
-    previewSamples = { ...previewSamples, [name]: value };
+    previewSamples = withPreviewSample(previewSamples, name, value);
+    const request = previewRequest;
+    if (request === undefined) return;
     if (previewAst?.astVersion === 5) {
-      if (previewRequest === undefined) return;
-      if (previewTimer !== undefined) window.clearTimeout(previewTimer);
-      const epoch = ++previewEpoch;
       previewBusy = true;
-      const request = previewRequest;
-      previewTimer = window.setTimeout(() => {
+      previewScheduler.schedule(150, (epoch) => {
         void renderCompilerPreview(request, epoch).catch((error) => {
-          if (epoch === previewEpoch) previewError = errorNotice(error);
+          if (previewScheduler.isCurrent(epoch)) previewError = errorNotice(error);
         }).finally(() => {
-          if (epoch === previewEpoch) previewBusy = false;
+          if (previewScheduler.isCurrent(epoch)) previewBusy = false;
         });
-      }, 150);
+      });
     } else {
-      renderLocalPreview(selectedLocale);
+      renderLocalPreview(request.locale);
     }
   }
 
@@ -756,7 +782,7 @@
       state: patch.state ?? existing?.state ?? effectiveReviewState(undefined, row?.cells[locale]?.entry !== undefined),
       note: patch.note ?? existing?.note,
       sourceFingerprint: patch.sourceFingerprint ?? existing?.sourceFingerprint,
-      samples: patch.samples ?? existing?.samples ?? {},
+      samples: createPreviewSamples(patch.samples ?? existing?.samples),
     };
     reviewEntries = index < 0
       ? [...reviewEntries, next]
@@ -769,7 +795,7 @@
     updateReview(selectedKey, selectedLocale, {
       state,
       sourceFingerprint: sourceFingerprint(currentSourceValue),
-      samples: { ...previewSamples },
+      samples: createPreviewSamples(previewSamples),
     });
   }
 
@@ -790,7 +816,7 @@
         state,
         note: existing?.note,
         sourceFingerprint: sourceFingerprint(row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value),
-        samples: { ...(existing?.samples ?? {}) },
+        samples: createPreviewSamples(existing?.samples),
       };
       const index = next.findIndex((candidate) => reviewIdentity(candidate.key, candidate.locale) === identity);
       if (index < 0) next.push(entry);
@@ -809,14 +835,17 @@
     try {
       const result = await bridge.saveReview({
         expectedRevision: reviewRevision,
-        entries: reviewEntries.map((entry) => ({ ...entry, samples: { ...entry.samples } })),
+        entries: reviewEntries.map((entry) => ({ ...entry, samples: createPreviewSamples(entry.samples) })),
         terminology: terminology.map((term) => ({ ...term })),
       });
       if (!result.ok || result.review === undefined) {
         reviewMessage = result.message ?? notice("ui_feedback_review_save_failed");
         return;
       }
-      reviewEntries = structuredClone(result.review.entries);
+      reviewEntries = result.review.entries.map((entry) => ({
+        ...structuredClone(entry),
+        samples: createPreviewSamples(entry.samples),
+      }));
       terminology = structuredClone(result.review.terminology);
       reviewRevision = result.review.revision;
       reviewDirty = false;
@@ -1051,7 +1080,7 @@
       request.key,
       JSON.stringify(previewSamples),
     );
-    if (epoch !== previewEpoch) return;
+    if (!previewScheduler.isCurrent(epoch)) return;
     if (!result.success || result.renderedJson === undefined) {
       previewResult = undefined;
       previewError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
@@ -2149,7 +2178,7 @@
               {#if previewAst !== undefined && previewInputEntries(previewAst).length > 0}
                 <div class="sample-inputs">
                   {#each previewInputEntries(previewAst) as [name, descriptor] (name)}
-                    <label><span>{name}<small>{descriptor.type}</small></span><input value={previewSamples[name] ?? ""} oninput={(event) => updatePreviewSample(name, event.currentTarget.value)} /></label>
+                    <label><span>{name}<small>{descriptor.type}</small></span><input value={previewSampleOr(previewSamples, name, "")} oninput={(event) => updatePreviewSample(name, event.currentTarget.value)} /></label>
                   {/each}
                 </div>
               {/if}

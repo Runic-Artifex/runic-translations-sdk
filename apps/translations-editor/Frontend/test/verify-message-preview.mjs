@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
-import { executeMessagePreview, flattenPreview, parseRenderedMessagePreview } from "../src/lib/message-preview.js";
+import {
+  createMessagePreviewRequest,
+  createMessagePreviewScheduler,
+  createPreviewSamples,
+  executeMessagePreview,
+  flattenPreview,
+  parseRenderedMessagePreview,
+  previewSampleOr,
+  routeMessagePreview,
+  withPreviewSample,
+} from "../src/lib/message-preview.js";
 import { sourceMessageToArtifact, toStructuredMessage } from "../src/lib/message-composer.ts";
 
 const artifact = {
@@ -124,4 +134,113 @@ assert.throws(
   "An active callback field escaped the bounded inert run shape.",
 );
 
-console.log("PASS: editor preview routes v2/v4 locally, keeps v5 compiler runs inert, and rejects cross-profile execution.");
+const selection = { key: "account_title", locale: "en" };
+const rowRequest = createMessagePreviewRequest(
+  "de.rmf2",
+  "account_title = Konto\npayment_title = Zahlung\n",
+  "payment_title",
+  selection.locale,
+);
+selection.key = "payment_title";
+assert.deepEqual(rowRequest, {
+  path: "de.rmf2",
+  content: "account_title = Konto\npayment_title = Zahlung\n",
+  key: "payment_title",
+  locale: "en",
+}, "A message-row switch scheduled the new document with the previous key.");
+
+const localeRequest = createMessagePreviewRequest(
+  "fr.rmf2",
+  "payment_title = Paiement\n",
+  selection.key,
+  "fr",
+);
+selection.locale = "fr";
+assert.deepEqual(localeRequest, {
+  path: "fr.rmf2",
+  content: "payment_title = Paiement\n",
+  key: "payment_title",
+  locale: "fr",
+}, "A locale switch scheduled the new document with the previous locale.");
+assert.equal(Object.isFrozen(rowRequest) && Object.isFrozen(localeRequest), true,
+  "Scheduled preview identity remained mutable after a selection change.");
+
+function fakeScheduler() {
+  let nextHandle = 0;
+  const pending = new Map();
+  const scheduler = createMessagePreviewScheduler(
+    (callback) => { const handle = ++nextHandle; pending.set(handle, callback); return handle; },
+    (handle) => pending.delete(handle),
+  );
+  return {
+    scheduler,
+    flush() {
+      const callbacks = [...pending.values()];
+      pending.clear();
+      for (const callback of callbacks) callback();
+    },
+    get size() { return pending.size; },
+  };
+}
+
+const rowDebounce = fakeScheduler();
+let acceptedRequest;
+rowDebounce.scheduler.schedule(450, () => { acceptedRequest = createMessagePreviewRequest("de.rmf2", "old", "account_title", "en"); });
+rowDebounce.scheduler.schedule(450, () => { acceptedRequest = rowRequest; });
+assert.equal(rowDebounce.size, 1, "A message-row switch left the previous preview debounce active.");
+rowDebounce.flush();
+assert.equal(acceptedRequest.key, "payment_title", "The debounced row preview retained the old key.");
+
+const localeDebounce = fakeScheduler();
+localeDebounce.scheduler.schedule(450, () => { acceptedRequest = rowRequest; });
+localeDebounce.scheduler.schedule(450, () => { acceptedRequest = localeRequest; });
+assert.equal(localeDebounce.size, 1, "A locale switch left the previous preview debounce active.");
+localeDebounce.flush();
+assert.equal(acceptedRequest.locale, "fr", "The debounced locale preview retained the old locale.");
+
+const hostileNames = ["__proto__", "constructor", "toString"];
+let hostileSamples = createPreviewSamples();
+for (const name of hostileNames) {
+  assert.equal(previewSampleOr(hostileSamples, name, "missing"), "missing",
+    `Inherited property '${name}' was mistaken for an entered preview sample.`);
+  hostileSamples = withPreviewSample(hostileSamples, name, `value:${name}`);
+}
+const routedCalls = [];
+const routed = await routeMessagePreview(async (path, content, locale, key, samplesJson) => {
+  routedCalls.push({ path, content, locale, key, samplesJson });
+  return samplesJson === undefined
+    ? {
+        success: true,
+        locale,
+        astJson: JSON.stringify({
+          astVersion: 5,
+          profile: "rmf2-execution-v2",
+          inputs: hostileNames.map((name) => ({ name, type: "string" })),
+        }),
+        diagnostics: [],
+      }
+    : { success: true, locale, renderedJson: '{"key":"payment_title","locale":"fr","runs":[{"text":"safe"}]}', diagnostics: [] };
+}, localeRequest, hostileSamples, () => "default");
+assert.equal(routedCalls.length, 2, "AST 5 preview did not use the required two-stage host route.");
+assert.deepEqual(routedCalls.map(({ key, locale }) => ({ key, locale })), [
+  { key: "payment_title", locale: "fr" },
+  { key: "payment_title", locale: "fr" },
+], "AST 5 routing lost the captured row or locale between host requests.");
+assert.equal(Object.getPrototypeOf(routed.samples), null, "Routed preview samples regained an object prototype.");
+const hostileRoundTrip = JSON.parse(routedCalls[1].samplesJson);
+for (const name of hostileNames) {
+  assert.equal(Object.hasOwn(hostileRoundTrip, name), true,
+    `Preview sample '${name}' was omitted during AST 5 request serialization.`);
+  assert.equal(hostileRoundTrip[name], `value:${name}`,
+    `Preview sample '${name}' was corrupted during AST 5 request serialization.`);
+}
+let staleCurrent = true;
+let staleCalls = 0;
+await routeMessagePreview(async () => {
+  staleCalls += 1;
+  staleCurrent = false;
+  return routed.initial;
+}, rowRequest, hostileSamples, () => "default", () => staleCurrent);
+assert.equal(staleCalls, 1, "A superseded AST 5 preview issued its second host request.");
+
+console.log("PASS: editor preview captures row/locale identity, routes prototype-safe AST 5 samples, keeps runs inert, and rejects cross-profile execution.");

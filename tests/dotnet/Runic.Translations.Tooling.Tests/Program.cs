@@ -21,13 +21,14 @@ internal static class Program
             XliffReportsStructuredMf2Loss();
             V2XliffIsDeterministicAndRoundTripsApprovedReview();
             V2XliffReportsStructuredLossAndRefusesImport();
+            XliffRefusesStructuredTextWithStaleMetadata();
             XliffPreflightSeparatesTextContractAndFreshness();
             LocalePackUsesCanonicalCompilerBytes();
             ArtifactInspectionRecognizesGeneratedOutputs();
             Rmf2PacksAndInspection();
             ToolRequestKeepsLegacyPositionalShape();
             ToolCommandKeepsLegacyInitShape();
-            Console.WriteLine("RESULT 11/11 passed");
+            Console.WriteLine("RESULT 12/12 passed");
             return 0;
         }
         catch (Exception exception)
@@ -132,6 +133,26 @@ internal static class Program
         try { _ = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes); }
         catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
         throw new InvalidOperationException("Execution-v2 structured XLIFF input was accepted.");
+    }
+
+    private static void XliffRefusesStructuredTextWithStaleMetadata()
+    {
+        byte[] v4 = TranslationInterchange.ExportXliff21(Compile("Hello", "Hallo")).Documents.Single().Bytes;
+        AssertStructuredTamperRefused(v4, "<source>Hello</source>", "<source>{{{|Hello|}}}</source>");
+
+        byte[] v5 = ExportProfile(CompileV2("hello = Hello", "hello = Hallo")).Documents.Single().Bytes;
+        AssertStructuredTamperRefused(v5, "<target>Hallo</target>", "<target>{{{|Hallo|}}}</target>");
+    }
+
+    private static void AssertStructuredTamperRefused(byte[] exported, string original, string replacement)
+    {
+        string text = Encoding.UTF8.GetString(exported);
+        if (!text.Contains(original, StringComparison.Ordinal))
+            throw new InvalidOperationException("The plain XLIFF fixture did not contain the expected text node.");
+        byte[] tampered = Encoding.UTF8.GetBytes(text.Replace(original, replacement, StringComparison.Ordinal));
+        try { _ = TranslationInterchange.ImportXliff21(tampered); }
+        catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
+        throw new InvalidOperationException("Structured XLIFF text bypassed refusal through stale runic:unit metadata.");
     }
 
     private static void XliffPreflightSeparatesTextContractAndFreshness()

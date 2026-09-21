@@ -1,4 +1,110 @@
 /**
+ * Captures the preview identity selected by the caller. Reactive selection may
+ * change afterward without retargeting an already scheduled request.
+ * @param {string} path
+ * @param {string} content
+ * @param {string} key
+ * @param {string} locale
+ */
+export function createMessagePreviewRequest(path, content, key, locale) {
+  return Object.freeze({ path, content, key, locale });
+}
+
+/**
+ * Copies sample values into a dictionary with no inherited property names.
+ * @param {Record<string, string> | undefined} [source]
+ * @returns {Record<string, string>}
+ */
+export function createPreviewSamples(source) {
+  /** @type {Record<string, string>} */
+  const samples = Object.create(null);
+  if (source !== undefined) {
+    for (const [name, value] of Object.entries(source)) samples[name] = value;
+  }
+  return samples;
+}
+
+/**
+ * @param {Record<string, string>} samples
+ * @param {string} name
+ * @param {string} fallback
+ */
+export function previewSampleOr(samples, name, fallback) {
+  return Object.hasOwn(samples, name) ? samples[name] : fallback;
+}
+
+/**
+ * @param {Record<string, string>} samples
+ * @param {string} name
+ * @param {string} value
+ */
+export function withPreviewSample(samples, name, value) {
+  const next = createPreviewSamples(samples);
+  next[name] = value;
+  return next;
+}
+
+/**
+ * Owns debounce and freshness for preview work without depending on reactive
+ * component globals.
+ * @param {(callback: () => void, delay: number) => unknown} setTimer
+ * @param {(handle: unknown) => void} clearTimer
+ */
+export function createMessagePreviewScheduler(setTimer, clearTimer) {
+  let epoch = 0;
+  /** @type {unknown} */
+  let handle;
+  return Object.freeze({
+    /** @param {number} delay @param {(epoch: number) => void} operation */
+    schedule(delay, operation) {
+      if (handle !== undefined) clearTimer(handle);
+      const scheduledEpoch = ++epoch;
+      handle = setTimer(() => {
+        handle = undefined;
+        operation(scheduledEpoch);
+      }, delay);
+      return scheduledEpoch;
+    },
+    cancel() {
+      if (handle !== undefined) clearTimer(handle);
+      handle = undefined;
+      epoch += 1;
+    },
+    /** @param {number} candidate */
+    isCurrent(candidate) {
+      return candidate === epoch;
+    },
+  });
+}
+
+/**
+ * Runs the host request sequence for a captured selection. AST 5 receives a
+ * second request carrying prototype-safe samples; AST 2/4 remains local.
+ * @param {(path: string, content: string, locale: string, key: string, samplesJson?: string) => Promise<any>} previewMessage
+ * @param {{ readonly path: string, readonly content: string, readonly key: string, readonly locale: string }} request
+ * @param {Record<string, string>} previousSamples
+ * @param {(type: string) => string} defaultSample
+ * @param {() => boolean} [isCurrent]
+ */
+export async function routeMessagePreview(previewMessage, request, previousSamples, defaultSample, isCurrent = () => true) {
+  const initial = await previewMessage(request.path, request.content, request.locale, request.key);
+  const samples = createPreviewSamples(previousSamples);
+  if (!isCurrent() || !initial.success || typeof initial.astJson !== "string" || typeof initial.locale !== "string") {
+    return { initial, ast: undefined, samples, rendered: undefined };
+  }
+  const ast = JSON.parse(initial.astJson);
+  const inputs = ast.astVersion === 5 ? ast.inputs : Object.entries(ast.inputs)
+    .map(([name, descriptor]) => ({ name, type: descriptor.type }));
+  for (const input of inputs) {
+    samples[input.name] = previewSampleOr(previousSamples, input.name, defaultSample(input.type));
+  }
+  const rendered = ast.astVersion === 5
+    ? await previewMessage(request.path, request.content, request.locale, request.key, JSON.stringify(samples))
+    : undefined;
+  return { initial, ast, samples, rendered };
+}
+
+/**
  * Executes the compiler-normalized locale AST used by the generated ESM dynamic runtime.
  * The result is semantic data only. Callers must never turn markup names into HTML.
  * @param {import("./message-model").MessageArtifact} ast
@@ -15,9 +121,9 @@ export function executeMessagePreview(ast, locale, samples) {
   }
   locale = ast.contentLocale ?? locale;
   /** @type {Record<string, unknown>} */
-  const inputs = {};
+  const inputs = Object.create(null);
   for (const [name, descriptor] of Object.entries(ast.inputs)) {
-    if (!(name in samples)) throw new TypeError(`Enter a sample value for '${name}'.`);
+    if (!Object.hasOwn(samples, name)) throw new TypeError(`Enter a sample value for '${name}'.`);
     inputs[name] = parseSample(name, descriptor.type, samples[name]);
   }
   const selected = ast.selectors.map((selector) => {
