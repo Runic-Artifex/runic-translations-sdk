@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace Runic.Translations.Compiler;
 
-/// <summary>The opt-in semantic foundation. Project compilation still uses the v4 adapter.</summary>
+/// <summary>The opt-in semantic foundation. The default project path still uses the v4 adapter.</summary>
 internal static class Rmf2SemanticCompilerV5
 {
     internal static Rmf2SemanticResultV5 Compile(TranslationSource source, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
@@ -17,8 +17,14 @@ internal static class Rmf2SemanticCompilerV5
         return new Lowerer(syntax, options, cancellationToken).Lower();
     }
 
+    internal static Rmf2SemanticResultV5 CompileWithCallerContract(TranslationSource source,
+        IReadOnlyList<Rmf2InputV5> inputs, TranslationCompilerOptions options, CancellationToken cancellationToken)
+        => new Lowerer(Mf2SyntaxReader.Read(source, options, cancellationToken), options, cancellationToken,
+            inputs.ToDictionary(input => input.Name, input => input.Type, StringComparer.Ordinal)).Lower();
+
     private sealed record Symbol(string Kind, string ValueType, string Selection, IReadOnlyList<string> Inputs);
-    private sealed class Lowerer(Mf2SyntaxDocument syntax, TranslationCompilerOptions options, CancellationToken cancellation)
+    private sealed class Lowerer(Mf2SyntaxDocument syntax, TranslationCompilerOptions options, CancellationToken cancellation,
+        IReadOnlyDictionary<string, string>? callerTypes = null)
     {
         private readonly DiagnosticBag _diagnostics = new();
         private readonly Dictionary<string, Symbol> _symbols = new(StringComparer.Ordinal);
@@ -35,12 +41,21 @@ internal static class Rmf2SemanticCompilerV5
             // Seed signatures only after declaration validation: prior references
             // cannot be retroactively bound by a later input declaration. Locals
             // still require declaration order and retain their expression graph.
+            if (callerTypes is not null)
+                foreach (var input in callerTypes)
+                    if (!_locals.Contains(input.Key))
+                        _symbols[input.Key] = new("input", input.Value, DefaultSelection(input.Value), new[] { input.Key });
             foreach (var declaration in syntax.Declarations.Where(d => d.Kind == "input"))
             {
                 var function = declaration.Expression.Function is string name ? Rmf2FunctionRegistryV2.Find(name) : null;
                 string type = function?.InputType ?? "string";
+                if (callerTypes?.TryGetValue(declaration.Name, out string? callerType) == true)
+                {
+                    if (function is not null && type != callerType) Error("Input declaration differs from the canonical caller type for '" + declaration.Name + "'.", declaration.NameLocation);
+                    type = callerType;
+                }
                 _inputs[declaration.Name] = type;
-                _symbols[declaration.Name] = new("input", type, Selection(declaration.Expression, function?.Selection ?? "exact"), new[] { declaration.Name });
+                _symbols[declaration.Name] = new("input", type, Selection(declaration.Expression, function?.Selection ?? DefaultSelection(type)), new[] { declaration.Name });
             }
             // Infer unconstrained input types through complete local operand chains.
             // Formatter metadata on a local does not create a new underlying value.
@@ -58,6 +73,12 @@ internal static class Rmf2SemanticCompilerV5
                 while (operand is { Kind: Mf2OperandKind.Variable } && localOperands.TryGetValue(operand.Value, out var underlying)) operand = underlying;
                 if (operand is not { Kind: Mf2OperandKind.Variable } || declaredTypes.Contains(operand.Value)) continue;
                 string type = function.InputType;
+                if (callerTypes?.TryGetValue(operand.Value, out string? callerType) == true)
+                {
+                    if (type != callerType && !(callerType == "int64" && type == "decimal"))
+                        Error("Formatter requires a different caller type for '" + operand.Value + "'.", operand.Location);
+                    type = callerType;
+                }
                 if (inferredTypes.TryGetValue(operand.Value, out string? previous) && previous != type)
                 {
                     if (previous is "int64" or "decimal" && type is "int64" or "decimal") type = "int64";
@@ -190,7 +211,11 @@ internal static class Rmf2SemanticCompilerV5
         }
         private Symbol Resolve(string name, string? expectedType, TextSourceLocation location)
         {
-            if (_symbols.TryGetValue(name, out var symbol)) return symbol;
+            if (_symbols.TryGetValue(name, out var symbol))
+            {
+                if (symbol.Kind == "input") _inputs[name] = symbol.ValueType;
+                return symbol;
+            }
             if (_locals.Contains(name)) DataError("Local '" + name + "' is referenced before its declaration.", location);
             string type = expectedType ?? "string";
             symbol = new("input", type, DefaultSelection(type), new[] { name });

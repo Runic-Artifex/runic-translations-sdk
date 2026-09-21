@@ -41,6 +41,11 @@ Tool builders consume the compiler API through `Runic.Translations.Tooling`. App
 
 Compilation is deterministic for the same classified UTF-8 inputs and options. It does not read files, mutate a workspace, or provide a user interface. The authoring package adds supported discovery and mutation operations on top of this kernel.
 
+Backend integration work can explicitly select the internal `Rmf2ExecutionV2`
+project profile and receive a separate typed v5 carrier. The public entry point
+continues to emit v4 RMF2. See the [v5 project-linking contract](../../specs/translations/rmf2-project-v5.md)
+for cross-locale contracts, fingerprint/freshness separation and generated names.
+
 ## Compatibility and status
 
 The containing Tooling package is a public preview for .NET 10. Source schemas, normalized message grammar, artifact schemas, and ESM ABI are versioned separately from package SemVer.

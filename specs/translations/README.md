@@ -90,3 +90,6 @@ The additive [semantic v5 foundation](rmf2-execution-v2.md) and
 [v2 option table](rmf2-execution-v2.json) specify the next typed model. Its v5
 schemas and compiler IR are staged independently; project output and installed
 runtimes continue to use the v1/v4 contract until generation/runtime integration.
+The [staged v5 project linker](rmf2-project-v5.md) provides an explicit typed
+compiler profile, cross-locale caller/markup contracts, separate compatibility
+and freshness hashes, and the generated-name mapping for the dependent backends.

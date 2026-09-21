@@ -1,0 +1,15 @@
+account {
+  bill =
+    .input {$count :integer}
+    .input {$rate :number}
+    .input {$用户 :string}
+    .local $percent = {$rate :number style=percent maximumFractionDigits=2}
+    .match $count
+    one {{{#link ref=invoice}One invoice{/link} for {$用户}: {$percent}}}
+    * {{{#link ref=invoice}{$count} invoices{/link} for {$用户}: {$percent}}}
+  total =
+    .input {$rate :number}
+    .local $formatted = {$rate :number style=percent minimumFractionDigits=2 maximumFractionDigits=2}
+    .local $alias = {$formatted}
+    {{{$alias}}}
+}
