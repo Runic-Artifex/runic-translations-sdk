@@ -47,7 +47,7 @@ public sealed class TranslationWorkspaceTransactionPlan
     {
         Root = root;
         CatalogId = catalogId;
-        Edits = edits;
+        Edits = SnapshotEdits(edits);
         _compilation = compilation;
         _validation = ValidationReceipt.From(compilation);
     }
@@ -60,7 +60,7 @@ public sealed class TranslationWorkspaceTransactionPlan
     {
         Root = root;
         CatalogId = catalogId;
-        Edits = edits;
+        Edits = SnapshotEdits(edits);
         _compilation = compilation.Current;
         _validation = ValidationReceipt.From(compilation);
     }
@@ -73,6 +73,15 @@ public sealed class TranslationWorkspaceTransactionPlan
     public TranslationCompilation Compilation => _compilation ?? throw new InvalidOperationException(
         "Compilation is unavailable because this plan was validated as rmf2-execution-v2 rather than the v4 compiler profile.");
     internal bool IsCompilerValid => _validation.Success;
+
+    private static System.Collections.ObjectModel.ReadOnlyCollection<TranslationWorkspaceEdit> SnapshotEdits(IReadOnlyList<TranslationWorkspaceEdit> edits)
+    {
+        ArgumentNullException.ThrowIfNull(edits);
+        var snapshot = new TranslationWorkspaceEdit[edits.Count];
+        for (int index = 0; index < edits.Count; index++)
+            snapshot[index] = edits[index] ?? throw new ArgumentException("A workspace transaction edit cannot be null.", nameof(edits));
+        return Array.AsReadOnly(snapshot);
+    }
 
     private readonly record struct ValidationReceipt
     {
