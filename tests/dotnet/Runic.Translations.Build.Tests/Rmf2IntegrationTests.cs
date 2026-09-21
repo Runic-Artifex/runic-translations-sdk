@@ -48,9 +48,10 @@ internal static class Rmf2IntegrationTests
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
         File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"", "\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", StringComparison.Ordinal));
         File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = Shop\n");
+        string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
         string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
         File.WriteAllText(temporary.Resolve("Consumer.proj"), $$"""
-            <Project><PropertyGroup><Configuration>Debug</Configuration></PropertyGroup>
+            <Project><PropertyGroup><Configuration>{{configuration}}</Configuration></PropertyGroup>
             <ItemGroup><TranslationProject Include="translations/runic.json" /></ItemGroup>
             <Import Project="{{targets}}" />
             <Target Name="Dump" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources">
