@@ -1,3 +1,0 @@
-type static class Runic.Translations.Compiler.Generation.TranslationOutputRenderer
-  field const System.Int32 TemplateManifestV2Version = 2
-  field const System.Int32 WebModuleManifestV2Version = 2

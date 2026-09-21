@@ -200,8 +200,10 @@ type static class Runic.Translations.Compiler.Generation.TranslationOutputRender
   field const System.Int32 LocaleArtifactV2Version = 2
   field const System.Int32 LocaleArtifactV4Version = 4
   field const System.Int32 LocaleArtifactVersion = 1
+  field const System.Int32 TemplateManifestV2Version = 2
   field const System.Int32 TemplateManifestVersion = 1
   field const System.Int32 TypeScriptContractVersion = 1
+  field const System.Int32 WebModuleManifestV2Version = 2
   method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderAssetManifestJson(Runic.Translations.Compiler.CompiledTextCatalog catalog, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.Generation.TranslationGeneratedOutput> selectedOutputs)
   method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderCSharpAccessors(Runic.Translations.Compiler.CompiledTextCatalog catalog)
   method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderCSharpCatalogData(Runic.Translations.Compiler.CompiledTextCatalog catalog)
