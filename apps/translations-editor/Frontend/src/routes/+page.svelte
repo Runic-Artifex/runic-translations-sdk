@@ -65,7 +65,7 @@
   import { Spinner } from "$lib/components/ui/spinner/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import type { MessageArtifact } from "$lib/message-composer";
-  import { executeMessagePreview } from "$lib/message-preview.js";
+  import { executeMessagePreview, parseRenderedMessagePreview } from "$lib/message-preview.js";
   import {
     clearLocalEditorState,
     configureLocalEditorState,
@@ -109,6 +109,7 @@
   type MutationKind = EditorMutationRequest["kind"];
   type MessagePreviewResult = ReturnType<typeof executeMessagePreview>;
   type PreviewNode = Extract<MessagePreviewResult, { kind: "content" }>["nodes"][number];
+  type PreviewRequest = { path: string; content: string; locale: string; key: string };
 
   const bridge = createEditorBridge();
   configureLocalEditorState(bridge);
@@ -190,6 +191,7 @@
   let previewAst = $state.raw<MessageArtifact>();
   let previewSamples = $state<Record<string, string>>({});
   let previewResult = $state.raw<MessagePreviewResult>();
+  let previewRequest = $state.raw<PreviewRequest>();
   let previewTimer: number | undefined;
   let previewEpoch = 0;
   let reviewEntries = $state<EditorReviewEntry[]>([]);
@@ -613,6 +615,7 @@
     }
     previewAst = undefined;
     previewResult = undefined;
+    previewRequest = undefined;
     previewError = undefined;
     if (nextMode === "translation" && document !== undefined) {
       schedulePreview(document.path, drafts[document.path] ?? document.content);
@@ -687,9 +690,11 @@
   function schedulePreview(path: string, content: string): void {
     if (previewTimer !== undefined) window.clearTimeout(previewTimer);
     const epoch = ++previewEpoch;
+    const request = { path, content, locale: selectedLocale, key: selectedKey };
+    previewRequest = request;
     previewBusy = true;
     previewTimer = window.setTimeout(() => {
-      void bridge.previewMessage(path, content, selectedLocale, selectedKey).then((result) => {
+      void bridge.previewMessage(request.path, request.content, request.locale, request.key).then(async (result) => {
         if (epoch !== previewEpoch) return;
         if (!result.success || result.astJson === undefined || result.locale === undefined) {
           previewAst = undefined;
@@ -700,12 +705,13 @@
         const ast = JSON.parse(result.astJson) as MessageArtifact;
         previewAst = ast;
         const samples: Record<string, string> = {};
-        for (const [name, descriptor] of Object.entries(ast.inputs)) {
+        for (const [name, descriptor] of previewInputEntries(ast)) {
           samples[name] = previewSamples[name] ?? defaultSample(descriptor.type);
         }
         previewSamples = samples;
         previewError = undefined;
-        renderPreview(result.locale);
+        if (ast.astVersion === 5) await renderCompilerPreview(request, epoch);
+        else renderLocalPreview(result.locale);
       }).catch((error) => {
         if (epoch === previewEpoch) previewError = errorNotice(error);
       }).finally(() => {
@@ -716,7 +722,22 @@
 
   function updatePreviewSample(name: string, value: string): void {
     previewSamples = { ...previewSamples, [name]: value };
-    renderPreview(selectedLocale);
+    if (previewAst?.astVersion === 5) {
+      if (previewRequest === undefined) return;
+      if (previewTimer !== undefined) window.clearTimeout(previewTimer);
+      const epoch = ++previewEpoch;
+      previewBusy = true;
+      const request = previewRequest;
+      previewTimer = window.setTimeout(() => {
+        void renderCompilerPreview(request, epoch).catch((error) => {
+          if (epoch === previewEpoch) previewError = errorNotice(error);
+        }).finally(() => {
+          if (epoch === previewEpoch) previewBusy = false;
+        });
+      }, 150);
+    } else {
+      renderLocalPreview(selectedLocale);
+    }
   }
 
   function updateReview(
@@ -1011,8 +1032,8 @@
     editResourceValue(value);
   }
 
-  function renderPreview(locale: string): void {
-    if (previewAst === undefined) return;
+  function renderLocalPreview(locale: string): void {
+    if (previewAst === undefined || previewAst.astVersion === 5) return;
     try {
       previewResult = executeMessagePreview(previewAst, locale, previewSamples);
       previewError = undefined;
@@ -1022,13 +1043,37 @@
     }
   }
 
+  async function renderCompilerPreview(request: PreviewRequest, epoch: number): Promise<void> {
+    const result = await bridge.previewMessage(
+      request.path,
+      request.content,
+      request.locale,
+      request.key,
+      JSON.stringify(previewSamples),
+    );
+    if (epoch !== previewEpoch) return;
+    if (!result.success || result.renderedJson === undefined) {
+      previewResult = undefined;
+      previewError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
+      return;
+    }
+    previewResult = parseRenderedMessagePreview(result.renderedJson);
+    previewError = undefined;
+  }
+
+  function previewInputEntries(ast: MessageArtifact): Array<[string, { type: string }]> {
+    return ast.astVersion === 5
+      ? ast.inputs.map((input) => [input.name, input])
+      : Object.entries(ast.inputs);
+  }
+
   function defaultSample(type: string): string {
-    if (type === "int" || type === "number") return "1";
-    if (type === "bool") return "true";
+    if (type === "int" || type === "int64" || type === "number" || type === "decimal") return "1";
+    if (type === "bool" || type === "boolean") return "true";
     if (type === "date") return "2026-08-08";
     if (type === "time") return "12:30:00";
-    if (type === "datetime") return "2026-08-08T12:30:00Z";
-    if (type === "guid") return "12345678-1234-1234-1234-123456789abc";
+    if (type === "datetime" || type === "instant") return "2026-08-08T12:30:00Z";
+    if (type === "guid" || type === "uuid") return "12345678-1234-1234-1234-123456789abc";
     return ui.text("ui_preview_sample");
   }
 
@@ -2101,9 +2146,9 @@
                 <div><strong>{ui.text("ui_page_preview_title")}</strong><span>{ui.text("ui_page_preview_description")}</span></div>
                 <span class="preview-state">{previewBusy ? ui.text("ui_page_preview_compiling") : previewAst === undefined ? ui.text("ui_page_preview_unavailable") : selectedLocale}</span>
               </header>
-              {#if previewAst !== undefined && Object.keys(previewAst.inputs).length > 0}
+              {#if previewAst !== undefined && previewInputEntries(previewAst).length > 0}
                 <div class="sample-inputs">
-                  {#each Object.entries(previewAst.inputs) as [name, descriptor] (name)}
+                  {#each previewInputEntries(previewAst) as [name, descriptor] (name)}
                     <label><span>{name}<small>{descriptor.type}</small></span><input value={previewSamples[name] ?? ""} oninput={(event) => updatePreviewSample(name, event.currentTarget.value)} /></label>
                   {/each}
                 </div>

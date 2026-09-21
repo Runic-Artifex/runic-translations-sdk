@@ -179,6 +179,7 @@ export interface EditorMessagePreview {
   success: boolean;
   locale?: string;
   astJson?: string;
+  renderedJson?: string;
   diagnostics: EditorDiagnostic[];
 }
 

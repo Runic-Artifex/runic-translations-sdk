@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
+using System.Threading;
 using Runic.Translations.Compiler;
 using Runic.Translations.Compiler.Generation;
 using Runic.Translations.Tooling;
@@ -17,12 +19,15 @@ internal static class Program
             Mf2ProjectCompilesThroughToolingFacade();
             XliffRoundTripsPlainMf2AndReview();
             XliffReportsStructuredMf2Loss();
+            V2XliffIsDeterministicAndRoundTripsApprovedReview();
+            V2XliffReportsStructuredLossAndRefusesImport();
+            XliffPreflightSeparatesTextContractAndFreshness();
             LocalePackUsesCanonicalCompilerBytes();
             ArtifactInspectionRecognizesGeneratedOutputs();
             Rmf2PacksAndInspection();
             ToolRequestKeepsLegacyPositionalShape();
             ToolCommandKeepsLegacyInitShape();
-            Console.WriteLine("RESULT 8/8 passed");
+            Console.WriteLine("RESULT 11/11 passed");
             return 0;
         }
         catch (Exception exception)
@@ -79,6 +84,88 @@ internal static class Program
         try { _ = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes); }
         catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
         throw new InvalidOperationException("Structured XLIFF input was accepted.");
+    }
+
+    private static void V2XliffIsDeterministicAndRoundTripsApprovedReview()
+    {
+        object compilation = CompileV2("hello = Hello", "hello = Hallo");
+        object preflight = Preflight(compilation);
+        string fingerprint = Property<string>(preflight, "TextProfileFingerprint");
+        var review = new TranslationInterchangeReview("app",
+            [new TranslationInterchangeReviewEntry("hello", "de", "approved", "Ready.", fingerprint)]);
+
+        TranslationXliffExportResult first = ExportProfile(compilation, review);
+        TranslationXliffExportResult second = ExportProfile(compilation, review);
+        if (first.Documents.Count != 1 ||
+            !first.Documents[0].Bytes.SequenceEqual(second.Documents[0].Bytes) ||
+            !first.Report.IsLossless)
+            throw new InvalidOperationException("Execution-v2 XLIFF export was not deterministic and lossless.");
+
+        TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(first.Documents[0].Bytes);
+        TranslationInterchangeReviewEntry importedReview = imported.Review.Entries.Single();
+        if (Encoding.UTF8.GetString(imported.Messages.Single().Bytes) != "Hallo\n" ||
+            importedReview.State != "approved" ||
+            importedReview.SourceFingerprint != fingerprint)
+            throw new InvalidOperationException("Execution-v2 XLIFF did not round-trip plain text and approved review evidence.");
+    }
+
+    private static void V2XliffReportsStructuredLossAndRefusesImport()
+    {
+        const string english = """
+            items =
+              .input {$count :integer select=plural}
+              .match $count
+              one {{One item}}
+              * {{{$count} items}}
+            """;
+        const string german = """
+            items =
+              .input {$count :integer select=plural}
+              .match $count
+              one {{Ein Element}}
+              * {{{$count} Elemente}}
+            """;
+        TranslationXliffExportResult exported = ExportProfile(CompileV2(english, german));
+        if (exported.Report.IsLossless ||
+            !exported.Report.Losses.Any(loss => loss.Code == "XLIFF21-STRUCTURED-MESSAGE" && loss.SemanticLoss))
+            throw new InvalidOperationException("Execution-v2 structured XLIFF loss was not reported.");
+        try { _ = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes); }
+        catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
+        throw new InvalidOperationException("Execution-v2 structured XLIFF input was accepted.");
+    }
+
+    private static void XliffPreflightSeparatesTextContractAndFreshness()
+    {
+        object first = CompileV2("hello = Hello", "hello = Hallo");
+        object changed = CompileV2("hello = Hello again", "hello = Hallo");
+        object firstPreflight = Preflight(first);
+        object changedPreflight = Preflight(changed);
+        object firstProject = Property<object>(Property<object>(first, "Rmf2"), "Project");
+        object changedProject = Property<object>(Property<object>(changed, "Rmf2"), "Project");
+        string caller = Property<string>(firstProject, "CallerFingerprint");
+        string changedCaller = Property<string>(changedProject, "CallerFingerprint");
+        string sourceHash = Property<string>(firstProject, "SourceHash");
+        string fingerprint = Property<string>(firstPreflight, "TextProfileFingerprint");
+        string freshness = Property<string>(firstPreflight, "SourceFreshness");
+        TranslationCompilation v4 = Compile("Hello", "Hallo");
+        TranslationCompilation v4TargetChanged = Compile("Hello", "Guten Tag");
+        object v4Preflight = Preflight(v4);
+        object v4TargetChangedPreflight = Preflight(v4TargetChanged);
+
+        if (!Property<bool>(firstPreflight, "Success") ||
+            Property<string>(firstPreflight, "CatalogId") != "app" ||
+            Property<string>(firstPreflight, "SourceLocale") != "en" ||
+            caller != changedCaller ||
+            sourceHash != freshness ||
+            fingerprint == caller ||
+            fingerprint == sourceHash ||
+            fingerprint == Property<string>(changedPreflight, "TextProfileFingerprint") ||
+            freshness == Property<string>(changedPreflight, "SourceFreshness") ||
+            Property<string>(v4Preflight, "TextProfileFingerprint") != Property<string>(v4TargetChangedPreflight, "TextProfileFingerprint") ||
+            Property<string>(v4Preflight, "SourceFreshness") == Property<string>(v4TargetChangedPreflight, "SourceFreshness") ||
+            Property<string>(v4Preflight, "SourceFreshness") == v4.Catalogs.Single().Fingerprint ||
+            Property<string>(v4Preflight, "TextProfileFingerprint") == v4.Catalogs.Single().Fingerprint)
+            throw new InvalidOperationException("XLIFF preflight conflated caller compatibility, source freshness, or the closed text profile.");
     }
 
     private static void LocalePackUsesCanonicalCompilerBytes()
@@ -140,6 +227,56 @@ internal static class Program
     }
 
     private static TranslationCompilation CompilePlainFixture() => Compile("Hello", "Hallo");
+
+    private static object CompileV2(string english, string german)
+    {
+        TranslationSource project = Source("translations/runic.json", """
+            {
+              "schemaVersion": 1,
+              "catalog": "app",
+              "code": { "namespace": "App", "className": "Text" },
+              "baseLocale": "en",
+              "sourceLayout": "rmf2-v1",
+              "executionProfile": "rmf2-execution-v2",
+              "locales": ["en", { "tag": "de", "fallback": "en" }]
+            }
+            """);
+        MethodInfo method = typeof(TranslationCompiler).GetMethod(
+            "CompileProjectForSelectedProfile",
+            BindingFlags.Static | BindingFlags.NonPublic) ??
+            throw new InvalidOperationException("Profile compiler entry point is missing.");
+        object compilation = method.Invoke(null,
+            [project, new[] { Source("translations/en.rmf2", english), Source("translations/de.rmf2", german) }, null, CancellationToken.None]) ??
+            throw new InvalidOperationException("Profile compiler returned no result.");
+        if (!Property<bool>(compilation, "Success"))
+            throw new InvalidOperationException("Execution-v2 fixture did not compile.");
+        return compilation;
+    }
+
+    private static object Preflight(object compilation)
+    {
+        MethodInfo method = typeof(TranslationInterchange).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+            .Single(candidate => candidate.Name == "PreflightXliff21" && candidate.GetParameters().Length == 1 &&
+                candidate.GetParameters()[0].ParameterType.IsInstanceOfType(compilation));
+        return method.Invoke(null, [compilation]) ??
+            throw new InvalidOperationException("XLIFF preflight returned no projection.");
+    }
+
+    private static TranslationXliffExportResult ExportProfile(
+        object compilation,
+        TranslationInterchangeReview? review = null)
+    {
+        MethodInfo method = typeof(TranslationInterchange).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+            .Single(candidate => candidate.Name == "ExportXliff21" &&
+                candidate.GetParameters().Length == 2 &&
+                candidate.GetParameters()[0].ParameterType.Name == "TranslationProfileCompilation");
+        return (TranslationXliffExportResult)(method.Invoke(null, [compilation, review]) ??
+            throw new InvalidOperationException("Profile XLIFF export returned no result."));
+    }
+
+    private static T Property<T>(object value, string name) =>
+        (T)(value.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(value) ??
+            throw new InvalidOperationException("Missing property '" + name + "'."));
 
     private static TranslationCompilation Compile(string english, string german)
     {

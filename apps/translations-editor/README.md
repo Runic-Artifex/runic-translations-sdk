@@ -47,6 +47,15 @@ MF2 messages, watches external changes, and previews through the canonical
 compiler model. Diagnostics remain privacy-bounded and writes use revision
 checks plus atomic replacement.
 
+Both the compatible RMF2 execution profile and explicit
+`rmf2-execution-v2` projects use their selected compiler/runtime pipeline.
+Execution-v2 previews are formatted by the verified .NET artifact/pack path;
+the browser receives inert semantic runs and never approximates AST 5 in
+JavaScript. Editor refactors and XLIFF imports are resource-only: they do not
+rewrite application call sites. The closed XLIFF 2.1 profile round-trips direct
+plain-text RMF2 resources, reports structured messages as semantic loss, and
+refuses structured imports instead of flattening them.
+
 Machine-translation providers and signed stable distribution are not available yet.
 
 ## Build from source

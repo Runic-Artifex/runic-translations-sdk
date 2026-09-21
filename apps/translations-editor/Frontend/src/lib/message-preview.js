@@ -7,6 +7,12 @@
  * @returns {{ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] }}
  */
 export function executeMessagePreview(ast, locale, samples) {
+  if (ast.astVersion === 5) {
+    throw new TypeError("RMF2 execution-v2 previews must be rendered by the compiler host.");
+  }
+  if (ast.astVersion !== 2 && ast.astVersion !== 4) {
+    throw new TypeError(`Unsupported message preview AST version '${ast.astVersion}'.`);
+  }
   locale = ast.contentLocale ?? locale;
   /** @type {Record<string, unknown>} */
   const inputs = {};
@@ -36,6 +42,72 @@ export function executeMessagePreview(ast, locale, samples) {
   return hasMarkup(nodes)
     ? { kind: "content", nodes }
     : { kind: "text", value: flattenPreview(nodes) };
+}
+
+/**
+ * Converts the compiler host's JSON preview runs to the same inert semantic
+ * result consumed by InlinePreview. Markup names and options remain data.
+ * @param {string} renderedJson
+ * @returns {{ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] }}
+ */
+export function parseRenderedMessagePreview(renderedJson) {
+  const document = JSON.parse(renderedJson);
+  if (!isRecord(document) || typeof document.key !== "string" ||
+      typeof document.locale !== "string" || !Array.isArray(document.runs) ||
+      !hasExactKeys(document, ["key", "locale", "runs"])) {
+    throw new TypeError("The compiler host returned an invalid rendered message preview.");
+  }
+  const nodes = document.runs.map(renderedRun);
+  return hasMarkup(nodes)
+    ? { kind: "content", nodes }
+    : { kind: "text", value: flattenPreview(nodes) };
+}
+
+/** @param {unknown} value @returns {PreviewNode} */
+function renderedRun(value) {
+  if (!isRecord(value)) invalidRenderedRun();
+  if (typeof value.text === "string") {
+    const textOnly = hasExactKeys(value, ["text"]);
+    const fullRun = hasExactKeys(value, ["name", "text", "options", "children"]);
+    if (!textOnly && !fullRun) invalidRenderedRun();
+    if (fullRun && (typeof value.name !== "string" || !isStringRecord(value.options) ||
+        !Array.isArray(value.children) || value.children.length !== 0)) {
+      invalidRenderedRun();
+    }
+    return { kind: "text", value: value.text };
+  }
+  if (value.text !== null || typeof value.name !== "string" || value.name.length === 0 ||
+      !isStringRecord(value.options) || !Array.isArray(value.children) ||
+      !hasExactKeys(value, ["name", "text", "options", "children"])) {
+    invalidRenderedRun();
+  }
+  return {
+    kind: "element",
+    name: value.name,
+    attributes: { ...value.options },
+    children: value.children.map(renderedRun),
+  };
+}
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** @param {unknown} value @returns {value is Record<string, string>} */
+function isStringRecord(value) {
+  return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
+}
+
+/** @param {Record<string, unknown>} value @param {string[]} expected */
+function hasExactKeys(value, expected) {
+  const keys = Object.keys(value);
+  return keys.length === expected.length && keys.every((key) => expected.includes(key));
+}
+
+/** @returns {never} */
+function invalidRenderedRun() {
+  throw new TypeError("The compiler host returned an invalid rendered message run.");
 }
 
 /** @param {PreviewNode[]} nodes @returns {string} */

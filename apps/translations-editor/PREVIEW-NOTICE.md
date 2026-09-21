@@ -11,7 +11,11 @@ The source-built Editor is the public demonstration for English and German
 localization and parameterized MF2 count messages. Its resources use one TOML file
 per locale with `sourceLayout: "locale-toml"` in `runic.json`.
 
-The editor also supports projects that opt into `sourceLayout: "rmf2-v1"`.
+The editor also supports projects that opt into `sourceLayout: "rmf2-v1"`,
+including explicit `executionProfile: "rmf2-execution-v2"`. Its edits remain
+resource-only. Plain direct resources use the closed XLIFF text profile;
+structured exports carry an explicit loss report and cannot be imported through
+that text profile.
 RMF2 is a bounded profile rather than full Unicode MF2 conformance; see the
 [RMF2 implementation guide](../../docs/guides/translations/rmf2.md) for its
 supported resource and markup contracts.

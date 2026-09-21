@@ -167,7 +167,7 @@ export interface EditorBridge {
   redo(): Promise<EditorOperationResult>;
   validate(path: string, content: string): Promise<ValidationResult>;
   transformDocument(path: string, content: string, key?: string, value?: string): Promise<EditorDocumentDraft>;
-  previewMessage(path: string, content: string, locale: string, key: string): Promise<EditorMessagePreview>;
+  previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string): Promise<EditorMessagePreview>;
   saveReview(request: EditorReviewSaveRequest): Promise<EditorReviewOperationResult>;
   about(): Promise<EditorAbout>;
   createDiagnosticBundle(): Promise<EditorDiagnosticBundleResult>;
@@ -230,8 +230,11 @@ export function createEditorBridge(): EditorBridge {
       const receipt = await dispatch({ _tag: "TransformDocument", ...encodeRequest({ path, content, key, value }) });
       return domain<EditorDocumentDraft>(revive(receipt.result));
     },
-    async previewMessage(path, content, locale, key) {
-      const receipt = await dispatch({ _tag: "PreviewMessage", path, content, locale, key });
+    async previewMessage(path, content, locale, key, samplesJson) {
+      const receipt = await dispatch({
+        _tag: "PreviewMessage",
+        ...encodeRequest({ path, content, locale, key, samplesJson }),
+      });
       return domain<EditorMessagePreview>(revive(receipt.preview));
     },
     async saveReview(request) {

@@ -143,6 +143,7 @@ internal sealed record EditorMessagePreview(
     bool Success,
     string? Locale,
     string? AstJson,
+    string? RenderedJson,
     IReadOnlyList<EditorDiagnostic> Diagnostics);
 
 internal sealed record EditorOperationResult(
@@ -273,7 +274,7 @@ internal sealed record PreparedInterchangeImport(
     string SourcePath,
     byte[] SourceHash,
     string CatalogId,
-    string ExpectedCatalogFingerprint,
+    string ExpectedSourceFreshness,
     IReadOnlyList<PreparedInterchangeDocument> Documents,
     IReadOnlyList<TranslationEditorStateEntry> MergedEntries,
     string? ExpectedSidecarRevision);

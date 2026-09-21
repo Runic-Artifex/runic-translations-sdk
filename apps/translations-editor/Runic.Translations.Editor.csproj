@@ -41,6 +41,7 @@
     <DefineConstants>$(DefineConstants);RUNIC_PLATFORM_$(RunicNativeProvider)</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../eng/translations/Rmf2Preview.cs" Link="Shared/Rmf2Preview.cs" />
     <ProjectReference Include="../../packages/dotnet/Runic.Platform.$(RunicNativeProvider)/Runic.Platform.$(RunicNativeProvider).csproj" />
   </ItemGroup>
 

@@ -137,6 +137,7 @@ const EditorMessagePreview = Schema.Struct({
   success: Schema.Boolean,
   locale: Schema.optional(Schema.String),
   astJson: Schema.optional(Schema.String),
+  renderedJson: Schema.optional(Schema.String),
   diagnostics: Schema.Array(EditorDiagnostic),
 });
 
@@ -422,6 +423,7 @@ const commands = [
       content: Schema.String,
       locale: Schema.String,
       key: Schema.String,
+      samplesJson: Schema.optional(Schema.String),
     }),
     "MessagePreviewed",
   ),

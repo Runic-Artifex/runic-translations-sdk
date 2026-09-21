@@ -21,6 +21,7 @@
     </ItemGroup>
   </Target>
   <ItemGroup>
+    <InternalsVisibleTo Include="Runic.Translations.Editor" />
     <ProjectReference Include="../Runic.CommandLine/Runic.CommandLine.csproj" />
     <ProjectReference Include="../Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj"
                       PrivateAssets="all"

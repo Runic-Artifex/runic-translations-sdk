@@ -28,22 +28,37 @@ public static class TranslationInterchange
     /// <summary>Exports one compiler-valid catalog as one XLIFF document per non-default locale.</summary>
     public static TranslationXliffExportResult ExportXliff21(
         TranslationCompilation compilation,
-        TranslationInterchangeReview? review = null)
+        TranslationInterchangeReview? review = null) =>
+        ExportXliff21(TranslationInterchangeProjectionAdapter.From(compilation), review);
+
+    // Kept internal because TranslationProfileCompilation and the v5 project are
+    // compiler implementation contracts. The editor can use this path without
+    // publishing either model as part of Tooling's public API.
+    internal static TranslationXliffExportResult ExportXliff21(
+        TranslationProfileCompilation compilation,
+        TranslationInterchangeReview? review = null) =>
+        ExportXliff21(TranslationInterchangeProjectionAdapter.From(compilation), review);
+
+    internal static TranslationInterchangeProjection PreflightXliff21(
+        TranslationProfileCompilation compilation) =>
+        TranslationInterchangeProjectionAdapter.From(compilation);
+
+    internal static TranslationInterchangeProjection PreflightXliff21(
+        TranslationCompilation compilation) =>
+        TranslationInterchangeProjectionAdapter.From(compilation);
+
+    private static TranslationXliffExportResult ExportXliff21(
+        TranslationInterchangeProjection projection,
+        TranslationInterchangeReview? review)
     {
-        ArgumentNullException.ThrowIfNull(compilation);
-        if (!compilation.Success) throw new TranslationInterchangeException("XLIFF21-COMPILATION", "XLIFF export requires a successful compiler result.");
-        if (compilation.Catalogs.Count != 1) throw new TranslationInterchangeException("XLIFF21-CATALOG", "XLIFF export requires exactly one compiled catalog.");
-        CompiledTextCatalog catalog = compilation.Catalogs[0];
-        ValidateExportReview(review, catalog);
+        ValidateExportReview(review, projection);
         var documents = new List<TranslationXliffDocument>();
         var losses = new List<TranslationInterchangeLoss>();
-        if (catalog.Layers.Count != 1)
-            throw new TranslationInterchangeException("XLIFF21-LAYERS", "XLIFF export requires exactly one source layer so its identity can be preserved.");
-        foreach (CompiledTextLocale locale in catalog.Locales.OrderBy(static item => item.Tag, StringComparer.Ordinal))
+        foreach (TranslationInterchangeLocale locale in projection.Locales.OrderBy(static item => item.Tag, StringComparer.Ordinal))
         {
-            if (string.Equals(locale.Tag, catalog.DefaultLocale, StringComparison.Ordinal)) continue;
-            byte[] bytes = Render(catalog, catalog.Layers[0].Name, locale, review, losses);
-            documents.Add(new TranslationXliffDocument(catalog.Id, catalog.DefaultLocale, locale.Tag, bytes));
+            if (string.Equals(locale.Tag, projection.SourceLocale, StringComparison.Ordinal)) continue;
+            byte[] bytes = Render(projection, locale, review, losses);
+            documents.Add(new TranslationXliffDocument(projection.CatalogId, projection.SourceLocale, locale.Tag, bytes));
         }
         return new TranslationXliffExportResult(documents, new TranslationInterchangeReport(losses));
     }
@@ -117,25 +132,25 @@ public static class TranslationInterchange
         catch (JsonException exception) { throw new TranslationInterchangeException("REVIEW-MALFORMED", "The review representation is malformed.", exception); }
     }
 
-    private static byte[] Render(CompiledTextCatalog catalog, string layer, CompiledTextLocale targetLocale, TranslationInterchangeReview? review, List<TranslationInterchangeLoss> losses)
+    private static byte[] Render(TranslationInterchangeProjection projection, TranslationInterchangeLocale targetLocale, TranslationInterchangeReview? review, List<TranslationInterchangeLoss> losses)
     {
-        EnsureExportBounds(catalog, targetLocale, review);
+        EnsureExportBounds(projection, targetLocale, review);
         var direct = targetLocale.DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
         var reviewByKey = review?.Entries.Where(entry => string.Equals(entry.Locale, targetLocale.Tag, StringComparison.Ordinal)).ToDictionary(static entry => entry.Key, StringComparer.Ordinal) ?? new Dictionary<string, TranslationInterchangeReviewEntry>(StringComparer.Ordinal);
         using var stream = new MemoryStream();
         using (XmlWriter writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = false, NewLineHandling = NewLineHandling.None, OmitXmlDeclaration = false }))
         {
-            writer.WriteStartDocument(); writer.WriteStartElement("xliff", XliffNamespace); writer.WriteAttributeString("version", "2.1"); writer.WriteAttributeString("srcLang", catalog.DefaultLocale); writer.WriteAttributeString("trgLang", targetLocale.Tag);
-            writer.WriteStartElement("file", XliffNamespace); writer.WriteAttributeString("id", catalog.Id); writer.WriteAttributeString("original", catalog.Id + "." + targetLocale.Tag + "." + layer + ".xliff");
-            foreach (CompiledTranslation source in catalog.CanonicalResources)
+            writer.WriteStartDocument(); writer.WriteStartElement("xliff", XliffNamespace); writer.WriteAttributeString("version", "2.1"); writer.WriteAttributeString("srcLang", projection.SourceLocale); writer.WriteAttributeString("trgLang", targetLocale.Tag);
+            writer.WriteStartElement("file", XliffNamespace); writer.WriteAttributeString("id", projection.CatalogId); writer.WriteAttributeString("original", projection.CatalogId + "." + targetLocale.Tag + "." + projection.Layer + ".xliff");
+            foreach (TranslationInterchangeSourceUnit source in projection.CanonicalUnits)
             {
-                direct.TryGetValue(source.Key, out CompiledTranslation? target);
-                bool structured = !source.IsTextInterchangeLossless || target?.IsTextInterchangeLossless == false;
+                direct.TryGetValue(source.Key, out TranslationInterchangeTargetUnit? target);
+                bool structured = source.Structured || target?.Structured == true;
                 if (structured) losses.Add(new("XLIFF21-STRUCTURED-MESSAGE", "/" + source.Key, "Selectors, formatting, or markup are not losslessly representable by the closed XLIFF text profile.", true));
                 writer.WriteStartElement("unit", XliffNamespace); writer.WriteAttributeString("id", source.Key);
-                WriteNotes(writer, catalog.SchemaVersion, layer, source, target, structured, reviewByKey.TryGetValue(source.Key, out TranslationInterchangeReviewEntry? entry) ? entry : null);
-                writer.WriteStartElement("segment", XliffNamespace); writer.WriteAttributeString("id", "1"); if (entry is not null) writer.WriteAttributeString("state", SegmentState(entry.State)); writer.WriteStartElement("source", XliffNamespace); writer.WriteString(source.Pattern); writer.WriteEndElement();
-                if (target is not null) { writer.WriteStartElement("target", XliffNamespace); writer.WriteString(target.Pattern); writer.WriteEndElement(); }
+                WriteNotes(writer, projection.SchemaVersion, projection.Layer, source, structured, reviewByKey.TryGetValue(source.Key, out TranslationInterchangeReviewEntry? entry) ? entry : null);
+                writer.WriteStartElement("segment", XliffNamespace); writer.WriteAttributeString("id", "1"); if (entry is not null) writer.WriteAttributeString("state", SegmentState(entry.State)); writer.WriteStartElement("source", XliffNamespace); writer.WriteString(source.Text); writer.WriteEndElement();
+                if (target is not null) { writer.WriteStartElement("target", XliffNamespace); writer.WriteString(target.Text); writer.WriteEndElement(); }
                 writer.WriteEndElement(); writer.WriteEndElement();
             }
             writer.WriteEndElement(); writer.WriteEndElement(); writer.WriteEndDocument();
@@ -144,10 +159,10 @@ public static class TranslationInterchange
         return stream.ToArray();
     }
 
-    private static void WriteNotes(XmlWriter writer, int schemaVersion, string layer, CompiledTranslation source, CompiledTranslation? target, bool structured, TranslationInterchangeReviewEntry? review)
+    private static void WriteNotes(XmlWriter writer, int schemaVersion, string layer, TranslationInterchangeSourceUnit source, bool structured, TranslationInterchangeReviewEntry? review)
     {
         writer.WriteStartElement("notes", XliffNamespace);
-        writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "runic:unit"); writer.WriteString(SerializeUnitNote(schemaVersion, layer, source, target, structured)); writer.WriteEndElement();
+        writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "runic:unit"); writer.WriteString(SerializeUnitNote(schemaVersion, layer, source.Metadata, structured)); writer.WriteEndElement();
         if (review is not null) { writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "runic:review"); writer.WriteAttributeString("appliesTo", "target"); writer.WriteString(SerializeReviewNote(review)); writer.WriteEndElement(); }
         writer.WriteEndElement();
     }
@@ -177,7 +192,24 @@ public static class TranslationInterchange
         if (layers.Length != 1) throw new TranslationInterchangeException("XLIFF21-LAYER", "Every imported XLIFF unit must declare the same source layer.");
         if (schemaVersions.Length != 1 || schemaVersions[0] != 2) throw new TranslationInterchangeException("XLIFF21-SCHEMA", "Every imported XLIFF unit must use the current MF2 compiler schema.");
         if (layers.Length != 1 || layers[0] != "base") throw new TranslationInterchangeException("XLIFF21-LAYER", "Every imported XLIFF unit must use the conventional base layer.");
-        string fingerprint = ValidateImportedContract(catalog, sourceLocale, targetLocale, resources); var review = new TranslationInterchangeReview(catalog, reviews); ValidateReview(review, catalog);
+        ValidateImportedContract(catalog, sourceLocale, targetLocale, resources);
+        string fingerprint = TranslationInterchangeFingerprint.TextProfile(
+            catalog,
+            sourceLocale,
+            layers[0],
+            schemaVersions[0],
+            resources.Select(static pair => new TranslationInterchangeSourceUnit(
+                pair.Key,
+                pair.Value.SourcePattern,
+                pair.Value.Structured,
+                new TranslationInterchangeUnitMetadata(
+                    pair.Value.Description,
+                    pair.Value.Since,
+                    pair.Value.Deprecated,
+                    pair.Value.Tags,
+                    pair.Value.Placeholders.Select(static placeholder => new TranslationInterchangePlaceholder(
+                        placeholder.Name, placeholder.Type, placeholder.Format)).ToArray()))));
+        var review = new TranslationInterchangeReview(catalog, reviews); ValidateReview(review, catalog);
         foreach (TranslationInterchangeReviewEntry entry in review.Entries) if (entry.State == "approved" && !string.Equals(entry.SourceFingerprint, fingerprint, StringComparison.Ordinal)) throw new TranslationInterchangeException("REVIEW-FINGERPRINT", "Approved review data does not match the reconstructed source fingerprint.");
         TranslationMf2Document[] messages = resources.Select(static pair => new TranslationMf2Document(
             pair.Key,
@@ -199,7 +231,7 @@ public static class TranslationInterchange
         if (reader.MoveToContent() != XmlNodeType.Element) throw new TranslationInterchangeException("XLIFF21-TARGET", "A segment must contain target text."); RequireElement(reader, "target", "XLIFF21-TARGET"); RequireAttributes(reader, "XLIFF21-TARGET", [], []); string target = ReadText(reader, "target");
         if (reader.MoveToContent() != XmlNodeType.EndElement || reader.LocalName != "segment") throw new TranslationInterchangeException("XLIFF21-SEGMENT", "A segment contains unsupported content."); reader.Read();
         if (reader.MoveToContent() != XmlNodeType.EndElement || reader.LocalName != "unit") throw new TranslationInterchangeException("XLIFF21-UNIT", "A unit contains unsupported content."); reader.Read();
-        return new ImportedUnit(source, target, metadata.SchemaVersion, metadata.Layer, metadata.Description, metadata.Since, metadata.Deprecated, metadata.Tags, metadata.Placeholders);
+        return new ImportedUnit(source, target, metadata.SchemaVersion, metadata.Layer, metadata.Structured, metadata.Description, metadata.Since, metadata.Deprecated, metadata.Tags, metadata.Placeholders);
     }
 
     private static string ReadText(XmlReader reader, string name)
@@ -210,7 +242,7 @@ public static class TranslationInterchange
         if (reader.NodeType != XmlNodeType.EndElement || reader.LocalName != name || text.Length > MaximumTextLength) throw new TranslationInterchangeException("XLIFF21-TEXT", "XLIFF text must be plain bounded text."); reader.Read(); return text.ToString();
     }
 
-    private static string ValidateImportedContract(string catalog, string sourceLocale, string targetLocale, SortedDictionary<string, ImportedUnit> units)
+    private static void ValidateImportedContract(string catalog, string sourceLocale, string targetLocale, SortedDictionary<string, ImportedUnit> units)
     {
         string project = "{\"schemaVersion\":1,\"catalog\":" + Quote(catalog) + ",\"code\":{\"namespace\":\"Runic.Interchange\",\"className\":\"Text\"},\"baseLocale\":" + Quote(sourceLocale) + ",\"locales\":[{\"tag\":" + Quote(sourceLocale) + "},{\"tag\":" + Quote(targetLocale) + ",\"fallback\":" + Quote(sourceLocale) + "}]}";
         var messages = new List<TranslationSource>(units.Count * 2);
@@ -222,18 +254,17 @@ public static class TranslationInterchange
         TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(
             new TranslationSource("interchange/runic.json", Encoding.UTF8.GetBytes(project)), messages);
         if (!compilation.Success || compilation.Catalogs.Count != 1) throw new TranslationInterchangeException("XLIFF21-CONTRACT", "XLIFF target text or placeholder metadata does not satisfy the compiler contract.");
-        return compilation.Catalogs[0].Fingerprint;
     }
 
-    private static string SerializePlaceholders(IReadOnlyList<CompiledTextPlaceholder> values)
+    private static string SerializePlaceholders(IReadOnlyList<TranslationInterchangePlaceholder> values)
     {
-        using var stream = new MemoryStream(); using (var writer = new Utf8JsonWriter(stream)) { writer.WriteStartArray(); foreach (CompiledTextPlaceholder value in values.OrderBy(static item => item.Name, StringComparer.Ordinal)) { writer.WriteStartObject(); writer.WriteString("name", value.Name); writer.WriteString("type", TypeName(value.Type)); writer.WriteString("format", value.Format); writer.WriteEndObject(); } writer.WriteEndArray(); } return Convert.ToBase64String(stream.ToArray());
+        using var stream = new MemoryStream(); using (var writer = new Utf8JsonWriter(stream)) { writer.WriteStartArray(); foreach (TranslationInterchangePlaceholder value in values.OrderBy(static item => item.Name, StringComparer.Ordinal)) { writer.WriteStartObject(); writer.WriteString("name", value.Name); writer.WriteString("type", value.Type); writer.WriteString("format", value.Format); writer.WriteEndObject(); } writer.WriteEndArray(); } return Convert.ToBase64String(stream.ToArray());
     }
 
-    private static string SerializeUnitNote(int schemaVersion, string layer, CompiledTranslation source, CompiledTranslation? target, bool structured)
+    private static string SerializeUnitNote(int schemaVersion, string layer, TranslationInterchangeUnitMetadata metadata, bool structured)
     {
         using var stream = new MemoryStream(); using (var writer = new Utf8JsonWriter(stream))
-        { string? description = target?.Description ?? source.Description; string? since = target?.Since ?? source.Since; string? deprecated = target?.DeprecatedReason ?? source.DeprecatedReason; writer.WriteStartObject(); writer.WriteNumber("schemaVersion", schemaVersion); writer.WriteString("layer", layer); writer.WriteBoolean("structured", structured); if (description is not null) writer.WriteString("description", description); if (since is not null) writer.WriteString("since", since); if (deprecated is not null) writer.WriteString("deprecated", deprecated); writer.WriteString("tags", SerializeStrings(target?.Tags ?? source.Tags)); writer.WriteString("placeholders", SerializePlaceholders(source.Placeholders)); writer.WriteEndObject(); }
+        { writer.WriteStartObject(); writer.WriteNumber("schemaVersion", schemaVersion); writer.WriteString("layer", layer); writer.WriteBoolean("structured", structured); if (metadata.Description is not null) writer.WriteString("description", metadata.Description); if (metadata.Since is not null) writer.WriteString("since", metadata.Since); if (metadata.Deprecated is not null) writer.WriteString("deprecated", metadata.Deprecated); writer.WriteString("tags", SerializeStrings(metadata.Tags)); writer.WriteString("placeholders", SerializePlaceholders(metadata.Placeholders)); writer.WriteEndObject(); }
         return Convert.ToBase64String(stream.ToArray());
     }
 
@@ -282,15 +313,14 @@ public static class TranslationInterchange
         if (encoded is null) return []; try { byte[] bytes = Convert.FromBase64String(encoded); using JsonDocument document = JsonDocument.Parse(bytes); if (document.RootElement.ValueKind != JsonValueKind.Array) throw new TranslationInterchangeException("XLIFF21-PLACEHOLDERS", "Runic placeholder metadata is invalid."); var result = new List<ImportedPlaceholder>(); foreach (JsonElement item in document.RootElement.EnumerateArray()) { RequireObject(item, "XLIFF21-PLACEHOLDERS"); RequireExact(item, "name", "type", "format"); result.Add(new ImportedPlaceholder(RequiredString(item, "name", "XLIFF21-PLACEHOLDERS"), RequiredString(item, "type", "XLIFF21-PLACEHOLDERS"), RequiredString(item, "format", "XLIFF21-PLACEHOLDERS"))); } if (result.Count > 32 || result.Select(static item => item.Name).Distinct(StringComparer.Ordinal).Count() != result.Count) throw new TranslationInterchangeException("XLIFF21-PLACEHOLDERS", "Runic placeholder metadata is invalid."); return result; } catch (FormatException exception) { throw new TranslationInterchangeException("XLIFF21-PLACEHOLDERS", "Runic placeholder metadata is invalid.", exception); } catch (JsonException exception) { throw new TranslationInterchangeException("XLIFF21-PLACEHOLDERS", "Runic placeholder metadata is invalid.", exception); }
     }
 
-    private static string TypeName(TranslationArgumentType type) => type switch { TranslationArgumentType.Int => "int", TranslationArgumentType.Number => "number", TranslationArgumentType.Boolean => "bool", TranslationArgumentType.Date => "date", TranslationArgumentType.Time => "time", TranslationArgumentType.DateTime => "datetime", TranslationArgumentType.Guid => "guid", _ => "string" };
     private static string Quote(string value) { using var stream = new MemoryStream(); using (var writer = new Utf8JsonWriter(stream)) writer.WriteStringValue(value); return Encoding.UTF8.GetString(stream.ToArray()); }
     private static void RequireElement(XmlReader reader, string name, string code) { if (reader.NamespaceURI != XliffNamespace || reader.LocalName != name) throw new TranslationInterchangeException(code, "The XLIFF profile contains an unsupported element."); }
     private static string RequiredAttribute(XmlReader reader, string name, string code) => reader.GetAttribute(name) ?? throw new TranslationInterchangeException(code, "The XLIFF profile is missing a required attribute.");
     private static void RequireAttributes(XmlReader reader, string code, IReadOnlyCollection<string> required, IReadOnlyCollection<string> optional) { var seen = new HashSet<string>(StringComparer.Ordinal); if (reader.HasAttributes) for (int index = 0; index < reader.AttributeCount; index++) { reader.MoveToAttribute(index); if (reader.Prefix == "xmlns" || reader.NamespaceURI == "http://www.w3.org/2000/xmlns/") continue; bool accepted = reader.NamespaceURI.Length == 0 && (required.Contains(reader.LocalName, StringComparer.Ordinal) || optional.Contains(reader.LocalName, StringComparer.Ordinal)); if (!accepted || !seen.Add(reader.LocalName)) throw new TranslationInterchangeException(code, "The XLIFF profile contains an unknown or duplicate attribute."); } reader.MoveToElement(); foreach (string name in required) if (reader.GetAttribute(name) is null) throw new TranslationInterchangeException(code, "The XLIFF profile is missing a required attribute."); }
     private static void ValidateReview(TranslationInterchangeReview? review, string catalog) { if (review is null) return; if (!string.Equals(review.CatalogId, catalog, StringComparison.Ordinal) || review.Entries.Count > MaximumReviewEntries) throw new TranslationInterchangeException("REVIEW-INVALID", "The review representation has an invalid catalog or entry count."); var identities = new HashSet<string>(StringComparer.Ordinal); foreach (TranslationInterchangeReviewEntry entry in review.Entries) if (!IsKey(entry.Key) || string.IsNullOrEmpty(entry.Locale) || !IsReviewState(entry.State) || entry.Note?.Length > 16_384 || entry.SourceFingerprint?.Length > 256 || !identities.Add(entry.Key + "\0" + entry.Locale)) throw new TranslationInterchangeException("REVIEW-INVALID", "The review representation contains an invalid or duplicate entry."); }
-    private static void ValidateExportReview(TranslationInterchangeReview? review, CompiledTextCatalog catalog) { ValidateReview(review, catalog.Id); if (review is null) return; var keys = new HashSet<string>(catalog.CanonicalResources.Select(static value => value.Key), StringComparer.Ordinal); var locales = new HashSet<string>(catalog.Locales.Where(locale => locale.Tag != catalog.DefaultLocale).Select(static value => value.Tag), StringComparer.Ordinal); foreach (TranslationInterchangeReviewEntry entry in review.Entries) { if (!keys.Contains(entry.Key) || !locales.Contains(entry.Locale)) throw new TranslationInterchangeException("REVIEW-UNEXPORTED", "Review data references a key or locale that is not exported."); if (entry.State == "approved" && !string.Equals(entry.SourceFingerprint, catalog.Fingerprint, StringComparison.Ordinal)) throw new TranslationInterchangeException("REVIEW-FINGERPRINT", "Approved review data must match the compiled source fingerprint."); } }
-    private static void EnsureExportBounds(CompiledTextCatalog catalog, CompiledTextLocale locale, TranslationInterchangeReview? review) { if (catalog.CanonicalResources.Count > MaximumUnits) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The catalog has too many resources for XLIFF export."); long bytes = 512; foreach (CompiledTranslation source in catalog.CanonicalResources) { bytes += ExpandedBytes(source.Key) + ExpandedBytes(source.Pattern) + MetadataBytes(source) + 1024; if (bytes > MaximumXliffBytes) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The XLIFF export exceeds the byte limit."); } foreach (CompiledTranslation target in locale.DirectResources) { bytes += ExpandedBytes(target.Pattern) + MetadataBytes(target); if (bytes > MaximumXliffBytes) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The XLIFF export exceeds the byte limit."); } if (review is not null) foreach (TranslationInterchangeReviewEntry entry in review.Entries) { bytes += ExpandedBytes(entry.Note) + ExpandedBytes(entry.SourceFingerprint) + 256; if (bytes > MaximumXliffBytes) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The XLIFF export exceeds the byte limit."); } }
-    private static long MetadataBytes(CompiledTranslation value) { long bytes = ExpandedBytes(value.Description) + ExpandedBytes(value.Since) + ExpandedBytes(value.DeprecatedReason); foreach (string tag in value.Tags) bytes += ExpandedBytes(tag); foreach (CompiledTextPlaceholder placeholder in value.Placeholders) bytes += ExpandedBytes(placeholder.Name) + ExpandedBytes(placeholder.Format) + 32; return checked(bytes * 2 + 256); }
+    private static void ValidateExportReview(TranslationInterchangeReview? review, TranslationInterchangeProjection projection) { ValidateReview(review, projection.CatalogId); if (review is null) return; var keys = new HashSet<string>(projection.CanonicalUnits.Select(static value => value.Key), StringComparer.Ordinal); var locales = new HashSet<string>(projection.Locales.Where(locale => locale.Tag != projection.SourceLocale).Select(static value => value.Tag), StringComparer.Ordinal); foreach (TranslationInterchangeReviewEntry entry in review.Entries) { if (!keys.Contains(entry.Key) || !locales.Contains(entry.Locale)) throw new TranslationInterchangeException("REVIEW-UNEXPORTED", "Review data references a key or locale that is not exported."); if (entry.State == "approved" && !string.Equals(entry.SourceFingerprint, projection.TextProfileFingerprint, StringComparison.Ordinal)) throw new TranslationInterchangeException("REVIEW-FINGERPRINT", "Approved review data must match the closed XLIFF source-profile fingerprint."); } }
+    private static void EnsureExportBounds(TranslationInterchangeProjection projection, TranslationInterchangeLocale locale, TranslationInterchangeReview? review) { if (projection.CanonicalUnits.Count > MaximumUnits) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The catalog has too many resources for XLIFF export."); long bytes = 512; foreach (TranslationInterchangeSourceUnit source in projection.CanonicalUnits) { bytes += ExpandedBytes(source.Key) + ExpandedBytes(source.Text) + MetadataBytes(source.Metadata) + 1024; if (bytes > MaximumXliffBytes) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The XLIFF export exceeds the byte limit."); } foreach (TranslationInterchangeTargetUnit target in locale.DirectResources) { bytes += ExpandedBytes(target.Text); if (bytes > MaximumXliffBytes) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The XLIFF export exceeds the byte limit."); } if (review is not null) foreach (TranslationInterchangeReviewEntry entry in review.Entries) { bytes += ExpandedBytes(entry.Note) + ExpandedBytes(entry.SourceFingerprint) + 256; if (bytes > MaximumXliffBytes) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The XLIFF export exceeds the byte limit."); } }
+    private static long MetadataBytes(TranslationInterchangeUnitMetadata value) { long bytes = ExpandedBytes(value.Description) + ExpandedBytes(value.Since) + ExpandedBytes(value.Deprecated); foreach (string tag in value.Tags) bytes += ExpandedBytes(tag); foreach (TranslationInterchangePlaceholder placeholder in value.Placeholders) bytes += ExpandedBytes(placeholder.Name) + ExpandedBytes(placeholder.Type) + ExpandedBytes(placeholder.Format) + 32; return checked(bytes * 2 + 256); }
     private static long ExpandedBytes(string? value) => value is null ? 0 : checked((long)Encoding.UTF8.GetByteCount(value) * 6 + 32);
     private static bool IsReviewState(string value) => value is "draft" or "translated" or "needs-review" or "approved";
     private static bool IsKey(string value) => value.Length > 0 && (char.IsAsciiLetter(value[0]) || value[0] == '_') && value.Skip(1).All(static character => char.IsAsciiLetterOrDigit(character) || character == '_');
@@ -300,8 +330,8 @@ public static class TranslationInterchange
     private static bool RequiredBoolean(JsonElement value, string name, string code) { if (!value.TryGetProperty(name, out JsonElement item) || item.ValueKind is not JsonValueKind.True and not JsonValueKind.False) throw new TranslationInterchangeException(code, "A required JSON member is missing or malformed."); return item.GetBoolean(); }
     private static string? OptionalString(JsonElement value, string name, string code) { if (!value.TryGetProperty(name, out JsonElement item)) return null; if (item.ValueKind != JsonValueKind.String) throw new TranslationInterchangeException(code, "An optional JSON member is malformed."); return item.GetString(); }
     private static void RequireExact(JsonElement value, params string[] names) { RequireAllowed(value, names); foreach (string name in names) if (!value.TryGetProperty(name, out _)) throw new TranslationInterchangeException("REVIEW-MEMBER", "A required JSON member is missing."); }
-    private static void RequireAllowed(JsonElement value, params string[] names) { var allowed = new HashSet<string>(names, StringComparer.Ordinal); var seen = new HashSet<string>(StringComparer.Ordinal); foreach (JsonProperty property in value.EnumerateObject()) if (!seen.Add(property.Name) || !allowed.Contains(property.Name)) throw new TranslationInterchangeException("REVIEW-MEMBER", "The review representation contains an unknown or duplicate member."); }
-    private sealed record ImportedUnit(string SourcePattern, string Pattern, int SchemaVersion, string Layer, string? Description, string? Since, string? Deprecated, string[] Tags, IReadOnlyList<ImportedPlaceholder> Placeholders);
+    private static void RequireAllowed(JsonElement value, params string[] names) { var allowed = new HashSet<string>(names, StringComparer.Ordinal); var seen = new HashSet<string>(StringComparer.Ordinal); foreach (System.Text.Json.JsonProperty property in value.EnumerateObject()) if (!seen.Add(property.Name) || !allowed.Contains(property.Name)) throw new TranslationInterchangeException("REVIEW-MEMBER", "The review representation contains an unknown or duplicate member."); }
+    private sealed record ImportedUnit(string SourcePattern, string Pattern, int SchemaVersion, string Layer, bool Structured, string? Description, string? Since, string? Deprecated, string[] Tags, IReadOnlyList<ImportedPlaceholder> Placeholders);
     private sealed record UnitNote(int SchemaVersion, string Layer, bool Structured, string? Description, string? Since, string? Deprecated, string[] Tags, IReadOnlyList<ImportedPlaceholder> Placeholders);
     private sealed record ImportedPlaceholder(string Name, string Type, string Format);
 }

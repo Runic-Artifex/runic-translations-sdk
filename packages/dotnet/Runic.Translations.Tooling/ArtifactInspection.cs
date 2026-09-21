@@ -259,7 +259,7 @@ public static class ArtifactInspector
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
         int count = 0;
-        foreach (JsonProperty property in messages.EnumerateObject())
+        foreach (System.Text.Json.JsonProperty property in messages.EnumerateObject())
         {
             if (!keys.Add(property.Name))
             {
@@ -286,7 +286,7 @@ public static class ArtifactInspector
             else
             {
                 int inputs = 0;
-                foreach (JsonProperty _ in fields["inputs"].EnumerateObject()) inputs++;
+                foreach (System.Text.Json.JsonProperty _ in fields["inputs"].EnumerateObject()) inputs++;
                 if (inputs > MaximumMessageInputs)
                     findings.Add(PackFinding(TranslationPackReason.LimitExceeded, "A message exceeds the configured input limit."));
             }
@@ -355,7 +355,7 @@ public static class ArtifactInspector
     {
         var result = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         var allowed = new HashSet<string>(expected, StringComparer.Ordinal);
-        foreach (JsonProperty property in value.EnumerateObject())
+        foreach (System.Text.Json.JsonProperty property in value.EnumerateObject())
         {
             if (!allowed.Contains(property.Name))
                 findings.Add(PackFinding(TranslationPackReason.UnknownMember, "The external pack contains unknown property '" + property.Name + "'."));

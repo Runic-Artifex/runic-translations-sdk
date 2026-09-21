@@ -259,6 +259,7 @@ internal static class Rmf2IntegrationTests
             Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.preview", ["arguments"] = new JsonArray(uri, "x", "en") }, 20);
             Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(uri, "x", "de", new JsonObject()) }, 28);
             Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(new Uri(RepositoryPaths.Resolve("specs/translations/examples/rmf2/en.rmf2")).AbsoluteUri, "payment", "de", new JsonObject { ["count"] = "1", ["tone"] = "positive" }) }, 29);
+            Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(new Uri(RepositoryPaths.Resolve("specs/translations/corpus/rmf2-v1/en.rmf2")).AbsoluteUri, "core_rich", "de", new JsonObject()) }, 30);
             Send("textDocument/rename", new JsonObject { ["textDocument"] = Document(), ["position"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["newName"] = "greeting" }, 2);
             doc = Document(); doc["version"] = 3;
             Send("textDocument/didChange", new JsonObject { ["textDocument"] = doc, ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = {#link ref=help}Help{/link} {$name} |$literal|\n" }) });
@@ -316,7 +317,23 @@ internal static class Rmf2IntegrationTests
             Send("shutdown", new JsonObject(), 3); Send("exit", new JsonObject()); process.StandardInput.Close();
             if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
             Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
-            Assert.Contains("Bereit", frames.Single(frame => frame["id"]?.ToString() == "29").ToJsonString());
+            JsonNode v4Preview = frames.Single(frame => frame["id"]?.ToString() == "29")["result"]!;
+            string v4Runs = v4Preview["runs"]!.ToJsonString();
+            Assert.Equal("payment", v4Preview["key"]!.GetValue<string>());
+            Assert.Equal("de", v4Preview["locale"]!.GetValue<string>());
+            Assert.Contains("Bereit", v4Runs);
+            Assert.Contains("shop:badge", v4Runs);
+            Assert.Contains("runic:link", v4Runs);
+            Assert.Contains("runic:action", v4Runs);
+            Assert.False(v4Runs.Contains("example.invalid", StringComparison.Ordinal), "Preview bindings leaked into the semantic run tree.");
+            JsonNode v5Preview = frames.Single(frame => frame["id"]?.ToString() == "30")["result"]!;
+            string v5Runs = v5Preview["runs"]!.ToJsonString();
+            Assert.Equal("core_rich", v5Preview["key"]!.GetValue<string>());
+            Assert.Equal("de", v5Preview["locale"]!.GetValue<string>());
+            Assert.Contains("app:badge", v5Runs);
+            Assert.Contains("runic:link", v5Runs);
+            Assert.Contains("runic:br", v5Runs);
+            Assert.False(v5Runs.Contains("example.invalid", StringComparison.Ordinal), "Preview bindings leaked into the semantic run tree.");
             Assert.Contains("Guten Tag", frames.Single(frame => frame["id"]?.ToString() == "28").ToJsonString());
             Assert.Contains("Bonjour", frames.Single(frame => frame["id"]?.ToString() == "24")["result"]!.ToJsonString());
             Assert.Contains("Rename refused", frames.Single(frame => frame["id"]?.ToString() == "25")["error"]!["message"]!.ToString());
