@@ -15,6 +15,7 @@ internal static class Rmf2RuntimeV5Tests
         runner.Add("v5 dynamic options follow typed local dependencies", OptionLocals);
         runner.Add("v5 exact numeric keys outrank categories independent of source order", NumericRanking);
         runner.Add("v5 selector ranks compare lexicographically and preserve literal stars", LexicographicRanking);
+        runner.Add("v5 forward input selection metadata reaches earlier locals and direct selectors", ForwardInputSelection);
         runner.Add("v5 canonical decimals preserve exact precision and CLDR operands", DecimalSelection);
         runner.Add("v5 annotations remain inert ordered and separate on closing markup", Annotations);
         runner.Add("v5 caller contracts preserve NFC identities and ignore presentation hints", CallerContracts);
@@ -129,6 +130,26 @@ internal static class Rmf2RuntimeV5Tests
         var ordinal = new CompiledRmf2Message([new("n", TextArgumentType.Int)], [new("input", "n", Expr(Input("n"), TextArgumentType.Int, "integer", new CompiledRmf2Option("select", Text("ordinal"))))], [new(Input("n"), TextArgumentType.Int, "ordinal")], [new([new("few")], [new("rd")]), new([new()], [new("th")])]);
         Assert.Equal("rd", ordinal.Format([new("n", 23L)], "en"));
         Assert.Equal("th", ordinal.Format([new("n", 13L)], "en"));
+    }
+    private static void ForwardInputSelection()
+    {
+        foreach (string selection in new[] { "exact", "ordinal" })
+        {
+            CompiledRmf2Declaration[] declarations = [
+                new("local", "alias", Expr(Input("n"), TextArgumentType.Number)),
+                new("input", "n", Expr(Input("n"), TextArgumentType.Number, "number", new CompiledRmf2Option("select", Text(selection))))];
+            foreach (var operand in new[] { Input("n"), Local("alias") })
+            {
+                var message = new CompiledRmf2Message([new("n", TextArgumentType.Number)], declarations,
+                    [new(operand, TextArgumentType.Number, selection)],
+                    [new([selection == "exact" ? new("23.0", "23") : new("few")], [new("selected")]), new([new()], [new("fallback")])]);
+                Assert.Equal("selected", message.Format([new("n", 23m)], "en"));
+                Assert.Equal("fallback", message.Format([new("n", 13m)], "en"));
+            }
+        }
+        Assert.Throws<ArgumentException>(() => Simple([], [
+            new("local", "alias", Expr(Local("later"), TextArgumentType.Number)),
+            new("local", "later", Expr(Number("1"), TextArgumentType.Number))], new CompiledRmf2Node("x")));
     }
     private static void Annotations()
     {

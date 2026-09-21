@@ -286,7 +286,10 @@ points while legacy constructors retain their ASCII placeholder rules.
 
 The evaluator resolves ordered declarations, inherits or replaces formatter
 metadata, validates dynamic options, and ranks exact decimal and pinned CLDR
-matches. Invalid resolved options raise `TranslationFormatException`; they do
+matches. Input carrier and selection signatures are available throughout the
+message, including to locals appearing before the input declaration. Local
+references and dynamic option dependencies still require declaration order.
+Invalid resolved options raise `TranslationFormatException`; they do
 not clamp or fall back. Constructors reject malformed normalized models with
 argument exceptions. Authored numeric spelling and canonical fields are checked
 exactly before parsing into decimal; no binary floating point is involved.

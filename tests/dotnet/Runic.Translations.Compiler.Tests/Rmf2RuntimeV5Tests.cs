@@ -12,6 +12,7 @@ internal static class Rmf2RuntimeV5Tests
         runner.Add("RMF2 v5 normalized compiler values execute without a v4 adapter", CompilerValues);
         runner.Add("RMF2 v5 locale grammars execute against the same typed caller contract", CallerContracts);
         runner.Add("RMF2 v5 normalized annotation and markup ordering survives runtime lowering", Annotations);
+        runner.Add("RMF2 v5 forward input selection annotations survive runtime lowering", ForwardInputSelection);
     }
     private static void CompilerValues()
     {
@@ -41,6 +42,17 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("flag", content.Nodes.Span[1].Annotations.Span[0].Name);
         Assert.Equal("100", content.Nodes.Span[1].Annotations.Span[1].Value!.Canonical);
         Assert.Equal("close", content.Nodes.Span[2].Annotations.Span[0].Name);
+    }
+    private static void ForwardInputSelection()
+    {
+        foreach (string selector in new[] { "n", "a" })
+        {
+            var ordinal = Compile(".local $a = {$n}\n.input {$n :number select=ordinal}\n.match $" + selector + "\nfew {{ordinal}}\n* {{fallback}}");
+            Assert.Equal("ordinal", ordinal.Format([new("n", 23m)], "en"));
+            Assert.Equal("fallback", ordinal.Format([new("n", 13m)], "en"));
+            var exact = Compile(".local $a = {$n}\n.input {$n :number select=exact}\n.match $" + selector + "\n23 {{exact}}\n* {{fallback}}");
+            Assert.Equal("exact", exact.Format([new("n", 23m)], "en"));
+        }
     }
     // Test-only direct lowering. Project linking, generated emission and pack
     // dispatch deliberately remain outside this runtime implementation slice.

@@ -175,6 +175,19 @@ internal static class Rmf2RuntimeValidation
             if (previous is not null && string.CompareOrdinal(previous, input.Name) >= 0) throw new ArgumentException("V5 inputs must be unique and ordinally sorted.", nameof(message));
             inputs.Add(input.Name, new(input.Type, Selection(DefaultFunction(input.Type)), explicitInputs.Contains(input.Name))); previous = input.Name;
         }
+        // Input signatures and selection annotations have whole-message scope,
+        // just as in semantic lowering. Only locals require prior declarations.
+        // Do not resolve options here: their local dependencies remain ordered.
+        foreach (var declaration in message.DeclarationArray)
+        {
+            if (declaration.Kind != "input") continue;
+            if (declaration.Expression.Operand.Kind != "input" || declaration.Expression.Operand.Value != declaration.Name ||
+                !inputs.TryGetValue(declaration.Name, out Symbol? input) || declaration.Expression.ValueType != input.Type)
+                throw new ArgumentException("Input declaration must annotate its own typed caller input.", nameof(message));
+            string selection = declaration.Expression.Function is null ? input.Selection : Selection(declaration.Expression.Function);
+            foreach (var option in declaration.Expression.OptionArray) if (option.Name == "select") selection = option.Value.Value;
+            inputs[declaration.Name] = input with { Selection = selection };
+        }
         foreach (var declaration in message.DeclarationArray)
         {
             if (!declared.Add(declaration.Name)) throw new ArgumentException("Duplicate v5 declaration.", nameof(message));
