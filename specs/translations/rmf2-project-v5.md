@@ -13,7 +13,7 @@ compiler unchanged. The discriminated result carries either a current
 return diagnostics without a project that could accidentally reach emission.
 
 Public `runic.json`/CLI profile activation remains deferred until generated
-C#/ESM, pack loading and their integration checks are ready. Project schema v1,
+C#/ESM and their integration checks are ready. Project schema v1,
 resource syntax `rmf2-v1`, and exported markup contract v1 remain unchanged:
 artifact v5 does not imply a project schema version bump. Default project output
 remains v4. The staged linker uses the existing locale, mount, completeness,
@@ -74,6 +74,26 @@ v5 content changes, including changes intentionally excluded from caller
 compatibility. Source paths inside the project are relative to its directory.
 The exported markup v1 JSON retains effective content-locale mappings for runtime
 renderers, but those mappings are excluded from the caller fingerprint.
+
+## Resolved locale artifact and pack loading
+
+The staged locale writer emits artifact/grammar 5 with the explicit
+`rmf2-execution-v2` profile. It serializes the linked v5 AST directly and never
+converts through the v4 carrier. Each resolved message carries its effective
+content locale. Its input array is expanded to the canonical caller contract, so
+a target translation may omit an unused input while snapshot invocation remains
+stable across locales and fallback sources.
+
+The .NET pack contract uses `TranslationPackMessageContract.FromRmf2Inputs` and
+`TranslationPackContract.CreateRmf2V5`. Those factories accept validated NFC
+RMF2 argument names; the existing constructors retain their ASCII validation.
+The loader validates the closed envelope and AST, version/profile identity,
+catalog/locale/fingerprint, caller input ordering and types, declaration graph,
+exact decimal canonical values, selectors, fallback vector, content locale,
+markup and functional slots, and all runtime limits before activation. Verified
+messages overlay through the existing immutable external-snapshot composition.
+Fingerprint equality is compatibility evidence only. Applications that require
+authenticity still provide an integrity verifier over the exact pack bytes.
 
 ## Generated-name mapping version 1
 

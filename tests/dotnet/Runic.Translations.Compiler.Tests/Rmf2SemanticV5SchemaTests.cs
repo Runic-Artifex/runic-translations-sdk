@@ -78,7 +78,7 @@ internal static class Rmf2SemanticV5SchemaTests
         }
     }
 
-    private static JsonSchema ReadSchema(string fileName)
+    internal static JsonSchema ReadSchema(string fileName)
     {
         // All references resolve from the checked-in schemas. No remote fetch or
         // dialect downgrade is involved, including the unchanged markup v1 shape.
@@ -88,7 +88,7 @@ internal static class Rmf2SemanticV5SchemaTests
             if (dependency != fileName) registry.Register(JsonSchema.FromFile(RepositoryPaths.Resolve("specs", "translations", "schemas", dependency), options));
         return JsonSchema.FromFile(RepositoryPaths.Resolve("specs", "translations", "schemas", fileName), options);
     }
-    private static void AssertValidation(JsonSchema schema, JsonObject instance, bool expected, string context)
+    internal static void AssertValidation(JsonSchema schema, JsonObject instance, bool expected, string context)
     {
         using var document = JsonDocument.Parse(instance.ToJsonString());
         var result = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });

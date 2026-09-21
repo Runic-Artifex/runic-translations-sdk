@@ -453,11 +453,13 @@ type readonly struct Runic.Translations.TranslationPackArgumentContract : System
 type sealed class Runic.Translations.TranslationPackContract
   ctor Runic.Translations.TranslationPackContract(System.String catalog, System.String locale, System.String contractFingerprint, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> messages, System.Int32 messageGrammarVersion = 1)
   ctor Runic.Translations.TranslationPackContract(System.String catalog, System.String locale, System.String contractFingerprint, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> messages, System.Int32 messageGrammarVersion, System.String rmf2MarkupContract)
+  method static Runic.Translations.TranslationPackContract CreateRmf2V5(System.String catalog, System.String locale, System.String contractFingerprint, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> messages, System.String rmf2MarkupContract)
   property System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> Messages { get; }
   property System.Int32 MessageGrammarVersion { get; }
   property System.String Catalog { get; }
   property System.String ContractFingerprint { get; }
   property System.String Locale { get; }
+  property System.String Profile { get; }
   property System.String Rmf2MarkupContract { get; }
 
 type sealed class Runic.Translations.TranslationPackException : System.Exception, System.Runtime.Serialization.ISerializable
@@ -516,6 +518,7 @@ type static class Runic.Translations.TranslationPackLoader
 
 type sealed class Runic.Translations.TranslationPackMessageContract
   ctor Runic.Translations.TranslationPackMessageContract(Runic.Translations.TranslationKey key, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackArgumentContract> arguments = null)
+  method static Runic.Translations.TranslationPackMessageContract FromRmf2Inputs(Runic.Translations.TranslationKey key, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Input> inputs)
   property Runic.Translations.TranslationKey Key { get; }
   property System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackArgumentContract> Arguments { get; }
 

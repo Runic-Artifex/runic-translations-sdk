@@ -36,6 +36,12 @@ Choose `Runic.Translations` for application runtime behavior: generated catalog 
 
 External packs are untrusted until their artifact version, catalog, locale, contract fingerprint, keys, argument contracts, and limits have been verified. Applications that require authenticity must also supply an integrity verifier; schema validation alone does not establish provenance.
 
+The staged RMF2 execution-v2 path uses explicit v5 pack factories and strict
+version/profile dispatch. A matching fingerprint demonstrates generated-contract
+compatibility; it is not a signature or authenticity proof. Default generated
+projects remain on the current activated profile until the v5 generator slices
+are complete.
+
 ## Compatibility and status
 
 This package is a public preview for .NET 10. Preview releases may contain documented breaking API changes. Keep the runtime and generated source on the same Runic Translations release; runtime ABI mismatches fail explicitly.

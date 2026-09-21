@@ -12,6 +12,7 @@ internal static class Program
         Rmf2SemanticV5SchemaTests.Register(runner);
         Rmf2RuntimeV5Tests.Register(runner);
         Rmf2ProjectV5Tests.Register(runner);
+        Rmf2ArtifactV5Tests.Register(runner);
         if (args.Length == 1 && args[0] == "--rmf2-semantic-v5") return runner.Run();
         RuntimeContractTests.Register(runner);
         CompilerTests.Register(runner);

@@ -88,6 +88,30 @@ public sealed class TranslationPackMessageContract
     public TranslationPackMessageContract(
         TranslationKey key,
         IReadOnlyList<TranslationPackArgumentContract>? arguments = null)
+        : this(key, arguments, false)
+    {
+    }
+
+    /// <summary>Creates a v5 message contract from NFC RMF2 caller inputs.</summary>
+    public static TranslationPackMessageContract FromRmf2Inputs(
+        TranslationKey key,
+        IReadOnlyList<CompiledRmf2Input> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        var arguments = new TranslationPackArgumentContract[inputs.Count];
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            CompiledRmf2Input input = inputs[i]
+                ?? throw new ArgumentException("RMF2 caller inputs cannot contain null.", nameof(inputs));
+            arguments[i] = new TranslationPackArgumentContract(input.Name, input.Type, DefaultFormat(input.Type));
+        }
+        return new TranslationPackMessageContract(key, arguments, true);
+    }
+
+    private TranslationPackMessageContract(
+        TranslationKey key,
+        IReadOnlyList<TranslationPackArgumentContract>? arguments,
+        bool rmf2)
     {
         if (string.IsNullOrEmpty(key.Catalog)) throw new ArgumentException("A key catalog is required.", nameof(key));
         if (key.Id < 0) throw new ArgumentOutOfRangeException(nameof(key), "A key identifier cannot be negative.");
@@ -100,7 +124,7 @@ public sealed class TranslationPackMessageContract
         for (int i = 0; i < copy.Length; i++)
         {
             TranslationPackArgumentContract argument = arguments![i];
-            if (!TranslationPackValidation.IsIdentifier(argument.Name))
+            if (rmf2 ? !TranslationPackValidation.IsRmf2Name(argument.Name) : !TranslationPackValidation.IsIdentifier(argument.Name))
                 throw new ArgumentException("An argument name is invalid.", nameof(arguments));
             if (previousName is not null && string.CompareOrdinal(previousName, argument.Name) >= 0)
                 throw new ArgumentException("Argument contracts must be unique and ordinal-sorted.", nameof(arguments));
@@ -112,6 +136,16 @@ public sealed class TranslationPackMessageContract
 
         _arguments = Array.AsReadOnly(copy);
     }
+
+    private static TextArgumentFormat DefaultFormat(TextArgumentType type) => type switch
+    {
+        TextArgumentType.String => TextArgumentFormat.None,
+        TextArgumentType.Int or TextArgumentType.Number => TextArgumentFormat.Plain,
+        TextArgumentType.Bool => TextArgumentFormat.Lower,
+        TextArgumentType.Guid => TextArgumentFormat.D,
+        TextArgumentType.Date or TextArgumentType.Time or TextArgumentType.DateTime => TextArgumentFormat.Iso,
+        _ => throw new ArgumentException("Unknown RMF2 caller input type.", nameof(type)),
+    };
 
     /// <summary>The generated key.</summary>
     public TranslationKey Key { get; }
@@ -137,9 +171,24 @@ public sealed class TranslationPackContract
     /// <summary>Creates a pack contract with the versioned RMF2 markup and slot manifest.</summary>
     public TranslationPackContract(string catalog, string locale, string contractFingerprint,
         IReadOnlyList<TranslationPackMessageContract> messages, int messageGrammarVersion, string? rmf2MarkupContract)
+        : this(catalog, locale, contractFingerprint, messages, messageGrammarVersion, rmf2MarkupContract, null)
     {
-        if ((messageGrammarVersion == 4) != (rmf2MarkupContract is not null)) throw new ArgumentException("Grammar 4 requires an RMF2 markup contract.", nameof(rmf2MarkupContract));
+    }
+
+    /// <summary>Creates a staged RMF2 execution-v2 contract for one resolved locale artifact v5.</summary>
+    public static TranslationPackContract CreateRmf2V5(string catalog, string locale, string contractFingerprint,
+        IReadOnlyList<TranslationPackMessageContract> messages, string rmf2MarkupContract) =>
+        new(catalog, locale, contractFingerprint, messages, 5,
+            rmf2MarkupContract ?? throw new ArgumentNullException(nameof(rmf2MarkupContract)), "rmf2-execution-v2");
+
+    private TranslationPackContract(string catalog, string locale, string contractFingerprint,
+        IReadOnlyList<TranslationPackMessageContract> messages, int messageGrammarVersion, string? rmf2MarkupContract, string? profile)
+    {
+        if ((messageGrammarVersion is 4 or 5) != (rmf2MarkupContract is not null)) throw new ArgumentException("RMF2 grammars require an RMF2 markup contract.", nameof(rmf2MarkupContract));
+        if ((messageGrammarVersion == 5) != (profile is not null) || profile is not null && profile != "rmf2-execution-v2")
+            throw new ArgumentException("Grammar 5 requires the rmf2-execution-v2 profile.", nameof(profile));
         Rmf2MarkupContract = rmf2MarkupContract;
+        Profile = profile;
         ArgumentNullException.ThrowIfNull(messages);
         if (!TranslationPackValidation.IsCatalog(catalog))
             throw new ArgumentException("The catalog identifier is invalid.", nameof(catalog));
@@ -147,7 +196,7 @@ public sealed class TranslationPackContract
             throw new ArgumentException("The locale must be a canonical structural BCP 47 tag.", nameof(locale));
         if (!TranslationPackValidation.IsFingerprint(contractFingerprint))
             throw new ArgumentException("The fingerprint must be lowercase sha256 hexadecimal text.", nameof(contractFingerprint));
-        if (messageGrammarVersion is not (1 or 2 or 4))
+        if (messageGrammarVersion is not (1 or 2 or 4 or 5))
             throw new ArgumentOutOfRangeException(nameof(messageGrammarVersion));
 
         Catalog = catalog;
@@ -181,6 +230,8 @@ public sealed class TranslationPackContract
     public string ContractFingerprint { get; }
     /// <summary>The message grammar expected in a matching locale artifact.</summary>
     public int MessageGrammarVersion { get; }
+    /// <summary>The staged execution profile, or null for legacy pack contracts.</summary>
+    public string? Profile { get; }
     /// <summary>The trusted language-neutral manifest required before RMF2 pack activation.</summary>
     public string? Rmf2MarkupContract { get; }
     /// <summary>The ordinal-sorted known message contracts.</summary>
@@ -200,7 +251,7 @@ public sealed class VerifiedTranslationPackMessage
     public TranslationKey Key { get; }
     /// <summary>The validated plain-text message pattern.</summary>
     public string Pattern { get; }
-    /// <summary>The verified normalized message for grammar v2, or null for grammar v1.</summary>
+    /// <summary>The verified normalized message for grammars v2, v4, and v5, or null for grammar v1.</summary>
     public CompiledTextMessage? Message { get; }
 }
 
