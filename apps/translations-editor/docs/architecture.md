@@ -36,6 +36,13 @@ explicit groups form their logical namespace. Explicit `sourceRoots` can mount
 feature-local resources. The editor uses the compiler's RMF2 source model and
 diagnostics, including the resource/markup contracts that apply to that layout.
 
+Discovery is reconciled from the configured roots on every load/check, so
+mounted add, change, delete, and rename events are handled as membership
+changes. Desktop and IDE hosts must open a common containing workspace when a
+mount is outside the configuration directory; no host silently follows a
+symlink or reparse point into an unconfigured tree. CLI and MSBuild perform the
+same bounded rescan on each invocation/build.
+
 The editor owns workspace navigation, drafts, review state, interchange, and
 atomic workspace mutations. The compiler owns message semantics, diagnostics,
 generated APIs, and build-time validation. Review state is stored separately from

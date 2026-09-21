@@ -22,6 +22,7 @@ internal sealed class EditorWorkspace : IDisposable
     private readonly Dictionary<string, string> _knownRevisions = new(StringComparer.Ordinal);
     private string? _catalogId;
     private int _watcherOverflowed;
+    private int _reconcileRequested;
     private bool _disposed;
 
     public EditorWorkspace(string root)
@@ -30,6 +31,7 @@ internal sealed class EditorWorkspace : IDisposable
         _root = Path.GetFullPath(root);
         if (!Directory.Exists(_root))
             throw new EditorUserException(EditorNotice.Create("ui_backend_workspace_missing", ("path", _root)));
+        ValidateNoReparseAncestors(_root);
         _watcher = new FileSystemWatcher(_root)
         {
             IncludeSubdirectories = true,
@@ -53,7 +55,8 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             bool overflowed = Interlocked.Exchange(ref _watcherOverflowed, 0) != 0;
-            if (!overflowed && _pendingChanges.IsEmpty)
+            bool reconcile = overflowed || Interlocked.Exchange(ref _reconcileRequested, 0) != 0;
+            if (!reconcile && _pendingChanges.IsEmpty)
                 return new EditorExternalChanges(false, [], []);
 
             Dictionary<string, byte[]> currentFiles = ReadCurrentTranslationFiles(cancellationToken);
@@ -61,18 +64,30 @@ internal sealed class EditorWorkspace : IDisposable
                 static pair => pair.Key,
                 static pair => Revision(pair.Value),
                 StringComparer.Ordinal);
+            // Remove only the events observed for this scan.  Events arriving
+            // while the inventory is being read remain queued for the next
+            // reconciliation and cannot be acknowledged by this baseline.
             var candidates = new HashSet<string>(_pendingChanges.Keys, StringComparer.Ordinal);
-            _pendingChanges.Clear();
-            if (overflowed)
+            foreach (string path in candidates) _pendingChanges.TryRemove(path, out _);
+            // A source event, manifest event, or directory membership event
+            // all request a complete previous/current inventory comparison.
+            // Comparing only queued paths loses delayed watcher events and can
+            // silently acknowledge an unreported mounted add/delete/rename.
+            if (reconcile || candidates.Count != 0)
             {
                 candidates.UnionWith(_knownRevisions.Keys);
                 candidates.UnionWith(current.Keys);
             }
 
+            // FileSystemWatcher observes the containing workspace, so an edit in
+            // an unrelated RMF2/TOML file can be queued as well.  Only report a
+            // path that is part of the previous or current configured source
+            // inventory; otherwise an unrelated file would look like a deletion.
             string[] changed = candidates
-                .Where(path => !_knownRevisions.TryGetValue(path, out string? known) ||
+                .Where(path => (_knownRevisions.ContainsKey(path) || current.ContainsKey(path)) &&
+                    (!_knownRevisions.TryGetValue(path, out string? known) ||
                     !current.TryGetValue(path, out string? revision) ||
-                    !string.Equals(known, revision, StringComparison.Ordinal))
+                    !string.Equals(known, revision, StringComparison.Ordinal)))
                 .Order(StringComparer.Ordinal)
                 .ToArray();
             var changes = new EditorExternalFileChange[changed.Length];
@@ -86,6 +101,11 @@ internal sealed class EditorWorkspace : IDisposable
                 }
                 changes[index] = new EditorExternalFileChange(path, true, StrictUtf8.GetString(bytes), Revision(bytes));
             }
+            // The caller may acknowledge these changes without immediately
+            // loading a full snapshot. Keep the physical inventory as the
+            // baseline so a later rename/delete of a newly added mount file
+            // still reports the old path as removed.
+            ReplaceKnownRevisions(current);
             return new EditorExternalChanges(overflowed, changed, changes);
         }
         finally
@@ -1159,10 +1179,17 @@ internal sealed class EditorWorkspace : IDisposable
         var sourceRoots = new List<string>();
         using (JsonDocument config = JsonDocument.Parse(replacementPath == configRelativePath && replacementContent is not null ? StrictUtf8.GetBytes(replacementContent) : File.ReadAllBytes(configPath)))
         {
-            if (StringProperty(config.RootElement, "sourceLayout") == "rmf2-v1" && config.RootElement.TryGetProperty("sourceRoots", out var mounts))
+            string sourceLayout = StringProperty(config.RootElement, "sourceLayout") ?? string.Empty;
+            string extension = sourceLayout switch
+            {
+                "rmf2-v1" => ".rmf2",
+                "locale-toml" => ".toml",
+                _ => ".mf2",
+            };
+            if (sourceLayout == "rmf2-v1" && config.RootElement.TryGetProperty("sourceRoots", out var mounts))
                 foreach (var mount in mounts.EnumerateArray()) sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
             else sourceRoots.Add(projectRoot);
-            foreach (string sourceRoot in sourceRoots) paths.AddRange(EnumerateSourceFiles(sourceRoot).Order(StringComparer.Ordinal));
+            foreach (string sourceRoot in sourceRoots) paths.AddRange(EnumerateSourceFiles(sourceRoot, extension).Order(StringComparer.Ordinal));
         }
         var files = new List<WorkspaceFile>(paths.Count);
         TranslationSource? projectSource = null;
@@ -1420,18 +1447,44 @@ internal sealed class EditorWorkspace : IDisposable
     private Dictionary<string, byte[]> ReadCurrentTranslationFiles(CancellationToken cancellationToken)
     {
         string? config = FindMf2ProjectConfig();
-        if (config is null)
-            throw new EditorUserException(EditorNotice.Create("ui_backend_config_required"));
+        // A deleted manifest is itself a meaningful inventory transition.  A
+        // subsequent watcher event will repopulate the inventory when the
+        // project is recreated, while this scan can still report removals.
+        if (config is null) return new Dictionary<string, byte[]>(StringComparer.Ordinal);
         string projectRoot = Path.GetDirectoryName(config)!;
+        var sourceRoots = new List<string>();
+        string extension;
+        using (JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(config)))
+        {
+            string sourceLayout = StringProperty(document.RootElement, "sourceLayout") ?? string.Empty;
+            extension = sourceLayout switch
+            {
+                "rmf2-v1" => ".rmf2",
+                "locale-toml" => ".toml",
+                _ => ".mf2",
+            };
+            if (sourceLayout == "rmf2-v1" &&
+                document.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
+            {
+                foreach (JsonElement mount in mounts.EnumerateArray())
+                    sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
+            }
+            else
+            {
+                sourceRoots.Add(projectRoot);
+            }
+        }
         var result = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
             [NormalizeRelativePath(Path.GetRelativePath(_root, config))] = ReadSourceBytes(ContainedPath(NormalizeRelativePath(Path.GetRelativePath(_root, config)))),
         };
-        foreach (string path in EnumerateSourceFiles(projectRoot))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            result[NormalizeRelativePath(Path.GetRelativePath(_root, path))] = ReadSourceBytes(ContainedPath(NormalizeRelativePath(Path.GetRelativePath(_root, path))));
-        }
+        foreach (string sourceRoot in sourceRoots)
+            foreach (string path in EnumerateSourceFiles(sourceRoot, extension))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string relative = NormalizeRelativePath(Path.GetRelativePath(_root, path));
+                result[relative] = ReadSourceBytes(ContainedPath(relative));
+            }
         return result;
     }
 
@@ -1442,26 +1495,28 @@ internal sealed class EditorWorkspace : IDisposable
             _knownRevisions.Add(revision.Key, revision.Value);
     }
 
-    private void OnWatcherChanged(object sender, FileSystemEventArgs eventArgs) => QueueChange(eventArgs.FullPath);
+    private void OnWatcherChanged(object sender, FileSystemEventArgs eventArgs) =>
+        QueueChange(eventArgs.FullPath, eventArgs.ChangeType is WatcherChangeTypes.Created or WatcherChangeTypes.Deleted);
 
     private void OnWatcherRenamed(object sender, RenamedEventArgs eventArgs)
     {
-        QueueChange(eventArgs.OldFullPath);
-        QueueChange(eventArgs.FullPath);
+        QueueChange(eventArgs.OldFullPath, true);
+        QueueChange(eventArgs.FullPath, true);
     }
 
     private void OnWatcherError(object sender, ErrorEventArgs eventArgs) =>
         Interlocked.Exchange(ref _watcherOverflowed, 1);
 
-    private void QueueChange(string fullPath)
+    private void QueueChange(string fullPath, bool membershipChanged = false)
     {
         if (_disposed) return;
-        if (!fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase) &&
-            !IsSourcePath(fullPath)) return;
+        bool relevant = fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || IsSourcePath(fullPath);
+        if (!relevant && !membershipChanged) return;
         string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
         if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)) return;
         if (relativePath.StartsWith(".runic-translations/", StringComparison.Ordinal)) return;
         _pendingChanges.TryAdd(relativePath, 0);
+        Interlocked.Exchange(ref _reconcileRequested, 1);
     }
 
     private static bool IsSourcePath(string path) =>
@@ -1469,8 +1524,9 @@ internal sealed class EditorWorkspace : IDisposable
         path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
 
-    private static IEnumerable<string> EnumerateSourceFiles(string root)
+    private static IEnumerable<string> EnumerateSourceFiles(string root, string extension)
     {
+        ValidateNoReparseAncestors(root);
         foreach (string path in Directory.EnumerateFileSystemEntries(root).Order(StringComparer.Ordinal))
         {
             FileAttributes attributes = File.GetAttributes(path);
@@ -1479,9 +1535,21 @@ internal sealed class EditorWorkspace : IDisposable
             if ((attributes & FileAttributes.Directory) != 0)
             {
                 if (Path.GetFileName(path) == ".runic-translations") continue;
-                foreach (string child in EnumerateSourceFiles(path)) yield return child;
+                foreach (string child in EnumerateSourceFiles(path, extension)) yield return child;
             }
-            else if (IsSourcePath(path)) yield return path;
+            else if (string.Equals(Path.GetExtension(path), extension, StringComparison.OrdinalIgnoreCase)) yield return path;
+        }
+    }
+
+    private static void ValidateNoReparseAncestors(string path)
+    {
+        string? current = Path.GetFullPath(path);
+        while (current is not null)
+        {
+            if ((File.Exists(current) || Directory.Exists(current)) &&
+                (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                throw new EditorUserException(EditorNotice.Create("ui_backend_path_link"));
+            current = Path.GetDirectoryName(current);
         }
     }
 

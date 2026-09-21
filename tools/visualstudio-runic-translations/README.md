@@ -42,6 +42,11 @@ changes before invoking preview. Configuration-changing refactors are refused
 because this client cannot safely include unsaved JSON buffers; resource buffers remain synchronized
 through LSP. C#, TypeScript, Svelte, TOML and legacy MF2 retain their existing
 language services. Runic does not silently rename their application call sites.
+The client watches RMF2 resources and manifests under the containing solution;
+when `sourceRoots` points outside the config directory, open the common
+containing workspace so those declared files remain inside the host watch
+boundary. Symlink/reparse-point mounts are rejected by the shared server rather
+than traversed.
 
 ## Build and package
 

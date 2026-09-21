@@ -29,9 +29,27 @@ public sealed class Rmf2SourceDiscovery : ITask
                 using var json = JsonDocument.Parse(File.ReadAllBytes(config));
                 if (json.RootElement.TryGetProperty("executionProfile", out JsonElement profile) && profile.ValueKind == JsonValueKind.String)
                     ExecutionProfile = profile.GetString() ?? string.Empty;
-                if (json.RootElement.TryGetProperty("sourceLayout", out var layout) && layout.GetString() == "rmf2-v1" && json.RootElement.TryGetProperty("sourceRoots", out var mounts))
-                    foreach (JsonElement mount in mounts.EnumerateArray()) Discover(Path.GetFullPath(mount.GetProperty("path").GetString()!, root), files);
-                else Discover(root, files);
+                string layout = json.RootElement.TryGetProperty("sourceLayout", out JsonElement layoutValue) &&
+                    layoutValue.ValueKind == JsonValueKind.String ? layoutValue.GetString() ?? string.Empty : string.Empty;
+                string extension = layout switch
+                {
+                    "rmf2-v1" => ".rmf2",
+                    "locale-toml" => ".toml",
+                    _ => ".mf2",
+                };
+                if (layout == "rmf2-v1" && json.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
+                {
+                    if (mounts.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("sourceRoots must be an array.");
+                    foreach (JsonElement mount in mounts.EnumerateArray())
+                    {
+                        if (mount.ValueKind != JsonValueKind.Object ||
+                            !mount.TryGetProperty("path", out JsonElement path) || path.ValueKind != JsonValueKind.String ||
+                            string.IsNullOrWhiteSpace(path.GetString()))
+                            throw new InvalidOperationException("Each source root must declare a non-empty path.");
+                        Discover(Path.GetFullPath(path.GetString()!, root), extension, files);
+                    }
+                }
+                else Discover(root, extension, files);
             }
             Sources = new List<string>(files).ToArray(); return true;
         }
@@ -40,8 +58,9 @@ public sealed class Rmf2SourceDiscovery : ITask
             BuildEngine.LogErrorEvent(new BuildErrorEventArgs("translations", "RTR0052", "", 0, 0, 0, 0, exception.Message, "", nameof(Rmf2SourceDiscovery))); return false;
         }
     }
-    private static void Discover(string root, SortedSet<string> files)
+    private static void Discover(string root, string extension, SortedSet<string> files)
     {
+        ValidateNoReparseAncestors(root);
         var directories = new Stack<string>(); directories.Push(root); int visited = 0;
         while (directories.Count > 0)
         {
@@ -53,8 +72,20 @@ public sealed class Rmf2SourceDiscovery : ITask
                 FileAttributes attributes = File.GetAttributes(path);
                 if ((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Translation sources must not traverse symbolic links.");
                 if ((attributes & FileAttributes.Directory) != 0) directories.Push(path);
-                else if (Path.GetExtension(path).ToLowerInvariant() is ".rmf2" or ".toml" or ".mf2") files.Add(path);
+                else if (string.Equals(Path.GetExtension(path), extension, StringComparison.OrdinalIgnoreCase)) files.Add(path);
             }
+        }
+    }
+
+    private static void ValidateNoReparseAncestors(string path)
+    {
+        string? current = Path.GetFullPath(path);
+        while (current is not null)
+        {
+            if ((File.Exists(current) || Directory.Exists(current)) &&
+                (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Translation source roots must not traverse symbolic links.");
+            current = Path.GetDirectoryName(current);
         }
     }
 }
