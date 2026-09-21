@@ -203,6 +203,7 @@ internal static class EditorSmokeTest
                 "Redo did not restore the complete physical file.");
 
             await RunRmf2Async(Path.Combine(container, "rmf2")).ConfigureAwait(false);
+            await RunStructuredRmf2PreviewAsync(Path.Combine(container, "rmf2-preview")).ConfigureAwait(false);
             await RunMountedWatchReconciliationAsync(Path.Combine(container, "mounted-watch")).ConfigureAwait(false);
             Console.WriteLine("PASS: editor nested TOML messages, grouped create/rename, trivia, revisions, grouped XLIFF conflicts, and physical undo/redo.");
             return 0;
@@ -226,7 +227,7 @@ internal static class EditorSmokeTest
         Directory.CreateDirectory(Path.Combine(root, "accounts"));
         Directory.CreateDirectory(Path.Combine(root, "payments"));
         await File.WriteAllTextAsync(Path.Combine(root, "runic.json"), """
-        {"schemaVersion":1,"catalog":"rmf2-smoke","sourceLayout":"rmf2-v1","baseLocale":"en","code":{"namespace":"Smoke","className":"Text"},"validation":{"translationCompleteness":"allow"},"sourceRoots":[{"path":"shop","namespace":["shop"]},{"path":"accounts","namespace":["account"]},{"path":"payments","namespace":["payment"]}]}
+        {"schemaVersion":1,"catalog":"rmf2-smoke","sourceLayout":"rmf2-v1","executionProfile":"rmf2-execution-v2","baseLocale":"en","code":{"namespace":"Smoke","className":"Text"},"validation":{"translationCompleteness":"allow"},"sourceRoots":[{"path":"shop","namespace":["shop"]},{"path":"accounts","namespace":["account"]},{"path":"payments","namespace":["payment"]}]}
         """);
         await File.WriteAllTextAsync(Path.Combine(root, "shop", "en.rmf2"), "title = Shop\n");
         await File.WriteAllTextAsync(Path.Combine(root, "accounts", "en.rmf2"), "# Profile heading\ntitle = Account\n");
@@ -247,6 +248,10 @@ internal static class EditorSmokeTest
         EditorXliffExportResult exported = await session.ExportXliffAsync(interchangeDirectory).ConfigureAwait(false);
         Require(exported.Ok && exported.Documents.Count == 1, exported.Message?.ToString() ?? "RMF2 XLIFF export failed.");
         string interchangePath = Path.Combine(root, exported.Documents[0].Path);
+        EditorXliffExportResult repeated = await session.ExportXliffAsync(Path.Combine(root, "interchange-repeat")).ConfigureAwait(false);
+        Require(repeated.Ok && repeated.Documents.Count == 1 &&
+            File.ReadAllBytes(interchangePath).SequenceEqual(File.ReadAllBytes(Path.Combine(root, repeated.Documents[0].Path))),
+            "RMF2 XLIFF export bytes were not deterministic.");
         XDocument xliff = XDocument.Load(interchangePath);
         XNamespace xliffNamespace = "urn:oasis:names:tc:xliff:document:2.0";
         foreach (XElement unit in xliff.Descendants(xliffNamespace + "unit"))
@@ -288,6 +293,48 @@ internal static class EditorSmokeTest
             var result = await session.ApplyMutationAsync(request with { ConfirmationToken = preview.ConfirmationToken });
             Require(result.Ok, "RMF2 mutation failed: " + request.Kind + " " + result.Message);
         }
+    }
+
+    private static async Task RunStructuredRmf2PreviewAsync(string root)
+    {
+        Directory.CreateDirectory(root);
+        await File.WriteAllTextAsync(Path.Combine(root, "runic.json"), """
+        {
+          "schemaVersion": 1,
+          "catalog": "rmf2-preview",
+          "sourceLayout": "rmf2-v1",
+          "executionProfile": "rmf2-execution-v2",
+          "baseLocale": "en",
+          "code": { "namespace": "Smoke", "className": "Text" },
+          "markup": {
+            "contracts": [{
+              "name": "shop:badge", "kind": "paired", "children": "inline",
+              "interactive": false, "plainText": "children", "options": {}
+            }],
+            "slots": { "notice": { "help": { "min": 1, "max": 1 }, "retry": { "min": 1, "max": 1 } } }
+          }
+        }
+        """).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(root, "en.rmf2"),
+            """
+            notice =
+              .input {$name :string}
+              {{Hello {$name}. {#link ref=help}Help{/link} {#action ref=retry}Retry{/action} {#shop:badge}Ready{/shop:badge}}}
+            """).ConfigureAwait(false);
+        using var workspace = new EditorWorkspace(root);
+        WorkspaceSnapshot snapshot = await workspace.LoadAsync().ConfigureAwait(false);
+        EditorDocument document = snapshot.Documents.Single(item => item.Path == "en.rmf2");
+        EditorMessagePreview preview = await workspace.PreviewMessageAsync(
+            document.Path, document.Content, "en", "notice", "{\"name\":\"Viktor\"}").ConfigureAwait(false);
+        Require(snapshot.Success && preview.Success && preview.AstJson?.Contains("\"astVersion\": 5", StringComparison.Ordinal) == true,
+            "Execution-v2 editor preview did not expose the typed AST 5 contract: " +
+            string.Join(" ", snapshot.Diagnostics.Concat(preview.Diagnostics).Select(static item => item.Message)));
+        Require(preview.RenderedJson?.Contains("\"name\":\"runic:link\"", StringComparison.Ordinal) == true &&
+            preview.RenderedJson.Contains("\"name\":\"runic:action\"", StringComparison.Ordinal) &&
+            preview.RenderedJson.Contains("\"name\":\"shop:badge\"", StringComparison.Ordinal) &&
+            preview.RenderedJson.Contains("Viktor", StringComparison.Ordinal) &&
+            !preview.RenderedJson.Contains("example.invalid", StringComparison.Ordinal),
+            "Execution-v2 editor preview did not format samples or keep link, action, and custom markup inert.");
     }
 
     private static async Task RunMountedWatchReconciliationAsync(string root)

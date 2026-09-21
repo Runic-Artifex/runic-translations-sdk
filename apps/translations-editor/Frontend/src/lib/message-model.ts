@@ -41,10 +41,18 @@ export type ArtifactNode =
   | { kind: "input"; input: string }
   | { kind: "format"; input: string; function: FormatFunction; format: string; unit?: string; numeric?: string }
   | { kind: "markup"; name: string; attributes: Record<string, string>; children: ArtifactNode[]; standalone?: boolean; variableOptions?: string[]; annotations?: Record<string, string> };
-export interface MessageArtifact {
+export interface LocalMessageArtifact {
   astVersion: 2 | 4;
   contentLocale?: string;
   inputs: Record<string, ArtifactInput>;
   selectors: ArtifactSelector[];
   variants: Array<{ matches: Record<string, string>; nodes: ArtifactNode[] }>;
 }
+
+export interface Rmf2ExecutionV2MessageArtifact {
+  astVersion: 5;
+  profile: "rmf2-execution-v2";
+  inputs: Array<{ name: string; type: string }>;
+}
+
+export type MessageArtifact = LocalMessageArtifact | Rmf2ExecutionV2MessageArtifact;

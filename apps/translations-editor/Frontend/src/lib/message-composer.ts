@@ -1,6 +1,6 @@
 import type { ResourceValue } from "./resource-model";
 
-import type { StructuredMessage, MessageInput, MessageFormat, MessagePatternNode, MessageVariant, MessageArtifact, ArtifactNode, ArtifactInput, InputType, FormatFunction } from "./message-model";
+import type { StructuredMessage, MessageInput, MessageFormat, MessagePatternNode, MessageVariant, LocalMessageArtifact, ArtifactNode, ArtifactInput, InputType, FormatFunction } from "./message-model";
 export * from "./message-model";
 
 export function toStructuredMessage(value: ResourceValue | undefined): StructuredMessage {
@@ -121,7 +121,7 @@ export function patternText(nodes: MessagePatternNode[]): string | undefined {
   return result;
 }
 
-export function sourceMessageToArtifact(value: StructuredMessage): MessageArtifact {
+export function sourceMessageToArtifact(value: StructuredMessage): LocalMessageArtifact {
   const inputs = inferredInputs(value);
   const declarations = new Map((value.declarations ?? []).map((declaration) => [declaration.name, declaration]));
   return {

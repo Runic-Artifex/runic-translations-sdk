@@ -276,7 +276,16 @@ rows backed by physical files, edits message values, creates missing translation
 in the corresponding locale file, previews and validates through the shared
 compiler, and preserves physical revisions. Structural create/move/rename/
 duplicate/delete and locale/fallback workflows use shared transactions, and rich
-preview controls render the normalized inline tree.
+preview controls render the normalized inline tree. Explicit execution-v2
+projects are compiled with the v5 carrier; AST 5 preview requests execute the
+verified .NET artifact/pack plan on the editor host and return inert semantic
+runs. The frontend never coerces AST 5 into the v4 JavaScript executor.
+
+Editor changes are resource-only and do not rewrite application call sites.
+Its closed XLIFF 2.1 text profile losslessly round-trips direct plain resources
+for either execution profile. Structured declarations, expressions, selectors,
+or markup produce the existing semantic-loss report, and the corresponding
+text-profile import is refused rather than approximated.
 
 The [VS Code extension](../../../tools/vscode-runic-translations/README.md) and
 [Visual Studio extension](../../../tools/visualstudio-runic-translations/README.md)

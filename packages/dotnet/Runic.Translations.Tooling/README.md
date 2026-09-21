@@ -17,6 +17,13 @@ provenance are never silently flattened: export records deterministic loss
 events and import rejects structured units. This is not general XLIFF or MF2
 conformance.
 
+The public low-level export overload remains the v4 compiler boundary. The
+first-party editor also uses an internal profile-neutral projection for explicit
+execution-v2 projects; it reads v5 direct resources and never exposes or
+fabricates a public v5 catalog carrier. Approved review stamps use a dedicated
+closed-text-profile fingerprint, while workspace source freshness remains a
+separate conflict check.
+
 The package carries the schemas needed for the generated runtime artifacts,
 including locale-pack-v2 and locale-artifact-v2.
 

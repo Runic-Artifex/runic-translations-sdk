@@ -1,4 +1,149 @@
 /**
+ * Captures the preview identity selected by the caller. Reactive selection may
+ * change afterward without retargeting an already scheduled request.
+ * @param {string} path
+ * @param {string} content
+ * @param {string} key
+ * @param {string} locale
+ */
+export function createMessagePreviewRequest(path, content, key, locale) {
+  return Object.freeze({ path, content, key, locale });
+}
+
+/**
+ * Copies sample values into a dictionary with no inherited property names.
+ * @param {Record<string, string> | undefined} [source]
+ * @returns {Record<string, string>}
+ */
+export function createPreviewSamples(source) {
+  /** @type {Record<string, string>} */
+  const samples = Object.create(null);
+  if (source !== undefined) {
+    for (const [name, value] of Object.entries(source)) samples[name] = value;
+  }
+  return samples;
+}
+
+/**
+ * @param {Record<string, string>} samples
+ * @param {string} name
+ * @param {string} fallback
+ */
+export function previewSampleOr(samples, name, fallback) {
+  return Object.hasOwn(samples, name) ? samples[name] : fallback;
+}
+
+/**
+ * @param {Record<string, string>} samples
+ * @param {string} name
+ * @param {string} value
+ */
+export function withPreviewSample(samples, name, value) {
+  const next = createPreviewSamples(samples);
+  next[name] = value;
+  return next;
+}
+
+/**
+ * Owns debounce and freshness for preview work without depending on reactive
+ * component globals.
+ * @param {(callback: () => void, delay: number) => unknown} setTimer
+ * @param {(handle: unknown) => void} clearTimer
+ */
+export function createMessagePreviewScheduler(setTimer, clearTimer) {
+  let epoch = 0;
+  /** @type {unknown} */
+  let handle;
+  return Object.freeze({
+    /** @param {number} delay @param {(epoch: number) => void} operation */
+    schedule(delay, operation) {
+      if (handle !== undefined) clearTimer(handle);
+      const scheduledEpoch = ++epoch;
+      handle = setTimer(() => {
+        handle = undefined;
+        operation(scheduledEpoch);
+      }, delay);
+      return scheduledEpoch;
+    },
+    cancel() {
+      if (handle !== undefined) clearTimer(handle);
+      handle = undefined;
+      epoch += 1;
+    },
+    /** @param {number} candidate */
+    isCurrent(candidate) {
+      return candidate === epoch;
+    },
+  });
+}
+
+/**
+ * Owns the invariant that samples may render only after the active request has
+ * supplied its own AST. `begin` also supplies the complete stale-view
+ * invalidation that a UI must apply before starting the debounce.
+ */
+export function createMessagePreviewOwnership() {
+  /** @type {ReturnType<typeof createMessagePreviewRequest> | undefined} */
+  let activeRequest;
+  /** @type {ReturnType<typeof createMessagePreviewRequest> | undefined} */
+  let parsedRequest;
+  return Object.freeze({
+    /** @param {ReturnType<typeof createMessagePreviewRequest>} request */
+    begin(request) {
+      activeRequest = request;
+      parsedRequest = undefined;
+      return Object.freeze({ request, ast: undefined, result: undefined, error: undefined });
+    },
+    /** @param {ReturnType<typeof createMessagePreviewRequest>} request */
+    acceptParsed(request) {
+      if (request !== activeRequest) return false;
+      parsedRequest = request;
+      return true;
+    },
+    /**
+     * @param {ReturnType<typeof createMessagePreviewRequest> | undefined} request
+     * @param {unknown} ast
+     * @returns {request is ReturnType<typeof createMessagePreviewRequest>}
+     */
+    canRenderSample(request, ast) {
+      return request !== undefined && ast !== undefined && request === activeRequest && request === parsedRequest;
+    },
+    reset() {
+      activeRequest = undefined;
+      parsedRequest = undefined;
+    },
+  });
+}
+
+/**
+ * Runs the host request sequence for a captured selection. AST 5 receives a
+ * second request carrying prototype-safe samples; AST 2/4 remains local.
+ * @param {(path: string, content: string, locale: string, key: string, samplesJson?: string) => Promise<any>} previewMessage
+ * @param {{ readonly path: string, readonly content: string, readonly key: string, readonly locale: string }} request
+ * @param {Record<string, string>} previousSamples
+ * @param {(type: string) => string} defaultSample
+ * @param {() => boolean} [isCurrent]
+ */
+export async function routeMessagePreview(previewMessage, request, previousSamples, defaultSample, isCurrent = () => true) {
+  const initial = await previewMessage(request.path, request.content, request.locale, request.key);
+  let samples = createPreviewSamples(previousSamples);
+  if (!isCurrent() || !initial.success || typeof initial.astJson !== "string" || typeof initial.locale !== "string") {
+    return { initial, ast: undefined, samples, rendered: undefined };
+  }
+  const ast = JSON.parse(initial.astJson);
+  samples = createPreviewSamples();
+  const inputs = ast.astVersion === 5 ? ast.inputs : Object.entries(ast.inputs)
+    .map(([name, descriptor]) => ({ name, type: descriptor.type }));
+  for (const input of inputs) {
+    samples[input.name] = previewSampleOr(previousSamples, input.name, defaultSample(input.type));
+  }
+  const rendered = ast.astVersion === 5
+    ? await previewMessage(request.path, request.content, request.locale, request.key, JSON.stringify(samples))
+    : undefined;
+  return { initial, ast, samples, rendered };
+}
+
+/**
  * Executes the compiler-normalized locale AST used by the generated ESM dynamic runtime.
  * The result is semantic data only. Callers must never turn markup names into HTML.
  * @param {import("./message-model").MessageArtifact} ast
@@ -7,11 +152,17 @@
  * @returns {{ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] }}
  */
 export function executeMessagePreview(ast, locale, samples) {
+  if (ast.astVersion === 5) {
+    throw new TypeError("RMF2 execution-v2 previews must be rendered by the compiler host.");
+  }
+  if (ast.astVersion !== 2 && ast.astVersion !== 4) {
+    throw new TypeError(`Unsupported message preview AST version '${ast.astVersion}'.`);
+  }
   locale = ast.contentLocale ?? locale;
   /** @type {Record<string, unknown>} */
-  const inputs = {};
+  const inputs = Object.create(null);
   for (const [name, descriptor] of Object.entries(ast.inputs)) {
-    if (!(name in samples)) throw new TypeError(`Enter a sample value for '${name}'.`);
+    if (!Object.hasOwn(samples, name)) throw new TypeError(`Enter a sample value for '${name}'.`);
     inputs[name] = parseSample(name, descriptor.type, samples[name]);
   }
   const selected = ast.selectors.map((selector) => {
@@ -36,6 +187,72 @@ export function executeMessagePreview(ast, locale, samples) {
   return hasMarkup(nodes)
     ? { kind: "content", nodes }
     : { kind: "text", value: flattenPreview(nodes) };
+}
+
+/**
+ * Converts the compiler host's JSON preview runs to the same inert semantic
+ * result consumed by InlinePreview. Markup names and options remain data.
+ * @param {string} renderedJson
+ * @returns {{ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] }}
+ */
+export function parseRenderedMessagePreview(renderedJson) {
+  const document = JSON.parse(renderedJson);
+  if (!isRecord(document) || typeof document.key !== "string" ||
+      typeof document.locale !== "string" || !Array.isArray(document.runs) ||
+      !hasExactKeys(document, ["key", "locale", "runs"])) {
+    throw new TypeError("The compiler host returned an invalid rendered message preview.");
+  }
+  const nodes = document.runs.map(renderedRun);
+  return hasMarkup(nodes)
+    ? { kind: "content", nodes }
+    : { kind: "text", value: flattenPreview(nodes) };
+}
+
+/** @param {unknown} value @returns {PreviewNode} */
+function renderedRun(value) {
+  if (!isRecord(value)) invalidRenderedRun();
+  if (typeof value.text === "string") {
+    const textOnly = hasExactKeys(value, ["text"]);
+    const fullRun = hasExactKeys(value, ["name", "text", "options", "children"]);
+    if (!textOnly && !fullRun) invalidRenderedRun();
+    if (fullRun && (typeof value.name !== "string" || !isStringRecord(value.options) ||
+        !Array.isArray(value.children) || value.children.length !== 0)) {
+      invalidRenderedRun();
+    }
+    return { kind: "text", value: value.text };
+  }
+  if (value.text !== null || typeof value.name !== "string" || value.name.length === 0 ||
+      !isStringRecord(value.options) || !Array.isArray(value.children) ||
+      !hasExactKeys(value, ["name", "text", "options", "children"])) {
+    invalidRenderedRun();
+  }
+  return {
+    kind: "element",
+    name: value.name,
+    attributes: { ...value.options },
+    children: value.children.map(renderedRun),
+  };
+}
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** @param {unknown} value @returns {value is Record<string, string>} */
+function isStringRecord(value) {
+  return isRecord(value) && Object.values(value).every((item) => typeof item === "string");
+}
+
+/** @param {Record<string, unknown>} value @param {string[]} expected */
+function hasExactKeys(value, expected) {
+  const keys = Object.keys(value);
+  return keys.length === expected.length && keys.every((key) => expected.includes(key));
+}
+
+/** @returns {never} */
+function invalidRenderedRun() {
+  throw new TypeError("The compiler host returned an invalid rendered message run.");
 }
 
 /** @param {PreviewNode[]} nodes @returns {string} */

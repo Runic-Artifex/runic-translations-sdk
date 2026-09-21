@@ -2,8 +2,11 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Xml;
 using System.Xml.Linq;
+using Runic.Translations;
+using Runic.Translations.Internal;
 using Runic.Translations.Tooling;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
@@ -228,6 +231,7 @@ internal sealed class EditorWorkspace : IDisposable
         string content,
         string locale,
         string key,
+        string? samplesJson = null,
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -237,21 +241,35 @@ internal sealed class EditorWorkspace : IDisposable
             string path = NormalizeKnownPath(relativePath);
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
             EditorDiagnostic[] diagnostics = Diagnostics(state.Compilation);
-            if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
-                return new EditorMessagePreview(false, null, null, diagnostics);
+            if (!state.Compilation.Success)
+                return new EditorMessagePreview(false, null, null, null, diagnostics);
+
+            if (state.Compilation.Rmf2?.Project is { } rmf2)
+            {
+                Rmf2LocaleV5? selectedLocale = rmf2.Locales.SingleOrDefault(item => item.Tag == locale);
+                Rmf2TranslationV5? resource = selectedLocale?.ResolvedResources.SingleOrDefault(item => item.Key == key);
+                if (resource is null)
+                    return MissingPreviewKey(path, locale, key);
+                string ast = Rmf2MessageJsonV5.Serialize(resource.Message);
+                JsonObject samples = samplesJson is null ? new JsonObject() : JsonNode.Parse(samplesJson)?.AsObject()
+                    ?? throw new JsonException("Preview samples must be a JSON object.");
+                string? rendered = resource.Message.Inputs.All(input => samples.ContainsKey(input.Name))
+                    ? Rmf2Preview.Render(rmf2, key, locale, samples).ToJsonString()
+                    : null;
+                return new EditorMessagePreview(true, locale, ast, rendered, diagnostics);
+            }
 
             TranslationGeneratedOutput artifact = TranslationOutputRenderer.RenderLocaleJson(
-                state.Compilation.Catalogs[0], locale);
+                state.Compilation.Current!.Catalogs[0], locale);
             using JsonDocument document = JsonDocument.Parse(artifact.Text);
             JsonElement messages = document.RootElement.GetProperty("messages");
             if (!messages.TryGetProperty(key, out JsonElement message))
-                return new EditorMessagePreview(false, locale, null,
-                    [new EditorDiagnostic("PREVIEW", "error", string.Empty, path, 1, 1, 1, 1, EditorNotice.Create("ui_backend_preview_key_missing", ("key", key)))]);
-            return new EditorMessagePreview(true, locale, message.GetRawText(), diagnostics);
+                return MissingPreviewKey(path, locale, key);
+            return new EditorMessagePreview(true, locale, message.GetRawText(), null, diagnostics);
         }
-        catch (Exception exception) when (exception is ArgumentException or JsonException)
+        catch (Exception exception) when (exception is ArgumentException or JsonException or TranslationAuthoringException or TranslationFormatException)
         {
-            return new EditorMessagePreview(false, null, null,
+            return new EditorMessagePreview(false, null, null, null,
                 [new EditorDiagnostic("PREVIEW", "error", string.Empty, relativePath, 1, 1, 1, 1, EditorNotice.FromException(exception))]);
         }
         finally
@@ -259,6 +277,11 @@ internal sealed class EditorWorkspace : IDisposable
             _gate.Release();
         }
     }
+
+    private static EditorMessagePreview MissingPreviewKey(string path, string locale, string key) =>
+        new(false, locale, null, null,
+            [new EditorDiagnostic("PREVIEW", "error", string.Empty, path, 1, 1, 1, 1,
+                EditorNotice.Create("ui_backend_preview_key_missing", ("key", key)))]);
 
     public async Task<EditorOperationResult> SaveAsync(
         string relativePath,
@@ -431,15 +454,13 @@ internal sealed class EditorWorkspace : IDisposable
 
     // ---- XLIFF interchange (W03) ----
     //
-    // Fingerprint reconciliation: the interchange profile validates approved
-    // review entries against the compiler catalog fingerprint, while the editor
-    // sidecar keeps per-entry fnv1a64 fingerprints as client-side staleness
-    // markers. The reconciliation is stamp-on-export / strip-on-import:
-    // approved entries are stamped with the live compilation fingerprint when
-    // an interchange payload leaves the editor (satisfying REVIEW-FINGERPRINT),
-    // and imported entries are stored without a fingerprint because interchange
-    // already validated them; later exports re-stamp from the fresh catalog.
-    // Non-approved entries never carry an interchange fingerprint.
+    // Fingerprint reconciliation: approved interchange entries use the closed
+    // text-profile fingerprint (source text plus its interchange contract),
+    // independently of v5 CallerFingerprint and SourceHash. SourceHash remains
+    // the optimistic-concurrency freshness token. The editor sidecar keeps its
+    // per-entry fnv1a64 marker separately. Approved entries are stamped on
+    // export and stripped after validated import; later exports stamp them from
+    // the current text profile. Non-approved entries never carry a stamp.
 
     internal async Task<EditorXliffExportResult> ExportXliffAsync(
         string? directory,
@@ -450,17 +471,17 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
-            if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
+            if (!state.Compilation.Success)
                 return new EditorXliffExportResult(false, EditorNotice.Create("ui_backend_xliff_compile"), null, [], []);
-            CompiledTextCatalog catalog = state.Compilation.Catalogs[0];
-            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.Id), catalog);
+            TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
+            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog);
             TranslationXliffExportResult export = TranslationInterchange.ExportXliff21(state.Compilation, review);
             string targetDirectory = ResolveInterchangeOutputDirectory(directory, Path.Combine(".runic-translations", "export"));
             Directory.CreateDirectory(targetDirectory);
             var documents = new List<EditorInterchangeFile>(export.Documents.Count);
             foreach (TranslationXliffDocument document in export.Documents)
             {
-                string fullPath = Path.Combine(targetDirectory, $"{catalog.Id}.{document.TargetLocale}.xliff");
+                string fullPath = Path.Combine(targetDirectory, $"{catalog.CatalogId}.{document.TargetLocale}.xliff");
                 await WriteAtomicallyAsync(fullPath, document.Bytes, cancellationToken).ConfigureAwait(false);
                 documents.Add(new EditorInterchangeFile(
                     Path.GetRelativePath(_root, fullPath).Replace('\\', '/'), document.TargetLocale, document.Bytes.LongLength));
@@ -468,7 +489,7 @@ internal sealed class EditorWorkspace : IDisposable
             return new EditorXliffExportResult(
                 true,
                 null,
-                catalog.Id,
+                catalog.CatalogId,
                 documents,
                 export.Report.Losses.Select(static loss => new EditorInterchangeLoss(
                     loss.Code, loss.Location, loss.Message, loss.SemanticLoss)).ToArray());
@@ -492,14 +513,14 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
-            if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
+            if (!state.Compilation.Success)
                 return new EditorReviewFileResult(false, EditorNotice.Create("ui_backend_review_compile"), null, 0);
-            CompiledTextCatalog catalog = state.Compilation.Catalogs[0];
-            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.Id), catalog);
+            TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
+            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog);
             byte[] bytes = TranslationInterchange.ExportReviewJson(review);
             string targetPath = Path.Combine(
                 ResolveInterchangeOutputDirectory(path is null ? null : Path.GetDirectoryName(path), Path.Combine(".runic-translations", "export")),
-                path is null ? $"{catalog.Id}.review.json" : Path.GetFileName(path));
+                path is null ? $"{catalog.CatalogId}.review.json" : Path.GetFileName(path));
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
             await WriteAtomicallyAsync(targetPath, bytes, cancellationToken).ConfigureAwait(false);
             return new EditorReviewFileResult(
@@ -527,9 +548,9 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
-            if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
+            if (!state.Compilation.Success)
                 return (RefuseXliff("EDITOR-COMPILE", EditorNotice.Create("ui_backend_import_compile")), null);
-            CompiledTextCatalog catalog = state.Compilation.Catalogs[0];
+            TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
             byte[] bytes = await ReadImportSourceAsync(path, cancellationToken).ConfigureAwait(false);
             TranslationXliffImportResult import = TranslationInterchange.ImportXliff21(bytes);
             var refusals = new List<EditorInterchangeRefusal>();
@@ -542,13 +563,13 @@ internal sealed class EditorWorkspace : IDisposable
                 static pair => pair.Key,
                 static pair => StrictUtf8.GetString(pair.Value.Bytes).TrimEnd('\r', '\n'),
                 StringComparer.Ordinal);
-            if (!string.Equals(import.SourceLocale, catalog.DefaultLocale, StringComparison.Ordinal))
+            if (!string.Equals(import.SourceLocale, catalog.SourceLocale, StringComparison.Ordinal))
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-LOCALE-MISMATCH",
-                    EditorNotice.Create("ui_backend_refusal_1", ("value1", import.SourceLocale!), ("value2", catalog.DefaultLocale!))));
-            foreach (string key in importedValues.Keys.Where(key => !catalog.CanonicalResources.Any(candidate => string.Equals(candidate.Key, key, StringComparison.Ordinal))).Order(StringComparer.Ordinal))
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_2", ("value1", key!), ("value2", catalog.Id!))));
+                    EditorNotice.Create("ui_backend_refusal_1", ("value1", import.SourceLocale!), ("value2", catalog.SourceLocale!))));
+            foreach (string key in importedValues.Keys.Where(key => !catalog.CanonicalUnits.Any(candidate => string.Equals(candidate.Key, key, StringComparison.Ordinal))).Order(StringComparer.Ordinal))
+                refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_2", ("value1", key!), ("value2", catalog.CatalogId!))));
 
-            var sidecar = TranslationEditorStateStore.Load(_root, catalog.Id);
+            var sidecar = TranslationEditorStateStore.Load(_root, catalog.CatalogId);
             if (sidecar.Error is not null)
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", EditorNotice.External(sidecar.Error)));
             CollectApprovalFingerprintRefusals(catalog, import.Review.Entries, refusals);
@@ -557,11 +578,11 @@ internal sealed class EditorWorkspace : IDisposable
                 return (new EditorXliffImportPlan(false, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, null,
                     [], 0, 0, 0, 0, 0, false, refusals.Order(InterchangeRefusalOrder.Instance).ToArray()), null);
 
-            const string layer = "base";
-            CompiledTextLocale targetLocale = catalog.Locales.Single(locale => string.Equals(locale.Tag, import.TargetLocale, StringComparison.Ordinal));
+            string layer = catalog.Layer;
+            TranslationInterchangeLocale targetLocale = catalog.Locales.Single(locale => string.Equals(locale.Tag, import.TargetLocale, StringComparison.Ordinal));
             Dictionary<string, string> direct = targetLocale.DirectResources.ToDictionary(
                 static resource => resource.Key,
-                static resource => resource.Pattern.TrimEnd('\r', '\n'),
+                static resource => resource.Text.TrimEnd('\r', '\n'),
                 StringComparer.Ordinal);
             string configPath = FindMf2ProjectConfig()!;
             string projectPrefix = NormalizeRelativePath(Path.GetRelativePath(_root, Path.GetDirectoryName(configPath)!));
@@ -651,7 +672,7 @@ internal sealed class EditorWorkspace : IDisposable
                     import.TargetLocale!, localeEdits);
                 documents.Add(new PreparedInterchangeDocument(targetPath, target?.Revision, original, updated));
             }
-            TranslationCompilation proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
+            TranslationProfileCompilation proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
             if (!proposed.Success)
             {
                 string message = string.Join(" ", proposed.Diagnostics
@@ -678,7 +699,7 @@ internal sealed class EditorWorkspace : IDisposable
                 ResolveImportSourcePath(path),
                 SHA256.HashData(bytes),
                 import.CatalogId,
-                catalog.Fingerprint,
+                catalog.SourceFreshness,
                 documents,
                 merged,
                 sidecar.Revision);
@@ -710,9 +731,11 @@ internal sealed class EditorWorkspace : IDisposable
             if (!Convert.ToHexStringLower(SHA256.HashData(source)).Equals(Convert.ToHexStringLower(prepared.SourceHash), StringComparison.Ordinal))
                 return Failure("import-file-changed", EditorNotice.Create("ui_backend_import_file_changed"));
             WorkspaceState currentState = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
-            if (!currentState.Compilation.Success || currentState.Compilation.Catalogs.Count != 1 ||
-                !string.Equals(currentState.Compilation.Catalogs[0].Id, prepared.CatalogId, StringComparison.Ordinal) ||
-                !string.Equals(currentState.Compilation.Catalogs[0].Fingerprint, prepared.ExpectedCatalogFingerprint, StringComparison.Ordinal))
+            if (!currentState.Compilation.Success)
+                return Failure("conflict", EditorNotice.Create("ui_backend_import_catalog_changed"));
+            TranslationInterchangeProjection currentCatalog = TranslationInterchange.PreflightXliff21(currentState.Compilation);
+            if (!string.Equals(currentCatalog.CatalogId, prepared.CatalogId, StringComparison.Ordinal) ||
+                !string.Equals(currentCatalog.SourceFreshness, prepared.ExpectedSourceFreshness, StringComparison.Ordinal))
                 return Failure("conflict", EditorNotice.Create("ui_backend_import_catalog_changed"));
             string? sidecarRevision = TranslationEditorStateStore.Load(_root, prepared.CatalogId).Revision;
             if (!string.Equals(sidecarRevision, prepared.ExpectedSidecarRevision, StringComparison.Ordinal))
@@ -758,6 +781,10 @@ internal sealed class EditorWorkspace : IDisposable
                 snapshot.Success ? null : EditorNotice.External(string.Join(" ", snapshot.Diagnostics.Select(static diagnostic => diagnostic.Message))),
                 snapshot.Success ? snapshot : null, null);
         }
+        catch (TranslationInterchangeException)
+        {
+            return Failure("conflict", EditorNotice.Create("ui_backend_import_catalog_changed"));
+        }
         catch (Exception exception) when (exception is TranslationEditorStateException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return Failure("io", EditorNotice.FromException(exception));
@@ -782,25 +809,25 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
-            if (!state.Compilation.Success || state.Compilation.Catalogs.Count != 1)
+            if (!state.Compilation.Success)
                 return (RefuseReview("EDITOR-COMPILE", EditorNotice.Create("ui_backend_import_compile")), null);
-            CompiledTextCatalog catalog = state.Compilation.Catalogs[0];
+            TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
             byte[] bytes = await ReadImportSourceAsync(path, cancellationToken).ConfigureAwait(false);
             TranslationInterchangeReview import = TranslationInterchange.ImportReviewJson(bytes);
             var refusals = new List<EditorInterchangeRefusal>();
-            if (!string.Equals(import.CatalogId, catalog.Id, StringComparison.Ordinal))
+            if (!string.Equals(import.CatalogId, catalog.CatalogId, StringComparison.Ordinal))
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-CATALOG-MISMATCH",
-                    EditorNotice.Create("ui_backend_refusal_3", ("value1", import.CatalogId!), ("value2", catalog.Id!))));
-            var canonicalKeys = new HashSet<string>(catalog.CanonicalResources.Select(static value => value.Key), StringComparer.Ordinal);
+                    EditorNotice.Create("ui_backend_refusal_3", ("value1", import.CatalogId!), ("value2", catalog.CatalogId!))));
+            var canonicalKeys = new HashSet<string>(catalog.CanonicalUnits.Select(static value => value.Key), StringComparer.Ordinal);
             var localeTags = new HashSet<string>(catalog.Locales.Select(static value => value.Tag), StringComparer.Ordinal);
             foreach (TranslationInterchangeReviewEntry entry in import.Entries)
             {
                 if (!canonicalKeys.Contains(entry.Key))
-                    refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_4", ("value1", entry.Key!), ("value2", catalog.Id!))));
+                    refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_4", ("value1", entry.Key!), ("value2", catalog.CatalogId!))));
                 if (!localeTags.Contains(entry.Locale))
                     refusals.Add(new EditorInterchangeRefusal("EDITOR-LOCALE-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_5", ("value1", entry.Locale!))));
             }
-            TranslationEditorStateLoadResult sidecar = TranslationEditorStateStore.Load(_root, catalog.Id);
+            TranslationEditorStateLoadResult sidecar = TranslationEditorStateStore.Load(_root, catalog.CatalogId);
             if (sidecar.Error is not null)
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", EditorNotice.External(sidecar.Error)));
             CollectApprovalFingerprintRefusals(catalog, import.Entries, refusals);
@@ -831,12 +858,12 @@ internal sealed class EditorWorkspace : IDisposable
             var prepared = new PreparedInterchangeImport(
                 ResolveImportSourcePath(path),
                 SHA256.HashData(bytes),
-                catalog.Id,
-                catalog.Fingerprint,
+                catalog.CatalogId,
+                catalog.SourceFreshness,
                 [],
                 merged,
                 sidecar.Revision);
-            return (new EditorReviewImportPlan(true, null, null, catalog.Id, changes.ToArray(), added, changed, removed, overflowed, []), prepared);
+            return (new EditorReviewImportPlan(true, null, null, catalog.CatalogId, changes.ToArray(), added, changed, removed, overflowed, []), prepared);
         }
         catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
         {
@@ -860,9 +887,11 @@ internal sealed class EditorWorkspace : IDisposable
             if (!Convert.ToHexStringLower(SHA256.HashData(source)).Equals(Convert.ToHexStringLower(prepared.SourceHash), StringComparison.Ordinal))
                 return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_review_file_changed"), null, null);
             WorkspaceState currentState = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
-            if (!currentState.Compilation.Success || currentState.Compilation.Catalogs.Count != 1 ||
-                !string.Equals(currentState.Compilation.Catalogs[0].Id, prepared.CatalogId, StringComparison.Ordinal) ||
-                !string.Equals(currentState.Compilation.Catalogs[0].Fingerprint, prepared.ExpectedCatalogFingerprint, StringComparison.Ordinal))
+            if (!currentState.Compilation.Success)
+                return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_catalog_changed"), null, null);
+            TranslationInterchangeProjection currentCatalog = TranslationInterchange.PreflightXliff21(currentState.Compilation);
+            if (!string.Equals(currentCatalog.CatalogId, prepared.CatalogId, StringComparison.Ordinal) ||
+                !string.Equals(currentCatalog.SourceFreshness, prepared.ExpectedSourceFreshness, StringComparison.Ordinal))
                 return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_catalog_changed"), null, null);
             TranslationEditorStateLoadResult sidecar = TranslationEditorStateStore.Load(_root, prepared.CatalogId);
             if (!string.Equals(sidecar.Revision, prepared.ExpectedSidecarRevision, StringComparison.Ordinal))
@@ -870,6 +899,10 @@ internal sealed class EditorWorkspace : IDisposable
             var state = new TranslationEditorState(prepared.CatalogId, prepared.MergedEntries, sidecar.State.Terminology);
             TranslationEditorStateLoadResult saved = TranslationEditorStateStore.Save(_root, state, prepared.ExpectedSidecarRevision);
             return new EditorReviewOperationResult(true, null, Review(saved), null);
+        }
+        catch (TranslationInterchangeException)
+        {
+            return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_catalog_changed"), null, null);
         }
         catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
         {
@@ -933,11 +966,13 @@ internal sealed class EditorWorkspace : IDisposable
     private string ResolveInterchangeOutputDirectory(string? directory, string defaultRelative) =>
         ContainedPath(directory is null or "" ? defaultRelative : NormalizeRelativePath(directory));
 
-    private static TranslationInterchangeReview BuildExportReview(TranslationEditorStateLoadResult sidecar, CompiledTextCatalog catalog)
+    private static TranslationInterchangeReview BuildExportReview(
+        TranslationEditorStateLoadResult sidecar,
+        TranslationInterchangeProjection catalog)
     {
-        var keys = new HashSet<string>(catalog.CanonicalResources.Select(static value => value.Key), StringComparer.Ordinal);
+        var keys = new HashSet<string>(catalog.CanonicalUnits.Select(static value => value.Key), StringComparer.Ordinal);
         var locales = new HashSet<string>(
-            catalog.Locales.Where(locale => !string.Equals(locale.Tag, catalog.DefaultLocale, StringComparison.Ordinal)).Select(static locale => locale.Tag),
+            catalog.Locales.Where(locale => !string.Equals(locale.Tag, catalog.SourceLocale, StringComparison.Ordinal)).Select(static locale => locale.Tag),
             StringComparer.Ordinal);
         var entries = sidecar.State.Entries
             .Where(entry => keys.Contains(entry.Key) && locales.Contains(entry.Locale))
@@ -946,9 +981,9 @@ internal sealed class EditorWorkspace : IDisposable
                 entry.Locale,
                 entry.State,
                 entry.Note,
-                string.Equals(entry.State, "approved", StringComparison.Ordinal) ? catalog.Fingerprint : null))
+                string.Equals(entry.State, "approved", StringComparison.Ordinal) ? catalog.TextProfileFingerprint : null))
             .ToArray();
-        return new TranslationInterchangeReview(catalog.Id, entries);
+        return new TranslationInterchangeReview(catalog.CatalogId, entries);
     }
 
     // Imported entries replace matching identities wholesale (interchange cannot
@@ -977,7 +1012,7 @@ internal sealed class EditorWorkspace : IDisposable
             .ToList();
     }
 
-    private static TranslationCompilation CompileWithInterchangeDocuments(
+    private static TranslationProfileCompilation CompileWithInterchangeDocuments(
         IReadOnlyList<WorkspaceFile> files,
         IReadOnlyList<PreparedInterchangeDocument> documents,
         CancellationToken cancellationToken)
@@ -988,7 +1023,7 @@ internal sealed class EditorWorkspace : IDisposable
             .ToDictionary(static file => file.Path, static file => file.Content, StringComparer.Ordinal);
         foreach (PreparedInterchangeDocument document in documents)
             messages[document.Path] = StrictUtf8.GetString(document.Bytes);
-        return TranslationCompiler.CompileProject(
+        return TranslationCompiler.CompileProjectForSelectedProfile(
             Source(project.Path, project.Content),
             messages.OrderBy(static pair => pair.Key, StringComparer.Ordinal).Select(static pair => Source(pair.Key, pair.Value)),
             null,
@@ -1068,9 +1103,12 @@ internal sealed class EditorWorkspace : IDisposable
         return succeeded;
     }
 
-    private static void CollectXliffSourceRefusals(byte[] bytes, CompiledTextCatalog catalog, List<EditorInterchangeRefusal> refusals)
+    private static void CollectXliffSourceRefusals(
+        byte[] bytes,
+        TranslationInterchangeProjection catalog,
+        List<EditorInterchangeRefusal> refusals)
     {
-        var liveSources = catalog.CanonicalResources.ToDictionary(static value => value.Key, static value => value.Pattern, StringComparer.Ordinal);
+        var liveSources = catalog.CanonicalUnits.ToDictionary(static value => value.Key, static value => value.Text, StringComparer.Ordinal);
         using var stream = new MemoryStream(bytes, writable: false);
         using XmlReader reader = XmlReader.Create(stream, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
         XDocument document = XDocument.Load(reader, LoadOptions.None);
@@ -1085,27 +1123,30 @@ internal sealed class EditorWorkspace : IDisposable
         }
     }
 
-    private static void CollectCatalogRefusals(CompiledTextCatalog catalog, TranslationXliffImportResult import, List<EditorInterchangeRefusal> refusals)
+    private static void CollectCatalogRefusals(
+        TranslationInterchangeProjection catalog,
+        TranslationXliffImportResult import,
+        List<EditorInterchangeRefusal> refusals)
     {
-        if (!string.Equals(import.CatalogId, catalog.Id, StringComparison.Ordinal))
+        if (!string.Equals(import.CatalogId, catalog.CatalogId, StringComparison.Ordinal))
             refusals.Add(new EditorInterchangeRefusal("EDITOR-CATALOG-MISMATCH",
-                EditorNotice.Create("ui_backend_refusal_7", ("value1", import.CatalogId!), ("value2", catalog.Id!))));
+                EditorNotice.Create("ui_backend_refusal_7", ("value1", import.CatalogId!), ("value2", catalog.CatalogId!))));
         if (!catalog.Locales.Any(locale => string.Equals(locale.Tag, import.TargetLocale, StringComparison.Ordinal)))
             refusals.Add(new EditorInterchangeRefusal("EDITOR-LOCALE-NOT-IN-CATALOG",
                 EditorNotice.Create("ui_backend_refusal_8", ("value1", import.TargetLocale!))));
-        if (string.Equals(import.TargetLocale, catalog.DefaultLocale, StringComparison.Ordinal))
+        if (string.Equals(import.TargetLocale, catalog.SourceLocale, StringComparison.Ordinal))
             refusals.Add(new EditorInterchangeRefusal("EDITOR-TARGET-DEFAULT-LOCALE",
-                EditorNotice.Create("ui_backend_refusal_9", ("value1", catalog.DefaultLocale!))));
+                EditorNotice.Create("ui_backend_refusal_9", ("value1", catalog.SourceLocale!))));
     }
 
     private static void CollectApprovalFingerprintRefusals(
-        CompiledTextCatalog catalog,
+        TranslationInterchangeProjection catalog,
         IReadOnlyList<TranslationInterchangeReviewEntry> entries,
         List<EditorInterchangeRefusal> refusals)
     {
         foreach (TranslationInterchangeReviewEntry entry in entries.Where(static entry => string.Equals(entry.State, "approved", StringComparison.Ordinal)))
         {
-            if (string.Equals(entry.SourceFingerprint, catalog.Fingerprint, StringComparison.Ordinal)) continue;
+            if (string.Equals(entry.SourceFingerprint, catalog.TextProfileFingerprint, StringComparison.Ordinal)) continue;
             refusals.Add(new EditorInterchangeRefusal("EDITOR-APPROVAL-FINGERPRINT",
                 EditorNotice.Create("ui_backend_refusal_10", ("value1", entry.Key!), ("value2", entry.Locale!))));
         }
@@ -1113,7 +1154,7 @@ internal sealed class EditorWorkspace : IDisposable
 
     private static void Flatten(JsonElement node, string prefix, Dictionary<string, string> values)
     {
-        foreach (JsonProperty property in node.EnumerateObject())
+        foreach (System.Text.Json.JsonProperty property in node.EnumerateObject())
         {
             string key = prefix.Length == 0 ? property.Name : prefix + "." + property.Name;
             if (property.Value.ValueKind == JsonValueKind.String)
@@ -1236,19 +1277,24 @@ internal sealed class EditorWorkspace : IDisposable
             files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         }
 
-        TranslationCompilation compilation = TranslationCompiler.CompileProject(projectSource, messageSources, null, cancellationToken);
-        CompiledTextCatalog? compiled = compilation.Catalogs.Count == 0 ? null : compilation.Catalogs[0];
-        if (compiled is not null)
+        TranslationProfileCompilation compilation = TranslationCompiler.CompileProjectForSelectedProfile(
+            projectSource, messageSources, null, cancellationToken);
+        CompiledTextCatalog? current = compilation.Current?.Catalogs.Count == 1 ? compilation.Current.Catalogs[0] : null;
+        Rmf2ProjectV5? rmf2 = compilation.Rmf2?.Project;
+        (string Tag, string? Fallback)[] compiledLocales = current is not null
+            ? current.Locales.Select(static locale => (locale.Tag, locale.FallbackTag)).ToArray()
+            : rmf2?.Locales.Select(static locale => (locale.Tag, locale.FallbackTag)).ToArray() ?? [];
+        if (compiledLocales.Length != 0)
         {
             for (int index = 0; index < files.Count; index++)
             {
                 WorkspaceFile file = files[index];
-                string? canonicalLocale = compiled.Locales.FirstOrDefault(locale =>
-                    string.Equals(locale.Tag, file.Locale, StringComparison.OrdinalIgnoreCase))?.Tag;
+                string? canonicalLocale = compiledLocales.FirstOrDefault(locale =>
+                    string.Equals(locale.Tag, file.Locale, StringComparison.OrdinalIgnoreCase)).Tag;
                 if (canonicalLocale is not null) files[index] = file with { Locale = canonicalLocale };
             }
         }
-        _catalogId = compiled?.Id ?? catalogId;
+        _catalogId = current?.Id ?? rmf2?.Id ?? catalogId;
         if (replacementPath is null)
         {
             _knownRevisions.Clear();
@@ -1263,8 +1309,8 @@ internal sealed class EditorWorkspace : IDisposable
                 _catalogId ?? string.Empty,
                 new[] { configRelativePath },
                 messageSources.Count,
-                compiled?.Locales.Count ?? 0,
-                compiled?.CanonicalResources.Count ?? 0,
+                compiledLocales.Length,
+                current?.CanonicalResources.Count ?? rmf2?.CanonicalMessages.Count ?? 0,
                 errors,
                 compilation.Diagnostics.Count - errors,
                 compilation.Success),
@@ -1280,13 +1326,21 @@ internal sealed class EditorWorkspace : IDisposable
             : state.Files.Find(file => file.Kind == DocumentKind.Manifest && string.Equals(file.CatalogId, _catalogId, StringComparison.Ordinal));
         if (manifest is not null)
             catalog = ReadCatalog(manifest.Content);
-        if (catalog is not null && state.Compilation.Catalogs.Count != 0)
+        if (catalog is not null && state.Compilation.Current?.Catalogs.Count == 1)
         {
-            CompiledTextCatalog compiledCatalog = state.Compilation.Catalogs[0];
+            CompiledTextCatalog compiledCatalog = state.Compilation.Current.Catalogs[0];
             catalog = catalog with
             {
                 DefaultLocale = compiledCatalog.DefaultLocale,
                 Locales = compiledCatalog.Locales.Select(static locale => new EditorLocale(locale.Tag, locale.FallbackTag)).ToArray(),
+            };
+        }
+        else if (catalog is not null && state.Compilation.Rmf2?.Project is { } rmf2)
+        {
+            catalog = catalog with
+            {
+                DefaultLocale = rmf2.DefaultLocale,
+                Locales = rmf2.Locales.Select(static locale => new EditorLocale(locale.Tag, locale.FallbackTag)).ToArray(),
             };
         }
 
@@ -1320,7 +1374,7 @@ internal sealed class EditorWorkspace : IDisposable
         result.State.Terminology.Select(static term => new EditorTerminologyEntry(
             term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
 
-    private static EditorDiagnostic[] Diagnostics(TranslationCompilation compilation)
+    private static EditorDiagnostic[] Diagnostics(TranslationProfileCompilation compilation)
     {
         var result = new EditorDiagnostic[compilation.Diagnostics.Count];
         for (int index = 0; index < result.Length; index++)
@@ -1657,6 +1711,6 @@ internal sealed class EditorWorkspace : IDisposable
 
     private sealed record WorkspaceState(
         List<WorkspaceFile> Files,
-        TranslationCompilation Compilation,
+        TranslationProfileCompilation Compilation,
         IReadOnlyList<EditorCatalogSummary> Catalogs);
 }

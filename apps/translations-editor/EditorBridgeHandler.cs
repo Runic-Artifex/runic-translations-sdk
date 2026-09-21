@@ -205,6 +205,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
             command.Content,
             command.Locale,
             command.Key,
+            command.SamplesJson,
             cancellationToken).ConfigureAwait(false);
         return new()
         {
@@ -214,6 +215,7 @@ internal sealed class EditorBridgeHandler(EditorSession session) : Contract.IEdi
                 Success = value.Success,
                 Locale = value.Locale,
                 AstJson = value.AstJson,
+                RenderedJson = value.RenderedJson,
                 Diagnostics = value.Diagnostics.Select(static value => new Contract.MessagePreviewedPreviewDiagnosticsItem
                 {
                     Id = value.Id,

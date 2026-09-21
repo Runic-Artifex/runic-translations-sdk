@@ -8,7 +8,7 @@
   "fingerprint": {
     "algorithm": "sha256",
     "scope": "wire",
-    "value": "e91f67a360e65065044415abd3f0484a8a430dab3d33cdea97afc8e696532528"
+    "value": "e6098ff7df69ddaa46a591209a22660760193c51b5e81e272021fb1b979b01de"
   },
   "format": "runic.application-bridge-ir",
   "formatVersion": 1,
@@ -639,6 +639,12 @@
           },
           "path": {
             "optional": false,
+            "type": {
+              "kind": "string"
+            }
+          },
+          "samplesJson": {
+            "optional": true,
             "type": {
               "kind": "string"
             }
@@ -2743,6 +2749,12 @@
                   }
                 },
                 "locale": {
+                  "optional": true,
+                  "type": {
+                    "kind": "string"
+                  }
+                },
+                "renderedJson": {
                   "optional": true,
                   "type": {
                     "kind": "string"

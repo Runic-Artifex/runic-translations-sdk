@@ -12,6 +12,7 @@ using System.Text.RegularExpressions;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
 using Runic.Translations.Compiler.Generation;
+using Runic.Translations.Internal;
 
 namespace Runic.Translations.Tool;
 
