@@ -31,6 +31,7 @@
     <EmbeddedResource Include="..\..\specs\translations\schemas\asset-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.asset-manifest-v1.schema.json" />
     <EmbeddedResource Include="..\..\specs\translations\schemas\web-module-manifest-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.web-module-manifest-v1.schema.json" />
     <EmbeddedResource Include="..\..\specs\translations\schemas\web-module-manifest-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.web-module-manifest-v2.schema.json" />
+    <EmbeddedResource Include="..\..\specs\translations\schemas\web-module-manifest-v3.schema.json" LogicalName="Runic.Translations.Tool.Schemas.web-module-manifest-v3.schema.json" />
     <EmbeddedResource Include="..\..\specs\translations\schemas\message-ast-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.message-ast-v2.schema.json" />
     <EmbeddedResource Include="..\..\specs\translations\schemas\message-ast-v5.schema.json" LogicalName="Runic.Translations.Tool.Schemas.message-ast-v5.schema.json" />
     <EmbeddedResource Include="..\..\specs\translations\schemas\locale-pack-v2.schema.json" LogicalName="Runic.Translations.Tool.Schemas.locale-pack-v2.schema.json" />

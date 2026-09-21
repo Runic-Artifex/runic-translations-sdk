@@ -106,6 +106,11 @@ internal static class Rmf2ArtifactV5Tests
             string json = mutate(original.DeepClone().AsObject());
             Reject(json, contract, name);
         }
+        JsonObject independentPatterns = original.DeepClone().AsObject();
+        foreach (JsonNode? variant in Ast(independentPatterns, "account_bill")["variants"]!.AsArray())
+            variant!["nodes"]!.AsArray().Add(new JsonObject { ["kind"] = "text", ["value"] = new string('x', 40_000) });
+        _ = TranslationPackLoader.VerifyAsync(
+            new ExternalTranslationPack(Encoding.UTF8.GetBytes(independentPatterns.ToJsonString())), contract).AsTask().GetAwaiter().GetResult();
         string duplicate = artifact.Text.Replace("{\"artifactVersion\":5", "{\"artifactVersion\":5,\"artifactVersion\":5", StringComparison.Ordinal);
         Reject(duplicate, contract, "duplicate member");
         byte[] invalidUtf8 = artifact.GetUtf8Bytes(); invalidUtf8[Array.IndexOf(invalidUtf8, (byte)'b')] = 0xff;
