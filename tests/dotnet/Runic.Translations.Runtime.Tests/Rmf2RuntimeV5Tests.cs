@@ -260,6 +260,10 @@ internal static class Rmf2RuntimeV5Tests
     {
         Assert.Equal(2, TranslationsCompatibility.Rmf2RuntimeAbiVersion); Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion); Assert.Equal(2, TranslationsCompatibility.MessageGrammarVersion);
         Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(1), "ABI 1 remains supported"); Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(2), "ABI 2 is supported");
+        // Each generated generation embeds its own requirement, not the runtime's marker.
+        const int v4Requirement = 1, v5Requirement = 2;
+        TranslationsCompatibility.EnsureRmf2RuntimeAbi(v4Requirement);
+        TranslationsCompatibility.EnsureRmf2RuntimeAbi(v5Requirement);
         foreach (int version in new[] { -1, 0, 3, int.MaxValue }) Assert.Throws<NotSupportedException>(() => TranslationsCompatibility.EnsureRmf2RuntimeAbi(version));
         CompiledRmf2Node[] nodes = [new("original")]; var message = Simple([], [], nodes); nodes[0] = new("changed");
         message.Variants.ToArray()[0] = new([], [new("changed")]);

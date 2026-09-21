@@ -191,7 +191,9 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         {
             context.CancellationToken.ThrowIfCancellationRequested();
             CompiledTextCatalog catalog = compilation.Catalogs[catalogIndex];
-            if (catalog.MessageGrammarVersion == 4 && rmf2Version != 1)
+            // V4 output requires ABI 1. ABI 2 explicitly retains that contract;
+            // do not infer compatibility for missing or unknown future markers.
+            if (catalog.MessageGrammarVersion == 4 && rmf2Version is not (1 or 2))
             {
                 context.ReportDiagnostic(Diagnostic.Create(Descriptor("RTR0024", DiagnosticSeverity.Error), Location.None,
                     "RMF2 generated code requires the additive RMF2 runtime ABI version 1. Upgrade the runtime and generator together."));

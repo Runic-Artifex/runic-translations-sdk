@@ -319,8 +319,11 @@ slot schemas. That adapter remains dependent work.
 the literal requirement **2**, then call `EnsureRmf2RuntimeAbi(2)` or
 `SupportsRmf2RuntimeAbi(2)`. These methods execute against the loaded runtime and
 accept requirements 1 and 2. A generated constant that aliases the runtime's
-constant is not a compatibility check. Existing v4 emission is intentionally
-unchanged in this slice.
+constant is not a compatibility check. Existing v4 emission embeds its own
+literal requirement **1**; its generator accepts the known supporting RMF2
+runtime markers 1 and 2, but rejects missing or unknown markers. The separate
+legacy runtime ABI check still requires exactly 1. This does not activate v5
+emission.
 
 Still dependent: C#/ESM v5 generation and project linking, caller fingerprint
 versioning, v5 pack semantic validation and explicit loader dispatch, and any
