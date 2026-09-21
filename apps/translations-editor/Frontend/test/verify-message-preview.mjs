@@ -198,6 +198,55 @@ assert.equal(localeDebounce.size, 1, "A locale switch left the previous preview 
 localeDebounce.flush();
 assert.equal(acceptedRequest.locale, "fr", "The debounced locale preview retained the old locale.");
 
+const draftDebounce = fakeScheduler();
+const changedDraft = createMessagePreviewRequest("fr.rmf2", "payment_title = changed", "payment_title", "fr");
+let activeAst = { astVersion: 5, profile: "rmf2-execution-v2", inputs: [{ name: "oldInput", type: "string" }] };
+let parsedRequest = localeRequest;
+let activeRequest = changedDraft;
+let draftSamples = withPreviewSample(createPreviewSamples(), "oldInput", "old");
+let draftRoute;
+const draftCalls = [];
+parsedRequest = undefined;
+activeAst = undefined;
+draftDebounce.scheduler.schedule(450, (epoch) => {
+  draftRoute = routeMessagePreview(async (path, content, locale, key, samplesJson) => {
+    draftCalls.push({ path, content, locale, key, samplesJson });
+    return samplesJson === undefined
+      ? {
+          success: true,
+          locale,
+          astJson: JSON.stringify({
+            astVersion: 5,
+            profile: "rmf2-execution-v2",
+            inputs: [{ name: "newInput", type: "string" }],
+          }),
+          diagnostics: [],
+        }
+      : { success: true, locale, renderedJson: '{"key":"payment_title","locale":"fr","runs":[{"text":"new render"}]}', diagnostics: [] };
+  }, changedDraft, draftSamples, () => "new default", () => draftDebounce.scheduler.isCurrent(epoch)).then((next) => {
+    activeAst = next.ast;
+    parsedRequest = changedDraft;
+    draftSamples = next.samples;
+    return next;
+  });
+});
+// This models an input event queued from the old controls before Svelte removes
+// them. It may update remembered samples, but cannot replace the pending parse.
+draftSamples = withPreviewSample(draftSamples, "oldInput", "queued edit");
+if (activeAst?.astVersion === 5 && parsedRequest === activeRequest) {
+  draftDebounce.scheduler.schedule(150, () => { throw new Error("A stale sample edit replaced the required parse."); });
+}
+assert.equal(draftDebounce.size, 1, "A stale sample edit canceled the changed draft's parse debounce.");
+draftDebounce.flush();
+const changedResult = await draftRoute;
+assert.equal(draftCalls.length, 2, "The changed AST 5 draft did not complete parse and render routing.");
+assert.deepEqual(activeAst.inputs.map((input) => input.name), ["newInput"],
+  "Preview controls retained the previous AST 5 input schema.");
+assert.equal(Object.hasOwn(draftSamples, "oldInput"), false, "A removed AST 5 input survived the new parse.");
+assert.equal(draftSamples.newInput, "new default", "The new AST 5 input did not receive its default sample.");
+assert.equal(parseRenderedMessagePreview(changedResult.rendered.renderedJson).value, "new render",
+  "The changed draft did not render from the new AST 5 route.");
+
 const hostileNames = ["__proto__", "constructor", "toString"];
 let hostileSamples = createPreviewSamples();
 for (const name of hostileNames) {

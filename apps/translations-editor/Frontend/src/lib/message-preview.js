@@ -88,11 +88,12 @@ export function createMessagePreviewScheduler(setTimer, clearTimer) {
  */
 export async function routeMessagePreview(previewMessage, request, previousSamples, defaultSample, isCurrent = () => true) {
   const initial = await previewMessage(request.path, request.content, request.locale, request.key);
-  const samples = createPreviewSamples(previousSamples);
+  let samples = createPreviewSamples(previousSamples);
   if (!isCurrent() || !initial.success || typeof initial.astJson !== "string" || typeof initial.locale !== "string") {
     return { initial, ast: undefined, samples, rendered: undefined };
   }
   const ast = JSON.parse(initial.astJson);
+  samples = createPreviewSamples();
   const inputs = ast.astVersion === 5 ? ast.inputs : Object.entries(ast.inputs)
     .map(([name, descriptor]) => ({ name, type: descriptor.type }));
   for (const input of inputs) {

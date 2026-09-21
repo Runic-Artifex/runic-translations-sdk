@@ -264,7 +264,7 @@ public static class TranslationInterchange
             .DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
         foreach ((string key, ImportedUnit unit) in units)
         {
-            if (!IsClosedTextSyntax(unit.SourcePattern) || !IsClosedTextSyntax(unit.Pattern) ||
+            if (!IsTextInterchangeSyntaxLossless(unit.SourcePattern) || !IsTextInterchangeSyntaxLossless(unit.Pattern) ||
                 !string.Equals(canonical[key].Pattern, unit.SourcePattern, StringComparison.Ordinal) ||
                 !targets.TryGetValue(key, out CompiledTranslation? target) ||
                 !string.Equals(target.Pattern, unit.Pattern, StringComparison.Ordinal))
@@ -272,12 +272,16 @@ public static class TranslationInterchange
         }
     }
 
-    private static bool IsClosedTextSyntax(string pattern)
+    private static bool IsTextInterchangeSyntaxLossless(string pattern)
     {
-        Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(
-            new TranslationSource("interchange/message.mf2", Encoding.UTF8.GetBytes(pattern)));
-        return syntax.Success && syntax.Declarations.Count == 0 && syntax.Match is null && syntax.Variants.Count == 0 &&
-            !syntax.Tokens.Any(static token => token.Kind is Mf2SyntaxTokenKind.PatternStart or Mf2SyntaxTokenKind.PatternEnd);
+        var source = new TranslationSource("interchange/message.mf2", Encoding.UTF8.GetBytes(pattern));
+        Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(source);
+        if (!syntax.Success) return false;
+        if (!syntax.Tokens.Any(static token => token.Kind is Mf2SyntaxTokenKind.PatternStart or Mf2SyntaxTokenKind.PatternEnd))
+            return true;
+        Rmf2MessageV5? message = Rmf2SemanticCompilerV5.Compile(source).Message;
+        return message is not null && message.Declarations.Count == 0 && message.Selectors.Count == 0 &&
+            message.Variants.Count == 1 && message.Variants[0].Nodes.All(static node => node is Rmf2TextV5);
     }
 
     private static string SerializePlaceholders(IReadOnlyList<TranslationInterchangePlaceholder> values)

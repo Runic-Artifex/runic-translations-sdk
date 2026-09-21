@@ -205,6 +205,7 @@
   let previewSamples = $state.raw<Record<string, string>>(createPreviewSamples());
   let previewResult = $state.raw<MessagePreviewResult>();
   let previewRequest = $state.raw<PreviewRequest>();
+  let previewParsedRequest = $state.raw<PreviewRequest>();
   let reviewEntries = $state<EditorReviewEntry[]>([]);
   let terminology = $state<EditorTerminologyEntry[]>([]);
   let reviewRevision = $state<string>();
@@ -628,6 +629,7 @@
     previewAst = undefined;
     previewResult = undefined;
     previewRequest = undefined;
+    previewParsedRequest = undefined;
     previewError = undefined;
     previewScheduler.cancel();
     previewBusy = false;
@@ -707,6 +709,10 @@
   function schedulePreview(path: string, content: string, key: string, locale: string): void {
     const request = createMessagePreviewRequest(path, content, key, locale);
     previewRequest = request;
+    previewParsedRequest = undefined;
+    previewAst = undefined;
+    previewResult = undefined;
+    previewError = undefined;
     previewBusy = true;
     previewScheduler.schedule(450, (epoch) => {
       void routeMessagePreview(
@@ -727,6 +733,7 @@
         }
         const ast = routed.ast as MessageArtifact;
         previewAst = ast;
+        previewParsedRequest = request;
         previewSamples = routed.samples;
         previewError = undefined;
         if (ast.astVersion === 5) {
@@ -751,7 +758,7 @@
   function updatePreviewSample(name: string, value: string): void {
     previewSamples = withPreviewSample(previewSamples, name, value);
     const request = previewRequest;
-    if (request === undefined) return;
+    if (request === undefined || previewParsedRequest !== request || previewAst === undefined) return;
     if (previewAst?.astVersion === 5) {
       previewBusy = true;
       previewScheduler.schedule(150, (epoch) => {

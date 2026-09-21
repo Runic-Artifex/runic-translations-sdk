@@ -20,6 +20,7 @@ internal static class Program
             XliffRoundTripsPlainMf2AndReview();
             XliffReportsStructuredMf2Loss();
             V2XliffIsDeterministicAndRoundTripsApprovedReview();
+            V2QuotedTextXliffRoundTrips();
             V2XliffReportsStructuredLossAndRefusesImport();
             XliffRefusesStructuredTextWithStaleMetadata();
             XliffPreflightSeparatesTextContractAndFreshness();
@@ -28,7 +29,7 @@ internal static class Program
             Rmf2PacksAndInspection();
             ToolRequestKeepsLegacyPositionalShape();
             ToolCommandKeepsLegacyInitShape();
-            Console.WriteLine("RESULT 12/12 passed");
+            Console.WriteLine("RESULT 13/13 passed");
             return 0;
         }
         catch (Exception exception)
@@ -133,6 +134,16 @@ internal static class Program
         try { _ = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes); }
         catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
         throw new InvalidOperationException("Execution-v2 structured XLIFF input was accepted.");
+    }
+
+    private static void V2QuotedTextXliffRoundTrips()
+    {
+        TranslationXliffExportResult exported = ExportProfile(CompileV2("hello = {{Hello}}", "hello = {{Hallo}}"));
+        if (!exported.Report.IsLossless)
+            throw new InvalidOperationException("Execution-v2 text-only quoted syntax was reported as lossy.");
+        TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes);
+        if (Encoding.UTF8.GetString(imported.Messages.Single().Bytes) != "{{Hallo}}\n")
+            throw new InvalidOperationException("Execution-v2 text-only quoted syntax did not round-trip exactly.");
     }
 
     private static void XliffRefusesStructuredTextWithStaleMetadata()
