@@ -1,0 +1,9 @@
+.input {$count :number}
+.input {$digits :integer}
+.input {$style :string}
+.local $formatted = {$count :number style=$style minimumFractionDigits=$digits maximumFractionDigits=$digits @note @empty=|| @n=1e0}
+.local $alias = {$formatted}
+.match $alias
+one {{category}}
+1.0 {{exact {$alias} {42 :number style=percent}}}
+* {{other {#strong @note}text{/strong @end=0}}}

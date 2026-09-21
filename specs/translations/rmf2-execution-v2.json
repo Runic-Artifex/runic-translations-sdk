@@ -1,0 +1,273 @@
+{
+  "profile": "rmf2-execution-v2",
+  "profileVersion": 2,
+  "mf2Baseline": "LDML-48.2",
+  "resourceSyntaxVersion": 1,
+  "markupContractVersion": 1,
+  "messageGrammarVersion": 5,
+  "normalizedAstVersion": 5,
+  "artifactVersion": 5,
+  "implementationStage": "semantic-foundation",
+  "executableBackends": [],
+  "targetBackends": [
+    "dotnet",
+    "esm"
+  ],
+  "localeCapabilities": "capabilities-v1.json",
+  "functions": {
+    "string": {
+      "inputType": "string",
+      "selection": "exact",
+      "options": {
+        "select": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "exact",
+          "values": [
+            "exact"
+          ]
+        }
+      }
+    },
+    "integer": {
+      "inputType": "int64",
+      "selection": "plural",
+      "options": {
+        "select": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "plural",
+          "values": [
+            "plural",
+            "ordinal",
+            "exact"
+          ]
+        },
+        "useGrouping": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "never",
+          "values": [
+            "always",
+            "never"
+          ]
+        }
+      }
+    },
+    "number": {
+      "inputType": "decimal",
+      "selection": "plural",
+      "options": {
+        "select": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "plural",
+          "values": [
+            "plural",
+            "ordinal",
+            "exact"
+          ]
+        },
+        "style": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "decimal",
+          "values": [
+            "decimal",
+            "percent"
+          ]
+        },
+        "minimumFractionDigits": {
+          "inputType": "int64",
+          "literal": true,
+          "dynamic": true,
+          "default": "0",
+          "values": [],
+          "minimum": 0,
+          "maximum": 6
+        },
+        "maximumFractionDigits": {
+          "inputType": "int64",
+          "literal": true,
+          "dynamic": true,
+          "default": "6 (decimal), 4 (percent)",
+          "values": [],
+          "minimum": 0,
+          "maximum": 6
+        }
+      }
+    },
+    "date": {
+      "inputType": "date",
+      "selection": "none",
+      "options": {
+        "style": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "iso",
+          "values": [
+            "iso",
+            "short",
+            "long"
+          ]
+        }
+      }
+    },
+    "time": {
+      "inputType": "time",
+      "selection": "none",
+      "options": {
+        "style": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "iso",
+          "values": [
+            "iso",
+            "short",
+            "long"
+          ]
+        }
+      }
+    },
+    "datetime": {
+      "inputType": "datetime",
+      "selection": "none",
+      "options": {
+        "style": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "iso",
+          "values": [
+            "iso",
+            "short",
+            "long"
+          ]
+        }
+      }
+    },
+    "runic:uuid": {
+      "inputType": "guid",
+      "selection": "none",
+      "options": {
+        "style": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "d",
+          "values": [
+            "d",
+            "n",
+            "b",
+            "p"
+          ]
+        }
+      }
+    },
+    "runic:boolean": {
+      "inputType": "boolean",
+      "selection": "exact",
+      "options": {
+        "select": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "exact",
+          "values": [
+            "exact"
+          ]
+        }
+      }
+    },
+    "runic:relative-time": {
+      "inputType": "decimal",
+      "selection": "plural",
+      "options": {
+        "unit": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "day",
+          "values": [
+            "second",
+            "minute",
+            "hour",
+            "day",
+            "week",
+            "month",
+            "year"
+          ]
+        },
+        "numeric": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "always",
+          "values": [
+            "always",
+            "auto"
+          ]
+        }
+      }
+    }
+  },
+  "optionErrors": {
+    "unknown": "compile-error",
+    "invalidLiteral": "compile-error",
+    "undeclaredDynamicInput": "compile-error",
+    "dynamicTypeMismatch": "compile-error",
+    "invalidDynamicValue": "evaluation-error",
+    "rangeHandling": "reject-never-clamp",
+    "diagnostic": "RTR0065"
+  },
+  "numberConstraints": {
+    "fractionDigits": "0 <= minimum <= maximum <= 6 (decimal) or 4 (percent)",
+    "rounding": "halfExpand",
+    "selectionUses": "unformatted-canonical-value"
+  },
+  "decimal": {
+    "coefficientMaximum": "79228162514264337593543950335",
+    "scaleMinimum": 0,
+    "scaleMaximum": 28,
+    "sourceLengthMaximum": 4096,
+    "exponent": "signed-int32",
+    "canonical": "plain decimal, no exponent, no leading plus or redundant zeros, negative zero becomes 0",
+    "overflow": "reject",
+    "underflow": "reject nonzero values outside the exact domain",
+    "rounding": "none"
+  },
+  "selection": {
+    "numericRank": [
+      "exact",
+      "category",
+      "wildcard"
+    ],
+    "otherRank": [
+      "exact",
+      "wildcard"
+    ],
+    "order": "lexicographic in selector order",
+    "tie": "first authored variant",
+    "comparisonNormalization": "NFC",
+    "duplicateVectors": "reject after NFC and selector-specific decimal canonicalization",
+    "fallback": "required all-wildcard vector"
+  },
+  "annotations": {
+    "ordered": true,
+    "values": [
+      "absent",
+      "string-literal",
+      "number-literal"
+    ],
+    "execution": "inert",
+    "callerInputs": false
+  },
+  "semanticSource": "rmf2-execution-v2.md"
+}

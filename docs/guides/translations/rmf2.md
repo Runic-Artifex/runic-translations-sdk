@@ -288,3 +288,8 @@ are delegated or refused, never implemented as blind text replacement.
 
 See [validation and measurements](rmf2-validation.md) for reproducible checks
 and the recorded native Windows host results.
+
+The additive [semantic v5 foundation](rmf2-semantic-v5.md) defines typed locals,
+literal formatting, dynamic options and precise key selection for the next
+execution profile. Its compiler IR and schemas are available for integration;
+the current project output and runtime limits above remain in force.

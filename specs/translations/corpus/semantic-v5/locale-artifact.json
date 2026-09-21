@@ -1,0 +1,264 @@
+{
+  "artifactVersion": 5,
+  "messageGrammarVersion": 5,
+  "profile": "rmf2-execution-v2",
+  "catalog": "semantic-v5",
+  "locale": "en",
+  "contractFingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "messages": {
+    "Example": {
+      "contentLocale": "en",
+      "ast": {
+        "astVersion": 5,
+        "profile": "rmf2-execution-v2",
+        "inputs": [
+          {
+            "name": "count",
+            "type": "decimal"
+          },
+          {
+            "name": "digits",
+            "type": "int64"
+          },
+          {
+            "name": "style",
+            "type": "string"
+          }
+        ],
+        "declarations": [
+          {
+            "kind": "input",
+            "name": "count",
+            "expression": {
+              "operand": {
+                "kind": "input",
+                "value": "count"
+              },
+              "function": "number",
+              "options": [],
+              "annotations": []
+            }
+          },
+          {
+            "kind": "input",
+            "name": "digits",
+            "expression": {
+              "operand": {
+                "kind": "input",
+                "value": "digits"
+              },
+              "function": "integer",
+              "options": [],
+              "annotations": []
+            }
+          },
+          {
+            "kind": "input",
+            "name": "style",
+            "expression": {
+              "operand": {
+                "kind": "input",
+                "value": "style"
+              },
+              "function": "string",
+              "options": [],
+              "annotations": []
+            }
+          },
+          {
+            "kind": "local",
+            "name": "formatted",
+            "expression": {
+              "operand": {
+                "kind": "input",
+                "value": "count"
+              },
+              "function": "number",
+              "options": [
+                {
+                  "name": "style",
+                  "value": {
+                    "kind": "input",
+                    "value": "style"
+                  }
+                },
+                {
+                  "name": "minimumFractionDigits",
+                  "value": {
+                    "kind": "input",
+                    "value": "digits"
+                  }
+                },
+                {
+                  "name": "maximumFractionDigits",
+                  "value": {
+                    "kind": "input",
+                    "value": "digits"
+                  }
+                }
+              ],
+              "annotations": [
+                {
+                  "name": "note"
+                },
+                {
+                  "name": "empty",
+                  "value": {
+                    "kind": "string-literal",
+                    "value": ""
+                  }
+                },
+                {
+                  "name": "n",
+                  "value": {
+                    "kind": "number-literal",
+                    "value": "1e0",
+                    "canonical": "1"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "kind": "local",
+            "name": "alias",
+            "expression": {
+              "operand": {
+                "kind": "local",
+                "value": "formatted"
+              },
+              "options": [],
+              "annotations": []
+            }
+          }
+        ],
+        "selectors": [
+          {
+            "value": {
+              "kind": "local",
+              "value": "alias"
+            },
+            "type": "decimal",
+            "function": "plural"
+          }
+        ],
+        "variants": [
+          {
+            "keys": [
+              {
+                "kind": "literal",
+                "value": "one"
+              }
+            ],
+            "nodes": [
+              {
+                "kind": "text",
+                "value": "category"
+              }
+            ]
+          },
+          {
+            "keys": [
+              {
+                "kind": "literal",
+                "value": "1.0",
+                "canonical": "1"
+              }
+            ],
+            "nodes": [
+              {
+                "kind": "text",
+                "value": "exact "
+              },
+              {
+                "kind": "expression",
+                "expression": {
+                  "operand": {
+                    "kind": "local",
+                    "value": "alias"
+                  },
+                  "options": [],
+                  "annotations": []
+                }
+              },
+              {
+                "kind": "text",
+                "value": " "
+              },
+              {
+                "kind": "expression",
+                "expression": {
+                  "operand": {
+                    "kind": "number-literal",
+                    "value": "42",
+                    "canonical": "42"
+                  },
+                  "function": "number",
+                  "options": [
+                    {
+                      "name": "style",
+                      "value": {
+                        "kind": "string-literal",
+                        "value": "percent"
+                      }
+                    }
+                  ],
+                  "annotations": []
+                }
+              }
+            ]
+          },
+          {
+            "keys": [
+              {
+                "kind": "wildcard"
+              }
+            ],
+            "nodes": [
+              {
+                "kind": "text",
+                "value": "other "
+              },
+              {
+                "kind": "markup",
+                "name": "strong",
+                "markupKind": "open",
+                "options": [],
+                "annotations": [
+                  {
+                    "name": "note"
+                  }
+                ]
+              },
+              {
+                "kind": "text",
+                "value": "text"
+              },
+              {
+                "kind": "markup",
+                "name": "strong",
+                "markupKind": "close",
+                "options": [],
+                "annotations": [
+                  {
+                    "name": "end",
+                    "value": {
+                      "kind": "number-literal",
+                      "value": "0",
+                      "canonical": "0"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "markupContract": {
+    "version": 1,
+    "contracts": {},
+    "messages": {}
+  }
+}

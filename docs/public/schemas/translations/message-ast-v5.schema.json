@@ -1,0 +1,413 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/message-ast-v5.schema.json",
+  "title": "Runic RMF2 normalized message AST v5",
+  "type": "object",
+  "required": [
+    "astVersion",
+    "profile",
+    "inputs",
+    "declarations",
+    "selectors",
+    "variants"
+  ],
+  "properties": {
+    "astVersion": {
+      "const": 5
+    },
+    "profile": {
+      "const": "rmf2-execution-v2"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/input"
+      },
+      "maxItems": 32
+    },
+    "declarations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/declaration"
+      },
+      "maxItems": 256
+    },
+    "selectors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/selector"
+      },
+      "maxItems": 16
+    },
+    "variants": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/variant"
+      },
+      "maxItems": 256,
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "reference": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "input",
+            "local"
+          ]
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "literal": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "string-literal"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value",
+            "canonical"
+          ],
+          "properties": {
+            "kind": {
+              "const": "number-literal"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$"
+            },
+            "canonical": {
+              "type": "string",
+              "pattern": "^(?:0|-?(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]))$"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "value": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/reference"
+        },
+        {
+          "$ref": "#/$defs/literal"
+        }
+      ]
+    },
+    "option": {
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "$ref": "#/$defs/value"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotation": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "$ref": "#/$defs/literal"
+        }
+      },
+      "additionalProperties": false
+    },
+    "expression": {
+      "type": "object",
+      "required": [
+        "operand",
+        "options",
+        "annotations"
+      ],
+      "properties": {
+        "operand": {
+          "$ref": "#/$defs/value"
+        },
+        "function": {
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "date",
+            "time",
+            "datetime",
+            "runic:uuid",
+            "runic:boolean",
+            "runic:relative-time"
+          ]
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/option"
+          }
+        },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/annotation"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "enum": [
+            "string",
+            "int64",
+            "decimal",
+            "boolean",
+            "date",
+            "time",
+            "datetime",
+            "guid"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "declaration": {
+      "type": "object",
+      "required": [
+        "kind",
+        "name",
+        "expression"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "input",
+            "local"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expression": {
+          "$ref": "#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "selector": {
+      "type": "object",
+      "required": [
+        "value",
+        "type",
+        "function"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/reference"
+        },
+        "type": {
+          "enum": [
+            "string",
+            "int64",
+            "decimal",
+            "boolean"
+          ]
+        },
+        "function": {
+          "enum": [
+            "exact",
+            "plural",
+            "ordinal"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "key": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "wildcard"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "literal"
+            },
+            "value": {
+              "type": "string"
+            },
+            "canonical": {
+              "type": "string",
+              "pattern": "^(?:0|-?(?:[1-9][0-9]*(?:\\.[0-9]*[1-9])?|0\\.[0-9]*[1-9]))$"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "node": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "text"
+            },
+            "value": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "expression"
+          ],
+          "properties": {
+            "kind": {
+              "const": "expression"
+            },
+            "expression": {
+              "$ref": "#/$defs/expression"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "name",
+            "markupKind",
+            "options",
+            "annotations"
+          ],
+          "properties": {
+            "kind": {
+              "const": "markup"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "markupKind": {
+              "enum": [
+                "open",
+                "close",
+                "standalone"
+              ]
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/option"
+              }
+            },
+            "annotations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/annotation"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "variant": {
+      "type": "object",
+      "required": [
+        "keys",
+        "nodes"
+      ],
+      "properties": {
+        "keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/key"
+          },
+          "maxItems": 16
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "maxItems": 4096
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
