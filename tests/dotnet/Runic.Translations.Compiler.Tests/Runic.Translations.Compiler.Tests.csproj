@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" />
     <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations\Runic.Translations.csproj" />
+    <PackageReference Include="JsonSchema.Net" PrivateAssets="all" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

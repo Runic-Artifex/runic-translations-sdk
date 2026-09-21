@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Json.Schema;
 using CompilerModel = Runic.Translations.Compiler;
 using Runic.Translations.Compiler.Generation;
 
@@ -12,51 +15,85 @@ internal static class ContractCoherenceTests
 {
     public static void Register(TestRunner runner)
     {
-        runner.Add("schema-v2 template manifests accept the compiler instance", TemplateManifestInstanceMatchesSchema);
-        runner.Add("schema-v2 web module manifests accept the compiler instance", WebModuleManifestInstanceMatchesSchema);
+        runner.Add("generated legacy, schema-v2, and RMF2 manifests satisfy their JSON schemas", GeneratedInstancesMatchSchemas);
+        runner.Add("manifest schemas reject representative contract drift", SchemasRejectContractDrift);
     }
 
-    private static void TemplateManifestInstanceMatchesSchema()
+    private static void GeneratedInstancesMatchSchemas()
     {
-        CompilerModel.CompiledTextCatalog catalog = CompileSchemaV2Catalog();
-        TranslationGeneratedOutput output = TranslationOutputRenderer.RenderTemplateManifestJson(catalog);
-        Assert.Equal("portable.template-manifest-v2.json", output.RelativePath);
-        using JsonDocument instance = JsonDocument.Parse(output.GetUtf8Bytes());
-        using JsonDocument schema = ReadSchema("template-manifest-v2.schema.json");
-        AssertClosedObject(instance.RootElement, schema.RootElement, "template manifest");
-        Assert.Equal(2, instance.RootElement.GetProperty("manifestVersion").GetInt32());
-        Assert.Equal(2, instance.RootElement.GetProperty("messageGrammarVersion").GetInt32());
-        JsonElement messageSchema = schema.RootElement.GetProperty("$defs").GetProperty("message");
-        JsonElement argumentSchema = schema.RootElement.GetProperty("$defs").GetProperty("argument");
-        foreach (System.Text.Json.JsonProperty message in instance.RootElement.GetProperty("messages").EnumerateObject())
+        (CompilerModel.CompiledTextCatalog Catalog, string TemplateSchema, string TemplatePath)[] catalogs =
+        [
+            (CompileLegacyCatalog(), "template-manifest-v1.schema.json", "legacy.template-manifest-v1.json"),
+            (CompileSchemaV2Catalog(), "template-manifest-v2.schema.json", "portable.template-manifest-v2.json"),
+            (CompileRmf2Catalog(), "template-manifest-v2.schema.json", "app.template-manifest-v2.json"),
+        ];
+
+        foreach ((CompilerModel.CompiledTextCatalog catalog, string templateSchema, string templatePath) in catalogs)
         {
-            AssertClosedObject(message.Value, messageSchema, "template message " + message.Name);
-            foreach (JsonElement argument in message.Value.GetProperty("arguments").EnumerateArray())
-                AssertClosedObject(argument, argumentSchema, "template argument " + message.Name);
+            TranslationGeneratedOutput template = TranslationOutputRenderer.RenderTemplateManifestJson(catalog);
+            Assert.Equal(templatePath, template.RelativePath);
+            AssertSchemaAccepts(templateSchema, template.GetUtf8Bytes(), template.RelativePath);
+
+            TranslationGeneratedOutput web = TranslationOutputRenderer.RenderEsmModules(catalog)
+                .Single(item => item.Kind == TranslationGeneratedOutputKind.WebModuleManifestJson);
+            AssertSchemaAccepts("web-module-manifest-v2.schema.json", web.GetUtf8Bytes(), web.RelativePath);
         }
     }
 
-    private static void WebModuleManifestInstanceMatchesSchema()
+    private static void SchemasRejectContractDrift()
     {
         CompilerModel.CompiledTextCatalog catalog = CompileSchemaV2Catalog();
-        IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderEsmModules(catalog);
-        TranslationGeneratedOutput output = outputs.Single(item => item.Kind == TranslationGeneratedOutputKind.WebModuleManifestJson);
-        Assert.Equal("portable.esm/web-module-manifest-v2.json", output.RelativePath);
-        using JsonDocument instance = JsonDocument.Parse(output.GetUtf8Bytes());
-        using JsonDocument schema = ReadSchema("web-module-manifest-v2.schema.json");
-        AssertClosedObject(instance.RootElement, schema.RootElement, "web module manifest");
-        JsonElement entrypoints = instance.RootElement.GetProperty("entrypoints");
-        AssertClosedObject(entrypoints, schema.RootElement.GetProperty("properties").GetProperty("entrypoints"), "web entrypoints");
-        Assert.Equal("transport.js", entrypoints.GetProperty("transport").GetString());
-        HashSet<string> assets = new(StringComparer.Ordinal);
-        foreach (JsonElement asset in instance.RootElement.GetProperty("assets").EnumerateArray())
-        {
-            JsonElement assetSchema = schema.RootElement.GetProperty("properties").GetProperty("assets").GetProperty("items");
-            AssertClosedObject(asset, assetSchema, "web asset");
-            Assert.True(assets.Add(asset.GetProperty("path").GetString() ?? string.Empty), "web asset paths must be unique");
-        }
-        foreach (System.Text.Json.JsonProperty entrypoint in entrypoints.EnumerateObject())
-            Assert.True(assets.Contains(entrypoint.Value.GetString() ?? string.Empty), "web entrypoint is missing from assets: " + entrypoint.Name);
+        TranslationGeneratedOutput template = TranslationOutputRenderer.RenderTemplateManifestJson(catalog);
+        TranslationGeneratedOutput web = TranslationOutputRenderer.RenderEsmModules(catalog)
+            .Single(item => item.Kind == TranslationGeneratedOutputKind.WebModuleManifestJson);
+
+        JsonObject manifestVersion = ParseObject(template);
+        manifestVersion["manifestVersion"] = 1;
+        AssertSchemaRejects("template-manifest-v2.schema.json", manifestVersion, "template manifest const");
+
+        JsonObject grammar = ParseObject(template);
+        grammar["messageGrammarVersion"] = 3;
+        AssertSchemaRejects("template-manifest-v2.schema.json", grammar, "template manifest enum");
+
+        JsonObject catalogId = ParseObject(template);
+        catalogId["catalog"] = "UpperCase";
+        AssertSchemaRejects("template-manifest-v2.schema.json", catalogId, "template manifest pattern");
+
+        JsonObject messagesType = ParseObject(template);
+        messagesType["messages"] = "not-an-object";
+        AssertSchemaRejects("template-manifest-v2.schema.json", messagesType, "template manifest type");
+
+        JsonObject messageBounds = ParseObject(template);
+        JsonObject firstMessage = messageBounds["messages"]!.AsObject().First().Value!.AsObject();
+        JsonArray arguments = firstMessage["arguments"]!.AsArray();
+        for (int index = arguments.Count; index <= 32; index++)
+            arguments.Add(new JsonObject { ["name"] = "extra" + index, ["type"] = "string", ["format"] = "none" });
+        AssertSchemaRejects("template-manifest-v2.schema.json", messageBounds, "template manifest maxItems");
+
+        JsonObject fingerprint = ParseObject(web);
+        fingerprint["contractFingerprint"] = "not-a-fingerprint";
+        AssertSchemaRejects("web-module-manifest-v2.schema.json", fingerprint, "web manifest pattern");
+
+        JsonObject entrypoint = ParseObject(web);
+        entrypoint["entrypoints"]!.AsObject()["transport"] = "other.js";
+        AssertSchemaRejects("web-module-manifest-v2.schema.json", entrypoint, "web manifest entrypoint const");
+
+        JsonObject assetType = ParseObject(web);
+        assetType["assets"]!.AsArray()[0]!.AsObject()["byteLength"] = "0";
+        AssertSchemaRejects("web-module-manifest-v2.schema.json", assetType, "web manifest asset type");
+    }
+
+    private static CompilerModel.CompiledTextCatalog CompileLegacyCatalog()
+    {
+        const string manifest = """
+            { "schemaVersion": 1, "catalog": "legacy", "code": { "namespace": "Tests", "className": "LegacyText" },
+              "defaultLocale": "en", "locales": [{"tag":"en"}], "layers": [{"name":"base","priority":0}] }
+            """;
+        const string document = """
+            { "schemaVersion": 1, "catalog": "legacy", "locale": "en", "layer": "base",
+              "resources": { "Greeting": { "$value": "Hello {name}", "$placeholders": { "name": { "type": "string" } } } } }
+            """;
+        return CompileCatalog(manifest, document);
     }
 
     private static CompilerModel.CompiledTextCatalog CompileSchemaV2Catalog()
@@ -69,6 +106,23 @@ internal static class ContractCoherenceTests
             { "schemaVersion": 2, "catalog": "portable", "locale": "en", "layer": "base",
               "resources": { "Greeting": { "$value": "Hello {name}", "$placeholders": { "name": { "type": "string" } } } } }
             """;
+        return CompileCatalog(manifest, document);
+    }
+
+    private static CompilerModel.CompiledTextCatalog CompileRmf2Catalog()
+    {
+        CompilerModel.TranslationCompilation compilation = CompilerModel.TranslationCompiler.CompileProject(
+            Rmf2Tests.Project(),
+            [new CompilerModel.TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("welcome = Hello\n"))]);
+        Assert.True(compilation.Success, CompilerTests.DiagnosticsText(compilation.Diagnostics));
+        CompilerModel.CompiledTextCatalog catalog = Assert.Single(compilation.Catalogs);
+        Assert.Equal(4, catalog.MessageGrammarVersion);
+        Assert.True(catalog.Rmf2MarkupContract is not null, "RMF2 catalog must carry its markup contract.");
+        return catalog;
+    }
+
+    private static CompilerModel.CompiledTextCatalog CompileCatalog(string manifest, string document)
+    {
         CompilerModel.TranslationCompilation compilation = CompilerModel.TranslationCompiler.Compile(
             [CompilerTests.Source("manifest.json", manifest)],
             [CompilerTests.Source("en.json", document)]);
@@ -76,20 +130,37 @@ internal static class ContractCoherenceTests
         return Assert.Single(compilation.Catalogs);
     }
 
-    private static JsonDocument ReadSchema(string fileName) => JsonDocument.Parse(
-        File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "schemas", fileName)),
-        new JsonDocumentOptions { AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow, MaxDepth = 128 });
+    private static JsonObject ParseObject(TranslationGeneratedOutput output) =>
+        JsonNode.Parse(output.GetUtf8Bytes())!.AsObject();
 
-    private static void AssertClosedObject(JsonElement instance, JsonElement schema, string context)
+    private static void AssertSchemaAccepts(string schemaFile, byte[] instanceBytes, string context)
     {
-        Assert.Equal(System.Text.Json.JsonValueKind.Object, instance.ValueKind, context + " must be an object");
-        JsonElement properties = schema.GetProperty("properties");
-        HashSet<string> required = new(StringComparer.Ordinal);
-        foreach (JsonElement item in schema.GetProperty("required").EnumerateArray())
-            required.Add(item.GetString() ?? string.Empty);
-        foreach (string name in required)
-            Assert.True(instance.TryGetProperty(name, out _), context + " is missing required property " + name);
-        foreach (System.Text.Json.JsonProperty property in instance.EnumerateObject())
-            Assert.True(properties.TryGetProperty(property.Name, out _), context + " contains unknown property " + property.Name);
+        using JsonDocument instance = JsonDocument.Parse(instanceBytes);
+        JsonSchema schema = ReadValidatorSchema(schemaFile);
+        EvaluationResults result = schema.Evaluate(instance.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+        Assert.True(result.IsValid, context + " failed JSON Schema validation: " + result);
+    }
+
+    private static void AssertSchemaRejects(string schemaFile, JsonObject instance, string context)
+    {
+        using JsonDocument document = JsonDocument.Parse(instance.ToJsonString());
+        JsonSchema schema = ReadValidatorSchema(schemaFile);
+        EvaluationResults result = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+        Assert.True(!result.IsValid, context + " was accepted by JSON Schema validation.");
+    }
+
+    private static JsonSchema ReadValidatorSchema(string fileName)
+    {
+        SchemaRegistry registry = new();
+        BuildOptions options = new() { Dialect = Dialect.Draft202012, SchemaRegistry = registry };
+        if (fileName == "template-manifest-v1.schema.json")
+        {
+            string argumentSchemaPath = RepositoryPaths.Resolve("specs", "translations", "schemas", "locale-artifact-v1.schema.json");
+            JsonSchema argumentSchema = JsonSchema.FromFile(argumentSchemaPath, options);
+            registry.Register(argumentSchema);
+        }
+
+        string schemaPath = RepositoryPaths.Resolve("specs", "translations", "schemas", fileName);
+        return JsonSchema.FromFile(schemaPath, options);
     }
 }

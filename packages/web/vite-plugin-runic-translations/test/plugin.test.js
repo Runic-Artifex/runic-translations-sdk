@@ -90,6 +90,44 @@ test("rejects stale assets and forged generated manifest fingerprints", async ()
   }
 });
 
+test("rejects v2 manifests outside the closed schema contract", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-v2-contract-"));
+  try {
+    const generated = join(root, "app.esm");
+    await mkdir(generated);
+    for (const name of ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js", "wrong.js"])
+      await writeFile(join(generated, name), name === "runtime.js" ? `export const contractFingerprint = ${JSON.stringify(fingerprint)};\n` : "export {};\n");
+    const manifest = join(generated, "web-module-manifest-v2.json");
+    await writeGeneratedManifest(manifest, {
+      webModuleManifestVersion: 2,
+      esmAbiVersion: 3,
+      catalog: "app",
+      entrypoints: { messages: "messages.js", types: "messages.d.ts", runtime: "runtime.js", server: "server.js", transport: "transport.js", dynamic: "dynamic.js" },
+      assets: ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js", "wrong.js"].map(path => ({ path })),
+    });
+    const valid = JSON.parse(await readFile(manifest, "utf8"));
+    const rejected = [
+      ["unknown root member", document => { document.extra = true; }, /unknown member/],
+      ["invalid catalog", document => { document.catalog = "UpperCase"; }, /invalid catalog/],
+      ["invalid media type", document => { document.assets[0].mediaType = "application/javascript"; }, /invalid generated asset/],
+      ["unknown entrypoint member", document => { document.entrypoints.extra = "wrong.js"; }, /invalid entrypoints/],
+      ["wrong fixed entrypoint", document => { document.entrypoints.transport = "wrong.js"; }, /invalid entrypoints/],
+    ];
+    for (const [label, mutate, error] of rejected) {
+      const document = JSON.parse(JSON.stringify(valid));
+      mutate(document);
+      await writeFile(manifest, JSON.stringify(document));
+      await assert.rejects(
+        () => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }),
+        error,
+        label,
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("runs the pinned compiler workflow before loading generated modules", async () => {
   const root = await mkdtemp(join(tmpdir(), "runic-vite-compiler-"));
   try {
