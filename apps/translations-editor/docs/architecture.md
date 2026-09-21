@@ -35,6 +35,11 @@ RMF2 files are recursively discovered as `{locale}.rmf2`; directory segments and
 explicit groups form their logical namespace. Explicit `sourceRoots` can mount
 feature-local resources. The editor uses the compiler's RMF2 source model and
 diagnostics, including the resource/markup contracts that apply to that layout.
+For `rmf2-execution-v2`, it selects the compiler's v5 project carrier; omission
+retains the compatible v4 profile. The editor's internal interchange projection
+normalizes either successful carrier only for closed text interchange. It never
+converts a v5 project into a public v4 catalog, which would lose direct-resource
+identity, raw syntax, caller contracts, and freshness information.
 
 Discovery is reconciled from the configured roots on every load/check, so
 mounted add, change, delete, and rename events are handled as membership
@@ -68,6 +73,21 @@ Headless commands use the same workspace and compiler path as the interface:
 - `export`, `report`, and `import --apply` support XLIFF and review JSON
   interchange, with `report` providing the read-only import preview; and
 - `diagnostics` creates a local diagnostic bundle and never uploads it.
+
+The XLIFF 2.1 implementation is a deterministic closed plain-text profile.
+Direct plain resources round-trip; declarations, expressions, selectors, and
+markup appear as explicit semantic-loss entries and are refused on text-profile
+import. A review approval uses the closed-text-profile fingerprint, separately
+from source freshness, so a compatible review state cannot hide a stale catalog.
+Imports and structural transactions write only declared translation resources
+and editor review state. They never edit application call sites or create legacy
+`.mf2` files for an RMF2 project.
+
+For rich preview, the editor host renders explicit v2 requests through the
+verified .NET artifact/pack path. The bridge returns validated semantic runs;
+the Svelte frontend treats links, actions, icons, and custom markup as inert
+display data. It does not load application renderers, execute callbacks, or
+coerce AST 5 into the v4 JavaScript evaluator.
 
 ## Formats and language tooling
 

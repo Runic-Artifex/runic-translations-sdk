@@ -94,3 +94,10 @@ contract. The low-level public v4 compiler carrier remains separate.
 The [v5 project linker](rmf2-project-v5.md) provides an explicit typed
 compiler profile, cross-locale caller/markup contracts, separate compatibility
 and freshness hashes, and the generated-name mapping for the dependent backends.
+The version-explicit [`rmf2-v1` corpus](corpus/rmf2-v1/README.md) is the shared
+release oracle for that activated profile: compiler, generated C#, .NET
+artifact-v5 loading, generated ESM, and ESM dynamic loading run the same typed
+execution and rejection cases. Its exclusions—terms, references, group fallback,
+C++ RMF2, rich XLIFF, application call-site rewriting, direct legacy-to-RMF2
+migration, and marketplace concerns—are deliberate release-boundary exclusions,
+not unversioned omissions from the protocol.

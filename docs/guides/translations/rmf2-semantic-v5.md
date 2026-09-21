@@ -63,3 +63,10 @@ isolated package-only C# and ESM consumer, strict external-pack composition, and
 NativeAOT execution from the packed build/runtime graph. Cross-backend corpus
 checks cover the maintained execution-v2 contract. These checks do not claim
 evidence from a published 0.4.0 release; they consume local package candidates.
+
+The first-party Translations Editor is also profile-aware, but it is not a
+second v5 compiler or renderer. Internally it projects v4 or v5 results into the
+closed text-interchange shape; a v5 project is never forced through the public
+v4 catalog carrier. AST 5 preview is rendered through the verified .NET
+artifact/pack path and returned to the browser as validated inert semantic runs.
+The browser neither executes application bindings nor approximates AST 5.

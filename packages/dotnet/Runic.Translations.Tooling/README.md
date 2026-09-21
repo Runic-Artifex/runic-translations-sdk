@@ -39,4 +39,4 @@ execution-v2 project emission. `Rmf2ResourceReader`, `Rmf2ResourceWriter` and
 `Rmf2Workspace` provide recoverable resources, explicit segment edits and
 revisioned transaction plans. The package includes the artifact 4 schema. See
 the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the supported
-subset and remaining interchange work.
+subset, the closed plain-text interchange boundary, and frozen exclusions.

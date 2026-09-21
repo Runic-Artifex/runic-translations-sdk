@@ -287,6 +287,13 @@ for either execution profile. Structured declarations, expressions, selectors,
 or markup produce the existing semantic-loss report, and the corresponding
 text-profile import is refused rather than approximated.
 
+The version-explicit [RMF2 v1 corpus](../../../specs/translations/corpus/rmf2-v1/README.md)
+is the shared release oracle for the execution-v2 boundary. The compiler,
+generated C#, .NET artifact-v5 loader, generated ESM, and ESM dynamic-pack
+loader consume its common typed execution and rejection expectations. It is
+evidence for the implemented profile, not a claim of general Unicode MF2 or
+general XLIFF conformance.
+
 The [VS Code extension](../../../tools/vscode-runic-translations/README.md) and
 [Visual Studio extension](../../../tools/visualstudio-runic-translations/README.md)
 package this language server with native IDE navigation and preview commands.
@@ -339,6 +346,8 @@ C++ RMF2, terms, and group-atomic fallback remain unsupported in both profiles.
 Arbitrary rich XLIFF is outside the supported text-profile
 scope; exports report semantic loss. Application-language call-site refactors
 are delegated or refused, never implemented as blind text replacement.
+Direct legacy-to-RMF2 migration, marketplace distribution, and rich XLIFF are
+also outside the frozen RMF2 v1 release boundary.
 
 See [validation and measurements](rmf2-validation.md) for reproducible checks
 and the recorded native Windows host results.
