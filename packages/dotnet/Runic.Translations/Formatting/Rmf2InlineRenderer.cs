@@ -99,6 +99,57 @@ public sealed class Rmf2InlineRenderer
         }
     }
 
+    internal void ValidatePlanV5(TranslationPackMessageContract contract, CompiledRmf2Message message)
+    {
+        if (!_slots.TryGetValue(contract.Key.Name, out var slots) || !_bounds.TryGetValue(contract.Key.Name, out var bounds))
+            throw new TranslationFormatException("Unknown RMF2 message contract.");
+        var types = message.InputArray.ToDictionary(input => input.Name, input => input.Type, StringComparer.Ordinal);
+        foreach (CompiledRmf2Declaration declaration in message.DeclarationArray) types[declaration.Name] = declaration.Expression.ValueType;
+        foreach (CompiledRmf2Variant variant in message.VariantArray)
+        {
+            var stack = new Stack<Tag>();
+            var names = new Stack<string>();
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (CompiledRmf2Node node in variant.NodeArray)
+            {
+                if (node.Kind != "markup") continue;
+                if (node.MarkupKind == "close")
+                {
+                    if (!_tags.TryGetValue(node.Value, out Tag? closing) || closing.Standalone || stack.Count == 0 || names.Pop() != node.Value)
+                        throw new TranslationFormatException("Unbalanced or invalid closing markup.");
+                    if (node.OptionArray.Length != 0) throw new TranslationFormatException("Closing markup cannot declare options.");
+                    stack.Pop();
+                    continue;
+                }
+                if (!_tags.TryGetValue(node.Value, out Tag? tag) || tag.Standalone != (node.MarkupKind == "standalone") || tag.Interactive && stack.Any(parent => parent.Interactive))
+                    throw new TranslationFormatException("Unknown tag, invalid kind or interactive nesting.");
+                var present = new HashSet<string>(StringComparer.Ordinal);
+                bool functional = node.Value is "runic:link" or "runic:action" or "runic:icon";
+                foreach (CompiledRmf2Option option in node.OptionArray)
+                {
+                    present.Add(option.Name);
+                    if (functional && option.Name == "ref")
+                    {
+                        if (option.Value.Kind != "string-literal" || !slots.TryGetValue(option.Value.Value, out string? slotKind) || slotKind != node.Value)
+                            throw new TranslationFormatException("Unknown functional slot or changed slot kind.");
+                        counts[option.Value.Value] = counts.GetValueOrDefault(option.Value.Value) + 1;
+                        continue;
+                    }
+                    if (!tag.Options.TryGetValue(option.Name, out Option? schema) || !schema.Accepts(option.Value, types))
+                        throw new TranslationFormatException("Unknown or incompatible typed markup option.");
+                }
+                if (functional && !present.Contains("ref")) throw new TranslationFormatException("Missing functional ref.");
+                foreach (string option in tag.Options.Keys) if (!present.Contains(option)) throw new TranslationFormatException("Missing required markup option.");
+                if (!tag.Standalone) { stack.Push(tag); names.Push(node.Value); }
+                if (stack.Count > 16) throw new TranslationFormatException("Markup depth limit exceeded.");
+            }
+            if (stack.Count != 0) throw new TranslationFormatException("Unclosed inline plan.");
+            foreach (var slot in bounds)
+                if (counts.GetValueOrDefault(slot.Key) < slot.Value.Min || counts.GetValueOrDefault(slot.Key) > slot.Value.Max)
+                    throw new TranslationFormatException("Functional slot multiplicity mismatch.");
+        }
+    }
+
     /// <summary>Builds semantic inline runs for the selected variant, checking all potential slot bindings.</summary>
     public IReadOnlyList<InlineMarkupRun> Render(string key, LocalizedTextContent content,
         IReadOnlyDictionary<string, InlineMarkupBinding>? slots = null)
@@ -188,5 +239,18 @@ public sealed class Rmf2InlineRenderer
         internal bool AcceptsType(TextArgumentType type) => Type switch { "number" => type is TextArgumentType.Int or TextArgumentType.Number, "boolean" => type == TextArgumentType.Bool, _ => type == TextArgumentType.String };
         internal bool Accepts(string value) => Type switch
         { "enum" => Values.Contains(value, StringComparer.Ordinal), "number" => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double number) && double.IsFinite(number), "boolean" => value is "true" or "false", _ => true };
+        internal bool Accepts(CompiledRmf2Value value, Dictionary<string, TextArgumentType> types)
+        {
+            if (value.Kind is "input" or "local")
+                return !LiteralOnly && types.TryGetValue(value.Value, out TextArgumentType type) && AcceptsType(type);
+            return Type switch
+            {
+                "number" => value.Kind == "number-literal" && value.Canonical is not null,
+                "boolean" => value.Kind == "string-literal" && value.Value is "true" or "false",
+                "enum" => value.Kind == "string-literal" && Values.Contains(value.Value, StringComparer.Ordinal),
+                "string" => value.Kind == "string-literal",
+                _ => false,
+            };
+        }
     }
 }

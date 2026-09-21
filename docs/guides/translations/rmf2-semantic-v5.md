@@ -1,9 +1,10 @@
 # RMF2 semantic v5 foundation
 
-The additive `rmf2-execution-v2` profile has a typed compiler model and published
-v5 message/artifact schemas. It is not enabled in project output or installed
-runtimes yet. Existing RMF2 projects continue to emit v4 and use the v1 execution
-profile, with its existing supported features and refusal diagnostics.
+The additive `rmf2-execution-v2` profile has a typed compiler model, a staged
+resolved-locale artifact writer, strict .NET external-pack loading, and published
+v5 message/artifact schemas. It is not enabled by the default project output or
+CLI yet. Existing RMF2 projects continue to emit v4 and use the v1 execution
+profile, with their existing supported features and refusal diagnostics.
 
 The new model preserves input/local references, formatted literal operands,
 formatter metadata through local chains, ordered typed options, and inert
@@ -44,7 +45,14 @@ The CLI `schema` command also exports both v5 schemas for offline validation;
 schema distribution does not enable v5 project generation or runtime loading.
 Resource syntax and markup contracts remain version 1.
 
-The next integration slice must evaluate typed locals/options, link project
-markup contracts, generate v5 code, validate external v5 packs and implement
-explicit version dispatch in .NET and ESM. No rendering or backend parity claim
-follows from this semantic foundation alone.
+The v5 pack path is explicitly dispatched by artifact version, grammar and
+`rmf2-execution-v2` profile. It validates bounded strict JSON/UTF-8, the caller
+contract, declaration graph, exact decimals, selectors and fallback vectors,
+effective content locales, and linked markup/slot obligations before composing
+through the existing immutable snapshot path. The caller supplies integrity
+verification when authenticity is required; a matching fingerprint proves
+compatibility, not provenance. Legacy v1/v2/v4 constructors and readers remain
+unchanged and reject v5 artifacts.
+
+Generated C#/ESM emission and public profile activation remain later integration
+slices. No backend-parity claim follows from the staged artifact/loader path alone.

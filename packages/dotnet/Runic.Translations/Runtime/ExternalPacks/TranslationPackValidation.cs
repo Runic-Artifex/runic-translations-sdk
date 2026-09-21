@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 
 namespace Runic.Translations;
 
@@ -30,6 +31,25 @@ internal static class TranslationPackValidation
     }
 
     internal static bool IsIdentifier(string? value) => !string.IsNullOrEmpty(value) && IsIdentifier(value.AsSpan());
+
+    internal static bool IsRmf2Name(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !value.IsNormalized(NormalizationForm.FormC)) return false;
+        bool first = true;
+        foreach (Rune rune in value.EnumerateRunes())
+        {
+            int scalar = rune.Value;
+            if (!IsRmf2NameStart(scalar) && (first || scalar is not (>= '0' and <= '9' or '-' or '.'))) return false;
+            first = false;
+        }
+        return !first;
+    }
+
+    private static bool IsRmf2NameStart(int value) => value is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or '+' or '_' or
+        >= 0xA1 and <= 0x61B or >= 0x61D and <= 0x167F or >= 0x1681 and <= 0x1FFF or >= 0x200B and <= 0x200D or
+        >= 0x2010 and <= 0x2027 or >= 0x2030 and <= 0x205E or >= 0x2060 and <= 0x2065 or >= 0x206A and <= 0x2FFF or
+        >= 0x3001 and <= 0xD7FF or >= 0xE000 and <= 0xFDCF or >= 0xFDF0 and <= 0xFFFD ||
+        value >= 0x10000 && value <= 0x10FFFD && (value & 0xFFFF) <= 0xFFFD;
 
     private static bool IsIdentifier(ReadOnlySpan<char> value)
     {

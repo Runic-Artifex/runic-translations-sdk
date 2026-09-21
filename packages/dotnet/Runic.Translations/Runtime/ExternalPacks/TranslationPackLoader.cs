@@ -93,9 +93,13 @@ public static class TranslationPackLoader
             if (!accepted) throw PackError("The external pack was rejected by the integrity policy.", TranslationPackFailureReason.IntegrityRejected);
         }
 
-        return contract.MessageGrammarVersion == 4 || (contract.MessageGrammarVersion == 2 && IsVersion2(ownedContent, cancellationToken))
-            ? TranslationPackV2Loader.Parse(ownedContent, contract, limits, cancellationToken)
-            : Parse(ownedContent, contract, limits, cancellationToken);
+        return contract.MessageGrammarVersion switch
+        {
+            5 => TranslationPackV5Loader.Parse(ownedContent, contract, limits, cancellationToken),
+            4 => TranslationPackV2Loader.Parse(ownedContent, contract, limits, cancellationToken),
+            2 when IsVersion2(ownedContent, cancellationToken) => TranslationPackV2Loader.Parse(ownedContent, contract, limits, cancellationToken),
+            _ => Parse(ownedContent, contract, limits, cancellationToken),
+        };
     }
 
     private static VerifiedExternalTranslationPack Parse(
