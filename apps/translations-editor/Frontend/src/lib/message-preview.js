@@ -78,6 +78,44 @@ export function createMessagePreviewScheduler(setTimer, clearTimer) {
 }
 
 /**
+ * Owns the invariant that samples may render only after the active request has
+ * supplied its own AST. `begin` also supplies the complete stale-view
+ * invalidation that a UI must apply before starting the debounce.
+ */
+export function createMessagePreviewOwnership() {
+  /** @type {ReturnType<typeof createMessagePreviewRequest> | undefined} */
+  let activeRequest;
+  /** @type {ReturnType<typeof createMessagePreviewRequest> | undefined} */
+  let parsedRequest;
+  return Object.freeze({
+    /** @param {ReturnType<typeof createMessagePreviewRequest>} request */
+    begin(request) {
+      activeRequest = request;
+      parsedRequest = undefined;
+      return Object.freeze({ request, ast: undefined, result: undefined, error: undefined });
+    },
+    /** @param {ReturnType<typeof createMessagePreviewRequest>} request */
+    acceptParsed(request) {
+      if (request !== activeRequest) return false;
+      parsedRequest = request;
+      return true;
+    },
+    /**
+     * @param {ReturnType<typeof createMessagePreviewRequest> | undefined} request
+     * @param {unknown} ast
+     * @returns {request is ReturnType<typeof createMessagePreviewRequest>}
+     */
+    canRenderSample(request, ast) {
+      return request !== undefined && ast !== undefined && request === activeRequest && request === parsedRequest;
+    },
+    reset() {
+      activeRequest = undefined;
+      parsedRequest = undefined;
+    },
+  });
+}
+
+/**
  * Runs the host request sequence for a captured selection. AST 5 receives a
  * second request carrying prototype-safe samples; AST 2/4 remains local.
  * @param {(path: string, content: string, locale: string, key: string, samplesJson?: string) => Promise<any>} previewMessage

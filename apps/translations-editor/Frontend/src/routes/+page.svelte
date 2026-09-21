@@ -67,6 +67,7 @@
   import type { MessageArtifact } from "$lib/message-composer";
   import {
     createMessagePreviewRequest,
+    createMessagePreviewOwnership,
     createMessagePreviewScheduler,
     createPreviewSamples,
     executeMessagePreview,
@@ -121,6 +122,7 @@
   type PreviewRequest = ReturnType<typeof createMessagePreviewRequest>;
 
   const bridge = createEditorBridge();
+  const previewOwnership = createMessagePreviewOwnership();
   const previewScheduler = createMessagePreviewScheduler(
     (callback, delay) => setTimeout(callback, delay),
     (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
@@ -205,7 +207,6 @@
   let previewSamples = $state.raw<Record<string, string>>(createPreviewSamples());
   let previewResult = $state.raw<MessagePreviewResult>();
   let previewRequest = $state.raw<PreviewRequest>();
-  let previewParsedRequest = $state.raw<PreviewRequest>();
   let reviewEntries = $state<EditorReviewEntry[]>([]);
   let terminology = $state<EditorTerminologyEntry[]>([]);
   let reviewRevision = $state<string>();
@@ -629,7 +630,7 @@
     previewAst = undefined;
     previewResult = undefined;
     previewRequest = undefined;
-    previewParsedRequest = undefined;
+    previewOwnership.reset();
     previewError = undefined;
     previewScheduler.cancel();
     previewBusy = false;
@@ -708,11 +709,11 @@
 
   function schedulePreview(path: string, content: string, key: string, locale: string): void {
     const request = createMessagePreviewRequest(path, content, key, locale);
-    previewRequest = request;
-    previewParsedRequest = undefined;
-    previewAst = undefined;
-    previewResult = undefined;
-    previewError = undefined;
+    const beginning = previewOwnership.begin(request);
+    previewRequest = beginning.request;
+    previewAst = beginning.ast;
+    previewResult = beginning.result;
+    previewError = beginning.error;
     previewBusy = true;
     previewScheduler.schedule(450, (epoch) => {
       void routeMessagePreview(
@@ -732,8 +733,8 @@
           return;
         }
         const ast = routed.ast as MessageArtifact;
+        if (!previewOwnership.acceptParsed(request)) return;
         previewAst = ast;
-        previewParsedRequest = request;
         previewSamples = routed.samples;
         previewError = undefined;
         if (ast.astVersion === 5) {
@@ -758,7 +759,7 @@
   function updatePreviewSample(name: string, value: string): void {
     previewSamples = withPreviewSample(previewSamples, name, value);
     const request = previewRequest;
-    if (request === undefined || previewParsedRequest !== request || previewAst === undefined) return;
+    if (!previewOwnership.canRenderSample(request, previewAst)) return;
     if (previewAst?.astVersion === 5) {
       previewBusy = true;
       previewScheduler.schedule(150, (epoch) => {

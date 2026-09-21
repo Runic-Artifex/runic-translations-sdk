@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   createMessagePreviewRequest,
+  createMessagePreviewOwnership,
   createMessagePreviewScheduler,
   createPreviewSamples,
   executeMessagePreview,
@@ -199,15 +200,22 @@ localeDebounce.flush();
 assert.equal(acceptedRequest.locale, "fr", "The debounced locale preview retained the old locale.");
 
 const draftDebounce = fakeScheduler();
+const draftOwnership = createMessagePreviewOwnership();
 const changedDraft = createMessagePreviewRequest("fr.rmf2", "payment_title = changed", "payment_title", "fr");
 let activeAst = { astVersion: 5, profile: "rmf2-execution-v2", inputs: [{ name: "oldInput", type: "string" }] };
-let parsedRequest = localeRequest;
-let activeRequest = changedDraft;
+let activeResult = { kind: "text", value: "old render" };
+let activeError = "old error";
 let draftSamples = withPreviewSample(createPreviewSamples(), "oldInput", "old");
 let draftRoute;
 const draftCalls = [];
-parsedRequest = undefined;
-activeAst = undefined;
+const beginning = draftOwnership.begin(changedDraft);
+const activeRequest = beginning.request;
+activeAst = beginning.ast;
+activeResult = beginning.result;
+activeError = beginning.error;
+assert.equal(activeAst, undefined, "Beginning a changed draft retained the previous AST.");
+assert.equal(activeResult, undefined, "Beginning a changed draft retained the previous render.");
+assert.equal(activeError, undefined, "Beginning a changed draft retained the previous error.");
 draftDebounce.scheduler.schedule(450, (epoch) => {
   draftRoute = routeMessagePreview(async (path, content, locale, key, samplesJson) => {
     draftCalls.push({ path, content, locale, key, samplesJson });
@@ -224,8 +232,9 @@ draftDebounce.scheduler.schedule(450, (epoch) => {
         }
       : { success: true, locale, renderedJson: '{"key":"payment_title","locale":"fr","runs":[{"text":"new render"}]}', diagnostics: [] };
   }, changedDraft, draftSamples, () => "new default", () => draftDebounce.scheduler.isCurrent(epoch)).then((next) => {
+    assert.equal(draftOwnership.acceptParsed(changedDraft), true,
+      "The active changed draft could not claim its parsed AST.");
     activeAst = next.ast;
-    parsedRequest = changedDraft;
     draftSamples = next.samples;
     return next;
   });
@@ -233,7 +242,7 @@ draftDebounce.scheduler.schedule(450, (epoch) => {
 // This models an input event queued from the old controls before Svelte removes
 // them. It may update remembered samples, but cannot replace the pending parse.
 draftSamples = withPreviewSample(draftSamples, "oldInput", "queued edit");
-if (activeAst?.astVersion === 5 && parsedRequest === activeRequest) {
+if (draftOwnership.canRenderSample(activeRequest, activeAst)) {
   draftDebounce.scheduler.schedule(150, () => { throw new Error("A stale sample edit replaced the required parse."); });
 }
 assert.equal(draftDebounce.size, 1, "A stale sample edit canceled the changed draft's parse debounce.");
