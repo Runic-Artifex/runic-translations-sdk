@@ -13,10 +13,11 @@ For SDK development, set `runicTranslations.serverAssembly` to the built tool DL
 `runicTranslations.dotnetPath` selects the installed .NET executable. Separate
 workspace folders get separate server instances. Restarting reopens unsaved
 buffers; stopping releases watchers and terminates the language-server client.
-For `rmf2-v1` projects, declared `sourceRoots` are also watched directly, so
-mounted add/change/delete/rename events outside the config directory are
-reconciled. Open a common containing workspace for such mounts; symlink and
-reparse-point roots remain rejected by the shared server.
+For `rmf2-v1` projects, declared `sourceRoots` inside the opened workspace are
+covered by one canonical recursive watch plan, so mounted add/change/delete/rename
+events outside the config directory are reconciled without duplicate nested
+watchers. Open a common containing workspace for such mounts; roots outside that
+boundary and symlink/reparse-point escapes are not watched.
 
 The Runic commands in the Command Palette provide inert example previews, group
 extraction/inlining and explicitly source-only input/slot/resource renames. Preview shares

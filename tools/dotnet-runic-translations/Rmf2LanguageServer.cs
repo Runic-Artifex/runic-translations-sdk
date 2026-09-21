@@ -340,27 +340,105 @@ internal sealed class Rmf2LanguageServer
     // TranslationSource uses portable separators, including on Windows. Buffer overlays
     // must use the same key as disk sources or the workspace receives duplicates.
     private static string LocalPath(string uri) => new Uri(uri).LocalPath.Replace('\\', '/');
-    private Rmf2Workspace Workspace(string path)
+    private string ProjectDirectory(string path)
     {
         _requestCancellation.ThrowIfCancellationRequested();
-        string? directory = Path.GetDirectoryName(path);
-        while (directory is not null && !File.Exists(Path.Combine(directory, "runic.json"))) directory = Path.GetDirectoryName(directory);
-        if (directory is null)
-            directory = _workspaceRoots.SelectMany(root => new[] { root, Path.Combine(root, "translations") }).FirstOrDefault(root => File.Exists(Path.Combine(root, "runic.json")));
-        if (directory is null) throw new InvalidOperationException("No runic.json project was found in the resource ancestors or workspace translations directory.");
+        string fullPath = Path.GetFullPath(path);
+        string? directory = Path.GetDirectoryName(fullPath);
+        while (directory is not null)
+        {
+            string config = Path.Combine(directory, "runic.json");
+            if (File.Exists(config) || _buffers.ContainsKey(new Uri(config).AbsoluteUri)) return directory;
+            directory = Path.GetDirectoryName(directory);
+        }
+
+        // A mounted resource need not have its project in its ancestor chain.
+        // Resolve it against the bounded set of conventional workspace projects
+        // and open configuration buffers. Prefer the most-specific matching
+        // source root, then the canonical project path for deterministic ties.
+        var candidates = _workspaceRoots
+            .SelectMany(root => new[] { root, Path.Combine(root, "translations") })
+            .Concat(_buffers.Keys
+                .Select(LocalPath)
+                .Where(candidate => Path.GetFileName(candidate).Equals("runic.json", StringComparison.OrdinalIgnoreCase))
+                .Select(candidate => Path.GetDirectoryName(candidate)!))
+            .Select(Path.GetFullPath)
+            .Where(candidate => File.Exists(Path.Combine(candidate, "runic.json")) ||
+                _buffers.ContainsKey(new Uri(Path.Combine(candidate, "runic.json")).AbsoluteUri))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var matches = new List<(string Project, int Specificity)>();
+        foreach (string candidate in candidates)
+            foreach (string sourceRoot in ProjectSourceRoots(candidate))
+                if (IsWithin(sourceRoot, fullPath)) matches.Add((candidate, Path.GetFullPath(sourceRoot).Length));
+        if (matches.Count != 0)
+            return matches.OrderByDescending(match => match.Specificity).ThenBy(match => match.Project, StringComparer.Ordinal).First().Project;
+        throw new InvalidOperationException("No runic.json project contains this resource in its project directory or configured source roots.");
+    }
+
+    private string[] ProjectSourceRoots(string directory)
+    {
+        string projectPath = Path.Combine(directory, "runic.json");
+        string text;
+        if (_buffers.TryGetValue(new Uri(projectPath).AbsoluteUri, out Buffer? projectBuffer)) text = projectBuffer.Text;
+        else
+        {
+            try { text = File.ReadAllText(projectPath, Utf8); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return [directory]; }
+        }
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(text);
+            if (!document.RootElement.TryGetProperty("sourceLayout", out var layout) || layout.GetString() != "rmf2-v1" ||
+                !document.RootElement.TryGetProperty("sourceRoots", out var mounts) || mounts.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return [directory];
+            return mounts.EnumerateArray()
+                .Where(mount => mount.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                    mount.TryGetProperty("path", out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(value.GetString()))
+                .Select(mount => Path.GetFullPath(mount.GetProperty("path").GetString()!, directory))
+                .ToArray();
+        }
+        catch (System.Text.Json.JsonException) { return [directory]; }
+    }
+
+    private Rmf2Workspace Workspace(string path)
+    {
+        string directory = ProjectDirectory(path);
+        string[] group = BufferUris(directory).ToArray();
+        return Workspace(directory, group);
+    }
+
+    private Rmf2Workspace Workspace(string directory, IReadOnlyCollection<string> group)
+    {
+        _requestCancellation.ThrowIfCancellationRequested();
         string projectPath = Path.Combine(directory, "runic.json");
         _buffers.TryGetValue(new Uri(projectPath).AbsoluteUri, out var projectBuffer);
         CompilerInputs inputs = InputFiles.ReadProject(directory, projectBuffer is null ? null : new TranslationSource(projectPath, Utf8.GetBytes(projectBuffer.Text)));
         var sources = inputs.Messages.Select(s => new TranslationSource(Path.GetFullPath(s.Path), s.GetUtf8Bytes())).ToDictionary(s => s.Path, StringComparer.Ordinal);
-        foreach (var pair in _buffers)
+        foreach (string uri in group)
         {
-            string file = LocalPath(pair.Key);
-            if (sources.ContainsKey(file) || (Path.GetExtension(file).Equals(".rmf2", StringComparison.OrdinalIgnoreCase) && inputs.SourceRoots?.Any(sourceRoot => IsWithin(sourceRoot, file)) == true)) sources[file] = new TranslationSource(file, Utf8.GetBytes(pair.Value.Text));
+            Buffer buffer = _buffers[uri];
+            string file = LocalPath(uri);
+            if (sources.ContainsKey(file) || (Path.GetExtension(file).Equals(".rmf2", StringComparison.OrdinalIgnoreCase) && inputs.SourceRoots?.Any(sourceRoot => IsWithin(sourceRoot, file)) == true))
+                sources[file] = new TranslationSource(file, Utf8.GetBytes(buffer.Text));
         }
         string root = directory;
         foreach (string file in sources.Keys)
             while (!IsWithin(root, file)) root = Path.GetDirectoryName(root)!;
         return _syntaxCache.Create(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()), sources.Values, _requestCancellation);
+    }
+
+    private IEnumerable<string> BufferUris(string projectDirectory)
+    {
+        foreach (string uri in _buffers.Keys.Order(StringComparer.Ordinal))
+        {
+            string? candidate = null;
+            try { candidate = ProjectDirectory(LocalPath(uri)); }
+            catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { }
+            if (candidate is not null && string.Equals(candidate, projectDirectory, StringComparison.Ordinal)) yield return uri;
+        }
     }
     private JsonObject WorkspaceEdit(TranslationWorkspaceTransactionPlan plan)
     {
@@ -392,43 +470,60 @@ internal sealed class Rmf2LanguageServer
         var syntax = Rmf2ResourceReader.Analyze(new TranslationSource(LocalPath(uri), configuration ? Array.Empty<byte>() : Utf8.GetBytes(text)));
         var buffer = new Buffer(text, version, syntax); _buffers[uri] = buffer;
         IReadOnlyList<TranslationDiagnostic> catalogDiagnostics = Array.Empty<TranslationDiagnostic>();
-        try { catalogDiagnostics = Workspace(LocalPath(uri)).Validate().Diagnostics; }
+        string[] group = [uri];
+        try
+        {
+            string project = ProjectDirectory(LocalPath(uri));
+            group = BufferUris(project).ToArray();
+            catalogDiagnostics = Workspace(project, group).Validate().Diagnostics;
+        }
         catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException) {
             if (configuration) catalogDiagnostics = TranslationCompiler.CompileProject(new TranslationSource(LocalPath(uri), Utf8.GetBytes(text)), Array.Empty<TranslationSource>()).Diagnostics;
         }
-        PublishDiagnostics(catalogDiagnostics);
+        PublishDiagnostics(catalogDiagnostics, group);
     }
 
     private void RefreshDiagnostics()
     {
         if (_buffers.Count == 0) return;
-        // Open buffers are normally in one configured project.  Reuse the
-        // regular workspace validation path so a watched mounted source,
-        // deletion, or manifest change is reflected without requiring a
-        // synthetic textDocument/didChange notification.
-        string path = LocalPath(_buffers.Keys.First());
-        IReadOnlyList<TranslationDiagnostic> catalogDiagnostics = Array.Empty<TranslationDiagnostic>();
-        try { catalogDiagnostics = Workspace(path).Validate().Diagnostics; }
-        catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException)
+        var groups = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
+        var unresolved = new List<string>();
+        foreach (string uri in _buffers.Keys.Order(StringComparer.Ordinal))
         {
-            if (Path.GetFileName(path).Equals("runic.json", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                var buffer = _buffers.Values.First();
-                catalogDiagnostics = TranslationCompiler.CompileProject(new TranslationSource(path, Utf8.GetBytes(buffer.Text)), Array.Empty<TranslationSource>()).Diagnostics;
+                string project = ProjectDirectory(LocalPath(uri));
+                if (!groups.TryGetValue(project, out List<string>? group)) groups.Add(project, group = []);
+                group.Add(uri);
             }
+            catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { unresolved.Add(uri); }
         }
-        PublishDiagnostics(catalogDiagnostics);
+        foreach (var group in groups)
+        {
+            IReadOnlyList<TranslationDiagnostic> diagnostics = Array.Empty<TranslationDiagnostic>();
+            try { diagnostics = Workspace(group.Key, group.Value).Validate().Diagnostics; }
+            catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException)
+            {
+                string configUri = new Uri(Path.Combine(group.Key, "runic.json")).AbsoluteUri;
+                if (_buffers.TryGetValue(configUri, out Buffer? config))
+                    diagnostics = TranslationCompiler.CompileProject(new TranslationSource(LocalPath(configUri), Utf8.GetBytes(config.Text)), Array.Empty<TranslationSource>()).Diagnostics;
+            }
+            PublishDiagnostics(diagnostics, group.Value);
+        }
+        // An unresolved buffer has no project whose catalog diagnostics can be
+        // attributed safely. Publish only its own syntax diagnostics.
+        foreach (string uri in unresolved) PublishDiagnostics(Array.Empty<TranslationDiagnostic>(), [uri]);
     }
 
-    private void PublishDiagnostics(IReadOnlyList<TranslationDiagnostic> catalogDiagnostics)
+    private void PublishDiagnostics(IReadOnlyList<TranslationDiagnostic> catalogDiagnostics, IEnumerable<string> uris)
     {
-        foreach (var pair in _buffers)
+        foreach (string uri in uris)
         {
-            var current = pair.Value;
-            string path = LocalPath(pair.Key);
+            if (!_buffers.TryGetValue(uri, out Buffer? current)) continue;
+            string path = LocalPath(uri);
             var diagnostics = current.Syntax.Diagnostics.Concat(catalogDiagnostics.Where(d => Path.GetFullPath(d.Location.Path).Replace('\\', '/') == path))
                 .DistinctBy(d => (d.Id, d.Location.StartByte, d.Location.LengthBytes, d.Message));
-            Publish(pair.Key, new JsonArray(diagnostics.Select(d => (JsonNode)new JsonObject {
+            Publish(uri, new JsonArray(diagnostics.Select(d => (JsonNode)new JsonObject {
                 ["range"] = Range(current, d.Location), ["severity"] = d.Severity == TranslationDiagnosticSeverity.Error ? 1 : 2,
                 ["code"] = d.Id, ["source"] = "runic-rmf2", ["message"] = d.Message,
             }).ToArray()));

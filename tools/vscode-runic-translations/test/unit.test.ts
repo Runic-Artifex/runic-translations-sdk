@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { serverLaunch, sourceWatchRoots } from "../src/server.js";
@@ -33,16 +33,25 @@ test("local tool resolution respects a root manifest and preserves argument boun
     expect(serverLaunch(root, "dotnet", "server with spaces.dll").args).toEqual([join(root, "server with spaces.dll"), "lsp"]);
   } finally { rmSync(root, { recursive: true }); }
 });
-test("RMF2 source watchers include configured mounts outside the project directory", () => {
+test("RMF2 source watcher plans dedupe nested mounts and reject workspace escapes", () => {
   const root = mkdtempSync(join(tmpdir(), "runic-vscode-mounts-"));
+  const outside = mkdtempSync(join(tmpdir(), "runic-vscode-outside-"));
   try {
+    const canonicalRoot = realpathSync.native(root);
     mkdirSync(join(root, "translations"));
     mkdirSync(join(root, "feature"));
+    mkdirSync(join(root, "feature", "nested"));
+    if (process.platform !== "win32") symlinkSync(outside, join(root, "escaped-link"), "dir");
     writeFileSync(join(root, "translations", "runic.json"), JSON.stringify({
       schemaVersion: 1, catalog: "app", sourceLayout: "rmf2-v1",
-      sourceRoots: [{ path: "../feature", namespace: ["shop"] }],
+      sourceRoots: [
+        { path: "../feature", namespace: ["shop"] },
+        { path: "../feature/nested", namespace: ["nested"] },
+        { path: "../../outside-workspace", namespace: ["escape"] },
+        ...(process.platform === "win32" ? [] : [{ path: "../escaped-link", namespace: ["linked"] }]),
+      ],
     }));
-    expect(sourceWatchRoots(root)).toEqual([root, join(root, "feature")]);
+    expect(sourceWatchRoots(root)).toEqual([canonicalRoot]);
     mkdirSync(join(root, "new-feature"));
     writeFileSync(join(root, "translations", "runic.json"), JSON.stringify({
       schemaVersion: 1, catalog: "app", sourceLayout: "rmf2-v1",
@@ -51,11 +60,13 @@ test("RMF2 source watchers include configured mounts outside the project directo
     }));
     writeFileSync(join(root, "new-feature", "de.rmf2"), "title = Neu\n");
     // The extension refreshes its manually forwarded subscriptions from this
-    // stable plan after the manifest event; a subsequent source event must be
-    // observable under the replacement mount.
-    expect(sourceWatchRoots(root)).toEqual([root, join(root, "new-feature")]);
-    expect(sourceWatchRoots(root).some(path => path === join(root, "new-feature"))).toBe(true);
-  } finally { rmSync(root, { recursive: true }); }
+    // stable plan after the manifest event. The one containing watcher observes
+    // the replacement mount without adding a duplicate recursive subscription.
+    expect(sourceWatchRoots(root)).toEqual([canonicalRoot]);
+  } finally {
+    rmSync(root, { recursive: true });
+    rmSync(outside, { recursive: true });
+  }
 });
 test("refreshed source watchers forward events and dispose replaced subscriptions", () => {
   let roots = ["old"];

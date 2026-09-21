@@ -22,6 +22,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 migration previews and preserves backups", Migration);
         runner.Add("RMF2 LSP negotiates Unicode positions and returns versioned rename edits", Lsp);
         runner.Add("RMF2 LSP rescans watched files and configuration with unsaved overlays", LspWatchRescan);
+        runner.Add("RMF2 LSP isolates watched diagnostics by project", LspWatchProjectIsolation);
     }
     private const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en","sourceLayout":"rmf2-v1"}""";
     private static void PaymentExample()
@@ -429,6 +430,98 @@ internal static class Rmf2IntegrationTests
         WaitForPublication(beforeConfiguration);
         JsonObject configured = LatestDiagnostics();
         Assert.Equal(initialMessage, configured["params"]!["diagnostics"]![0]!["message"]!.GetValue<string>());
+
+        Send("shutdown", new JsonObject(), 5); Send("exit", new JsonObject()); process.StandardInput.Close();
+        if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
+        Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
+    }
+
+    private static void LspWatchProjectIsolation()
+    {
+        using TemporaryDirectory temporary = new();
+        string one = temporary.Resolve("one"), two = temporary.Resolve("two");
+        Directory.CreateDirectory(one); Directory.CreateDirectory(two);
+        File.WriteAllText(Path.Combine(one, "runic.json"),
+            "{\"schemaVersion\":1,\"catalog\":\"one\",\"code\":{\"namespace\":\"Example\",\"className\":\"OneText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"rmf2-v1\",\"markup\":{\"slots\":{\"x\":{\"retry\":{\"min\":1,\"max\":1}}}}}");
+        File.WriteAllText(Path.Combine(two, "runic.json"),
+            "{\"schemaVersion\":1,\"catalog\":\"two\",\"code\":{\"namespace\":\"Example\",\"className\":\"TwoText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"rmf2-v1\",\"markup\":{\"slots\":{\"y\":{\"confirm\":{\"min\":1,\"max\":1}}}}}");
+        string onePath = Path.Combine(one, "en.rmf2"), twoPath = Path.Combine(two, "en.rmf2");
+        File.WriteAllText(onePath, "x = Disk one\n"); File.WriteAllText(twoPath, "y = Disk two\n");
+        string oneUri = new Uri(onePath).AbsoluteUri, twoUri = new Uri(twoPath).AbsoluteUri;
+
+        var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
+        using var process = Process.Start(start)!;
+        var frames = new List<JsonNode>(); var frameGate = new object();
+        var output = Task.Run(() => {
+            var stream = process.StandardOutput.BaseStream;
+            while (true)
+            {
+                var header = new List<byte>(); int value;
+                while ((value = stream.ReadByte()) >= 0) { header.Add((byte)value); if (header.Count >= 4 && header.TakeLast(4).SequenceEqual(new byte[] { 13, 10, 13, 10 })) break; }
+                if (value < 0) return;
+                int size = int.Parse(Encoding.ASCII.GetString(header.ToArray()).Substring(16).Trim(), System.Globalization.CultureInfo.InvariantCulture);
+                byte[] payload = new byte[size]; stream.ReadExactly(payload);
+                lock (frameGate) { frames.Add(JsonNode.Parse(payload)!); System.Threading.Monitor.PulseAll(frameGate); }
+            }
+        });
+        var errors = process.StandardError.ReadToEndAsync();
+        void Send(string method, JsonObject args, int? id = null)
+        {
+            var request = new JsonObject { ["jsonrpc"] = "2.0", ["method"] = method, ["params"] = args };
+            if (id.HasValue) request["id"] = id.Value;
+            string json = request.ToJsonString(); process.StandardInput.Write("Content-Length: " + Encoding.UTF8.GetByteCount(json) + "\r\n\r\n" + json); process.StandardInput.Flush();
+            if (id.HasValue)
+            {
+                var deadline = Stopwatch.StartNew();
+                lock (frameGate) while (!frames.Any(frame => frame["id"]?.ToString() == id.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+                {
+                    if (deadline.Elapsed.TotalSeconds > 10) throw new TimeoutException("LSP response was not received.");
+                    System.Threading.Monitor.Wait(frameGate, 100);
+                }
+            }
+        }
+        string[] Messages(string uri)
+        {
+            lock (frameGate)
+            {
+                JsonNode publication = frames.Last(frame => frame["method"]?.ToString() == "textDocument/publishDiagnostics" &&
+                    frame["params"]?["uri"]?.GetValue<string>() == uri);
+                return publication["params"]!["diagnostics"]!.AsArray()
+                    .Select(diagnostic => diagnostic!["message"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray();
+            }
+        }
+        void AssertIsolated(string[] expectedOne, string[] expectedTwo, string operation)
+        {
+            string[] actualOne = Messages(oneUri), actualTwo = Messages(twoUri);
+            Assert.Equal(string.Join('|', expectedOne), string.Join('|', actualOne), operation + " changed or cleared project-one diagnostics.");
+            Assert.Equal(string.Join('|', expectedTwo), string.Join('|', actualTwo), operation + " changed or cleared project-two diagnostics.");
+        }
+
+        Send("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Resolve(".")).AbsoluteUri, ["capabilities"] = new JsonObject() }, 1);
+        Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri, ["version"] = 1, ["text"] = "x = Unsaved one\n" } });
+        Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri, ["version"] = 1, ["text"] = "y = Unsaved two\n" } });
+        // A later didOpen revision may intentionally suppress the earlier
+        // publication. Establish a complete grouped baseline explicitly.
+        Send("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray() });
+        Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri } }, 2);
+        string[] initialOne = Messages(oneUri), initialTwo = Messages(twoUri);
+        Assert.True(initialOne.Length > 0 && initialTwo.Length > 0, "Both projects must begin with distinct catalog diagnostics.");
+        Assert.False(initialOne.SequenceEqual(initialTwo), "The two-project fixture did not produce distinguishable diagnostics.");
+
+        // Valid disk changes must not replace either unsaved overlay during a
+        // watched-file refresh, and one project's diagnostics must never be
+        // published as (or used to clear) the other project's diagnostics.
+        File.WriteAllText(onePath, "x = {#action ref=retry}One{/action}\n");
+        File.WriteAllText(twoPath, "y = {#action ref=confirm}Two{/action}\n");
+        Send("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray(
+            new JsonObject { ["uri"] = oneUri, ["type"] = 2 }, new JsonObject { ["uri"] = twoUri, ["type"] = 2 }) });
+        Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri } }, 3);
+        AssertIsolated(initialOne, initialTwo, "watched-file refresh");
+
+        Send("workspace/didChangeConfiguration", new JsonObject { ["settings"] = new JsonObject { ["runicTranslations"] = new JsonObject() } });
+        Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri } }, 4);
+        AssertIsolated(initialOne, initialTwo, "configuration refresh");
 
         Send("shutdown", new JsonObject(), 5); Send("exit", new JsonObject()); process.StandardInput.Close();
         if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
