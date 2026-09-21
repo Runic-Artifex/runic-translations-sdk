@@ -7,8 +7,8 @@ using System.Text.Json;
 
 namespace Runic.Translations.Compiler.Generation;
 
-// Staged ESM backend over the typed v5 carrier. The public/default renderer is
-// deliberately untouched so its v4 bytes and Vite contract remain stable.
+// Profile-selected ESM backend over the typed v5 carrier. The default renderer
+// remains untouched so omitted-profile v4 bytes and Vite contracts stay stable.
 internal static class Rmf2EsmOutputRendererV5
 {
     internal static IReadOnlyList<TranslationGeneratedOutput> Render(Rmf2ProjectV5 project)

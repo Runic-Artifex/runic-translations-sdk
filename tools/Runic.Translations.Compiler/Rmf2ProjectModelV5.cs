@@ -5,9 +5,14 @@ using System.Text;
 
 namespace Runic.Translations.Compiler;
 
-// Profile selection is explicit while the CLI and public compiler continue to
-// use the legacy carrier. A v5 result can never masquerade as a v4 catalog.
+// Profile selection is explicit. Coordinated hosts consume the typed v5
+// carrier directly; a v5 result can never masquerade as a v4 catalog.
 internal enum TranslationProjectProfile { Current, Rmf2ExecutionV2 }
+internal sealed record TranslationProjectProfileSelection(TranslationProjectProfile Profile,
+    IReadOnlyList<TranslationDiagnostic> Diagnostics)
+{
+    internal bool Success => !Diagnostics.Any(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
+}
 internal sealed record TranslationProfileCompilation(TranslationProjectProfile Profile,
     TranslationCompilation? Current, Rmf2ProjectCompilationV5? Rmf2)
 {
@@ -43,6 +48,14 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
     internal const string Profile = "rmf2-execution-v2";
     internal const int MessageGrammarVersion = 5;
     internal const int RuntimeAbiVersion = 2;
+}
+
+internal static class Rmf2ProjectV5EmissionEligibility
+{
+    internal const string DiagnosticId = "RTR0009";
+    internal const string Message = "The effective default locale defines no canonical keys; RMF2 v5 generated runtime catalogs cannot be empty.";
+    internal static bool CanEmit(Rmf2ProjectV5 project) =>
+        (project ?? throw new ArgumentNullException(nameof(project))).CanonicalMessages.Count != 0;
 }
 
 // Versioned, injective mapping over NFC names; no transliteration, keyword table,

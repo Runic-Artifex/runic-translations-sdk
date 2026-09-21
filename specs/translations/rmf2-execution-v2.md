@@ -6,11 +6,12 @@ remain version **1**. The [finite profile table](rmf2-execution-v2.json) is
 normative together with this document. The LDML 48.2 baseline and existing locale
 capability table remain pinned.
 
-The project compiler, CLI, generated code and external-pack readers continue to
-use `rmf2-execution-v1` and artifact v4. The additive .NET `CompiledRmf2Message`
-constructors execute explicitly lowered v5 models; they do not accept serialized
-v5 artifacts or change project emission. A runtime must explicitly recognize v5
-before accepting its artifacts;
+An `rmf2-v1` project explicitly selects this profile with
+`executionProfile: "rmf2-execution-v2"`. Profile-aware CLI, MSBuild/source
+generator, and Vite hosts then emit typed C#/.NET and ESM artifacts from the v5
+model. Omitting the selector retains `rmf2-execution-v1`, grammar/artifact v4,
+and ESM ABI 3 byte-for-byte. A runtime must explicitly recognize v5 before
+accepting its artifacts;
 changing a version number on a v4 tree is not a conversion.
 
 ## Values, declarations and expressions
@@ -50,7 +51,7 @@ options: `.input {$n :number maximumFractionDigits=$n}` and
 Violations report `RTR0067`, `Duplicate declaration 'name'.`, at the later
 binding's name span (or the input's own name span for a self-option). This shared
 data-model rule applies to both current v4 and
-staged v5 compilation. References to a local before its declaration, including
+v5 compilation. References to a local before its declaration, including
 cycles, remain data-model errors as well.
 
 A local holds a **resolved underlying typed value**, independently of its
@@ -247,7 +248,7 @@ coefficient one larger than the maximum are rejected. Runtime internal decimal
 carriers and pack readers must preserve the same exact value; converting a
 canonical string through a binary float is not a valid exact-key comparison.
 
-## Serialized boundary and staged implementation
+## Serialized boundary and activated implementation
 
 [message-ast-v5.schema.json](schemas/message-ast-v5.schema.json) defines normalized
 messages. [locale-artifact-v5.schema.json](schemas/locale-artifact-v5.schema.json)
@@ -266,11 +267,11 @@ computed pinned CLDR category; it does not execute declarations or format text.
 Limits are 32 caller inputs (or a lower configured limit), 256 declarations,
 16 selectors, 256 variants, and 4096 nodes per pattern, plus existing source limits.
 
-The dependent generation and pack-loader work must integrate typed evaluation,
-exact decimal/CLDR parity, v5 project and markup linking, caller fingerprint
-versioning, code generation, pack semantic validation and explicit version
-dispatch. It must retain v4 readers and constructors and must not erase v5 data
-through the v4 AST adapter. Only that integrated work may change default emission.
+The typed evaluator, exact decimal/CLDR behavior, v5 project and markup linker,
+caller fingerprint, C# and ESM generators, strict pack validation, and explicit
+version dispatch are implemented together. V4 readers and constructors remain
+available and v5 data never passes through the v4 AST adapter. Activation is
+explicit; it does not change emission for a project that omits the selector.
 
 ### Additive .NET runtime boundary
 
@@ -312,7 +313,7 @@ number-literal annotations retain their distinct representations. Existing
 renderers ignore the new annotation collection. Runtime markup constructors
 require balanced events and bound option references but assume project contract
 linking has already resolved element identities and validated markup option and
-slot schemas. The [staged project linker](rmf2-project-v5.md) now performs that
+slot schemas. The [v5 project linker](rmf2-project-v5.md) performs that
 validation without converting v5 messages through the v4 model.
 
 `Rmf2RuntimeAbiVersion` is **2**; legacy `RuntimeAbiVersion = 1` and
@@ -323,14 +324,16 @@ accept requirements 1 and 2. A generated constant that aliases the runtime's
 constant is not a compatibility check. Existing v4 emission embeds its own
 literal requirement **1**; its generator accepts the known supporting RMF2
 runtime markers 1 and 2, but rejects missing or unknown markers. The separate
-legacy runtime ABI check still requires exactly 1. This does not activate v5
-emission.
+legacy runtime ABI check still requires exactly 1. The ABI marker alone does not
+activate v5 emission; profile-aware hosts must read the project selector and
+choose the v5 carrier explicitly.
 
-The typed C# and ESM backends and strict .NET/ESM v5 pack readers are available
-through internal staged entry points. Default compiler emission, public project
-profile selection, and Vite manifest-v3 dispatch remain deliberately dependent
-work. The machine profile's project-level executable backend list therefore
-remains empty until those activation changes move together.
+The source generator, CLI, MSBuild integration, and Vite plugin perform that
+dispatch for `executionProfile: "rmf2-execution-v2"`. Their activated backends
+are .NET/C# and ESM, including strict v5 pack readers and web manifest v3.
+Omission continues to select v4. C++ and standalone v5 TypeScript/template
+contracts remain unsupported and are refused rather than emitted under a v4
+contract.
 
 The [golden corpus](corpus/semantic-v5/README.md) is a schema/semantic fixture, not
 an activated locale pack. Test-only JsonSchema.Net validation uses Draft 2020-12

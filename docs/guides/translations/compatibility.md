@@ -26,5 +26,13 @@ Use one exact release for the `Runic.Translations.*` NuGet packages, the
 release changes; generated artifacts are not a hand-authored compatibility
 surface.
 
+RMF2 has an explicit dual contract within project schema 1. With
+`sourceLayout: "rmf2-v1"` and no execution selector, hosts retain grammar and
+artifact 4, .NET RMF2 ABI requirement 1, ESM ABI 3, and web manifest v2. Adding
+`executionProfile: "rmf2-execution-v2"` selects grammar/artifact 5, .NET RMF2 ABI
+2, ESM ABI 4, and web manifest v3. Hosts reject unknown profiles and do not infer
+the newer contract from file extensions. C++ and standalone v5
+TypeScript/template contracts remain unsupported.
+
 Preview releases may make breaking changes when release notes identify the
 affected contract. Stable releases follow SemVer for public package APIs.

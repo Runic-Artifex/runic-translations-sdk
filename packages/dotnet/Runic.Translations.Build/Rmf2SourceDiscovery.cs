@@ -13,6 +13,8 @@ public sealed class Rmf2SourceDiscovery : ITask
     public ITaskItem[] Projects { get; set; } = Array.Empty<ITaskItem>();
     [Output]
     public string[] Sources { get; set; } = Array.Empty<string>();
+    [Output]
+    public string ExecutionProfile { get; set; } = string.Empty;
     public IBuildEngine BuildEngine { get; set; } = null!;
     public ITaskHost HostObject { get; set; } = null!;
     public bool Execute()
@@ -25,6 +27,8 @@ public sealed class Rmf2SourceDiscovery : ITask
                 string config = Path.GetFullPath(project.ItemSpec), root = Path.GetDirectoryName(config)!;
                 if (new FileInfo(config).Length > 8 * 1024 * 1024) throw new IOException("Translation project exceeds byte limit.");
                 using var json = JsonDocument.Parse(File.ReadAllBytes(config));
+                if (json.RootElement.TryGetProperty("executionProfile", out JsonElement profile) && profile.ValueKind == JsonValueKind.String)
+                    ExecutionProfile = profile.GetString() ?? string.Empty;
                 if (json.RootElement.TryGetProperty("sourceLayout", out var layout) && layout.GetString() == "rmf2-v1" && json.RootElement.TryGetProperty("sourceRoots", out var mounts))
                     foreach (JsonElement mount in mounts.EnumerateArray()) Discover(Path.GetFullPath(mount.GetProperty("path").GetString()!, root), files);
                 else Discover(root, files);

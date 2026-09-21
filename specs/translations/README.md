@@ -14,9 +14,9 @@ diagnostic identities.
 | Authoring messages | MessageFormat 2 `.mf2` files |
 | Message grammar | MF2 with the documented Runic v1 profile |
 | Normalized message AST | 2 execution AST; 3 MF2-subset interchange AST |
-| Resolved locale artifact | 1 (grammar 1), locale-pack-v2 (grammar 2), RMF2 artifact 4, and staged RMF2 artifact 5 |
-| Runtime/generated-code ABI | 1 |
-| ESM ABI | 3 (shipping), 4 (staged RMF2 execution-v2) |
+| Resolved locale artifact | 1 (grammar 1), locale-pack-v2 (grammar 2), RMF2 artifact 4 by omission, and RMF2 artifact 5 with `rmf2-execution-v2` |
+| Runtime/generated-code ABI | Legacy 1; RMF2 ABI 1 by omission and 2 with `rmf2-execution-v2` |
+| ESM ABI | 3 by omission; 4 with `rmf2-execution-v2` |
 | Transport contract | 1 |
 
 Package versions are independent from these integers. New cross-runtime schemas
@@ -87,10 +87,10 @@ RMF2 fingerprints include caller input/slot contracts, markup registries and eff
 locale mappings; source selector trees and physical file organization are excluded.
 
 The additive [semantic v5 foundation](rmf2-execution-v2.md) and
-[v2 option table](rmf2-execution-v2.json) specify the next typed model. Its v5
-schemas, compiler IR, .NET backend, and ESM ABI 4 backend are staged
-independently; public project output and installed Vite dispatch continue to use
-the v1/v4 contract until coordinated profile activation.
-The [staged v5 project linker](rmf2-project-v5.md) provides an explicit typed
+[v2 option table](rmf2-execution-v2.json) specify the typed model. For an
+`rmf2-v1` project, `executionProfile: "rmf2-execution-v2"` activates typed v5
+C#/.NET and ESM generation in profile-aware hosts; omission preserves the v1/v4
+contract. The low-level public v4 compiler carrier remains separate.
+The [v5 project linker](rmf2-project-v5.md) provides an explicit typed
 compiler profile, cross-locale caller/markup contracts, separate compatibility
 and freshness hashes, and the generated-name mapping for the dependent backends.

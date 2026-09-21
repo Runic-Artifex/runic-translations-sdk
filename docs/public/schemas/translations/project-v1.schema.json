@@ -23,6 +23,10 @@
       ],
       "description": "locale-toml keeps TOML locale files beside runic.json; rmf2-v1 discovers grouped .rmf2 files with directory namespaces. Omit for legacy MF2 files."
     },
+    "executionProfile": {
+      "const": "rmf2-execution-v2",
+      "description": "For an rmf2-v1 project, explicitly selects typed grammar 5/runtime ABI 2 output for the .NET and ESM backends. Omit to retain grammar/artifact v4."
+    },
     "sourceRoots": {
       "type": "array",
       "minItems": 1,
@@ -307,6 +311,11 @@
           {
             "required": [
               "markup"
+            ]
+          },
+          {
+            "required": [
+              "executionProfile"
             ]
           }
         ]

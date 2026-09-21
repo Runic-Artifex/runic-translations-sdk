@@ -239,7 +239,7 @@ internal static class Program
         if (templateManifest) result |= ToolEmission.TemplateManifest;
         if (esm) result |= ToolEmission.Esm;
         if (cpp) result |= ToolEmission.Cpp;
-        return result == ToolEmission.None ? ToolEmission.All : result;
+        return result;
     }
 
     private static ToolOperationResult Usage(string message)
@@ -339,6 +339,14 @@ internal static class Program
         }
 
         CompilerInputs inputs = InputFiles.ReadProject(invocation.ProjectPath!);
+        if (invocation.Command is ToolCommand.Validate or ToolCommand.Generate or ToolCommand.Verify)
+        {
+            TranslationProjectProfileSelection selection = TranslationCompiler.SelectProjectProfile(inputs.Project);
+            WriteDiagnostics(selection.Diagnostics, result);
+            if (!selection.Success) return DiagnosticFailure;
+            if (selection.Profile == TranslationProjectProfile.Rmf2ExecutionV2)
+                return RunRmf2V5(invocation, inputs, result);
+        }
         TranslationCompilation compilation = TranslationCompiler.CompileProject(inputs.Project, inputs.Messages);
         WriteDiagnostics(compilation.Diagnostics, result);
         if (!compilation.Success)
@@ -397,6 +405,46 @@ internal static class Program
         return Success;
     }
 
+    private static int RunRmf2V5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result)
+    {
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages);
+        WriteDiagnostics(compilation.Diagnostics, result);
+        if (!compilation.Success || compilation.Project is null) return DiagnosticFailure;
+        if (invocation.Command == ToolCommand.Validate)
+        {
+            result.WriteOutputLine($"validated 1 project(s) and {inputs.Messages.Count} source document(s).");
+            return Success;
+        }
+
+        if (!Rmf2ProjectV5EmissionEligibility.CanEmit(compilation.Project))
+        {
+            WriteDiagnostics([new TranslationDiagnostic(
+                Rmf2ProjectV5EmissionEligibility.DiagnosticId,
+                TranslationDiagnosticSeverity.Error,
+                Rmf2ProjectV5EmissionEligibility.Message,
+                new TextSourceLocation(inputs.Project.Path, 0, 0, 1, 1, 1, 1))], result);
+            return DiagnosticFailure;
+        }
+
+        IReadOnlyList<ToolArtifact> artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission);
+        if (invocation.Command == ToolCommand.Generate)
+        {
+            ArtifactFiles.WriteAtomically(invocation.OutputPath!, artifacts);
+            result.WriteOutputLine($"generated {artifacts.Count} artifact(s).");
+            return Success;
+        }
+
+        IReadOnlyList<string> differences = ArtifactFiles.Verify(invocation.OutputPath!, artifacts);
+        if (differences.Count == 0)
+        {
+            result.WriteOutputLine($"verified {artifacts.Count} artifact(s).");
+            return Success;
+        }
+        for (int index = 0; index < differences.Count; index++)
+            result.AddDiagnostic("RCLI9011", "verify", $"verify: {differences[index]}", CommandDiagnosticSeverity.Error);
+        return DiagnosticFailure;
+    }
+
     private static void WriteDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics, ToolOperationResult result)
     {
         for (int index = 0; index < diagnostics.Count; index++)
@@ -430,7 +478,7 @@ internal static class Program
         writer.WriteLine("Framework transport uses --runic-output human|json; --output remains the tool destination option.");
         writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --no-starter.");
         writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest --emit-esm --emit-cpp.");
-        writer.WriteLine("With no emit switches, generate and verify use all output groups.");
+        writer.WriteLine("With no emit switches, generate and verify use the selected execution profile's default output groups.");
         writer.WriteLine("Exit codes: 0 success; 1 validation or verification diagnostics; 2 invocation or operational failure.");
     }
 }

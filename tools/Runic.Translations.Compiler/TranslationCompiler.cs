@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -9,7 +10,7 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceLayout", "sourceRoots", "markup" };
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceLayout", "executionProfile", "sourceRoots", "markup" };
     private static readonly string[] ManifestMembers = { "$schema", "schemaVersion", "catalog", "code", "defaultLocale", "locales", "layers", "validation", "runtime", "outputs" };
     private static readonly string[] DocumentMembers = { "$schema", "schemaVersion", "catalog", "locale", "layer", "resources" };
     private static readonly string[] LeafMembers = { "$value", "$description", "$placeholders", "$since", "$deprecated", "$tags" };
@@ -180,6 +181,16 @@ public static partial class TranslationCompiler
         if (manifest is null)
             return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
 
+        TranslationProjectProfile profile = ReadProjectProfile(parsed.Root!, project, diagnostics);
+        if (diagnostics.Items.Any(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error))
+            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
+        if (profile == TranslationProjectProfile.Rmf2ExecutionV2)
+        {
+            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error,
+                "rmf2-execution-v2 requires a profile-aware compiler host and cannot be represented by the v4 catalog carrier.",
+                project, parsed.Root!.Property("executionProfile")!.Value.Span);
+            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
+        }
         JsonProperty? layoutProperty = parsed.Root!.Property("sourceLayout");
         bool rmf2 = layoutProperty?.Value.Text == "rmf2-v1";
         bool toml = layoutProperty?.Value.Text == "locale-toml";

@@ -18,6 +18,19 @@ The remaining proposal work is listed below.
 }
 ```
 
+Typed execution is a separate, explicit opt-in on the same resource layout:
+
+```json
+{
+  "schemaVersion": 1,
+  "sourceLayout": "rmf2-v1",
+  "executionProfile": "rmf2-execution-v2",
+  "catalog": "app",
+  "code": { "namespace": "Example", "className": "AppText" },
+  "baseLocale": "en"
+}
+```
+
 ```rmf2
 # Checkout copy
 checkout {
@@ -253,16 +266,18 @@ Their READMEs describe configuration, supported refactor scope and host checks.
 
 ## Versions and execution limits
 
-RMF2 uses resource syntax **1**, execution profile **rmf2-execution-v1**, markup
-contract/renderer ABI **1**, and normalized AST/resolved locale artifact **4**.
-The additive .NET `Rmf2RuntimeAbiVersion` marker coexists with legacy runtime ABI
-1; legacy grammar/AST/pack 2 stays unchanged. Generated ESM retains its existing
-module ABI and exports the extra RMF2 marker. Artifact 4 includes the trusted
-markup registry, slot requirements, and effective content locales. External pack
-loading checks these before activation; payloads never register UI implementations.
-`BuildRmf2LocalePacks` is the tooling facade; `BuildLocalePackV2` remains version 2.
-Generated dynamic modules retain the historical `decodeLocalePackV2` function name
-but check their catalog's actual artifact version.
+RMF2 resource syntax and markup contract/renderer ABI remain version **1**. When
+`executionProfile` is omitted, profile **rmf2-execution-v1** uses normalized AST
+and resolved locale artifact **4**, .NET RMF2 ABI requirement **1**, and ESM ABI
+**3**. Explicit **rmf2-execution-v2** uses grammar/artifact **5**, .NET RMF2 ABI
+requirement **2**, and ESM ABI **4**. The generator, CLI/MSBuild integration, and
+Vite plugin dispatch from this selector; they never infer v5 from `.rmf2` files.
+
+Artifacts 4 and 5 include the trusted markup registry, slot requirements, and
+effective content locales. External pack loading checks these before activation;
+payloads never register UI implementations. The public tooling
+`BuildRmf2LocalePacks` facade remains v4, while profile-aware build and CLI hosts
+own v5 emission. `BuildLocalePackV2` remains version 2.
 
 The named MF2 baseline is LDML **48.2**; the implemented execution subset is
 explicit in [rmf2-execution-v1.json](../../../specs/translations/rmf2-execution-v1.json).
@@ -289,17 +304,17 @@ An `.input` can use its own variable as the operand but not within its function
 options. For example, `.input {$s :string select=$s}` reports the same Duplicate
 Declaration diagnostic at the input binding's name.
 
-Remaining limits are explicit: variable-valued formatter options, expression
-annotations, formatted literal operands/locals and quoted wildcard execution are
-rejected by the execution profile. C++ RMF2, terms and group-atomic fallback are
-unsupported. Arbitrary rich XLIFF is outside the supported text-profile
+When the execution selector is omitted, variable-valued formatter options,
+expression annotations, formatted literal operands/locals, and quoted wildcard
+execution remain v1 limitations. Execution-v2 implements those typed semantics.
+C++ RMF2, terms, and group-atomic fallback remain unsupported in both profiles.
+Arbitrary rich XLIFF is outside the supported text-profile
 scope; exports report semantic loss. Application-language call-site refactors
 are delegated or refused, never implemented as blind text replacement.
 
 See [validation and measurements](rmf2-validation.md) for reproducible checks
 and the recorded native Windows host results.
 
-The additive [semantic v5 foundation](rmf2-semantic-v5.md) defines typed locals,
-literal formatting, dynamic options and precise key selection for the next
-execution profile. Its compiler IR and schemas are available for integration;
-the current project output and runtime limits above remain in force.
+The additive [semantic v5 profile](rmf2-semantic-v5.md) defines typed locals,
+literal formatting, dynamic options, and precise key selection. Select it
+explicitly for .NET/C# and ESM output; omission retains the v1/v4 contract.

@@ -18,6 +18,8 @@ internal static class BuildIntegrationTests
         runner.Add("build discovers one conventional MF2 translation project", ConventionalProjectIsDiscovered);
         runner.Add("build generates only below the isolated intermediate root", GenerationIsIsolated);
         runner.Add("build generation is incremental and input-sensitive", GenerationIsIncremental);
+        runner.Add("build profile changes regenerate and reconcile v4 and v5 artifacts", ExecutionProfileChangesReconcileArtifacts);
+        runner.Add("build v5 emit properties select exact supported groups and refuse unsupported groups", V5EmitFlagsAreExact);
         runner.Add("build regenerates an artifact missing despite a current stamp", MissingArtifactInvalidatesStamp);
         runner.Add("build emit flags select exact non-CSharp artifact groups", EmitFlagsSelectOutputs);
         runner.Add("build fails fast when the configured tool is missing", MissingToolFailsFast);
@@ -205,6 +207,119 @@ internal static class BuildIntegrationTests
         Assert.True(File.GetLastWriteTimeUtc(stamp) > firstWrite, "A changed input did not rerun generation.");
     }
 
+    private static void ExecutionProfileChangesReconcileArtifacts()
+    {
+        using TemporaryDirectory temporary = CreateConsumer(
+            generationEnabled: true,
+            extraProperties: """
+                <TranslationsEmitJson>false</TranslationsEmitJson>
+                <TranslationsEmitTypeScript>false</TranslationsEmitTypeScript>
+                <TranslationsEmitTemplateManifest>false</TranslationsEmitTemplateManifest>
+                <TranslationsEmitEsm>false</TranslationsEmitEsm>
+                <TranslationsEmitCpp>false</TranslationsEmitCpp>
+                """);
+        // Simulate an inherited repository/CI preference. The consumer's explicit
+        // false values above request profile defaults rather than this ambient group.
+        File.WriteAllText(temporary.Resolve("Directory.Build.props"),
+            "<Project><PropertyGroup><TranslationsEmitTypeScript>true</TranslationsEmitTypeScript></PropertyGroup></Project>\n",
+            new UTF8Encoding(false));
+        Directory.Delete(temporary.Resolve("translations", "en"), recursive: true);
+        Directory.CreateDirectory(temporary.Resolve("feature"));
+        string configPath = temporary.Resolve("translations", "runic.json");
+        const string current = "{\"schemaVersion\":1,\"catalog\":\"minimal\",\"code\":{\"namespace\":\"Example\",\"className\":\"MinimalText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}\n";
+        File.WriteAllText(configPath, current, new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("feature", "en.rmf2"), "greeting = Hello\n", new UTF8Encoding(false));
+
+        ProcessResult first = Build(temporary);
+        Assert.Equal(0, first.ExitCode, first.Combined);
+        string output = FindGeneratedDirectory(temporary, "minimal.en.locale-v4.json");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.esm", "web-module-manifest-v2.json")), "default RMF2 build omitted v4 web manifest");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.translations-v1.d.ts")), "default RMF2 build omitted v4 TypeScript contract");
+        Assert.True(Directory.EnumerateFiles(output, "minimal.template-manifest-*.json", SearchOption.TopDirectoryOnly).Any(), "default RMF2 build omitted v4 template manifest");
+
+        Thread.Sleep(1_200);
+        string activated = current.Replace("\"sourceLayout\":\"rmf2-v1\"",
+            "\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal);
+        File.WriteAllText(configPath, activated, new UTF8Encoding(false));
+        ProcessResult second = Build(temporary, noRestore: true);
+        Assert.Equal(0, second.ExitCode, second.Combined);
+        Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v5.json")), "profile change did not generate v5 locale artifact");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.asset-manifest-v1.json")), "profile change did not generate v5 asset manifest");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.esm-v5", "web-module-manifest-v3.json")), "profile change did not generate v5 web manifest");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.translations-v1.d.ts")), "v5 default emitted the v4 TypeScript edge contract");
+        Assert.False(Directory.EnumerateFiles(output, "minimal.template-manifest-*.json", SearchOption.TopDirectoryOnly).Any(), "v5 default emitted a v4 template manifest");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.en.locale-v4.json")), "profile change retained stale v4 locale artifact");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.esm", "web-module-manifest-v2.json")), "profile change retained stale v4 ESM manifest");
+
+        string german = temporary.Resolve("feature", "de.rmf2");
+        File.WriteAllText(german, "greeting = Hallo\n", new UTF8Encoding(false));
+        File.SetLastWriteTimeUtc(german, DateTime.UtcNow.AddMinutes(-1));
+        ProcessResult added = Build(temporary, noRestore: true);
+        Assert.Equal(0, added.ExitCode, added.Combined);
+        Assert.True(File.Exists(Path.Combine(output, "minimal.de.locale-v5.json")), "mounted v5 membership addition did not regenerate");
+        File.Delete(german);
+        ProcessResult removed = Build(temporary, noRestore: true);
+        Assert.Equal(0, removed.ExitCode, removed.Combined);
+        Assert.False(File.Exists(Path.Combine(output, "minimal.de.locale-v5.json")), "mounted v5 membership deletion left stale output");
+
+        Thread.Sleep(1_200);
+        File.WriteAllText(configPath, current, new UTF8Encoding(false));
+        ProcessResult third = Build(temporary, noRestore: true);
+        Assert.Equal(0, third.ExitCode, third.Combined);
+        Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v4.json")), "profile removal did not restore v4 output");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.translations-v1.d.ts")), "profile removal did not restore v4 TypeScript contract");
+        Assert.True(Directory.EnumerateFiles(output, "minimal.template-manifest-*.json", SearchOption.TopDirectoryOnly).Any(), "profile removal did not restore v4 template manifest");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.en.locale-v5.json")), "profile removal retained stale v5 locale artifact");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.esm-v5", "web-module-manifest-v3.json")), "profile removal retained stale v5 ESM manifest");
+    }
+
+    private static void V5EmitFlagsAreExact()
+    {
+        foreach ((string Property, string Expected) in new[]
+        {
+            ("<TranslationsEmitJson>true</TranslationsEmitJson>", "minimal.asset-manifest-v1.json|minimal.en.locale-v5.json"),
+            ("<TranslationsEmitEsm>true</TranslationsEmitEsm>", "esm"),
+        })
+        {
+            using TemporaryDirectory temporary = CreateV5Consumer(Property);
+            ProcessResult result = Build(temporary);
+            Assert.Equal(0, result.ExitCode, result.Combined);
+            string output = FindGenerationRoot(temporary);
+            string[] artifacts = GeneratedArtifacts(output);
+            if (Expected == "esm")
+                Assert.True(artifacts.Length > 0 && artifacts.All(static path => path.StartsWith("minimal.esm-v5/", StringComparison.Ordinal)),
+                    "TranslationsEmitEsm produced another v5 output group");
+            else Assert.Equal(Expected, string.Join('|', artifacts));
+        }
+
+        foreach ((string Property, string Switch) in new[]
+        {
+            ("<TranslationsEmitTypeScript>true</TranslationsEmitTypeScript>", "--emit-typescript"),
+            ("<TranslationsEmitTemplateManifest>true</TranslationsEmitTemplateManifest>", "--emit-template-manifest"),
+            ("<TranslationsEmitCpp>true</TranslationsEmitCpp>", "--emit-cpp"),
+        })
+        {
+            using TemporaryDirectory temporary = CreateV5Consumer(Property);
+            ProcessResult result = Build(temporary);
+            Assert.True(result.ExitCode != 0, "MSBuild accepted unsupported v5 switch " + Switch);
+            Assert.Contains("RTR0065", result.Combined);
+            Assert.Contains(Switch, result.Combined);
+            Assert.False(Directory.EnumerateFiles(temporary.Resolve("artifacts", "obj"), ".generate.stamp", SearchOption.AllDirectories).Any(),
+                "MSBuild stamped unsupported v5 selection " + Switch);
+        }
+    }
+
+    private static TemporaryDirectory CreateV5Consumer(string property)
+    {
+        TemporaryDirectory temporary = CreateConsumer(generationEnabled: false, extraProperties: property);
+        Directory.Delete(temporary.Resolve("translations", "en"), recursive: true);
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"),
+            "{\"schemaVersion\":1,\"catalog\":\"minimal\",\"code\":{\"namespace\":\"Example\",\"className\":\"MinimalText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"}\n",
+            new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "en.rmf2"), "greeting = Hello\n", new UTF8Encoding(false));
+        return temporary;
+    }
+
     private static void OutputContainmentIsEnforced()
     {
         using TemporaryDirectory temporary = CreateConsumer(generationEnabled: true, outputPath: "escaped-output/");
@@ -258,7 +373,7 @@ internal static class BuildIntegrationTests
             generationEnabled: true,
             outputPath: "$(IntermediateOutputPath)$(TargetFramework)/linked-output/");
         string target = temporary.Resolve("link-target");
-        string link = temporary.Resolve("artifacts", "obj", "Debug", "net10.0", "linked-output");
+        string link = temporary.Resolve("artifacts", "obj", BuildConfiguration, "net10.0", "linked-output");
         Directory.CreateDirectory(target);
         Directory.CreateDirectory(Path.GetDirectoryName(link)!);
         try
@@ -366,11 +481,12 @@ internal static class BuildIntegrationTests
 
     private static ProcessResult Build(TemporaryDirectory temporary, bool noRestore = false)
     {
-        // Fixtures create their output paths in Debug. MSBuild otherwise inherits
-        // CONFIGURATION from CI and can build elsewhere, bypassing the test's link.
+        // Match the configuration that produced the test and its referenced build
+        // task/tool assemblies. Hard-coding Debug makes Release CI silently fall
+        // back to wildcard discovery, which cannot report executionProfile.
         string[] arguments = noRestore
-            ? ["build", "Consumer.csproj", "--configuration", "Debug", "--no-restore", "/nologo", "/v:minimal"]
-            : ["build", "Consumer.csproj", "--configuration", "Debug", "/nologo", "/v:minimal"];
+            ? ["build", "Consumer.csproj", "--configuration", BuildConfiguration, "--no-restore", "/nologo", "/v:minimal"]
+            : ["build", "Consumer.csproj", "--configuration", BuildConfiguration, "/nologo", "/v:minimal"];
         return Processes.DotNet(temporary.Path, arguments);
     }
 
@@ -379,7 +495,7 @@ internal static class BuildIntegrationTests
         "clean",
         "Consumer.csproj",
         "--configuration",
-        "Debug",
+        BuildConfiguration,
         "/nologo",
         "/v:minimal");
 
@@ -390,12 +506,20 @@ internal static class BuildIntegrationTests
         return Path.GetDirectoryName(artifact)!;
     }
 
+    private static string FindGenerationRoot(TemporaryDirectory temporary)
+    {
+        string state = Directory.EnumerateFiles(temporary.Resolve("artifacts", "obj"), ".generate.inputs", SearchOption.AllDirectories).Single();
+        return Path.GetDirectoryName(state)!;
+    }
+
     private static string[] GeneratedArtifacts(string output) => TestFixture
         .RelativeFiles(output)
         .Where(path => !Path.GetFileName(path).StartsWith(".generate.", StringComparison.Ordinal))
         .ToArray();
 
     private static string XmlPath(string path) => path.Replace("&", "&amp;", StringComparison.Ordinal).Replace("\"", "&quot;", StringComparison.Ordinal);
+
+    private static string BuildConfiguration => new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
 
     private static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 }

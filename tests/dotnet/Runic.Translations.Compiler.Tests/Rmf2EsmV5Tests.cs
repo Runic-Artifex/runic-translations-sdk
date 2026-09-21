@@ -18,7 +18,7 @@ internal static class Rmf2EsmV5Tests
     {
         runner.Add("RMF2 v5 generated ESM executes exact static dynamic transport and SSR paths", Executes);
         runner.Add("RMF2 v5 ESM preserves exact selection dynamic options aliases and ordered annotations", SemanticParity);
-        runner.Add("RMF2 v5 ESM manifest is closed versioned and rejected by the shipping Vite adapter", ManifestIsolation);
+        runner.Add("RMF2 v5 ESM manifest is closed versioned and accepted only as the exact shipping Vite contract", ManifestIsolation);
         runner.Add("RMF2 v5 ESM preserves hostile NFC caller names without prototype mutation", HostileNames);
         runner.Add("RMF2 v5 ESM hardens locale dynamic pack and renderer boundaries", RuntimeHardening);
     }
@@ -148,8 +148,9 @@ internal static class Rmf2EsmV5Tests
         {
             string plugin = RepositoryPaths.Resolve("packages", "web", "vite-plugin-runic-translations", "index.js");
             string script = Path.Combine(directory, "vite-reject.mjs");
-            File.WriteAllText(script, "import { runicTranslations } from " + JsonString(plugin) + ";\n" +
-                "const plugin=runicTranslations({manifest:" + JsonString(Path.Combine(directory, manifest.RelativePath)) + "});let rejected=false;try{await plugin.buildStart.call({addWatchFile(){}});}catch(e){rejected=String(e).includes(\"manifest version '3'\");}if(!rejected)throw new Error('shipping Vite adapter accepted staged v5');\n", new UTF8Encoding(false));
+            string manifestPath = Path.Combine(directory, manifest.RelativePath);
+            File.WriteAllText(script, "import { readFile, writeFile } from 'node:fs/promises';\nimport { runicTranslations } from " + JsonString(plugin) + ";\n" +
+                "const path=" + JsonString(manifestPath) + ";const adapter=runicTranslations({manifest:path});await adapter.buildStart.call({addWatchFile(){}});if(await adapter.resolveId('virtual:runic-translations/billing/runtime')!=='\\0virtual:runic-translations/billing/runtime')throw new Error('shipping Vite adapter did not activate v5');const document=JSON.parse(await readFile(path,'utf8'));document.profile='future';await writeFile(path,JSON.stringify(document));let rejected=false;try{await runicTranslations({manifest:path}).buildStart.call({addWatchFile(){}});}catch(e){rejected=String(e).includes('execution contract');}if(!rejected)throw new Error('shipping Vite adapter accepted mismatched v5 profile');\n", new UTF8Encoding(false));
             Run("bun", [script], directory);
         }
         finally { Directory.Delete(directory, true); }

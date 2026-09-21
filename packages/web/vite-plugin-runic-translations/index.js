@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 
 const prefix = "\0virtual:runic-translations/";
 const supportedEsmAbiVersion = 3;
+const supportedRmf2EsmAbiVersion = 4;
 const execFileAsync = promisify(execFile);
 
 /**
@@ -22,6 +23,7 @@ export function runicTranslations(options = {}) {
   const compiler = project;
   const explicitSources = new Set((options.sourceFiles ?? []).map(path => resolve(path)));
   let sourceRoots = project?.sourceRoots ?? (compiler ? [compiler.project] : []);
+  let watchRoots = project?.watchRoots ?? sourceRoots;
   let sourceFiles = new Set([...explicitSources, ...(project?.sourceFiles ?? [])]);
   let server;
   let cleanupWatcher;
@@ -39,7 +41,8 @@ export function runicTranslations(options = {}) {
       manifestPath = current.manifest;
       sourceFiles = new Set([...explicitSources, ...current.sourceFiles]);
       sourceRoots = current.sourceRoots;
-      server?.watcher.add(sourceRoots);
+      watchRoots = current.watchRoots;
+      server?.watcher.add(watchRoots);
       server?.watcher.add([...sourceFiles]);
       return execFileAsync(compiler.command, argumentsValue, {
         cwd: compiler.cwd,
@@ -53,20 +56,29 @@ export function runicTranslations(options = {}) {
     const document = JSON.parse(await readFile(manifestPath, "utf8"));
     if (!document || typeof document !== "object" || Array.isArray(document))
       throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest must be an object.");
-    if (document.webModuleManifestVersion !== 1 && document.webModuleManifestVersion !== 2)
+    if (![1, 2, 3].includes(document.webModuleManifestVersion))
       throw new Error(`Unsupported Runic ../web/vite-plugin-runic-translations module manifest version '${document.webModuleManifestVersion}'.`);
-    const strictV2 = document.webModuleManifestVersion === 2;
-    if (strictV2 && Object.keys(document).some(key => !["webModuleManifestVersion", "esmAbiVersion", "catalog", "contractFingerprint", "entrypoints", "assets"].includes(key)))
-      throw new Error("The Runic ../web/vite-plugin-runic-translations v2 module manifest contains an unknown member.");
-    if (document.esmAbiVersion !== supportedEsmAbiVersion)
-      throw new Error(`Unsupported Runic ESM ABI version '${document.esmAbiVersion}'. Expected '${supportedEsmAbiVersion}'.`);
+    const strictV2 = document.webModuleManifestVersion >= 2;
+    const rmf2V5 = document.webModuleManifestVersion === 3;
+    const rootMembers = rmf2V5
+      ? ["webModuleManifestVersion", "esmAbiVersion", "rmf2RuntimeAbiVersion", "messageGrammarVersion", "profile", "generatedNameVersion", "catalog", "contractFingerprint", "sourceHash", "entrypoints", "assets"]
+      : ["webModuleManifestVersion", "esmAbiVersion", "catalog", "contractFingerprint", "entrypoints", "assets"];
+    if (strictV2 && Object.keys(document).some(key => !rootMembers.includes(key)))
+      throw new Error(`The Runic ../web/vite-plugin-runic-translations v${document.webModuleManifestVersion} module manifest contains an unknown member.`);
+    const expectedEsmAbi = rmf2V5 ? supportedRmf2EsmAbiVersion : supportedEsmAbiVersion;
+    if (document.esmAbiVersion !== expectedEsmAbi)
+      throw new Error(`Unsupported Runic ESM ABI version '${document.esmAbiVersion}'. Expected '${expectedEsmAbi}'.`);
+    if (rmf2V5 && (document.rmf2RuntimeAbiVersion !== 2 || document.messageGrammarVersion !== 5 ||
+        document.profile !== "rmf2-execution-v2" || document.generatedNameVersion !== 1 ||
+        typeof document.sourceHash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(document.sourceHash)))
+      throw new Error("The Runic ../web/vite-plugin-runic-translations v3 module manifest has an incompatible RMF2 execution contract.");
     if (typeof document.catalog !== "string" || !document.entrypoints ||
         typeof document.contractFingerprint !== "string" || !/^sha256:[a-f0-9]{64}$/.test(document.contractFingerprint))
       throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest is malformed.");
     if (strictV2 && !/^[a-z][a-z0-9.-]*$/.test(document.catalog))
-      throw new Error("The Runic ../web/vite-plugin-runic-translations v2 module manifest has an invalid catalog ID.");
+      throw new Error(`The Runic ../web/vite-plugin-runic-translations v${document.webModuleManifestVersion} module manifest has an invalid catalog ID.`);
     if (strictV2 && (typeof document.entrypoints !== "object" || Array.isArray(document.entrypoints)))
-      throw new Error("The Runic ../web/vite-plugin-runic-translations v2 module manifest has malformed entrypoints.");
+      throw new Error(`The Runic ../web/vite-plugin-runic-translations v${document.webModuleManifestVersion} module manifest has malformed entrypoints.`);
     catalog = document.catalog;
     const root = dirname(manifestPath);
     const requiredEntrypoints = {
@@ -84,7 +96,7 @@ export function runicTranslations(options = {}) {
       };
       if (Object.keys(document.entrypoints).some(kind => !Object.hasOwn(expectedEntrypoints, kind)) ||
           Object.keys(expectedEntrypoints).some(kind => document.entrypoints[kind] !== expectedEntrypoints[kind]))
-        throw new Error("The Runic ../web/vite-plugin-runic-translations v2 module manifest has invalid entrypoints.");
+        throw new Error(`The Runic ../web/vite-plugin-runic-translations v${document.webModuleManifestVersion} module manifest has invalid entrypoints.`);
       for (const kind of ["types", "server", "transport", "dynamic"])
         requiredEntrypoints[kind] = document.entrypoints[kind];
     }
@@ -94,7 +106,7 @@ export function runicTranslations(options = {}) {
     for (const asset of document.assets) {
       if (strictV2 && (!asset || typeof asset !== "object" || Array.isArray(asset) ||
           Object.keys(asset).some(key => !["path", "sha256", "byteLength", "mediaType"].includes(key))))
-        throw new Error("The Runic ../web/vite-plugin-runic-translations v2 module manifest contains an unknown asset member.");
+        throw new Error(`The Runic ../web/vite-plugin-runic-translations v${document.webModuleManifestVersion} module manifest contains an unknown asset member.`);
       if (!asset || typeof asset.path !== "string" || (strictV2 && !/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9_$.-]+(?:\/[A-Za-z0-9_$.-]+)*$/.test(asset.path)) || typeof asset.sha256 !== "string" ||
           !/^[a-f0-9]{64}$/.test(asset.sha256) || !Number.isSafeInteger(asset.byteLength) || asset.byteLength < 0 ||
           typeof asset.mediaType !== "string" || (strictV2 && !["text/javascript", "text/typescript"].includes(asset.mediaType)) || assets.has(asset.path))
@@ -116,6 +128,20 @@ export function runicTranslations(options = {}) {
     const runtimeFingerprint = /^export const contractFingerprint = ("sha256:[a-f0-9]{64}");$/m.exec(runtime)?.[1];
     if (runtimeFingerprint !== JSON.stringify(document.contractFingerprint))
       throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest fingerprint does not match its generated runtime.");
+    if (rmf2V5) {
+      const markers = new Map([...runtime.matchAll(/^export const (esmAbiVersion|rmf2RuntimeAbiVersion|messageGrammarVersion|profile|generatedNameVersion|sourceHash) = (.+);$/gm)]
+        .map(match => [match[1], match[2]]));
+      const expected = {
+        esmAbiVersion: String(document.esmAbiVersion),
+        rmf2RuntimeAbiVersion: String(document.rmf2RuntimeAbiVersion),
+        messageGrammarVersion: String(document.messageGrammarVersion),
+        profile: JSON.stringify(document.profile),
+        generatedNameVersion: String(document.generatedNameVersion),
+        sourceHash: JSON.stringify(document.sourceHash),
+      };
+      if (Object.entries(expected).some(([name, value]) => markers.get(name) !== value))
+        throw new Error("The Runic ../web/vite-plugin-runic-translations v3 module manifest does not match its generated RMF2 runtime contract.");
+    }
     generatedPaths = new Set(assets.values());
     entries = Object.freeze({
       messages: assets.get(requiredEntrypoints.messages),
@@ -167,7 +193,7 @@ export function runicTranslations(options = {}) {
 
     configureServer(value) {
       server = value;
-      if (compiler) server.watcher.add(sourceRoots);
+      if (compiler) server.watcher.add(watchRoots);
       const membershipChanged = path => {
         const pending = update(resolve(path), server);
         if (!pending) return;
@@ -267,6 +293,10 @@ function readProject(config, output) {
     throw new Error("The Runic translation project must declare schemaVersion 1 and a catalog ID.");
   if (settings.sourceLayout !== undefined && settings.sourceLayout !== "locale-toml" && settings.sourceLayout !== "rmf2-v1")
     throw new Error(`Unsupported Runic translation sourceLayout '${settings.sourceLayout}'.`);
+  if (settings.executionProfile !== undefined && settings.executionProfile !== "rmf2-execution-v2")
+    throw new Error(`Unsupported Runic translation executionProfile '${settings.executionProfile}'.`);
+  if (settings.executionProfile === "rmf2-execution-v2" && settings.sourceLayout !== "rmf2-v1")
+    throw new Error("Runic translation executionProfile 'rmf2-execution-v2' requires sourceLayout 'rmf2-v1'.");
   const project = dirname(config);
   const sourceFiles = [config];
   function discover(directory) {
@@ -284,9 +314,12 @@ function readProject(config, output) {
     ? settings.sourceRoots.map(mount => resolve(project, mount.path)) : [project];
   for (const root of roots) discover(root);
   return {
-    manifest: contained(output, `${settings.catalog}.esm/web-module-manifest-v2.json`),
+    manifest: contained(output, settings.executionProfile === "rmf2-execution-v2"
+      ? `${settings.catalog}.esm-v5/web-module-manifest-v3.json`
+      : `${settings.catalog}.esm/web-module-manifest-v2.json`),
     sourceFiles: Object.freeze(sourceFiles.sort()),
     sourceRoots: Object.freeze(roots),
+    watchRoots: Object.freeze([...new Set([project, ...roots])]),
   };
 }
 
