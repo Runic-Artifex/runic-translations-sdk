@@ -189,7 +189,10 @@ runic-translations init-rmf2 --directory translations --catalog app \
 # Equivalent: runic-translations init ... --layout rmf2-v1
 ```
 
-Both forms create `sourceLayout: "rmf2-v1"` and `{locale}.rmf2` resources.
+Both forms create `sourceLayout: "rmf2-v1"` and `{locale}.rmf2` resources while
+retaining the compatible v1 execution / artifact v4 contract. Add
+`executionProfile: "rmf2-execution-v2"` to select typed v5 execution. The
+dedicated RMF2 item and project templates select v5 for new projects.
 
 ```sh
 runic-translations validate --project translations

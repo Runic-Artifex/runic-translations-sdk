@@ -62,10 +62,13 @@ dotnet new runic-translations-rmf2 --output . --catalog app --defaultLocale en -
 dotnet new runic-translations-project-rmf2 --name Example.Translations --output Example.Translations --packageVersion <VERSION>
 ```
 
-The standalone tool offers the equivalent `runic-translations init-rmf2` command,
-or `runic-translations init ... --layout rmf2-v1`. Both forms create
-`sourceLayout: "rmf2-v1"` and `{locale}.rmf2` starter resources; invalid layout
-values fail with exit code 2.
+Both RMF2 templates select `sourceLayout: "rmf2-v1"` together with
+`executionProfile: "rmf2-execution-v2"`, producing typed v5 C# and ESM ABI 4
+output. The standalone tool also offers `runic-translations init-rmf2`, or
+`runic-translations init ... --layout rmf2-v1`, for compatibility scaffolding;
+those commands omit the selector and therefore retain the v1 execution / artifact
+v4 contract. Add the execution profile to those generated projects when v5
+semantics are required. Invalid layout values fail with exit code 2.
 
 ## Compatibility and status
 
