@@ -92,7 +92,10 @@ export function runicTranslations(options = {}) {
       throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest does not declare its generated assets.");
     const assets = new Map();
     for (const asset of document.assets) {
-      if (!asset || typeof asset.path !== "string" || typeof asset.sha256 !== "string" ||
+      if (strictV2 && (!asset || typeof asset !== "object" || Array.isArray(asset) ||
+          Object.keys(asset).some(key => !["path", "sha256", "byteLength", "mediaType"].includes(key))))
+        throw new Error("The Runic ../web/vite-plugin-runic-translations v2 module manifest contains an unknown asset member.");
+      if (!asset || typeof asset.path !== "string" || (strictV2 && !/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9_$.-]+(?:\/[A-Za-z0-9_$.-]+)*$/.test(asset.path)) || typeof asset.sha256 !== "string" ||
           !/^[a-f0-9]{64}$/.test(asset.sha256) || !Number.isSafeInteger(asset.byteLength) || asset.byteLength < 0 ||
           typeof asset.mediaType !== "string" || (strictV2 && !["text/javascript", "text/typescript"].includes(asset.mediaType)) || assets.has(asset.path))
         throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest contains an invalid generated asset entry.");

@@ -110,6 +110,9 @@ test("rejects v2 manifests outside the closed schema contract", async () => {
       ["unknown root member", document => { document.extra = true; }, /unknown member/],
       ["invalid catalog", document => { document.catalog = "UpperCase"; }, /invalid catalog/],
       ["invalid media type", document => { document.assets[0].mediaType = "application/javascript"; }, /invalid generated asset/],
+      ["unknown asset member", document => { document.assets[0].extra = true; }, /unknown asset member/],
+      ["asset path with spaces", document => { document.assets[0].path = "bad path.js"; }, /invalid generated asset/],
+      ["asset path traversal", document => { document.assets[0].path = "x\/..\/messages.js"; }, /invalid generated asset/],
       ["unknown entrypoint member", document => { document.entrypoints.extra = "wrong.js"; }, /invalid entrypoints/],
       ["wrong fixed entrypoint", document => { document.entrypoints.transport = "wrong.js"; }, /invalid entrypoints/],
     ];
