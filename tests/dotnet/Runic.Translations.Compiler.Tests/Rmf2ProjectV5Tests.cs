@@ -207,7 +207,7 @@ internal static class Rmf2ProjectV5Tests
     }
     private static void Names()
     {
-        string[] names = ["class", "default", "await", "arguments", "a-b", "a_b", "A", "a", "r_61", "用户", "café", "🌍", "namespace"];
+        string[] names = ["class", "default", "await", "arguments", "a-b", "a+b", "a.b", "a_b", "1lead", "A", "a", "r_61", "用户", "café", "🌍", "namespace"];
         string[] generated = names.Select(Rmf2GeneratedNamesV1.Identifier).ToArray();
         Assert.Equal(names.Length, generated.Distinct(StringComparer.Ordinal).Count());
         Assert.True(generated.All(name => name.StartsWith("r_", StringComparison.Ordinal) && name.Skip(2).All(c => char.IsAsciiHexDigit(c))), "Generated names are not portable ASCII identifiers.");

@@ -14,19 +14,32 @@ internal static class GeneratorTestHost
 {
     internal static GeneratorRun Run(params TestInput[] inputs) => Run(RuntimeReferenceMode.Matching, inputs);
 
+    internal static GeneratorRun RunRmf2V5(params TestInput[] inputs) =>
+        Run(TranslationsGenerator.CreateRmf2ExecutionV2(), RuntimeReferenceMode.Matching, null, inputs);
+
+    internal static GeneratorRun RunRmf2V5(RuntimeReferenceMode runtimeReferenceMode, params TestInput[] inputs) =>
+        Run(TranslationsGenerator.CreateRmf2ExecutionV2(), runtimeReferenceMode, null, inputs);
+
+    internal static GeneratorRun RunRmf2V5WithConsumer(string source, params TestInput[] inputs) =>
+        Run(TranslationsGenerator.CreateRmf2ExecutionV2(), RuntimeReferenceMode.Matching, source, inputs);
+
     internal static GeneratorRun Run(RuntimeReferenceMode runtimeReferenceMode, params TestInput[] inputs)
+        => Run(new TranslationsGenerator(), runtimeReferenceMode, null, inputs);
+
+    private static GeneratorRun Run(TranslationsGenerator generator, RuntimeReferenceMode runtimeReferenceMode,
+        string? consumerSource, params TestInput[] inputs)
     {
         var additionalTexts = inputs.Select(static input => (AdditionalText)new MemoryAdditionalText(input.Path, input.Text)).ToImmutableArray();
         var optionsProvider = new TestOptionsProvider(inputs);
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         CSharpCompilation compilation = CSharpCompilation.Create(
             "GeneratorConsumer",
-            new[] { CSharpSyntaxTree.ParseText("internal static class EntryPoint { }", parseOptions) },
+            new[] { CSharpSyntaxTree.ParseText(consumerSource ?? "internal static class EntryPoint { }", parseOptions) },
             References(runtimeReferenceMode),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            generators: new[] { new TranslationsGenerator().AsSourceGenerator() },
+            generators: new[] { generator.AsSourceGenerator() },
             additionalTexts: additionalTexts,
             parseOptions: parseOptions,
             optionsProvider: optionsProvider,

@@ -252,6 +252,11 @@ internal static class Rmf2RuntimeV5Tests
     private static void SnapshotDispatch()
     {
         Assert.Equal("1.25", Snapshot(Simple([], [], Output(Number("1.25"), TextArgumentType.Number)), []).Format(new("test", 0, "Value"), []));
+        LocalizedTextContent plainV5 = Snapshot(Simple([], [], new CompiledRmf2Node("Plain")), []).FormatContent(new("test", 0, "Value"), []);
+        Assert.Equal("Plain", plainV5.Nodes.Span[0].Value);
+        var legacy = new CompiledTranslationSnapshot(new("test", "en", [new("Value", [])],
+            [new("en", null, [new(0, "", new CompiledTextMessage([new(CompiledTextMessageNodeKind.Text, "Plain")]))])]), "en");
+        Assert.Throws<TranslationFormatException>(() => legacy.FormatContent(new("test", 0, "Value"), []));
         var french = new CompiledRmf2Message([], [], [], [new([], [Output(Number("1.25"), TextArgumentType.Number)])], "fr");
         Assert.Equal("1,25", Snapshot(french, []).Format(new("test", 0, "Value"), []));
         Assert.Throws<ArgumentException>(() => Snapshot(Simple([new("n", TextArgumentType.Int)], [], Output(Input("n"), TextArgumentType.Int)), [new("n", TextArgumentType.Number)]));

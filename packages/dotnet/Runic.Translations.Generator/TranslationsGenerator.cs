@@ -17,10 +17,19 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
 {
     private const string KindMetadata = "build_metadata.AdditionalFiles.RunicTranslationKind";
     private const string ProjectDirectoryProperty = "build_property.ProjectDir";
+    private readonly TranslationProjectProfile _profile;
+
+    /// <summary>Creates the shipping generator using the current public compiler profile.</summary>
+    public TranslationsGenerator() : this(TranslationProjectProfile.Current) { }
+
+    internal TranslationsGenerator(TranslationProjectProfile profile) => _profile = profile;
+
+    internal static TranslationsGenerator CreateRmf2ExecutionV2() => new(TranslationProjectProfile.Rmf2ExecutionV2);
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        TranslationProjectProfile profile = _profile;
         IncrementalValuesProvider<GeneratorInput> inputs = context.AdditionalTextsProvider
             .Combine(context.AnalyzerConfigOptionsProvider)
             .Select(static (pair, cancellationToken) => CreateInput(pair.Left, pair.Right, cancellationToken))
@@ -33,15 +42,15 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
 
         context.RegisterSourceOutput(
             inputs.Collect().WithTrackingName("TranslationCompilation").Combine(runtimeAbi),
-            static (productionContext, pair) =>
+            (productionContext, pair) =>
             {
-                if (!pair.Right.IsCompatible)
+                if (!pair.Right.IsCompatible || profile == TranslationProjectProfile.Rmf2ExecutionV2 && pair.Right.Rmf2Version != 2)
                 {
-                    productionContext.ReportDiagnostic(CreateAbiDiagnostic(pair.Right));
+                    productionContext.ReportDiagnostic(CreateAbiDiagnostic(pair.Right, profile));
                     return;
                 }
 
-                Generate(productionContext, pair.Left, pair.Right.Rmf2Version);
+                Generate(productionContext, pair.Left, pair.Right.Rmf2Version, profile);
             });
     }
 
@@ -87,11 +96,19 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         return null;
     }
 
-    private static Diagnostic CreateAbiDiagnostic(RuntimeAbiState state)
+    private static Diagnostic CreateAbiDiagnostic(RuntimeAbiState state, TranslationProjectProfile profile)
     {
         string message = state.IsMissing
-            ? "Referenced Runic.Translations runtime ABI is missing; generated code requires ABI version 1."
-            : "Referenced Runic.Translations runtime ABI version " + state.Version + " is incompatible with generated ABI version 1.";
+            ? profile == TranslationProjectProfile.Rmf2ExecutionV2
+                ? "Referenced Runic.Translations runtime ABI is missing; generated RMF2 code requires runtime ABI version 1 and RMF2 ABI version 2."
+                : "Referenced Runic.Translations runtime ABI is missing; generated code requires ABI version 1."
+            : state.Version != 1
+                ? "Referenced Runic.Translations runtime ABI version " + state.Version + " is incompatible with generated ABI version 1."
+                : profile == TranslationProjectProfile.Rmf2ExecutionV2
+                    ? state.Rmf2Version < 0
+                        ? "Referenced Runic.Translations RMF2 runtime ABI is missing; generated RMF2 code requires ABI version 2."
+                        : "Referenced Runic.Translations RMF2 runtime ABI version " + state.Rmf2Version + " is incompatible with generated RMF2 ABI version 2."
+                    : "Referenced Runic.Translations runtime ABI is incompatible with generated ABI version 1.";
         return Diagnostic.Create(Descriptor("RTR0024", DiagnosticSeverity.Error), Location.None, message);
     }
 
@@ -133,7 +150,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         return normalized.Length == 0 ? "." : normalized;
     }
 
-    private static void Generate(SourceProductionContext context, IEnumerable<GeneratorInput> inputs, int rmf2Version)
+    private static void Generate(SourceProductionContext context, IEnumerable<GeneratorInput> inputs, int rmf2Version, TranslationProjectProfile profile)
     {
         var projects = new List<TranslationSource>();
         var messages = new List<TranslationSource>();
@@ -174,6 +191,12 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 "Exactly one Runic translation project must be supplied."));
             return;
         }
+        if (profile == TranslationProjectProfile.Rmf2ExecutionV2)
+        {
+            GenerateRmf2V5(context, projects[0], messages, sourceTexts);
+            return;
+        }
+
         TranslationCompilation compilation = TranslationCompiler.CompileProject(projects[0], messages, null, context.CancellationToken);
 
         bool hasErrors = false;
@@ -221,6 +244,47 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
 
                 context.AddSource(output.RelativePath, SourceText.From(output.Text, new UTF8Encoding(false, true)));
             }
+        }
+    }
+
+    private static void GenerateRmf2V5(SourceProductionContext context, TranslationSource project,
+        IReadOnlyList<TranslationSource> messages, Dictionary<string, SourceText> sourceTexts)
+    {
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, messages, null, context.CancellationToken);
+        bool hasErrors = false;
+        for (int index = 0; index < compilation.Diagnostics.Count; index++)
+        {
+            TranslationDiagnostic diagnostic = compilation.Diagnostics[index];
+            context.ReportDiagnostic(CreateDiagnostic(diagnostic, sourceTexts));
+            if (diagnostic.Severity == TranslationDiagnosticSeverity.Error) hasErrors = true;
+        }
+        if (hasErrors || compilation.Project is null) return;
+
+        Rmf2ProjectV5 linked = compilation.Project;
+        if (linked.CanonicalMessages.Count == 0)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(Descriptor("RTR0009", DiagnosticSeverity.Error), Location.None,
+                "The effective default locale defines no canonical keys; RMF2 v5 generated runtime catalogs cannot be empty."));
+            return;
+        }
+        TranslationGeneratedOutput[] outputs =
+        {
+            TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked),
+            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked),
+            TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(linked),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked),
+        };
+        var emittedHints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (int index = 0; index < outputs.Length; index++)
+        {
+            TranslationGeneratedOutput output = outputs[index];
+            if (!emittedHints.Add(output.RelativePath))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Descriptor("RTR0018", DiagnosticSeverity.Error), Location.None,
+                    "Generated hint name '" + output.RelativePath + "' collides across catalogs."));
+                continue;
+            }
+            context.AddSource(output.RelativePath, SourceText.From(output.Text, new UTF8Encoding(false, true)));
         }
     }
 
