@@ -7,7 +7,7 @@ using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Authoring;
 
-/// <summary>Creates the convention-based <c>runic.json</c> and locale TOML project layout.</summary>
+/// <summary>Creates a validated locale TOML or explicitly opted-in RMF2 project layout.</summary>
 public static class TranslationProjectScaffolder
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
@@ -36,10 +36,12 @@ public static class TranslationProjectScaffolder
         };
         {
             byte[] starter = request.IncludeStarterMessage
-                ? TranslationLocaleWriter.Render([new KeyValuePair<string, string>("application_title", RequireValue(request.ClassName, "class name"))])
+                ? request.Layout == TranslationProjectLayout.Rmf2
+                    ? RenderRmf2Starter(request)
+                    : TranslationLocaleWriter.Render([new KeyValuePair<string, string>("application_title", RequireValue(request.ClassName, "class name"))])
                 : [];
             for (int index = 0; index < locales.Count; index++)
-                files.Add(new TranslationProjectFile($"{locales[index].Tag}.toml", starter));
+                files.Add(new TranslationProjectFile($"{locales[index].Tag}{SourceExtension(request.Layout)}", starter));
         }
         files.Sort((left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
 
@@ -61,7 +63,7 @@ public static class TranslationProjectScaffolder
             writer.WriteStartObject();
             writer.WriteString("$schema", "https://runic-artifex.eu/schemas/translations/project-v1.schema.json");
             writer.WriteNumber("schemaVersion", 1);
-            writer.WriteString("sourceLayout", "locale-toml");
+            writer.WriteString("sourceLayout", request.Layout == TranslationProjectLayout.Rmf2 ? "rmf2-v1" : "locale-toml");
             writer.WriteString("catalog", RequireValue(request.CatalogId, "catalog ID"));
             writer.WriteStartObject("code");
             writer.WriteString("namespace", RequireValue(request.CodeNamespace, "code namespace"));
@@ -99,10 +101,17 @@ public static class TranslationProjectScaffolder
     {
         var sources = new List<TranslationSource>();
         for (int index = 0; index < files.Count; index++)
-            if (files[index].RelativePath.EndsWith(".toml", StringComparison.Ordinal))
+            if (files[index].RelativePath.EndsWith(SourceExtension(TranslationProjectLayout.LocaleToml), StringComparison.Ordinal) ||
+                files[index].RelativePath.EndsWith(SourceExtension(TranslationProjectLayout.Rmf2), StringComparison.Ordinal))
                 sources.Add(new TranslationSource(files[index].RelativePath, files[index].Bytes));
         return sources.ToArray();
     }
+
+    private static byte[] RenderRmf2Starter(TranslationProjectCreationRequest request) =>
+        Utf8.GetBytes($"application_title = {RequireValue(request.ClassName, "class name")}\n");
+
+    private static string SourceExtension(TranslationProjectLayout layout) =>
+        layout == TranslationProjectLayout.Rmf2 ? ".rmf2" : ".toml";
 
     private static string FormatDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics)
     {

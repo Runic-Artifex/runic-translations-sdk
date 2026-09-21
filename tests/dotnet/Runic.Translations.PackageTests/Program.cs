@@ -128,7 +128,15 @@ internal static class Program
             "content/templates/project/.template.config/template.json",
             "content/templates/project/translations/_defaultLocale_.toml",
             "content/templates/project/translations/runic.json",
-            "content/templates/project/RunicTranslationsProject.csproj");
+            "content/templates/project/RunicTranslationsProject.csproj",
+            "content/templates/rmf2-item/.template.config/template.json",
+            "content/templates/rmf2-item/translations/_defaultLocale_.rmf2",
+            "content/templates/rmf2-item/translations/runic.json",
+            "content/templates/rmf2-project/.config/dotnet-tools.json",
+            "content/templates/rmf2-project/.template.config/template.json",
+            "content/templates/rmf2-project/translations/_defaultLocale_.rmf2",
+            "content/templates/rmf2-project/translations/runic.json",
+            "content/templates/rmf2-project/RunicTranslationsProject.csproj");
 
         AssertDependencies(runtime, Array.Empty<string>());
         AssertDependencies(tooling, ["Runic.CommandLine"]);

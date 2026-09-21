@@ -180,6 +180,17 @@ a feature directory and an executable DOM example.
 
 ## CLI, editor, and language service
 
+New RMF2 projects are opt-in. Existing `init` and the translation templates
+continue to create locale-TOML projects unless RMF2 is selected explicitly:
+
+```sh
+runic-translations init-rmf2 --directory translations --catalog app \
+  --default-locale en --namespace Example --class AppText
+# Equivalent: runic-translations init ... --layout rmf2-v1
+```
+
+Both forms create `sourceLayout: "rmf2-v1"` and `{locale}.rmf2` resources.
+
 ```sh
 runic-translations validate --project translations
 runic-translations generate --project translations --output obj/translations --emit-csharp --emit-json --emit-esm
