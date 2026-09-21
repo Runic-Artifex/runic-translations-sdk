@@ -312,7 +312,8 @@ number-literal annotations retain their distinct representations. Existing
 renderers ignore the new annotation collection. Runtime markup constructors
 require balanced events and bound option references but assume project contract
 linking has already resolved element identities and validated markup option and
-slot schemas. That adapter remains dependent work.
+slot schemas. The [staged project linker](rmf2-project-v5.md) now performs that
+validation without converting v5 messages through the v4 model.
 
 `Rmf2RuntimeAbiVersion` is **2**; legacy `RuntimeAbiVersion = 1` and
 `MessageGrammarVersion = 2` remain unchanged. Generated v5 consumers must embed
@@ -325,8 +326,7 @@ runtime markers 1 and 2, but rejects missing or unknown markers. The separate
 legacy runtime ABI check still requires exactly 1. This does not activate v5
 emission.
 
-Still dependent: C#/ESM v5 generation and project linking, caller fingerprint
-versioning, v5 pack semantic validation and explicit loader dispatch, and any
+Still dependent: C#/ESM v5 generation, v5 pack semantic validation and explicit loader dispatch, and any
 change to default emission. The constructor evaluator is not a v5 pack loader.
 The machine profile's project-level executable backend list remains empty until
 those backend integrations are complete.

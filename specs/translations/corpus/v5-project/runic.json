@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "catalog": "billing",
+  "code": { "namespace": "Example", "className": "BillingText" },
+  "baseLocale": "en",
+  "locales": ["en", "de"],
+  "sourceLayout": "rmf2-v1"
+}

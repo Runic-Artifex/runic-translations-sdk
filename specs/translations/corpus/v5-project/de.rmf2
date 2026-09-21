@@ -1,0 +1,12 @@
+account {
+  bill =
+    .input {$count :integer}
+    .input {$rate :number}
+    .local $percent = {$rate :number style=percent maximumFractionDigits=2}
+    {{{#runic:link ref=invoice}{$count} Rechnungen{/runic:link}: {$percent}}}
+  total =
+    .input {$rate :number}
+    .local $formatted = {$rate :number style=percent minimumFractionDigits=2 maximumFractionDigits=2}
+    .local $alias = {$formatted}
+    {{{$alias}}}
+}

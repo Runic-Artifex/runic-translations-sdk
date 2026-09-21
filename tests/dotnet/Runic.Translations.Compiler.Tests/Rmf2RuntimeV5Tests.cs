@@ -76,7 +76,7 @@ internal static class Rmf2RuntimeV5Tests
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
         return Lower(result.Message!);
     }
-    private static CompiledRmf2Message Lower(Rmf2MessageV5 message) => new(message.Inputs.Select(item => new CompiledRmf2Input(item.Name, Type(item.Type))).ToArray(),
+    internal static CompiledRmf2Message Lower(Rmf2MessageV5 message) => new(message.Inputs.Select(item => new CompiledRmf2Input(item.Name, Type(item.Type))).ToArray(),
             message.Declarations.Select(item => new CompiledRmf2Declaration(item.Kind, item.Name, Expression(item.Expression))).ToArray(),
             message.Selectors.Select(item => new CompiledRmf2Selector(Value(item.Value), Type(item.Type), item.Function)).ToArray(),
             message.Variants.Select(item => new CompiledRmf2Variant(item.Keys.Select(key => new CompiledRmf2Key(key.Value, key.Canonical)).ToArray(), item.Nodes.Select(Node).ToArray())).ToArray());
