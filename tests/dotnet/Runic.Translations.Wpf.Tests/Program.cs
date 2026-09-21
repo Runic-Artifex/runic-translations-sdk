@@ -68,7 +68,12 @@ internal static class Program
         try { renderer.SetContent(target, "payment", content, blankLabelSlots); }
         catch (TranslationFormatException) { rejectedBlankLabel = true; }
         Require(rejectedBlankLabel, "Whitespace meaningful icon alternate text was accepted.");
+        Require(ReferenceEquals(button, target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Button>().Single()),
+            "A rejected render replaced the active action control.");
+        var firstButton = button;
         renderer.SetContent(target, "payment", content, slots);
+        button = target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Button>().Single();
+        Require(!ReferenceEquals(firstButton, button), "A successful rerender did not replace the action control.");
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Action did not fire once.");
         renderer.SetContent(target, "payment", content, slots);
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Detached action remained active.");
