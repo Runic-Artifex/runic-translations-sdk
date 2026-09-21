@@ -84,7 +84,11 @@ public static class Mf2SyntaxReader
         {
             // LDML 48.2 forbids binding a variable mentioned anywhere in an earlier
             // declaration, including option operands, not just earlier bindings.
-            if (previousVariables.Contains(declaration.Name)) Error("Duplicate declaration '" + declaration.Name + "'.", declaration.NameLocation);
+            // An input's own operand is permitted, but its function options must
+            // not refer to the input being bound by this declaration.
+            bool selfOption = declaration.Kind == "input" && declaration.Expression.Options.Any(option =>
+                option.Value is { Kind: Mf2OperandKind.Variable } value && value.Value == declaration.Name);
+            if (previousVariables.Contains(declaration.Name) || selfOption) Error("Duplicate declaration '" + declaration.Name + "'.", declaration.NameLocation);
             foreach (var token in syntax.Tokens.Where(t => t.Kind == Mf2SyntaxTokenKind.Variable && t.Location.StartByte >= declaration.Expression.Location.StartByte && t.Location.StartByte < declaration.Expression.Location.StartByte + declaration.Expression.Location.LengthBytes))
             {
                 if (locals.Contains(token.Value) && !declared.Contains(token.Value)) Error("Local '" + token.Value + "' is referenced before its declaration.", token.Location);

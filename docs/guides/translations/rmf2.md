@@ -285,6 +285,9 @@ including variable-valued options. Thus `.local $a = {$n}` followed by
 `$n`; declare the input before the local instead. NFC-equivalent names have the
 same identity. Quoted literal or annotation text does not count as a variable
 reference. Local forward references and cycles are also data-model errors.
+An `.input` can use its own variable as the operand but not within its function
+options. For example, `.input {$s :string select=$s}` reports the same Duplicate
+Declaration diagnostic at the input binding's name.
 
 Remaining limits are explicit: variable-valued formatter options, expression
 annotations, formatted literal operands/locals and quoted wildcard execution are

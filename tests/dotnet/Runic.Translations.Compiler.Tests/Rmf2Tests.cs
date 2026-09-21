@@ -15,7 +15,7 @@ internal static class Rmf2Tests
         runner.Add("RMF2 rejects duplicate leaves namespace and generated identity collisions", Collisions);
         runner.Add("RMF2 caller contracts allow locale selectors and omitted inputs", Contracts);
         runner.Add("RMF2 rejects unsupported execution options without silently changing semantics", Capabilities);
-        runner.Add("RMF2 v4 rejects late input bindings with mapped data-model spans", DeclarationOrder);
+        runner.Add("RMF2 v4 rejects late bindings and input self-options with mapped data-model spans", DeclarationOrder);
         runner.Add("RMF2 metadata validates examples and parameter names", Metadata);
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
@@ -102,6 +102,26 @@ internal static class Rmf2Tests
         var ordered = TranslationCompiler.CompileProject(Project(), [Source("translations/en.rmf2", "x =\n  .input {$n :integer select=ordinal}\n  .local $a = {$n}\n  .match $a\n  one {{one}}\n  * {{other}}")]);
         Assert.True(ordered.Success, Errors(ordered));
         Assert.Equal("ordinal", ordered.Catalogs[0].CanonicalResources[0].Message.Selectors[0].Function);
+        foreach (string declaration in new[] { ".input {$n :number maximumFractionDigits=$n}", ".input {$s :string select=$s}" })
+        {
+            string source = "# 雪\r\nx =\r\n  " + declaration + "\r\n  {{x}}";
+            var result = TranslationCompiler.CompileProject(Project(), [Source("translations/en.rmf2", source)]);
+            Assert.True(!result.Success, "The v4 compiler accepted an input self-option.");
+            var diagnostic = Assert.Single(result.Diagnostics);
+            Assert.Equal("RTR0067", diagnostic.Id);
+            Assert.Equal("Duplicate declaration '" + declaration[9] + "'.", diagnostic.Message);
+            Assert.Equal(Encoding.UTF8.GetByteCount(source[..source.IndexOf('$')]), diagnostic.Location.StartByte);
+            Assert.Equal(2, diagnostic.Location.LengthBytes);
+            Assert.Equal(3, diagnostic.Location.Line);
+            Assert.Equal(11, diagnostic.Location.Column);
+            Assert.Equal(3, diagnostic.Location.EndLine);
+            Assert.Equal(13, diagnostic.Location.EndColumn);
+        }
+        foreach (string declaration in new[] { ".input {$n}", ".input {$n :number minimumFractionDigits=2 maximumFractionDigits=2}", ".input {$s :string select=exact}" })
+        {
+            var result = TranslationCompiler.CompileProject(Project(), [Source("translations/en.rmf2", "x = " + declaration + " {{x}}")]);
+            Assert.True(result.Success, Errors(result));
+        }
     }
     private static void Metadata()
     {

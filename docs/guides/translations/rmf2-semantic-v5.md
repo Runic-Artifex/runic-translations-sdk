@@ -19,6 +19,9 @@ by `.input {$n :number}` is a Duplicate Declaration (`RTR0067` at the later `$n`
 not a forward input reference. Put the input first or leave it implicit where
 the profile permits. Local forward references and cycles remain invalid. This
 shared validation also protects the current v4 compiler.
+An input's own operand is allowed, but its function options cannot refer to
+itself: `.input {$n :number maximumFractionDigits=$n}` is also `RTR0067`, at the
+input binding's `$n`.
 
 Variant keys distinguish bare wildcard `*` from literal `|*|`.
 Selection compares per-selector ranks in order: numeric exact, plural/ordinal

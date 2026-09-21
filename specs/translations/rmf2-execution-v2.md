@@ -43,8 +43,12 @@ Following [LDML 48.2 declarations](https://github.com/unicode-org/cldr/blob/rele
 a declaration cannot bind a variable that appeared anywhere in a previous
 declaration, whether as a binding, operand or variable-valued option. Names use
 NFC identity; quoted literals and annotation text are not variable references.
+An `.input` may use its own variable as its operand, but not in its function
+options: `.input {$n :number maximumFractionDigits=$n}` and
+`.input {$s :string select=$s}` are Duplicate Declaration errors.
 Violations report `RTR0067`, `Duplicate declaration 'name'.`, at the later
-binding's name span. This shared data-model rule applies to both current v4 and
+binding's name span (or the input's own name span for a self-option). This shared
+data-model rule applies to both current v4 and
 staged v5 compilation. References to a local before its declaration, including
 cycles, remain data-model errors as well.
 

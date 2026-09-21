@@ -16,7 +16,7 @@ internal static class Rmf2SemanticV5Tests
     {
         runner.Add("RMF2 v5 keeps typed formatted local chains and literal formatting", LocalsAndLiterals);
         runner.Add("RMF2 v5 infers through aliases and preserves underlying types across formatter overrides", LocalValueTypes);
-        runner.Add("RMF2 v5 rejects late input bindings before formatter and selector inference", DeclarationOrder);
+        runner.Add("RMF2 v5 rejects late bindings and input self-options before inference", DeclarationOrder);
         runner.Add("RMF2 v5 UUID literals require exactly 36 D-format characters", UuidLiterals);
         runner.Add("RMF2 v5 dynamic options require declared typed caller inputs", DynamicOptions);
         runner.Add("RMF2 v5 finite option table validates enums ranges defaults and runtime errors", Options);
@@ -78,13 +78,15 @@ internal static class Rmf2SemanticV5Tests
             ".local $a = {$n} .input {$n :number style=percent} {{ {$a} }}",
             ".local $a = {$n} .input {$n :integer select=ordinal} .match $a one {{one}} * {{other}}",
             ".input {$n :number maximumFractionDigits=$digits} .input {$digits :integer} {{ {$n} }}",
+            ".input {$n :number maximumFractionDigits=$n} {{ {$n} }}",
+            ".input {$s :string select=$s} {{ {$s} }}",
             ".local $a = {1 :number select=$selection} .input {$selection :string} {{ {$a} }}" })
         {
             var result = Compile(source);
-            Assert.True(!result.Success && result.Message is null, "Late binding reached v5 inference.");
+            Assert.True(!result.Success && result.Message is null, "Invalid binding reached v5 inference.");
             var diagnostic = Assert.Single(result.Diagnostics);
             Assert.Equal("RTR0067", diagnostic.Id);
-            Assert.True(diagnostic.Message.StartsWith("Duplicate declaration '", StringComparison.Ordinal), "Late binding was mistaken for a capability error.");
+            Assert.True(diagnostic.Message.StartsWith("Duplicate declaration '", StringComparison.Ordinal), "Invalid binding was mistaken for a capability error.");
             Assert.Equal(Encoding.UTF8.GetByteCount(source[..(source.LastIndexOf(".input {", StringComparison.Ordinal) + 8)]), diagnostic.Location.StartByte);
         }
         var ordered = Message(".input {$n :integer select=ordinal} .local $a = {$n} .match $a one {{one}} * {{other}}");
@@ -92,6 +94,7 @@ internal static class Rmf2SemanticV5Tests
         Assert.Equal("ordinal", ordered.Selectors[0].Function);
         var options = Message(".input {$digits :integer} .input {$n :number maximumFractionDigits=$digits} .local $a = {$n} {{ {$a} }}");
         Assert.Equal("digits:int64,n:decimal", string.Join(',', options.Inputs.Select(input => input.Name + ":" + input.Type)));
+        Message(".input {$n :number maximumFractionDigits=2 @note=|$n|} .input {$s :string select=exact} {{ {$n} {$s} }}");
         Message(".local $a = {|$n| :string @note=|$n|} .input {$n :number} {{ {$a} {$n} }}");
     }
     private static void DynamicOptions()
