@@ -177,6 +177,9 @@ internal static class Rmf2AuthoringTests
             Assert.Equal(1, report.Losses.Count);
             Assert.Equal("RMF2-MIGRATION-COMMENT-OWNERSHIP", report.Losses[0].Code);
             Assert.Equal("en.toml", report.Losses[0].Location);
+            _ = new Rmf2Workspace(root, Source(Path.Combine(root, "runic.json"), Encoding.UTF8.GetString(project.GetUtf8Bytes())), [Source(Path.Combine(root, "en.toml"), "# Translator note\n[shop]\ntitle='Shop'\n")])
+                .MigrateTomlWithReport(out TranslationMigrationReport absoluteReport);
+            Assert.Equal("en.toml", absoluteReport.Losses[0].Location);
             new Rmf2Workspace(root, project, [source]).MigrateToml(out IReadOnlyList<string> compatibilityNotes);
             Assert.Equal(report.Losses[0].Message, compatibilityNotes.Single());
             TranslationWorkspaceTransaction.Commit(plan);

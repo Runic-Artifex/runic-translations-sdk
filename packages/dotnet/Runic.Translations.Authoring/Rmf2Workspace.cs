@@ -276,7 +276,7 @@ public sealed class Rmf2Workspace
             string path = Path.ChangeExtension(source.Path, ".rmf2"), backup = source.Path + ".bak";
             if (_sources.ContainsKey(path) || File.Exists(Path.Combine(_root, Relative(backup)))) throw new TranslationAuthoringException("Migration destination or backup exists.");
             changes[path] = Rmf2ResourceWriter.ImportTomlWithReport(source, Path.GetFileNameWithoutExtension(source.Path), out TranslationMigrationReport sourceReport);
-            losses.AddRange(sourceReport.Losses);
+            losses.AddRange(sourceReport.Losses.Select(loss => loss with { Location = Relative(loss.Location) }));
             changes[source.Path] = null; changes[backup] = source.GetUtf8Bytes();
         }
         changes[_project.Path] = Utf8.GetBytes(config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
