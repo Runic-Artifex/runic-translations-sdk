@@ -43,6 +43,7 @@ internal sealed class Rmf2LanguageServer
     {
         // The reader remains responsive to cancellation while one worker owns document state.
         using var queue = new BlockingCollection<(JsonObject Request, CancellationTokenSource Cancellation, long Revision)>(256);
+        using var benchmarkBarrier = new ManualResetEventSlim(false);
         var pending = new Dictionary<string, CancellationTokenSource>(StringComparer.Ordinal);
         Task<int> worker = Task.Run(() => {
             foreach (var item in queue.GetConsumingEnumerable())
@@ -53,6 +54,8 @@ internal sealed class Rmf2LanguageServer
                 try
                 {
                     _requestCancellation.ThrowIfCancellationRequested();
+                    if (method == "runic/testBarrier" && BenchmarkBarrierEnabled)
+                        benchmarkBarrier.Wait();
                     if (method == "exit") return _shutdown ? 0 : 1;
                     JsonNode? result = Handle(method, request["params"] as JsonObject ?? new JsonObject());
                     lock (_revisionGate)
@@ -81,6 +84,11 @@ internal sealed class Rmf2LanguageServer
             while (Read() is { } request)
             {
                 string method = request["method"]?.GetValue<string>() ?? "";
+                if (method == "runic/testBarrier/release" && BenchmarkBarrierEnabled)
+                {
+                    benchmarkBarrier.Set();
+                    continue;
+                }
                 if (method == "$/cancelRequest")
                 {
                     string? target = request["params"]?["id"]?.ToJsonString();
@@ -102,6 +110,7 @@ internal sealed class Rmf2LanguageServer
         finally { queue.CompleteAdding(); worker.GetAwaiter().GetResult(); }
         return worker.GetAwaiter().GetResult();
     }
+    private static bool BenchmarkBarrierEnabled => Environment.GetEnvironmentVariable("RUNIC_LSP_TEST_BARRIER") == "1";
     private JsonNode? Handle(string method, JsonObject args)
     {
         if (method == "initialize")
@@ -356,7 +365,7 @@ internal sealed class Rmf2LanguageServer
                 {
                     if (Path.GetFileName(entry) is not (".git" or "node_modules" or "bin" or "obj" or "dist" or "artifacts" or ".cache" or ".direnv" or ".vs")) directories.Push(entry);
                 }
-                else if (Path.GetExtension(entry).ToLowerInvariant() is ".cs" or ".ts" or ".tsx" or ".js" or ".jsx" or ".svelte" or ".toml" or ".resx" or ".razor" or ".xaml" or ".cpp" or ".h")
+                else if (Path.GetExtension(entry).ToLowerInvariant() is ".cs" or ".ts" or ".tsx" or ".js" or ".jsx" or ".svelte" or ".toml" or ".resx" or ".razor" or ".xaml" or ".cpp" or ".h" or ".mf2")
                     throw new TranslationAuthoringException("Rename refused: this workspace contains application or legacy sources whose references Runic cannot safely rewrite. Use the native language refactor, or explicitly choose Rename Resource in Resource Sources and update call sites separately.");
             }
         }

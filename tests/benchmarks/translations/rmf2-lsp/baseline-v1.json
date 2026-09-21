@@ -1,0 +1,12 @@
+{
+  "protocol": "runic-rmf2-lsp-benchmark",
+  "version": 1,
+  "catalogMessages": 2000,
+  "samples": 3,
+  "cancellationQueueDepth": 32,
+  "maxMilliseconds": {
+    "largeCatalogMedian": 15000,
+    "incrementalMedian": 10000,
+    "cancellationMedian": 15000
+  }
+}

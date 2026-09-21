@@ -247,8 +247,13 @@ references for caller inputs span translations of the same logical resource,
 including mounted files and unsaved buffers. Locals remain scoped to their own
 message, and same-named translation locals are excluded from caller-input results.
 Definitions return explicit declarations; an implicitly used input has no
-declaration target unless another translation declares it. Application call-site navigation remains owned by native language services;
-Runic's resource references are intentionally scoped to catalog sources.
+declaration target unless another translation declares it. Application call-site
+navigation remains owned by native language services; Runic's resource
+references are intentionally scoped to catalog sources. Standard resource F2
+therefore refuses a workspace containing application or legacy sources (or
+unindexable links) instead of returning a partial edit. The explicit
+resource-source transaction is the opt-in boundary; callers must update native
+application call sites separately.
 Local-variable rename uses parsed symbol locations and rejects capture of an
 existing variable. Quoted literals and ordinary message text are preserved.
 `runic.extractGroup` and `runic.inlineResource` return `WorkspaceEdit` results;
@@ -263,9 +268,7 @@ Refactors validate the complete catalog.
 executes the verified .NET plan with inert functional bindings. Hover adds
 compiled input types and content/fallback locales when validation succeeds.
 Explicit `runic.renameInput`, `runic.renameSlot` and `runic.renameResource`
-commands return resource-source transactions. Normal resource F2 refuses
-workspaces containing application/legacy sources or unindexable links instead of
-silently omitting call sites. Configuration-changing edits require a client that
+commands return resource-source transactions. Configuration-changing edits require a client that
 synchronizes `runic.json` through `runicConfigurationSync` initialization options.
 
 The editor discovers recursive resources and mounted namespaces, exposes logical
