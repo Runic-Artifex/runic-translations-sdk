@@ -18,7 +18,7 @@ internal static class CapabilityMatrixTests
         using JsonDocument document = ReadMatrix();
         JsonElement root = document.RootElement;
         Assert.Equal(1, root.GetProperty("capabilityMatrixVersion").GetInt32());
-        Assert.Equal("0.3.0-preview.1", root.GetProperty("releaseTarget").GetString());
+        Assert.Equal("0.4.0-preview.1", root.GetProperty("releaseTarget").GetString());
         JsonElement cldr = root.GetProperty("cldr");
         Assert.Equal("48.2", cldr.GetProperty("version").GetString());
         Assert.Equal("48.2.0", cldr.GetProperty("jsonTag").GetString());
