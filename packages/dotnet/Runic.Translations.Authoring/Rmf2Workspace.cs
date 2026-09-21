@@ -64,6 +64,7 @@ public sealed class Rmf2Workspace
         return LanguageService.Complete(origin.MessageSyntax, byteOffset, baseMessage?.MessageSyntax);
     }
     public TranslationCompilation Validate() => TranslationCompiler.CompileProject(_project, _sources.Values, null, _cancellationToken);
+    internal TranslationProfileCompilation ValidateForProfile() => TranslationCompiler.CompileProjectForSelectedProfile(_project, _sources.Values, null, _cancellationToken);
 
     /// <summary>Finds locals in one message, or caller inputs across translations of the same logical resource.</summary>
     public IReadOnlyList<Rmf2VariableReference> VariableReferences(string path, string key, string name)
@@ -302,17 +303,16 @@ public sealed class Rmf2Workspace
     private TranslationWorkspaceTransactionPlan ChangeLocale(string operation, string locale, string? fallback, string? copyFrom)
     {
         locale = TranslationProjectScaffolder.CanonicalizeLocale(locale.Trim());
-        var compilation = Validate();
-        if (!compilation.Success) throw new TranslationAuthoringException("Repair catalog diagnostics before changing locales.");
-        var catalog = compilation.Catalogs.Single();
-        fallback = TranslationProjectScaffolder.CanonicalizeLocale((fallback ?? catalog.DefaultLocale).Trim());
-        var locales = catalog.Locales.ToDictionary(item => item.Tag, item => item.FallbackTag, StringComparer.Ordinal);
+        ProfileLocaleView catalog = ValidateLocaleView();
+        if (!catalog.Success) throw new TranslationAuthoringException("Repair catalog diagnostics before changing locales: " + string.Join("; ", catalog.Diagnostics.Select(diagnostic => diagnostic.Message)));
+        fallback = TranslationProjectScaffolder.CanonicalizeLocale((fallback ?? catalog.DefaultLocale!).Trim());
+        var locales = catalog.Locales.ToDictionary(item => item.Tag, item => item.Fallback, StringComparer.Ordinal);
         if (!locales.ContainsKey(fallback) || fallback == locale) throw new TranslationAuthoringException("A different existing fallback locale is required.");
         var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
         if (operation == "add")
         {
             if (locales.ContainsKey(locale)) throw new TranslationAuthoringException("The locale already exists.");
-            copyFrom = TranslationProjectScaffolder.CanonicalizeLocale((copyFrom ?? catalog.DefaultLocale).Trim());
+            copyFrom = TranslationProjectScaffolder.CanonicalizeLocale((copyFrom ?? catalog.DefaultLocale!).Trim());
             if (!locales.ContainsKey(copyFrom)) throw new TranslationAuthoringException("The source locale does not exist.");
             foreach (var source in _sources.Values.Where(source => string.Equals(Path.GetFileNameWithoutExtension(source.Path), copyFrom, StringComparison.OrdinalIgnoreCase)))
             {
@@ -337,6 +337,21 @@ public sealed class Rmf2Workspace
         config["locales"] = new JsonArray(locales.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (JsonNode)(pair.Value is null ? new JsonObject { ["tag"] = pair.Key } : new JsonObject { ["tag"] = pair.Key, ["fallback"] = pair.Value })).ToArray());
         changes[_project.Path] = Utf8.GetBytes(config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
         return Plan(changes);
+    }
+
+    private ProfileLocaleView ValidateLocaleView()
+    {
+        TranslationProfileCompilation compilation = ValidateForProfile();
+        if (compilation.Current is { Catalogs.Count: 1 } current)
+        {
+            CompiledTextCatalog catalog = current.Catalogs[0];
+            return new ProfileLocaleView(catalog.Id, catalog.DefaultLocale,
+                catalog.Locales.Select(locale => new ProfileLocale(locale.Tag, locale.FallbackTag)).ToArray(), compilation.Diagnostics);
+        }
+        if (compilation.Rmf2?.Project is { } project)
+            return new ProfileLocaleView(project.Id, project.DefaultLocale,
+                project.Locales.Select(locale => new ProfileLocale(locale.Tag, locale.FallbackTag)).ToArray(), compilation.Diagnostics);
+        return new ProfileLocaleView(null, null, Array.Empty<ProfileLocale>(), compilation.Diagnostics);
     }
 
     private void UpdateSlotKeys(Dictionary<string, byte[]?> changes, IReadOnlyDictionary<string, string?> keys, bool duplicate)
@@ -382,10 +397,20 @@ public sealed class Rmf2Workspace
             else if (change.Value is null) sources.Remove(change.Key);
             else if (change.Key.EndsWith(".rmf2", StringComparison.Ordinal)) sources[change.Key] = new TranslationSource(change.Key, change.Value);
         }
-        var compilation = TranslationCompiler.CompileProject(project, sources.Values, null, _cancellationToken);
-        if (!compilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
-        return new TranslationWorkspaceTransactionPlan(_root, compilation.Catalogs[0].Id, edits.AsReadOnly(), compilation);
+        TranslationProfileCompilation profileCompilation = TranslationCompiler.CompileProjectForSelectedProfile(project, sources.Values, null, _cancellationToken);
+        if (!profileCompilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", profileCompilation.Diagnostics.Select(d => d.Message)));
+        string catalogId = profileCompilation.Current?.Catalogs[0].Id ?? profileCompilation.Rmf2!.Project!.Id;
+        return new TranslationWorkspaceTransactionPlan(_root, catalogId, edits.AsReadOnly(), profileCompilation);
     }
+
+    private sealed record ProfileLocale(string Tag, string? Fallback);
+    private sealed record ProfileLocaleView(string? Catalog, string? DefaultLocale,
+        IReadOnlyList<ProfileLocale> Locales, IReadOnlyList<TranslationDiagnostic> Diagnostics)
+    {
+        internal bool Success => Catalog is not null && DefaultLocale is not null &&
+            !Diagnostics.Any(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
+    }
+
     public IReadOnlyList<string> LogicalPath(string path, Rmf2ResourceNode node) => Prefix(path).Concat(node.Path).ToArray();
     /// <summary>Resolves an explicit logical path relative to a physical resource mount.</summary>
     public IReadOnlyList<string> LocalPath(string path, IReadOnlyList<string> logicalPath)

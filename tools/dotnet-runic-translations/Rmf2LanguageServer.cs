@@ -22,6 +22,8 @@ internal sealed class Rmf2LanguageServer
     private readonly Dictionary<string, Buffer> _buffers = new(StringComparer.Ordinal);
     private readonly Stream _input;
     private readonly Stream _output;
+    private readonly Action<string>? _beforeRequest;
+    private readonly Action<string>? _requestCancelled;
     private readonly object _revisionGate = new();
     private string _encoding = "utf-16";
     private bool _shutdown;
@@ -34,7 +36,14 @@ internal sealed class Rmf2LanguageServer
     private bool _globalDiagnosticsRefreshPending;
     private bool _projectIndexRescanPending;
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    internal Rmf2LanguageServer(Stream input, Stream output) { _input = input; _output = output; }
+    internal Rmf2LanguageServer(Stream input, Stream output, Action<string>? beforeRequest = null,
+        Action<string>? requestCancelled = null)
+    {
+        _input = input;
+        _output = output;
+        _beforeRequest = beforeRequest;
+        _requestCancelled = requestCancelled;
+    }
     private CancellationToken _requestCancellation;
     private long _latestRevision;
     private long _processedRevision;
@@ -53,6 +62,10 @@ internal sealed class Rmf2LanguageServer
                 try
                 {
                     _requestCancellation.ThrowIfCancellationRequested();
+                    // Tests can coordinate the in-process worker through the
+                    // internal constructor. The production stdio entry point
+                    // never supplies a hook or exposes a barrier method.
+                    _beforeRequest?.Invoke(method);
                     if (method == "exit") return _shutdown ? 0 : 1;
                     JsonNode? result = Handle(method, request["params"] as JsonObject ?? new JsonObject());
                     lock (_revisionGate)
@@ -84,7 +97,16 @@ internal sealed class Rmf2LanguageServer
                 if (method == "$/cancelRequest")
                 {
                     string? target = request["params"]?["id"]?.ToJsonString();
-                    lock (_revisionGate) { if (target is not null && pending.TryGetValue(target, out var cancellation)) cancellation.Cancel(); }
+                    bool observed = false;
+                    lock (_revisionGate)
+                    {
+                        if (target is not null && pending.TryGetValue(target, out var cancellation))
+                        {
+                            cancellation.Cancel();
+                            observed = true;
+                        }
+                    }
+                    if (observed) _requestCancelled?.Invoke(target!);
                     continue;
                 }
                 var source = new CancellationTokenSource();
@@ -144,15 +166,39 @@ internal sealed class Rmf2LanguageServer
             if (command is "runic.preview" or "runic.renderPreview")
             {
                 string key = arguments[1]!.GetValue<string>(), locale = arguments[2]!.GetValue<string>();
-                var compilation = workspace.Validate();
+                TranslationProfileCompilation compilation = workspace.ValidateForProfile();
                 if (!compilation.Success) throw new TranslationAuthoringException(string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
-                var catalog = compilation.Catalogs.Single();
-                if (command == "runic.renderPreview") return Rmf2Preview.Render(catalog, key, locale, arguments[3]!.AsObject());
-                var artifact = JsonNode.Parse(TranslationOutputRenderer.RenderLocaleJson(catalog, locale).Text)!;
-                var message = artifact["messages"]?[key] ?? throw new TranslationAuthoringException("Unknown preview message.");
+                JsonNode message;
+                JsonNode markup;
+                JsonArray inputContract;
+                if (compilation.Current is { } current)
+                {
+                    CompiledTextCatalog catalog = current.Catalogs.Single();
+                    if (command == "runic.renderPreview") return Rmf2Preview.Render(catalog, key, locale, arguments[3]!.AsObject());
+                    JsonNode artifact = JsonNode.Parse(TranslationOutputRenderer.RenderLocaleJson(catalog, locale).Text)!;
+                    message = artifact["messages"]?[key] ?? throw new TranslationAuthoringException("Unknown preview message.");
+                    markup = JsonNode.Parse(catalog.Rmf2MarkupContract!)!;
+                    inputContract = new JsonArray(message["inputs"]!.AsObject().Select(input => (JsonNode)new JsonObject {
+                        ["name"] = input.Key,
+                        ["type"] = input.Value?["type"]?.GetValue<string>() ?? "string",
+                    }).ToArray());
+                }
+                else
+                {
+                    Rmf2ProjectV5 project = compilation.Rmf2!.Project!;
+                    if (command == "runic.renderPreview") return Rmf2Preview.Render(project, key, locale, arguments[3]!.AsObject());
+                    JsonNode artifact = JsonNode.Parse(Rmf2LocaleArtifactV5.Render(project, locale).Text)!;
+                    message = artifact["messages"]?[key]?["ast"] ?? throw new TranslationAuthoringException("Unknown preview message.");
+                    markup = JsonNode.Parse(project.MarkupContract)!;
+                    Rmf2MessageContractV5 contract = project.CanonicalMessages.Concat(project.ExtraMessages).Single(item => item.Key == key);
+                    inputContract = new JsonArray(contract.Inputs.Select(input => (JsonNode)new JsonObject {
+                        ["name"] = input.Name,
+                        ["type"] = input.Type,
+                    }).ToArray());
+                }
                 var examples = workspace.Documents.SelectMany(doc => doc.Nodes.Where(node => !node.IsGroup && string.Join('_', workspace.LogicalPath(doc.Source.Path, node)) == key))
                     .SelectMany(node => node.Properties.Where(value => value.StartsWith("example ", StringComparison.Ordinal)).Select(value => JsonNode.Parse(value.Substring(8))));
-                return new JsonObject { ["key"] = key, ["locale"] = locale, ["ast"] = message.DeepClone(), ["markup"] = JsonNode.Parse(catalog.Rmf2MarkupContract!), ["examples"] = new JsonArray(examples.ToArray()) };
+                return new JsonObject { ["key"] = key, ["locale"] = locale, ["ast"] = message.DeepClone(), ["inputs"] = inputContract, ["markup"] = markup, ["examples"] = new JsonArray(examples.ToArray()) };
             }
             if (command == "runic.renameResource")
                 return WorkspaceEdit(workspace.Rename(arguments[1]!.AsArray().Select(value => value!.GetValue<string>()).ToArray(), arguments[2]!.GetValue<string>()));
@@ -271,19 +317,32 @@ internal sealed class Rmf2LanguageServer
             string path = LocalPath(uri); var workspace = Workspace(path);
             string key = string.Join('_', workspace.LogicalPath(path, entry));
             string content = entry.MessageSyntax is { } messageSyntax ? workspace.LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte)) ?? key : key;
-            var compiled = workspace.Validate();
+            TranslationProfileCompilation compiled = workspace.ValidateForProfile();
             if (compiled.Success && !entry.IsGroup)
             {
-                var catalog = compiled.Catalogs.Single();
                 string locale = Path.GetFileNameWithoutExtension(path);
-                var value = catalog.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
-                if (value is not null)
+                if (compiled.Current is { } current)
                 {
-                    content += "\nContent locale: " + Path.GetFileNameWithoutExtension(value.SourceLocation.Path);
-                    if (value.Placeholders.Count > 0) content += "\nInputs: " + string.Join(", ", value.Placeholders.Select(input => "$" + input.Name + ": " + input.Type + (input.Format.Length == 0 ? "" : " (" + input.Format + ")")));
+                    CompiledTextCatalog catalog = current.Catalogs.Single();
+                    CompiledTranslation? value = catalog.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
+                    if (value is not null)
+                    {
+                        content += "\nContent locale: " + Path.GetFileNameWithoutExtension(value.SourceLocation.Path);
+                        if (value.Placeholders.Count > 0) content += "\nInputs: " + string.Join(", ", value.Placeholders.Select(input => "$" + input.Name + ": " + input.Type + (input.Format.Length == 0 ? "" : " (" + input.Format + ")")));
+                    }
+                    string? fallback = catalog.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
+                    if (fallback is not null) content += "\nFallback: " + fallback;
                 }
-                var fallback = catalog.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
-                if (fallback is not null) content += "\nFallback: " + fallback;
+                else
+                {
+                    Rmf2ProjectV5 project = compiled.Rmf2!.Project!;
+                    Rmf2TranslationV5? value = project.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
+                    Rmf2MessageContractV5? contract = project.CanonicalMessages.Concat(project.ExtraMessages).FirstOrDefault(item => item.Key == key);
+                    if (value is not null) content += "\nContent locale: " + value.ContentLocale;
+                    if (contract is { Inputs.Count: > 0 }) content += "\nInputs: " + string.Join(", ", contract.Inputs.Select(input => "$" + input.Name + ": " + input.Type));
+                    string? fallback = project.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
+                    if (fallback is not null) content += "\nFallback: " + fallback;
+                }
             }
             content += "\n" + string.Join("\n", entry.Comments) + "\n" + string.Join("\n", entry.Properties);
             return new JsonObject { ["contents"] = new JsonObject { ["kind"] = "plaintext", ["value"] = content } };
@@ -356,7 +415,7 @@ internal sealed class Rmf2LanguageServer
                 {
                     if (Path.GetFileName(entry) is not (".git" or "node_modules" or "bin" or "obj" or "dist" or "artifacts" or ".cache" or ".direnv" or ".vs")) directories.Push(entry);
                 }
-                else if (Path.GetExtension(entry).ToLowerInvariant() is ".cs" or ".ts" or ".tsx" or ".js" or ".jsx" or ".svelte" or ".toml" or ".resx" or ".razor" or ".xaml" or ".cpp" or ".h")
+                else if (Path.GetExtension(entry).ToLowerInvariant() is ".cs" or ".ts" or ".tsx" or ".js" or ".jsx" or ".svelte" or ".toml" or ".resx" or ".razor" or ".xaml" or ".cpp" or ".h" or ".mf2")
                     throw new TranslationAuthoringException("Rename refused: this workspace contains application or legacy sources whose references Runic cannot safely rewrite. Use the native language refactor, or explicitly choose Rename Resource in Resource Sources and update call sites separately.");
             }
         }
@@ -649,10 +708,10 @@ internal sealed class Rmf2LanguageServer
         {
             string project = BufferProjectDirectory(LocalPath(uri));
             group = BufferUris(project).ToArray();
-            catalogDiagnostics = Workspace(project, group).Validate().Diagnostics;
+            catalogDiagnostics = Workspace(project, group).ValidateForProfile().Diagnostics;
         }
         catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException) {
-            if (configuration) catalogDiagnostics = TranslationCompiler.CompileProject(new TranslationSource(LocalPath(uri), Utf8.GetBytes(text)), Array.Empty<TranslationSource>()).Diagnostics;
+            if (configuration) catalogDiagnostics = ConfigDiagnostics(new TranslationSource(LocalPath(uri), Utf8.GetBytes(text)));
         }
         PublishDiagnostics(catalogDiagnostics, group);
     }
@@ -695,12 +754,12 @@ internal sealed class Rmf2LanguageServer
         foreach (var group in groups)
         {
             IReadOnlyList<TranslationDiagnostic> diagnostics = Array.Empty<TranslationDiagnostic>();
-            try { diagnostics = Workspace(group.Key, group.Value).Validate().Diagnostics; }
+            try { diagnostics = Workspace(group.Key, group.Value).ValidateForProfile().Diagnostics; }
             catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException)
             {
                 string configUri = new Uri(Path.Combine(group.Key, "runic.json")).AbsoluteUri;
                 if (_buffers.TryGetValue(configUri, out Buffer? config))
-                    diagnostics = TranslationCompiler.CompileProject(new TranslationSource(LocalPath(configUri), Utf8.GetBytes(config.Text)), Array.Empty<TranslationSource>()).Diagnostics;
+                    diagnostics = ConfigDiagnostics(new TranslationSource(LocalPath(configUri), Utf8.GetBytes(config.Text)));
             }
             PublishDiagnostics(diagnostics, group.Value);
         }
@@ -723,6 +782,9 @@ internal sealed class Rmf2LanguageServer
             }).ToArray()));
         }
     }
+
+    private IReadOnlyList<TranslationDiagnostic> ConfigDiagnostics(TranslationSource project)
+        => TranslationCompiler.CompileProjectForSelectedProfile(project, Array.Empty<TranslationSource>(), null, _requestCancellation).Diagnostics;
     private void Publish(string uri, JsonArray diagnostics)
     {
         lock (_revisionGate)

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { LanguageClient, type LanguageClientOptions, type WorkspaceEdit as ProtocolEdit } from "vscode-languageclient/node";
 import { serverLaunch, sourceWatchRoots } from "./server.js";
-import { previewHtml, type Preview } from "./preview.js";
+import { resolvePreviewHtml, type Preview, type RenderedPreview } from "./preview.js";
 import { ForwardedWatchers } from "./watchers.js";
 
 interface MessageInfo { key: string; localKey: string; isGroup: boolean; path: string[]; logicalPath: string[]; locale: string; locales: string[]; inputs: string[]; slots: string[] }
@@ -104,12 +104,14 @@ export function activate(context: vscode.ExtensionContext) {
     const preview = await client.sendRequest<Preview>("workspace/executeCommand", { command: "runic.preview", arguments: [editor.document.uri.toString(), info.key, locale] });
     const samples: Record<string, string> = {};
     const example = preview.examples[0] ?? {};
-    for (const name of Object.keys(preview.ast.inputs)) {
+    const inputNames = preview.inputs.map(input => input.name);
+    for (const name of inputNames) {
       const value = await vscode.window.showInputBox({ prompt: `Sample value for ${name}`, value: name in example ? String(example[name]) : "" });
       if (value === undefined) return;
       samples[name] = value;
     }
-    const html = previewHtml(preview, samples);
+    const html = await resolvePreviewHtml(preview, samples, () =>
+      client.sendRequest<RenderedPreview>("workspace/executeCommand", { command: "runic.renderPreview", arguments: [editor.document.uri.toString(), info.key, locale, samples] }));
     const panel = vscode.window.createWebviewPanel("runic.preview", `${info.key} · ${locale}`, vscode.ViewColumn.Beside, { enableScripts: false, localResourceRoots: [] });
     panel.webview.html = html;
   });

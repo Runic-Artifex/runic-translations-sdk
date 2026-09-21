@@ -2,9 +2,10 @@
 
 The maintained payment fixture is `specs/translations/examples/rmf2`. Compiler,
 external-pack and generated .NET/ESM checks exercise its contracts, conditional
-slots and locale variants. RMF2 execution remains the bounded
-`rmf2-execution-v1` profile; accepting syntax does not promise execution of every
-Unicode function or draft feature.
+slots and locale variants. Projects that omit `executionProfile` retain the
+bounded `rmf2-execution-v1` profile; explicit `rmf2-execution-v2` projects use
+the typed v5 path. Neither profile promises every Unicode function or draft
+feature merely because its syntax is accepted.
 
 ## Focused checks
 
@@ -65,14 +66,20 @@ The official VSSDK packaging targets generate installer metadata; the archive
 verifier checks declared assets, TextMate grammar and exclusion of host DLLs.
 Installation and native host checks passed on Windows 11 build 26200,
 Visual Studio Community 2026 18.8.2, on 2026-09-11 in an isolated `RunicRmf2`
-profile. The maintained [native interaction test](../../../tools/visualstudio-runic-translations/test/native-host.ps1)
-checks registered commands, inert rich content, invalid-number recovery, locale
-selection and unsaved text after server restart. The 2022 host is API-targeted
-but was not separately run.
+profile, using the then-current default-profile fixture. The maintained
+[native interaction test](../../../tools/visualstudio-runic-translations/test/native-host.ps1)
+now selects `rmf2-execution-v2` and checks registered commands, inert rich
+content, invalid-number recovery, locale selection and unsaved text after server
+restart. That updated execution-v2 script still requires an interactive Windows
+rerun. The VSIX declares
+`[17.14,19.0)` because the client targets the 17.14 API and the tested host is
+in the 18.x line. This range declaration is not a claim that every host is
+validated: native evidence currently covers only Visual Studio Community 2026
+18.8.2; the Visual Studio 2022 17.14 host remains platform-only validation.
 
-The focused RMF2 CLI/LSP suite passes 5/5 on Windows and Linux, including plain
-and rich German runtime previews. The runtime suite passes 175/175, including a
-zero-input compiled variant regression. See the [Windows integration procedure](../../../tools/visualstudio-runic-translations/README.md)
+The focused RMF2 CLI/LSP suite includes explicit execution-v2 preview and
+resource-only refactor coverage, plus mounted multi-project discovery and
+diagnostic isolation. See the [Windows integration procedure](../../../tools/visualstudio-runic-translations/README.md)
 for build, installation and interactive-session execution.
 
 ## Representative measurements
@@ -102,6 +109,25 @@ returns a string; rich paths construct semantic content and adapter nodes.
 Native layout, browser layout, GC pauses and end-to-end language-server transport
 are outside these measurements. The syntax cache has a separately tested bounded
 capacity and reuses only byte-identical resource snapshots.
+
+The transport-level LSP measurement is opt-in and has its workload and generous
+pass/fail limits checked into
+`tests/benchmarks/translations/rmf2-lsp/baseline-v2.json`:
+
+```sh
+dotnet run -c Release --project tests/dotnet/Runic.Translations.Build.Tests -- --rmf2-lsp-benchmark
+```
+
+It measures an explicitly activated v2 2,000-message catalog and a ranged
+incremental edit through the real child-process stdio entry point (three samples,
+reporting medians). Queued cancellation uses the same framed protocol over
+in-process streams with internal worker and cancellation-observed hooks, so the
+reader has cancelled the queued target before the worker resumes. The production
+stdio entry point supplies neither hook and exposes no test barrier protocol
+method.
+CI runs the same command as a deterministic, workload-specific regression guard
+with generous upper bounds; those bounds are not a latency promise. Host-only
+Visual Studio UI/layout time is outside the measurement.
 
 ## Interchange boundary
 

@@ -58,6 +58,37 @@ internal static class Rmf2ProjectV5EmissionEligibility
         (project ?? throw new ArgumentNullException(nameof(project))).CanonicalMessages.Count != 0;
 }
 
+internal sealed record Rmf2V5Definition(int Id, Rmf2MessageContractV5 Contract, bool Canonical);
+
+internal sealed class Rmf2V5DefinitionTable
+{
+    private readonly Dictionary<string, Rmf2V5Definition> _byKey;
+    private Rmf2V5DefinitionTable(IReadOnlyList<Rmf2V5Definition> definitions)
+    {
+        Definitions = definitions;
+        _byKey = definitions.ToDictionary(item => item.Contract.Key, StringComparer.Ordinal);
+    }
+
+    internal IReadOnlyList<Rmf2V5Definition> Definitions { get; }
+    internal int Id(string key) => _byKey[key].Id;
+    internal Rmf2MessageContractV5 Contract(string key) => _byKey[key].Contract;
+
+    internal static Rmf2V5DefinitionTable Create(Rmf2ProjectV5 project)
+    {
+        var result = new List<Rmf2V5Definition>();
+        foreach (Rmf2MessageContractV5 contract in project.CanonicalMessages.OrderBy(item => item.Id))
+        {
+            if (contract.Id != result.Count) throw new InvalidOperationException("Canonical v5 message IDs must be contiguous.");
+            result.Add(new(contract.Id, contract, true));
+        }
+        foreach (Rmf2MessageContractV5 contract in project.ExtraMessages.OrderBy(item => item.Key, StringComparer.Ordinal))
+            result.Add(new(result.Count, contract, false));
+        if (result.Select(item => item.Contract.Key).Distinct(StringComparer.Ordinal).Count() != result.Count)
+            throw new InvalidOperationException("Duplicate v5 message contract key.");
+        return new(result.ToArray());
+    }
+}
+
 // Versioned, injective mapping over NFC names; no transliteration, keyword table,
 // case folding or collision suffix depends on which other messages are present.
 // Always encoding also distinguishes an input named "r_61" from an input "a".

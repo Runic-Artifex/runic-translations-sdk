@@ -58,7 +58,7 @@ public static class TranslationWorkspaceTransaction
     private static void CommitCore(TranslationWorkspaceTransactionPlan plan, Action<int>? afterApply)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        if (!plan.Compilation.Success)
+        if (!plan.IsCompilerValid)
             throw new TranslationAuthoringException("A workspace transaction cannot commit a compiler-invalid plan.");
         if (plan.Edits.Count is 0 or > MaximumEdits)
             throw new TranslationAuthoringException($"A workspace transaction must contain between 1 and {MaximumEdits} edits.");

@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, realpathSyn
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { serverLaunch, sourceWatchRoots } from "../src/server.js";
-import { previewHtml } from "../src/preview.js";
+import { previewHtml, resolvePreviewHtml } from "../src/preview.js";
 import { ForwardedWatchers, type DisposableLike, type WatcherLike } from "../src/watchers.js";
 
 class MockWatcher implements WatcherLike<string> {
@@ -94,7 +94,26 @@ test("refreshed source watchers forward events and dispose replaced subscription
   expect(created[1].changed).toHaveLength(0);
 });
 test("preview reuses normalized execution and never creates application navigation or active markup", () => {
-  const html = previewHtml({ key: "<script>", locale: "en", examples: [], ast: { astVersion: 4, inputs: {}, selectors: [], variants: [{ matches: {}, nodes: [{ kind: "text", value: "<script>alert(1)</script>" }, { kind: "markup", name: "runic:link", attributes: { ref: "help" }, children: [{ kind: "text", value: "Help" }] }, { kind: "markup", name: "runic:action", attributes: {}, children: [{ kind: "text", value: "Retry" }] }] }] } }, {});
+  const html = previewHtml({ key: "<script>", locale: "en", examples: [], inputs: [], ast: { astVersion: 4, inputs: {}, selectors: [], variants: [{ matches: {}, nodes: [{ kind: "text", value: "<script>alert(1)</script>" }, { kind: "markup", name: "runic:link", attributes: { ref: "help" }, children: [{ kind: "text", value: "Help" }] }, { kind: "markup", name: "runic:action", attributes: {}, children: [{ kind: "text", value: "Retry" }] }] }] } }, {});
   expect(html).toContain("&lt;script&gt;"); expect(html).not.toContain("<script>");
   expect(html).toContain("aria-disabled=\"true\""); expect(html).toContain("<button disabled>"); expect(html).not.toContain("href=");
+});
+test("execution-v2 preview selects server rendering and remains inert", async () => {
+  let rendered = false;
+  const html = await resolvePreviewHtml({
+    key: "<key>", locale: "en", examples: [], inputs: [],
+    ast: { astVersion: 5, profile: "rmf2-execution-v2", inputs: [] },
+  }, {}, async () => {
+    rendered = true;
+    return { key: "<key>", locale: "en", runs: [
+    { text: "<script>alert(1)</script>" },
+    { name: "runic:link", text: null, children: [{ text: "Help" }] },
+    { name: "runic:action", text: null, children: [{ text: "Retry" }] },
+    { name: "shop:badge", text: null, children: [{ text: "Ready" }] },
+    ] };
+  });
+  expect(rendered).toBe(true);
+  expect(html).toContain("&lt;script&gt;"); expect(html).not.toContain("<script>");
+  expect(html).toContain("aria-disabled=\"true\""); expect(html).toContain("<button disabled>"); expect(html).not.toContain("href=");
+  expect(html).toContain("title=\"shop:badge\"");
 });

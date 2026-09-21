@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -16,6 +17,7 @@ internal static class WorkspaceMutationTests
         runner.Add("Locale removal deletes documents and repairs fallback edges", RemoveLocale);
         runner.Add("Fallback mutation rejects cycles before writing", FallbackCycle);
         runner.Add("Key lifecycle mutations preserve values across locales", KeyLifecycle);
+        runner.Add("Transaction plans snapshot validated edits and expose immutable bytes", ImmutablePlan);
         runner.Add("Transaction rejects stale revisions without partial writes", StaleRevision);
         runner.Add("Interrupted transaction can complete from its journal", CompleteRecovery);
         runner.Add("Interrupted transaction can roll back byte-exactly", RollbackRecovery);
@@ -86,6 +88,37 @@ internal static class WorkspaceMutationTests
             Assert.Equal("Confirm\n", File.ReadAllText(System.IO.Path.Combine(project.Path, locale, "action_confirm_again.mf2"), Encoding.UTF8));
         }
         Assert.True(CompileProject(project.Path).Success, "The key lifecycle result did not compile.");
+    }
+
+    private static void ImmutablePlan()
+    {
+        using ProjectWorkspace project = new();
+        TranslationWorkspaceTransactionPlan validated = TranslationWorkspaceMutation.AddLocale(
+            new TranslationAddLocaleRequest(project.Path, "product", "fr", "de", "de"));
+        TranslationWorkspaceEdit[] callerEdits = validated.Edits.ToArray();
+        TranslationWorkspaceTransactionPlan plan = new(project.Path, validated.CatalogId, callerEdits, validated.Compilation);
+        TranslationWorkspaceEdit created = plan.Edits.Single(edit => edit.Kind == TranslationWorkspaceEditKind.Create);
+        byte[] expectedBytes = created.GetUtf8Bytes()!;
+
+        var replacement = new TranslationWorkspaceEdit("unvalidated.mf2", TranslationWorkspaceEditKind.Create, null, Encoding.UTF8.GetBytes("unvalidated"));
+        callerEdits[0] = replacement;
+        Assert.True(plan.Edits is not TranslationWorkspaceEdit[], "The plan exposed its edit snapshot as a replaceable array.");
+        var publicList = (IList<TranslationWorkspaceEdit>)plan.Edits;
+        try { publicList[0] = replacement; throw new InvalidOperationException("The public edit list accepted a replacement."); }
+        catch (NotSupportedException) { }
+        var untypedPublicList = (System.Collections.IList)plan.Edits;
+        try { untypedPublicList[0] = replacement; throw new InvalidOperationException("The untyped public edit list accepted a replacement."); }
+        catch (NotSupportedException) { }
+
+        byte[] publicBytes = created.GetUtf8Bytes()!;
+        publicBytes[0] ^= 0xff;
+        Assert.True(created.GetUtf8Bytes()!.SequenceEqual(expectedBytes), "The public byte accessor exposed mutable plan storage.");
+
+        TranslationWorkspaceTransaction.Commit(plan);
+        Assert.True(!File.Exists(System.IO.Path.Combine(project.Path, "unvalidated.mf2")), "Commit applied an edit supplied after validation.");
+        Assert.True(File.ReadAllBytes(System.IO.Path.Combine(project.Path, created.RelativePath)).SequenceEqual(expectedBytes),
+            "Commit did not apply the snapshotted validated edit bytes.");
+        Assert.True(CompileProject(project.Path).Success, "The immutable transaction plan did not preserve the validated project.");
     }
 
     private static void StaleRevision()

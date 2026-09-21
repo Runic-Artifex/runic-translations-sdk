@@ -1,7 +1,9 @@
 # Runic RMF2 Translations for Visual Studio
 
-Development preview targeting Visual Studio 2022 17.14 and compatible newer
-hosts, Windows x64. Native checks use Visual Studio 2026 18.8.2. The MEF client
+Development preview declares a Visual Studio host range of 17.14 through 18.x
+(`[17.14,19.0)`), Windows x64. The in-process API is pinned to 17.14. Native
+evidence currently covers only Visual Studio Community 2026 18.8.2; the range
+declaration is not evidence that every host in it has been run. The MEF client
 registers `.rmf2` with Visual Studio's remote-code content type and uses the same
 stdio language server as VS Code. TextMate highlighting, diagnostics, completion,
 hover, symbols, definition/references, formatting and bounded F2 resource/local
@@ -55,6 +57,7 @@ Cross-compilation uses the SDK development shell:
 ```sh
 dotnet build tools/dotnet-runic-translations
 dotnet build tools/visualstudio-runic-translations
+python tools/visualstudio-runic-translations/package.py --check-source
 ```
 
 Create the installable VSIX with Visual Studio's full-framework MSBuild on
@@ -76,14 +79,19 @@ A native-built archive copied to Linux can be verified with `package.py --input
 archive.
 
 The VS host dependency set is pinned separately from the SDK's modern runtime
-packages: in-process dependencies must match Visual Studio 17.14.
+packages: in-process dependencies target the Visual Studio 17.14 API surface.
+The declared host range is `[17.14,19.0)`; native evidence currently covers
+only Visual Studio Community 2026 18.8.2.
 `packages.lock.json` records the graph. The VSIX contains only the extension's
 own managed assembly; VS-owned DLLs resolve from the host.
 
 ## Windows integration check
 
 Use a dedicated experimental instance; the maintained test expects
-`/RootSuffix RunicRmf2` and a signed-in interactive Windows desktop:
+`/RootSuffix RunicRmf2` and a signed-in interactive Windows desktop. The script
+copies the maintained payment fixture and explicitly activates
+`rmf2-execution-v2`. The recorded 2026-09-11 native run predates that activation,
+so the updated path still requires a fresh interactive receipt:
 
 1. Build the language server and VSIX, then install with
    `VSIXInstaller.exe /rootSuffix:RunicRmf2 /quiet <native-built.vsix>`.

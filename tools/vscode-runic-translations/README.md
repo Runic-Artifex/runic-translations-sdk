@@ -20,11 +20,13 @@ watchers. Open a common containing workspace for such mounts; roots outside that
 boundary and symlink/reparse-point escapes are not watched.
 
 The Runic commands in the Command Palette provide inert example previews, group
-extraction/inlining and explicitly source-only input/slot/resource renames. Preview shares
-the Translations Editor's normalized AST evaluator. Links/actions are inert,
-icons are placeholders and custom markup is labeled; no application callbacks or
-application startup are involved. Custom renderer code is never loaded by the
-extension.
+extraction/inlining and explicitly source-only input/slot/resource renames.
+Default-profile preview shares the Translations Editor's normalized v4 AST
+evaluator. Explicit `rmf2-execution-v2` preview asks the server to execute its
+verified .NET runtime plan and renders the returned inert runs. Links/actions are
+inert, icons are placeholders and custom markup is labeled; no application
+callbacks or application startup are involved. Custom renderer code is never
+loaded by the extension.
 
 The LSP owns RMF2 plus configuration synchronization. Existing C#, TypeScript,
 Svelte, TOML and legacy MF2 language services retain their files. Resource-source

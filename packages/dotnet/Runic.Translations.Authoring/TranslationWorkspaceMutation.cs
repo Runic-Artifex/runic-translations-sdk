@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Compiler;
+using JsonValue = System.Text.Json.Nodes.JsonValue;
 
 namespace Runic.Translations.Authoring;
 
