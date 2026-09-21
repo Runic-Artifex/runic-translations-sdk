@@ -34,5 +34,16 @@ artifact 4, .NET RMF2 ABI requirement 1, ESM ABI 3, and web manifest v2. Adding
 the newer contract from file extensions. C++ and standalone v5
 TypeScript/template contracts remain unsupported.
 
+The first-party editor and IDE integrations preserve that explicit profile
+boundary. Their source edits and XLIFF imports are resource-only: they do not
+change application-language call sites. The editor's XLIFF 2.1 interchange is a
+closed plain-text profile, not a general rich-MF2 transport; structured units
+produce a semantic-loss report and are refused on text-profile import.
+
+The frozen RMF2 v1 scope excludes terms, references, group fallback, C++ RMF2,
+rich XLIFF, direct legacy-to-RMF2 migration, application call-site rewriting,
+and marketplace concerns. Adding any of these needs an explicit contract and
+compatibility decision rather than an implicit extension of either profile.
+
 Preview releases may make breaking changes when release notes identify the
 affected contract. Stable releases follow SemVer for public package APIs.

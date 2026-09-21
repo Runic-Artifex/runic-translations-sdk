@@ -23,7 +23,7 @@ and `2` when validation cannot start.
 
 ## Headless interchange
 
-Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an import's reviewable diff and refusals without changing the workspace. An XLIFF import updates the target locale's conventional MF2 message files. An import is applied only when `--apply` is explicit; it previews and consumes the confirmation within one process, so no confirmation token is persisted or reusable.
+Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an import's reviewable diff and refusals without changing the workspace. An XLIFF import updates only the target project's declared translation resources. An import is applied only when `--apply` is explicit; it previews and consumes the confirmation within one process, so no confirmation token is persisted or reusable.
 
 ```bash
 ./runic-translations-editor export /path/to/workspace --format xliff --output .runic-translations/export
@@ -34,7 +34,7 @@ Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an 
 ./runic-translations-editor report /path/to/workspace --format review --source .runic-translations/export/catalog.review.json
 ```
 
-`--output` belongs to `export`; select the command response envelope with `--runic-output json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). A report or import that is refused returns exit code `1` and lists its refusal codes in both human output and the JSON fault details.
+`--output` belongs to `export`; select the command response envelope with `--runic-output json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). An XLIFF import updates only the selected project's translation resources: conventional `.mf2` files, locale TOML, or RMF2 `.rmf2` files according to its source layout. A report or import that is refused returns exit code `1` and lists its refusal codes in both human output and the JSON fault details.
 
 ## Local support diagnostics
 
@@ -48,13 +48,15 @@ compiler model. Diagnostics remain privacy-bounded and writes use revision
 checks plus atomic replacement.
 
 Both the compatible RMF2 execution profile and explicit
-`rmf2-execution-v2` projects use their selected compiler/runtime pipeline.
-Execution-v2 previews are formatted by the verified .NET artifact/pack path;
-the browser receives inert semantic runs and never approximates AST 5 in
-JavaScript. Editor refactors and XLIFF imports are resource-only: they do not
-rewrite application call sites. The closed XLIFF 2.1 profile round-trips direct
-plain-text RMF2 resources, reports structured messages as semantic loss, and
-refuses structured imports instead of flattening them.
+`rmf2-execution-v2` projects use their selected compiler/runtime pipeline. The
+editor's internal interchange projection accepts either profile without
+fabricating a public v5 catalog from the v4 carrier. Execution-v2 previews are
+formatted by the verified .NET artifact/pack path; the browser receives validated
+inert semantic runs and never approximates AST 5 in JavaScript. Editor refactors
+and XLIFF imports are resource-only: they do not rewrite application call sites.
+The closed XLIFF 2.1 profile deterministically round-trips direct plain-text
+RMF2 resources, reports structured messages as semantic loss, and refuses
+structured imports instead of flattening them.
 
 Machine-translation providers and signed stable distribution are not available yet.
 

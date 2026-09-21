@@ -7,6 +7,13 @@ bounded `rmf2-execution-v1` profile; explicit `rmf2-execution-v2` projects use
 the typed v5 path. Neither profile promises every Unicode function or draft
 feature merely because its syntax is accepted.
 
+The version-explicit [`rmf2-v1` corpus](../../../specs/translations/corpus/rmf2-v1/README.md)
+is the common release oracle for the explicit v2 profile. It supplies the same
+typed execution and rejection expectations to the compiler, generated C#,
+.NET artifact-v5 loader, generated ESM, and ESM dynamic-pack loader. The payment
+fixture remains the maintained end-to-end example; neither fixture turns the
+bounded profile into full Unicode MF2 conformance.
+
 ## Focused checks
 
 Run these in the locked project development shell:
@@ -134,8 +141,10 @@ Visual Studio UI/layout time is outside the measurement.
 RMF2 source is the lossless representation for markup, declarations, variants
 and attached metadata. The existing closed XLIFF 2.1 text profile reports
 structured messages as semantic losses. It does not claim lossless interchange
-for arbitrary rich MF2. Review its loss report before
-using a text-profile export for translation.
+for arbitrary rich MF2. Review its loss report before using a text-profile export
+for translation. The import side refuses those structured units rather than
+flattening them; an approved review stamp uses the closed-text-profile
+fingerprint, while source freshness remains a separate conflict check.
 
 The editor smoke fixture selects `rmf2-execution-v2` and covers mounted
 resource mutations, locale/fallback transactions, save/reload, deterministic

@@ -13,9 +13,12 @@ per locale with `sourceLayout: "locale-toml"` in `runic.json`.
 
 The editor also supports projects that opt into `sourceLayout: "rmf2-v1"`,
 including explicit `executionProfile: "rmf2-execution-v2"`. Its edits remain
-resource-only. Plain direct resources use the closed XLIFF text profile;
-structured exports carry an explicit loss report and cannot be imported through
-that text profile.
+resource-only and never rewrite application call sites. Plain direct resources
+use the closed, deterministic XLIFF 2.1 text profile. Structured exports carry
+an explicit loss report and their units are refused on import through that text
+profile instead of being flattened. Execution-v2 preview is rendered through the
+verified .NET artifact/pack path; the browser receives only inert semantic runs
+and does not load application callbacks or renderers.
 RMF2 is a bounded profile rather than full Unicode MF2 conformance; see the
 [RMF2 implementation guide](../../docs/guides/translations/rmf2.md) for its
 supported resource and markup contracts.
