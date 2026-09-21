@@ -1,10 +1,13 @@
 # RMF2 semantic v5 foundation
 
-The additive `rmf2-execution-v2` profile has a typed compiler model, a staged
+The additive `rmf2-execution-v2` profile has a typed compiler model,
 resolved-locale artifact writer, strict .NET external-pack loading, and published
-v5 message/artifact schemas. It is not enabled by the default project output or
-CLI yet. Existing RMF2 projects continue to emit v4 and use the v1 execution
-profile, with their existing supported features and refusal diagnostics.
+v5 message/artifact schemas. Add `executionProfile: "rmf2-execution-v2"` to an
+`rmf2-v1` project to activate typed v5 C#/.NET and ESM output. Omit it to retain
+the existing v4/v1 behavior. C++ and standalone v5 TypeScript/template contracts
+remain unsupported and are refused deterministically.
+An empty project is valid as an authoring scaffold; generation and verification
+require at least one canonical key in the effective default locale.
 
 The new model preserves input/local references, formatted literal operands,
 formatter metadata through local chains, ordered typed options, and inert
@@ -42,7 +45,7 @@ describe these rules and the integration boundary. Public schema mirrors are
 [message AST v5](/schemas/translations/message-ast-v5.schema.json) and
 [locale artifact v5](/schemas/translations/locale-artifact-v5.schema.json).
 The CLI `schema` command also exports both v5 schemas for offline validation;
-schema distribution does not enable v5 project generation or runtime loading.
+schema distribution alone does not activate a project; the explicit selector does.
 Resource syntax and markup contracts remain version 1.
 
 The v5 pack path is explicitly dispatched by artifact version, grammar and
@@ -54,5 +57,6 @@ verification when authenticity is required; a matching fingerprint proves
 compatibility, not provenance. Legacy v1/v2/v4 constructors and readers remain
 unchanged and reject v5 artifacts.
 
-Generated C#/ESM emission and public profile activation remain later integration
-slices. No backend-parity claim follows from the staged artifact/loader path alone.
+The CLI, source generator/MSBuild integration, and Vite plugin dispatch the
+selected profile to the v5 C#/ESM backends. This does not claim package-only
+consumer, cross-backend corpus, NativeAOT, or published-release evidence.

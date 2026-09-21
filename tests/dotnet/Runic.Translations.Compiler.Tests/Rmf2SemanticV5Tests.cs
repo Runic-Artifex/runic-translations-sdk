@@ -307,6 +307,8 @@ internal static class Rmf2SemanticV5Tests
     private static void Registry()
     {
         using var profile = JsonDocument.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "rmf2-execution-v2.json")));
+        Assert.Equal("project-activated", profile.RootElement.GetProperty("implementationStage").GetString());
+        Assert.Equal("dotnet,esm", string.Join(',', profile.RootElement.GetProperty("executableBackends").EnumerateArray().Select(item => item.GetString())));
         var functions = profile.RootElement.GetProperty("functions");
         Assert.Equal(Rmf2FunctionRegistryV2.Functions.Count, functions.EnumerateObject().Count());
         foreach (var rule in Rmf2FunctionRegistryV2.Functions)

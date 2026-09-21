@@ -28,7 +28,11 @@ dotnet tool restore
 dotnet build
 ```
 
-The project declaration and MF2 messages become Roslyn `AdditionalFiles` with `RunicTranslationKind` metadata for `Runic.Translations.Generator`. ESM output defaults to `obj/<configuration>/<target-framework>/translations/app.esm/`; consume its `web-module-manifest-v2.json` with the Vite adapter.
+The project declaration and messages become Roslyn `AdditionalFiles` with
+`RunicTranslationKind` metadata for `Runic.Translations.Generator`. ESM output
+defaults to `obj/<configuration>/<target-framework>/translations/app.esm/` and
+`web-module-manifest-v2.json`. An RMF2 execution-v2 project instead uses
+`app.esm-v5/` and `web-module-manifest-v3.json`; consume either with the Vite adapter.
 
 ## Select generated artifacts
 
@@ -42,14 +46,19 @@ Set one or more of these properties to `true`:
 | `TranslationsEmitEsm` | Tree-shakable ESM modules and declarations |
 | `TranslationsEmitCpp` | Experimental C++20 output |
 
-`TranslationsGenerateOnBuild=true` with no individual selection emits JSON, TypeScript, template, and ESM groups; C++ remains explicit. Generated C# is never written to disk by this package—it belongs to the source generator.
+`TranslationsGenerateOnBuild=true` with no individual selection emits JSON,
+TypeScript, template, and ESM groups for the default profile. Execution-v2 emits
+locale-v5 JSON plus its asset manifest and ESM-v5; C# remains source-generator
+owned. Explicit TypeScript, template, and C++ selection fails with `RTR0065` for
+v5 because version-correct renderers do not exist. Generated C# is never written
+to disk by this package—it belongs to the source generator.
 
 Choose this package for generated C# and whenever MSBuild owns input classification or non-C# artifact generation. Use the CLI directly when generation is owned by Vite, CI, or another host.
 
 ## Important build behavior
 
 - Discovery follows the declared `TranslationProject` directory, including nondefault paths. Explicit `TranslationToml` and legacy `TranslationMf2` items override the corresponding discovery. File membership is recorded in generation state so additions and removals invalidate artifacts.
-- The current target accepts exactly one `runic.json` project and its discovered sibling `{locale}.toml` files (`sourceLayout: "locale-toml"`) or legacy `.mf2` messages.
+- The current target accepts exactly one `runic.json` project and its discovered sibling `{locale}.toml` files (`sourceLayout: "locale-toml"`), legacy `.mf2` messages, or recursive RMF2 `.rmf2` sources (`sourceLayout: "rmf2-v1"`).
 - The default launcher is the project-local `dotnet tool run runic-translations --`; restore the committed tool manifest before building.
 - Output must resolve beneath `IntermediateOutputPath`. Unsafe paths fail with `RTR0020`.
 - Incremental generation tracks inputs, settings, the tool manifest, declared outputs, and an owned-output inventory.
@@ -71,3 +80,6 @@ Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob
 ## RMF2
 
 RMF2 projects opt in with `sourceLayout: "rmf2-v1"`. The bundled .NET MSBuild task discovers recursive `{locale}.rmf2` files and explicit `sourceRoots`, including membership changes. It uses the host Microsoft.Build.Framework assembly. Source-checkout imports require building this package first. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md).
+
+Add `executionProfile: "rmf2-execution-v2"` to select typed v5 generated C# and
+the v5 non-C# defaults. Omitting it preserves v4 output.

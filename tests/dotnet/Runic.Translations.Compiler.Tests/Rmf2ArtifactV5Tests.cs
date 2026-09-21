@@ -15,8 +15,34 @@ internal static class Rmf2ArtifactV5Tests
     internal static void Register(TestRunner runner)
     {
         runner.Add("RMF2 v5 locale artifact round-trips typed fallback content without v4 conversion", RoundTrip);
+        runner.Add("RMF2 v5 locale outputs produce a schema-valid deterministic asset manifest", AssetManifest);
         runner.Add("RMF2 v5 external pack rejects hostile envelope and AST mutations", HostileMatrix);
         runner.Add("RMF2 v5 pack factories preserve legacy ASCII validation and old reader rejection", VersionIsolation);
+    }
+
+    private static void AssetManifest()
+    {
+        (Rmf2ProjectV5 project, _) = Fixture("en");
+        TranslationGeneratedOutput[] locales = project.Locales
+            .Select(locale => Rmf2LocaleArtifactV5.Render(project, locale.Tag)).ToArray();
+        TranslationGeneratedOutput manifest = TranslationOutputRenderer.RenderRmf2V5AssetManifestJson(project, locales);
+        JsonObject root = JsonNode.Parse(manifest.Text)!.AsObject();
+        Rmf2SemanticV5SchemaTests.AssertValidation(Rmf2SemanticV5SchemaTests.ReadSchema("asset-manifest-v1.schema.json"),
+            root, true, "Emitted v5 asset manifest");
+        Assert.Equal(project.Id + ".asset-manifest-v1.json", manifest.RelativePath);
+        JsonArray assets = root["assets"]!.AsArray();
+        Assert.Equal(locales.Length, assets.Count);
+        for (int index = 0; index < locales.Length; index++)
+        {
+            TranslationGeneratedOutput locale = locales[index];
+            JsonObject asset = assets[index]!.AsObject();
+            Assert.Equal(locale.RelativePath, asset["path"]!.GetValue<string>());
+            Assert.Equal(locale.Sha256.Substring("sha256:".Length), asset["sha256"]!.GetValue<string>());
+            Assert.Equal(locale.GetUtf8Bytes().Length, asset["byteLength"]!.GetValue<int>());
+            Assert.Equal("application/json", asset["mediaType"]!.GetValue<string>());
+            Assert.Equal(project.Locales[index].Tag, asset["locale"]!.GetValue<string>());
+        }
+        Assert.Equal(manifest.Text, TranslationOutputRenderer.RenderRmf2V5AssetManifestJson(project, locales.Reverse()).Text);
     }
 
     private static void RoundTrip()

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using Json.Schema;
 
 namespace Runic.Translations.Compiler.Tests;
 
@@ -15,7 +16,27 @@ internal static class SchemaTests
         runner.Add("schemas contain only resolvable local references", LocalReferencesResolve);
         runner.Add("published schema identifiers match their bundled file names", CanonicalIdentifiersMatchFiles);
         runner.Add("v3 source and locale-pack schemas publish closed profile boundaries", V3SchemaBoundaries);
+        runner.Add("project schema constrains RMF2 execution-v2 activation", ProjectExecutionProfileBoundary);
         runner.Add("valid corpus sources are strict JSON", ValidCorpusSourcesAreStrictJson);
+    }
+
+    private static void ProjectExecutionProfileBoundary()
+    {
+        JsonSchema schema = JsonSchema.FromFile(ReadSchemaPath("project-v1.schema.json"),
+            new BuildOptions { Dialect = Dialect.Draft202012 });
+        const string Prefix = "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"";
+        AssertProject(Prefix + "}", true, "omitted profile");
+        AssertProject(Prefix + ",\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"}", true, "selected RMF2 profile");
+        AssertProject(Prefix + ",\"executionProfile\":\"rmf2-execution-v2\"}", false, "profile without layout");
+        AssertProject(Prefix + ",\"sourceLayout\":\"locale-toml\",\"executionProfile\":\"rmf2-execution-v2\"}", false, "profile with wrong layout");
+        AssertProject(Prefix + ",\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"future-profile\"}", false, "unknown profile");
+
+        void AssertProject(string json, bool expected, string context)
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            EvaluationResults result = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+            Assert.Equal(expected, result.IsValid, context + ": " + result);
+        }
     }
 
     private static void SchemasAreVersionedAndClosed()

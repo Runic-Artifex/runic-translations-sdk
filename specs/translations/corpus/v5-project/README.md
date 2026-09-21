@@ -10,5 +10,6 @@ canonical keys. Compiler tests also assert normalized caller types, slot kinds,
 content locales, deterministic hashes and execution through the typed .NET
 runtime without a v4 conversion.
 
-This fixture complements the message-level semantic-v5 corpus; generated modules
-and external locale packs remain separate integration work.
+This fixture complements the message-level semantic-v5 corpus. It exercises
+generated modules and external locale packs internally; profile-aware host
+activation and installed-package evidence are tested separately.

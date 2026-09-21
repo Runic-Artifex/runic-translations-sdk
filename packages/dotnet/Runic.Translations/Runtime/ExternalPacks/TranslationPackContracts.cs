@@ -175,7 +175,7 @@ public sealed class TranslationPackContract
     {
     }
 
-    /// <summary>Creates a staged RMF2 execution-v2 contract for one resolved locale artifact v5.</summary>
+    /// <summary>Creates an RMF2 execution-v2 contract for one resolved locale artifact v5.</summary>
     public static TranslationPackContract CreateRmf2V5(string catalog, string locale, string contractFingerprint,
         IReadOnlyList<TranslationPackMessageContract> messages, string rmf2MarkupContract) =>
         new(catalog, locale, contractFingerprint, messages, 5,
@@ -230,7 +230,7 @@ public sealed class TranslationPackContract
     public string ContractFingerprint { get; }
     /// <summary>The message grammar expected in a matching locale artifact.</summary>
     public int MessageGrammarVersion { get; }
-    /// <summary>The staged execution profile, or null for legacy pack contracts.</summary>
+    /// <summary>The execution profile, or null for legacy pack contracts.</summary>
     public string? Profile { get; }
     /// <summary>The trusted language-neutral manifest required before RMF2 pack activation.</summary>
     public string? Rmf2MarkupContract { get; }

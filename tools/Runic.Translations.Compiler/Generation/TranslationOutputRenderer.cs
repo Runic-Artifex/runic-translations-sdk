@@ -70,6 +70,13 @@ public static class TranslationOutputRenderer
     internal static IReadOnlyList<TranslationGeneratedOutput> RenderRmf2V5EsmModules(Rmf2ProjectV5 project) =>
         Rmf2EsmOutputRendererV5.Render(project ?? throw new ArgumentNullException(nameof(project)));
 
+    internal static TranslationGeneratedOutput RenderRmf2V5AssetManifestJson(
+        Rmf2ProjectV5 project,
+        IEnumerable<TranslationGeneratedOutput> selectedOutputs) =>
+        EdgeOutputRenderer.RenderRmf2V5AssetManifest(
+            project ?? throw new ArgumentNullException(nameof(project)),
+            selectedOutputs ?? throw new ArgumentNullException(nameof(selectedOutputs)));
+
     /// <summary>Renders one declared locale as canonical compact JSON using resolved fallback values.</summary>
     public static TranslationGeneratedOutput RenderLocaleJson(CompiledTextCatalog catalog, string locale)
     {

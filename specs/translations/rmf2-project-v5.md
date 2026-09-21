@@ -1,24 +1,25 @@
-# Staged RMF2 v5 project linking
+# RMF2 v5 project linking
 
 The compiler has a separate `Rmf2ProjectV5` carrier for
 `rmf2-execution-v2`. It contains v5 messages directly. It never constructs a
 `CompiledMessagePattern` or passes messages through the v4 parser/adapter.
 
-Internal backend integrations select
-`TranslationCompiler.CompileProjectForProfile(...,
+Profile-aware generator, CLI, MSBuild, and Vite hosts inspect `runic.json` and
+select `TranslationCompiler.CompileProjectForProfile(...,
 TranslationProjectProfile.Rmf2ExecutionV2)`; `Current` calls the existing public
 compiler unchanged. The discriminated result carries either a current
 `TranslationCompilation` or an `Rmf2ProjectCompilationV5`, never both.
 `CompileRmf2ProjectV5` is the dedicated typed entry point. Failed v5 compilations
 return diagnostics without a project that could accidentally reach emission.
 
-Public `runic.json`/CLI profile activation remains deferred even though the
-internal generated C# and ESM backends and their integration checks are ready.
-Project schema v1,
-resource syntax `rmf2-v1`, and exported markup contract v1 remain unchanged:
-artifact v5 does not imply a project schema version bump. Default project output
-remains v4. The staged linker uses the existing locale, mount, completeness,
-extra-key, empty-value and runtime policies.
+An `rmf2-v1` project activates this carrier with
+`executionProfile: "rmf2-execution-v2"`; omission keeps existing v4 output.
+The low-level public `CompileProject` method remains the v4 carrier and rejects
+the selector, so callers cannot accidentally erase v5 data by compiling it as
+v4. Project schema v1, resource syntax `rmf2-v1`, and exported markup contract v1
+remain unchanged:
+artifact v5 does not imply a project schema version bump. The v5 linker uses the
+existing locale, mount, completeness, extra-key, empty-value and runtime policies.
 
 ## Caller contracts and executable content
 
@@ -78,7 +79,7 @@ renderers, but those mappings are excluded from the caller fingerprint.
 
 ## Resolved locale artifact and pack loading
 
-The staged locale writer emits artifact/grammar 5 with the explicit
+The locale writer emits artifact/grammar 5 with the explicit
 `rmf2-execution-v2` profile. It serializes the linked v5 AST directly and never
 converts through the v4 carrier. Each resolved message carries its effective
 content locale. Its input array is expanded to the canonical caller contract, so
@@ -108,10 +109,11 @@ collisions with names that already resemble an encoded name. For example,
 `Path(segments)` joins encoded segments with `_`, which cannot occur inside the
 hex payload. Segment boundaries are preserved. This contract is tested for
 keywords, punctuation, Unicode, composed/decomposed aliases and segment
-collisions. Generator emission is a dependent slice; it must use this mapping
-and separate generated helper scopes. RMF2 resource keys retain their existing
-ASCII path rules and underscore-key collision rejection.
+collisions. Generator emission uses this mapping and separate generated helper
+scopes. RMF2 resource keys retain their existing ASCII path rules and
+underscore-key collision rejection.
 
 The cross-locale fixture in [corpus/v5-project](corpus/v5-project/README.md)
 exercises the carrier, generated backends, exact ESM runtime, and strict pack
-decoders. None of those internal entry points activates default project output.
+decoders. It is an internal fixture, not proof that an installed package or a
+published release contains the profile; host activation is tested separately.

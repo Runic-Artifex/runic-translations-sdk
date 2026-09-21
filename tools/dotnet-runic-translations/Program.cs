@@ -239,7 +239,7 @@ internal static class Program
         if (templateManifest) result |= ToolEmission.TemplateManifest;
         if (esm) result |= ToolEmission.Esm;
         if (cpp) result |= ToolEmission.Cpp;
-        return result == ToolEmission.None ? ToolEmission.All : result;
+        return result;
     }
 
     private static ToolOperationResult Usage(string message)
@@ -416,6 +416,16 @@ internal static class Program
             return Success;
         }
 
+        if (!Rmf2ProjectV5EmissionEligibility.CanEmit(compilation.Project))
+        {
+            WriteDiagnostics([new TranslationDiagnostic(
+                Rmf2ProjectV5EmissionEligibility.DiagnosticId,
+                TranslationDiagnosticSeverity.Error,
+                Rmf2ProjectV5EmissionEligibility.Message,
+                new TextSourceLocation(inputs.Project.Path, 0, 0, 1, 1, 1, 1))], result);
+            return DiagnosticFailure;
+        }
+
         IReadOnlyList<ToolArtifact> artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission);
         if (invocation.Command == ToolCommand.Generate)
         {
@@ -468,7 +478,7 @@ internal static class Program
         writer.WriteLine("Framework transport uses --runic-output human|json; --output remains the tool destination option.");
         writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --no-starter.");
         writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest --emit-esm --emit-cpp.");
-        writer.WriteLine("With no emit switches, generate and verify use all output groups.");
+        writer.WriteLine("With no emit switches, generate and verify use the selected execution profile's default output groups.");
         writer.WriteLine("Exit codes: 0 success; 1 validation or verification diagnostics; 2 invocation or operational failure.");
     }
 }

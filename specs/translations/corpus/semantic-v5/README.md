@@ -9,8 +9,8 @@ Each expression records its underlying `valueType` separately from its formatter
 
 The enclosing artifact is hand-authored: its all-zero fingerprint and empty
 markup contract are placeholders for schema shape validation. It is not a
-runtime-activatable pack, a generated project artifact, or evidence that v5
-project linking is implemented. The normal project compiler still emits v4.
+runtime-activatable pack or generated project artifact. Profile-aware hosts test
+project activation separately; this fixture remains only semantic/schema evidence.
 
 The fixture exercises declaration order, typed caller inputs, formatted local
 chains, dynamic options, ordered valueless/empty/numeric annotations, numeric

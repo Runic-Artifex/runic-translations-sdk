@@ -277,10 +277,10 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         if (hasErrors || compilation.Project is null) return;
 
         Rmf2ProjectV5 linked = compilation.Project;
-        if (linked.CanonicalMessages.Count == 0)
+        if (!Rmf2ProjectV5EmissionEligibility.CanEmit(linked))
         {
-            context.ReportDiagnostic(Diagnostic.Create(Descriptor("RTR0009", DiagnosticSeverity.Error), Location.None,
-                "The effective default locale defines no canonical keys; RMF2 v5 generated runtime catalogs cannot be empty."));
+            context.ReportDiagnostic(Diagnostic.Create(Descriptor(Rmf2ProjectV5EmissionEligibility.DiagnosticId, DiagnosticSeverity.Error), Location.None,
+                Rmf2ProjectV5EmissionEligibility.Message));
             return;
         }
         TranslationGeneratedOutput[] outputs =

@@ -37,7 +37,7 @@ internal sealed record Rmf2SemanticResultV5(Rmf2MessageV5? Message, IReadOnlyLis
 
 internal static class Rmf2MessageJsonV5
 {
-    // This is the staged normalized-AST boundary, not locale artifact emission.
+    // This is the normalized-AST boundary, not locale artifact emission.
     internal static string Serialize(Rmf2MessageV5 message)
     {
         using var stream = new MemoryStream();

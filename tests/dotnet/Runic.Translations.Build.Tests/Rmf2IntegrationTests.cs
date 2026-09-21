@@ -16,6 +16,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 payment fixture generates and verifies all supported outputs", PaymentExample);
         runner.Add("RMF2 CLI discovers feature mounts and produces version 4 packs", MountedCli);
         runner.Add("RMF2 CLI project activation emits and verifies the cohesive v5 contract", ActivatedV5Cli);
+        runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
         runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
         runner.Add("RMF2 migration previews and preserves backups", Migration);
         runner.Add("RMF2 LSP negotiates Unicode positions and returns versioned rename edits", Lsp);
@@ -58,24 +59,74 @@ internal static class Rmf2IntegrationTests
         ProcessResult generate = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "out");
         Assert.Equal(0, generate.ExitCode, generate.Combined);
         Assert.True(File.Exists(temporary.Resolve("out/app.en.locale-v5.json")), "v5 locale artifact missing");
+        Assert.True(File.Exists(temporary.Resolve("out/app.asset-manifest-v1.json")), "v5 asset manifest missing");
         string manifestPath = temporary.Resolve("out/app.esm-v5/web-module-manifest-v3.json");
         Assert.True(File.Exists(manifestPath), "v5 web manifest missing");
         string manifest = File.ReadAllText(manifestPath);
         Assert.Contains("\"esmAbiVersion\":4", manifest);
         Assert.Contains("\"profile\":\"rmf2-execution-v2\"", manifest);
         Assert.False(Directory.EnumerateFiles(temporary.Resolve("out"), "*.locale-v4.json", SearchOption.AllDirectories).Any(), "v5 activation emitted v4 artifacts");
+        Assert.False(File.Exists(temporary.Resolve("out/app.translations-v1.d.ts")), "v5 default emitted the v4 TypeScript contract");
+        Assert.False(Directory.EnumerateFiles(temporary.Resolve("out"), "app.template-manifest-*.json", SearchOption.TopDirectoryOnly).Any(), "v5 default emitted a v4 template manifest");
         Assert.True(Directory.EnumerateFiles(temporary.Resolve("out"), "*.g.cs", SearchOption.TopDirectoryOnly).Count() == 4, "v5 typed C# output is incomplete");
         ProcessResult verify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "out");
         Assert.Equal(0, verify.ExitCode, verify.Combined);
-        ProcessResult cpp = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "cpp", "--emit-cpp");
-        Assert.Equal(1, cpp.ExitCode, cpp.Combined);
-        Assert.Contains("RTR0065", cpp.Combined);
-        Assert.False(Directory.Exists(temporary.Resolve("cpp")), "v5 activation emitted C++ output");
+
+        ProcessResult csharp = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "csharp", "--emit-csharp");
+        Assert.Equal(0, csharp.ExitCode, csharp.Combined);
+        Assert.True(TestFixture.RelativeFiles(temporary.Resolve("csharp")).Length == 4 &&
+            TestFixture.RelativeFiles(temporary.Resolve("csharp")).All(static file => file.EndsWith(".g.cs", StringComparison.Ordinal)),
+            "--emit-csharp produced another output group");
+        ProcessResult json = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "json", "--emit-json");
+        Assert.Equal(0, json.ExitCode, json.Combined);
+        Assert.Equal("app.asset-manifest-v1.json|app.en.locale-v5.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("json"))));
+        ProcessResult esm = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "esm", "--emit-esm");
+        Assert.Equal(0, esm.ExitCode, esm.Combined);
+        Assert.True(TestFixture.RelativeFiles(temporary.Resolve("esm")).All(static file => file.StartsWith("app.esm-v5/", StringComparison.Ordinal)),
+            "--emit-esm produced another output group");
+        foreach (string flag in new[] { "--emit-typescript", "--emit-template-manifest", "--emit-cpp" })
+        {
+            string directory = flag.Substring("--emit-".Length);
+            ProcessResult unsupported = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", directory, flag);
+            Assert.Equal(1, unsupported.ExitCode, unsupported.Combined);
+            Assert.Contains("RTR0065", unsupported.Combined);
+            Assert.Contains(flag, unsupported.Combined);
+            Assert.False(Directory.Exists(temporary.Resolve(directory)), "unsupported v5 selection emitted output");
+        }
+        ProcessResult mixed = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "mixed", "--emit-json", "--emit-typescript");
+        Assert.Equal(1, mixed.ExitCode, mixed.Combined);
+        Assert.Contains("RTR0065", mixed.Combined);
+        Assert.False(Directory.Exists(temporary.Resolve("mixed")), "mixed supported/unsupported v5 selection emitted partial output");
+        ProcessResult unsupportedVerify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "out", "--emit-template-manifest");
+        Assert.Equal(1, unsupportedVerify.ExitCode, unsupportedVerify.Combined);
+        Assert.Contains("RTR0065", unsupportedVerify.Combined);
 
         File.WriteAllText(path, config.Replace("rmf2-execution-v2", "future-profile", StringComparison.Ordinal));
         ProcessResult invalid = TestFixture.RunTool(temporary, "validate", "--project", "translations");
         Assert.Equal(1, invalid.ExitCode, invalid.Combined);
         Assert.Contains("RTR0065", invalid.Combined);
+    }
+    private static void EmptyV5CliBoundary()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations"));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"",
+            "\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal));
+        ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+        foreach ((string Command, string? Flag) in new (string, string?)[]
+        {
+            ("generate", null), ("generate", "--emit-json"), ("generate", "--emit-esm"), ("verify", null),
+        })
+        {
+            string output = Flag is null ? Command : $"{Command}{Flag.AsSpan("--emit-".Length)}";
+            ProcessResult result = Flag is null
+                ? TestFixture.RunTool(temporary, Command, "--project", "translations", "--output", output)
+                : TestFixture.RunTool(temporary, Command, "--project", "translations", "--output", output, Flag);
+            Assert.Equal(1, result.ExitCode, result.Combined);
+            Assert.Contains("RTR0009", result.Combined);
+            Assert.False(Directory.Exists(temporary.Resolve(output)), "empty v5 project emitted " + output);
+        }
     }
     private static void MountedBuild()
     {

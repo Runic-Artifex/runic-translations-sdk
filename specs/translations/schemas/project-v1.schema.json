@@ -25,7 +25,7 @@
     },
     "executionProfile": {
       "const": "rmf2-execution-v2",
-      "description": "Explicitly opts an rmf2-v1 project into the typed RMF2 grammar 5 / runtime ABI 2 execution contract. Omit to retain the current v4 contract."
+      "description": "For an rmf2-v1 project, explicitly selects typed grammar 5/runtime ABI 2 output for the .NET and ESM backends. Omit to retain grammar/artifact v4."
     },
     "sourceRoots": {
       "type": "array",

@@ -7,8 +7,11 @@
   "messageGrammarVersion": 5,
   "normalizedAstVersion": 5,
   "artifactVersion": 5,
-  "implementationStage": "backend-staging",
-  "executableBackends": [],
+  "implementationStage": "project-activated",
+  "executableBackends": [
+    "dotnet",
+    "esm"
+  ],
   "targetBackends": [
     "dotnet",
     "esm"

@@ -33,6 +33,12 @@ Console.WriteLine(text.Application.Name);
 
 The generator reports compiler diagnostics at source locations and writes no files. C# becomes part of the current compilation; JSON, TypeScript, ESM, template manifests, and experimental C++ output belong to the build or CLI surfaces.
 
+For `sourceLayout: "rmf2-v1"`, declaring
+`executionProfile: "rmf2-execution-v2"` emits typed v5 C# that requires RMF2
+runtime ABI 2. Omitting the selector retains byte-stable v4 generation; that
+generated code embeds ABI requirement 1 and accepts runtime markers known to
+support it (1 or 2).
+
 ## When to choose this package
 
 Choose `Runic.Translations.Build` for typed C# application APIs and generated web assets. Choose `Runic.Translations.Tooling` for direct programmatic compilation.

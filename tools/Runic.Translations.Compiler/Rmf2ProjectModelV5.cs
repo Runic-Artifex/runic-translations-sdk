@@ -50,6 +50,14 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
     internal const int RuntimeAbiVersion = 2;
 }
 
+internal static class Rmf2ProjectV5EmissionEligibility
+{
+    internal const string DiagnosticId = "RTR0009";
+    internal const string Message = "The effective default locale defines no canonical keys; RMF2 v5 generated runtime catalogs cannot be empty.";
+    internal static bool CanEmit(Rmf2ProjectV5 project) =>
+        (project ?? throw new ArgumentNullException(nameof(project))).CanonicalMessages.Count != 0;
+}
+
 // Versioned, injective mapping over NFC names; no transliteration, keyword table,
 // case folding or collision suffix depends on which other messages are present.
 // Always encoding also distinguishes an input named "r_61" from an input "a".
