@@ -379,17 +379,26 @@ function validateEnvelope(value) {
 }
 
 function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
-  if (!contract || !isRecord(wrapper) || !exactKeys(wrapper, ["contentLocale", "ast"]) || typeof wrapper.contentLocale !== "string" || !localeSet.has(wrapper.contentLocale)) return "malformed-pattern";
+  if (!contract || !isRecord(wrapper)) return "malformed-pattern";
+  const wrapperMembers=["contentLocale","ast"];
+  if (Object.keys(wrapper).some(name=>!wrapperMembers.includes(name))) return "unknown-member";
+  if (!wrapperMembers.every(name=>Object.hasOwn(wrapper,name)) || typeof wrapper.contentLocale !== "string" || !localeSet.has(wrapper.contentLocale)) return "malformed-pattern";
   if (artifactLocale !== null && rmf2Contract.messages?.[key]?.contentLocales?.[artifactLocale] !== wrapper.contentLocale) return "argument-contract-mismatch";
-  const ast = wrapper.ast; if (!isRecord(ast) || !exactKeys(ast, ["astVersion","profile","inputs","declarations","selectors","variants"]) || ast.astVersion !== 5 || ast.profile !== profile) return "message-grammar-version-mismatch";
+  const ast = wrapper.ast, astMembers=["astVersion","profile","inputs","declarations","selectors","variants"];
+  if (!isRecord(ast)) return "malformed-pattern";
+  if (Object.keys(ast).some(name=>!astMembers.includes(name))) return "unknown-member";
+  if (!astMembers.every(name=>Object.hasOwn(ast,name))) return "malformed-pattern";
+  if (ast.astVersion !== 5) return "artifact-version-mismatch";
+  if (ast.profile !== profile) return "message-grammar-version-mismatch";
   if (!Array.isArray(ast.inputs) || ast.inputs.length !== contract.inputs.length || ast.inputs.length > limits.maximumArgumentsPerMessage) return "argument-contract-mismatch";
-  for (let index = 0; index < ast.inputs.length; index++) { const input = ast.inputs[index], expected = contract.inputs[index]; if (!isRecord(input) || !exactKeys(input,["name","type"]) || input.name !== expected.name || input.type !== expected.type || !validName(input.name)) return "argument-contract-mismatch"; }
+  for (let index = 0; index < ast.inputs.length; index++) { const input = ast.inputs[index], expected = contract.inputs[index], inputMembers=["name","type"]; if (!isRecord(input)) return "malformed-pattern"; if(Object.keys(input).some(name=>!inputMembers.includes(name)))return "unknown-member"; if(!inputMembers.every(name=>Object.hasOwn(input,name)))return "malformed-pattern"; if(input.name !== expected.name || input.type !== expected.type || !validName(input.name)) return "argument-contract-mismatch"; }
   if (!Array.isArray(ast.declarations) || ast.declarations.length > 256 || !Array.isArray(ast.selectors) || ast.selectors.length > 16 || !Array.isArray(ast.variants) || ast.variants.length < 1 || ast.variants.length > 256) return "limit-exceeded";
   const explicitInputs = new Set(ast.declarations.filter(declaration => isRecord(declaration) && declaration.kind === "input" && typeof declaration.name === "string").map(declaration => declaration.name));
   const symbols = Object.create(null); for (const input of ast.inputs) symbols[input.name] = { type: input.type, selection: selectionForType(input.type), explicitDependencies: explicitInputs.has(input.name) };
   const bound = new Set(), referenced = new Set();
   for (const declaration of ast.declarations) {
-    if (!isRecord(declaration) || !exactKeys(declaration,["kind","name","expression"]) || !["input","local"].includes(declaration.kind) || !validName(declaration.name) || bound.has(declaration.name) || referenced.has(declaration.name)) return "malformed-pattern";
+    const memberError = closedMemberError(declaration,["kind","name","expression"]); if(memberError)return memberError;
+    if (!["input","local"].includes(declaration.kind) || !validName(declaration.name) || bound.has(declaration.name) || referenced.has(declaration.name)) return "malformed-pattern";
     const error = validateExpression(declaration.expression, symbols, referenced); if (error) return error;
     if (declaration.kind === "input") { if (declaration.expression.operand.kind !== "input" || declaration.expression.operand.value !== declaration.name || !Object.hasOwn(symbols,declaration.name)) return "argument-contract-mismatch"; }
     else if (Object.hasOwn(symbols,declaration.name)) return "argument-contract-mismatch";
@@ -400,24 +409,29 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
   }
   const selectorNames = new Set();
   for (const selector of ast.selectors) {
-    if (!isRecord(selector) || !exactKeys(selector,["value","type","function"]) || !["exact","plural","ordinal"].includes(selector.function) || !validValue(selector.value) || selectorNames.has(selector.value.value)) return "malformed-pattern";
+    const memberError=closedMemberError(selector,["value","type","function"]);if(memberError)return memberError;
+    const valueError=validateValue(selector.value);if(valueError)return valueError;
+    if (!["exact","plural","ordinal"].includes(selector.function) || selectorNames.has(selector.value.value)) return "malformed-pattern";
     if (!["input","local"].includes(selector.value.kind) || !Object.hasOwn(symbols,selector.value.value) || symbols[selector.value.value].type !== selector.type || symbols[selector.value.value].selection !== selector.function) return "argument-contract-mismatch";
     selectorNames.add(selector.value.value);
   }
   const vectors = new Set(); let fallback = false;
   for (const variant of ast.variants) {
-    if (!isRecord(variant) || !exactKeys(variant,["keys","nodes"]) || !Array.isArray(variant.keys) || variant.keys.length !== ast.selectors.length || !Array.isArray(variant.nodes)) return "malformed-pattern";
+    const memberError=closedMemberError(variant,["keys","nodes"]);if(memberError)return memberError;
+    if (!Array.isArray(variant.keys) || variant.keys.length !== ast.selectors.length || !Array.isArray(variant.nodes)) return "malformed-pattern";
     const vector = []; let all = true;
-    for (let index = 0; index < variant.keys.length; index++) { const normalized = validateKey(variant.keys[index], ast.selectors[index]); if (normalized === null) return "malformed-pattern"; vector.push(normalized); all &&= normalized === "*"; }
+    for (let index = 0; index < variant.keys.length; index++) { const validated = validateKey(variant.keys[index], ast.selectors[index]); if (validated.error) return validated.error; vector.push(validated.value); all &&= validated.value === "*"; }
     const encoded = JSON.stringify(vector); if (vectors.has(encoded)) return "malformed-pattern"; vectors.add(encoded); fallback ||= all;
     const stack = [], slotCounts = Object.create(null), slotRequirements = rmf2Contract.messages?.[key]?.slots ?? Object.create(null); let totalNodes = 0, textBytes = 0;
     for (const node of variant.nodes) {
       if (++totalNodes > 4096) return "limit-exceeded";
       if (!isRecord(node) || typeof node.kind !== "string") return "malformed-pattern";
-      if (node.kind === "text") { if (!exactKeys(node,["kind","value"]) || typeof node.value !== "string") return "malformed-pattern"; textBytes += new TextEncoder().encode(node.value).length; if (textBytes > limits.maximumPatternBytes) return "limit-exceeded"; }
-      else if (node.kind === "expression") { if (!exactKeys(node,["kind","expression"])) return "malformed-pattern"; const error = validateExpression(node.expression,symbols); if (error) return error; }
+      if (node.kind === "text") { const memberError=closedMemberError(node,["kind","value"]);if(memberError)return memberError;if (typeof node.value !== "string") return "malformed-pattern"; textBytes += new TextEncoder().encode(node.value).length; if (textBytes > limits.maximumPatternBytes) return "limit-exceeded"; }
+      else if (node.kind === "expression") { const memberError=closedMemberError(node,["kind","expression"]);if(memberError)return memberError;const error = validateExpression(node.expression,symbols); if (error) return error; }
       else if (node.kind === "markup") {
-        if (!exactKeys(node,["kind","name","markupKind","options","annotations"]) || !validName(node.name,true) || !["open","close","standalone"].includes(node.markupKind) || !Object.hasOwn(rmf2Contract.contracts,node.name) || !validateAnnotations(node.annotations)) return "argument-contract-mismatch";
+        const memberError=closedMemberError(node,["kind","name","markupKind","options","annotations"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";
+        const annotationError=validateAnnotations(node.annotations,"argument-contract-mismatch");if(annotationError)return annotationError;
+        if (!validName(node.name,true) || !["open","close","standalone"].includes(node.markupKind) || !Object.hasOwn(rmf2Contract.contracts,node.name)) return "argument-contract-mismatch";
         const markupError = validateMarkupNode(node,symbols,slotRequirements,slotCounts,stack); if (markupError) return markupError;
         if (node.markupKind === "open") { stack.push(node.name); if (stack.length > 16) return "limit-exceeded"; } else if (node.markupKind === "close" && stack.pop() !== node.name) return "malformed-pattern";
       }
@@ -430,22 +444,25 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
 }
 
 function validateExpression(expression, symbols, references) {
-  if (!isRecord(expression)) return "malformed-pattern";
-  const expected = ["operand","valueType","options","annotations", ...(expression.function === undefined ? [] : ["function"])]; if (!exactKeys(expression,expected) || !validValue(expression.operand) || !["string","int64","decimal","boolean","date","time","datetime","guid"].includes(expression.valueType) || !validateAnnotations(expression.annotations)) return "malformed-pattern";
+  const memberError=closedMemberError(expression,["operand","valueType","function","options","annotations"],["operand","valueType","options","annotations"]);if(memberError)return memberError;
+  if(Object.hasOwn(expression,"function")&&expression.function===undefined)return "malformed-pattern";
+  const valueError=validateValue(expression.operand);if(valueError)return valueError;
+  const annotationError=validateAnnotations(expression.annotations,"malformed-pattern");if(annotationError)return annotationError;
+  if (!["string","int64","decimal","boolean","date","time","datetime","guid"].includes(expression.valueType)) return "malformed-pattern";
   if (["input","local"].includes(expression.operand.kind)) { if (!Object.hasOwn(symbols,expression.operand.value) || symbols[expression.operand.value].type !== expression.valueType) return "argument-contract-mismatch"; }
   else { try { literal(expression.operand, expression.valueType); } catch { return "malformed-pattern"; } }
   if (expression.function === undefined) return expression.options.length === 0 ? null : "malformed-pattern";
   const accepted = functionType(expression.function); if (!accepted || !(accepted === expression.valueType || (expression.valueType === "int64" && accepted === "decimal"))) return "argument-contract-mismatch";
-  if (!validateOptions(expression.options,symbols,expression.function)) return "argument-contract-mismatch";
+  const optionError=validateOptions(expression.options,symbols,expression.function);if(optionError)return optionError;
   if (references) for (const option of expression.options) referenceValue(option.value,references);
   return null;
 }
 
 function validateOptions(options, symbols, fn) {
-  if (!Array.isArray(options) || options.length > 256) return false; const names = new Set(), staticEntries=[]; let dynamic=false;
-  for (const option of options) { if (!isRecord(option) || !exactKeys(option,["name","value"]) || !validName(option.name) || names.has(option.name) || !validValue(option.value)) return false; names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return false; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return false; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return false; } } } }
-  if(fn){try{const resolved=freezeOwnRecord(staticEntries);validateResolvedOptions(fn,resolved);if(dynamic&&fn==="number"){const style=resolved.style,min=resolved.minimumFractionDigits??0n,max=resolved.maximumFractionDigits;if(style==="percent"&&min>4n||max!==undefined&&min>max)return false;}}catch{return false;}}
-  return true;
+  if (!Array.isArray(options) || options.length > 256) return "argument-contract-mismatch"; const names = new Set(), staticEntries=[]; let dynamic=false;
+  for (const option of options) { const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name)||names.has(option.name))return "argument-contract-mismatch";names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return "argument-contract-mismatch"; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return "argument-contract-mismatch"; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return "argument-contract-mismatch"; } } } }
+  if(fn){try{const resolved=freezeOwnRecord(staticEntries);validateResolvedOptions(fn,resolved);if(dynamic&&fn==="number"){const style=resolved.style,min=resolved.minimumFractionDigits??0n,max=resolved.maximumFractionDigits;if(style==="percent"&&min>4n||max!==undefined&&min>max)return "argument-contract-mismatch";}}catch{return "argument-contract-mismatch";}}
+  return null;
 }
 function validateMarkupNode(node,symbols,requirements,counts,stack) {
   const contract=rmf2Contract.contracts[node.name],functional=["runic:link","runic:action","runic:icon"].includes(node.name);
@@ -454,7 +471,7 @@ function validateMarkupNode(node,symbols,requirements,counts,stack) {
   if(contract.interactive&&stack.some(name=>rmf2Contract.contracts[name]?.interactive))return "argument-contract-mismatch";
   if(!Array.isArray(node.options)||node.options.length>256)return "limit-exceeded";
   const values=Object.create(null);
-  for(const option of node.options){if(!isRecord(option)||!exactKeys(option,["name","value"])||!validName(option.name)||Object.hasOwn(values,option.name)||!validValue(option.value))return "argument-contract-mismatch";values[option.name]=option.value;}
+  for(const option of node.options){const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name)||Object.hasOwn(values,option.name))return "argument-contract-mismatch";values[option.name]=option.value;}
   if(functional){const reference=values.ref;if(!reference||reference.kind!=="string-literal"||!Object.hasOwn(requirements,reference.value)||requirements[reference.value].kind!==node.name)return "argument-contract-mismatch";counts[reference.value]=(counts[reference.value]??0)+1;}
   const expected=Object.keys(contract.options);
   if(expected.some(name=>!Object.hasOwn(values,name))||Object.keys(values).some(name=>name!=="ref"&&!Object.hasOwn(contract.options,name)))return "argument-contract-mismatch";
@@ -463,9 +480,9 @@ function validateMarkupNode(node,symbols,requirements,counts,stack) {
 }
 function markupTypeAccepts(schema,type){return schema==="number"?["int64","decimal"].includes(type):schema==="boolean"?type==="boolean":type==="string";}
 function markupLiteral(schema,value){try{if(schema.type==="number")return value.kind==="number-literal"&&decimalCanonical(parseDecimal(value.value))===value.canonical;if(value.kind!=="string-literal")return false;if(schema.type==="boolean")return ["true","false"].includes(value.value);if(schema.type==="enum")return schema.values.includes(value.value);return true;}catch{return false;}}
-function validateAnnotations(values) { if (!Array.isArray(values) || values.length > 256) return false; const names = new Set(); return values.every(value => isRecord(value) && exactKeys(value,["name", ...(value.value === undefined ? [] : ["value"])]) && validName(value.name,true) && !names.has(value.name) && (names.add(value.name), true) && (value.value === undefined || validValue(value.value) && !["input","local"].includes(value.value.kind))); }
-function validValue(value) { if (!isRecord(value) || !["input","local","string-literal","number-literal"].includes(value.kind)) return false; const numeric = value.kind === "number-literal"; if (!exactKeys(value,["kind","value", ...(numeric ? ["canonical"] : [])]) || typeof value.value !== "string" || numeric && typeof value.canonical !== "string") return false; if (["input","local"].includes(value.kind) && !validName(value.value)) return false; if (numeric) { try { return decimalCanonical(parseDecimal(value.value)) === value.canonical; } catch { return false; } } return true; }
-function validateKey(key, selector) { if (!isRecord(key) || typeof key.kind !== "string") return null; if (key.kind === "wildcard") return exactKeys(key,["kind"]) ? "*" : null; if (key.kind !== "literal" || !exactKeys(key,["kind","value", ...(key.canonical === undefined ? [] : ["canonical"])]) || typeof key.value !== "string") return null; if (["decimal","int64"].includes(selector.type)) { try { const value = parseDecimal(key.value); const canonical = decimalCanonical(value); if (key.canonical !== canonical || selector.type === "int64" && (value.scale !== 0 || (value.negative ? -value.coefficient : value.coefficient) < minimumInt64 || (value.negative ? -value.coefficient : value.coefficient) > maximumInt64)) return null; return `=${canonical}`; } catch { if (key.canonical !== undefined || selector.function === "exact" || !["zero","one","two","few","many","other"].includes(key.value)) return null; return `=${key.value}`; } } if (key.canonical !== undefined || selector.type === "boolean" && !["true","false"].includes(key.value)) return null; return `=${key.value.normalize("NFC")}`; }
+function validateAnnotations(values,invalid) { if (!Array.isArray(values) || values.length > 256) return invalid; const names = new Set();for(const annotation of values){const memberError=closedMemberError(annotation,["name","value"],["name"]);if(memberError)return memberError==="unknown-member"?memberError:invalid;if(!validName(annotation.name,true)||names.has(annotation.name))return invalid;names.add(annotation.name);if(Object.hasOwn(annotation,"value")){if(annotation.value===undefined)return invalid;const valueError=validateValue(annotation.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:invalid;if(["input","local"].includes(annotation.value.kind))return invalid;}}return null; }
+function validateValue(value) { if (!isRecord(value)||typeof value.kind!=="string") return "malformed";const numeric=value.kind==="number-literal";const memberError=closedMemberError(value,["kind","value",...(numeric?["canonical"]:[]) ]);if(memberError)return memberError;if(!["input","local","string-literal","number-literal"].includes(value.kind)||typeof value.value!=="string"||numeric&&typeof value.canonical!=="string")return "malformed-pattern";if(["input","local"].includes(value.kind)&&!validName(value.value))return "malformed-pattern";if(numeric){try{if(decimalCanonical(parseDecimal(value.value))!==value.canonical)return "malformed-pattern";}catch{return "malformed-pattern";}}return null; }
+function validateKey(key,selector) { if(!isRecord(key)||typeof key.kind!=="string")return {error:"malformed-pattern"};if(key.kind==="wildcard"){const memberError=closedMemberError(key,["kind"]);return memberError?{error:memberError}:{value:"*"};}const memberError=closedMemberError(key,["kind","value","canonical"],["kind","value"]);if(memberError)return {error:memberError};if(key.kind!=="literal"||typeof key.value!=="string"||Object.hasOwn(key,"canonical")&&key.canonical===undefined)return {error:"malformed-pattern"};if(["decimal","int64"].includes(selector.type)){try{const value=parseDecimal(key.value),canonical=decimalCanonical(value);if(key.canonical!==canonical||selector.type==="int64"&&(value.scale!==0||(value.negative?-value.coefficient:value.coefficient)<minimumInt64||(value.negative?-value.coefficient:value.coefficient)>maximumInt64))return {error:"malformed-pattern"};return {value:`=${canonical}`};}catch{if(key.canonical!==undefined||selector.function==="exact"||!["zero","one","two","few","many","other"].includes(key.value))return {error:"malformed-pattern"};return {value:`=${key.value}`};}}if(key.canonical!==undefined||selector.type==="boolean"&&!["true","false"].includes(key.value))return {error:"malformed-pattern"};return {value:`=${key.value.normalize("NFC")}`};}
 function expressionSymbol(expression,symbols) { const inherited=["input","local"].includes(expression.operand.kind)?symbols[expression.operand.value]:{type:expression.valueType,selection:selectionForType(expression.valueType),explicitDependencies:true}; if(expression.function===undefined)return inherited; const selected=expression.options.find(option=>option.name==="select"); let explicitDependencies=inherited.explicitDependencies;for(const option of expression.options)if(["input","local"].includes(option.value.kind))explicitDependencies&&=symbols[option.value.value].explicitDependencies;return {type:expression.valueType,selection:selected?.value?.value??selectionForFunction(expression.function),explicitDependencies}; }
 function selectionForType(type) { return ["string","boolean"].includes(type)?"exact":["int64","decimal"].includes(type)?"plural":"none"; }
 function selectionForFunction(fn) { return ["string","runic:boolean"].includes(fn)?"exact":["integer","number","runic:relative-time"].includes(fn)?"plural":"none"; }
@@ -480,6 +497,7 @@ function validTime(value) { if (!/^\d{2}:\d{2}:\d{2}$/.test(value)) return false
 function validDateTime(value) { if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value) || value.startsWith("0000-")) return false; const date = new Date(value); return !Number.isNaN(date.valueOf()) && date.toISOString().replace(".000Z","Z") === value; }
 function canonicalLocale(value) { if (typeof value!=="string"||!value||value.startsWith("-")||value.endsWith("-"))return null;const parts=value.split("-");if(parts[0].length<2||parts[0].length>8||!/^[A-Za-z]+$/.test(parts[0]))return null;const result=[parts[0].toLowerCase()];let extension=false;for(let index=1;index<parts.length;index++){const part=parts[index];if(part.length<1||part.length>8||!/^[A-Za-z0-9]+$/.test(part))return null;if(part.length===1){extension=true;result.push(part.toLowerCase());}else if(!extension&&part.length===4&&/^[A-Za-z]+$/.test(part))result.push(part[0].toUpperCase()+part.slice(1).toLowerCase());else if(!extension&&part.length===2&&/^[A-Za-z]+$/.test(part))result.push(part.toUpperCase());else if(!extension&&part.length===3&&/^\d+$/.test(part))result.push(part);else result.push(part.toLowerCase());}return result.join("-");}
 function isRecord(value) { return typeof value === "object" && value !== null && !Array.isArray(value); }
+function closedMemberError(value,allowed,required=allowed){if(!isRecord(value))return "malformed-pattern";if(Object.keys(value).some(name=>!allowed.includes(name)))return "unknown-member";return required.every(name=>Object.hasOwn(value,name))?null:"malformed-pattern";}
 function exactKeys(value, names) { if (!isRecord(value)) return false; const actual = Object.keys(value).sort(), expected = [...names].sort(); return actual.length === expected.length && actual.every((name,index) => name === expected[index] && Object.hasOwn(value,name)); }
 function cloneFreeze(value) { if (Array.isArray(value)) return Object.freeze(value.map(cloneFreeze)); if (isRecord(value)) return freezeOwnRecord(Object.keys(value).map(key => [key,cloneFreeze(value[key])])); return value; }
 function success(value) { return Object.freeze({ ok: true, value }); }

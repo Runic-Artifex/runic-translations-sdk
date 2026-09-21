@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "catalog": "oracle",
+  "code": {
+    "namespace": "Runic.Conformance",
+    "className": "OracleText",
+    "visibility": "public"
+  },
+  "baseLocale": "en",
+  "locales": [
+    "en",
+    "de",
+    { "tag": "fr", "fallback": "de" },
+    { "tag": "fr-FR", "fallback": "fr" }
+  ],
+  "sourceLayout": "rmf2-v1",
+  "executionProfile": "rmf2-execution-v2",
+  "validation": {
+    "translationCompleteness": "allow",
+    "extraLocaleKeys": "allow"
+  },
+  "markup": {
+    "contracts": [
+      {
+        "name": "app:badge",
+        "kind": "paired",
+        "children": "inline",
+        "interactive": false,
+        "plainText": "children",
+        "options": {
+          "amount": { "type": "number", "default": "1e2" },
+          "tone": { "type": "enum", "values": ["positive", "neutral"], "default": "neutral" }
+        }
+      }
+    ],
+    "aliases": { "badge": "app:badge" }
+  }
+}

@@ -38,3 +38,8 @@ are applied identically on both sides: `truncateFromEnd` drops trailing bytes,
 bytes, and `verifier: "reject"` decodes under a rejecting integrity policy.
 Every entry must surface exactly its `expected` token on both runtimes;
 `accepted` marks the positive control that must decode successfully.
+
+[`rmf2-v1/index.json`](rmf2-v1/index.json) is the separate, version-explicit
+release oracle for `rmf2-v1` plus `rmf2-execution-v2`. It drives the linked v5
+compiler model, generated C#, .NET artifact-v5 loading, generated ESM, and ESM
+dynamic-pack loading from shared typed execution and rejection expectations.

@@ -1,0 +1,26 @@
+core {
+  total =
+    .input {$rate :number}
+    .input {$digits :integer}
+    .input {$style :string}
+    .local $formatted = {$rate :number style=$style minimumFractionDigits=$digits maximumFractionDigits=$digits @source @empty=|| @one=1e0}
+    .local $alias = {$formatted}
+    {{{$alias}}}
+  rank =
+    .input {$count :number}
+    .input {$kind :string}
+    .match $count $kind
+    1.0 |primary| {{exact-primary}}
+    one * {{category-any}}
+    * |*| {{literal-star}}
+    * * {{wildcard}}
+  rich = {#strong @open}{#badge}Read{/badge}{/strong} {#link ref=terms}terms{/link}{#br/}Done
+  hostile =
+    .input {$__proto__ :string}
+    .input {$constructor :string}
+    .input {$user-name :string}
+    .input {$café :string}
+    .input {$用户 :string}
+    {{שלום 🌍 {$__proto__}|{$constructor}|{$user-name}|{$café}|{$用户}}}
+  direct = English
+}

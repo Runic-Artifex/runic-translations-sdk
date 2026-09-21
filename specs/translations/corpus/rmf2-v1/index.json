@@ -1,0 +1,208 @@
+{
+  "corpusVersion": 1,
+  "identity": "runic-rmf2-v1-conformance",
+  "contracts": {
+    "sourceSyntax": "rmf2-v1",
+    "executionProfile": "rmf2-execution-v2",
+    "messageAstVersion": 5,
+    "localeArtifactVersion": 5,
+    "runtimeAbiVersion": 2,
+    "markupContractVersion": 1,
+    "generatedNameVersion": 1
+  },
+  "project": {
+    "manifest": "runic.json",
+    "sources": ["en.rmf2", "de.rmf2", "fr.rmf2"]
+  },
+  "canonicalKeys": ["core_direct", "core_hostile", "core_rank", "core_rich", "core_total"],
+  "messagePaths": {
+    "core_direct": ["core", "direct"],
+    "core_hostile": ["core", "hostile"],
+    "core_rank": ["core", "rank"],
+    "core_rich": ["core", "rich"],
+    "core_total": ["core", "total"]
+  },
+  "localeOnlyKeys": ["locale_extra"],
+  "determinism": {
+    "callerFingerprint": "sha256:7e1daafd0eb60cfb1688568d2be0160dc190db392f869af1df5846beebc155b0",
+    "sourceHash": "sha256:ff7b63d6d8147200ddff0acb36e25d3bd546e8a278dabc6d4b7cc8118678f5e5",
+    "assetManifestSha256": "sha256:24d5ce3c223e4f29162ec1a0d719548fe4bfcc6d0e971752d2602062af253ea6",
+    "localeArtifactSha256": {
+      "de": "sha256:8e9cd5f06851c19d90785cad83d0a5f38274a559da0261bf29f8dd85185e0d06",
+      "en": "sha256:f0902b3ac0af4d992a51abc857b6c415e02b776178d16f41abd40671a67cfab8",
+      "fr": "sha256:b63ad8cae6b57ba7020c3affdcf88bb7f503527ee0ffcfdca7161fe7683d0676",
+      "fr-FR": "sha256:81475d1975ac3b7dab152b5687b4fb5b40c8a3182eb53c6804fe45e9a315e3f5"
+    }
+  },
+  "locales": [
+    { "requested": "en", "fallback": null },
+    { "requested": "de", "fallback": "en" },
+    { "requested": "fr", "fallback": "de" },
+    { "requested": "fr-FR", "fallback": "fr" }
+  ],
+  "executions": [
+    {
+      "id": "exact-decimal-en",
+      "locale": "en",
+      "key": "core_total",
+      "arguments": {
+        "rate": { "type": "decimal", "value": "0.125" },
+        "digits": { "type": "int64", "value": "2" },
+        "style": { "type": "string", "value": "percent" }
+      },
+      "expected": { "kind": "text", "value": "12.50%", "contentLocale": "en" }
+    },
+    {
+      "id": "exact-decimal-de",
+      "locale": "de",
+      "key": "core_total",
+      "arguments": {
+        "rate": { "type": "decimal", "value": "0.125" },
+        "digits": { "type": "int64", "value": "2" },
+        "style": { "type": "string", "value": "percent" }
+      },
+      "expected": { "kind": "text", "value": "12,50%", "contentLocale": "de" }
+    },
+    {
+      "id": "regional-fallback",
+      "locale": "fr-FR",
+      "key": "core_total",
+      "arguments": {
+        "rate": { "type": "decimal", "value": "0.125" },
+        "digits": { "type": "int64", "value": "2" },
+        "style": { "type": "string", "value": "percent" }
+      },
+      "expected": { "kind": "text", "value": "12,50%", "contentLocale": "de" }
+    },
+    {
+      "id": "direct-regional-chain",
+      "locale": "fr-FR",
+      "key": "core_direct",
+      "arguments": {},
+      "expected": { "kind": "text", "value": "Français", "contentLocale": "fr" }
+    },
+    {
+      "id": "numeric-exact-before-category",
+      "locale": "en",
+      "key": "core_rank",
+      "arguments": {
+        "count": { "type": "decimal", "value": "1.0" },
+        "kind": { "type": "string", "value": "primary" }
+      },
+      "expected": { "kind": "text", "value": "exact-primary", "contentLocale": "en" }
+    },
+    {
+      "id": "category-before-wildcard",
+      "locale": "en",
+      "key": "core_rank",
+      "arguments": {
+        "count": { "type": "decimal", "value": "1" },
+        "kind": { "type": "string", "value": "secondary" }
+      },
+      "expected": { "kind": "text", "value": "category-any", "contentLocale": "en" }
+    },
+    {
+      "id": "quoted-star-before-wildcard",
+      "locale": "en",
+      "key": "core_rank",
+      "arguments": {
+        "count": { "type": "decimal", "value": "2" },
+        "kind": { "type": "string", "value": "*" }
+      },
+      "expected": { "kind": "text", "value": "literal-star", "contentLocale": "en" }
+    },
+    {
+      "id": "structured-markup-defaults-aliases-slots",
+      "locale": "de",
+      "key": "core_rich",
+      "arguments": {},
+      "slots": { "terms": { "kind": "runic:link", "href": "/terms" } },
+      "expected": {
+        "kind": "structured",
+        "plainText": "Lesen Bedingungen\nFertig",
+        "contentLocale": "de",
+        "markup": ["runic:strong", "app:badge", "runic:link", "runic:br"]
+      }
+    },
+    {
+      "id": "hostile-nfc-and-unicode",
+      "locale": "en",
+      "key": "core_hostile",
+      "arguments": {
+        "__proto__": { "type": "string", "value": "proto" },
+        "constructor": { "type": "string", "value": "ctor" },
+        "user-name": { "type": "string", "value": "punct" },
+        "café": { "type": "string", "value": "nfc" },
+        "用户": { "type": "string", "value": "雪" }
+      },
+      "expected": { "kind": "text", "value": "שלום 🌍 proto|ctor|punct|nfc|雪", "contentLocale": "en" }
+    },
+    {
+      "id": "locale-extra-runtime-only",
+      "locale": "de",
+      "key": "locale_extra",
+      "dynamicOnly": true,
+      "arguments": { "n": { "type": "int64", "value": "7" } },
+      "expected": { "kind": "text", "value": "Extra 7", "contentLocale": "de" }
+    }
+  ],
+  "layouts": [
+    { "id": "flat", "source": "layouts/flat/en.rmf2", "logicalPath": "translations/en.rmf2", "newline": "crlf" },
+    { "id": "split", "source": "layouts/split/en.rmf2", "logicalPath": "translations/checkout/cart/en.rmf2" },
+    { "id": "mounted", "source": "layouts/mounted/en.rmf2", "logicalPath": "src/shop/i18n/cart/en.rmf2", "mountPath": "../src/shop/i18n", "namespace": ["checkout"] }
+  ],
+  "invalidPacks": [
+    { "id": "artifact-version", "mutation": "artifactVersion", "value": 4, "rejection": "RTR0023/artifact-version-mismatch" },
+    { "id": "grammar-version", "mutation": "messageGrammarVersion", "value": 4, "rejection": "RTR0023/message-grammar-version-mismatch" },
+    { "id": "profile", "mutation": "profile", "value": "rmf2-execution-v1", "rejection": "RTR0023/message-grammar-version-mismatch" },
+    { "id": "catalog", "mutation": "catalog", "value": "other", "rejection": "RTR0023/catalog-mismatch" },
+    { "id": "locale", "mutation": "locale", "value": "xx", "rejection": "RTR0023/locale-mismatch" },
+    { "id": "fingerprint", "mutation": "contractFingerprint", "value": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "rejection": "RTR0023/contract-fingerprint-mismatch" },
+    { "id": "unknown-root-member", "mutation": "addRootMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-key", "mutation": "addMessage", "value": true, "rejection": "RTR0023/unknown-key" },
+    { "id": "content-locale", "mutation": "contentLocale", "value": "en", "rejection": "RTR0023/argument-contract-mismatch" },
+    { "id": "markup-contract", "mutation": "markupContract", "value": {}, "rejection": "RTR0023/argument-contract-mismatch" },
+    { "id": "unknown-ast-member", "mutation": "addAstMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "ast-version", "mutation": "astVersion", "value": 4, "rejection": "RTR0023/artifact-version-mismatch" },
+    { "id": "unknown-wrapper-member", "mutation": "addWrapperMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-input-member", "mutation": "addInputMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-declaration-member", "mutation": "addDeclarationMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-selector-member", "mutation": "addSelectorMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-variant-member", "mutation": "addVariantMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-wildcard-key-member", "mutation": "addWildcardKeyMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-literal-key-member", "mutation": "addLiteralKeyMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-text-node-member", "mutation": "addTextNodeMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-expression-node-member", "mutation": "addExpressionNodeMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-markup-node-member", "mutation": "addMarkupNodeMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-expression-member", "mutation": "addExpressionMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-expression-option-member", "mutation": "addExpressionOptionMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-markup-option-member", "mutation": "addMarkupOptionMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-expression-annotation-member", "mutation": "addExpressionAnnotationMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-markup-annotation-member", "mutation": "addMarkupAnnotationMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-value-member", "mutation": "addValueMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "unknown-numeric-value-member", "mutation": "addNumericValueMember", "value": true, "rejection": "RTR0023/unknown-member" },
+    { "id": "missing-expression-option-value-kind-with-unknown", "mutation": "missingExpressionOptionValueKindWithUnknown", "value": true, "rejection": "RTR0023/malformed" },
+    { "id": "non-string-expression-option-value-kind-with-unknown", "mutation": "nonStringExpressionOptionValueKindWithUnknown", "value": true, "rejection": "RTR0023/malformed" },
+    { "id": "missing-expression-annotation-value-kind-with-unknown", "mutation": "missingExpressionAnnotationValueKindWithUnknown", "value": true, "rejection": "RTR0023/malformed" },
+    { "id": "missing-markup-value-kind-with-unknown", "mutation": "missingMarkupValueKindWithUnknown", "value": true, "rejection": "RTR0023/malformed" },
+    { "id": "non-string-markup-value-kind-with-unknown", "mutation": "nonStringMarkupValueKindWithUnknown", "value": true, "rejection": "RTR0023/malformed" },
+    { "id": "non-string-markup-annotation-value-kind-with-unknown", "mutation": "nonStringMarkupAnnotationValueKindWithUnknown", "value": true, "rejection": "RTR0023/malformed" },
+    { "id": "unbound-local", "mutation": "unboundLocal", "value": true, "rejection": "RTR0023/argument-contract-mismatch" },
+    { "id": "implicit-dynamic-dependency", "mutation": "implicitDynamicDependency", "value": true, "rejection": "RTR0023/argument-contract-mismatch" },
+    { "id": "selector-contract", "mutation": "selectorContract", "value": "ordinal", "rejection": "RTR0023/argument-contract-mismatch" },
+    { "id": "duplicate-selector", "mutation": "duplicateSelector", "value": true, "rejection": "RTR0023/malformed-pattern" },
+    { "id": "slot-identity", "mutation": "slotIdentity", "value": "other", "rejection": "RTR0023/argument-contract-mismatch" },
+    { "id": "node-limit", "mutation": "nodeLimit", "value": 4097, "rejection": "RTR0023/limit-exceeded" },
+    { "id": "duplicate-root-member", "mutation": "duplicateRootMember", "value": true, "rejection": "RTR0023/malformed" }
+  ],
+  "esmObjectCases": ["single-read-getter", "null-prototype-inputs", "own-undefined-optionals", "nonadditive-rejection-taxonomy"],
+  "referencedEvidence": {
+    "semanticAst": "../semantic-v5/message.mf2",
+    "semanticGolden": "../semantic-v5/locale-artifact.json",
+    "linkedProject": "../v5-project/expected-contract.json",
+    "recoveryAndSourceMaps": [
+      "../../../../tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2Tests.cs",
+      "../../../../tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2SemanticV5Tests.cs"
+    ]
+  }
+}

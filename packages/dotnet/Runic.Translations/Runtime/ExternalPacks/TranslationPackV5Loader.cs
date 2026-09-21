@@ -93,7 +93,15 @@ internal static class TranslationPackV5Loader
             throw Limit("A message has an invalid or excessive variant list.");
         var variants = new List<CompiledRmf2Variant>();
         foreach (JsonElement item in ast["variants"].EnumerateArray()) variants.Add(ReadVariant(item, limits));
-        return new CompiledRmf2Message(inputs, declarations, selectors, variants, contentLocale);
+        try { return new CompiledRmf2Message(inputs, declarations, selectors, variants, contentLocale); }
+        catch (ArgumentException exception) when (exception.Message.StartsWith("Unbound or forward v5 reference", StringComparison.Ordinal) ||
+            exception.Message.StartsWith("Input declaration must annotate its own caller input", StringComparison.Ordinal) ||
+            exception.Message.StartsWith("Input declaration function must establish its caller carrier", StringComparison.Ordinal) ||
+            exception.Message.StartsWith("Local shadows caller input", StringComparison.Ordinal) ||
+            exception.Message.StartsWith("Expression carrier disagrees with its operand", StringComparison.Ordinal) ||
+            exception.Message.StartsWith("Dynamic option requires an explicitly declared typed dependency", StringComparison.Ordinal) ||
+            exception.Message.StartsWith("Inconsistent v5 selector", StringComparison.Ordinal))
+        { throw Error(exception.Message, TranslationPackFailureReason.ArgumentContractMismatch); }
     }
 
     private static CompiledRmf2Input[] ReadInputs(JsonElement value, TranslationPackMessageContract contract, TranslationPackLimits limits)

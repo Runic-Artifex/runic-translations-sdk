@@ -203,8 +203,10 @@ internal static class Rmf2RuntimeValidation
         foreach (var selector in message.SelectorArray)
         {
             Symbol symbol = Resolve(selector.Value);
-            if (!selectorNames.Add(selector.Value.Value) || symbol.Type != selector.Type || symbol.Selection != selector.Function)
-                throw new ArgumentException("Inconsistent or duplicate v5 selector.", nameof(message));
+            if (!selectorNames.Add(selector.Value.Value))
+                throw new ArgumentException("Duplicate v5 selector.", nameof(message));
+            if (symbol.Type != selector.Type || symbol.Selection != selector.Function)
+                throw new ArgumentException("Inconsistent v5 selector.", nameof(message));
         }
         if (message.VariantArray.Length == 0 || (message.SelectorArray.Length == 0 && message.VariantArray.Length != 1)) throw new ArgumentException("Invalid v5 variant count.", nameof(message));
         bool fallback = false;
