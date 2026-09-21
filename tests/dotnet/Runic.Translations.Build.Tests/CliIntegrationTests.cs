@@ -16,6 +16,7 @@ internal static class CliIntegrationTests
         runner.Add("CLI init creates canonical locale files and explicit fallbacks", InitCreatesMultipleLocales);
         runner.Add("CLI init rejects conflicts without changing the target", InitConflictDoesNotWrite);
         runner.Add("CLI init supports an empty TOML project", InitWithoutStarterIsValid);
+        runner.Add("CLI RMF2 init is explicit and compiler-valid", InitRmf2IsExplicit);
         runner.Add("CLI project mode validates and generates conventional MF2", ProjectModeValidatesAndGenerates);
         runner.Add("CLI schema writes exact bundled versioned schemas", SchemaWritesExactSchemas);
     }
@@ -236,6 +237,39 @@ internal static class CliIntegrationTests
         Assert.Equal("en.toml|runic.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
         ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "Resources");
         Assert.Equal(0, validate.ExitCode, validate.Combined);
+    }
+
+    private static void InitRmf2IsExplicit()
+    {
+        using TemporaryDirectory temporary = new();
+        ProcessResult create = TestFixture.RunTool(
+            temporary,
+            "init-rmf2",
+            "--directory", "Resources",
+            "--catalog", "product",
+            "--default-locale", "en",
+            "--namespace", "Customer.Product",
+            "--class", "ProductText");
+
+        Assert.Equal(0, create.ExitCode, create.Combined);
+        Assert.Equal("en.rmf2|runic.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
+        string manifest = File.ReadAllText(temporary.Resolve("Resources", "runic.json"), Encoding.UTF8);
+        Assert.Contains("\"sourceLayout\": \"rmf2-v1\"", manifest);
+        Assert.Contains("application_title = ProductText", File.ReadAllText(temporary.Resolve("Resources", "en.rmf2"), Encoding.UTF8));
+        Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "Resources").ExitCode);
+
+        ProcessResult defaultInit = TestFixture.RunTool(
+            temporary,
+            "init",
+            "--directory", "LocaleResources",
+            "--catalog", "product",
+            "--default-locale", "en",
+            "--namespace", "Customer.Product",
+            "--class", "ProductText");
+        Assert.Equal(0, defaultInit.ExitCode, defaultInit.Combined);
+        Assert.True(File.Exists(temporary.Resolve("LocaleResources", "en.toml")), "default init silently changed from locale TOML");
+
+        AssertUsageFailure(temporary, "--layout expects 'locale-toml' or 'rmf2-v1'.", "init", "--directory", "Invalid", "--catalog", "product", "--default-locale", "en", "--namespace", "Customer.Product", "--class", "ProductText", "--layout", "legacy");
     }
 
     private static void SchemaWritesExactSchemas()

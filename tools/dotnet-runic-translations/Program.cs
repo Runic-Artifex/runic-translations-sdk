@@ -225,10 +225,26 @@ internal static class Program
         return result;
     }
 
-    internal static ToolOperationResult ExecuteInit(string directory, string catalog, string defaultLocale, string codeNamespace, string className, IReadOnlyList<string> locales, bool noStarter) =>
-        Execute(new ToolInvocation(ToolCommand.Init, null, ToolEmission.None,
-            new TranslationProjectCreationRequest(directory, catalog, defaultLocale, codeNamespace, className,
-                ParseLocales(locales), !noStarter)));
+    internal static ToolOperationResult ExecuteInit(string directory, string catalog, string defaultLocale, string codeNamespace, string className, IReadOnlyList<string> locales, bool noStarter, string layout = "locale-toml")
+    {
+        try
+        {
+            return Execute(new ToolInvocation(ToolCommand.Init, null, ToolEmission.None,
+                new TranslationProjectCreationRequest(directory, catalog, defaultLocale, codeNamespace, className,
+                    ParseLocales(locales), !noStarter, ParseLayout(layout))));
+        }
+        catch (ToolUsageException exception)
+        {
+            return Usage(exception.Message);
+        }
+    }
+
+    private static TranslationProjectLayout ParseLayout(string value) => value switch
+    {
+        "locale-toml" => TranslationProjectLayout.LocaleToml,
+        "rmf2-v1" => TranslationProjectLayout.Rmf2,
+        _ => throw new ToolUsageException("--layout expects 'locale-toml' or 'rmf2-v1'."),
+    };
 
     internal static ToolEmission Emission(bool csharp, bool json, bool typescript, bool templateManifest, bool esm, bool cpp)
     {
@@ -246,6 +262,7 @@ internal static class Program
     {
         var result = new ToolOperationResult { ExitCode = InvocationFailure, ExitCategory = CommandExitCategory.Usage };
         result.AddDiagnostic("RCLI9003", "tool-usage", message, CommandDiagnosticSeverity.Error);
+        result.SetHumanOutput($"runic-translations: {message}\n{UsageText()}\n");
         return result;
     }
 
@@ -466,6 +483,7 @@ internal static class Program
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  runic-translations init --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [init-options]");
+        writer.WriteLine("  runic-translations init-rmf2 --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [init-options]");
         writer.WriteLine("  runic-translations lsp");
         writer.WriteLine("  runic-translations migrate-rmf2 --project <translations-directory> [--dry-run]");
         writer.WriteLine("  runic-translations migrate --project <translations-directory> [--dry-run]");
@@ -476,7 +494,8 @@ internal static class Program
         writer.WriteLine();
         writer.WriteLine("Arguments may be read from a UTF-8 response file with @<file>.");
         writer.WriteLine("Framework transport uses --runic-output human|json; --output remains the tool destination option.");
-        writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --no-starter.");
+        writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --no-starter --layout locale-toml|rmf2-v1.");
+        writer.WriteLine("The init command defaults to locale-toml; use init-rmf2 or --layout rmf2-v1 to opt into RMF2.");
         writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest --emit-esm --emit-cpp.");
         writer.WriteLine("With no emit switches, generate and verify use the selected execution profile's default output groups.");
         writer.WriteLine("Exit codes: 0 success; 1 validation or verification diagnostics; 2 invocation or operational failure.");
@@ -561,7 +580,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
     {
         ToolOperationResult result = request.Command switch
         {
-            "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter),
+            "init" or "init-rmf2" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter, request.Layout),
             "migrate-rmf2" => Program.Execute(new ToolInvocation(ToolCommand.MigrateRmf2, null, ToolEmission.None, null, request.Project, request.DryRun)),
             "migrate" => Program.Execute(new ToolInvocation(ToolCommand.Migrate, null, ToolEmission.None, null, request.Project, request.DryRun)),
             "validate" => ExecuteCompilation(request, ToolCommand.Validate, null, ToolEmission.None),

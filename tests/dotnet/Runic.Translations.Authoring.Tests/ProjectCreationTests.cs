@@ -20,6 +20,7 @@ internal static class ProjectCreationTests
         runner.Add("Creation rejects a linked target parent", LinkedParentIsRejected);
         runner.Add("Project without starter messages remains compiler-valid", NoStarterIsValid);
         runner.Add("Project config carries its editor schema declaration", ProjectConfigDeclaresSchema);
+        runner.Add("Explicit RMF2 project is compiler-valid", Rmf2ProjectIsValid);
     }
 
     private static void GermanOnlyIsValid()
@@ -159,6 +160,22 @@ internal static class ProjectCreationTests
         string config = Utf8(plan, "runic.json");
         Assert.True(config.Contains("project-v1.schema.json", StringComparison.Ordinal), "Project schema declaration is missing.");
         Assert.True(config.Contains("\"sourceLayout\": \"locale-toml\"", StringComparison.Ordinal), "New projects must explicitly select locale TOML.");
+    }
+
+    private static void Rmf2ProjectIsValid()
+    {
+        TranslationProjectPlan plan = TranslationProjectPlanBuilder.Build();
+        Assert.True(plan.Compilation.Success, "Generated RMF2 project did not compile.");
+        Assert.Equal("en.rmf2|runic.json", string.Join('|', plan.Files.Select(file => file.RelativePath)));
+        Assert.True(Utf8(plan, "runic.json").Contains("\"sourceLayout\": \"rmf2-v1\"", StringComparison.Ordinal), "RMF2 source layout was not selected.");
+        Assert.True(Utf8(plan, "en.rmf2").Contains("application_title = ProductText", StringComparison.Ordinal), "RMF2 starter resource is missing.");
+    }
+
+    private sealed class TranslationProjectPlanBuilder
+    {
+        public static TranslationProjectPlan Build() => TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
+            "unused", "product", "en", "Customer.Product", "ProductText",
+            additionalLocales: null, includeStarterMessage: true, layout: TranslationProjectLayout.Rmf2));
     }
 
     private static TranslationProjectCreationRequest Request(string directory, string locale) => new(

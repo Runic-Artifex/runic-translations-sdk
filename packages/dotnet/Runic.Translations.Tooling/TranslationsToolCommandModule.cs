@@ -67,8 +67,15 @@ public static class TranslationsToolCommandModule
             cancellationToken);
     }
 
-    [Command("init", Description = "Create a translation project and starter catalogs.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    public static CommandOutcome<TranslationsToolCommandResult> Init([FromServices] ITranslationsToolCommandOperations operations, [Option("--directory", Required = true)] string directory, [Option("--catalog", Required = true)] string catalog, [Option("--default-locale", Required = true)] string defaultLocale, [Option("--namespace", Required = true)] string codeNamespace, [Option("--class", Required = true)] string className, [Option("--locale", AllowMultipleValues = true)] IReadOnlyList<string> locales, [Option("--no-starter")] bool noStarter) => operations.Execute(new("init", Directory: directory, Catalog: catalog, DefaultLocale: defaultLocale, Namespace: codeNamespace, ClassName: className, Locales: locales, NoStarter: noStarter));
+    /// <summary>Legacy locale-TOML entry point retained for precompiled callers.</summary>
+    public static CommandOutcome<TranslationsToolCommandResult> Init(ITranslationsToolCommandOperations operations, string directory, string catalog, string defaultLocale, string codeNamespace, string className, IReadOnlyList<string> locales, bool noStarter) =>
+        Init(operations, directory, catalog, defaultLocale, codeNamespace, className, locales, noStarter, "locale-toml");
+
+    [Command("init", Description = "Create a locale-TOML translation project and starter catalogs.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    public static CommandOutcome<TranslationsToolCommandResult> Init([FromServices] ITranslationsToolCommandOperations operations, [Option("--directory", Required = true)] string directory, [Option("--catalog", Required = true)] string catalog, [Option("--default-locale", Required = true)] string defaultLocale, [Option("--namespace", Required = true)] string codeNamespace, [Option("--class", Required = true)] string className, [Option("--locale", AllowMultipleValues = true)] IReadOnlyList<string> locales, [Option("--no-starter")] bool noStarter, [Option("--layout")] string layout = "locale-toml") => operations.Execute(new("init", Directory: directory, Catalog: catalog, DefaultLocale: defaultLocale, Namespace: codeNamespace, ClassName: className, Locales: locales, NoStarter: noStarter) { Layout = layout });
+
+    [Command("init-rmf2", Description = "Create an RMF2 translation project and starter resources.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    public static CommandOutcome<TranslationsToolCommandResult> InitRmf2([FromServices] ITranslationsToolCommandOperations operations, [Option("--directory", Required = true)] string directory, [Option("--catalog", Required = true)] string catalog, [Option("--default-locale", Required = true)] string defaultLocale, [Option("--namespace", Required = true)] string codeNamespace, [Option("--class", Required = true)] string className, [Option("--locale", AllowMultipleValues = true)] IReadOnlyList<string> locales, [Option("--no-starter")] bool noStarter) => operations.Execute(new("init-rmf2", Directory: directory, Catalog: catalog, DefaultLocale: defaultLocale, Namespace: codeNamespace, ClassName: className, Locales: locales, NoStarter: noStarter) { Layout = "rmf2-v1" });
 
     [Command("migrate", Description = "Migrate an existing translations project.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Migrate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project, [Option("--dry-run")] bool dryRun) => operations.Execute(new("migrate", Project: project, DryRun: dryRun));
@@ -210,7 +217,11 @@ public sealed record TranslationsToolCommandRequest(
     bool EmitTemplateManifest = false,
     bool EmitEsm = false,
     bool EmitCpp = false,
-    bool DryRun = false);
+    bool DryRun = false)
+{
+    /// <summary>Optional project layout for <c>init</c>; retained as a property to preserve the original positional ABI.</summary>
+    public string Layout { get; init; } = "locale-toml";
+}
 
 /// <summary>Portable command payload; the standard dispatcher renders its human text or JSON envelope.</summary>
 public sealed record TranslationsToolCommandResult(string Output, string Error) { public override string ToString() => Output; }

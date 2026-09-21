@@ -51,6 +51,25 @@ The item template creates `translations/runic.json` and a default-locale TOML fi
 
 Choose the project template for a complete .NET and ESM setup. Choose the item template when a project already owns package versions and build configuration. Use `runic-translations init` when you need multiple locales, explicit fallback edges, or optional starter content in one command.
 
+## Opt into RMF2
+
+RMF2 is an explicit choice; the templates above and `runic-translations init`
+remain locale-TOML by default. Select one of the RMF2 templates when recursive
+`.rmf2` resources and inline markup contracts are needed:
+
+```bash
+dotnet new runic-translations-rmf2 --output . --catalog app --defaultLocale en --namespace Example.Translations --className AppText
+dotnet new runic-translations-project-rmf2 --name Example.Translations --output Example.Translations --packageVersion <VERSION>
+```
+
+Both RMF2 templates select `sourceLayout: "rmf2-v1"` together with
+`executionProfile: "rmf2-execution-v2"`, producing typed v5 C# and ESM ABI 4
+output. The standalone tool also offers `runic-translations init-rmf2`, or
+`runic-translations init ... --layout rmf2-v1`, for compatibility scaffolding;
+those commands omit the selector and therefore retain the v1 execution / artifact
+v4 contract. Add the execution profile to those generated projects when v5
+semantics are required. Invalid layout values fail with exit code 2.
+
 ## Compatibility and status
 
 Template output uses the package version embedded at packing time. If you pass `--packageVersion`, it must identify one matching release of the runtime, build package, and tool. Preview upgrades may change generated project files or source schemas; review the [compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md) before updating an existing project.

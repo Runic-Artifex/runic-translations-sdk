@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Runic.Translations.Compiler;
@@ -19,7 +20,9 @@ internal static class Program
             LocalePackUsesCanonicalCompilerBytes();
             ArtifactInspectionRecognizesGeneratedOutputs();
             Rmf2PacksAndInspection();
-            Console.WriteLine("RESULT 6/6 passed");
+            ToolRequestKeepsLegacyPositionalShape();
+            ToolCommandKeepsLegacyInitShape();
+            Console.WriteLine("RESULT 8/8 passed");
             return 0;
         }
         catch (Exception exception)
@@ -107,6 +110,33 @@ internal static class Program
         var artifact = TranslationsTooling.BuildRmf2LocalePacks(compilation).Single();
         var inspection = ArtifactInspector.Inspect(artifact.GetUtf8Bytes());
         if (inspection.Kind != "locale-artifact-v4" || inspection.Findings.Count != 0) throw new InvalidOperationException("RMF2 artifact inspection failed.");
+    }
+
+    private static void ToolRequestKeepsLegacyPositionalShape()
+    {
+        var request = new TranslationsToolCommandRequest("init");
+        request.Deconstruct(out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _);
+        if (typeof(TranslationsToolCommandRequest).GetConstructors().Single().GetParameters().Length != 17)
+            throw new InvalidOperationException("TranslationsToolCommandRequest changed its legacy positional constructor shape.");
+        if (request.Layout != "locale-toml" || request with { Layout = "rmf2-v1" } is not { Layout: "rmf2-v1" })
+            throw new InvalidOperationException("TranslationsToolCommandRequest layout compatibility property failed.");
+    }
+
+    private static void ToolCommandKeepsLegacyInitShape()
+    {
+        Type[] expected =
+        [
+            typeof(ITranslationsToolCommandOperations), typeof(string), typeof(string), typeof(string),
+            typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(bool),
+        ];
+        var initMethods = typeof(TranslationsToolCommandModule).GetMethods()
+            .Where(method => method.Name == "Init")
+            .ToArray();
+        var legacy = initMethods.SingleOrDefault(method => method.GetParameters().Length == expected.Length);
+        if (legacy is null || !legacy.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(expected))
+            throw new InvalidOperationException("TranslationsToolCommandModule.Init changed its legacy eight-parameter method shape.");
+        if (initMethods.Length != 2 || initMethods.Single(method => method.GetParameters().Length == expected.Length + 1).GetParameters().Last().ParameterType != typeof(string))
+            throw new InvalidOperationException("TranslationsToolCommandModule.Init layout-aware overload is missing.");
     }
 
     private static TranslationCompilation CompilePlainFixture() => Compile("Hello", "Hallo");
