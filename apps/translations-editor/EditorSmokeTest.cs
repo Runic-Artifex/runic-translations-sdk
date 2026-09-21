@@ -223,11 +223,13 @@ internal static class EditorSmokeTest
     {
         Directory.CreateDirectory(Path.Combine(root, "shop"));
         Directory.CreateDirectory(Path.Combine(root, "accounts"));
+        Directory.CreateDirectory(Path.Combine(root, "payments"));
         await File.WriteAllTextAsync(Path.Combine(root, "runic.json"), """
-        {"schemaVersion":1,"catalog":"rmf2-smoke","sourceLayout":"rmf2-v1","baseLocale":"en","code":{"namespace":"Smoke","className":"Text"},"sourceRoots":[{"path":"shop","namespace":["shop"]},{"path":"accounts","namespace":["account"]}]}
+        {"schemaVersion":1,"catalog":"rmf2-smoke","sourceLayout":"rmf2-v1","baseLocale":"en","code":{"namespace":"Smoke","className":"Text"},"validation":{"translationCompleteness":"allow"},"sourceRoots":[{"path":"shop","namespace":["shop"]},{"path":"accounts","namespace":["account"]},{"path":"payments","namespace":["payment"]}]}
         """);
         await File.WriteAllTextAsync(Path.Combine(root, "shop", "en.rmf2"), "title = Shop\n");
         await File.WriteAllTextAsync(Path.Combine(root, "accounts", "en.rmf2"), "# Profile heading\ntitle = Account\n");
+        await File.WriteAllTextAsync(Path.Combine(root, "payments", "en.rmf2"), "title = Payment\n");
         using var session = new EditorSession(root);
         Require((await session.LoadAsync()).Success, "Mounted RMF2 editor catalog failed to load.");
         await Apply(new("create-key", null, null, null, null, null, "account.profile", "Profile"));
@@ -239,6 +241,42 @@ internal static class EditorSmokeTest
         await Apply(new("set-fallback", "de", "en", null, null, null, null, null));
         await Apply(new("duplicate-key", null, null, null, null, "account_heading", "account.copy", null));
         await Apply(new("delete-key", null, null, null, null, "account_copy", null, null));
+
+        string interchangeDirectory = Path.Combine(root, "interchange");
+        EditorXliffExportResult exported = await session.ExportXliffAsync(interchangeDirectory).ConfigureAwait(false);
+        Require(exported.Ok && exported.Documents.Count == 1, exported.Message?.ToString() ?? "RMF2 XLIFF export failed.");
+        string interchangePath = Path.Combine(root, exported.Documents[0].Path);
+        XDocument xliff = XDocument.Load(interchangePath);
+        XNamespace xliffNamespace = "urn:oasis:names:tc:xliff:document:2.0";
+        foreach (XElement unit in xliff.Descendants(xliffNamespace + "unit"))
+        {
+            string? key = unit.Attribute("id")?.Value;
+            if (key is "shop_title" or "account_heading" or "payment_title")
+            {
+                XElement target = unit.Descendants(xliffNamespace + "target").Single();
+                target.Value = key switch
+                {
+                    "shop_title" => "Importierter Shop",
+                    "account_heading" => "Importiertes Konto",
+                    _ => "Importierte Zahlung",
+                };
+            }
+        }
+        xliff.Save(interchangePath);
+        File.Delete(Path.Combine(root, "payments", "de.rmf2"));
+        EditorXliffImportPlan importPlan = await session.PreviewXliffImportAsync(interchangePath).ConfigureAwait(false);
+        Require(importPlan.Ok, importPlan.Message?.ToString() ?? "RMF2 XLIFF import preview failed.");
+        Require((await session.ApplyXliffImportAsync(importPlan.ConfirmationToken!).ConfigureAwait(false)).Ok,
+            "RMF2 XLIFF import failed.");
+        Require(File.ReadAllText(Path.Combine(root, "shop", "de.rmf2")).Contains("title = Importierter Shop", StringComparison.Ordinal),
+            "RMF2 XLIFF import did not update the target resource.");
+        Require(File.ReadAllText(Path.Combine(root, "accounts", "de.rmf2")).Contains("heading = Importiertes Konto", StringComparison.Ordinal),
+            "RMF2 XLIFF import did not update the mounted target resource.");
+        Require(File.Exists(Path.Combine(root, "payments", "de.rmf2")) &&
+            File.ReadAllText(Path.Combine(root, "payments", "de.rmf2")).Contains("title = Importierte Zahlung", StringComparison.Ordinal),
+            "RMF2 XLIFF import did not recreate the missing mounted target resource.");
+        Require(!Directory.EnumerateFiles(root, "*.mf2", SearchOption.AllDirectories).Any(),
+            "RMF2 XLIFF import created a legacy MF2 file.");
         await Apply(new("remove-locale", "de", null, "en", null, null, null, null));
         Require(!File.Exists(Path.Combine(root, "accounts", "de.rmf2")), "RMF2 locale removal left a source behind.");
         Console.WriteLine("PASS: editor mounted RMF2 create, rename, duplicate, delete, locale and fallback transactions.");

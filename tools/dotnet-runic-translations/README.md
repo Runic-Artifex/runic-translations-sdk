@@ -73,4 +73,9 @@ Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob
 
 ## RMF2
 
-`sourceLayout: "rmf2-v1"` enables recursive resources and markup contracts. Use `migrate-rmf2 --project translations --dry-run` to preview TOML migration, then omit `--dry-run` to commit with original `.toml.bak` files. `lsp` starts the bounded stdio language service. See the [RMF2 guide](../../docs/guides/translations/rmf2.md) for capabilities and limits.
+`sourceLayout: "rmf2-v1"` enables recursive resources and markup contracts. For
+legacy projects, run `migrate` and validate first, then use
+`migrate-rmf2 --project translations --dry-run` to preview the TOML-to-RMF2
+step. Applying that second step retains byte-preserving sibling `.toml.bak`
+files; keep a durable VCS or external backup for the first legacy-to-TOML step.
+`lsp` starts the bounded stdio language service. See the [RMF2 guide](../../docs/guides/translations/rmf2.md) for capabilities and limits.
