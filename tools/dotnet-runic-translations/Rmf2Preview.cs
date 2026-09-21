@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json.Nodes;
+using JsonValue = System.Text.Json.Nodes.JsonValue;
 using Runic.Translations;
 using Runic.Translations.Compiler;
 using Runic.Translations.Compiler.Generation;

@@ -8,7 +8,7 @@ Import generated Runic Translations messages through stable Vite virtual modules
 npm install --save-dev @runic-artifex/vite-plugin-runic-translations@<VERSION>
 ```
 
-Replace `<VERSION>` with the current public preview shown on npm. The package supports Vite 6, 7, and 8. A Vite application and generated `web-module-manifest-v2.json` are required for project-owned generation; explicit `manifest` paths may continue to use the v1 contract. If the plugin owns generation, install `dotnet-runic-translations` in a project-local .NET 10 tool manifest at that same exact release.
+Replace `<VERSION>` with the current public preview shown on npm. The package supports Vite 6, 7, and 8. Project-owned generation uses `web-module-manifest-v2.json` by default or the v3 contract for explicitly activated RMF2 execution v2 projects; explicit `manifest` paths may also use the v1 contract. If the plugin owns generation, install `dotnet-runic-translations` in a project-local .NET 10 tool manifest at that same exact release.
 
 ## Configure Vite
 
@@ -65,4 +65,4 @@ Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob
 
 ## RMF2
 
-Project mode accepts `sourceLayout: "rmf2-v1"`, recursively discovers `.rmf2`, and watches all explicit `sourceRoots` for additions, edits and removals. It invokes the shared compiler and retains its diagnostic failures. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the generated inline renderer API.
+Project mode accepts `sourceLayout: "rmf2-v1"`, recursively discovers `.rmf2`, and watches `runic.json`, the project directory, and all explicit `sourceRoots` for additions, edits and removals. Add `executionProfile: "rmf2-execution-v2"` to select the typed grammar 5 / ESM ABI 4 output and its `web-module-manifest-v3.json`; omitting the selector retains the existing v4 / manifest-v2 output. It invokes the shared compiler and retains its diagnostic failures. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the generated inline renderer API.

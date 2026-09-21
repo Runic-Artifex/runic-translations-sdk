@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Runic.Translations.Compiler;
 using Runic.Translations.Compiler.Generation;
 
@@ -84,5 +85,33 @@ internal static class CompilerOutputAdapter
         }
 
         return ArtifactFiles.Normalize(artifacts);
+    }
+
+    internal static IReadOnlyList<ToolArtifact> Render(Rmf2ProjectV5 project, ToolEmission emission)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        if ((emission & ToolEmission.Cpp) != 0)
+            throw new ToolDiagnosticException("RTR0065: C++ generation does not support executionProfile 'rmf2-execution-v2'.");
+
+        var outputs = new List<TranslationGeneratedOutput>();
+        if ((emission & ToolEmission.CSharp) != 0)
+        {
+            outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpKeys(project));
+            outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(project));
+            outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(project));
+            outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project));
+        }
+        if ((emission & ToolEmission.Json) != 0)
+            foreach (string locale in project.Locales.Select(static item => item.Tag).OrderBy(static item => item, StringComparer.Ordinal))
+                outputs.Add(Rmf2LocaleArtifactV5.Render(project, locale));
+        // The v5 ESM contract owns its declarations and versioned web manifest.
+        // Preserve the established switches by treating either edge-only request
+        // as selecting that cohesive output group.
+        if ((emission & (ToolEmission.Esm | ToolEmission.TypeScript | ToolEmission.TemplateManifest)) != 0)
+            outputs.AddRange(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
+
+        return ArtifactFiles.Normalize(outputs
+            .Select(static output => new ToolArtifact(output.RelativePath, output.GetUtf8Bytes()))
+            .ToArray());
     }
 }

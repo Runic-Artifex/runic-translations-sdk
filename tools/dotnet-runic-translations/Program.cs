@@ -339,6 +339,14 @@ internal static class Program
         }
 
         CompilerInputs inputs = InputFiles.ReadProject(invocation.ProjectPath!);
+        if (invocation.Command is ToolCommand.Validate or ToolCommand.Generate or ToolCommand.Verify)
+        {
+            TranslationProjectProfileSelection selection = TranslationCompiler.SelectProjectProfile(inputs.Project);
+            WriteDiagnostics(selection.Diagnostics, result);
+            if (!selection.Success) return DiagnosticFailure;
+            if (selection.Profile == TranslationProjectProfile.Rmf2ExecutionV2)
+                return RunRmf2V5(invocation, inputs, result);
+        }
         TranslationCompilation compilation = TranslationCompiler.CompileProject(inputs.Project, inputs.Messages);
         WriteDiagnostics(compilation.Diagnostics, result);
         if (!compilation.Success)
@@ -395,6 +403,36 @@ internal static class Program
 
         result.WriteOutputLine($"verified {artifacts.Count} artifact(s).");
         return Success;
+    }
+
+    private static int RunRmf2V5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result)
+    {
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages);
+        WriteDiagnostics(compilation.Diagnostics, result);
+        if (!compilation.Success || compilation.Project is null) return DiagnosticFailure;
+        if (invocation.Command == ToolCommand.Validate)
+        {
+            result.WriteOutputLine($"validated 1 project(s) and {inputs.Messages.Count} source document(s).");
+            return Success;
+        }
+
+        IReadOnlyList<ToolArtifact> artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission);
+        if (invocation.Command == ToolCommand.Generate)
+        {
+            ArtifactFiles.WriteAtomically(invocation.OutputPath!, artifacts);
+            result.WriteOutputLine($"generated {artifacts.Count} artifact(s).");
+            return Success;
+        }
+
+        IReadOnlyList<string> differences = ArtifactFiles.Verify(invocation.OutputPath!, artifacts);
+        if (differences.Count == 0)
+        {
+            result.WriteOutputLine($"verified {artifacts.Count} artifact(s).");
+            return Success;
+        }
+        for (int index = 0; index < differences.Count; index++)
+            result.AddDiagnostic("RCLI9011", "verify", $"verify: {differences[index]}", CommandDiagnosticSeverity.Error);
+        return DiagnosticFailure;
     }
 
     private static void WriteDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics, ToolOperationResult result)

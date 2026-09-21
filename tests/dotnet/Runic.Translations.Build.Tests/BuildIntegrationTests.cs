@@ -18,6 +18,7 @@ internal static class BuildIntegrationTests
         runner.Add("build discovers one conventional MF2 translation project", ConventionalProjectIsDiscovered);
         runner.Add("build generates only below the isolated intermediate root", GenerationIsIsolated);
         runner.Add("build generation is incremental and input-sensitive", GenerationIsIncremental);
+        runner.Add("build profile changes regenerate and reconcile v4 and v5 artifacts", ExecutionProfileChangesReconcileArtifacts);
         runner.Add("build regenerates an artifact missing despite a current stamp", MissingArtifactInvalidatesStamp);
         runner.Add("build emit flags select exact non-CSharp artifact groups", EmitFlagsSelectOutputs);
         runner.Add("build fails fast when the configured tool is missing", MissingToolFailsFast);
@@ -203,6 +204,52 @@ internal static class BuildIntegrationTests
         ProcessResult third = Build(temporary, noRestore: true);
         Assert.Equal(0, third.ExitCode, third.Combined);
         Assert.True(File.GetLastWriteTimeUtc(stamp) > firstWrite, "A changed input did not rerun generation.");
+    }
+
+    private static void ExecutionProfileChangesReconcileArtifacts()
+    {
+        using TemporaryDirectory temporary = CreateConsumer(generationEnabled: true);
+        Directory.Delete(temporary.Resolve("translations", "en"), recursive: true);
+        Directory.CreateDirectory(temporary.Resolve("feature"));
+        string configPath = temporary.Resolve("translations", "runic.json");
+        const string current = "{\"schemaVersion\":1,\"catalog\":\"minimal\",\"code\":{\"namespace\":\"Example\",\"className\":\"MinimalText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}\n";
+        File.WriteAllText(configPath, current, new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("feature", "en.rmf2"), "greeting = Hello\n", new UTF8Encoding(false));
+
+        ProcessResult first = Build(temporary);
+        Assert.Equal(0, first.ExitCode, first.Combined);
+        string output = FindGeneratedDirectory(temporary, "minimal.en.locale-v4.json");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.esm", "web-module-manifest-v2.json")), "default RMF2 build omitted v4 web manifest");
+
+        Thread.Sleep(1_200);
+        string activated = current.Replace("\"sourceLayout\":\"rmf2-v1\"",
+            "\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal);
+        File.WriteAllText(configPath, activated, new UTF8Encoding(false));
+        ProcessResult second = Build(temporary, noRestore: true);
+        Assert.Equal(0, second.ExitCode, second.Combined);
+        Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v5.json")), "profile change did not generate v5 locale artifact");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.esm-v5", "web-module-manifest-v3.json")), "profile change did not generate v5 web manifest");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.en.locale-v4.json")), "profile change retained stale v4 locale artifact");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.esm", "web-module-manifest-v2.json")), "profile change retained stale v4 ESM manifest");
+
+        string german = temporary.Resolve("feature", "de.rmf2");
+        File.WriteAllText(german, "greeting = Hallo\n", new UTF8Encoding(false));
+        File.SetLastWriteTimeUtc(german, DateTime.UtcNow.AddMinutes(-1));
+        ProcessResult added = Build(temporary, noRestore: true);
+        Assert.Equal(0, added.ExitCode, added.Combined);
+        Assert.True(File.Exists(Path.Combine(output, "minimal.de.locale-v5.json")), "mounted v5 membership addition did not regenerate");
+        File.Delete(german);
+        ProcessResult removed = Build(temporary, noRestore: true);
+        Assert.Equal(0, removed.ExitCode, removed.Combined);
+        Assert.False(File.Exists(Path.Combine(output, "minimal.de.locale-v5.json")), "mounted v5 membership deletion left stale output");
+
+        Thread.Sleep(1_200);
+        File.WriteAllText(configPath, current, new UTF8Encoding(false));
+        ProcessResult third = Build(temporary, noRestore: true);
+        Assert.Equal(0, third.ExitCode, third.Combined);
+        Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v4.json")), "profile removal did not restore v4 output");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.en.locale-v5.json")), "profile removal retained stale v5 locale artifact");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.esm-v5", "web-module-manifest-v3.json")), "profile removal retained stale v5 ESM manifest");
     }
 
     private static void OutputContainmentIsEnforced()

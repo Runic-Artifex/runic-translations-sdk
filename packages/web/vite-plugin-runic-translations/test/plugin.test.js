@@ -12,6 +12,7 @@ import { runicTranslations } from "../index.js";
 
 const execFileAsync = promisify(execFile);
 const fingerprint = `sha256:${"a".repeat(64)}`;
+const sourceHash = `sha256:${"b".repeat(64)}`;
 
 async function writeGeneratedManifest(path, document) {
   const root = dirname(path);
@@ -20,6 +21,30 @@ async function writeGeneratedManifest(path, document) {
     return { ...asset, sha256: createHash("sha256").update(content).digest("hex"), byteLength: content.byteLength, mediaType: asset.mediaType ?? "text/javascript" };
   }));
   await writeFile(path, JSON.stringify({ ...document, contractFingerprint: fingerprint, assets }));
+}
+
+async function writeV3Fixture(root, overrides = {}) {
+  await mkdir(root, { recursive: true });
+  for (const name of ["messages.js", "messages.d.ts", "server.js", "transport.js", "dynamic.js"])
+    await writeFile(join(root, name), "export {};\n");
+  await writeFile(join(root, "runtime.js"), `export const esmAbiVersion = 4;
+export const rmf2RuntimeAbiVersion = 2;
+export const messageGrammarVersion = 5;
+export const profile = "rmf2-execution-v2";
+export const generatedNameVersion = 1;
+export const contractFingerprint = ${JSON.stringify(fingerprint)};
+export const sourceHash = ${JSON.stringify(sourceHash)};
+`);
+  const manifest = join(root, "web-module-manifest-v3.json");
+  await writeGeneratedManifest(manifest, {
+    webModuleManifestVersion: 3, esmAbiVersion: 4, rmf2RuntimeAbiVersion: 2,
+    messageGrammarVersion: 5, profile: "rmf2-execution-v2", generatedNameVersion: 1,
+    sourceHash, catalog: "app",
+    entrypoints: { messages: "messages.js", types: "messages.d.ts", runtime: "runtime.js", server: "server.js", transport: "transport.js", dynamic: "dynamic.js" },
+    assets: ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js"].map(path => ({ path })),
+    ...overrides,
+  });
+  return manifest;
 }
 
 test("resolves generated entrypoints and declares watch inputs", async () => {
@@ -50,6 +75,38 @@ test("resolves generated entrypoints and declares watch inputs", async () => {
   assert.equal(id, "\0virtual:runic-translations/app/messages");
   const module = await plugin.load(id);
   assert.match(module, /export \* from .*app\.esm\/messages\.js/);
+});
+
+test("accepts the complete RMF2 v3 contract and refuses profile or ABI mismatches", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-v3-"));
+  try {
+    const generated = join(root, "app.esm-v5");
+    const manifest = await writeV3Fixture(generated);
+    const plugin = runicTranslations({ manifest });
+    await plugin.buildStart.call({ addWatchFile() {} });
+    assert.equal(await plugin.resolveId("virtual:runic-translations/app/runtime"), "\0virtual:runic-translations/app/runtime");
+
+    for (const [field, value, pattern] of [
+      ["profile", "future-profile", /execution contract/],
+      ["esmAbiVersion", 3, /ESM ABI/],
+      ["rmf2RuntimeAbiVersion", 1, /execution contract/],
+      ["messageGrammarVersion", 4, /execution contract/],
+      ["generatedNameVersion", 2, /execution contract/],
+      ["sourceHash", "bad", /execution contract/],
+    ]) {
+      const document = JSON.parse(await readFile(manifest, "utf8"));
+      document[field] = value;
+      await writeFile(manifest, JSON.stringify(document));
+      await assert.rejects(() => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }), pattern, field);
+      await writeV3Fixture(generated);
+    }
+    const document = JSON.parse(await readFile(manifest, "utf8"));
+    document.unknown = true;
+    await writeFile(manifest, JSON.stringify(document));
+    await assert.rejects(() => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }), /unknown member/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("rejects manifest paths that escape the generated root", async () => {
@@ -450,4 +507,32 @@ test("RMF2 mounts watch new feature files outside the project directory", async 
     watcher.emit("add",german); assert.equal((await change).type,"full-reload"); assert.ok(watched.includes(german));
     server.httpServer.emit("close");
   } finally { await rm(root,{recursive:true,force:true}); }
+});
+
+test("project execution profile selects v3 output and watches config plus mounted roots", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-rmf2-v5-"));
+  try {
+    const project = join(root, "translations"), feature = join(root, "feature"), output = join(root, "generated");
+    await mkdir(project); await mkdir(feature);
+    const config = join(project, "runic.json");
+    await writeFile(config, JSON.stringify({ schemaVersion: 1, catalog: "app", sourceLayout: "rmf2-v1",
+      executionProfile: "rmf2-execution-v2", sourceRoots: [{ path: "../feature", namespace: ["shop"] }] }));
+    const english = join(feature, "en.rmf2"); await writeFile(english, "title = Shop\n");
+    await writeV3Fixture(join(output, "app.esm-v5"));
+    const compiler = join(root, "compiler.mjs"); await writeFile(compiler, "process.exit(0);");
+    const plugin = runicTranslations({ project, output, command: process.execPath, commandArguments: [compiler] });
+    const watcher = new EventEmitter(), watched = [];
+    watcher.add = paths => watched.push(...(Array.isArray(paths) ? paths : [paths]));
+    const server = { watcher, httpServer: new EventEmitter(), ws: { send() {} },
+      moduleGraph: { getModuleById: () => undefined, getModulesByFile: () => new Set(), invalidateModule() {} } };
+    plugin.configureServer(server);
+    await plugin.buildStart.call({ addWatchFile: path => watched.push(path) });
+    assert.ok(watched.includes(project));
+    assert.ok(watched.includes(config));
+    assert.ok(watched.includes(feature));
+    assert.ok(watched.includes(english));
+    assert.equal(await plugin.resolveId("virtual:runic-translations/app"), "\0virtual:runic-translations/app/messages");
+    await writeFile(config, JSON.stringify({ schemaVersion: 1, catalog: "app", sourceLayout: "rmf2-v1", executionProfile: "future" }));
+    await assert.rejects(() => plugin.handleHotUpdate({ file: config, server }), /executionProfile/);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

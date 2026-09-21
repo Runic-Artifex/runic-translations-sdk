@@ -29,8 +29,8 @@ public static class TranslationOutputRenderer
     /// <summary>The writer version of the generated ESM module manifest.</summary>
     public const int WebModuleManifestV2Version = 2;
 
-    // Kept separate from the shipping v4 renderer until project-profile
-    // activation can move every host and adapter together.
+    // Kept separate from the v4 renderer so omitted project profiles retain
+    // their established artifact and runtime ABI contracts byte-for-byte.
     internal const int Rmf2V5EsmAbiVersion = 4;
     internal const int WebModuleManifestV3Version = 3;
 
@@ -53,9 +53,8 @@ public static class TranslationOutputRenderer
     public static TranslationGeneratedOutput RenderCSharpRegistration(CompiledTextCatalog catalog) =>
         CSharpOutputRenderer.RenderRegistration(RequireCatalog(catalog));
 
-    // The execution-v2 carrier is intentionally internal until every generated
-    // backend can be activated together. The source generator's explicit
-    // staged profile is the only production assembly allowed to consume it.
+    // The execution-v2 carrier remains internal; coordinated hosts select it
+    // only from the explicit project executionProfile contract.
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpKeys(Rmf2ProjectV5 project) =>
         Rmf2CSharpOutputRendererV5.RenderKeys(project ?? throw new ArgumentNullException(nameof(project)));
 

@@ -12,6 +12,39 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
+    internal static TranslationProjectProfileSelection SelectProjectProfile(TranslationSource project,
+        TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        cancellationToken.ThrowIfCancellationRequested();
+        options ??= new TranslationCompilerOptions();
+        var diagnostics = new DiagnosticBag();
+        ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, options, cancellationToken);
+        TranslationProjectProfile profile = parsed.Root is { Kind: JsonKind.Object } root
+            ? ReadProjectProfile(root, project, diagnostics)
+            : TranslationProjectProfile.Current;
+        return new(profile, Array.AsReadOnly(diagnostics.ToSortedArray()));
+    }
+
+    private static TranslationProjectProfile ReadProjectProfile(JsonValue root, TranslationSource project, DiagnosticBag diagnostics)
+    {
+        JsonProperty? property = root.Property("executionProfile");
+        if (property is null) return TranslationProjectProfile.Current;
+        if (property.Value.Kind != JsonKind.String ||
+            !string.Equals(property.Value.Text, Rmf2ProjectV5.Profile, StringComparison.Ordinal))
+        {
+            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error,
+                "Unsupported executionProfile; expected 'rmf2-execution-v2', or omit it for the current v4 contract.",
+                project, property.Value.Span);
+            return TranslationProjectProfile.Current;
+        }
+        JsonProperty? layout = root.Property("sourceLayout");
+        if (layout?.Value.Kind != JsonKind.String || !string.Equals(layout.Value.Text, "rmf2-v1", StringComparison.Ordinal))
+            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error,
+                "rmf2-execution-v2 requires sourceLayout rmf2-v1.", project, property.Value.Span);
+        return TranslationProjectProfile.Rmf2ExecutionV2;
+    }
+
     internal static TranslationProfileCompilation CompileProjectForProfile(TranslationSource project,
         IEnumerable<TranslationSource> messages, TranslationProjectProfile profile,
         TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
@@ -45,6 +78,8 @@ public static partial class TranslationCompiler
         ManifestModel? manifest = parsed.Root is null ? null : ReadMf2Project(parsed, diagnostics, options);
         if (manifest is null || Failed()) return Result();
         JsonValue config = parsed.Root!;
+        _ = ReadProjectProfile(config, project, diagnostics);
+        if (Failed()) return Result();
         if (config.Property("sourceLayout")?.Value.Text != "rmf2-v1")
         {
             diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, "rmf2-execution-v2 requires sourceLayout rmf2-v1.", project, config.Span);

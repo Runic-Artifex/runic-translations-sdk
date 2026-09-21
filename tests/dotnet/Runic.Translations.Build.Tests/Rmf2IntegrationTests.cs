@@ -15,6 +15,7 @@ internal static class Rmf2IntegrationTests
     {
         runner.Add("RMF2 payment fixture generates and verifies all supported outputs", PaymentExample);
         runner.Add("RMF2 CLI discovers feature mounts and produces version 4 packs", MountedCli);
+        runner.Add("RMF2 CLI project activation emits and verifies the cohesive v5 contract", ActivatedV5Cli);
         runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
         runner.Add("RMF2 migration previews and preserves backups", Migration);
         runner.Add("RMF2 LSP negotiates Unicode positions and returns versioned rename edits", Lsp);
@@ -41,6 +42,40 @@ internal static class Rmf2IntegrationTests
         Assert.Equal(0, generated.ExitCode, generated.Combined);
         string json = File.ReadAllText(temporary.Resolve("out/app.en.locale-v4.json"));
         Assert.Contains("shop_title", json); Assert.Contains("runic:strong", json);
+    }
+    private static void ActivatedV5Cli()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations"));
+        string config = Project.Replace("\"sourceLayout\":\"rmf2-v1\"",
+            "\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal);
+        string path = temporary.Resolve("translations/runic.json");
+        File.WriteAllText(path, config);
+        File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "literal = {1e+2 :number}\n");
+
+        ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+        ProcessResult generate = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "out");
+        Assert.Equal(0, generate.ExitCode, generate.Combined);
+        Assert.True(File.Exists(temporary.Resolve("out/app.en.locale-v5.json")), "v5 locale artifact missing");
+        string manifestPath = temporary.Resolve("out/app.esm-v5/web-module-manifest-v3.json");
+        Assert.True(File.Exists(manifestPath), "v5 web manifest missing");
+        string manifest = File.ReadAllText(manifestPath);
+        Assert.Contains("\"esmAbiVersion\":4", manifest);
+        Assert.Contains("\"profile\":\"rmf2-execution-v2\"", manifest);
+        Assert.False(Directory.EnumerateFiles(temporary.Resolve("out"), "*.locale-v4.json", SearchOption.AllDirectories).Any(), "v5 activation emitted v4 artifacts");
+        Assert.True(Directory.EnumerateFiles(temporary.Resolve("out"), "*.g.cs", SearchOption.TopDirectoryOnly).Count() == 4, "v5 typed C# output is incomplete");
+        ProcessResult verify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "out");
+        Assert.Equal(0, verify.ExitCode, verify.Combined);
+        ProcessResult cpp = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "cpp", "--emit-cpp");
+        Assert.Equal(1, cpp.ExitCode, cpp.Combined);
+        Assert.Contains("RTR0065", cpp.Combined);
+        Assert.False(Directory.Exists(temporary.Resolve("cpp")), "v5 activation emitted C++ output");
+
+        File.WriteAllText(path, config.Replace("rmf2-execution-v2", "future-profile", StringComparison.Ordinal));
+        ProcessResult invalid = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+        Assert.Equal(1, invalid.ExitCode, invalid.Combined);
+        Assert.Contains("RTR0065", invalid.Combined);
     }
     private static void MountedBuild()
     {

@@ -7,7 +7,7 @@ using System.Text.Json;
 
 namespace Runic.Translations.Compiler.Generation;
 
-// Staged v5 emission consumes the typed project carrier directly. It must not
+// Profile-selected v5 emission consumes the typed project carrier directly. It must not
 // pass through CompiledTextCatalog because that carrier cannot represent v5.
 internal static class Rmf2LocaleArtifactV5
 {

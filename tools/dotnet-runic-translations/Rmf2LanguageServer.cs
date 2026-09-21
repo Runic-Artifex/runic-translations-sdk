@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
+using JsonValue = System.Text.Json.Nodes.JsonValue;
 using System.Text.RegularExpressions;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
