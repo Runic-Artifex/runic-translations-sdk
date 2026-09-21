@@ -149,6 +149,19 @@ public sealed class CompiledTextMessage
     private readonly CompiledTextMessageSelector[] _selectors;
     private readonly CompiledTextMessageVariant[] _variants;
 
+    /// <summary>Wraps a validated v5 message without lowering it to the v4 model or changing legacy constructor overload resolution.</summary>
+    public static CompiledTextMessage FromRmf2(CompiledRmf2Message message) => new(message);
+
+    private CompiledTextMessage(CompiledRmf2Message message)
+    {
+        Rmf2V5 = message ?? throw new ArgumentNullException(nameof(message));
+        _nodes = []; _selectors = []; _variants = [];
+        Rmf2 = true; ContentLocale = message.ContentLocale;
+    }
+
+    /// <summary>The separate v5 model, or null for legacy constructors.</summary>
+    public CompiledRmf2Message? Rmf2V5 { get; }
+
     /// <summary>Creates a simple compiled pattern.</summary>
     public CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes)
         : this(nodes, Array.Empty<CompiledTextMessageSelector>(), Array.Empty<CompiledTextMessageVariant>())
@@ -204,6 +217,7 @@ public sealed class CompiledTextMessage
     {
         get
         {
+            if (Rmf2V5 is not null) return Rmf2V5.HasMarkup;
             if (ContainsMarkup(_nodes)) return true;
             for (int index = 0; index < _variants.Length; index++) if (ContainsMarkup(_variants[index].NodeArray)) return true;
             return false;
@@ -325,6 +339,13 @@ internal static class CompiledTextMessageRuntime
 
     internal static bool MatchesContract(CompiledTextMessage message, TranslationPlaceholderDescriptor[] descriptors)
     {
+        if (message.Rmf2V5 is { } v5)
+        {
+            if (v5.InputArray.Length != descriptors.Length) return false;
+            for (int index = 0; index < descriptors.Length; index++)
+                if (descriptors[index].Name != v5.InputArray[index].Name || descriptors[index].Type != v5.InputArray[index].Type) return false;
+            return true;
+        }
         var used = new bool[descriptors.Length];
         if (!Mark(message.NodeArray, descriptors, used)) return false;
         CompiledTextMessageSelector[] selectors = message.SelectorArray;
@@ -346,6 +367,7 @@ internal static class CompiledTextMessageRuntime
     internal static string Format(CompiledTextMessage message, ReadOnlySpan<TextArgument> arguments, string locale,
         ITextValueFormatter formatter, int maximumOutputLength = TextPatternFormatter.DefaultMaximumOutputLength)
     {
+        if (message.Rmf2V5 is { } v5) return v5.Format(arguments, locale, maximumOutputLength);
         CompiledTextMessageNode[] nodes = message.NodeArray;
         if (message.VariantArray.Length != 0) nodes = SelectVariant(message, arguments, locale);
         if (message.HasMarkup) throw new TranslationFormatException("Structured localized content must be requested through FormatContent.");
@@ -379,6 +401,7 @@ internal static class CompiledTextMessageRuntime
     internal static LocalizedTextContent FormatContent(CompiledTextMessage message, ReadOnlySpan<TextArgument> arguments,
         string locale, ITextValueFormatter formatter, int maximumOutputLength = TextPatternFormatter.DefaultMaximumOutputLength)
     {
+        if (message.Rmf2V5 is { } v5) return v5.FormatContent(arguments, locale, maximumOutputLength);
         locale = message.ContentLocale ?? locale;
         CompiledTextMessageNode[] nodes = message.VariantArray.Length == 0 ? message.NodeArray : SelectVariant(message, arguments, locale);
         var result = new List<LocalizedTextContentNode>();

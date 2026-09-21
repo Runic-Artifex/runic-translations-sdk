@@ -126,6 +126,17 @@ public readonly struct TextArgument
     {
     }
 
+    /// <summary>Copies a closed carrier under an NFC RMF2 identity, independently of legacy ASCII placeholder names.</summary>
+    public static TextArgument CreateRmf2(string name, TextArgument value)
+    {
+        Rmf2RuntimeValidation.Name(name);
+        _ = Rmf2ResolvedFormat.Canonical(value);
+        return new TextArgument(name, value);
+    }
+
+    private TextArgument(string name, TextArgument value)
+    { Name = name; Type = value.Type; Format = value.Format; _value = value._value; }
+
     private TextArgument(string name, TextArgumentType type, TextArgumentFormat format, object value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);

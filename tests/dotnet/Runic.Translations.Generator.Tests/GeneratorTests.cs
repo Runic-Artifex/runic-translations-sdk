@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Runic.Translations.Generator.Tests;
 
@@ -26,8 +27,10 @@ internal static class GeneratorTests
 
     internal static void Register(TestRunner runner)
     {
-        runner.Add("RMF2 generation rejects a legacy runtime with an actionable diagnostic", Rmf2LegacyRuntime);
+        runner.Add("RMF2 generation rejects missing unsupported and unknown additive runtime ABIs", Rmf2UnsupportedRuntime);
+        runner.Add("RMF2 v4 generation pins ABI 1 on both known supporting runtime markers", Rmf2SupportedRuntime);
         runner.Add("RMF2 generation compiles standalone markup caller contracts and pack v4", Rmf2GenerationCompiles);
+        runner.Add("explicit v5 consumer ABI 2 checks remain separate from v4 generation", Rmf2ExplicitV5Requirement);
         runner.Add("grouped TOML paths preserve typed legacy accessors", GroupedTomlGenerationCompiles);
         runner.Add("grouped TOML collisions reject ambiguous generated identifiers", GroupedTomlCollisions);
         runner.Add("locale TOML incremental membership updates generated catalogs", TomlMembershipChanges);
@@ -44,12 +47,28 @@ internal static class GeneratorTests
         runner.Add("Windows device hint stems are rejected before emission", WindowsDeviceHintStem);
     }
 
-    private static void Rmf2LegacyRuntime()
+    private static void Rmf2UnsupportedRuntime()
     {
         string project = Project.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"sourceLayout\": \"rmf2-v1\",", StringComparison.Ordinal);
-        var run = GeneratorTestHost.Run(RuntimeReferenceMode.Legacy, ProjectInput(project), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "greeting = Hello"));
-        Assert.Equal("RTR0024", run.SingleResult.Diagnostics.Single().Id, "Additive RMF2 ABI diagnostic");
-        Assert.Equal(0, run.SingleResult.GeneratedSources.Length, "Legacy runtime received incompatible RMF2 source.");
+        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Legacy, RuntimeReferenceMode.Rmf2Zero, RuntimeReferenceMode.Rmf2Unknown })
+        {
+            GeneratorRun run = GeneratorTestHost.Run(mode, ProjectInput(project), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "greeting = Hello"));
+            Assert.Equal("RTR0024", run.SingleResult.Diagnostics.Single().Id, mode + ": additive RMF2 ABI diagnostic");
+            Assert.Equal(0, run.SingleResult.GeneratedSources.Length, mode + ": incompatible runtime received RMF2 source");
+        }
+    }
+
+    private static void Rmf2SupportedRuntime()
+    {
+        string project = Project.Replace("\"schemaVersion\": 1,", "\"schemaVersion\": 1, \"sourceLayout\": \"rmf2-v1\",", StringComparison.Ordinal);
+        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V1, RuntimeReferenceMode.Rmf2V2 })
+        {
+            // Marker-only references exercise discovery without requiring ABI 2 helper methods.
+            GeneratorRun run = GeneratorTestHost.Run(mode, ProjectInput(project), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "greeting = Hello"));
+            Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+            Assert.Equal(4, run.SingleResult.GeneratedSources.Length, mode + ": v4 generated sources");
+            Assert.True(Serialize(run).Contains("public const int Rmf2RuntimeAbiVersion = 1;", StringComparison.Ordinal), mode + ": v4 requirement must be literal 1");
+        }
     }
 
     private static void Rmf2GenerationCompiles()
@@ -60,6 +79,27 @@ internal static class GeneratorTests
         Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
         Diagnostic[] errors = run.Compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
         Assert.Equal(0, errors.Length, string.Join("\n", errors.Select(d => d.ToString())));
+        IFieldSymbol requirement = (IFieldSymbol)run.Compilation.GetTypeByMetadataName("Example.Localization.AppTextCatalog")!.GetMembers("Rmf2RuntimeAbiVersion").Single();
+        Assert.Equal(1, (int)requirement.ConstantValue!, "v4 compilation must not inherit the referenced runtime's ABI 2 marker");
+    }
+
+    private static void Rmf2ExplicitV5Requirement()
+    {
+        GeneratorRun run = GeneratorTestHost.Run();
+        const string source = """
+            internal static class FutureV5Consumer
+            {
+                internal const int RequiredRmf2RuntimeAbiVersion = 2;
+                internal static void CheckRuntime() =>
+                    global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(RequiredRmf2RuntimeAbiVersion);
+            }
+            """;
+        Compilation compilation = run.InputCompilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview)));
+        Diagnostic[] errors = compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
+        Assert.Equal(0, errors.Length, string.Join("\n", errors.Select(static error => error.ToString())));
+        IFieldSymbol requirement = (IFieldSymbol)compilation.GetTypeByMetadataName("FutureV5Consumer")!.GetMembers("RequiredRmf2RuntimeAbiVersion").Single();
+        Assert.Equal(2, (int)requirement.ConstantValue!, "v5 consumers can embed a distinct literal requirement");
+        TranslationsCompatibility.EnsureRmf2RuntimeAbi(2);
     }
 
     private static TestInput ProjectInput(string text = Project, string path = "C:/repo/translations/runic.json") =>

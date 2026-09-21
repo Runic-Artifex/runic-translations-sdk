@@ -109,7 +109,7 @@ internal static class CSharpOutputRenderer
             writer.Line("/// <summary>The versioned language-neutral markup and slot contract.</summary>");
             writer.Line("public const string Rmf2MarkupContract = " + GenerationSupport.CSharpString(catalog.Rmf2MarkupContract) + ";");
             writer.Line("/// <summary>The required additive RMF2 runtime ABI.</summary>");
-            writer.Line("public const int Rmf2RuntimeAbiVersion = global::Runic.Translations.TranslationsCompatibility.Rmf2RuntimeAbiVersion;");
+            writer.Line("public const int Rmf2RuntimeAbiVersion = 1;");
         }
         writer.Line("/// <summary>The generator contract version that emitted this source.</summary>");
         writer.Line("public const int GeneratorVersion = 1;");

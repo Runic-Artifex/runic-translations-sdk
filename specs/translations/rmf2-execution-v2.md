@@ -6,10 +6,11 @@ remain version **1**. The [finite profile table](rmf2-execution-v2.json) is
 normative together with this document. The LDML 48.2 baseline and existing locale
 capability table remain pinned.
 
-This change supplies a compiler semantic foundation. The project compiler, CLI,
-generated code, runtime constructors and external-pack readers continue to use
-`rmf2-execution-v1` and artifact v4. No installed runtime advertises v2 execution
-yet. A runtime must explicitly recognize v5 before accepting its artifacts;
+The project compiler, CLI, generated code and external-pack readers continue to
+use `rmf2-execution-v1` and artifact v4. The additive .NET `CompiledRmf2Message`
+constructors execute explicitly lowered v5 models; they do not accept serialized
+v5 artifacts or change project emission. A runtime must explicitly recognize v5
+before accepting its artifacts;
 changing a version number on a v4 tree is not a conversion.
 
 ## Values, declarations and expressions
@@ -265,12 +266,70 @@ computed pinned CLDR category; it does not execute declarations or format text.
 Limits are 32 caller inputs (or a lower configured limit), 256 declarations,
 16 selectors, 256 variants, and 4096 nodes per pattern, plus existing source limits.
 
-The dependent generation/runtime work must implement typed declaration
-evaluation, formatter inheritance/replacement, dynamic option error propagation,
+The dependent generation and pack-loader work must integrate typed evaluation,
 exact decimal/CLDR parity, v5 project and markup linking, caller fingerprint
 versioning, code generation, pack semantic validation and explicit version
 dispatch. It must retain v4 readers and constructors and must not erase v5 data
 through the v4 AST adapter. Only that integrated work may change default emission.
+
+### Additive .NET runtime boundary
+
+The .NET runtime now provides immutable `CompiledRmf2Value`, `Option`,
+`Annotation`, `Expression`, `Input`, `Declaration`, `Selector`, `Key`, `Node`,
+`Variant`, and `Message` types (each name uses the `CompiledRmf2` prefix).
+`CompiledTextMessage.FromRmf2(CompiledRmf2Message)` explicitly dispatches existing snapshot
+formatting to that evaluator. Existing constructors retain v4 behavior. Caller
+contracts match NFC input name and underlying `TextArgumentType`, independently
+of display formats. `TextArgument.CreateRmf2(name, carrier)` and
+`CompiledTranslationDefinition.FromRmf2Inputs` provide explicit NFC-name entry
+points while legacy constructors retain their ASCII placeholder rules.
+
+The evaluator resolves ordered declarations, inherits or replaces formatter
+metadata, validates dynamic options, and ranks exact decimal and pinned CLDR
+matches. Declarations cannot bind a variable referenced anywhere in a previous
+declaration, whether as an operand or a dynamic option. The runtime rejects such
+externally constructed models as duplicate declarations; it does not hoist input
+formatters or selection metadata. Input-before-local ordering remains valid.
+An explicit input formatter establishes its caller carrier exactly: `:number`
+and `:runic:relative-time` declare decimal inputs. Int64 widening into a decimal
+formatter is valid only for subsequent local or pattern expressions.
+Invalid resolved options raise `TranslationFormatException`; they do
+not clamp or fall back. Constructors reject malformed normalized models with
+argument exceptions. Authored numeric spelling and canonical fields are checked
+exactly before parsing into decimal; no binary floating point is involved.
+Number display uses halfExpand rounding and the finite precision table. Platform
+globalization still controls localized punctuation and date/time names. Ungrouped
+integer output is invariant, matching the pinned exact formatter capability.
+V5 uses the closed formatter table directly; a snapshot's optional legacy
+`ITextValueFormatter` does not override v5 function semantics.
+
+Annotations remain ordered and inert on expressions and every markup event in
+the runtime model. `LocalizedTextContentNode.Annotations` also carries expression
+and markup annotations, including closing-event annotations, separately from
+renderer `Attributes`. Declaration annotations stay on their declarations; an
+alias does not merge them into a use-site expression. Valueless, empty-string and
+number-literal annotations retain their distinct representations. Existing
+renderers ignore the new annotation collection. Runtime markup constructors
+require balanced events and bound option references but assume project contract
+linking has already resolved element identities and validated markup option and
+slot schemas. That adapter remains dependent work.
+
+`Rmf2RuntimeAbiVersion` is **2**; legacy `RuntimeAbiVersion = 1` and
+`MessageGrammarVersion = 2` remain unchanged. Generated v5 consumers must embed
+the literal requirement **2**, then call `EnsureRmf2RuntimeAbi(2)` or
+`SupportsRmf2RuntimeAbi(2)`. These methods execute against the loaded runtime and
+accept requirements 1 and 2. A generated constant that aliases the runtime's
+constant is not a compatibility check. Existing v4 emission embeds its own
+literal requirement **1**; its generator accepts the known supporting RMF2
+runtime markers 1 and 2, but rejects missing or unknown markers. The separate
+legacy runtime ABI check still requires exactly 1. This does not activate v5
+emission.
+
+Still dependent: C#/ESM v5 generation and project linking, caller fingerprint
+versioning, v5 pack semantic validation and explicit loader dispatch, and any
+change to default emission. The constructor evaluator is not a v5 pack loader.
+The machine profile's project-level executable backend list remains empty until
+those backend integrations are complete.
 
 The [golden corpus](corpus/semantic-v5/README.md) is a schema/semantic fixture, not
 an activated locale pack. Test-only JsonSchema.Net validation uses Draft 2020-12

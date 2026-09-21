@@ -52,19 +52,28 @@ internal static class GeneratorTestHost
             if (!IsRuntimeAssembly(path)) yield return MetadataReference.CreateFromFile(path);
         if (runtimeReferenceMode == RuntimeReferenceMode.Matching)
             yield return MetadataReference.CreateFromFile(typeof(TranslationKey).Assembly.Location);
-        else if (runtimeReferenceMode is RuntimeReferenceMode.Mismatched or RuntimeReferenceMode.Legacy)
-            yield return MismatchedRuntimeReference(trustedAssemblies, runtimeReferenceMode == RuntimeReferenceMode.Legacy);
+        else if (runtimeReferenceMode != RuntimeReferenceMode.Missing)
+            yield return SyntheticRuntimeReference(trustedAssemblies, runtimeReferenceMode);
     }
 
-    private static PortableExecutableReference MismatchedRuntimeReference(string trustedAssemblies, bool legacy)
+    private static PortableExecutableReference SyntheticRuntimeReference(string trustedAssemblies, RuntimeReferenceMode mode)
     {
-        SyntaxTree tree = CSharpSyntaxTree.ParseText("""
+        string rmf2Marker = mode switch
+        {
+            RuntimeReferenceMode.Rmf2V1 => "public const int Rmf2RuntimeAbiVersion = 1;",
+            RuntimeReferenceMode.Rmf2V2 => "public const int Rmf2RuntimeAbiVersion = 2;",
+            RuntimeReferenceMode.Rmf2Zero => "public const int Rmf2RuntimeAbiVersion = 0;",
+            RuntimeReferenceMode.Rmf2Unknown => "public const int Rmf2RuntimeAbiVersion = 3;",
+            _ => string.Empty,
+        };
+        SyntaxTree tree = CSharpSyntaxTree.ParseText($$"""
             namespace Runic.Translations;
             public static class TranslationsCompatibility
             {
-                public const int RuntimeAbiVersion = 2;
+                public const int RuntimeAbiVersion = {{(mode == RuntimeReferenceMode.Mismatched ? 2 : 1)}};
+                {{rmf2Marker}}
             }
-            """.Replace("= 2", legacy ? "= 1" : "= 2", StringComparison.Ordinal));
+            """);
         CSharpCompilation compilation = CSharpCompilation.Create(
             "Runic.Translations",
             new[] { tree },
@@ -143,6 +152,10 @@ internal enum RuntimeReferenceMode
     Mismatched,
     Legacy,
     Missing,
+    Rmf2V1,
+    Rmf2V2,
+    Rmf2Zero,
+    Rmf2Unknown,
 }
 
 internal sealed record GeneratorRun(
