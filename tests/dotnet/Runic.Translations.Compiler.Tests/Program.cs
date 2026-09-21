@@ -8,6 +8,9 @@ internal static class Program
     {
         if (args.Length == 1 && args[0] == "--rmf2-benchmark") return Rmf2MarkupTests.Benchmark();
         TestRunner runner = new();
+        Rmf2SemanticV5Tests.Register(runner);
+        Rmf2SemanticV5SchemaTests.Register(runner);
+        if (args.Length == 1 && args[0] == "--rmf2-semantic-v5") return runner.Run();
         RuntimeContractTests.Register(runner);
         CompilerTests.Register(runner);
         EsmGenerationTests.Register(runner);

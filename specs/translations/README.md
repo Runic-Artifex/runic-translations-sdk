@@ -85,3 +85,8 @@ The [RMF2 guide](../../docs/guides/translations/rmf2.md) specifies resource comp
 markup contracts, external artifact 4, migration, and remaining proposal work.
 RMF2 fingerprints include caller input/slot contracts, markup registries and effective
 locale mappings; source selector trees and physical file organization are excluded.
+
+The additive [semantic v5 foundation](rmf2-execution-v2.md) and
+[v2 option table](rmf2-execution-v2.json) specify the next typed model. Its v5
+schemas and compiler IR are staged independently; project output and installed
+runtimes continue to use the v1/v4 contract until generation/runtime integration.

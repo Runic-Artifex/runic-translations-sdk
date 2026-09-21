@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/locale-artifact-v5.schema.json",
+  "title": "Runic RMF2 resolved locale artifact v5",
+  "type": "object",
+  "required": [
+    "artifactVersion",
+    "messageGrammarVersion",
+    "profile",
+    "catalog",
+    "locale",
+    "contractFingerprint",
+    "messages",
+    "markupContract"
+  ],
+  "properties": {
+    "artifactVersion": {
+      "const": 5
+    },
+    "messageGrammarVersion": {
+      "const": 5
+    },
+    "profile": {
+      "const": "rmf2-execution-v2"
+    },
+    "catalog": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*$"
+    },
+    "locale": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+    },
+    "contractFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "messages": {
+      "type": "object",
+      "maxProperties": 50000,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "contentLocale",
+          "ast"
+        ],
+        "properties": {
+          "contentLocale": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ast": {
+            "$ref": "message-ast-v5.schema.json"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "markupContract": {
+      "$ref": "locale-artifact-v4.schema.json#/properties/markupContract"
+    }
+  },
+  "additionalProperties": false
+}

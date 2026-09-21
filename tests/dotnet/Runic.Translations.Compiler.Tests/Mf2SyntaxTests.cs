@@ -10,6 +10,7 @@ internal static class Mf2SyntaxTests
     internal static void Register(TestRunner runner)
     {
         runner.Add("MF2 grammar and data-model errors remain separate from backend limits", Grammar);
+        runner.Add("MF2 declarations reject prior-variable bindings and input self-options", DeclarationBindings);
         runner.Add("RMF2 lowers multiline expressions and quoted variant keys through the shared model", Lowering);
         runner.Add("RMF2 language service uses project contracts and semantic variables", LanguageService);
         runner.Add("RMF2 literal locals and aliases remain internal to the caller contract", LiteralLocals);
@@ -35,6 +36,55 @@ internal static class Mf2SyntaxTests
             var syntax = Read(value); Assert.True(syntax.Success, "Data-model constraint rejected by syntax parser.");
             Assert.True(Mf2SyntaxReader.ValidateDataModel(syntax).Any(d => d.Id == "RTR0067"), "Missing data-model diagnostic.");
         }
+    }
+    private static void DeclarationBindings()
+    {
+        foreach (string source in new[] {
+            ".local $a = {$n} .input {$n} {{x}}",
+            ".local $a = {$n} .input {$n :number style=percent} {{x}}",
+            ".local $a = {$n} .input {$n :integer select=ordinal} .match $a one {{one}} * {{other}}",
+            ".input {$n :number maximumFractionDigits=$digits} .input {$digits :integer} {{x}}",
+            ".input {$n :number style=$style} .local $style = {|percent|} {{x}}",
+            ".local $a = {1 :number select=$selection} .input {$selection :string} {{x}}",
+            ".input {$n} .local $n = {1} {{x}}",
+            ".local $n = {1} .input {$n} {{x}}",
+            ".input {$n :number maximumFractionDigits=$n} {{x}}",
+            ".input {$s :string select=$s} {{x}}",
+            ".input {$n :number minimumFractionDigits=$n maximumFractionDigits=$n} {{x}}",
+            ".input {$é :number maximumFractionDigits=$e\u0301} {{x}}",
+            ".input {$n} .input {$n :number maximumFractionDigits=$n} {{x}}",
+            ".local $a = {$e\u0301 @note=|雪|}\r\n.input {$é :number}\r\n{{x}}" })
+        {
+            var syntax = Read(source);
+            Assert.True(syntax.Success, "Duplicate declaration must remain a data-model error: " + source);
+            var binding = syntax.Declarations[^1];
+            var diagnostic = Assert.Single(Mf2SyntaxReader.ValidateDataModel(syntax).Where(d => d.Message == "Duplicate declaration '" + binding.Name + "'.").ToArray());
+            Assert.Equal("RTR0067", diagnostic.Id);
+            Assert.Equal(TranslationDiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.True(ReferenceEquals(binding.NameLocation, diagnostic.Location), "Duplicate declaration lost the invalid binding's exact source location.");
+            Assert.Equal("$" + binding.Name, Encoding.UTF8.GetString(syntax.Source.GetUtf8Bytes(), diagnostic.Location.StartByte, diagnostic.Location.LengthBytes));
+        }
+        foreach (string source in new[] {
+            ".input {$n :number} .local $a = {$n} {{x}}",
+            ".input {$n} {{x}}",
+            ".input {$n :number maximumFractionDigits=2 @note=|$n|} {{x}}",
+            ".input {$s :string select=exact} {{x}}",
+            ".input {$n :n n=|$n| @n=|$n|} {{x}}",
+            ".input {$digits :integer} .input {$n :number maximumFractionDigits=$digits} {{x}}",
+            ".input {$n :integer select=ordinal} .local $a = {$n} .match $a one {{one}} * {{other}}",
+            ".local $a = {|$n| :string @note=|$n|} .input {$n} {{x}}",
+            ".local $a = {1 :n n=n @n=|$n|} .input {$n} {{x}}",
+            ".local $a = {$n} .local $b = {$n} {{x}}" })
+        {
+            var syntax = Read(source);
+            Assert.True(syntax.Success, "Ordered control failed syntax: " + source);
+            Assert.Equal(0, Mf2SyntaxReader.ValidateDataModel(syntax).Count);
+        }
+        foreach (string source in new[] {
+            ".local $a = {$b} .local $b = {1} {{x}}",
+            ".local $a = {$b} .local $b = {$a} {{x}}",
+            ".local $a = {$a} {{x}}" })
+            Assert.True(Mf2SyntaxReader.ValidateDataModel(Read(source)).Any(d => d.Id == "RTR0067" && d.Message.Contains("referenced before its declaration", StringComparison.Ordinal)), "Local ordering/cycle check was lost.");
     }
     private static void Lowering()
     {
