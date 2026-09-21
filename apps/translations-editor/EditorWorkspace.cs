@@ -549,7 +549,24 @@ internal sealed class EditorWorkspace : IDisposable
             else projectPrefix += "/";
             var documents = new List<PreparedInterchangeDocument>();
             var localeEdits = new List<TranslationLocaleEdit>();
-            bool localeToml = UsesLocaleToml(state.Files.Single(file => file.Kind == DocumentKind.Manifest).Content);
+            string manifestContent = state.Files.Single(file => file.Kind == DocumentKind.Manifest).Content;
+            bool localeToml = UsesLocaleToml(manifestContent);
+            bool rmf2 = UsesRmf2(manifestContent);
+            Rmf2Workspace? rmf2Workspace = null;
+            Dictionary<string, byte[]>? rmf2Sources = null;
+            Dictionary<string, string>? rmf2ExpectedRevisions = null;
+            if (rmf2)
+            {
+                rmf2Sources = state.Files
+                    .Where(file => file.Kind == DocumentKind.Resource && file.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+                    .ToDictionary(static file => file.Path, static file => StrictUtf8.GetBytes(file.Content), StringComparer.Ordinal);
+                rmf2ExpectedRevisions = rmf2Sources.ToDictionary(static pair => pair.Key, static pair => Revision(pair.Value), StringComparer.Ordinal);
+                rmf2Workspace = new Rmf2Workspace(
+                    _root,
+                    Source(NormalizeRelativePath(Path.GetRelativePath(_root, configPath)), manifestContent),
+                    rmf2Sources.Select(static pair => Source(pair.Key, StrictUtf8.GetString(pair.Value))),
+                    cancellationToken);
+            }
             var changes = new List<EditorKeyChange>();
             bool overflowed = false;
             int added = 0, changed = 0, removed = 0, unchanged = 0;
@@ -567,6 +584,16 @@ internal sealed class EditorWorkspace : IDisposable
                         ? TranslationLocaleEditKind.SetValue : TranslationLocaleEditKind.Add, key, after));
                     continue;
                 }
+                if (rmf2)
+                {
+                    ApplyRmf2InterchangeValue(
+                        rmf2Workspace!,
+                        rmf2Sources!,
+                        import.TargetLocale!,
+                        key,
+                        after);
+                    continue;
+                }
                 string targetPath = $"{projectPrefix}{import.TargetLocale}/{key}.mf2";
                 WorkspaceFile? target = state.Files.FirstOrDefault(file => string.Equals(file.Path, targetPath, StringComparison.Ordinal));
                 byte[]? original = target is null ? null : StrictUtf8.GetBytes(target.Content);
@@ -575,6 +602,22 @@ internal sealed class EditorWorkspace : IDisposable
                     target?.Revision,
                     original,
                     importedMessages[key].Bytes));
+            }
+
+            if (rmf2)
+            {
+                foreach (KeyValuePair<string, byte[]> pair in rmf2Sources!.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+                {
+                    if (rmf2ExpectedRevisions!.TryGetValue(pair.Key, out string? expected) &&
+                        string.Equals(expected, Revision(pair.Value), StringComparison.Ordinal))
+                        continue;
+                    WorkspaceFile? original = state.Files.FirstOrDefault(file => file.Kind == DocumentKind.Resource && file.Path == pair.Key);
+                    documents.Add(new PreparedInterchangeDocument(
+                        pair.Key,
+                        original?.Revision,
+                        original is null ? null : StrictUtf8.GetBytes(original.Content),
+                        pair.Value));
+                }
             }
 
             if (localeEdits.Count != 0)
@@ -930,6 +973,58 @@ internal sealed class EditorWorkspace : IDisposable
             messages.OrderBy(static pair => pair.Key, StringComparer.Ordinal).Select(static pair => Source(pair.Key, pair.Value)),
             null,
             cancellationToken);
+    }
+
+    private static void ApplyRmf2InterchangeValue(
+        Rmf2Workspace workspace,
+        Dictionary<string, byte[]> sources,
+        string locale,
+        string logicalKey,
+        string value)
+    {
+        string[] logicalPath = logicalKey.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        if (logicalPath.Length == 0)
+            throw new TranslationAuthoringException("An imported RMF2 key is empty.");
+
+        // Prefer the target locale's existing declaration. This keeps its
+        // physical file, comments, and formatting intact while changing only
+        // the message body.
+        foreach (Rmf2ResourceDocument document in workspace.Documents
+            .Where(document => string.Equals(Path.GetFileNameWithoutExtension(document.Source.Path), locale, StringComparison.OrdinalIgnoreCase)))
+        {
+            Rmf2ResourceNode? node = document.Nodes.FirstOrDefault(node =>
+                !node.IsGroup && string.Equals(string.Join('_', workspace.LogicalPath(document.Source.Path, node)), logicalKey, StringComparison.Ordinal));
+            if (node is null) continue;
+            sources[document.Source.Path] = Rmf2ResourceWriter.SetMessage(
+                new TranslationSource(document.Source.Path, sources[document.Source.Path]), node.Key, value);
+            return;
+        }
+
+        // A missing target translation follows the base resource's namespace
+        // and mount. Replace only the locale file name, then use the writer's
+        // explicit path operation; never synthesize a legacy .mf2 path.
+        Rmf2ResourceDocument? baseDocument = workspace.Documents
+            .Where(document => string.Equals(Path.GetFileNameWithoutExtension(document.Source.Path), workspace.BaseLocale, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault(document => document.Nodes.Any(node =>
+                !node.IsGroup && string.Equals(string.Join('_', workspace.LogicalPath(document.Source.Path, node)), logicalKey, StringComparison.Ordinal)));
+        IReadOnlyList<string> resolvedLogicalPath = logicalPath;
+        string targetPath;
+        if (baseDocument is not null)
+        {
+            Rmf2ResourceNode node = baseDocument.Nodes.First(node =>
+                !node.IsGroup && string.Equals(string.Join('_', workspace.LogicalPath(baseDocument.Source.Path, node)), logicalKey, StringComparison.Ordinal));
+            resolvedLogicalPath = workspace.LogicalPath(baseDocument.Source.Path, node);
+            targetPath = Path.Combine(Path.GetDirectoryName(baseDocument.Source.Path) ?? string.Empty, locale + ".rmf2").Replace('\\', '/');
+        }
+        else
+        {
+            targetPath = locale + ".rmf2";
+        }
+
+        byte[] existing = sources.GetValueOrDefault(targetPath, []);
+        string[] localPath = workspace.LocalPath(targetPath, resolvedLogicalPath).ToArray();
+        sources[targetPath] = Rmf2ResourceWriter.AddMessage(
+            new TranslationSource(targetPath, existing), localPath, value);
     }
 
     private static async Task<bool> RollBackInterchangeDocumentsAsync(
@@ -1405,6 +1500,12 @@ internal sealed class EditorWorkspace : IDisposable
     {
         using JsonDocument document = JsonDocument.Parse(config);
         return StringProperty(document.RootElement, "sourceLayout") == "locale-toml";
+    }
+
+    private static bool UsesRmf2(string config)
+    {
+        using JsonDocument document = JsonDocument.Parse(config);
+        return StringProperty(document.RootElement, "sourceLayout") == "rmf2-v1";
     }
 
     private EditorMessageEntry[] ReadEntries(string path, string content, string? locale)

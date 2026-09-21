@@ -46,6 +46,7 @@ public sealed class Rmf2Workspace
         foreach (var source in _sources.Values) if (source.Path.EndsWith(".rmf2", StringComparison.Ordinal)) _syntax.Add(source.Path, cache?.Read(source, cancellationToken) ?? Rmf2ResourceReader.Read(source, cancellationToken: _cancellationToken));
     }
     public IReadOnlyList<Rmf2ResourceDocument> Documents => _syntax.Values.OrderBy(d => d.Source.Path, StringComparer.Ordinal).ToArray();
+    public string BaseLocale => _baseLocale;
     public string Revision(string path) => Hash(_sources[path].GetUtf8Bytes());
     public void Update(string path, byte[] content, string expectedRevision)
     {
@@ -259,7 +260,14 @@ public sealed class Rmf2Workspace
 
     public TranslationWorkspaceTransactionPlan MigrateToml(out IReadOnlyList<string> notes)
     {
-        var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal); var warnings = new List<string>();
+        TranslationWorkspaceTransactionPlan plan = MigrateToml(out notes, out _);
+        return plan;
+    }
+
+    /// <summary>Migrates locale TOML to RMF2 and exposes stable structured loss details.</summary>
+    public TranslationWorkspaceTransactionPlan MigrateToml(out IReadOnlyList<string> notes, out TranslationMigrationReport report)
+    {
+        var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal); var losses = new List<TranslationMigrationLoss>();
         JsonObject config = JsonNode.Parse(_project.GetUtf8Bytes())!.AsObject();
         if (config["sourceLayout"]?.GetValue<string>() != "locale-toml") throw new TranslationAuthoringException("TOML migration requires sourceLayout locale-toml.");
         config["sourceLayout"] = "rmf2-v1";
@@ -267,11 +275,22 @@ public sealed class Rmf2Workspace
         {
             string path = Path.ChangeExtension(source.Path, ".rmf2"), backup = source.Path + ".bak";
             if (_sources.ContainsKey(path) || File.Exists(Path.Combine(_root, Relative(backup)))) throw new TranslationAuthoringException("Migration destination or backup exists.");
-            changes[path] = Rmf2ResourceWriter.ImportToml(source, Path.GetFileNameWithoutExtension(source.Path), out var messages);
-            warnings.AddRange(messages); changes[source.Path] = null; changes[backup] = source.GetUtf8Bytes();
+            changes[path] = Rmf2ResourceWriter.ImportTomlWithReport(source, Path.GetFileNameWithoutExtension(source.Path), out TranslationMigrationReport sourceReport);
+            losses.AddRange(sourceReport.Losses);
+            changes[source.Path] = null; changes[backup] = source.GetUtf8Bytes();
         }
         changes[_project.Path] = Utf8.GetBytes(config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
-        notes = warnings.AsReadOnly(); return Plan(changes);
+        report = new TranslationMigrationReport(losses
+            .OrderBy(static loss => loss.Location, StringComparer.Ordinal)
+            .ThenBy(static loss => loss.Code, StringComparer.Ordinal));
+        notes = report.Notes;
+        return Plan(changes);
+    }
+
+    /// <summary>Convenience overload for callers that only consume structured migration data.</summary>
+    public TranslationWorkspaceTransactionPlan MigrateTomlWithReport(out TranslationMigrationReport report)
+    {
+        return MigrateToml(out _, out report);
     }
 
     /// <summary>Adds a locale by copying its physical source documents through a validated transaction.</summary>

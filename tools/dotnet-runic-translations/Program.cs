@@ -356,8 +356,9 @@ internal static class Program
                 // InputFiles paths are relative to the process cwd; make their identity absolute before planning within the project root.
                 var workspace = new Rmf2Workspace(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()),
                     inputs.Messages.Select(source => new TranslationSource(Path.GetFullPath(source.Path), source.GetUtf8Bytes())));
-                plan = workspace.MigrateToml(out var notes);
-                foreach (string note in notes) result.WriteOutputLine(note);
+                plan = workspace.MigrateToml(out _, out TranslationMigrationReport report);
+                foreach (TranslationMigrationLoss loss in report.Losses)
+                    result.WriteOutputLine($"{loss.Code} {loss.Location}: {loss.Message}");
             }
             else plan = TranslationWorkspaceMutation.MigrateToLocaleToml(root, compilation.Catalogs[0].Id);
             foreach (TranslationWorkspaceEdit edit in plan.Edits)

@@ -182,6 +182,24 @@ segment paths, and rejects destination collisions. The existing legacy-to-TOML
 migration remains separate. Older readers cannot read RMF2; keep the backups when
 rolling back and regenerate output for the chosen layout.
 
+The supported composition for an older project is deliberately two-step:
+
+```text
+legacy {locale}/{message-id}.mf2  --migrate-->  locale-toml  --migrate-rmf2-->  rmf2-v1
+```
+
+Run and validate each step before starting the next one. The legacy-to-TOML
+transaction removes the old per-message files after it has validated the
+complete replacement; it does not manufacture a second copy of every legacy
+file, so keep a committed revision or an external, durable backup before
+applying it. The TOML-to-RMF2 transaction writes each original TOML byte-for-byte
+to a sibling `{locale}.toml.bak`, refuses an occupied destination or backup, and
+only then commits the RMF2 files and discriminator. Treat those `.toml.bak`
+files as rollback material: retain them in the migration archive until the RMF2
+catalog has been validated and its generated artifacts have been accepted. Do
+not mix the intermediate and final layouts or delete the backups as part of an
+automated migration.
+
 `Rmf2Workspace` accepts unsaved buffers and revisions. Rename, format,
 extract-group, and inline-resource produce validated transaction plans. Extracting
 a documented group leaves its authoritative declaration and metadata in place.

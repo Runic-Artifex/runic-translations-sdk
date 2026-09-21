@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -171,8 +172,13 @@ internal static class Rmf2AuthoringTests
         {
             var project = Project("locale-toml"); var source = Source("en.toml", "# Translator note\n[shop]\ntitle='Shop'\n");
             File.WriteAllBytes(Path.Combine(root, "runic.json"), project.GetUtf8Bytes()); File.WriteAllBytes(Path.Combine(root, "en.toml"), source.GetUtf8Bytes());
-            var plan = new Rmf2Workspace(root, project, [source]).MigrateToml(out var notes);
+            var plan = new Rmf2Workspace(root, project, [source]).MigrateToml(out var notes, out TranslationMigrationReport report);
             Assert.True(notes.Count == 1 && plan.Compilation.Success, "Migration failed to report trivia.");
+            Assert.Equal(1, report.Losses.Count);
+            Assert.Equal("RMF2-MIGRATION-COMMENT-OWNERSHIP", report.Losses[0].Code);
+            Assert.Equal("en.toml", report.Losses[0].Location);
+            new Rmf2Workspace(root, project, [source]).MigrateToml(out IReadOnlyList<string> compatibilityNotes);
+            Assert.Equal(report.Losses[0].Message, compatibilityNotes.Single());
             TranslationWorkspaceTransaction.Commit(plan);
             Assert.Equal(Encoding.UTF8.GetString(source.GetUtf8Bytes()), File.ReadAllText(Path.Combine(root, "en.toml.bak")));
             Assert.True(File.Exists(Path.Combine(root, "en.rmf2")) && !File.Exists(Path.Combine(root, "en.toml")), "Migration did not replace the source layout.");
