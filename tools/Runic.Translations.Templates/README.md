@@ -58,7 +58,7 @@ remain locale-TOML by default. Select one of the RMF2 templates when recursive
 `.rmf2` resources and inline markup contracts are needed:
 
 ```bash
-dotnet new runic-translations-rmf2 --output translations --catalog app --defaultLocale en --namespace Example.Translations --className AppText
+dotnet new runic-translations-rmf2 --output . --catalog app --defaultLocale en --namespace Example.Translations --className AppText
 dotnet new runic-translations-project-rmf2 --name Example.Translations --output Example.Translations --packageVersion <VERSION>
 ```
 
