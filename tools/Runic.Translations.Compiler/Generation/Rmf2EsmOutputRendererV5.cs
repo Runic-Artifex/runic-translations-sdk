@@ -57,20 +57,23 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
         writer.Line("const generatedLocaleData = " + TranslationCapabilityRegistry.EsmLocaleDataJson + ";");
         writer.Line("export const rmf2Contract = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(project.MarkupContract) + "));");
-        writer.Line("export const messageContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(ContractsJson(project)) + "));");
+        writer.Line("export const messageContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(ContractsJson(project, includeExtras: true)) + "));");
         using Stream stream = typeof(Rmf2EsmOutputRendererV5).Assembly.GetManifestResourceStream("Runic.Translations.Compiler.Generation.Rmf2EsmRuntimeV5.js")!;
         using var reader = new StreamReader(stream);
         writer.Line(reader.ReadToEnd());
         return writer.ToString();
     }
 
-    private static string ContractsJson(Rmf2ProjectV5 project)
+    private static string ContractsJson(Rmf2ProjectV5 project, bool includeExtras)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
-            foreach (Rmf2MessageContractV5 message in project.CanonicalMessages.OrderBy(item => item.Key, StringComparer.Ordinal))
+            IEnumerable<Rmf2MessageContractV5> messages = includeExtras
+                ? project.CanonicalMessages.Concat(project.ExtraMessages)
+                : project.CanonicalMessages;
+            foreach (Rmf2MessageContractV5 message in messages.OrderBy(item => item.Key, StringComparer.Ordinal))
             {
                 writer.WriteStartObject(message.Key); writer.WriteBoolean("structured", message.Structured); writer.WriteStartArray("inputs");
                 foreach (Rmf2InputV5 input in message.Inputs) { writer.WriteStartObject(); writer.WriteString("name", input.Name); writer.WriteString("type", input.Type); writer.WriteEndObject(); }
@@ -96,7 +99,8 @@ internal static class Rmf2EsmOutputRendererV5
         }
         writer.Unindent(); writer.Line("}));");
         string identifier = Rmf2GeneratedNamesV1.Identifier(contract.Key);
-        writer.Line("export function " + identifier + "(inputs = Object.create(null), options) {"); writer.Indent();
+        writer.Line("export function " + identifier + "(" + (contract.Inputs.Count == 0 ? "options" : "inputs, options") + ") {"); writer.Indent();
+        if (contract.Inputs.Count == 0) writer.Line("const inputs = Object.create(null);");
         writer.Line("const locale = resolveLocale(options?.locale ?? getLocale());");
         writer.Line("return formatCompiledMessage(" + GenerationSupport.JsonString(contract.Key) + ", messages[locale], inputs, locale);");
         writer.Unindent(); writer.Line("}");
@@ -130,15 +134,16 @@ internal static class Rmf2EsmOutputRendererV5
         export type MessageOptions = Readonly<{ locale?: string }>;
         export type Rmf2Annotation = Readonly<{ name: string; value?: string | Rmf2Decimal }>;
         export type LocalizedContentNode = Readonly<{ kind: "text"; value: string; annotations: readonly Rmf2Annotation[] } | { kind: "element"; name: string; attributes: Readonly<Record<string,string>>; annotations: readonly Rmf2Annotation[]; closingAnnotations: readonly Rmf2Annotation[]; standalone: boolean; occurrence: string; children: readonly LocalizedContentNode[] }>;
-        export type LocalizedContent = Readonly<{ kind: "localized-content"; key: string; locale: string; nodes: readonly LocalizedContentNode[] }>;
+        export type LocalizedContent<Slots extends Record<string,string> = Record<string,string>> = Readonly<{ readonly __slots?: Slots; kind: "localized-content"; key: string; locale: string; nodes: readonly LocalizedContentNode[] }>;
         export type LinkBinding = Readonly<{ kind: "runic:link"; href: string }>;
         export type ActionBinding = Readonly<{ kind: "runic:action"; onActivate: () => void }>;
         export type IconBinding = Readonly<{ kind: "runic:icon"; asset: unknown; decorative: boolean; accessibleName?: (locale: string) => string }>;
+        export type SlotBindings<S extends Record<string,string>> = { readonly [K in keyof S]: S[K] extends "runic:link" ? LinkBinding : S[K] extends "runic:action" ? ActionBinding : IconBinding };
         export interface MarkupOption { readonly type: "string" | "enum" | "number" | "boolean"; readonly values?: readonly string[]; readonly default?: string; readonly literalOnly?: boolean; }
-        export interface MarkupContract { readonly name: string; readonly kind: "paired" | "standalone"; readonly interactive: boolean; readonly plainText: string; readonly options?: Readonly<Record<string,MarkupOption>>; }
+        export interface MarkupContract { readonly name: string; readonly kind: "paired" | "standalone"; readonly children: "inline" | "none"; readonly interactive: boolean; readonly plainText: "children" | "lineBreak" | "alternateText" | "explicit" | "omit"; readonly options?: Readonly<Record<string,MarkupOption>>; }
         export interface InlineElement<T> { readonly name: string; readonly children: readonly T[]; readonly options: Readonly<Record<string,string>>; readonly binding?: LinkBinding | ActionBinding | IconBinding; readonly occurrence: string; readonly locale: string; readonly standalone: boolean; readonly annotations: readonly Rmf2Annotation[]; readonly closingAnnotations: readonly Rmf2Annotation[]; }
         export interface MarkupBinding<T> { readonly contract: MarkupContract; readonly render: (element: InlineElement<T>) => T; }
-        export interface InlineRenderer<T> { render(content: LocalizedContent, options?: { slots?: Readonly<Record<string,LinkBinding | ActionBinding | IconBinding>> }): readonly T[]; extend(bindings: readonly MarkupBinding<T>[]): InlineRenderer<T>; }
+        export interface InlineRenderer<T> { render<S extends Record<string,string>>(content: LocalizedContent<S>, options: { slots: SlotBindings<S> }): readonly T[]; extend(bindings: readonly MarkupBinding<T>[]): InlineRenderer<T>; }
         export declare const baseLocale: string;
         export declare const locales: readonly string[];
         export declare function decimal(value: string): Rmf2Decimal;
@@ -153,7 +158,7 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function defineMarkup(contract: MarkupContract): MarkupContract;
         export declare function bindMarkup<T>(contract: MarkupContract, render: (element: InlineElement<T>) => T): MarkupBinding<T>;
         export declare function createInlineRenderer<T>(factory: { text(value: string): T; element(element: InlineElement<T>): T }, bindings?: readonly MarkupBinding<T>[]): InlineRenderer<T>;
-        export declare function toPlainText(content: LocalizedContent, options?: { slots?: Readonly<Record<string,LinkBinding | ActionBinding | IconBinding>>; allowActionLabels?: boolean; annotateLinkDestinations?: boolean; custom?: readonly MarkupBinding<string>[] }): string;
+        export declare function toPlainText<S extends Record<string,string>>(content: LocalizedContent<S>, options: { slots: SlotBindings<S>; allowActionLabels?: boolean; annotateLinkDestinations?: boolean; custom?: readonly MarkupBinding<string>[] }): string;
         export declare function createDomInlineRenderer(document: Document, bindings?: readonly MarkupBinding<Node>[]): InlineRenderer<Node>;
         """;
 
@@ -164,10 +169,15 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export declare const m: Readonly<{"); writer.Indent();
         foreach (Rmf2MessageContractV5 message in messages)
         {
-            writer.Line("readonly " + GenerationSupport.JsonString(message.Key) + ": (inputs" + (message.Inputs.Count == 0 ? "?" : "") + ": Readonly<{"); writer.Indent();
+            if (message.Inputs.Count == 0)
+            {
+                writer.Line("readonly " + GenerationSupport.JsonString(message.Key) + ": (options?: MessageOptions) => " + ResultType(message) + ";");
+                continue;
+            }
+            writer.Line("readonly " + GenerationSupport.JsonString(message.Key) + ": (inputs: Readonly<{"); writer.Indent();
             foreach (Rmf2InputV5 input in message.Inputs)
                 writer.Line("readonly " + GenerationSupport.JsonString(input.Name) + ": " + TypeScriptType(input.Type) + ";");
-            writer.Unindent(); writer.Line("}>, options?: MessageOptions) => " + (message.Structured ? "LocalizedContent" : "string") + ";");
+            writer.Unindent(); writer.Line("}>, options?: MessageOptions) => " + ResultType(message) + ";");
         }
         writer.Unindent(); writer.Line("}>;"); return writer.ToString();
     }
@@ -178,6 +188,14 @@ internal static class Rmf2EsmOutputRendererV5
         "boolean" => "boolean", "int64" => "bigint | number", "decimal" => "Rmf2Decimal | string",
         _ => throw new InvalidOperationException("Unknown RMF2 v5 input type."),
     };
+
+    private static string ResultType(Rmf2MessageContractV5 message)
+    {
+        if (!message.Structured) return "string";
+        string slots = string.Join("; ", message.Slots.OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Select(item => "readonly " + GenerationSupport.JsonString(item.Key) + ": " + GenerationSupport.JsonString(item.Value.Kind)));
+        return "LocalizedContent<{ " + slots + " }>";
+    }
 
     private static string Dynamic() => """
         // <auto-generated />
@@ -203,17 +221,20 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("import { decodeWireValue, freezeOwnRecord } from \"./runtime.js\";");
         writer.Line("const catalog = " + GenerationSupport.JsonString(project.Id) + ";");
         writer.Line("const contractFingerprint = " + GenerationSupport.JsonString(project.CallerFingerprint) + ";");
-        writer.Line("const contracts = JSON.parse(" + GenerationSupport.JsonString(ContractsJson(project)) + ");");
+        writer.Line("const contracts = JSON.parse(" + GenerationSupport.JsonString(ContractsJson(project, includeExtras: false)) + ");");
         writer.Line("export function decodeTextReference(value) {"); writer.Indent();
-        writer.Line("if (!value || typeof value !== \"object\" || Array.isArray(value) || value.version !== 1) return failure(\"unsupported-version\");");
-        writer.Line("const members = [\"version\",\"catalog\",\"contractFingerprint\",\"key\",\"arguments\",...(value.fallbackText === undefined ? [] : [\"fallbackText\"])]; if (Object.keys(value).length !== members.length || members.some(name => !Object.hasOwn(value, name))) return failure(\"malformed\");");
-        writer.Line("if (value.catalog !== catalog) return failure(\"catalog-mismatch\"); if (value.contractFingerprint !== contractFingerprint) return failure(\"fingerprint-mismatch\");");
-        writer.Line("if (typeof value.key !== \"string\" || !Object.hasOwn(contracts, value.key)) return failure(\"unknown-key\");");
-        writer.Line("const contract = contracts[value.key].inputs; if (!value.arguments || typeof value.arguments !== \"object\" || Array.isArray(value.arguments)) return failure(\"invalid-arguments\");");
-        writer.Line("const names = Object.keys(value.arguments).sort(); const expected = contract.map(item => item.name).sort(); if (names.length !== expected.length || names.some((name,index) => name !== expected[index])) return failure(\"invalid-arguments\");");
-        writer.Line("const entries = []; for (const item of contract) { const decoded = decodeWireValue(value.arguments[item.name], item.type); if (!decoded.ok) return failure(`invalid-argument:${item.name}`); entries.push([item.name, decoded.value]); }");
-        writer.Line("if (value.fallbackText !== undefined && (typeof value.fallbackText !== \"string\" || value.fallbackText.length > 65536)) return failure(\"invalid-fallback\");");
-        writer.Line("return Object.freeze({ ok: true, value: Object.freeze({ version: 1, catalog, contractFingerprint, key: value.key, arguments: freezeOwnRecord(entries), fallbackText: value.fallbackText }) });");
+        writer.Line("if (!value || typeof value !== \"object\" || Array.isArray(value)) return failure(\"unsupported-version\");");
+        writer.Line("try {"); writer.Indent();
+        writer.Line("const names = Object.keys(value).sort(); const fallbackPresent = names.includes(\"fallbackText\"); const expectedMembers = [\"arguments\",\"catalog\",\"contractFingerprint\",...(fallbackPresent ? [\"fallbackText\"] : []),\"key\",\"version\"].sort(); if (names.length !== expectedMembers.length || names.some((name,index) => name !== expectedMembers[index])) return failure(\"malformed\");");
+        writer.Line("const version = value.version, wireCatalog = value.catalog, wireFingerprint = value.contractFingerprint, key = value.key, argumentsValue = value.arguments, fallbackText = fallbackPresent ? value.fallbackText : undefined;");
+        writer.Line("if (version !== 1) return failure(\"unsupported-version\"); if (wireCatalog !== catalog) return failure(\"catalog-mismatch\"); if (wireFingerprint !== contractFingerprint) return failure(\"fingerprint-mismatch\");");
+        writer.Line("if (typeof key !== \"string\" || !Object.hasOwn(contracts, key)) return failure(\"unknown-key\");");
+        writer.Line("const contract = contracts[key].inputs; if (!argumentsValue || typeof argumentsValue !== \"object\" || Array.isArray(argumentsValue)) return failure(\"invalid-arguments\");");
+        writer.Line("const argumentNames = Object.keys(argumentsValue).sort(); const expectedArguments = contract.map(item => item.name).sort(); if (argumentNames.length !== expectedArguments.length || argumentNames.some((name,index) => name !== expectedArguments[index])) return failure(\"invalid-arguments\");");
+        writer.Line("const entries = []; for (const item of contract) { const wireValue = argumentsValue[item.name]; const decoded = decodeWireValue(wireValue, item.type); if (!decoded.ok) return failure(`invalid-argument:${item.name}`); entries.push([item.name, decoded.value]); }");
+        writer.Line("if (fallbackPresent && (typeof fallbackText !== \"string\" || fallbackText.length > 65536)) return failure(\"invalid-fallback\");");
+        writer.Line("return Object.freeze({ ok: true, value: Object.freeze({ version: 1, catalog, contractFingerprint, key, arguments: freezeOwnRecord(entries), fallbackText }) });");
+        writer.Unindent(); writer.Line("} catch { return failure(\"malformed\"); }");
         writer.Unindent(); writer.Line("}");
         writer.Line("export function formatTextReference(reference, handlers, options) { if (!handlers || typeof handlers !== \"object\" || !Object.hasOwn(handlers, reference.key) || typeof handlers[reference.key] !== \"function\") { if (reference.fallbackText !== undefined) return reference.fallbackText; throw new RangeError(`No text-reference handler for '${reference.key}'.`); } return handlers[reference.key](reference.arguments, options); }");
         writer.Line("function failure(reason) { return Object.freeze({ ok: false, reason }); }"); return writer.ToString();

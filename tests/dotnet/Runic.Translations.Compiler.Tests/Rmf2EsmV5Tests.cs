@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
 
@@ -11,12 +12,15 @@ namespace Runic.Translations.Compiler.Tests;
 
 internal static class Rmf2EsmV5Tests
 {
+    private static readonly JsonSerializerOptions ProjectJsonOptions = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+
     internal static void Register(TestRunner runner)
     {
         runner.Add("RMF2 v5 generated ESM executes exact static dynamic transport and SSR paths", Executes);
         runner.Add("RMF2 v5 ESM preserves exact selection dynamic options aliases and ordered annotations", SemanticParity);
         runner.Add("RMF2 v5 ESM manifest is closed versioned and rejected by the shipping Vite adapter", ManifestIsolation);
         runner.Add("RMF2 v5 ESM preserves hostile NFC caller names without prototype mutation", HostileNames);
+        runner.Add("RMF2 v5 ESM hardens locale dynamic pack and renderer boundaries", RuntimeHardening);
     }
 
     private static void Executes()
@@ -32,7 +36,7 @@ internal static class Rmf2EsmV5Tests
             File.WriteAllText(script, """
                 import { readFile } from "node:fs/promises";
                 import { m } from "./billing.esm-v5/messages.js";
-                import { decimal, linkBinding, toPlainText } from "./billing.esm-v5/runtime.js";
+                import { createInlineRenderer, decimal, linkBinding, toPlainText } from "./billing.esm-v5/runtime.js";
                 import { runWithLocale } from "./billing.esm-v5/server.js";
                 import { decodeLocaleArtifact, decodeLocalePack, formatDynamicMessage } from "./billing.esm-v5/dynamic.js";
                 import { decodeTextReference } from "./billing.esm-v5/transport.js";
@@ -43,14 +47,20 @@ internal static class Rmf2EsmV5Tests
                 check(bill.kind === "localized-content" && bill.locale === "de" && Object.isFrozen(bill.nodes), "structured content");
                 check(bill.nodes[0].children.map(node => node.value).join("") === "2 Rechnungen" && bill.nodes[0].attributes.ref === "invoice", "linked markup and options");
                 const plain=toPlainText(bill,{slots:{invoice:linkBinding({href:"/invoice"})}});check(plain==="2 Rechnungen: 12,5%", `plain-text markup projection: ${JSON.stringify(plain)}`);
+                let forgedLink=false;try{toPlainText(bill,{slots:{invoice:{kind:"runic:link",href:"javascript:alert(1)"}},annotateLinkDestinations:true});}catch{forgedLink=true;}check(forgedLink,"forged unsafe link binding accepted");
+                let hrefReads=0;const changingLink={kind:"runic:link",get href(){return ++hrefReads===1?"https://safe.example/":"javascript:alert(1)";}};const snapshottedLink=toPlainText(bill,{slots:{invoice:changingLink},annotateLinkDestinations:true});check(hrefReads===1&&snapshottedLink.includes("(https://safe.example/)"),"validated slot binding was not snapshotted before rendering");
                 const concurrent = await Promise.all([
                   runWithLocale("en", async () => { await Promise.resolve(); return m.account_total({ rate: decimal("0.125") }); }),
                   runWithLocale("de", async () => { await Promise.resolve(); return m.account_total({ rate: decimal("0.125") }); }),
                 ]);
                 check(concurrent[0] === "12.50%" && concurrent[1] === "12,50%", "request-local SSR isolation");
                 const raw = JSON.parse(await readFile(new URL("./artifact.json", import.meta.url), "utf8"));
+                const declared=raw.markupContract.contracts["runic:link"];let incompatible=false;try{createInlineRenderer({text:value=>value,element:element=>element.children.join("")},[{contract:{name:"runic:link",children:"none",...declared},render:()=>""}]);}catch{incompatible=true;}check(incompatible,"incompatible renderer contract accepted");
                 const decoded = decodeLocaleArtifact(raw); check(decoded.ok, decoded.reason);
                 check(formatDynamicMessage(decoded.value, "account_total", { rate: decimal("0.125") }) === "12,50%", "dynamic parity");
+                const validAst=raw.messages.account_total.ast;const changedAst=structuredClone(validAst);changedAst.variants[0].nodes=[{kind:"text",value:"unvalidated"}];let reads=0;
+                const getterWrapper={contentLocale:raw.messages.account_total.contentLocale};Object.defineProperty(getterWrapper,"ast",{enumerable:true,get(){return ++reads===1?validAst:changedAst;}});
+                const getterArtifact=structuredClone(raw);getterArtifact.messages.account_total=getterWrapper;const getterDecoded=decodeLocaleArtifact(getterArtifact);check(getterDecoded.ok,getterDecoded.reason);check(reads===1,"artifact getter was read more than once");check(formatDynamicMessage(getterDecoded.value,"account_total",{rate:decimal("0.125")})==="12,50%","decoder did not validate the exact snapshot it branded");
                 let forgedRejected=false;try{formatDynamicMessage(Object.freeze(structuredClone(decoded.value)),"account_total",{rate:decimal("0.125")});}catch{forgedRejected=true;}check(forgedRejected,"forged frozen artifact bypassed validation");
                 const bytes = new TextEncoder().encode(JSON.stringify(raw));
                 const packed = await decodeLocalePack(bytes, "de", copy => { copy[0] = 0; return true; }); check(packed.ok, packed.reason);
@@ -58,10 +68,13 @@ internal static class Rmf2EsmV5Tests
                 check(decodeLocaleArtifact(hostile).reason === "RTR0023/argument-contract-mismatch", "unbound AST accepted");
                 const decimalDrift = structuredClone(raw); decimalDrift.messages.account_total.ast.declarations[1].expression.options[1].value.canonical = "125";
                 check(!decodeLocaleArtifact(decimalDrift).ok, "canonical decimal drift accepted");
+                const largeValid=structuredClone(raw);for(const variant of largeValid.messages.account_bill.ast.variants)for(let index=0;index<2100;index++)variant.nodes.push({kind:"text",value:""});check(decodeLocaleArtifact(largeValid).ok,"per-pattern node limit was incorrectly accumulated across variants");
+                const independentPatterns=structuredClone(raw);for(const variant of independentPatterns.messages.account_bill.ast.variants)variant.nodes.push({kind:"text",value:"x".repeat(40000)});check(decodeLocaleArtifact(independentPatterns).ok,"per-pattern byte limit was incorrectly accumulated across variants");
                 const duplicate = new TextEncoder().encode(JSON.stringify(raw).replace('{"artifactVersion":5','{"artifactVersion":5,"artifactVersion":5'));
                 check((await decodeLocalePack(duplicate, "de")).reason === "RTR0023/malformed", "duplicate JSON property accepted");
                 const reference = decodeTextReference({ version:1, catalog:"billing", contractFingerprint:raw.contractFingerprint, key:"account_total", arguments:{rate:"0.125"} });
                 check(reference.ok && reference.value.arguments.rate.coefficient === 125n && reference.value.arguments.rate.scale === 3, "exact decimal transport");
+                let fallbackReads=0;const changingReference={version:1,catalog:"billing",contractFingerprint:raw.contractFingerprint,key:"account_total",arguments:{rate:"0.125"},get fallbackText(){return ++fallbackReads===1?"safe":Object.create(null);}};const snapshottedReference=decodeTextReference(changingReference);check(snapshottedReference.ok&&fallbackReads===1&&snapshottedReference.value.fallbackText==="safe","transport decoder did not snapshot caller-owned fields");
                 for (const spelling of ["9007199254740993", "1e+2", "1.2300e-2", "-0.000", "79228162514264337593543950335"]) decimal(spelling);
                 for (const spelling of ["1e29", "1e-29", "79228162514264337593543950336"]) { let rejected=false; try { decimal(spelling); } catch { rejected=true; } check(rejected, `decimal domain accepted ${spelling}`); }
                 console.log("RMF2 ESM v5 OK");
@@ -72,7 +85,10 @@ internal static class Rmf2EsmV5Tests
                 import { m } from "./billing.esm-v5/messages.js";
                 import { decimal, type LocalizedContent } from "./billing.esm-v5/runtime.js";
                 const total: string = m.account_total({ rate: decimal("0.125") }, { locale: "de" });
-                const bill: LocalizedContent = m.account_bill({ count: 2n, rate: decimal("0.125"), "用户": "Ada" });
+                const typedBill = m.account_bill({ count: 2n, rate: decimal("0.125"), "用户": "Ada" });
+                const bill: LocalizedContent = typedBill;
+                // @ts-expect-error invoice is a required link slot.
+                import("./billing.esm-v5/runtime.js").then(({toPlainText}) => toPlainText(typedBill, { slots: {} }));
                 void total; void bill;
                 """, new UTF8Encoding(false));
             Run("bun", [RepositoryPaths.Resolve("node_modules", "typescript", "bin", "tsc"), "--strict", "--noEmit", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--lib", "ES2022,DOM", "--skipLibCheck", typecheck], directory);
@@ -91,16 +107,22 @@ internal static class Rmf2EsmV5Tests
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(compilation.Project!));
         try
         {
+            File.WriteAllBytes(Path.Combine(directory, "semantic-artifact.json"), Rmf2LocaleArtifactV5.Render(compilation.Project!, "en").GetUtf8Bytes());
             string script = Path.Combine(directory, "semantic.mjs");
             File.WriteAllText(script, """
+                import { readFile } from "node:fs/promises";
                 import { m } from "./app.esm-v5/messages.js";
                 import { decimal } from "./app.esm-v5/runtime.js";
+                import { decodeLocaleArtifact } from "./app.esm-v5/dynamic.js";
                 const exact=m.sample({count:decimal("1.0"),digits:2n,style:"percent"});
                 if(exact.kind!=="localized-content"||exact.nodes.map(node=>node.value).join("")!=="exact 100.00% 4200%")throw new Error(`alias/dynamic/exact mismatch: ${JSON.stringify(exact)}`);
                 if(m.huge({n:decimal("9007199254740993")})!=="exact")throw new Error("binary64-unsafe exact selector failed");
                 let rejected=false;try{m.sample({count:decimal("1"),digits:2n,style:"bogus"});}catch{rejected=true;}if(!rejected)throw new Error("invalid dynamic enum accepted");
                 const other=m.sample({count:decimal("2"),digits:0n,style:"decimal"});
                 if(other.kind!=="localized-content"||other.nodes[1].annotations[0].name!=="note"||other.nodes[1].closingAnnotations[0].name!=="end"||other.nodes[1].closingAnnotations[0].value.coefficient!==0n)throw new Error("ordered annotations lost");
+                const artifact=JSON.parse(await readFile(new URL("./semantic-artifact.json",import.meta.url),"utf8"));
+                const declarations=artifact.messages.sample.ast.declarations;const explicit=declarations.findIndex(item=>item.kind==="input"&&item.name==="digits");if(explicit<0)throw new Error("fixture lost explicit dynamic dependency");declarations.splice(explicit,1);
+                if(decodeLocaleArtifact(artifact).ok)throw new Error("implicit dynamic option dependency accepted");
                 """, new UTF8Encoding(false));
             Run("bun", [script], directory);
         }
@@ -157,6 +179,74 @@ internal static class Rmf2EsmV5Tests
             Run("bun", [script], directory);
         }
         finally { Directory.Delete(directory, true); }
+    }
+
+    private static void RuntimeHardening()
+    {
+        Rmf2ProjectV5 european = CompileProject("numbers", "en", ["en", "nl"], false,
+            ("en", "hello = Hello\namount =\n  .input {$value :number}\n  {{ {$value :number minimumFractionDigits=2 maximumFractionDigits=2} }}"),
+            ("nl", "hello = Hallo\namount =\n  .input {$value :number}\n  {{ {$value :number minimumFractionDigits=2 maximumFractionDigits=2} }}"));
+        string europeanDirectory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(european));
+        try
+        {
+            string script = Path.Combine(europeanDirectory, "locale.mjs");
+            File.WriteAllText(script, """
+                import { m } from "./numbers.esm-v5/messages.js";
+                import { decimal, decodeWireValue } from "./numbers.esm-v5/runtime.js";
+                if(m.hello({locale:"nl"})!=="Hallo")throw new Error("zero-input locale options were treated as inputs");
+                const amount=m.amount({value:decimal("1.25")},{locale:"nl"});if(amount!==" 1,25 ")throw new Error(`Dutch decimal punctuation diverged from .NET: ${amount}`);
+                if(decodeWireValue("0000-01-01","date").ok||decodeWireValue("0000-01-01T00:00:00Z","datetime").ok)throw new Error("year zero date carrier accepted");
+                """, new UTF8Encoding(false));
+            Run("bun", [script], europeanDirectory);
+        }
+        finally { Directory.Delete(europeanDirectory, true); }
+
+        Rmf2ProjectV5 legacyTag = CompileProject("legacy", "iw", ["iw"], false, ("iw", "hello = שלום"));
+        string legacyDirectory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(legacyTag));
+        try
+        {
+            string script = Path.Combine(legacyDirectory, "legacy.mjs");
+            File.WriteAllText(script, "import { m } from './legacy.esm-v5/messages.js'; if(m.hello({locale:'iw'})!=='שלום')throw new Error('preserved locale tag became unreachable');\n", new UTF8Encoding(false));
+            Run("bun", [script], legacyDirectory);
+        }
+        finally { Directory.Delete(legacyDirectory, true); }
+
+        Rmf2ProjectV5 extras = CompileProject("extras", "en", ["en", "de"], true,
+            ("en", "x = X"), ("de", "x = X\nextra = {$n :integer}"));
+        string extraDirectory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(extras));
+        try
+        {
+            File.WriteAllBytes(Path.Combine(extraDirectory, "extra.json"), Rmf2LocaleArtifactV5.Render(extras, "de").GetUtf8Bytes());
+            string script = Path.Combine(extraDirectory, "extra.mjs");
+            File.WriteAllText(script, """
+                import { readFile } from "node:fs/promises";
+                import { decodeLocaleArtifact, formatDynamicMessage } from "./extras.esm-v5/dynamic.js";
+                const decoded=decodeLocaleArtifact(JSON.parse(await readFile(new URL("./extra.json",import.meta.url),"utf8")));
+                if(!decoded.ok)throw new Error(decoded.reason);if(formatDynamicMessage(decoded.value,"extra",{n:2n})!=="2")throw new Error("allowed dynamic extra was not executable");
+                """, new UTF8Encoding(false));
+            Run("bun", [script], extraDirectory);
+        }
+        finally { Directory.Delete(extraDirectory, true); }
+    }
+
+    private static Rmf2ProjectV5 CompileProject(string id, string baseLocale, IReadOnlyList<string> locales,
+        bool allowExtras, params (string Locale, string Source)[] sources)
+    {
+        string json = JsonSerializer.Serialize(new
+        {
+            schemaVersion = 1,
+            catalog = id,
+            code = new { @namespace = "Example", className = "Text" },
+            baseLocale,
+            locales,
+            sourceLayout = "rmf2-v1",
+            validation = allowExtras ? new { extraLocaleKeys = "allow" } : null,
+        }, ProjectJsonOptions);
+        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
+            new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
+            sources.Select(source => new TranslationSource("translations/" + source.Locale + ".rmf2", Encoding.UTF8.GetBytes(source.Source))).ToArray());
+        Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
+        return result.Project!;
     }
 
     private static Rmf2ProjectV5 Fixture()

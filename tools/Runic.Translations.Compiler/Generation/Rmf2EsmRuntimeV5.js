@@ -40,7 +40,7 @@ export function createLocaleSource(options = {}) {
 
 export function resolveLocale(requested) {
   if (typeof requested !== "string" || !requested) throw new RangeError("A non-empty locale is required.");
-  let canonical; try { canonical = Intl.getCanonicalLocales(requested)[0]; } catch { throw new RangeError(`Invalid locale '${requested}'.`); }
+  const canonical = canonicalLocale(requested); if (canonical === null) throw new RangeError(`Invalid locale '${requested}'.`);
   if (localeSet.has(canonical)) return canonical;
   if (unsupportedLocalePolicy === "ParentsThenDefault") {
     let parent = canonical; while (parent.includes("-")) { parent = parent.slice(0, parent.lastIndexOf("-")); if (localeSet.has(parent)) return parent; }
@@ -232,9 +232,11 @@ function formatDecimal(value, locale, options) {
   return `${value.negative && coefficient !== 0n ? "-" : ""}${whole}${fraction ? separator + fraction : ""}${percent ? "%" : ""}`;
 }
 
-function numberSymbols(locale) { const language = locale.toLowerCase().split("-")[0]; return ["de", "es", "it"].includes(language) ? { decimal: ",", group: "." } : language === "fr" ? { decimal: ",", group: "\u202f" } : { decimal: ".", group: "," }; }
-function groupDigits(value, separator) { let result = ""; for (let index = 0; index < value.length; index++) { if (index && (value.length - index) % 3 === 0) result += separator; result += value[index]; } return result; }
-function groupInteger(value, locale) { const negative = value < 0n; const digits = (negative ? -value : value).toString(); return (negative ? "-" : "") + groupDigits(digits, numberSymbols(locale).group); }
+function numberSymbols(locale) {
+  const parts = new Intl.NumberFormat(locale, { useGrouping: false, minimumFractionDigits: 1, maximumFractionDigits: 1 }).formatToParts(1.1);
+  return { decimal: parts.find(part => part.type === "decimal")?.value ?? "." };
+}
+function groupInteger(value, locale) { return new Intl.NumberFormat(locale, { useGrouping: true, maximumFractionDigits: 0 }).format(value); }
 
 function selectPlural(value, locale, ordinal) {
   const decimalValue = decimalAbsolute(value); const language = locale.toLowerCase().split("-")[0]; const rules = generatedLocaleData.plural[language];
@@ -322,14 +324,15 @@ export function freezeGeneratedMessage(key, value) {
 }
 
 export function decodeLocaleArtifactV5(value) {
-  const envelope = validateEnvelope(value); if (envelope) return failure(envelope);
+  let snapshot; try { snapshot = cloneFreeze(value); } catch { return failure("RTR0023/malformed"); }
+  const envelope = validateEnvelope(snapshot); if (envelope) return failure(envelope);
   const entries = [];
-  for (const [key, message] of Object.entries(value.messages)) {
+  for (const [key, message] of Object.entries(snapshot.messages)) {
     if (!Object.hasOwn(messageContracts, key)) return failure("RTR0023/unknown-key");
-    const error = validateMessageWrapper(message, messageContracts[key], value.locale, key); if (error) return failure(`RTR0023/${error}`);
-    const decoded=cloneFreeze(message);validatedMessages.add(decoded);entries.push([key,decoded]);
+    const error = validateMessageWrapper(message, messageContracts[key], snapshot.locale, key); if (error) return failure(`RTR0023/${error}`);
+    validatedMessages.add(message); entries.push([key,message]);
   }
-  const artifact=Object.freeze({ artifactVersion: 5, messageGrammarVersion: 5, profile, catalog, locale: value.locale, contractFingerprint, messages: freezeOwnRecord(entries), markupContract: rmf2Contract });decodedArtifacts.add(artifact);
+  const artifact=Object.freeze({ artifactVersion: 5, messageGrammarVersion: 5, profile, catalog, locale: snapshot.locale, contractFingerprint, messages: freezeOwnRecord(entries), markupContract: rmf2Contract });decodedArtifacts.add(artifact);
   return Object.freeze({ ok: true, value: artifact });
 }
 
@@ -369,7 +372,7 @@ function validateEnvelope(value) {
   if (value.artifactVersion !== 5) return "RTR0023/artifact-version-mismatch";
   if (value.messageGrammarVersion !== 5 || value.profile !== profile) return "RTR0023/message-grammar-version-mismatch";
   if (value.catalog !== catalog) return "RTR0023/catalog-mismatch"; if (value.contractFingerprint !== contractFingerprint) return "RTR0023/contract-fingerprint-mismatch";
-  try { if (typeof value.locale !== "string" || !localeSet.has(value.locale) || Intl.getCanonicalLocales(value.locale)[0] !== value.locale) return "RTR0023/locale-mismatch"; } catch { return "RTR0023/locale-mismatch"; }
+  if (typeof value.locale !== "string" || !localeSet.has(value.locale) || canonicalLocale(value.locale) !== value.locale) return "RTR0023/locale-mismatch";
   if (!isRecord(value.messages)) return "RTR0023/malformed"; if (Object.keys(value.messages).length > limits.maximumMessages) return "RTR0023/limit-exceeded";
   if (JSON.stringify(value.markupContract) !== JSON.stringify(rmf2Contract)) return "RTR0023/argument-contract-mismatch";
   return null;
@@ -382,7 +385,8 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
   if (!Array.isArray(ast.inputs) || ast.inputs.length !== contract.inputs.length || ast.inputs.length > limits.maximumArgumentsPerMessage) return "argument-contract-mismatch";
   for (let index = 0; index < ast.inputs.length; index++) { const input = ast.inputs[index], expected = contract.inputs[index]; if (!isRecord(input) || !exactKeys(input,["name","type"]) || input.name !== expected.name || input.type !== expected.type || !validName(input.name)) return "argument-contract-mismatch"; }
   if (!Array.isArray(ast.declarations) || ast.declarations.length > 256 || !Array.isArray(ast.selectors) || ast.selectors.length > 16 || !Array.isArray(ast.variants) || ast.variants.length < 1 || ast.variants.length > 256) return "limit-exceeded";
-  const symbols = Object.create(null); for (const input of ast.inputs) symbols[input.name] = { type: input.type, selection: selectionForType(input.type) };
+  const explicitInputs = new Set(ast.declarations.filter(declaration => isRecord(declaration) && declaration.kind === "input" && typeof declaration.name === "string").map(declaration => declaration.name));
+  const symbols = Object.create(null); for (const input of ast.inputs) symbols[input.name] = { type: input.type, selection: selectionForType(input.type), explicitDependencies: explicitInputs.has(input.name) };
   const bound = new Set(), referenced = new Set();
   for (const declaration of ast.declarations) {
     if (!isRecord(declaration) || !exactKeys(declaration,["kind","name","expression"]) || !["input","local"].includes(declaration.kind) || !validName(declaration.name) || bound.has(declaration.name) || referenced.has(declaration.name)) return "malformed-pattern";
@@ -400,13 +404,13 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
     if (!["input","local"].includes(selector.value.kind) || !Object.hasOwn(symbols,selector.value.value) || symbols[selector.value.value].type !== selector.type || symbols[selector.value.value].selection !== selector.function) return "argument-contract-mismatch";
     selectorNames.add(selector.value.value);
   }
-  const vectors = new Set(); let fallback = false, totalNodes = 0, textBytes = 0;
+  const vectors = new Set(); let fallback = false;
   for (const variant of ast.variants) {
     if (!isRecord(variant) || !exactKeys(variant,["keys","nodes"]) || !Array.isArray(variant.keys) || variant.keys.length !== ast.selectors.length || !Array.isArray(variant.nodes)) return "malformed-pattern";
     const vector = []; let all = true;
     for (let index = 0; index < variant.keys.length; index++) { const normalized = validateKey(variant.keys[index], ast.selectors[index]); if (normalized === null) return "malformed-pattern"; vector.push(normalized); all &&= normalized === "*"; }
     const encoded = JSON.stringify(vector); if (vectors.has(encoded)) return "malformed-pattern"; vectors.add(encoded); fallback ||= all;
-    const stack = [], slotCounts = Object.create(null), slotRequirements = rmf2Contract.messages?.[key]?.slots ?? Object.create(null);
+    const stack = [], slotCounts = Object.create(null), slotRequirements = rmf2Contract.messages?.[key]?.slots ?? Object.create(null); let totalNodes = 0, textBytes = 0;
     for (const node of variant.nodes) {
       if (++totalNodes > 4096) return "limit-exceeded";
       if (!isRecord(node) || typeof node.kind !== "string") return "malformed-pattern";
@@ -439,7 +443,7 @@ function validateExpression(expression, symbols, references) {
 
 function validateOptions(options, symbols, fn) {
   if (!Array.isArray(options) || options.length > 256) return false; const names = new Set(), staticEntries=[]; let dynamic=false;
-  for (const option of options) { if (!isRecord(option) || !exactKeys(option,["name","value"]) || !validName(option.name) || names.has(option.name) || !validValue(option.value)) return false; names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return false; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type) return false; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return false; } } } }
+  for (const option of options) { if (!isRecord(option) || !exactKeys(option,["name","value"]) || !validName(option.name) || names.has(option.name) || !validValue(option.value)) return false; names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return false; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return false; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return false; } } } }
   if(fn){try{const resolved=freezeOwnRecord(staticEntries);validateResolvedOptions(fn,resolved);if(dynamic&&fn==="number"){const style=resolved.style,min=resolved.minimumFractionDigits??0n,max=resolved.maximumFractionDigits;if(style==="percent"&&min>4n||max!==undefined&&min>max)return false;}}catch{return false;}}
   return true;
 }
@@ -462,7 +466,7 @@ function markupLiteral(schema,value){try{if(schema.type==="number")return value.
 function validateAnnotations(values) { if (!Array.isArray(values) || values.length > 256) return false; const names = new Set(); return values.every(value => isRecord(value) && exactKeys(value,["name", ...(value.value === undefined ? [] : ["value"])]) && validName(value.name,true) && !names.has(value.name) && (names.add(value.name), true) && (value.value === undefined || validValue(value.value) && !["input","local"].includes(value.value.kind))); }
 function validValue(value) { if (!isRecord(value) || !["input","local","string-literal","number-literal"].includes(value.kind)) return false; const numeric = value.kind === "number-literal"; if (!exactKeys(value,["kind","value", ...(numeric ? ["canonical"] : [])]) || typeof value.value !== "string" || numeric && typeof value.canonical !== "string") return false; if (["input","local"].includes(value.kind) && !validName(value.value)) return false; if (numeric) { try { return decimalCanonical(parseDecimal(value.value)) === value.canonical; } catch { return false; } } return true; }
 function validateKey(key, selector) { if (!isRecord(key) || typeof key.kind !== "string") return null; if (key.kind === "wildcard") return exactKeys(key,["kind"]) ? "*" : null; if (key.kind !== "literal" || !exactKeys(key,["kind","value", ...(key.canonical === undefined ? [] : ["canonical"])]) || typeof key.value !== "string") return null; if (["decimal","int64"].includes(selector.type)) { try { const value = parseDecimal(key.value); const canonical = decimalCanonical(value); if (key.canonical !== canonical || selector.type === "int64" && (value.scale !== 0 || (value.negative ? -value.coefficient : value.coefficient) < minimumInt64 || (value.negative ? -value.coefficient : value.coefficient) > maximumInt64)) return null; return `=${canonical}`; } catch { if (key.canonical !== undefined || selector.function === "exact" || !["zero","one","two","few","many","other"].includes(key.value)) return null; return `=${key.value}`; } } if (key.canonical !== undefined || selector.type === "boolean" && !["true","false"].includes(key.value)) return null; return `=${key.value.normalize("NFC")}`; }
-function expressionSymbol(expression,symbols) { const inherited=["input","local"].includes(expression.operand.kind)?symbols[expression.operand.value]:{type:expression.valueType,selection:selectionForType(expression.valueType)}; if(expression.function===undefined)return inherited; const selected=expression.options.find(option=>option.name==="select"); return {type:expression.valueType,selection:selected?.value?.value??selectionForFunction(expression.function)}; }
+function expressionSymbol(expression,symbols) { const inherited=["input","local"].includes(expression.operand.kind)?symbols[expression.operand.value]:{type:expression.valueType,selection:selectionForType(expression.valueType),explicitDependencies:true}; if(expression.function===undefined)return inherited; const selected=expression.options.find(option=>option.name==="select"); let explicitDependencies=inherited.explicitDependencies;for(const option of expression.options)if(["input","local"].includes(option.value.kind))explicitDependencies&&=symbols[option.value.value].explicitDependencies;return {type:expression.valueType,selection:selected?.value?.value??selectionForFunction(expression.function),explicitDependencies}; }
 function selectionForType(type) { return ["string","boolean"].includes(type)?"exact":["int64","decimal"].includes(type)?"plural":"none"; }
 function selectionForFunction(fn) { return ["string","runic:boolean"].includes(fn)?"exact":["integer","number","runic:relative-time"].includes(fn)?"plural":"none"; }
 function referenceValue(value,set) { if (["input","local"].includes(value.kind)) set.add(value.value); }
@@ -471,9 +475,10 @@ function validName(value, qualified = false) {
   if (typeof value !== "string" || !value || value !== value.normalize("NFC")) return false;
   let first=true,colon=false; for(const character of value){const code=character.codePointAt(0);if(code===58&&qualified&&!colon&&!first){colon=true;first=true;continue;}const start=(code>=65&&code<=90)||(code>=97&&code<=122)||code===43||code===95||(code>=0xa1&&code<=0x61b)||(code>=0x61d&&code<=0x167f)||(code>=0x1681&&code<=0x1fff)||(code>=0x200b&&code<=0x200d)||(code>=0x2010&&code<=0x2027)||(code>=0x2030&&code<=0x205e)||(code>=0x2060&&code<=0x2065)||(code>=0x206a&&code<=0x2fff)||(code>=0x3001&&code<=0xd7ff)||(code>=0xe000&&code<=0xfdcf)||(code>=0xfdf0&&code<=0xfffd)||(code>=0x10000&&code<=0x10fffd&&(code&0xffff)<=0xfffd);if(!start&&(first||!((code>=48&&code<=57)||code===45||code===46)))return false;first=false;}return !first;
 }
-function validDate(value) { if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false; const date = new Date(`${value}T00:00:00Z`); return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0,10) === value; }
+function validDate(value) { if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000-")) return false; const date = new Date(`${value}T00:00:00Z`); return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0,10) === value; }
 function validTime(value) { if (!/^\d{2}:\d{2}:\d{2}$/.test(value)) return false; return Number(value.slice(0,2)) < 24 && Number(value.slice(3,5)) < 60 && Number(value.slice(6,8)) < 60; }
-function validDateTime(value) { if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value)) return false; const date = new Date(value); return !Number.isNaN(date.valueOf()) && date.toISOString().replace(".000Z","Z") === value; }
+function validDateTime(value) { if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value) || value.startsWith("0000-")) return false; const date = new Date(value); return !Number.isNaN(date.valueOf()) && date.toISOString().replace(".000Z","Z") === value; }
+function canonicalLocale(value) { if (typeof value!=="string"||!value||value.startsWith("-")||value.endsWith("-"))return null;const parts=value.split("-");if(parts[0].length<2||parts[0].length>8||!/^[A-Za-z]+$/.test(parts[0]))return null;const result=[parts[0].toLowerCase()];let extension=false;for(let index=1;index<parts.length;index++){const part=parts[index];if(part.length<1||part.length>8||!/^[A-Za-z0-9]+$/.test(part))return null;if(part.length===1){extension=true;result.push(part.toLowerCase());}else if(!extension&&part.length===4&&/^[A-Za-z]+$/.test(part))result.push(part[0].toUpperCase()+part.slice(1).toLowerCase());else if(!extension&&part.length===2&&/^[A-Za-z]+$/.test(part))result.push(part.toUpperCase());else if(!extension&&part.length===3&&/^\d+$/.test(part))result.push(part);else result.push(part.toLowerCase());}return result.join("-");}
 function isRecord(value) { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function exactKeys(value, names) { if (!isRecord(value)) return false; const actual = Object.keys(value).sort(), expected = [...names].sort(); return actual.length === expected.length && actual.every((name,index) => name === expected[index] && Object.hasOwn(value,name)); }
 function cloneFreeze(value) { if (Array.isArray(value)) return Object.freeze(value.map(cloneFreeze)); if (isRecord(value)) return freezeOwnRecord(Object.keys(value).map(key => [key,cloneFreeze(value[key])])); return value; }
@@ -488,15 +493,30 @@ export function iconBinding({ asset,decorative,accessibleName }) { if (asset == 
 export function enumOption(values,defaultValue){if(!Array.isArray(values)||!values.length||values.some(value=>typeof value!=="string")||defaultValue!==undefined&&!values.includes(defaultValue))throw new TypeError("Invalid enum option.");return Object.freeze({type:"enum",values:Object.freeze([...values]),...(defaultValue===undefined?{}:{default:defaultValue})});}
 export function createInlineRenderer(factory, bindings = []) {
   if (!factory || typeof factory.text !== "function" || typeof factory.element !== "function") throw new TypeError("An inline renderer requires text and element factories.");
-  const custom=new Map();for(const binding of bindings){const declared=rmf2Contract.contracts[binding.contract.name];if(!declared||custom.has(binding.contract.name)||declared.kind!==binding.contract.kind||declared.plainText!==binding.contract.plainText||declared.interactive!==binding.contract.interactive)throw new TypeError("Incompatible or duplicate renderer contract.");custom.set(binding.contract.name,binding.render);}
+  const custom = new Map();
+  for (const binding of bindings) {
+    if (!isRecord(binding) || !isRecord(binding.contract) || typeof binding.render !== "function") throw new TypeError("Invalid markup renderer binding.");
+    const suppliedContract = binding.contract, declared = rmf2Contract.contracts[suppliedContract.name];
+    const children = declared?.kind === "standalone" ? "none" : "inline";
+    if (!declared || custom.has(suppliedContract.name) || declared.kind !== suppliedContract.kind || children !== suppliedContract.children || declared.plainText !== suppliedContract.plainText || declared.interactive !== suppliedContract.interactive) throw new TypeError("Incompatible or duplicate renderer contract.");
+    const suppliedOptions = suppliedContract.options ?? Object.create(null);
+    if (!isRecord(suppliedOptions) || Object.keys(declared.options).length !== Object.keys(suppliedOptions).length || Object.entries(declared.options).some(([name,schema]) => {
+      const actual = suppliedOptions[name];
+      return !isRecord(actual) || actual.type !== schema.type || JSON.stringify(actual.values ?? []) !== JSON.stringify(schema.values) || (actual.default ?? null) !== schema.default || !!actual.literalOnly !== schema.literalOnly;
+    })) throw new TypeError("Renderer option contract mismatch.");
+    custom.set(suppliedContract.name,binding.render);
+  }
   function render(content,{slots=Object.create(null)}={}) {
-    const requirements=rmf2Contract.messages[content.key]?.slots;if(content.kind!=="localized-content"||!requirements)throw new TypeError("Unknown RMF2 content contract.");const counts=Object.create(null);let count=0;
-    function visit(nodes,interactive=false){return nodes.map(node=>{if(++count>4096)throw new RangeError("Inline node limit exceeded.");if(node.kind==="text")return factory.text(node.value);const contract=rmf2Contract.contracts[node.name];if(!contract||(contract.kind==="standalone")!==node.standalone||interactive&&contract.interactive)throw new TypeError("Unknown or invalid inline markup.");let binding;for(const[name,value]of Object.entries(node.attributes)){if(name==="ref"&&["runic:link","runic:action","runic:icon"].includes(node.name)){binding=slots[value];if(requirements[value]?.kind!==node.name||binding?.kind!==node.name)throw new TypeError(`Invalid slot '${value}'.`);counts[value]=(counts[value]??0)+1;}else if(!contract.options[name]||!renderOption(contract.options[name],value))throw new TypeError(`Invalid option '${name}'.`);}for(const name of Object.keys(contract.options))if(!Object.hasOwn(node.attributes,name))throw new TypeError(`Missing option '${name}'.`);const element={name:node.name,children:visit(node.children,interactive||contract.interactive),options:node.attributes,binding,occurrence:`${content.key}:${node.occurrence}`,locale:content.locale,standalone:node.standalone,annotations:node.annotations,closingAnnotations:node.closingAnnotations};if(!custom.has(node.name)&&!node.name.startsWith("runic:"))throw new TypeError(`No renderer linked for '${node.name}'.`);return custom.has(node.name)?custom.get(node.name)(element):factory.element(element);});}
+    const requirements=rmf2Contract.messages[content.key]?.slots;if(content.kind!=="localized-content"||!requirements||!isRecord(slots))throw new TypeError("Unknown RMF2 content contract.");
+    const validatedSlots=Object.create(null);for (const [reference,requirement] of Object.entries(requirements)) validatedSlots[reference]=validateSlotBinding(reference,requirement.kind,slots[reference]);
+    const counts=Object.create(null);let count=0;
+    function visit(nodes,interactive=false,depth=0){if(depth>16)throw new RangeError("Inline nesting exceeds 16 levels.");return nodes.map(node=>{if(++count>4096)throw new RangeError("Inline node limit exceeded.");if(node.kind==="text")return factory.text(node.value);const contract=rmf2Contract.contracts[node.name];if(!contract||(contract.kind==="standalone")!==node.standalone||interactive&&contract.interactive)throw new TypeError("Unknown or invalid inline markup.");let binding;for(const[name,value]of Object.entries(node.attributes)){if(name==="ref"&&["runic:link","runic:action","runic:icon"].includes(node.name)){binding=validatedSlots[value];if(requirements[value]?.kind!==node.name||!binding)throw new TypeError(`Invalid slot '${value}'.`);counts[value]=(counts[value]??0)+1;}else if(!contract.options[name]||!renderOption(contract.options[name],value))throw new TypeError(`Invalid option '${name}'.`);}if(["runic:link","runic:action","runic:icon"].includes(node.name)&&!binding)throw new TypeError("Missing functional slot ref.");for(const name of Object.keys(contract.options))if(!Object.hasOwn(node.attributes,name))throw new TypeError(`Missing option '${name}'.`);const element={name:node.name,children:visit(node.children,interactive||contract.interactive,depth+1),options:node.attributes,binding,occurrence:`${content.key}:${node.occurrence}`,locale:content.locale,standalone:node.standalone,annotations:node.annotations,closingAnnotations:node.closingAnnotations};if(!custom.has(node.name)&&!node.name.startsWith("runic:"))throw new TypeError(`No renderer linked for '${node.name}'.`);return custom.has(node.name)?custom.get(node.name)(element):factory.element(element);});}
     const output=visit(content.nodes);for(const[slot,bounds]of Object.entries(requirements))if((counts[slot]??0)<bounds.min||(counts[slot]??0)>bounds.max)throw new TypeError(`Slot multiplicity mismatch for '${slot}'.`);return Object.freeze(output);
   }
   return Object.freeze({ render, extend(extra) { return createInlineRenderer(factory,[...bindings,...extra]); } });
 }
-export function defineMarkup(contract) { if (!isRecord(contract) || typeof contract.name !== "string") throw new TypeError("Invalid markup contract."); return cloneFreeze(contract); }
+function validateSlotBinding(reference,kind,binding){if(binding?.kind!==kind)throw new TypeError(`Missing or incompatible slot '${reference}'.`);return kind==="runic:link"?linkBinding(binding):kind==="runic:action"?actionBinding(binding):iconBinding(binding);}
+export function defineMarkup(contract) { if (!isRecord(contract) || !validName(contract.name,true) || contract.name.startsWith("runic:") || !["paired","standalone"].includes(contract.kind) || contract.children !== (contract.kind === "standalone" ? "none" : "inline") || typeof contract.interactive !== "boolean" || !["children","lineBreak","alternateText","explicit","omit"].includes(contract.plainText) || contract.options !== undefined && !isRecord(contract.options)) throw new TypeError("Invalid markup contract."); return cloneFreeze(contract); }
 export function bindMarkup(contract,render) { if (typeof render !== "function") throw new TypeError("A markup renderer is required."); return Object.freeze({contract,render}); }
 export function toPlainText(content,{slots=Object.create(null),allowActionLabels=false,annotateLinkDestinations=false,custom=[]}={}) { const renderer=createInlineRenderer({text:value=>value,element({name,children,binding,locale}) { if (name==="runic:br") return "\n"; if (name==="runic:action"&&!allowActionLabels) throw new TypeError("Action labels require explicit projection policy."); if (name==="runic:icon") { if (binding?.decorative) return ""; const label=binding?.accessibleName?.(locale); if (typeof label!=="string"||!label.trim()) throw new TypeError("Meaningful icon alternate text is empty."); return label; } const text=children.join(""); return name==="runic:link"&&annotateLinkDestinations?`${text} (${binding.href})`:text; }},custom); return renderer.render(content,{slots}).join(""); }
 export function createDomInlineRenderer(document,custom=[]) { return createInlineRenderer({text:value=>document.createTextNode(value),element({name,children,binding,locale}) { if(name==="runic:icon"){const node=typeof binding.asset==="function"?binding.asset(document):binding.asset?.cloneNode?.(true);if(!node||typeof node.setAttribute!=="function")throw new TypeError("The application icon asset must create a DOM element.");if(binding.decorative){node.setAttribute("aria-hidden","true");node.removeAttribute("aria-label");}else{const label=binding.accessibleName(locale);if(typeof label!=="string"||!label.trim())throw new TypeError("Meaningful icon alternate text is empty.");node.setAttribute("role","img");node.setAttribute("aria-label",label);}return node;}const tags={"runic:strong":"strong","runic:em":"em","runic:bold":"span","runic:italic":"span","runic:code":"code","runic:br":"br","runic:link":"a","runic:action":"button"};const node=document.createElement(tags[name]);if(name==="runic:bold")node.style.fontWeight="bold";if(name==="runic:italic")node.style.fontStyle="italic";if(name==="runic:link")node.href=binding.href;if(name==="runic:action"){node.type="button";node.addEventListener("click",binding.onActivate);}node.append(...children);return node;}},custom); }

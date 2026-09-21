@@ -91,9 +91,8 @@ internal static class TranslationPackV5Loader
         CompiledRmf2Selector[] selectors = ReadArray(ast["selectors"], 16, ReadSelector, "selector");
         if (ast["variants"].ValueKind != JsonValueKind.Array || ast["variants"].GetArrayLength() is < 1 or > 256)
             throw Limit("A message has an invalid or excessive variant list.");
-        int textBytes = 0;
         var variants = new List<CompiledRmf2Variant>();
-        foreach (JsonElement item in ast["variants"].EnumerateArray()) variants.Add(ReadVariant(item, limits, ref textBytes));
+        foreach (JsonElement item in ast["variants"].EnumerateArray()) variants.Add(ReadVariant(item, limits));
         return new CompiledRmf2Message(inputs, declarations, selectors, variants, contentLocale);
     }
 
@@ -128,14 +127,14 @@ internal static class TranslationPackV5Loader
         return new CompiledRmf2Selector(ReadValue(fields["value"]), Type(String(fields["type"])), String(fields["function"]));
     }
 
-    private static CompiledRmf2Variant ReadVariant(JsonElement value, TranslationPackLimits limits, ref int textBytes)
+    private static CompiledRmf2Variant ReadVariant(JsonElement value, TranslationPackLimits limits)
     {
         Dictionary<string, JsonElement> fields = Members(value, ["keys", "nodes"]);
         CompiledRmf2Key[] keys = ReadArray(fields["keys"], 16, ReadKey, "key");
         if (fields["nodes"].ValueKind != JsonValueKind.Array || fields["nodes"].GetArrayLength() > 4096)
             throw Limit("A message exceeds the normalized node limit.");
         var nodes = new List<CompiledRmf2Node>();
-        int depth = 0;
+        int depth = 0, textBytes = 0;
         foreach (JsonElement item in fields["nodes"].EnumerateArray())
         {
             CompiledRmf2Node node = ReadNode(item, ref textBytes, limits);
