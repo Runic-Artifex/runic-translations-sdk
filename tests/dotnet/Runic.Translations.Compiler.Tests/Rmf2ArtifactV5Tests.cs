@@ -62,6 +62,18 @@ internal static class Rmf2ArtifactV5Tests
             new ExternalTranslationPack(Rmf2LocaleArtifactV5.Render(fallbackProject, "fr").GetUtf8Bytes()), Contract(fallbackProject, "fr")).AsTask().GetAwaiter().GetResult();
         Assert.Equal("de", fallback.Messages[0].Message!.Rmf2V5!.ContentLocale);
         Assert.Equal("Deutsch", fallback.Messages[0].Message!.Rmf2V5!.Format([], "fr"));
+
+        Rmf2MessageContractV5 duplicate = project.CanonicalMessages[0] with { Id = -1 };
+        try
+        {
+            _ = Rmf2LocaleArtifactV5.Render(project with { ExtraMessages = [duplicate] }, "en");
+            throw new InvalidOperationException("Artifact emission accepted duplicate canonical/extra contract keys.");
+        }
+        catch (InvalidOperationException exception)
+        {
+            Assert.True(exception.Message.Contains("Duplicate v5 message contract 'account_bill'", StringComparison.Ordinal),
+                "Duplicate contract rejection was not deterministic.");
+        }
     }
 
     private static void HostileMatrix()

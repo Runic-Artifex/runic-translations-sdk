@@ -251,7 +251,7 @@ public sealed class VerifiedTranslationPackMessage
     public TranslationKey Key { get; }
     /// <summary>The validated plain-text message pattern.</summary>
     public string Pattern { get; }
-    /// <summary>The verified normalized message for grammar v2, or null for grammar v1.</summary>
+    /// <summary>The verified normalized message for grammars v2, v4, and v5, or null for grammar v1.</summary>
     public CompiledTextMessage? Message { get; }
 }
 

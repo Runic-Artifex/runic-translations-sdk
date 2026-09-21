@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -18,6 +19,11 @@ internal static class Rmf2LocaleArtifactV5
         ArgumentNullException.ThrowIfNull(localeTag);
         Rmf2LocaleV5 locale = project.Locales.SingleOrDefault(item => item.Tag == localeTag)
             ?? throw new ArgumentException("Locale '" + localeTag + "' is not declared by catalog '" + project.Id + "'.", nameof(localeTag));
+        var contracts = new Dictionary<string, Rmf2MessageContractV5>(
+            project.CanonicalMessages.Count + project.ExtraMessages.Count, StringComparer.Ordinal);
+        foreach (Rmf2MessageContractV5 contract in project.CanonicalMessages.Concat(project.ExtraMessages))
+            if (!contracts.TryAdd(contract.Key, contract))
+                throw new InvalidOperationException("Duplicate v5 message contract '" + contract.Key + "'.");
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
@@ -31,7 +37,8 @@ internal static class Rmf2LocaleArtifactV5
             writer.WriteStartObject("messages");
             foreach (Rmf2TranslationV5 resource in locale.ResolvedResources.OrderBy(item => item.Key, StringComparer.Ordinal))
             {
-                Rmf2MessageContractV5 contract = project.CanonicalMessages.Concat(project.ExtraMessages).Single(item => item.Key == resource.Key);
+                if (!contracts.TryGetValue(resource.Key, out Rmf2MessageContractV5? contract))
+                    throw new InvalidOperationException("Resolved v5 resource '" + resource.Key + "' has no message contract.");
                 writer.WriteStartObject(resource.Key);
                 writer.WriteString("contentLocale", resource.ContentLocale);
                 writer.WritePropertyName("ast");
