@@ -48,9 +48,10 @@ internal static class Rmf2IntegrationTests
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
         File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"", "\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", StringComparison.Ordinal));
         File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = Shop\n");
+        string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
         string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
         File.WriteAllText(temporary.Resolve("Consumer.proj"), $$"""
-            <Project><PropertyGroup><Configuration>Debug</Configuration></PropertyGroup>
+            <Project><PropertyGroup><Configuration>{{configuration}}</Configuration></PropertyGroup>
             <ItemGroup><TranslationProject Include="translations/runic.json" /></ItemGroup>
             <Import Project="{{targets}}" />
             <Target Name="Dump" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources">
@@ -177,12 +178,27 @@ internal static class Rmf2IntegrationTests
             Assert.Contains("does not synchronize", frames.Single(frame => frame["id"]?.ToString() == "27")["error"]!["message"]!.ToString());
             var tokens = frames.Single(frame => frame["id"]?.ToString() == "21")["result"]!["data"]!.AsArray();
             Assert.True(tokens.Count > 0 && tokens.Count % 5 == 0, "Semantic highlighting did not return LSP token tuples.");
+            int[] tokenValues = tokens.Select(token => token!.GetValue<int>()).ToArray();
+            for (int index = 0; index < tokenValues.Length; index += 5)
+            {
+                Assert.True(tokenValues[index] >= 0 && tokenValues[index + 1] >= 0, "Semantic token positions must use non-negative integer deltas.");
+                Assert.True(tokenValues[index + 2] > 0, "Semantic token lengths must be positive integers.");
+                Assert.True(tokenValues[index + 3] is >= 0 and <= 7, "Semantic token types must index the advertised legend.");
+                Assert.Equal(0, tokenValues[index + 4], "RMF2 semantic tokens do not advertise modifiers.");
+            }
             Assert.Equal(4, frames.Single(n => n["id"]?.ToString() == "20")["result"]!["ast"]!["astVersion"]!.GetValue<int>());
             Assert.Equal(encoding, frames.Single(n => n["id"]?.ToString() == "1")["result"]!["capabilities"]!["positionEncoding"]!.ToString());
             var diagnostic = frames.First(n => n["method"]?.ToString() == "textDocument/publishDiagnostics")["params"]!["diagnostics"]![0]!;
             Assert.Equal(encoding == "utf-8" ? 9 : encoding == "utf-16" ? 7 : 6, diagnostic["range"]!["start"]!["character"]!.GetValue<int>());
-            var rename = frames.Single(n => n["id"]?.ToString() == "2")["result"]!["documentChanges"]!.AsArray().Single(n => n!["textDocument"]?["uri"]?.ToString() == uri)!;
-            Assert.Equal(2, rename["textDocument"]!["version"]!.GetValue<int>()); Assert.Contains("greeting = Hello", rename["edits"]![0]!["newText"]!.ToString());
+            var documentChanges = frames.Single(n => n["id"]?.ToString() == "2")["result"]!["documentChanges"]!.AsArray();
+            Assert.True(documentChanges.All(change => change is JsonObject), "Workspace edits must contain JSON objects.");
+            var rename = documentChanges.Single(n => n!["textDocument"]?["uri"]?.ToString() == uri)!;
+            Assert.Equal(2, rename["textDocument"]!["version"]!.GetValue<int>());
+            var textEdits = rename["edits"]!.AsArray();
+            Assert.Equal(1, textEdits.Count, "A resource rename should replace each affected document once.");
+            Assert.Equal(0, textEdits[0]!["range"]!["start"]!["line"]!.GetValue<int>());
+            Assert.Equal(0, textEdits[0]!["range"]!["start"]!["character"]!.GetValue<int>());
+            Assert.Contains("greeting = Hello", textEdits[0]!["newText"]!.GetValue<string>());
             var completion = frames.Single(n => n["id"]?.ToString() == "4")["result"]!.AsArray();
             Assert.True(completion.Any(n => n!["label"]!.ToString() == "$name"), "Missing semantic input completion.");
             Assert.True(completion.All(n => n!["label"]!.ToString() != "$literal" && n["label"]!.ToString() != "/br"), "Invalid completion leaked into LSP.");

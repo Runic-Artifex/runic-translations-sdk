@@ -360,11 +360,11 @@ internal sealed class Rmf2LanguageServer
         foreach (var edit in plan.Edits)
         {
             string path = Path.GetFullPath(edit.RelativePath, plan.Root); string uri = new Uri(path).AbsoluteUri;
-            if (edit.Kind == TranslationWorkspaceEditKind.Create) edits.Add(new JsonObject { ["kind"] = "create", ["uri"] = uri });
-            if (edit.Kind == TranslationWorkspaceEditKind.Delete) { edits.Add(new JsonObject { ["kind"] = "delete", ["uri"] = uri }); continue; }
+            if (edit.Kind == TranslationWorkspaceEditKind.Create) edits.Add((JsonNode)new JsonObject { ["kind"] = "create", ["uri"] = uri });
+            if (edit.Kind == TranslationWorkspaceEditKind.Delete) { edits.Add((JsonNode)new JsonObject { ["kind"] = "delete", ["uri"] = uri }); continue; }
             _buffers.TryGetValue(uri, out Buffer? buffer);
             string before = edit.Kind == TranslationWorkspaceEditKind.Create ? "" : buffer?.Text ?? File.ReadAllText(path, Utf8);
-            edits.Add(new JsonObject {
+            edits.Add((JsonNode)new JsonObject {
                 ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = buffer is null ? null : JsonValue.Create(buffer.Version) },
                 ["edits"] = new JsonArray(new JsonObject { ["range"] = new JsonObject { ["start"] = Position(before, 0), ["end"] = Position(before, before.Length) }, ["newText"] = Utf8.GetString(edit.GetUtf8Bytes()!) }),
             });
@@ -430,8 +430,8 @@ internal sealed class Rmf2LanguageServer
                 {
                     var from = Position(buffer.Text, start); var to = Position(buffer.Text, finish);
                     int line = from["line"]!.GetValue<int>(), character = from["character"]!.GetValue<int>();
-                    data.Add(line - previousLine); data.Add(line == previousLine ? character - previousCharacter : character);
-                    data.Add(to["character"]!.GetValue<int>() - character); data.Add(span.Kind); data.Add(0);
+                    data.Add((JsonNode)JsonValue.Create(line - previousLine)); data.Add((JsonNode)JsonValue.Create(line == previousLine ? character - previousCharacter : character));
+                    data.Add((JsonNode)JsonValue.Create(to["character"]!.GetValue<int>() - character)); data.Add((JsonNode)JsonValue.Create(span.Kind)); data.Add((JsonNode)JsonValue.Create(0));
                     previousLine = line; previousCharacter = character;
                 }
                 if (newline < 0 || newline >= end) break;
