@@ -324,6 +324,43 @@ internal static class Rmf2V1CorpusTests
                 root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["operand"] =
                     new JsonObject { ["kind"] = "number-literal", ["value"] = "1", ["canonical"] = "1", ["future"] = value };
                 break;
+            case "missingExpressionOptionValueKindWithUnknown":
+            case "nonStringExpressionOptionValueKindWithUnknown":
+            {
+                JsonObject expression = root["messages"]!["core_total"]!["ast"]!["declarations"]!.AsArray()
+                    .Select(item => item!["expression"]!.AsObject()).First(item => item["options"]!.AsArray().Count > 0);
+                JsonObject optionValue = expression["options"]![0]!["value"]!.AsObject();
+                if (mutation == "missingExpressionOptionValueKindWithUnknown") optionValue.Remove("kind");
+                else optionValue["kind"] = 1;
+                optionValue["future"] = value;
+                break;
+            }
+            case "missingExpressionAnnotationValueKindWithUnknown":
+                root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["annotations"]!.AsArray().Add(
+                    new JsonObject { ["name"] = "future", ["value"] = new JsonObject { ["value"] = "x", ["future"] = value } });
+                break;
+            case "missingMarkupValueKindWithUnknown":
+            case "nonStringMarkupValueKindWithUnknown":
+            {
+                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
+                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup" && item["options"]!.AsArray().Count > 0);
+                JsonObject optionValue = node["options"]![0]!["value"]!.AsObject();
+                if (mutation == "missingMarkupValueKindWithUnknown") optionValue.Remove("kind");
+                else optionValue["kind"] = 1;
+                optionValue["future"] = value;
+                break;
+            }
+            case "nonStringMarkupAnnotationValueKindWithUnknown":
+            {
+                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
+                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup");
+                node["annotations"]!.AsArray().Add(new JsonObject
+                {
+                    ["name"] = "future",
+                    ["value"] = new JsonObject { ["kind"] = 1, ["value"] = "x", ["future"] = value },
+                });
+                break;
+            }
             case "unboundLocal": root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["operand"] = new JsonObject { ["kind"] = "local", ["value"] = "missing" }; break;
             case "implicitDynamicDependency":
             {
