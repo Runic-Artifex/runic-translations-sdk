@@ -326,10 +326,11 @@ runtime markers 1 and 2, but rejects missing or unknown markers. The separate
 legacy runtime ABI check still requires exactly 1. This does not activate v5
 emission.
 
-Still dependent: C#/ESM v5 generation, v5 pack semantic validation and explicit loader dispatch, and any
-change to default emission. The constructor evaluator is not a v5 pack loader.
-The machine profile's project-level executable backend list remains empty until
-those backend integrations are complete.
+The typed C# and ESM backends and strict .NET/ESM v5 pack readers are available
+through internal staged entry points. Default compiler emission, public project
+profile selection, and Vite manifest-v3 dispatch remain deliberately dependent
+work. The machine profile's project-level executable backend list therefore
+remains empty until those activation changes move together.
 
 The [golden corpus](corpus/semantic-v5/README.md) is a schema/semantic fixture, not
 an activated locale pack. Test-only JsonSchema.Net validation uses Draft 2020-12

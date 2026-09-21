@@ -29,6 +29,11 @@ public static class TranslationOutputRenderer
     /// <summary>The writer version of the generated ESM module manifest.</summary>
     public const int WebModuleManifestV2Version = 2;
 
+    // Kept separate from the shipping v4 renderer until project-profile
+    // activation can move every host and adapter together.
+    internal const int Rmf2V5EsmAbiVersion = 4;
+    internal const int WebModuleManifestV3Version = 3;
+
     /// <summary>The experimental generated C++ ABI compatibility version.</summary>
     public const int CppAbiVersion = 1;
 
@@ -62,6 +67,9 @@ public static class TranslationOutputRenderer
 
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpRegistration(Rmf2ProjectV5 project) =>
         Rmf2CSharpOutputRendererV5.RenderRegistration(project ?? throw new ArgumentNullException(nameof(project)));
+
+    internal static IReadOnlyList<TranslationGeneratedOutput> RenderRmf2V5EsmModules(Rmf2ProjectV5 project) =>
+        Rmf2EsmOutputRendererV5.Render(project ?? throw new ArgumentNullException(nameof(project)));
 
     /// <summary>Renders one declared locale as canonical compact JSON using resolved fallback values.</summary>
     public static TranslationGeneratedOutput RenderLocaleJson(CompiledTextCatalog catalog, string locale)

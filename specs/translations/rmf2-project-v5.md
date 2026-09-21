@@ -12,8 +12,9 @@ compiler unchanged. The discriminated result carries either a current
 `CompileRmf2ProjectV5` is the dedicated typed entry point. Failed v5 compilations
 return diagnostics without a project that could accidentally reach emission.
 
-Public `runic.json`/CLI profile activation remains deferred until generated
-C#/ESM and their integration checks are ready. Project schema v1,
+Public `runic.json`/CLI profile activation remains deferred even though the
+internal generated C# and ESM backends and their integration checks are ready.
+Project schema v1,
 resource syntax `rmf2-v1`, and exported markup contract v1 remain unchanged:
 artifact v5 does not imply a project schema version bump. Default project output
 remains v4. The staged linker uses the existing locale, mount, completeness,
@@ -112,4 +113,5 @@ and separate generated helper scopes. RMF2 resource keys retain their existing
 ASCII path rules and underscore-key collision rejection.
 
 The cross-locale fixture in [corpus/v5-project](corpus/v5-project/README.md)
-exercises the carrier and direct runtime lowering. It is not an activated pack.
+exercises the carrier, generated backends, exact ESM runtime, and strict pack
+decoders. None of those internal entry points activates default project output.
