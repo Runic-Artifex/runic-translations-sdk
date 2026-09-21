@@ -1,17 +1,21 @@
 # Pinned CLDR subset
 
-`runic-subset-48.2.json` is the normalized, reviewable subset derived from
+`runic-subset-48.2.json` is the normalized, reviewable source derived from
 Unicode CLDR 48.2 (`cldr-json` tag `48.2.0`). The source archive URL and
 SHA-512 digest are recorded in the file. The retained fields are plural-rule
 families and relative-time patterns for Runic's explicit target locales.
 
 The data is licensed under Unicode License v3; the complete notice is in
-`LICENSE`. Update the pinned source, digest, normalized subset, generated C#,
-capability matrix, and cross-runtime fixtures together. Then run:
+`LICENSE`. `eng/generate-cldr.mjs` deterministically derives the compiler
+registry, runtime locale data, and capability matrix. `eng/render-capabilities.mjs`
+then renders the guide from that matrix. Update the pinned source, digest,
+normalized subset, generated outputs, and cross-runtime fixtures together. Then run:
 
 ```bash
-node eng/generate-cldr.mjs
-./eng/verify.sh
+bun eng/generate-cldr.mjs
+bun eng/render-capabilities.mjs
+bun eng/generate-cldr.mjs --check
+bun eng/render-capabilities.mjs --check
 ```
 
 Generation is offline and deterministic. It never downloads data during a
