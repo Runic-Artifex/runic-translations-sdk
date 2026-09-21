@@ -46,7 +46,7 @@ internal static class Rmf2V1CorpusTests
         Assert.True(project.CanonicalMessages.All(message => message.Key != "locale_extra"), "Locale extra leaked into the canonical API.");
         Assert.Equal(string.Join('|', index.RootElement.GetProperty("locales").EnumerateArray().Select(item => item.GetProperty("requested").GetString() + ":" + (item.GetProperty("fallback").GetString() ?? "")).Order(StringComparer.Ordinal)),
             string.Join('|', project.Locales.Select(item => item.Tag + ":" + (item.FallbackTag ?? "")).Order(StringComparer.Ordinal)), "Locale fallback contract");
-        Assert.Equal("single-read-getter|null-prototype-inputs",
+        Assert.Equal("single-read-getter|null-prototype-inputs|own-undefined-optionals|nonadditive-rejection-taxonomy",
             string.Join('|', index.RootElement.GetProperty("esmObjectCases").EnumerateArray().Select(item => item.GetString())), "ESM hostile-object contract");
         JsonElement deterministic = index.RootElement.GetProperty("determinism");
         Assert.Equal(deterministic.GetProperty("callerFingerprint").GetString(), project.CallerFingerprint, "Caller fingerprint golden");
@@ -259,6 +259,71 @@ internal static class Rmf2V1CorpusTests
             case "astVersion": root["messages"]!["core_total"]!["ast"]!["astVersion"] = value; break;
             case "addWrapperMember": root["messages"]!["core_total"]!["future"] = value; break;
             case "addInputMember": root["messages"]!["core_total"]!["ast"]!["inputs"]![0]!["future"] = value; break;
+            case "addDeclarationMember": root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["future"] = value; break;
+            case "addSelectorMember": root["messages"]!["core_rank"]!["ast"]!["selectors"]![0]!["future"] = value; break;
+            case "addVariantMember": root["messages"]!["core_rank"]!["ast"]!["variants"]![0]!["future"] = value; break;
+            case "addWildcardKeyMember":
+            {
+                JsonObject key = root["messages"]!["core_rank"]!["ast"]!["variants"]!.AsArray()
+                    .SelectMany(item => item!["keys"]!.AsArray()).Select(item => item!.AsObject())
+                    .First(item => item["kind"]!.GetValue<string>() == "wildcard");
+                key["future"] = value;
+                break;
+            }
+            case "addLiteralKeyMember":
+            {
+                JsonObject key = root["messages"]!["core_rank"]!["ast"]!["variants"]!.AsArray()
+                    .SelectMany(item => item!["keys"]!.AsArray()).Select(item => item!.AsObject())
+                    .First(item => item["kind"]!.GetValue<string>() == "literal");
+                key["future"] = value;
+                break;
+            }
+            case "addTextNodeMember": root["messages"]!["core_direct"]!["ast"]!["variants"]![0]!["nodes"]![0]!["future"] = value; break;
+            case "addExpressionNodeMember":
+            {
+                JsonObject node = root["messages"]!["core_total"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
+                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "expression");
+                node["future"] = value;
+                break;
+            }
+            case "addMarkupNodeMember":
+            {
+                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
+                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup");
+                node["future"] = value;
+                break;
+            }
+            case "addExpressionMember": root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["future"] = value; break;
+            case "addExpressionOptionMember":
+            {
+                JsonObject expression = root["messages"]!["core_total"]!["ast"]!["declarations"]!.AsArray()
+                    .Select(item => item!["expression"]!.AsObject()).First(item => item["options"]!.AsArray().Count > 0);
+                expression["options"]![0]!["future"] = value;
+                break;
+            }
+            case "addMarkupOptionMember":
+            {
+                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
+                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup" && item["options"]!.AsArray().Count > 0);
+                node["options"]![0]!["future"] = value;
+                break;
+            }
+            case "addExpressionAnnotationMember":
+                root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["annotations"]!.AsArray()
+                    .Add(new JsonObject { ["name"] = "future", ["future"] = value });
+                break;
+            case "addMarkupAnnotationMember":
+            {
+                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
+                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup");
+                node["annotations"]!.AsArray().Add(new JsonObject { ["name"] = "future", ["future"] = value });
+                break;
+            }
+            case "addValueMember": root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["operand"]!["future"] = value; break;
+            case "addNumericValueMember":
+                root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["operand"] =
+                    new JsonObject { ["kind"] = "number-literal", ["value"] = "1", ["canonical"] = "1", ["future"] = value };
+                break;
             case "unboundLocal": root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["operand"] = new JsonObject { ["kind"] = "local", ["value"] = "missing" }; break;
             case "implicitDynamicDependency":
             {
@@ -354,7 +419,15 @@ internal static class Rmf2V1CorpusTests
         const markup=(value)=>{const names=[];const visit=nodes=>{for(const node of nodes)if(node.kind==="element"){names.push(node.name);visit(node.children);}};visit(value.nodes);return names;};
         const project=(value,test)=>{if(test.expected.kind!=="structured")return value;const actual=markup(value);if(JSON.stringify(actual)!==JSON.stringify(test.expected.markup))throw new Error(test.id+": markup "+JSON.stringify(actual));return toPlainText(value,{slots:Object.fromEntries(Object.entries(test.slots).map(([name,item])=>[name,linkBinding({href:item.href})])),custom});};
         for(const test of index.executions){const args=argsOf(test.arguments);const artifact=artifacts[test.locale];if(artifact.messages[test.key].contentLocale!==test.expected.contentLocale)throw new Error(test.id+": content locale");const dynamic=project(formatDynamicMessage(artifact,test.key,args),test);const expected=test.expected.value??test.expected.plainText;if(dynamic!==expected)throw new Error(test.id+": dynamic "+JSON.stringify(dynamic)+" != "+JSON.stringify(expected));if(!test.dynamicOnly){const generatedValue=Object.keys(test.arguments).length===0?m[test.key]({locale:test.locale}):m[test.key](args,{locale:test.locale});const generated=project(generatedValue,test);if(generated!==expected)throw new Error(test.id+": generated "+JSON.stringify(generated)+" != "+JSON.stringify(expected));}}
-        const raw=JSON.parse(await readFile(new URL("./en.json",import.meta.url),"utf8"));let reads=0;const stable=raw.messages.core_direct;const changed=structuredClone(stable);changed.ast.variants[0].nodes=[{kind:"text",value:"changed"}];const wrapper={contentLocale:stable.contentLocale};Object.defineProperty(wrapper,"ast",{enumerable:true,get(){return ++reads===1?stable.ast:changed.ast;}});raw.messages.core_direct=wrapper;const getter=decodeLocaleArtifact(raw);if(!getter.ok||reads!==1||formatDynamicMessage(getter.value,"core_direct",Object.create(null))!=="English")throw new Error("single-read-getter");
+        const raw=JSON.parse(await readFile(new URL("./en.json",import.meta.url),"utf8"));const reject=(candidate,reason,id)=>{const decoded=decodeLocaleArtifact(candidate);if(decoded.ok||decoded.reason!=="RTR0023/"+reason)throw new Error(id+": "+decoded.reason);};
+        const missingExpressionOption=structuredClone(raw);const expressionOption=missingExpressionOption.messages.core_total.ast.declarations.map(item=>item.expression).find(item=>item.options.length).options[0];delete expressionOption.value;reject(missingExpressionOption,"argument-contract-mismatch","missing-expression-option-member");
+        const missingMarkupOption=structuredClone(raw);const markupWithOptions=missingMarkupOption.messages.core_rich.ast.variants[0].nodes.find(item=>item.kind==="markup"&&item.options.length);delete markupWithOptions.options[0].value;reject(missingMarkupOption,"argument-contract-mismatch","missing-markup-option-member");
+        const missingMarkupAnnotation=structuredClone(raw);missingMarkupAnnotation.messages.core_rich.ast.variants[0].nodes.find(item=>item.kind==="markup").annotations.push({value:{kind:"string-literal",value:"x"}});reject(missingMarkupAnnotation,"argument-contract-mismatch","missing-markup-annotation-member");
+        const missingMarkupNodeMember=structuredClone(raw);delete missingMarkupNodeMember.messages.core_rich.ast.variants[0].nodes.find(item=>item.kind==="markup").annotations;reject(missingMarkupNodeMember,"argument-contract-mismatch","missing-markup-node-member");
+        const undefinedFunction=structuredClone(raw);undefinedFunction.messages.core_total.ast.declarations.map(item=>item.expression).find(item=>item.function===undefined).function=undefined;reject(undefinedFunction,"malformed-pattern","own-undefined-function");
+        const undefinedAnnotation=structuredClone(raw);undefinedAnnotation.messages.core_rich.ast.variants[0].nodes.find(item=>item.kind==="markup").annotations.push({name:"future",value:undefined});reject(undefinedAnnotation,"argument-contract-mismatch","own-undefined-annotation-value");
+        const undefinedCanonical=structuredClone(raw);undefinedCanonical.messages.core_rank.ast.variants.flatMap(item=>item.keys).find(item=>item.kind==="literal"&&!Object.hasOwn(item,"canonical")).canonical=undefined;reject(undefinedCanonical,"malformed-pattern","own-undefined-key-canonical");
+        let reads=0;const stable=raw.messages.core_direct;const changed=structuredClone(stable);changed.ast.variants[0].nodes=[{kind:"text",value:"changed"}];const wrapper={contentLocale:stable.contentLocale};Object.defineProperty(wrapper,"ast",{enumerable:true,get(){return ++reads===1?stable.ast:changed.ast;}});raw.messages.core_direct=wrapper;const getter=decodeLocaleArtifact(raw);if(!getter.ok||reads!==1||formatDynamicMessage(getter.value,"core_direct",Object.create(null))!=="English")throw new Error("single-read-getter");
         """;
 
     private const string EsmInvalidScript = """

@@ -26,7 +26,9 @@ Cross-backend expectations store decimal and integer arguments as strings so a
 JavaScript runner cannot round through binary64. Structured cases compare both
 the effective content locale and the explicit plain-text projection with typed
 functional-slot bindings. Pack rejection cases use the public `RTR0023/*`
-taxonomy shared by .NET and ESM.
+taxonomy shared by .NET and ESM, including closed-member rejection for every
+normalized wrapper, AST, input, declaration, selector, variant, key, node,
+expression, option, annotation, and value object shape.
 
 The corpus intentionally excludes terms, references, group fallback, C++, rich
 XLIFF, application call-site rewriting, direct legacy-to-RMF2 migration, and
