@@ -164,12 +164,22 @@ public sealed class Rmf2InlineRenderer
     {
         ArgumentNullException.ThrowIfNull(content);
         slots ??= new Dictionary<string, InlineMarkupBinding>();
-        if (!_slots.TryGetValue(key, out Dictionary<string, string>? required)) throw new TranslationFormatException("Unknown RMF2 message contract '" + key + "'.");
+        if (!_slots.TryGetValue(key, out Dictionary<string, string>? required) ||
+            !_bounds.TryGetValue(key, out Dictionary<string, (int Min, int Max)>? bounds))
+            throw new TranslationFormatException("Unknown RMF2 message contract '" + key + "'.");
         foreach (var slot in required)
             if (!slots.TryGetValue(slot.Key, out InlineMarkupBinding? binding) || !Matches(slot.Value, binding))
                 throw new TranslationFormatException("Missing or incompatible binding for slot '" + slot.Key + "'.");
         LocalizedTextContentNode[] nodes = content.Nodes.ToArray(); int at = 0, count = 0;
-        return Read(null, false, 0);
+        var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+        IReadOnlyList<InlineMarkupRun> runs = Read(null, false, 0);
+        foreach (var slot in bounds)
+        {
+            int occurrencesForSlot = occurrences.GetValueOrDefault(slot.Key);
+            if (occurrencesForSlot < slot.Value.Min || occurrencesForSlot > slot.Value.Max)
+                throw new TranslationFormatException("Functional slot multiplicity mismatch for '" + slot.Key + "'.");
+        }
+        return runs;
         IReadOnlyList<InlineMarkupRun> Read(string? closing, bool interactiveParent, int depth)
         {
             if (depth > 16) throw new TranslationFormatException("RMF2 inline nesting limit exceeded.");
@@ -192,8 +202,10 @@ public sealed class Rmf2InlineRenderer
                     if (option.IsAnnotation) continue;
                     if (option.Name == "ref" && node.Value is "runic:link" or "runic:action" or "runic:icon")
                     {
-                        if (!required.TryGetValue(option.Value, out string? kind) || kind != node.Value || !slots.TryGetValue(option.Value, out binding) || !Matches(kind, binding))
+                        if (!required.TryGetValue(option.Value, out string? kind) || !bounds.ContainsKey(option.Value) ||
+                            kind != node.Value || !slots.TryGetValue(option.Value, out binding) || !Matches(kind, binding))
                             throw new TranslationFormatException("Invalid functional slot '" + option.Value + "'.");
+                        occurrences[option.Value] = occurrences.GetValueOrDefault(option.Value) + 1;
                     }
                     else if (!tag.Options.TryGetValue(option.Name, out Option? schema) || !schema.Accepts(option.Value))
                         throw new TranslationFormatException("Invalid resolved markup option '" + option.Name + "'.");

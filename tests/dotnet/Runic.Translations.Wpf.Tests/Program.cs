@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
@@ -29,7 +30,8 @@ internal static class Program
         var runtime = new CompiledTranslationCatalog("checkout", "en",
             [new CompiledTranslationDefinition("payment", [new TranslationPlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain), new TranslationPlaceholderDescriptor("tone", TextArgumentType.String, TextArgumentFormat.None)]), new CompiledTranslationDefinition("plain", [])],
             [new CompiledTranslationLocale("en", null, verified.Messages.Select(message => new CompiledTranslationValue(message.Key.Id, "", message.Message!)).ToArray())]);
-        var content = new CompiledTranslationSnapshot(runtime, "en").FormatContent(key, [new TextArgument("count", 1), new TextArgument("tone", "positive")]);
+        var snapshot = new CompiledTranslationSnapshot(runtime, "en");
+        var content = snapshot.FormatContent(key, [new TextArgument("count", 1), new TextArgument("tone", "positive")]);
         int calls = 0;
         var slots = new Dictionary<string, InlineMarkupBinding> {
             ["terms"] = new InlineLinkBinding(new Uri("https://example.test/terms")), ["privacy"] = new InlineLinkBinding(new Uri("https://example.test/privacy")),
@@ -37,6 +39,21 @@ internal static class Program
         };
         var renderer = new WpfInlineRenderer(catalog.Rmf2MarkupContract!, _ => { }, new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (run, children) => { Require(run.Options["tone"] == "positive", "Badge lost its options."); Require(!run.Options.ContainsKey("@note"), "Annotation leaked into WPF markup options."); var span = new Span(); span.Inlines.AddRange(children); return span; } });
         var target = new TextBlock();
+        JsonObject strictContract = JsonNode.Parse(catalog.Rmf2MarkupContract!)!.AsObject();
+        strictContract["messages"]!["payment"]!["slots"]!["retry"]!["min"] = 1;
+        int prematureFactories = 0;
+        var guardedSlots = new Dictionary<string, InlineMarkupBinding>(slots) {
+            ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => { prematureFactories++; return new TextBlock(); }), false,
+                _ => { prematureFactories++; return "Star"; }),
+        };
+        var guardedRenderer = new WpfInlineRenderer(strictContract.ToJsonString(), _ => { },
+            new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (_, _) => { prematureFactories++; return new Span(); } },
+            (_, _) => prematureFactories++);
+        bool rejectedSelectedTree = false;
+        try { guardedRenderer.SetContent(target, "payment", snapshot.FormatContent(key, [new TextArgument("count", 0), new TextArgument("tone", "positive")]), guardedSlots); }
+        catch (TranslationFormatException) { rejectedSelectedTree = true; }
+        Require(rejectedSelectedTree && prematureFactories == 0 && target.Inlines.Count == 0,
+            "Invalid selected content reached a WPF renderer, asset or theme callback.");
         renderer.SetContent(target, "payment", content, slots);
         Require(calls == 0 && target.Language.IetfLanguageTag == "en", "Rendering activated an action or lost locale.");
         var containers = target.Inlines.OfType<InlineUIContainer>().ToArray();

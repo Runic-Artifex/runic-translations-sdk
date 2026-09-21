@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import type { InlineNode, InlineElement, InlineSnippets } from "./types.js";
   let { nodes, custom = {} }: { nodes: readonly InlineNode[]; custom?: InlineSnippets } = $props();
+  const iconLabels = new WeakMap<InlineElement, string>();
   function snippet(name: string): Snippet<[InlineElement]> {
     const render = custom[name];
     if (!render) throw new TypeError(`No Svelte snippet linked for '${name}'.`);
@@ -10,6 +11,15 @@
   function icon(value: unknown): Snippet {
     if (typeof value !== "function") throw new TypeError("Svelte icon assets must be text or snippets.");
     return value as Snippet;
+  }
+  function iconLabel(node: InlineElement): string | undefined {
+    if (node.binding?.kind !== "runic:icon" || node.binding.decorative) return undefined;
+    const cached = iconLabels.get(node);
+    if (cached !== undefined) return cached;
+    const label = node.binding.accessibleName?.(node.locale);
+    if (typeof label !== "string" || !label.trim()) throw new TypeError("Meaningful icon alternate text is empty.");
+    iconLabels.set(node, label);
+    return label;
   }
 </script>
 
@@ -32,7 +42,7 @@
     {:else if node.binding?.kind === "runic:action"}
       <button type="button" onclick={node.binding.onActivate} data-runic-occurrence={node.occurrence}>{@render renderNodes(node.children)}</button>
     {:else if node.binding?.kind === "runic:icon"}
-      <span role={node.binding.decorative ? undefined : "img"} aria-hidden={node.binding.decorative ? "true" : undefined} aria-label={node.binding.decorative ? undefined : node.binding.accessibleName?.(node.locale)} data-runic-occurrence={node.occurrence}>
+      <span role={node.binding.decorative ? undefined : "img"} aria-hidden={node.binding.decorative ? "true" : undefined} aria-label={iconLabel(node)} data-runic-occurrence={node.occurrence}>
         {#if typeof node.binding.asset === "string"}{node.binding.asset}{:else}{@render icon(node.binding.asset)()}{/if}
       </span>
     {:else}

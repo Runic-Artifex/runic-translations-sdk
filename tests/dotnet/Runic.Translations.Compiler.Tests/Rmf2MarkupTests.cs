@@ -73,6 +73,29 @@ internal static class Rmf2MarkupTests
         Assert.Equal("Read terms and privacy. Retry Star Available", renderer.ToPlainText("payment", content, slots, allowActionLabels: true));
         Assert.Equal(0, callbacks);
         Assert.True(content.Nodes.Span.ToArray().Any(n => n.Kind == LocalizedTextContentNodeKind.ElementStandalone), "Runtime lost standalone markup.");
+        foreach ((int min, int max, bool remove, string scenario) in new[] {
+            (2, 2, false, "minimum"),
+            (0, 0, false, "maximum"),
+            (0, 0, true, "key/content"),
+        })
+        {
+            JsonObject alteredContract = JsonNode.Parse(catalog.Rmf2MarkupContract!)!.AsObject();
+            JsonObject contractSlots = alteredContract["messages"]!["payment"]!["slots"]!.AsObject();
+            if (remove) contractSlots.Remove("star");
+            else
+            {
+                contractSlots["star"]!["min"] = min;
+                contractSlots["star"]!["max"] = max;
+            }
+            int accessibleNameCalls = 0;
+            var guardedSlots = new System.Collections.Generic.Dictionary<string, InlineMarkupBinding>(slots) {
+                ["star"] = new InlineIconBinding(new object(), false, _ => { accessibleNameCalls++; return "Star"; }),
+            };
+            bool rejected = false;
+            try { _ = new Rmf2InlineRenderer(alteredContract.ToJsonString()).ToPlainText("payment", content, guardedSlots, allowActionLabels: true); }
+            catch (TranslationFormatException) { rejected = true; }
+            Assert.True(rejected && accessibleNameCalls == 0, "Selected-content " + scenario + " slot mismatch reached a plain-text callback.");
+        }
         foreach (string replacement in new[] { "unknown", "privacy" })
         {
             string altered = Encoding.UTF8.GetString(bytes).Replace("\"ref\":\"terms\"", "\"ref\":\"" + replacement + "\"", StringComparison.Ordinal);

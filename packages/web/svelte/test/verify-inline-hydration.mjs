@@ -13,8 +13,10 @@ try {
   const { paymentNodes } = await vite.ssrLoadModule("/test/inline-hydration-data.ts");
   const { render } = await vite.ssrLoadModule("svelte/server");
   let calls = 0;
-  const { body } = render(fixture.default, { props: { nodes: paymentNodes(() => calls++) } });
+  let accessibleNameCalls = 0;
+  const { body } = await render(fixture.default, { props: { nodes: paymentNodes(() => calls++, locale => { accessibleNameCalls++; return locale === "en" ? "Star" : "Stern"; }) } });
   assert.equal(calls, 0, "SSR must not activate application actions");
+  assert.equal(accessibleNameCalls, 1, "SSR must evaluate a meaningful icon accessibleName exactly once");
   browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || process.env.WEBUI_BROWSER_PATH, headless: true });
   const page = await browser.newPage();
   const errors = [];
@@ -24,7 +26,7 @@ try {
   await page.goto(`${vite.resolvedUrls.local[0]}inline-hydration`);
   await page.waitForFunction(() => window.runicInlineResult !== undefined);
   assert.deepEqual(errors, []);
-  assert.deepEqual(await page.evaluate(() => window.runicInlineResult), { sameButton: true, sameLink: true, escaped: true, accessibleName: "Star", badge: "Available", initialCalls: 0, activatedCalls: 1, disposedCalls: 1, empty: true });
+  assert.deepEqual(await page.evaluate(() => window.runicInlineResult), { sameButton: true, sameLink: true, escaped: true, accessibleName: "Star", accessibleNameCalls: 1, badge: "Available", initialCalls: 0, activatedCalls: 1, disposedCalls: 1, empty: true, blankRejected: true });
   console.log("RMF2 Svelte SSR identity, escaping, accessibility, custom markup and action teardown passed.");
 } finally {
   await browser?.close();
