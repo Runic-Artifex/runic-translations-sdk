@@ -1,0 +1,11 @@
+core {
+  total =
+    .input {$rate :number}
+    .input {$digits :integer}
+    .input {$style :string}
+    .local $formatted = {$rate :number style=$style minimumFractionDigits=$digits maximumFractionDigits=$digits}
+    {{{$formatted}}}
+  rich = {#strong}{#app:badge}Lesen{/app:badge}{/strong} {#runic:link ref=terms}Bedingungen{/runic:link}{#runic:br/}Fertig
+  direct = Deutsch
+}
+locale_extra = Extra {$n :integer}

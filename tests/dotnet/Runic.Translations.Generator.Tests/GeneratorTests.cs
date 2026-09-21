@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -41,6 +42,7 @@ internal static class GeneratorTests
         runner.Add("staged RMF2 v5 generator preserves source and caller identities", Rmf2V5GeneratedIdentity);
         runner.Add("staged RMF2 v5 generator rejects runtime-invalid empty catalogs", Rmf2V5EmptyCatalog);
         runner.Add("staged RMF2 v5 generated code executes the frozen semantic surface", Rmf2V5GeneratedExecution);
+        runner.Add("RMF2 v1 corpus drives generated C# execution and canonical API boundaries", Rmf2V1CorpusGeneratedExecution);
         runner.Add("staged RMF2 v5 structured contracts execute plain locale variants", Rmf2V5CrossLocaleStructuredContract);
         runner.Add("staged RMF2 v5 generated fallback preserves canonical inputs and content locale", Rmf2V5GeneratedFallback);
         runner.Add("staged RMF2 v5 generated data assigns safe IDs to locale extras", Rmf2V5GeneratedExtras);
@@ -304,6 +306,94 @@ internal static class GeneratorTests
         Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
         Assert.Equal("12.50%|exact|100|3|rmf2-execution-v2|5",
             Execute(run, "Example.Localization.V5ExecutionProbe", "Run"), "generated v5 execution");
+    }
+
+    private static void Rmf2V1CorpusGeneratedExecution()
+    {
+        string root = Path.Combine(RepositoryRoot(), "specs", "translations", "corpus", "rmf2-v1");
+        using JsonDocument index = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "index.json")));
+        JsonElement project = index.RootElement.GetProperty("project");
+        var inputs = new System.Collections.Generic.List<TestInput>
+        {
+            new("C:/repo/translations/runic.json", "Project", File.ReadAllText(Path.Combine(root, project.GetProperty("manifest").GetString()!))),
+        };
+        foreach (JsonElement path in project.GetProperty("sources").EnumerateArray())
+            inputs.Add(new TestInput("C:/repo/translations/" + path.GetString(), "Rmf2", File.ReadAllText(Path.Combine(root, path.GetString()!))));
+
+        var body = new StringBuilder();
+        body.AppendLine("namespace Runic.Conformance;");
+        body.AppendLine("public static class CorpusProbe { public static string Run() {");
+        body.AppendLine("var manager=OracleTextCatalog.CreateManagerAsync().AsTask().GetAwaiter().GetResult(); var text=new OracleText(manager); var values=new global::System.Collections.Generic.List<string>(); var renderer=new global::Runic.Translations.Rmf2InlineRenderer(OracleTextCatalog.Rmf2MarkupContract);");
+        var expected = new System.Collections.Generic.List<string>();
+        JsonElement paths = index.RootElement.GetProperty("messagePaths");
+        foreach (JsonElement test in index.RootElement.GetProperty("executions").EnumerateArray())
+        {
+            if (test.TryGetProperty("dynamicOnly", out JsonElement dynamicOnly) && dynamicOnly.GetBoolean()) continue;
+            string key = test.GetProperty("key").GetString()!;
+            string member = "r_args_" + PathMember(paths.GetProperty(key).EnumerateArray().Select(item => item.GetString()!).ToArray());
+            body.Append("manager.SetLocaleAsync(").Append(Quote(test.GetProperty("locale").GetString()!)).AppendLine(").AsTask().GetAwaiter().GetResult();");
+            body.Append("var a_").Append(test.GetProperty("id").GetString()!.Replace('-', '_')).Append("=new global::Runic.Translations.TextArgument[]{");
+            foreach (System.Text.Json.JsonProperty argument in test.GetProperty("arguments").EnumerateObject())
+            {
+                string type = argument.Value.GetProperty("type").GetString()!, value = argument.Value.GetProperty("value").GetString()!;
+                string carrier = type switch
+                {
+                    "string" => "new global::Runic.Translations.TextArgument(\"_\"," + Quote(value) + ")",
+                    "int64" => "new global::Runic.Translations.TextArgument(\"_\"," + value + "L)",
+                    "decimal" => "new global::Runic.Translations.TextArgument(\"_\",global::System.Decimal.Parse(" + Quote(value) + ",global::System.Globalization.NumberStyles.Float,global::System.Globalization.CultureInfo.InvariantCulture))",
+                    _ => throw new InvalidOperationException("Unsupported corpus carrier " + type),
+                };
+                body.Append("global::Runic.Translations.TextArgument.CreateRmf2(").Append(Quote(argument.Name)).Append(',').Append(carrier).Append("),");
+            }
+            string variable = "a_" + test.GetProperty("id").GetString()!.Replace('-', '_');
+            JsonElement result = test.GetProperty("expected");
+            if (result.GetProperty("kind").GetString() == "structured")
+            {
+                body.Append("};var c_").Append(variable).Append("=text.").Append(member).Append('(').Append(variable).AppendLine(");");
+                body.Append("values.Add(renderer.ToPlainText(").Append(Quote(key)).Append(",c_").Append(variable).Append(",new global::System.Collections.Generic.Dictionary<string,global::Runic.Translations.InlineMarkupBinding>{");
+                foreach (System.Text.Json.JsonProperty slot in test.GetProperty("slots").EnumerateObject())
+                    body.Append('[').Append(Quote(slot.Name)).Append("]=new global::Runic.Translations.InlineLinkBinding(new global::System.Uri(").Append(Quote(slot.Value.GetProperty("href").GetString()!)).Append(",global::System.UriKind.RelativeOrAbsolute)),");
+                body.Append("})+\"|\"+c_").Append(variable).Append(".Locale+\"|\"+global::System.String.Join(\",\",global::System.Linq.Enumerable.Select(global::System.Linq.Enumerable.Where(c_").Append(variable).Append(".Nodes.Span.ToArray(),n=>n.Kind is global::Runic.Translations.LocalizedTextContentNodeKind.ElementStart or global::Runic.Translations.LocalizedTextContentNodeKind.ElementStandalone),n=>n.Value))").AppendLine(");");
+                expected.Add(result.GetProperty("plainText").GetString() + "|" + result.GetProperty("contentLocale").GetString() + "|" +
+                    string.Join(',', result.GetProperty("markup").EnumerateArray().Select(item => item.GetString())));
+            }
+            else
+            {
+                body.Append("};values.Add(text.").Append(member).Append('(').Append(variable).AppendLine("));");
+                expected.Add(result.GetProperty("value").GetString()!);
+            }
+        }
+        body.AppendLine("return global::System.String.Join(\"\\n\",values); } }");
+
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(body.ToString(), inputs.ToArray());
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Assert.Equal(string.Join("\n", expected), Execute(run, "Runic.Conformance.CorpusProbe", "Run"), "shared corpus generated C# execution");
+        string keys = run.SingleResult.GeneratedSources.Single(item => item.HintName.EndsWith(".Keys.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+        string accessors = run.SingleResult.GeneratedSources.Single(item => item.HintName.EndsWith(".Accessors.g.cs", StringComparison.Ordinal)).SourceText.ToString();
+        Assert.True(!keys.Contains("locale_extra", StringComparison.Ordinal) && !accessors.Contains("locale_extra", StringComparison.Ordinal),
+            "Locale-only extra entered the canonical generated API.");
+        JsonElement determinism = index.RootElement.GetProperty("determinism");
+        Assert.Equal(determinism.GetProperty("callerFingerprint").GetString()!, CorpusConstant(run, "ContractFingerprint"), "Generated caller fingerprint golden");
+        Assert.Equal(determinism.GetProperty("sourceHash").GetString()!, CorpusConstant(run, "SourceHash"), "Generated source hash golden");
+
+        TestInput[] withoutExtra = inputs.Select(item => item.Path.EndsWith("/de.rmf2", StringComparison.Ordinal)
+            ? item with { Text = item.Text.Replace("locale_extra = Extra {$n :integer}\n", string.Empty, StringComparison.Ordinal) } : item).ToArray();
+        GeneratorRun noExtra = GeneratorTestHost.RunWithConsumer(body.ToString(), withoutExtra);
+        Assert.Equal(CorpusConstant(run, "ContractFingerprint"), CorpusConstant(noExtra, "ContractFingerprint"), "Locale extra changed caller fingerprint");
+        Assert.True(CorpusConstant(run, "SourceHash") != CorpusConstant(noExtra, "SourceHash"), "Locale extra did not change source freshness");
+    }
+
+    private static string RepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "RunicSdk.Core.slnx"))) directory = directory.Parent;
+        return directory?.FullName ?? throw new DirectoryNotFoundException("Could not find repository root.");
+    }
+
+    private static string CorpusConstant(GeneratorRun run, string name)
+    {
+        IFieldSymbol field = (IFieldSymbol)run.Compilation.GetTypeByMetadataName("Runic.Conformance.OracleTextCatalog")!.GetMembers(name).Single();
+        return (string)field.ConstantValue!;
     }
 
     private static void Rmf2V5GeneratedNames()

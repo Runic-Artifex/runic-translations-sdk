@@ -379,11 +379,19 @@ function validateEnvelope(value) {
 }
 
 function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
-  if (!contract || !isRecord(wrapper) || !exactKeys(wrapper, ["contentLocale", "ast"]) || typeof wrapper.contentLocale !== "string" || !localeSet.has(wrapper.contentLocale)) return "malformed-pattern";
+  if (!contract || !isRecord(wrapper)) return "malformed-pattern";
+  const wrapperMembers=["contentLocale","ast"];
+  if (Object.keys(wrapper).some(name=>!wrapperMembers.includes(name))) return "unknown-member";
+  if (!wrapperMembers.every(name=>Object.hasOwn(wrapper,name)) || typeof wrapper.contentLocale !== "string" || !localeSet.has(wrapper.contentLocale)) return "malformed-pattern";
   if (artifactLocale !== null && rmf2Contract.messages?.[key]?.contentLocales?.[artifactLocale] !== wrapper.contentLocale) return "argument-contract-mismatch";
-  const ast = wrapper.ast; if (!isRecord(ast) || !exactKeys(ast, ["astVersion","profile","inputs","declarations","selectors","variants"]) || ast.astVersion !== 5 || ast.profile !== profile) return "message-grammar-version-mismatch";
+  const ast = wrapper.ast, astMembers=["astVersion","profile","inputs","declarations","selectors","variants"];
+  if (!isRecord(ast)) return "malformed-pattern";
+  if (Object.keys(ast).some(name=>!astMembers.includes(name))) return "unknown-member";
+  if (!astMembers.every(name=>Object.hasOwn(ast,name))) return "malformed-pattern";
+  if (ast.astVersion !== 5) return "artifact-version-mismatch";
+  if (ast.profile !== profile) return "message-grammar-version-mismatch";
   if (!Array.isArray(ast.inputs) || ast.inputs.length !== contract.inputs.length || ast.inputs.length > limits.maximumArgumentsPerMessage) return "argument-contract-mismatch";
-  for (let index = 0; index < ast.inputs.length; index++) { const input = ast.inputs[index], expected = contract.inputs[index]; if (!isRecord(input) || !exactKeys(input,["name","type"]) || input.name !== expected.name || input.type !== expected.type || !validName(input.name)) return "argument-contract-mismatch"; }
+  for (let index = 0; index < ast.inputs.length; index++) { const input = ast.inputs[index], expected = contract.inputs[index], inputMembers=["name","type"]; if (!isRecord(input)) return "malformed-pattern"; if(Object.keys(input).some(name=>!inputMembers.includes(name)))return "unknown-member"; if(!inputMembers.every(name=>Object.hasOwn(input,name)))return "malformed-pattern"; if(input.name !== expected.name || input.type !== expected.type || !validName(input.name)) return "argument-contract-mismatch"; }
   if (!Array.isArray(ast.declarations) || ast.declarations.length > 256 || !Array.isArray(ast.selectors) || ast.selectors.length > 16 || !Array.isArray(ast.variants) || ast.variants.length < 1 || ast.variants.length > 256) return "limit-exceeded";
   const explicitInputs = new Set(ast.declarations.filter(declaration => isRecord(declaration) && declaration.kind === "input" && typeof declaration.name === "string").map(declaration => declaration.name));
   const symbols = Object.create(null); for (const input of ast.inputs) symbols[input.name] = { type: input.type, selection: selectionForType(input.type), explicitDependencies: explicitInputs.has(input.name) };
