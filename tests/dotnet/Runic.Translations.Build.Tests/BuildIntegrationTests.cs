@@ -127,7 +127,7 @@ internal static class BuildIntegrationTests
         string intermediate = Path.GetFullPath(temporary.Resolve("artifacts", "obj")) + Path.DirectorySeparatorChar;
         Assert.True(Path.GetFullPath(output).StartsWith(intermediate, PathComparison), $"Generated output escaped the isolated intermediate root: {output}");
         Assert.Equal(
-            "minimal.asset-manifest-v1.json|minimal.en.locale-v2.json|minimal.esm/dynamic.d.ts|minimal.esm/dynamic.js|minimal.esm/messages.d.ts|minimal.esm/messages.js|minimal.esm/messages/_index.js|minimal.esm/messages/m$Hello.js|minimal.esm/runtime.d.ts|minimal.esm/runtime.js|minimal.esm/server.d.ts|minimal.esm/server.js|minimal.esm/transport.d.ts|minimal.esm/transport.js|minimal.esm/web-module-manifest-v1.json|minimal.template-manifest-v1.json|minimal.translations-v1.d.ts",
+            "minimal.asset-manifest-v1.json|minimal.en.locale-v2.json|minimal.esm/dynamic.d.ts|minimal.esm/dynamic.js|minimal.esm/messages.d.ts|minimal.esm/messages.js|minimal.esm/messages/_index.js|minimal.esm/messages/m$Hello.js|minimal.esm/runtime.d.ts|minimal.esm/runtime.js|minimal.esm/server.d.ts|minimal.esm/server.js|minimal.esm/transport.d.ts|minimal.esm/transport.js|minimal.esm/web-module-manifest-v2.json|minimal.template-manifest-v2.json|minimal.translations-v1.d.ts",
             string.Join('|', GeneratedArtifacts(output)));
         Assert.True(catalogBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("translations", "runic.json"))), "Build changed the project source.");
         Assert.True(documentBefore.AsSpan().SequenceEqual(File.ReadAllBytes(temporary.Resolve("translations", "en", "Hello.mf2"))), "Build changed the MF2 source.");
@@ -285,7 +285,7 @@ internal static class BuildIntegrationTests
         string output = FindGeneratedDirectory(temporary);
         Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v2.json")), "All emission omitted JSON.");
         Assert.True(File.Exists(Path.Combine(output, "minimal.asset-manifest-v1.json")), "All emission omitted the asset manifest.");
-        Assert.True(File.Exists(Path.Combine(output, "minimal.template-manifest-v1.json")), "All emission omitted template manifest.");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.template-manifest-v2.json")), "All emission omitted template manifest.");
         Assert.True(File.Exists(Path.Combine(output, "minimal.translations-v1.d.ts")), "All emission omitted TypeScript.");
         string sentinel = Path.Combine(output, "consumer-sentinel.txt");
         File.WriteAllText(sentinel, "consumer owned", new UTF8Encoding(false));
@@ -300,7 +300,7 @@ internal static class BuildIntegrationTests
         Assert.Equal(0, second.ExitCode, second.Combined);
         Assert.True(File.Exists(Path.Combine(output, "minimal.en.locale-v2.json")), "JSON-only reconciliation removed JSON.");
         Assert.True(File.Exists(Path.Combine(output, "minimal.asset-manifest-v1.json")), "JSON-only reconciliation removed the asset manifest.");
-        Assert.False(File.Exists(Path.Combine(output, "minimal.template-manifest-v1.json")), "JSON-only reconciliation retained the prior template manifest.");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.template-manifest-v2.json")), "JSON-only reconciliation retained the prior template manifest.");
         Assert.False(File.Exists(Path.Combine(output, "minimal.translations-v1.d.ts")), "JSON-only reconciliation retained the prior TypeScript contract.");
         Assert.True(File.Exists(sentinel), "Reconciliation deleted an uninventoried consumer file.");
 

@@ -90,23 +90,66 @@ test("rejects stale assets and forged generated manifest fingerprints", async ()
   }
 });
 
+test("rejects v2 manifests outside the closed schema contract", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-v2-contract-"));
+  try {
+    const generated = join(root, "app.esm");
+    await mkdir(generated);
+    for (const name of ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js", "wrong.js"])
+      await writeFile(join(generated, name), name === "runtime.js" ? `export const contractFingerprint = ${JSON.stringify(fingerprint)};\n` : "export {};\n");
+    const manifest = join(generated, "web-module-manifest-v2.json");
+    await writeGeneratedManifest(manifest, {
+      webModuleManifestVersion: 2,
+      esmAbiVersion: 3,
+      catalog: "app",
+      entrypoints: { messages: "messages.js", types: "messages.d.ts", runtime: "runtime.js", server: "server.js", transport: "transport.js", dynamic: "dynamic.js" },
+      assets: ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js", "wrong.js"].map(path => ({ path })),
+    });
+    const valid = JSON.parse(await readFile(manifest, "utf8"));
+    const rejected = [
+      ["unknown root member", document => { document.extra = true; }, /unknown member/],
+      ["invalid catalog", document => { document.catalog = "UpperCase"; }, /invalid catalog/],
+      ["invalid media type", document => { document.assets[0].mediaType = "application/javascript"; }, /invalid generated asset/],
+      ["unknown asset member", document => { document.assets[0].extra = true; }, /unknown asset member/],
+      ["asset path with spaces", document => { document.assets[0].path = "bad path.js"; }, /invalid generated asset/],
+      ["asset path traversal", document => { document.assets[0].path = "x\/..\/messages.js"; }, /invalid generated asset/],
+      ["unknown entrypoint member", document => { document.entrypoints.extra = "wrong.js"; }, /invalid entrypoints/],
+      ["wrong fixed entrypoint", document => { document.entrypoints.transport = "wrong.js"; }, /invalid entrypoints/],
+    ];
+    for (const [label, mutate, error] of rejected) {
+      const document = JSON.parse(JSON.stringify(valid));
+      mutate(document);
+      await writeFile(manifest, JSON.stringify(document));
+      await assert.rejects(
+        () => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }),
+        error,
+        label,
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("runs the pinned compiler workflow before loading generated modules", async () => {
   const root = await mkdtemp(join(tmpdir(), "runic-vite-compiler-"));
   try {
     const generated = join(root, "generated", "app.esm");
     await mkdir(generated, { recursive: true });
     await writeFile(join(generated, "messages.js"), "export const m = {};\n");
+    await writeFile(join(generated, "messages.d.ts"), "export {};\n");
     await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\nexport const locale = 'en';\n`);
+    await writeFile(join(generated, "server.js"), "export const version = 0;\n");
     await writeFile(join(generated, "transport.js"), "export const version = 1;\n");
     await writeFile(join(generated, "dynamic.js"), "export const version = 2;\n");
-    const manifest = join(generated, "web-module-manifest-v1.json");
+    const manifest = join(generated, "web-module-manifest-v2.json");
     await writeGeneratedManifest(manifest, {
-      webModuleManifestVersion: 1,
+      webModuleManifestVersion: 2,
       esmAbiVersion: 3,
       catalog: "app",
-      entrypoints: { messages: "messages.js", runtime: "runtime.js", types: "messages.d.ts", dynamic: "dynamic.js" },
+      entrypoints: { messages: "messages.js", types: "messages.d.ts", runtime: "runtime.js", server: "server.js", transport: "transport.js", dynamic: "dynamic.js" },
       assets: [
-        { path: "messages.js" }, { path: "runtime.js" }, { path: "transport.js" }, { path: "dynamic.js" },
+        { path: "messages.js" }, { path: "messages.d.ts" }, { path: "runtime.js" }, { path: "server.js" }, { path: "transport.js" }, { path: "dynamic.js" },
       ],
     });
     const project = join(root, "translations");
@@ -159,15 +202,15 @@ test("discovers the conventional Runic project without duplicate Vite declaratio
     await writeFile(message, "Application title\n");
     const generated = join(root, ".runic", "translations", "app.esm");
     await mkdir(generated, { recursive: true });
-    for (const name of ["messages.js", "server.js", "transport.js", "dynamic.js"])
+    for (const name of ["messages.js", "messages.d.ts", "server.js", "transport.js", "dynamic.js"])
       await writeFile(join(generated, name), "export {};\n");
     await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\n`);
-    await writeGeneratedManifest(join(generated, "web-module-manifest-v1.json"), {
-      webModuleManifestVersion: 1,
+    await writeGeneratedManifest(join(generated, "web-module-manifest-v2.json"), {
+      webModuleManifestVersion: 2,
       esmAbiVersion: 3,
       catalog: "app",
-      entrypoints: { messages: "messages.js", runtime: "runtime.js", server: "server.js", dynamic: "dynamic.js" },
-      assets: ["messages.js", "runtime.js", "server.js", "transport.js", "dynamic.js"].map(path => ({ path })),
+      entrypoints: { messages: "messages.js", types: "messages.d.ts", runtime: "runtime.js", server: "server.js", transport: "transport.js", dynamic: "dynamic.js" },
+      assets: ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js"].map(path => ({ path })),
     });
     const calls = join(root, "compiler-calls.txt");
     const compiler = join(root, "compiler.mjs");
@@ -288,12 +331,13 @@ test("locale TOML membership, config changes and invalid recovery regenerate wit
     for (const catalog of ["app", "renamed"]) {
       const generated = join(output, `${catalog}.esm`);
       await mkdir(generated, { recursive: true });
-      await writeFile(join(generated, "messages.js"), "export {};\n");
+      for (const name of ["messages.js", "messages.d.ts", "server.js", "transport.js", "dynamic.js"])
+        await writeFile(join(generated, name), "export {};\n");
       await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\n`);
-      await writeGeneratedManifest(join(generated, "web-module-manifest-v1.json"), {
-        webModuleManifestVersion: 1, esmAbiVersion: 3, catalog,
-        entrypoints: { messages: "messages.js", runtime: "runtime.js" },
-        assets: [{ path: "messages.js" }, { path: "runtime.js" }],
+      await writeGeneratedManifest(join(generated, "web-module-manifest-v2.json"), {
+        webModuleManifestVersion: 2, esmAbiVersion: 3, catalog,
+        entrypoints: { messages: "messages.js", types: "messages.d.ts", runtime: "runtime.js", server: "server.js", transport: "transport.js", dynamic: "dynamic.js" },
+        assets: ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js"].map(path => ({ path })),
       });
     }
     const calls = join(root, "calls.txt");
@@ -386,11 +430,13 @@ test("RMF2 mounts watch new feature files outside the project directory", async 
     await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app", sourceLayout: "rmf2-v1", sourceRoots: [{ path: "../feature", namespace: ["shop"] }] }));
     const english = join(feature, "en.rmf2"); await writeFile(english, "title = Shop\n");
     const generated = join(output, "app.esm"); await mkdir(generated, {recursive:true});
-    await writeFile(join(generated, "messages.js"), "export {};\n");
+    for (const name of ["messages.js", "messages.d.ts", "server.js", "transport.js", "dynamic.js"])
+      await writeFile(join(generated, name), "export {};\n");
     await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\n`);
-    await writeGeneratedManifest(join(generated, "web-module-manifest-v1.json"), {
-      webModuleManifestVersion: 1, esmAbiVersion: 3, catalog: "app",
-      entrypoints: { messages: "messages.js", runtime: "runtime.js" }, assets: [{path:"messages.js"}, {path:"runtime.js"}],
+    await writeGeneratedManifest(join(generated, "web-module-manifest-v2.json"), {
+      webModuleManifestVersion: 2, esmAbiVersion: 3, catalog: "app",
+      entrypoints: { messages: "messages.js", types: "messages.d.ts", runtime: "runtime.js", server: "server.js", transport: "transport.js", dynamic: "dynamic.js" },
+      assets: ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js"].map(path => ({ path })),
     });
     const compiler = join(root,"compiler.mjs"); await writeFile(compiler,"process.exit(0);");
     const plugin = runicTranslations({project,output,command:process.execPath,commandArguments:[compiler]});

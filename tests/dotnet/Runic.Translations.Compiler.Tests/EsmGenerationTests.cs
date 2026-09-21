@@ -35,9 +35,10 @@ internal static class EsmGenerationTests
         TranslationGeneratedOutput manifest = first.Single(output => output.Kind == TranslationGeneratedOutputKind.WebModuleManifestJson);
         using JsonDocument json = JsonDocument.Parse(manifest.GetUtf8Bytes());
         JsonElement root = json.RootElement;
-        Assert.Equal(1, root.GetProperty("webModuleManifestVersion").GetInt32());
+        Assert.Equal(TranslationOutputRenderer.WebModuleManifestV2Version, root.GetProperty("webModuleManifestVersion").GetInt32());
         Assert.Equal(TranslationOutputRenderer.EsmAbiVersion, root.GetProperty("esmAbiVersion").GetInt32());
         Assert.Equal(first.Count - 1, root.GetProperty("assets").GetArrayLength());
+        Assert.Equal("transport.js", root.GetProperty("entrypoints").GetProperty("transport").GetString());
 
         TranslationGeneratedOutput message = first.Single(output => output.RelativePath.EndsWith("m$Common$Hello.js", StringComparison.Ordinal));
         Assert.True(!message.Text.Contains("{{open}}", StringComparison.Ordinal), "Escaped braces leaked past AST normalization.");

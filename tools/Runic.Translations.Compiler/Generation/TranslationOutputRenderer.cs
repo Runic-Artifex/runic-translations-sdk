@@ -15,6 +15,8 @@ public static class TranslationOutputRenderer
 
     /// <summary>The writer version of the template-manifest edge contract.</summary>
     public const int TemplateManifestVersion = 1;
+    /// <summary>The template-manifest edge contract version for schema-v2 and RMF2 catalogs.</summary>
+    public const int TemplateManifestV2Version = 2;
 
     /// <summary>The writer version of the TypeScript key/argument edge contract.</summary>
     public const int TypeScriptContractVersion = 1;
@@ -24,6 +26,8 @@ public static class TranslationOutputRenderer
 
     /// <summary>The generated ESM API and runtime compatibility version.</summary>
     public const int EsmAbiVersion = 3;
+    /// <summary>The writer version of the generated ESM module manifest.</summary>
+    public const int WebModuleManifestV2Version = 2;
 
     /// <summary>The experimental generated C++ ABI compatibility version.</summary>
     public const int CppAbiVersion = 1;
