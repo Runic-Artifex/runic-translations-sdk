@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Runic.Translations.Tool;
 
 namespace Runic.Translations.Build.Tests;
 
@@ -23,6 +24,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 LSP negotiates Unicode positions and returns versioned rename edits", Lsp);
         runner.Add("RMF2 LSP rescans watched files and configuration with unsaved overlays", LspWatchRescan);
         runner.Add("RMF2 LSP isolates watched diagnostics by project", LspWatchProjectIsolation);
+        runner.Add("RMF2 LSP project indexing is entry-bounded, cancellable, and atomic", LspProjectIndexBounds);
     }
     private const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en","sourceLayout":"rmf2-v1"}""";
     private static void PaymentExample()
@@ -439,6 +441,7 @@ internal static class Rmf2IntegrationTests
     private static void LspWatchProjectIsolation()
     {
         using TemporaryDirectory temporary = new();
+        using TemporaryDirectory external = new();
         string one = temporary.Resolve("one"), two = temporary.Resolve("two"), zeta = temporary.Resolve("zeta");
         string sharedOne = temporary.Resolve("shared-one"), sharedTwo = temporary.Resolve("shared-two");
         foreach (string directory in new[] { one, two, zeta, sharedOne, sharedTwo }) Directory.CreateDirectory(directory);
@@ -462,6 +465,34 @@ internal static class Rmf2IntegrationTests
         string oneUri = new Uri(onePath).AbsoluteUri, twoUri = new Uri(twoPath).AbsoluteUri;
         string oneConfigUri = new Uri(Path.Combine(one, "runic.json")).AbsoluteUri;
         string twoConfigUri = new Uri(Path.Combine(two, "runic.json")).AbsoluteUri;
+        var linkedCases = new List<(string SourceUri, string? ConfigUri)>();
+        string? staleManifest = null;
+        if (!OperatingSystem.IsWindows())
+        {
+            File.WriteAllText(external.Resolve("runic.json"), Config("linked", "LinkedText", ".", "linked"));
+            string linked = temporary.Resolve("linked");
+            Directory.CreateDirectory(linked);
+            File.CreateSymbolicLink(Path.Combine(linked, "runic.json"), external.Resolve("runic.json"));
+            string linkedPath = Path.Combine(linked, "en.rmf2");
+            File.WriteAllText(linkedPath, "x = Linked\n");
+            linkedCases.Add((new Uri(linkedPath).AbsoluteUri, null));
+
+            string dangling = temporary.Resolve("dangling");
+            Directory.CreateDirectory(dangling);
+            string danglingManifest = Path.Combine(dangling, "runic.json");
+            File.CreateSymbolicLink(danglingManifest, external.Resolve("missing.json"));
+            string danglingPath = Path.Combine(dangling, "en.rmf2");
+            File.WriteAllText(danglingPath, "x = Dangling\n");
+            linkedCases.Add((new Uri(danglingPath).AbsoluteUri, new Uri(danglingManifest).AbsoluteUri));
+
+            string stale = temporary.Resolve("stale-linked");
+            Directory.CreateDirectory(stale);
+            staleManifest = Path.Combine(stale, "runic.json");
+            File.WriteAllText(staleManifest, Config("stale", "StaleText", ".", "stale"));
+            string stalePath = Path.Combine(stale, "en.rmf2");
+            File.WriteAllText(stalePath, "x = Stale\n");
+            linkedCases.Add((new Uri(stalePath).AbsoluteUri, null));
+        }
 
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
@@ -521,6 +552,24 @@ internal static class Rmf2IntegrationTests
         Assert.True(initialOne.Length > 0 && initialTwo.Length > 0, "Both projects must begin with distinct catalog diagnostics.");
         Assert.False(initialOne.SequenceEqual(initialTwo), "The two-project fixture did not produce distinguishable diagnostics.");
         Assert.True(initialOne.Any(message => message.Contains("retry", StringComparison.Ordinal)), "Closed mounted project tie-breaking did not select project one.");
+        if (staleManifest is not null)
+        {
+            File.Delete(staleManifest);
+            File.CreateSymbolicLink(staleManifest, external.Resolve("runic.json"));
+        }
+        for (int index = 0; index < linkedCases.Count; index++)
+        {
+            var linkedCase = linkedCases[index];
+            if (linkedCase.ConfigUri is not null)
+                Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = linkedCase.ConfigUri, ["version"] = 1, ["text"] = Config("dangling", "DanglingText", ".", "dangling") } });
+            Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = linkedCase.SourceUri, ["version"] = 1, ["text"] = "x = Unsaved linked\n" } });
+            int requestId = 40 + index;
+            Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.preview", ["arguments"] = new JsonArray(linkedCase.SourceUri, "x", "en") }, requestId);
+            Assert.Contains("No runic.json project", frames.Single(frame => frame["id"]?.ToString() == requestId.ToString(System.Globalization.CultureInfo.InvariantCulture))["error"]!["message"]!.GetValue<string>());
+            Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = linkedCase.SourceUri } });
+            if (linkedCase.ConfigUri is not null)
+                Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = linkedCase.ConfigUri } });
+        }
 
         // Remove the equal-specificity competitor and rebuild the closed
         // manifest index. Ownership and unsaved overlays remain stable.
@@ -537,12 +586,18 @@ internal static class Rmf2IntegrationTests
         Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneConfigUri, ["version"] = 1, ["text"] = oneConfig } });
         Send("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneConfigUri, ["version"] = 2 },
             ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = oneRemounted }) });
+        // Do not fence the global config refresh: a later resource-local
+        // notification must coalesce and flush the dirty all-project state.
+        Send("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri, ["version"] = 2 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Unsaved one updated\n" }) });
         Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri } }, 4);
         AssertMessages(oneUri, [], "removed source root retained stale diagnostics.");
         AssertMessages(twoUri, initialOne, "remounted source did not move to project one.");
 
         // An unsaved project-two remount transfers shared-one to project two.
         Send("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoConfigUri, ["version"] = 1, ["text"] = twoRemounted } });
+        Send("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri, ["version"] = 2 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Unsaved two updated\n" }) });
         Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri } }, 5);
         AssertMessages(oneUri, initialTwo, "unsaved source-root remount did not assign project two.");
         AssertMessages(twoUri, initialOne, "project-one remount lost ownership after project-two config opened.");
@@ -550,15 +605,123 @@ internal static class Rmf2IntegrationTests
         // Closing each config reverts to its disk mapping and must clear or
         // restore diagnostics for every affected source buffer.
         Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoConfigUri } });
+        Send("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri, ["version"] = 3 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Unsaved one latest\n" }) });
         Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri } }, 6);
         AssertMessages(oneUri, [], "didClose retained project-two remount diagnostics.");
         AssertMessages(twoUri, initialOne, "didClose disturbed the remaining project-one remount.");
         Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneConfigUri } });
+        Send("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri, ["version"] = 3 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = Unsaved two latest\n" }) });
         Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri } }, 7);
         AssertMessages(oneUri, initialOne, "didClose did not restore project-one disk ownership.");
         AssertMessages(twoUri, initialTwo, "didClose did not restore project-two disk ownership.");
 
         Send("shutdown", new JsonObject(), 8); Send("exit", new JsonObject()); process.StandardInput.Close();
+        if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
+        Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
+    }
+
+    private static void LspProjectIndexBounds()
+    {
+        using TemporaryDirectory temporary = new();
+        string stableProject = temporary.Resolve("middle-stable"), stableRoot = temporary.Resolve("shared-stable");
+        string hostile = temporary.Resolve("zzz-hostile");
+        foreach (string directory in new[] { stableProject, stableRoot, hostile }) Directory.CreateDirectory(directory);
+        static string MountedProject(string catalog, string root) =>
+            """{"schemaVersion":1,"catalog":"$catalog","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en","sourceLayout":"rmf2-v1","sourceRoots":[{"path":"../$root","namespace":[]}]}"""
+                .Replace("$catalog", catalog, StringComparison.Ordinal)
+                .Replace("$root", root, StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(stableProject, "runic.json"), MountedProject("stable", "shared-stable"));
+        string stableSource = Path.Combine(stableRoot, "en.rmf2");
+        File.WriteAllText(stableSource, "x = Stable\n");
+        // A flat hostile directory exercises per-entry counting without a deep
+        // tree or an unreasonable test fixture. The production cap remains
+        // 100,000; initialization may only lower it.
+        for (int index = 0; index < 512; index++) File.WriteAllText(Path.Combine(hostile, $"flat-{index:D4}.txt"), "");
+
+        var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
+        using var process = Process.Start(start)!;
+        var frames = new List<JsonNode>(); var frameGate = new object();
+        var output = Task.Run(() => {
+            var stream = process.StandardOutput.BaseStream;
+            while (true)
+            {
+                var header = new List<byte>(); int value;
+                while ((value = stream.ReadByte()) >= 0) { header.Add((byte)value); if (header.Count >= 4 && header.TakeLast(4).SequenceEqual(new byte[] { 13, 10, 13, 10 })) break; }
+                if (value < 0) return;
+                int size = int.Parse(Encoding.ASCII.GetString(header.ToArray()).Substring(16).Trim(), System.Globalization.CultureInfo.InvariantCulture);
+                byte[] payload = new byte[size]; stream.ReadExactly(payload);
+                lock (frameGate) { frames.Add(JsonNode.Parse(payload)!); System.Threading.Monitor.PulseAll(frameGate); }
+            }
+        });
+        var errors = process.StandardError.ReadToEndAsync();
+        void Write(string method, JsonObject args, int? id = null)
+        {
+            var request = new JsonObject { ["jsonrpc"] = "2.0", ["method"] = method, ["params"] = args };
+            if (id.HasValue) request["id"] = id.Value;
+            string json = request.ToJsonString();
+            process.StandardInput.Write("Content-Length: " + Encoding.UTF8.GetByteCount(json) + "\r\n\r\n" + json);
+            process.StandardInput.Flush();
+        }
+        JsonNode Wait(int id)
+        {
+            var deadline = Stopwatch.StartNew();
+            lock (frameGate) while (!frames.Any(frame => frame["id"]?.ToString() == id.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            {
+                if (deadline.Elapsed.TotalSeconds > 10) throw new TimeoutException("LSP response was not received.");
+                System.Threading.Monitor.Wait(frameGate, 100);
+            }
+            lock (frameGate) return frames.Single(frame => frame["id"]?.ToString() == id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        JsonObject Initialize(int limit) => new() {
+            ["rootUri"] = new Uri(temporary.Resolve(".")).AbsoluteUri,
+            ["capabilities"] = new JsonObject(),
+            ["initializationOptions"] = new JsonObject { ["runicProjectIndexEntryLimit"] = limit },
+        };
+
+        Write("initialize", Initialize(10_000), 1);
+        Assert.True(Wait(1)["result"] is not null, "Initial project index did not complete.");
+
+        // This project sorts before the retained one and is discovered before
+        // the later hostile directory reaches the entry bound. It must not
+        // leak out of a failed or cancelled scan's private candidate index.
+        string partialProject = temporary.Resolve("aaa-partial"), partialRoot = temporary.Resolve("shared-partial");
+        Directory.CreateDirectory(partialProject); Directory.CreateDirectory(partialRoot);
+        File.WriteAllText(Path.Combine(partialProject, "runic.json"), MountedProject("partial", "shared-partial"));
+        string partialSource = Path.Combine(partialRoot, "en.rmf2");
+        File.WriteAllText(partialSource, "x = Partial\n");
+
+        var retainedIndex = new SortedSet<string>(StringComparer.Ordinal) { stableProject };
+        using var cancellation = new System.Threading.CancellationTokenSource();
+        bool observedPartialManifest = false, cancelled = false;
+        try
+        {
+            Rmf2LanguageServer.ReplaceProjectIndex(
+                [temporary.Path], retainedIndex, 10_000, new object(),
+                entry => {
+                    if (!string.Equals(Path.GetFullPath(entry), Path.GetFullPath(Path.Combine(partialProject, "runic.json")), StringComparison.Ordinal)) return;
+                    observedPartialManifest = true;
+                    cancellation.Cancel();
+                }, cancellation.Token);
+        }
+        catch (OperationCanceledException) { cancelled = true; }
+        Assert.True(observedPartialManifest && cancelled, "Cancellation barrier did not stop discovery after the partial manifest was observed.");
+        Assert.Equal(stableProject, retainedIndex.Single(), "Cancelled discovery replaced the retained project index.");
+
+        Write("initialize", Initialize(16), 2);
+        Assert.Contains("bounded entry limit of 16", Wait(2)["error"]!["message"]!.GetValue<string>());
+
+        string stableUri = new Uri(stableSource).AbsoluteUri, partialUri = new Uri(partialSource).AbsoluteUri;
+        Write("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = stableUri, ["version"] = 1, ["text"] = "x = Unsaved stable\n" } });
+        Write("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = partialUri, ["version"] = 1, ["text"] = "x = Unsaved partial\n" } });
+        Write("workspace/executeCommand", new JsonObject { ["command"] = "runic.preview", ["arguments"] = new JsonArray(stableUri, "x", "en") }, 3);
+        Assert.Contains("Unsaved", Wait(3).ToJsonString(), "Failed bounded rescan replaced the previous complete index.");
+        Write("workspace/executeCommand", new JsonObject { ["command"] = "runic.preview", ["arguments"] = new JsonArray(partialUri, "x", "en") }, 30);
+        Assert.Contains("No runic.json project", Wait(30)["error"]!["message"]!.GetValue<string>(), "Failed bounded rescan published a partial project index.");
+
+        Write("shutdown", new JsonObject(), 6); Wait(6); Write("exit", new JsonObject()); process.StandardInput.Close();
         if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
         Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
     }
