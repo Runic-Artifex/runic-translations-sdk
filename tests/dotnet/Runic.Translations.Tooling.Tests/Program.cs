@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Runic.Translations.Compiler;
@@ -20,7 +21,8 @@ internal static class Program
             ArtifactInspectionRecognizesGeneratedOutputs();
             Rmf2PacksAndInspection();
             ToolRequestKeepsLegacyPositionalShape();
-            Console.WriteLine("RESULT 7/7 passed");
+            ToolCommandKeepsLegacyInitShape();
+            Console.WriteLine("RESULT 8/8 passed");
             return 0;
         }
         catch (Exception exception)
@@ -118,6 +120,23 @@ internal static class Program
             throw new InvalidOperationException("TranslationsToolCommandRequest changed its legacy positional constructor shape.");
         if (request.Layout != "locale-toml" || request with { Layout = "rmf2-v1" } is not { Layout: "rmf2-v1" })
             throw new InvalidOperationException("TranslationsToolCommandRequest layout compatibility property failed.");
+    }
+
+    private static void ToolCommandKeepsLegacyInitShape()
+    {
+        Type[] expected =
+        [
+            typeof(ITranslationsToolCommandOperations), typeof(string), typeof(string), typeof(string),
+            typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(bool),
+        ];
+        var initMethods = typeof(TranslationsToolCommandModule).GetMethods()
+            .Where(method => method.Name == "Init")
+            .ToArray();
+        var legacy = initMethods.SingleOrDefault(method => method.GetParameters().Length == expected.Length);
+        if (legacy is null || !legacy.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(expected))
+            throw new InvalidOperationException("TranslationsToolCommandModule.Init changed its legacy eight-parameter method shape.");
+        if (initMethods.Length != 2 || initMethods.Single(method => method.GetParameters().Length == expected.Length + 1).GetParameters().Last().ParameterType != typeof(string))
+            throw new InvalidOperationException("TranslationsToolCommandModule.Init layout-aware overload is missing.");
     }
 
     private static TranslationCompilation CompilePlainFixture() => Compile("Hello", "Hallo");

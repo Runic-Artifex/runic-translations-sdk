@@ -67,6 +67,10 @@ public static class TranslationsToolCommandModule
             cancellationToken);
     }
 
+    /// <summary>Legacy locale-TOML entry point retained for precompiled callers.</summary>
+    public static CommandOutcome<TranslationsToolCommandResult> Init(ITranslationsToolCommandOperations operations, string directory, string catalog, string defaultLocale, string codeNamespace, string className, IReadOnlyList<string> locales, bool noStarter) =>
+        Init(operations, directory, catalog, defaultLocale, codeNamespace, className, locales, noStarter, "locale-toml");
+
     [Command("init", Description = "Create a locale-TOML translation project and starter catalogs.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Init([FromServices] ITranslationsToolCommandOperations operations, [Option("--directory", Required = true)] string directory, [Option("--catalog", Required = true)] string catalog, [Option("--default-locale", Required = true)] string defaultLocale, [Option("--namespace", Required = true)] string codeNamespace, [Option("--class", Required = true)] string className, [Option("--locale", AllowMultipleValues = true)] IReadOnlyList<string> locales, [Option("--no-starter")] bool noStarter, [Option("--layout")] string layout = "locale-toml") => operations.Execute(new("init", Directory: directory, Catalog: catalog, DefaultLocale: defaultLocale, Namespace: codeNamespace, ClassName: className, Locales: locales, NoStarter: noStarter) { Layout = layout });
 
