@@ -210,7 +210,10 @@ internal static class Rmf2IntegrationTests
         foreach (string encoding in new[] { "utf-8", "utf-16", "utf-32" })
         {
             using TemporaryDirectory temporary = new();
-            File.WriteAllText(temporary.Resolve("runic.json"), Project);
+            bool executionV2 = encoding == "utf-16";
+            string activatedProject = executionV2 ? Project.Replace("\"sourceLayout\":\"rmf2-v1\"",
+                "\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal) : Project;
+            File.WriteAllText(temporary.Resolve("runic.json"), activatedProject);
             File.WriteAllText(temporary.Resolve("en.rmf2"), "x = Hello\n");
             File.WriteAllText(temporary.Resolve("de.rmf2"), "x = Guten Tag\n");
             string uri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
@@ -293,7 +296,7 @@ internal static class Rmf2IntegrationTests
             File.WriteAllText(temporary.Resolve("app.ts"), "export const text = 'x';\n");
             Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renameResource", ["arguments"] = new JsonArray(uri, new JsonArray("x"), "intentional") }, 26);
             Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = frenchUri } });
-            File.WriteAllText(temporary.Resolve("runic.json"), Project[..^1] + """, "markup":{"slots":{"x":{"retry":{"min":1,"max":1}}}}}""");
+            File.WriteAllText(temporary.Resolve("runic.json"), activatedProject[..^1] + """, "markup":{"slots":{"x":{"retry":{"min":1,"max":1}}}}}""");
             File.WriteAllText(temporary.Resolve("de.rmf2"), "x = {#action ref=retry}Retry{/action}\n");
             int publicationsBeforeWatch;
             lock (frameGate) publicationsBeforeWatch = frames.Count(frame => frame["method"]?.ToString() == "textDocument/publishDiagnostics");
@@ -330,7 +333,9 @@ internal static class Rmf2IntegrationTests
                 Assert.True(tokenValues[index + 3] is >= 0 and <= 7, "Semantic token types must index the advertised legend.");
                 Assert.Equal(0, tokenValues[index + 4], "RMF2 semantic tokens do not advertise modifiers.");
             }
-            Assert.Equal(4, frames.Single(n => n["id"]?.ToString() == "20")["result"]!["ast"]!["astVersion"]!.GetValue<int>());
+            JsonNode previewAst = frames.Single(n => n["id"]?.ToString() == "20")["result"]!["ast"]!;
+            Assert.Equal(executionV2 ? 5 : 4, previewAst["astVersion"]!.GetValue<int>());
+            if (executionV2) Assert.Equal("rmf2-execution-v2", previewAst["profile"]!.GetValue<string>());
             Assert.Equal(encoding, frames.Single(n => n["id"]?.ToString() == "1")["result"]!["capabilities"]!["positionEncoding"]!.ToString());
             var diagnostic = frames.First(n => n["method"]?.ToString() == "textDocument/publishDiagnostics")["params"]!["diagnostics"]![0]!;
             Assert.Equal(encoding == "utf-8" ? 9 : encoding == "utf-16" ? 7 : 6, diagnostic["range"]!["start"]!["character"]!.GetValue<int>());

@@ -55,6 +55,17 @@ public static partial class TranslationCompiler
             _ => throw new ArgumentOutOfRangeException(nameof(profile)),
         };
 
+    internal static TranslationProfileCompilation CompileProjectForSelectedProfile(TranslationSource project,
+        IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        TranslationProjectProfileSelection selection = SelectProjectProfile(project, options, cancellationToken);
+        if (!selection.Success)
+            return new TranslationProfileCompilation(selection.Profile,
+                new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), selection.Diagnostics), null);
+        return CompileProjectForProfile(project, messages, selection.Profile, options, cancellationToken);
+    }
+
     private sealed record Rmf2ProjectSourceV5(string Key, string[] Path, string Locale, TranslationSource Source, Rmf2ResourceNode Node);
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
     {

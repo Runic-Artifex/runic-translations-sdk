@@ -64,6 +64,7 @@ public sealed class Rmf2Workspace
         return LanguageService.Complete(origin.MessageSyntax, byteOffset, baseMessage?.MessageSyntax);
     }
     public TranslationCompilation Validate() => TranslationCompiler.CompileProject(_project, _sources.Values, null, _cancellationToken);
+    internal TranslationProfileCompilation ValidateForProfile() => TranslationCompiler.CompileProjectForSelectedProfile(_project, _sources.Values, null, _cancellationToken);
 
     /// <summary>Finds locals in one message, or caller inputs across translations of the same logical resource.</summary>
     public IReadOnlyList<Rmf2VariableReference> VariableReferences(string path, string key, string name)
@@ -382,10 +383,16 @@ public sealed class Rmf2Workspace
             else if (change.Value is null) sources.Remove(change.Key);
             else if (change.Key.EndsWith(".rmf2", StringComparison.Ordinal)) sources[change.Key] = new TranslationSource(change.Key, change.Value);
         }
-        var compilation = TranslationCompiler.CompileProject(project, sources.Values, null, _cancellationToken);
-        if (!compilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
-        return new TranslationWorkspaceTransactionPlan(_root, compilation.Catalogs[0].Id, edits.AsReadOnly(), compilation);
+        TranslationProfileCompilation profileCompilation = TranslationCompiler.CompileProjectForSelectedProfile(project, sources.Values, null, _cancellationToken);
+        if (!profileCompilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", profileCompilation.Diagnostics.Select(d => d.Message)));
+        // The public transaction contract predates the additive v5 carrier.
+        // Keep it source-compatible while the internal profile compilation is
+        // the authority for accepting the edit.
+        TranslationCompilation compilation = profileCompilation.Current ?? new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), profileCompilation.Diagnostics);
+        string catalogId = profileCompilation.Current?.Catalogs[0].Id ?? profileCompilation.Rmf2!.Project!.Id;
+        return new TranslationWorkspaceTransactionPlan(_root, catalogId, edits.AsReadOnly(), compilation);
     }
+
     public IReadOnlyList<string> LogicalPath(string path, Rmf2ResourceNode node) => Prefix(path).Concat(node.Path).ToArray();
     /// <summary>Resolves an explicit logical path relative to a physical resource mount.</summary>
     public IReadOnlyList<string> LocalPath(string path, IReadOnlyList<string> logicalPath)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -45,11 +46,12 @@ internal sealed class PreviewWindow : Window
             var preview = await client.RequestAsync("workspace/executeCommand", new { command = "runic.preview", arguments = new object[] { uri, info.Value<string>("key")!, locales.SelectedItem.ToString()! } }, lifetime.Token);
             if (lifetime.IsCancellationRequested) return;
             var example = preview["examples"]?.First as JObject;
-            foreach (var input in ((JObject)preview["ast"]!["inputs"]!).Properties())
+            IEnumerable<string> inputNames = ((JArray)preview["inputs"]!).Select(input => input!.Value<string>("name")!);
+            foreach (string inputName in inputNames)
             {
-                var box = new TextBox { Text = example?[input.Name]?.ToString() ?? "" };
-                AutomationProperties.SetName(box, input.Name); samples.Add(input.Name, box);
-                inputs.Children.Add(new TextBlock { Text = input.Name, Margin = new Thickness(0, 6, 0, 0) }); inputs.Children.Add(box);
+                var box = new TextBox { Text = example?[inputName]?.ToString() ?? "" };
+                AutomationProperties.SetName(box, inputName); samples.Add(inputName, box);
+                inputs.Children.Add(new TextBlock { Text = inputName, Margin = new Thickness(0, 6, 0, 0) }); inputs.Children.Add(box);
             }
             await RenderAsync();
         }

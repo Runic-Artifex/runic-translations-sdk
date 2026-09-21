@@ -21,6 +21,7 @@ internal static class Rmf2AuthoringTests
         runner.Add("RMF2 local rename changes semantic references without touching literal text", LocalRename);
         runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
         runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
+        runner.Add("RMF2 execution-v2 resource plans commit through the compatible transaction contract", ExecutionV2Transaction);
         runner.Add("RMF2 TOML migration validates complete catalog and retains original source", Migration);
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
@@ -162,6 +163,24 @@ internal static class Rmf2AuthoringTests
             var inline = split.Inline("shop/en.rmf2", "en.rmf2"); TranslationWorkspaceTransaction.Commit(inline);
             Assert.Equal(workspace.Validate().Catalogs[0].Fingerprint, inline.Compilation.Catalogs[0].Fingerprint);
             Assert.True(File.ReadAllText(Path.Combine(root, "en.rmf2")).Contains("# Keep this", StringComparison.Ordinal), "Inline lost comment.");
+        }
+        finally { Directory.Delete(root, true); }
+    }
+    private static void ExecutionV2Transaction()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "runic-rmf2-v2-authoring-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            TranslationSource project = Source("runic.json", Encoding.UTF8.GetString(Project().GetUtf8Bytes()).TrimEnd('}') + ",\"executionProfile\":\"rmf2-execution-v2\"}");
+            TranslationSource source = Source("en.rmf2", "x = Hello\n");
+            File.WriteAllBytes(Path.Combine(root, project.Path), project.GetUtf8Bytes());
+            File.WriteAllBytes(Path.Combine(root, source.Path), source.GetUtf8Bytes());
+            TranslationWorkspaceTransactionPlan plan = new Rmf2Workspace(root, project, [source]).Rename(["x"], "greeting");
+            Assert.True(plan.Compilation.Success, "Execution-v2 resource rename did not produce a committable compatibility plan.");
+            Assert.Equal("app", plan.CatalogId);
+            TranslationWorkspaceTransaction.Commit(plan);
+            Assert.True(File.ReadAllText(Path.Combine(root, "en.rmf2")).Contains("greeting = Hello", StringComparison.Ordinal), "Execution-v2 transaction did not commit the resource edit.");
         }
         finally { Directory.Delete(root, true); }
     }

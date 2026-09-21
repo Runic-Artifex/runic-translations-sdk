@@ -22,11 +22,16 @@ def manifest_contract(manifest):
     assert identity is not None, 'VSIX identity is missing'
     assert target is not None, 'VSIX installation target is missing'
     assert prerequisite is not None, 'VSIX core-editor prerequisite is missing'
+    assets = tuple(sorted(
+        tuple(sorted((name, value.replace('\\', '/') if name == 'Path' else value) for name, value in asset.attrib.items()))
+        for asset in manifest.findall('v:Assets/v:Asset', ns)
+    ))
     return {
         'identity': tuple(sorted(identity.attrib.items())),
         'license': manifest.findtext('v:Metadata/v:License', namespaces=ns),
         'target': (tuple(sorted(target.attrib.items())), target.findtext('v:ProductArchitecture', namespaces=ns)),
         'prerequisite': tuple(sorted(prerequisite.attrib.items())),
+        'assets': assets,
     }
 
 source_contract = manifest_contract(ET.parse(source_manifest).getroot())
@@ -40,6 +45,11 @@ if args.check_source:
     assert prerequisite['Id'] == 'Microsoft.VisualStudio.Component.CoreEditor' and prerequisite['Version'] == '[17.14,19.0)', 'Core editor prerequisite must match the declared installation range'
     assert source_contract['target'][1] == 'amd64', 'VSIX must declare the amd64 product architecture'
     assert source_contract['license'] == 'LICENSE.txt', 'VSIX must carry the packaged license name'
+    assert {(dict(asset)['Type'], dict(asset)['Path']) for asset in source_contract['assets']} == {
+        ('Microsoft.VisualStudio.MefComponent', 'Runic.Translations.VisualStudio.dll'),
+        ('Microsoft.VisualStudio.VsPackage', 'Runic.pkgdef'),
+        ('Microsoft.VisualStudio.VsPackage', 'Runic.Translations.VisualStudio.pkgdef'),
+    }, 'Unexpected source VSIX asset contract'
     print('PASS source VSIX manifest, host range and prerequisite contract')
     raise SystemExit(0)
 
@@ -49,7 +59,7 @@ if not source.is_file():
 with zipfile.ZipFile(source) as archive:
     assert archive.testzip() is None, 'Corrupt VSIX'
     names = set(archive.namelist())
-    for name in ('manifest.json', 'catalog.json', '[Content_Types].xml', 'LICENSE.txt', 'Runic.Translations.VisualStudio.pkgdef'):
+    for name in ('manifest.json', 'catalog.json', '[Content_Types].xml', 'LICENSE.txt', 'Runic.pkgdef', 'Runic.Translations.VisualStudio.pkgdef'):
         assert name in names, f'Missing native installer metadata: {name}'
     manifest = ET.fromstring(archive.read('extension.vsixmanifest'))
     assert manifest_contract(manifest) == source_contract, 'Embedded VSIX manifest identity/license/host contract differs from source.extension.vsixmanifest'

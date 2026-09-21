@@ -88,7 +88,10 @@ own managed assembly; VS-owned DLLs resolve from the host.
 ## Windows integration check
 
 Use a dedicated experimental instance; the maintained test expects
-`/RootSuffix RunicRmf2` and a signed-in interactive Windows desktop:
+`/RootSuffix RunicRmf2` and a signed-in interactive Windows desktop. The script
+copies the maintained payment fixture and explicitly activates
+`rmf2-execution-v2`. The recorded 2026-09-11 native run predates that activation,
+so the updated path still requires a fresh interactive receipt:
 
 1. Build the language server and VSIX, then install with
    `VSIXInstaller.exe /rootSuffix:RunicRmf2 /quiet <native-built.vsix>`.

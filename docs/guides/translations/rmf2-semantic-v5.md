@@ -58,5 +58,8 @@ compatibility, not provenance. Legacy v1/v2/v4 constructors and readers remain
 unchanged and reject v5 artifacts.
 
 The CLI, source generator/MSBuild integration, and Vite plugin dispatch the
-selected profile to the v5 C#/ESM backends. This does not claim package-only
-consumer, cross-backend corpus, NativeAOT, or published-release evidence.
+selected profile to the v5 C#/ESM backends. Checkout verification includes an
+isolated package-only C# and ESM consumer, strict external-pack composition, and
+NativeAOT execution from the packed build/runtime graph. Cross-backend corpus
+checks cover the maintained execution-v2 contract. These checks do not claim
+evidence from a published 0.4.0 release; they consume local package candidates.
