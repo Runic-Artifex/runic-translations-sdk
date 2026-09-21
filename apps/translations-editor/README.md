@@ -68,7 +68,7 @@ For frontend-only development, build once to generate the localized ESM module,
 then run this from the SDK root:
 
 ```sh
-RUNIC_TRANSLATIONS_MANIFEST="$PWD/apps/translations-editor/obj/Debug/net10.0/translations/editor.esm/web-module-manifest-v1.json" \
+RUNIC_TRANSLATIONS_MANIFEST="$PWD/apps/translations-editor/obj/Debug/net10.0/translations/editor.esm/web-module-manifest-v2.json" \
   bun run --cwd apps/translations-editor/Frontend dev:mock
 ```
 

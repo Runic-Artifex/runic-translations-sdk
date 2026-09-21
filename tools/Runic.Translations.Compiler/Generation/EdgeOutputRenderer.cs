@@ -150,8 +150,12 @@ internal static class EdgeOutputRenderer
 
     internal static TranslationGeneratedOutput RenderTemplateManifest(CompiledTextCatalog catalog)
     {
+        bool legacy = catalog.MessageGrammarVersion == 1;
+        int manifestVersion = legacy
+            ? TranslationOutputRenderer.TemplateManifestVersion
+            : TranslationOutputRenderer.TemplateManifestV2Version;
         var json = new StringBuilder();
-        json.Append("{\"manifestVersion\":").Append(TranslationOutputRenderer.TemplateManifestVersion)
+        json.Append("{\"manifestVersion\":").Append(manifestVersion)
             .Append(",\"messageGrammarVersion\":").Append(catalog.MessageGrammarVersion)
             .Append(",\"catalog\":").Append(GenerationSupport.JsonString(catalog.Id))
             .Append(",\"contractFingerprint\":").Append(GenerationSupport.JsonString(catalog.Fingerprint))
@@ -174,7 +178,7 @@ internal static class EdgeOutputRenderer
         json.Append("}}");
         return new TranslationGeneratedOutput(
             TranslationGeneratedOutputKind.TemplateManifestJson,
-            catalog.Id + ".template-manifest-v1.json",
+            catalog.Id + ".template-manifest-v" + manifestVersion + ".json",
             "application/json",
             json.ToString());
     }

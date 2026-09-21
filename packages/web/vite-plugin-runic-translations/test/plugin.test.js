@@ -159,15 +159,15 @@ test("discovers the conventional Runic project without duplicate Vite declaratio
     await writeFile(message, "Application title\n");
     const generated = join(root, ".runic", "translations", "app.esm");
     await mkdir(generated, { recursive: true });
-    for (const name of ["messages.js", "server.js", "transport.js", "dynamic.js"])
+    for (const name of ["messages.js", "messages.d.ts", "server.js", "transport.js", "dynamic.js"])
       await writeFile(join(generated, name), "export {};\n");
     await writeFile(join(generated, "runtime.js"), `export const contractFingerprint = ${JSON.stringify(fingerprint)};\n`);
-    await writeGeneratedManifest(join(generated, "web-module-manifest-v1.json"), {
-      webModuleManifestVersion: 1,
+    await writeGeneratedManifest(join(generated, "web-module-manifest-v2.json"), {
+      webModuleManifestVersion: 2,
       esmAbiVersion: 3,
       catalog: "app",
-      entrypoints: { messages: "messages.js", runtime: "runtime.js", server: "server.js", dynamic: "dynamic.js" },
-      assets: ["messages.js", "runtime.js", "server.js", "transport.js", "dynamic.js"].map(path => ({ path })),
+      entrypoints: { messages: "messages.js", types: "messages.d.ts", runtime: "runtime.js", server: "server.js", transport: "transport.js", dynamic: "dynamic.js" },
+      assets: ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js"].map(path => ({ path })),
     });
     const calls = join(root, "compiler-calls.txt");
     const compiler = join(root, "compiler.mjs");

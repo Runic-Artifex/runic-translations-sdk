@@ -808,11 +808,11 @@ internal static class EsmOutputRenderer
         ordered.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
         string root = catalog.Id + ".esm/";
         var json = new StringBuilder();
-        json.Append("{\"webModuleManifestVersion\":1,\"esmAbiVersion\":")
+        json.Append("{\"webModuleManifestVersion\":").Append(TranslationOutputRenderer.WebModuleManifestV2Version).Append(",\"esmAbiVersion\":")
             .Append(TranslationOutputRenderer.EsmAbiVersion)
             .Append(",\"catalog\":").Append(GenerationSupport.JsonString(catalog.Id))
             .Append(",\"contractFingerprint\":").Append(GenerationSupport.JsonString(catalog.Fingerprint))
-            .Append(",\"entrypoints\":{\"messages\":\"messages.js\",\"types\":\"messages.d.ts\",\"runtime\":\"runtime.js\",\"server\":\"server.js\",\"dynamic\":\"dynamic.js\"},\"assets\":[");
+            .Append(",\"entrypoints\":{\"messages\":\"messages.js\",\"types\":\"messages.d.ts\",\"runtime\":\"runtime.js\",\"server\":\"server.js\",\"transport\":\"transport.js\",\"dynamic\":\"dynamic.js\"},\"assets\":[");
         for (int index = 0; index < ordered.Count; index++)
         {
             if (index != 0) json.Append(',');
@@ -828,7 +828,7 @@ internal static class EsmOutputRenderer
         json.Append("]}");
         return Output(
             TranslationGeneratedOutputKind.WebModuleManifestJson,
-            root + "web-module-manifest-v1.json",
+            root + "web-module-manifest-v" + TranslationOutputRenderer.WebModuleManifestV2Version + ".json",
             "application/json",
             json.ToString());
     }

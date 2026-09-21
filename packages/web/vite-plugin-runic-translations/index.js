@@ -51,7 +51,7 @@ export function runicTranslations(options = {}) {
 
   async function refresh() {
     const document = JSON.parse(await readFile(manifestPath, "utf8"));
-    if (document.webModuleManifestVersion !== 1)
+    if (document.webModuleManifestVersion !== 1 && document.webModuleManifestVersion !== 2)
       throw new Error(`Unsupported Runic ../web/vite-plugin-runic-translations module manifest version '${document.webModuleManifestVersion}'.`);
     if (document.esmAbiVersion !== supportedEsmAbiVersion)
       throw new Error(`Unsupported Runic ESM ABI version '${document.esmAbiVersion}'. Expected '${supportedEsmAbiVersion}'.`);
@@ -64,6 +64,10 @@ export function runicTranslations(options = {}) {
       messages: document.entrypoints.messages,
       runtime: document.entrypoints.runtime,
     };
+    if (document.webModuleManifestVersion === 2) {
+      for (const kind of ["types", "server", "transport", "dynamic"])
+        requiredEntrypoints[kind] = document.entrypoints[kind];
+    }
     if (!Array.isArray(document.assets))
       throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest does not declare its generated assets.");
     const assets = new Map();
@@ -94,7 +98,7 @@ export function runicTranslations(options = {}) {
       messages: assets.get(requiredEntrypoints.messages),
       runtime: assets.get(requiredEntrypoints.runtime),
       server: assets.get(document.entrypoints.server ?? "server.js") ?? contained(root, document.entrypoints.server ?? "server.js"),
-      transport: assets.get("transport.js") ?? contained(root, "transport.js"),
+      transport: assets.get(document.entrypoints.transport ?? "transport.js") ?? contained(root, document.entrypoints.transport ?? "transport.js"),
       dynamic: assets.get(document.entrypoints.dynamic ?? "dynamic.js") ?? contained(root, document.entrypoints.dynamic ?? "dynamic.js"),
     });
     return document;
@@ -257,7 +261,7 @@ function readProject(config, output) {
     ? settings.sourceRoots.map(mount => resolve(project, mount.path)) : [project];
   for (const root of roots) discover(root);
   return {
-    manifest: contained(output, `${settings.catalog}.esm/web-module-manifest-v1.json`),
+    manifest: contained(output, `${settings.catalog}.esm/web-module-manifest-v2.json`),
     sourceFiles: Object.freeze(sourceFiles.sort()),
     sourceRoots: Object.freeze(roots),
   };

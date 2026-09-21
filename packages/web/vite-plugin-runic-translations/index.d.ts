@@ -5,7 +5,7 @@ export interface RunicTranslationsOptions {
   readonly project?: string;
   /** Generated artifact directory for project mode. Defaults to ./.runic/translations. */
   readonly output?: string;
-  /** Pre-generated web-module-manifest-v1.json path when generation is owned by another build. */
+  /** Pre-generated web-module-manifest-v1.json or web-module-manifest-v2.json path when generation is owned by another build. */
   readonly manifest?: string;
   /** Authoring inputs to watch; regeneration remains owned by the host build. */
   readonly sourceFiles?: readonly string[];

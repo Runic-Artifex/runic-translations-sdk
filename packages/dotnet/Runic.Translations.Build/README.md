@@ -28,7 +28,7 @@ dotnet tool restore
 dotnet build
 ```
 
-The project declaration and MF2 messages become Roslyn `AdditionalFiles` with `RunicTranslationKind` metadata for `Runic.Translations.Generator`. ESM output defaults to `obj/<configuration>/<target-framework>/translations/app.esm/`; consume its `web-module-manifest-v1.json` with the Vite adapter.
+The project declaration and MF2 messages become Roslyn `AdditionalFiles` with `RunicTranslationKind` metadata for `Runic.Translations.Generator`. ESM output defaults to `obj/<configuration>/<target-framework>/translations/app.esm/`; consume its `web-module-manifest-v2.json` with the Vite adapter.
 
 ## Select generated artifacts
 

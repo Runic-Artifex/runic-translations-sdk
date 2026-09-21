@@ -22,6 +22,7 @@ internal static class Program
         AnalysisTests.Register(runner);
         CorpusTests.Register(runner);
         SchemaTests.Register(runner);
+        ContractCoherenceTests.Register(runner);
         return runner.Run();
     }
 }

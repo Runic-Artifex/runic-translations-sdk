@@ -46,6 +46,8 @@ internal static class SchemaTests
         AssertReferencesResolve(ReadSchemaPath("catalog-v2.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("resources-v2.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("message-ast-v2.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("template-manifest-v2.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("web-module-manifest-v2.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("capabilities-v1.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("project-v1.schema.json"));
     }
@@ -138,7 +140,7 @@ internal static class SchemaTests
     private static void AssertReferencesResolve(string schemaPath)
     {
         using JsonDocument schema = ReadSchema(Path.GetFileName(schemaPath));
-        JsonElement definitions = schema.RootElement.GetProperty("$defs");
+        bool hasDefinitions = schema.RootElement.TryGetProperty("$defs", out JsonElement definitions);
         Visit(schema.RootElement);
 
         void Visit(JsonElement element)
@@ -153,7 +155,7 @@ internal static class SchemaTests
                         const string prefix = "#/$defs/";
                         Assert.True(reference.StartsWith(prefix, StringComparison.Ordinal),
                             $"Only local $defs references are allowed in {schemaPath}: {reference}");
-                        Assert.True(definitions.TryGetProperty(reference.AsSpan(prefix.Length), out _),
+                        Assert.True(hasDefinitions && definitions.TryGetProperty(reference.AsSpan(prefix.Length), out _),
                             $"Unresolved schema reference in {schemaPath}: {reference}");
                     }
 

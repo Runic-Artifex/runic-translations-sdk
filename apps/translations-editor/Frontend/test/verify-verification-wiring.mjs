@@ -31,7 +31,7 @@ const editorJob = Bun.YAML.parse(fullVerification).jobs.editor;
 assert.ok(editorJob.steps.some(step => step["working-directory"] === "apps/translations-editor/Frontend"
   && step.run === "bun run --bun verify:built"),
   "The SDK verifier bypasses the frontend verification source of truth.");
-assert.ok(editorJob.steps.some(step => step.env?.RUNIC_TRANSLATIONS_MANIFEST?.includes("web-module-manifest-v1.json")),
+assert.ok(editorJob.steps.some(step => step.env?.RUNIC_TRANSLATIONS_MANIFEST?.includes("web-module-manifest-v2.json")),
   "The SDK verifier must supply the generated translation manifest.");
 assert.doesNotMatch(viteConfig, /desktop:\s*true/,
   "The Vite plugin must not duplicate SvelteKit Desktop output ownership.");
