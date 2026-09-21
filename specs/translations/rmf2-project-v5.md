@@ -57,7 +57,8 @@ the already-validated resource.
 
 - caller contract version 1, execution profile, grammar 5, runtime ABI 2, and
   generated-name mapping version 1;
-- catalog identity, sorted canonical keys and sorted NFC caller names/types;
+- catalog identity, sorted canonical keys, their logical path segments, and
+  sorted NFC caller names/types;
 - canonical slot kinds/cardinalities and app-facing structured/markup contracts.
 
 It excludes translated text, locals, formatter choices, annotations, selector

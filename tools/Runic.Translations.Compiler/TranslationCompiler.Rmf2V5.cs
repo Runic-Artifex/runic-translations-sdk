@@ -165,7 +165,12 @@ public static partial class TranslationCompiler
             profile = Rmf2ProjectV5.Profile, messageGrammarVersion = Rmf2ProjectV5.MessageGrammarVersion,
             runtimeAbiVersion = Rmf2ProjectV5.RuntimeAbiVersion, generatedNameVersion = Rmf2GeneratedNamesV1.Version,
             catalog = manifest.Id,
-            messages = contracts.Select(contract => new { key = contract.Key, inputs = contract.Inputs.Select(input => new { name = input.Name, type = input.Type }) }),
+            messages = contracts.Select(contract => new
+            {
+                key = contract.Key,
+                path = contract.Path,
+                inputs = contract.Inputs.Select(input => new { name = input.Name, type = input.Type }),
+            }),
             markup = Rmf2ProjectMarkupV5.Export(callerMarkup, contracts),
         });
         return Result(new(manifest.Id, manifest.CodeNamespace, manifest.ClassName, manifest.Visibility, manifest.DefaultLocale,

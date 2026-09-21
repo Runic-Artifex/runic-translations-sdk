@@ -112,6 +112,14 @@ internal static class Rmf2ProjectV5Tests
         Assert.Equal(flat.CallerFingerprint, split.Project!.CallerFingerprint);
         Assert.Equal(flat.CallerFingerprint, mounted.Project!.CallerFingerprint);
         Assert.Equal("checkout.cart.title", string.Join('.', mounted.Project.CanonicalMessages[0].Path));
+
+        var flatKey = Good("a_b = {$name}");
+        var nestedKey = Good("a {\n  b = {$name}\n}");
+        Assert.Equal(flatKey.CanonicalMessages[0].Key, nestedKey.CanonicalMessages[0].Key);
+        Assert.True(Rmf2GeneratedNamesV1.Path(flatKey.CanonicalMessages[0].Path) != Rmf2GeneratedNamesV1.Path(nestedKey.CanonicalMessages[0].Path),
+            "Distinct logical paths unexpectedly shared a generated API name.");
+        Assert.True(flatKey.CallerFingerprint != nestedKey.CallerFingerprint,
+            "The caller fingerprint omitted the logical path used by generated APIs.");
     }
     private static void InvalidProjects()
     {
