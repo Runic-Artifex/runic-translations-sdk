@@ -146,7 +146,7 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
             return literal;
         }
 
-        ValidateArguments(_definitions[index], arguments);
+        if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
         return CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter);
     }
 
@@ -156,7 +156,7 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         if (!TryGetKeyIndex(key, out int index) || _messages[index] is not CompiledTextMessage message)
             throw new TranslationNotFoundException("Structured translation was not found.");
         if (!message.HasMarkup) throw new TranslationFormatException("The resource does not produce structured content.");
-        ValidateArguments(_definitions[index], arguments);
+        if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
         return CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter);
     }
 
@@ -168,7 +168,7 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         for (int i = 0; i < messages.Length; i++)
         {
             CompiledTextMessage? message = messages[i];
-            if (message is not null && message.VariantArray.Length == 0 && definitions[i].PlaceholderArray.Length == 0)
+            if (message is not null && message.Rmf2V5 is null && message.VariantArray.Length == 0 && definitions[i].PlaceholderArray.Length == 0)
             {
                 result[i] = CompiledTextMessageRuntime.RenderLiteral(message);
             }

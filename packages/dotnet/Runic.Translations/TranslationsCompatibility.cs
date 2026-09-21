@@ -9,6 +9,16 @@ public static class TranslationsCompatibility
     /// <summary>The ABI version embedded into generated C#.</summary>
     public const int RuntimeAbiVersion = 1;
 
-    /// <summary>The additive ABI for RMF2 standalone markup, options, and caller contracts.</summary>
-    public const int Rmf2RuntimeAbiVersion = 1;
+    /// <summary>The additive ABI for v4 markup and v5 typed expression evaluation.</summary>
+    public const int Rmf2RuntimeAbiVersion = 2;
+
+    /// <summary>Checks an embedded RMF2 ABI requirement against the executing runtime, without const inlining.</summary>
+    public static bool SupportsRmf2RuntimeAbi(int requiredVersion) => requiredVersion is 1 or 2;
+
+    /// <summary>Rejects an unsupported generated RMF2 ABI requirement before message construction.</summary>
+    public static void EnsureRmf2RuntimeAbi(int requiredVersion)
+    {
+        if (!SupportsRmf2RuntimeAbi(requiredVersion))
+            throw new System.NotSupportedException("The generated RMF2 message requires an unsupported runtime ABI.");
+    }
 }

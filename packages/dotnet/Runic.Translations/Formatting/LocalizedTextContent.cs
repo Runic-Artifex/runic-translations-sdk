@@ -20,12 +20,18 @@ public enum LocalizedTextContentNodeKind
 public sealed class LocalizedTextContentNode
 {
     private readonly CompiledTextMarkupProperty[] _attributes;
+    private readonly CompiledRmf2Annotation[] _annotations;
 
     internal LocalizedTextContentNode(LocalizedTextContentNodeKind kind, string value, CompiledTextMarkupProperty[]? attributes = null)
+        : this(kind, value, attributes, null) { }
+
+    internal LocalizedTextContentNode(LocalizedTextContentNodeKind kind, string value, CompiledTextMarkupProperty[]? attributes,
+        CompiledRmf2Annotation[]? annotations)
     {
         Kind = kind;
         Value = value;
         _attributes = attributes is null ? Array.Empty<CompiledTextMarkupProperty>() : (CompiledTextMarkupProperty[])attributes.Clone();
+        _annotations = annotations is null ? [] : (CompiledRmf2Annotation[])annotations.Clone();
     }
 
     /// <summary>The semantic node kind.</summary>
@@ -34,6 +40,8 @@ public sealed class LocalizedTextContentNode
     public string Value { get; }
     /// <summary>Semantic attributes; never HTML attributes without host validation.</summary>
     public ReadOnlyMemory<CompiledTextMarkupProperty> Attributes => (CompiledTextMarkupProperty[])_attributes.Clone();
+    /// <summary>Ordered inert v5 annotations; separate from active renderer options.</summary>
+    public ReadOnlyMemory<CompiledRmf2Annotation> Annotations => (CompiledRmf2Annotation[])_annotations.Clone();
 }
 
 /// <summary>Safe structured localized output that has no implicit HTML conversion.</summary>

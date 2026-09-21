@@ -14,6 +14,34 @@ public sealed class CompiledTranslationDefinition
 {
     private readonly TranslationPlaceholderDescriptor[] _placeholders;
 
+    /// <summary>Creates a v5 caller definition with NFC input names and type-only formatting contracts.</summary>
+    public static CompiledTranslationDefinition FromRmf2Inputs(string name, IReadOnlyList<CompiledRmf2Input> inputs, bool isCanonical = true)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        if (inputs.Count > 32) throw new ArgumentException("A resource cannot declare more than 32 inputs.", nameof(inputs));
+        var descriptors = new TranslationPlaceholderDescriptor[inputs.Count];
+        string? previous = null;
+        for (int index = 0; index < inputs.Count; index++)
+        {
+            CompiledRmf2Input input = inputs[index] ?? throw new ArgumentException("Null caller input.", nameof(inputs));
+            if (previous is not null && string.CompareOrdinal(previous, input.Name) >= 0) throw new ArgumentException("Inputs must be unique and ordinally sorted.", nameof(inputs));
+            TextArgumentFormat format = input.Type switch
+            {
+                TextArgumentType.String => TextArgumentFormat.None, TextArgumentType.Int or TextArgumentType.Number => TextArgumentFormat.Plain,
+                TextArgumentType.Bool => TextArgumentFormat.Lower, TextArgumentType.Guid => TextArgumentFormat.D, _ => TextArgumentFormat.Iso,
+            };
+            descriptors[index] = new(input.Name, input.Type, format); previous = input.Name;
+        }
+        return new CompiledTranslationDefinition(name, isCanonical, descriptors);
+    }
+
+    private CompiledTranslationDefinition(string name, bool isCanonical, TranslationPlaceholderDescriptor[] placeholders)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (!TranslationDataValidation.IsResourceName(name)) throw new ArgumentException("Resource names must be dot-separated ASCII identifiers.", nameof(name));
+        Name = name; IsCanonical = isCanonical; _placeholders = placeholders;
+    }
+
     /// <summary>Creates a compiled resource definition.</summary>
     public CompiledTranslationDefinition(
         string name,

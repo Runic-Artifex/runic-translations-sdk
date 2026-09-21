@@ -3,6 +3,78 @@
 # Generated deterministically; intentional changes require baseline review.
 # Nullability metadata is intentionally normalized away; readonly/init/ref/constraints and contract attributes are retained.
 
+type sealed class Runic.Translations.CompiledRmf2Annotation
+  ctor Runic.Translations.CompiledRmf2Annotation(System.String name, Runic.Translations.CompiledRmf2Value value = null)
+  property Runic.Translations.CompiledRmf2Value Value { get; }
+  property System.String Name { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Declaration
+  ctor Runic.Translations.CompiledRmf2Declaration(System.String kind, System.String name, Runic.Translations.CompiledRmf2Expression expression)
+  property Runic.Translations.CompiledRmf2Expression Expression { get; }
+  property System.String Kind { get; }
+  property System.String Name { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Expression
+  ctor Runic.Translations.CompiledRmf2Expression(Runic.Translations.CompiledRmf2Value operand, Runic.Translations.TextArgumentType valueType, System.String function = null, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Option> options = null, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Annotation> annotations = null)
+  property Runic.Translations.CompiledRmf2Value Operand { get; }
+  property Runic.Translations.TextArgumentType ValueType { get; }
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Annotation> Annotations { get; }
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Option> Options { get; }
+  property System.String Function { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Input
+  ctor Runic.Translations.CompiledRmf2Input(System.String name, Runic.Translations.TextArgumentType type)
+  property Runic.Translations.TextArgumentType Type { get; }
+  property System.String Name { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Key
+  ctor Runic.Translations.CompiledRmf2Key(System.String value = null, System.String canonical = null)
+  property System.String Canonical { get; }
+  property System.String Value { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Message
+  ctor Runic.Translations.CompiledRmf2Message(System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Input> inputs, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Declaration> declarations, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Selector> selectors, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Variant> variants, System.String contentLocale = null)
+  method Runic.Translations.LocalizedTextContent FormatContent(System.ReadOnlySpan<Runic.Translations.TextArgument> arguments, System.String locale, System.Int32 maximumOutputLength = 1048576)
+  method System.String Format(System.ReadOnlySpan<Runic.Translations.TextArgument> arguments, System.String locale, System.Int32 maximumOutputLength = 1048576)
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Declaration> Declarations { get; }
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Input> Inputs { get; }
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Selector> Selectors { get; }
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Variant> Variants { get; }
+  property System.String ContentLocale { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Node
+  ctor Runic.Translations.CompiledRmf2Node(Runic.Translations.CompiledRmf2Expression expression)
+  ctor Runic.Translations.CompiledRmf2Node(System.String name, System.String markupKind, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Option> options = null, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Annotation> annotations = null)
+  ctor Runic.Translations.CompiledRmf2Node(System.String text)
+  property Runic.Translations.CompiledRmf2Expression Expression { get; }
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Annotation> Annotations { get; }
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Option> Options { get; }
+  property System.String Kind { get; }
+  property System.String MarkupKind { get; }
+  property System.String Value { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Option
+  ctor Runic.Translations.CompiledRmf2Option(System.String name, Runic.Translations.CompiledRmf2Value value)
+  property Runic.Translations.CompiledRmf2Value Value { get; }
+  property System.String Name { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Selector
+  ctor Runic.Translations.CompiledRmf2Selector(Runic.Translations.CompiledRmf2Value value, Runic.Translations.TextArgumentType type, System.String function)
+  property Runic.Translations.CompiledRmf2Value Value { get; }
+  property Runic.Translations.TextArgumentType Type { get; }
+  property System.String Function { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Value
+  ctor Runic.Translations.CompiledRmf2Value(System.String kind, System.String value, System.String canonical = null)
+  property System.String Canonical { get; }
+  property System.String Kind { get; }
+  property System.String Value { get; }
+
+type sealed class Runic.Translations.CompiledRmf2Variant
+  ctor Runic.Translations.CompiledRmf2Variant(System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Key> keys, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Node> nodes)
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Key> Keys { get; }
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Node> Nodes { get; }
+
 type readonly struct Runic.Translations.CompiledTextMarkupProperty : System.IEquatable<Runic.Translations.CompiledTextMarkupProperty>
   ctor Runic.Translations.CompiledTextMarkupProperty(System.String Name, System.String Value)
   method System.Boolean Equals(Runic.Translations.CompiledTextMarkupProperty other)
@@ -22,6 +94,8 @@ type sealed class Runic.Translations.CompiledTextMessage
   ctor Runic.Translations.CompiledTextMessage(System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageNode> nodes, System.Boolean rmf2, System.String contentLocale = null)
   ctor Runic.Translations.CompiledTextMessage(System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageNode> nodes, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageSelector> selectors, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageVariant> variants)
   ctor Runic.Translations.CompiledTextMessage(System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageNode> nodes, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageSelector> selectors, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTextMessageVariant> variants, System.Boolean rmf2, System.String contentLocale = null)
+  method static Runic.Translations.CompiledTextMessage FromRmf2(Runic.Translations.CompiledRmf2Message message)
+  property Runic.Translations.CompiledRmf2Message Rmf2V5 { get; }
   property System.ReadOnlyMemory<Runic.Translations.CompiledTextMessageNode> Nodes { get; }
   property System.ReadOnlyMemory<Runic.Translations.CompiledTextMessageSelector> Selectors { get; }
   property System.ReadOnlyMemory<Runic.Translations.CompiledTextMessageVariant> Variants { get; }
@@ -82,6 +156,7 @@ type sealed class Runic.Translations.CompiledTranslationCatalog
 
 type sealed class Runic.Translations.CompiledTranslationDefinition
   ctor Runic.Translations.CompiledTranslationDefinition(System.String name, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPlaceholderDescriptor> placeholders, System.Boolean isCanonical = true)
+  method static Runic.Translations.CompiledTranslationDefinition FromRmf2Inputs(System.String name, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Input> inputs, System.Boolean isCanonical = true)
   property System.Boolean IsCanonical { get; }
   property System.ReadOnlyMemory<Runic.Translations.TranslationPlaceholderDescriptor> Placeholders { get; }
   property System.String Name { get; }
@@ -233,6 +308,7 @@ type sealed class Runic.Translations.LocalizedTextContent
 
 type sealed class Runic.Translations.LocalizedTextContentNode
   property Runic.Translations.LocalizedTextContentNodeKind Kind { get; }
+  property System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Annotation> Annotations { get; }
   property System.ReadOnlyMemory<Runic.Translations.CompiledTextMarkupProperty> Attributes { get; }
   property System.String Value { get; }
 
@@ -264,6 +340,7 @@ type readonly struct Runic.Translations.TextArgument
   ctor Runic.Translations.TextArgument(System.String name, System.String value)
   ctor Runic.Translations.TextArgument(System.String name, System.TimeOnly value, Runic.Translations.TextArgumentFormat format = Short)
   method System.Boolean TryGetValue<T>(out !!0 value)
+  method static Runic.Translations.TextArgument CreateRmf2(System.String name, Runic.Translations.TextArgument value)
   property Runic.Translations.TextArgumentFormat Format { get; }
   property Runic.Translations.TextArgumentType Type { get; }
   property System.String Name { get; }
@@ -492,8 +569,10 @@ type static class Runic.Translations.TranslationTransport
 
 type static class Runic.Translations.TranslationsCompatibility
   field const System.Int32 MessageGrammarVersion = 2
-  field const System.Int32 Rmf2RuntimeAbiVersion = 1
+  field const System.Int32 Rmf2RuntimeAbiVersion = 2
   field const System.Int32 RuntimeAbiVersion = 1
+  method static System.Boolean SupportsRmf2RuntimeAbi(System.Int32 requiredVersion)
+  method static System.Void EnsureRmf2RuntimeAbi(System.Int32 requiredVersion)
 
 type enum Runic.Translations.UnsupportedLocalePolicy : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   field System.Int32 value__
