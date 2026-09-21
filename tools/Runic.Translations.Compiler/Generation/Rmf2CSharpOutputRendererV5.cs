@@ -4,8 +4,9 @@ using System.Linq;
 
 namespace Runic.Translations.Compiler.Generation;
 
-// Staged generated-code backend for the typed execution-v2 carrier. Nothing in
-// this file is reachable through the public/default compiler path yet.
+// Typed generated-code backend selected by profile-aware shipping hosts only
+// when runic.json explicitly declares executionProfile rmf2-execution-v2.
+// Omitting the selector continues through the byte-stable v4 renderer.
 internal static class Rmf2CSharpOutputRendererV5
 {
     internal static TranslationGeneratedOutput RenderKeys(Rmf2ProjectV5 project)
