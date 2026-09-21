@@ -399,6 +399,12 @@ internal static class Program
             return Success;
         }
 
+        if ((invocation.Emission & ToolEmission.Cpp) != 0 && compilation.Catalogs.Any(static catalog => catalog.Rmf2MarkupContract is not null))
+        {
+            result.AddDiagnostic("RCLI9013", "unsupported-output", "--emit-cpp is not supported for RMF2 projects; select --emit-csharp, --emit-json, --emit-typescript, --emit-template-manifest, or --emit-esm.", CommandDiagnosticSeverity.Error);
+            return DiagnosticFailure;
+        }
+
         IReadOnlyList<ToolArtifact> artifacts = CompilerOutputAdapter.Render(compilation.Catalogs, invocation.Emission);
         if (invocation.Command == ToolCommand.Generate)
         {

@@ -18,6 +18,7 @@ internal static class Rmf2EsmV5Tests
     {
         runner.Add("RMF2 v5 generated ESM executes exact static dynamic transport and SSR paths", Executes);
         runner.Add("RMF2 v5 ESM preserves exact selection dynamic options aliases and ordered annotations", SemanticParity);
+        runner.Add("RMF2 v5 renderers hide annotations and preserve custom plain-text policies", RendererParity);
         runner.Add("RMF2 v5 ESM manifest is closed versioned and accepted only as the exact shipping Vite contract", ManifestIsolation);
         runner.Add("RMF2 v5 ESM preserves hostile NFC caller names without prototype mutation", HostileNames);
         runner.Add("RMF2 v5 ESM hardens locale dynamic pack and renderer boundaries", RuntimeHardening);
@@ -123,6 +124,62 @@ internal static class Rmf2EsmV5Tests
                 const artifact=JSON.parse(await readFile(new URL("./semantic-artifact.json",import.meta.url),"utf8"));
                 const declarations=artifact.messages.sample.ast.declarations;const explicit=declarations.findIndex(item=>item.kind==="input"&&item.name==="digits");if(explicit<0)throw new Error("fixture lost explicit dynamic dependency");declarations.splice(explicit,1);
                 if(decodeLocaleArtifact(artifact).ok)throw new Error("implicit dynamic option dependency accepted");
+                """, new UTF8Encoding(false));
+            Run("bun", [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    private static void RendererParity()
+    {
+        const string contracts = """
+            ,"markup":{"contracts":[
+              {"name":"app:children","kind":"paired","children":"inline","interactive":false,"plainText":"children","options":{}},
+              {"name":"app:omit","kind":"paired","children":"inline","interactive":false,"plainText":"omit","options":{}},
+              {"name":"app:break","kind":"standalone","children":"none","interactive":false,"plainText":"lineBreak","options":{}},
+              {"name":"app:explicit","kind":"paired","children":"inline","interactive":false,"plainText":"explicit","options":{}},
+              {"name":"app:alternate","kind":"paired","children":"inline","interactive":false,"plainText":"alternateText","options":{}}
+            ]}
+            """;
+        const string source = "children = {#app:children @note}keep{/app:children @end=0}\nomit = before {#app:omit}{#app:explicit}hidden{/app:explicit}{/app:omit} after\nbreak = before{#app:break/}after\nexplicit = {#app:explicit}label{/app:explicit}\nalternate = {#app:alternate}alt{/app:alternate}\nvalidated = {#app:children}keep{/app:children} {#link ref=destination}link{/link}\n";
+        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
+            Rmf2Tests.Project(contracts), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
+        Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
+        string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!));
+        try
+        {
+            string script = Path.Combine(directory, "renderer-parity.mjs");
+            File.WriteAllText(script, """
+                import { m } from "./app.esm-v5/messages.js";
+                import { bindMarkup, createInlineRenderer, defineMarkup, linkBinding, toPlainText } from "./app.esm-v5/runtime.js";
+                const check=(condition,message)=>{if(!condition)throw new Error(message);};
+                const children=defineMarkup({name:"app:children",kind:"paired",children:"inline",interactive:false,plainText:"children",options:{}});
+                const content=m.children();
+                check(content.nodes[0].annotations[0].name==="note"&&content.nodes[0].closingAnnotations[0].name==="end","semantic annotations were dropped");
+                let adapterElement;
+                const renderer=createInlineRenderer({text:value=>value,element:element=>element.children.join("")},[
+                  bindMarkup(children,element=>{adapterElement=element;return element.children.join("");})
+                ]);
+                check(renderer.render(content).join("")==="keep","custom renderer output");
+                check(!Object.hasOwn(adapterElement,"annotations")&&!Object.hasOwn(adapterElement,"closingAnnotations"),"compiler annotations leaked into the renderer adapter");
+                let rejected=false;try{createInlineRenderer({text:value=>value,element:element=>element.children.join("")}).render(content);}catch{rejected=true;}check(rejected,"strict renderer accepted an unbound custom element");
+                const forgedKind=Object.freeze({...content,nodes:Object.freeze([Object.freeze({...content.nodes[0],kind:"script"})])});
+                rejected=false;try{renderer.render(forgedKind);}catch{rejected=true;}check(rejected,"forged content-node discriminator reached the renderer");
+                check(toPlainText(content)==="keep","children projection");
+                const explicit=defineMarkup({name:"app:explicit",kind:"paired",children:"inline",interactive:false,plainText:"explicit",options:{}});
+                let hiddenCalls=0;
+                check(toPlainText(m.omit(),{custom:[bindMarkup(explicit,({children})=>{hiddenCalls++;return children.join("");})]})==="before  after"&&hiddenCalls===0,"omit projection materialized its subtree");
+                check(toPlainText(m.break())==="before\nafter","line-break projection");
+                for(const value of [m.explicit(),m.alternate()]){rejected=false;try{toPlainText(value);}catch{rejected=true;}check(rejected,"explicit adapter requirement");}
+                const alternate=defineMarkup({name:"app:alternate",kind:"paired",children:"inline",interactive:false,plainText:"alternateText",options:{}});
+                const custom=[bindMarkup(explicit,({children})=>children.join("")),bindMarkup(alternate,({children})=>children.join(""))];
+                check(toPlainText(m.explicit(),{custom})==="label"&&toPlainText(m.alternate(),{custom})==="alt","custom plain-text adapters");
+                let invalidCalls=0;
+                const guarded=createInlineRenderer({text:value=>value,element:element=>element.children.join("")},[bindMarkup(children,element=>{invalidCalls++;return element.children.join("");})]);
+                const linked=m.validated();
+                const missingLink=Object.freeze({...linked,nodes:Object.freeze(linked.nodes.filter(node=>node.name!=="runic:link"))});
+                rejected=false;try{guarded.render(missingLink,{slots:{destination:linkBinding({href:"/safe"})}});}catch{rejected=true;}check(rejected&&invalidCalls===0,"renderer callback ran before slot multiplicity validation");
+                rejected=false;try{createInlineRenderer({text:value=>value,element:element=>element.children.join("")},[{contract:{name:"runic:strong",kind:"paired",children:"inline",interactive:false,plainText:"children",options:{}},render:()=>"forged"}]);}catch{rejected=true;}check(rejected,"built-in renderer override accepted");
                 """, new UTF8Encoding(false));
             Run("bun", [script], directory);
         }

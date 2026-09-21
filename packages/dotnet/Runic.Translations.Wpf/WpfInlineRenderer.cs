@@ -73,7 +73,9 @@ public sealed class WpfInlineRenderer
             if (icon.Asset is not Func<FrameworkElement> create) throw new TranslationFormatException("WPF icon assets must be Func<FrameworkElement> factories returning a fresh element.");
             FrameworkElement element = create();
             element.Focusable = false;
-            var host = new IconHost(element, icon.Decorative, icon.Decorative ? "" : icon.AccessibleName!(locale));
+            string label = icon.Decorative ? "" : icon.AccessibleName!(locale);
+            if (!icon.Decorative && string.IsNullOrWhiteSpace(label)) throw new TranslationFormatException("Meaningful icon alternate text is empty.");
+            var host = new IconHost(element, icon.Decorative, label);
             inline = new InlineUIContainer(host) { BaselineAlignment = BaselineAlignment.Center };
         }
         else if (run.Binding is InlineActionBinding action)

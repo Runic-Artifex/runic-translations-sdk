@@ -171,8 +171,10 @@ checks in an interactive Windows 11 desktop session, and cross-compiles on Linux
 Plain-text conversion is explicit. `br` becomes LF, link labels are retained
 (with optional destination annotation), meaningful icons require a localized
 alternate label, and action labels require `allowActionLabels`. Custom web tags
-need a linked string renderer; .NET follows declared children/omit/break policies
-and rejects unsupported custom alternate-text projection.
+with `children`, `omit`, or `lineBreak` policies use those projections without a
+linked string renderer; explicit/alternate-text policies still require an
+adapter. .NET follows the same declared policies and rejects custom
+explicit/alternate-text projection when no adapter is available.
 
 The [payment fixture](../../../specs/translations/examples/rmf2/README.md)
 contains two locales, conditional retry, two links, an icon, a dynamic custom badge,

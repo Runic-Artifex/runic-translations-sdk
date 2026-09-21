@@ -17,9 +17,16 @@ internal static class Rmf2MarkupTests
         runner.Add("RMF2 markup rejects slots options and illegal nesting per variant", Invalid);
         runner.Add("RMF2 external packs validate options slots and standalone .NET rendering", External);
         runner.Add("RMF2 generated ESM executes rich plans typed slots and explicit text projection", Esm);
+        runner.Add("RMF2 custom plain-text policy matrix stays aligned across ESM and .NET", ProjectionMatrix);
     }
     private const string Contracts = ",\"markup\":{\"contracts\":[{\"name\":\"shop:badge\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"tone\":{\"type\":\"enum\",\"values\":[\"neutral\",\"positive\"],\"default\":\"neutral\"}}}],\"aliases\":{\"badge\":\"shop:badge\"}}";
     private const string Payment = "payment = Read {#link ref=terms}terms{/link} and {#link ref=privacy}privacy{/link}. {#action ref=retry}Retry{/action} {#icon ref=star/} {#badge tone=$tone @note=|safe annotation|}Available{/badge}";
+    private const string ProjectionContracts = ",\"markup\":{\"contracts\":[" +
+        "{\"name\":\"shop:children\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}}," +
+        "{\"name\":\"shop:omit\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"omit\",\"options\":{}}," +
+        "{\"name\":\"shop:break\",\"kind\":\"standalone\",\"children\":\"none\",\"interactive\":false,\"plainText\":\"lineBreak\",\"options\":{}}," +
+        "{\"name\":\"shop:explicit\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"explicit\",\"options\":{}}," +
+        "{\"name\":\"shop:alternate\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"alternateText\",\"options\":{}}]}";
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     private static TranslationCompilation Compile(string text, string config = "") => TranslationCompiler.CompileProject(Rmf2Tests.Project(config), [Source("translations/en.rmf2", text)]);
     private static void Model()
@@ -66,6 +73,29 @@ internal static class Rmf2MarkupTests
         Assert.Equal("Read terms and privacy. Retry Star Available", renderer.ToPlainText("payment", content, slots, allowActionLabels: true));
         Assert.Equal(0, callbacks);
         Assert.True(content.Nodes.Span.ToArray().Any(n => n.Kind == LocalizedTextContentNodeKind.ElementStandalone), "Runtime lost standalone markup.");
+        foreach ((int min, int max, bool remove, string scenario) in new[] {
+            (2, 2, false, "minimum"),
+            (0, 0, false, "maximum"),
+            (0, 0, true, "key/content"),
+        })
+        {
+            JsonObject alteredContract = JsonNode.Parse(catalog.Rmf2MarkupContract!)!.AsObject();
+            JsonObject contractSlots = alteredContract["messages"]!["payment"]!["slots"]!.AsObject();
+            if (remove) contractSlots.Remove("star");
+            else
+            {
+                contractSlots["star"]!["min"] = min;
+                contractSlots["star"]!["max"] = max;
+            }
+            int accessibleNameCalls = 0;
+            var guardedSlots = new System.Collections.Generic.Dictionary<string, InlineMarkupBinding>(slots) {
+                ["star"] = new InlineIconBinding(new object(), false, _ => { accessibleNameCalls++; return "Star"; }),
+            };
+            bool rejected = false;
+            try { _ = new Rmf2InlineRenderer(alteredContract.ToJsonString()).ToPlainText("payment", content, guardedSlots, allowActionLabels: true); }
+            catch (TranslationFormatException) { rejected = true; }
+            Assert.True(rejected && accessibleNameCalls == 0, "Selected-content " + scenario + " slot mismatch reached a plain-text callback.");
+        }
         foreach (string replacement in new[] { "unknown", "privacy" })
         {
             string altered = Encoding.UTF8.GetString(bytes).Replace("\"ref\":\"terms\"", "\"ref\":\"" + replacement + "\"", StringComparison.Ordinal);
@@ -95,6 +125,8 @@ internal static class Rmf2MarkupTests
                 const slots = { terms: linkBinding({href:'/terms'}), privacy: linkBinding({href:'/privacy'}), retry: actionBinding({onActivate:()=>calls++}), star: iconBinding({asset:{},decorative:false,accessibleName: locale => locale === 'en' ? 'Star' : 'Stern'}) };
                 const badge = defineMarkup({name:'shop:badge',kind:'paired',children:'inline',interactive:false,plainText:'children',options:{tone:enumOption(['neutral','positive'],'neutral')}});
                 const custom = [bindMarkup(badge, ({children,options})=>{ check(options.tone==='positive','option resolution'); return children.join(''); })];
+                const incompatibleBadge = defineMarkup({name:'shop:badge',kind:'standalone',children:'none',interactive:false,plainText:'children',options:{}});
+                let incompatible=false; try { createInlineRenderer({text:value=>value,element:node=>node},[bindMarkup(incompatibleBadge,node=>node)]); } catch { incompatible=true; } check(incompatible,'renderer contract child/kind mismatch accepted');
                 const content = m.payment({tone:'positive'});
                 check(content.key==='payment' && content.locale==='en','content identity');
                 for (const href of ['javascript:alert(1)','java\\tscript:alert(1)','data:text/html,bad']) {
@@ -104,6 +136,8 @@ internal static class Rmf2MarkupTests
                 let rejected=false; try { toPlainText(content,{slots,custom}); } catch { rejected=true; } check(rejected,'implicit action projection');
                 const text = toPlainText(content,{slots,custom,allowActionLabels:true});
                 check(text === 'Read terms and privacy. Retry Star Available','plain text: '+text);
+                check(toPlainText(content,{slots,allowActionLabels:true})===text,'policy-driven custom plain text projection');
+                check(!Object.hasOwn(content.nodes.find(node=>node.name==='shop:badge'),'annotations'),'annotations leaked into ESM content');
                 check(calls===0,'render invoked callback');
                 check(m.items({count:0})==='Empty','numeric exact selection');
                 check(m.items({count:1})==='One','default cardinal selection');
@@ -143,6 +177,61 @@ internal static class Rmf2MarkupTests
                 string diagnostics = checker.StandardOutput.ReadToEnd() + checker.StandardError.ReadToEnd(); checker.WaitForExit(); Assert.Equal(0, checker.ExitCode, diagnostics);
             }
             using var process = Process.Start(new ProcessStartInfo("bun", "test.mjs") { WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true })!;
+            string outputText = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd(); process.WaitForExit(); Assert.Equal(0, process.ExitCode, outputText);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    private static void ProjectionMatrix()
+    {
+        const string source = "children = {#shop:children}keep{/shop:children}\nomit = before {#shop:omit}{#shop:explicit}hidden{/shop:explicit}{/shop:omit} after\nbreak = before{#shop:break/}after\nexplicit = {#shop:explicit}label{/shop:explicit}\nalternate = {#shop:alternate}alt{/shop:alternate}";
+        var compilation = TranslationCompiler.CompileProject(Rmf2Tests.Project(ProjectionContracts), [Source("translations/en.rmf2", source)]);
+        Assert.True(compilation.Success, Errors(compilation));
+        var catalog = compilation.Catalogs[0];
+        var contract = new TranslationPackContract("app", "en", catalog.Fingerprint,
+            catalog.CanonicalResources.OrderBy(resource => resource.Key, StringComparer.Ordinal).Select(resource =>
+                new TranslationPackMessageContract(new TranslationKey("app", resource.Id, resource.Key))).ToArray(), 4, catalog.Rmf2MarkupContract);
+        var verified = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(TranslationOutputRenderer.RenderLocaleJson(catalog, "en").GetUtf8Bytes()), contract).AsTask().GetAwaiter().GetResult();
+        var runtime = new CompiledTranslationCatalog("app", "en",
+            catalog.CanonicalResources.OrderBy(resource => resource.Key, StringComparer.Ordinal).Select(resource => new CompiledTranslationDefinition(resource.Key, Array.Empty<TranslationPlaceholderDescriptor>())).ToArray(),
+            [new CompiledTranslationLocale("en", null, verified.Messages.Select(message => new CompiledTranslationValue(message.Key.Id, "", message.Message!)).ToArray())]);
+        var snapshot = new CompiledTranslationSnapshot(runtime, "en");
+        var renderer = new Rmf2InlineRenderer(catalog.Rmf2MarkupContract!);
+        TranslationKey Key(string name) => new("app", catalog.CanonicalResources.Single(resource => resource.Key == name).Id, name);
+        void RequireAdapter(string name, bool allowActionLabels = false)
+        {
+            try { _ = renderer.ToPlainText(name, snapshot.FormatContent(Key(name), []), allowActionLabels: allowActionLabels); }
+            catch (TranslationFormatException exception) when (exception.Message.Contains("adapter", StringComparison.Ordinal)) { return; }
+            throw new InvalidOperationException("Custom projection unexpectedly omitted its adapter requirement for " + name + ".");
+        }
+        Assert.Equal("keep", renderer.ToPlainText("children", snapshot.FormatContent(Key("children"), [])));
+        Assert.Equal("before  after", renderer.ToPlainText("omit", snapshot.FormatContent(Key("omit"), [])));
+        Assert.Equal("before\nafter", renderer.ToPlainText("break", snapshot.FormatContent(Key("break"), [])));
+        RequireAdapter("explicit", allowActionLabels: true);
+        RequireAdapter("alternate");
+
+        string root = Path.Combine(Path.GetTempPath(), "runic-rmf2-projection-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
+        try
+        {
+            foreach (var output in TranslationOutputRenderer.RenderEsmModules(catalog))
+            { string path = Path.Combine(root, output.RelativePath); Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllBytes(path, output.GetUtf8Bytes()); }
+            File.WriteAllText(Path.Combine(root, "matrix.mjs"), """
+                import {m} from './app.esm/messages.js';
+                import {toPlainText,defineMarkup,bindMarkup} from './app.esm/runtime.js';
+                const check=(ok,why)=>{if(!ok)throw new Error(why);};
+                check(toPlainText(m.children())==='keep','children policy');
+                check(toPlainText(m.omit())==='before  after','omit policy');
+                check(toPlainText(m.break())==='before\nafter','lineBreak policy');
+                let rejected=false; try { toPlainText(m.explicit()); } catch { rejected=true; } check(rejected,'explicit adapter requirement');
+                rejected=false; try { toPlainText(m.alternate()); } catch { rejected=true; } check(rejected,'alternateText adapter requirement');
+                const explicit=defineMarkup({name:'shop:explicit',kind:'paired',children:'inline',interactive:false,plainText:'explicit',options:{}});
+                const alternate=defineMarkup({name:'shop:alternate',kind:'paired',children:'inline',interactive:false,plainText:'alternateText',options:{}});
+                const custom=[bindMarkup(explicit,({children})=>children.join('')),bindMarkup(alternate,({children})=>children.join(''))];
+                check(toPlainText(m.explicit(),{custom})==='label','explicit adapter');
+                check(toPlainText(m.alternate(),{custom})==='alt','alternate adapter');
+                console.log('RMF2 projection matrix OK');
+                """);
+            using var process = Process.Start(new ProcessStartInfo("bun", "matrix.mjs") { WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true })!;
             string outputText = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd(); process.WaitForExit(); Assert.Equal(0, process.ExitCode, outputText);
         }
         finally { Directory.Delete(root, true); }

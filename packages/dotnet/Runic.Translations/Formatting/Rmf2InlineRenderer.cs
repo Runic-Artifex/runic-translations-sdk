@@ -42,8 +42,16 @@ public sealed class Rmf2InlineRenderer
             var options = new Dictionary<string, Option>(StringComparer.Ordinal);
             foreach (JsonProperty option in item.Value.GetProperty("options").EnumerateObject())
                 options.Add(option.Name, new Option(option.Value.GetProperty("type").GetString()!, option.Value.GetProperty("values").EnumerateArray().Select(v => v.GetString()!).ToArray(), option.Value.GetProperty("literalOnly").GetBoolean()));
-            _tags.Add(item.Name, new Tag(item.Value.GetProperty("kind").GetString() == "standalone",
-                item.Value.GetProperty("interactive").GetBoolean(), item.Value.GetProperty("plainText").GetString()!, options));
+            string kind = item.Value.GetProperty("kind").GetString()!;
+            if (kind is not ("paired" or "standalone")) throw new ArgumentException("Unsupported RMF2 markup kind.", nameof(contractJson));
+            bool standalone = kind == "standalone";
+            string children = item.Value.TryGetProperty("children", out JsonElement childrenElement)
+                ? childrenElement.GetString()!
+                : standalone ? "none" : "inline";
+            if (children != (standalone ? "none" : "inline")) throw new ArgumentException("RMF2 markup child model does not match its kind.", nameof(contractJson));
+            string plainText = item.Value.GetProperty("plainText").GetString()!;
+            if (plainText is not ("children" or "lineBreak" or "alternateText" or "explicit" or "omit")) throw new ArgumentException("Unsupported RMF2 plain-text projection policy.", nameof(contractJson));
+            _tags.Add(item.Name, new Tag(standalone, children, item.Value.GetProperty("interactive").GetBoolean(), plainText, options));
         }
         foreach (JsonProperty message in root.GetProperty("messages").EnumerateObject())
         {
@@ -156,12 +164,22 @@ public sealed class Rmf2InlineRenderer
     {
         ArgumentNullException.ThrowIfNull(content);
         slots ??= new Dictionary<string, InlineMarkupBinding>();
-        if (!_slots.TryGetValue(key, out Dictionary<string, string>? required)) throw new TranslationFormatException("Unknown RMF2 message contract '" + key + "'.");
+        if (!_slots.TryGetValue(key, out Dictionary<string, string>? required) ||
+            !_bounds.TryGetValue(key, out Dictionary<string, (int Min, int Max)>? bounds))
+            throw new TranslationFormatException("Unknown RMF2 message contract '" + key + "'.");
         foreach (var slot in required)
             if (!slots.TryGetValue(slot.Key, out InlineMarkupBinding? binding) || !Matches(slot.Value, binding))
                 throw new TranslationFormatException("Missing or incompatible binding for slot '" + slot.Key + "'.");
         LocalizedTextContentNode[] nodes = content.Nodes.ToArray(); int at = 0, count = 0;
-        return Read(null, false, 0);
+        var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
+        IReadOnlyList<InlineMarkupRun> runs = Read(null, false, 0);
+        foreach (var slot in bounds)
+        {
+            int occurrencesForSlot = occurrences.GetValueOrDefault(slot.Key);
+            if (occurrencesForSlot < slot.Value.Min || occurrencesForSlot > slot.Value.Max)
+                throw new TranslationFormatException("Functional slot multiplicity mismatch for '" + slot.Key + "'.");
+        }
+        return runs;
         IReadOnlyList<InlineMarkupRun> Read(string? closing, bool interactiveParent, int depth)
         {
             if (depth > 16) throw new TranslationFormatException("RMF2 inline nesting limit exceeded.");
@@ -184,8 +202,10 @@ public sealed class Rmf2InlineRenderer
                     if (option.IsAnnotation) continue;
                     if (option.Name == "ref" && node.Value is "runic:link" or "runic:action" or "runic:icon")
                     {
-                        if (!required.TryGetValue(option.Value, out string? kind) || kind != node.Value || !slots.TryGetValue(option.Value, out binding) || !Matches(kind, binding))
+                        if (!required.TryGetValue(option.Value, out string? kind) || !bounds.ContainsKey(option.Value) ||
+                            kind != node.Value || !slots.TryGetValue(option.Value, out binding) || !Matches(kind, binding))
                             throw new TranslationFormatException("Invalid functional slot '" + option.Value + "'.");
+                        occurrences[option.Value] = occurrences.GetValueOrDefault(option.Value) + 1;
                     }
                     else if (!tag.Options.TryGetValue(option.Name, out Option? schema) || !schema.Accepts(option.Value))
                         throw new TranslationFormatException("Invalid resolved markup option '" + option.Name + "'.");
@@ -202,7 +222,7 @@ public sealed class Rmf2InlineRenderer
         }
     }
 
-    /// <summary>Explicit projection; action labels require opt-in and meaningful icons require alternate text in the effective locale.</summary>
+    /// <summary>Explicit projection; action labels require opt-in, custom explicit/alternate-text policies require an adapter, and meaningful icons require alternate text in the effective locale.</summary>
     public string ToPlainText(string key, LocalizedTextContent content, IReadOnlyDictionary<string, InlineMarkupBinding>? slots = null,
         bool allowActionLabels = false, bool annotateLinkDestinations = false)
     {
@@ -213,6 +233,7 @@ public sealed class Rmf2InlineRenderer
         {
             if (run.Text is not null) { text.Append(run.Text); return; }
             Tag tag = _tags[run.Name];
+            if (tag.PlainText == "explicit" && run.Name != "runic:action") throw new TranslationFormatException("Custom markup requires an explicit plain-text adapter.");
             if (tag.PlainText == "explicit" && !allowActionLabels) throw new TranslationFormatException("This markup requires an explicit label-only projection policy.");
             if (tag.PlainText == "lineBreak") { text.Append('\n'); return; }
             if (run.Binding is InlineIconBinding icon)
@@ -233,7 +254,7 @@ public sealed class Rmf2InlineRenderer
     }
     private static bool Matches(string kind, InlineMarkupBinding binding) => kind switch
     { "runic:link" => binding is InlineLinkBinding { Destination: not null } link && (!link.Destination.IsAbsoluteUri || link.Destination.Scheme is "http" or "https" or "mailto" or "tel"), "runic:action" => binding is InlineActionBinding { Activate: not null }, "runic:icon" => binding is InlineIconBinding, _ => false };
-    private sealed record Tag(bool Standalone, bool Interactive, string PlainText, Dictionary<string, Option> Options);
+    private sealed record Tag(bool Standalone, string Children, bool Interactive, string PlainText, Dictionary<string, Option> Options);
     private sealed record Option(string Type, string[] Values, bool LiteralOnly)
     {
         internal bool AcceptsType(TextArgumentType type) => Type switch { "number" => type is TextArgumentType.Int or TextArgumentType.Number, "boolean" => type == TextArgumentType.Bool, _ => type == TextArgumentType.String };
