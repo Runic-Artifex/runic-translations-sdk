@@ -13,6 +13,13 @@ formatter: an int64 input formatted by `:number` remains int64 and can later use
 explicitly annotated caller types remain fixed. UUID literal binding requires
 exactly 36 UUID D-format characters without padding.
 
+Declarations cannot bind a variable already mentioned in an earlier declaration,
+including operands and dynamic options. For example, `.local $a = {$n}` followed
+by `.input {$n :number}` is a Duplicate Declaration (`RTR0067` at the later `$n`),
+not a forward input reference. Put the input first or leave it implicit where
+the profile permits. Local forward references and cycles remain invalid. This
+shared validation also protects the current v4 compiler.
+
 Variant keys distinguish bare wildcard `*` from literal `|*|`.
 Selection compares per-selector ranks in order: numeric exact, plural/ordinal
 category, then wildcard. String and boolean exact matches outrank wildcard.

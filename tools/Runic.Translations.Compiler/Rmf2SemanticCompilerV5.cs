@@ -32,7 +32,8 @@ internal static class Rmf2SemanticCompilerV5
             if (HasErrors()) return Result(null);
             foreach (var diagnostic in Mf2SyntaxReader.ValidateDataModel(syntax).Concat(Mf2SyntaxReader.ValidateInlineProfile(syntax))) _diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
             if (HasErrors()) return Result(null);
-            // Input signatures are known before lowering option references; locals
+            // Seed signatures only after declaration validation: prior references
+            // cannot be retroactively bound by a later input declaration. Locals
             // still require declaration order and retain their expression graph.
             foreach (var declaration in syntax.Declarations.Where(d => d.Kind == "input"))
             {

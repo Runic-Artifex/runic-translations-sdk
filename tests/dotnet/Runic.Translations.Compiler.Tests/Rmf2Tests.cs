@@ -15,6 +15,7 @@ internal static class Rmf2Tests
         runner.Add("RMF2 rejects duplicate leaves namespace and generated identity collisions", Collisions);
         runner.Add("RMF2 caller contracts allow locale selectors and omitted inputs", Contracts);
         runner.Add("RMF2 rejects unsupported execution options without silently changing semantics", Capabilities);
+        runner.Add("RMF2 v4 rejects late input bindings with mapped data-model spans", DeclarationOrder);
         runner.Add("RMF2 metadata validates examples and parameter names", Metadata);
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
@@ -81,6 +82,26 @@ internal static class Rmf2Tests
         }
         var aliases = TranslationCompiler.CompileProject(Project(), [Source("translations/Shop/en.rmf2", "x = X"), Source("translations/shop/de.rmf2", "y = Y")]);
         Assert.True(aliases.Diagnostics.Any(d => d.Id == "RTR0052"), "Case-only directory aliases accepted.");
+    }
+    private static void DeclarationOrder()
+    {
+        foreach (string annotation in new[] { "", " :number style=percent", " :integer select=ordinal" })
+        {
+            string source = "# 雪\r\nx =\r\n  .local $a = {$n}\r\n  .input {$n" + annotation + "}\r\n  {{{$a}}}";
+            var result = TranslationCompiler.CompileProject(Project(), [Source("translations/en.rmf2", source)]);
+            Assert.True(!result.Success, "The v4 compiler accepted a late input binding.");
+            var diagnostic = Assert.Single(result.Diagnostics.Where(d => d.Id == "RTR0067" && d.Message == "Duplicate declaration 'n'.").ToArray());
+            Assert.Equal("translations/en.rmf2", diagnostic.Location.Path);
+            Assert.Equal(Encoding.UTF8.GetByteCount(source[..source.LastIndexOf("$n", StringComparison.Ordinal)]), diagnostic.Location.StartByte);
+            Assert.Equal(2, diagnostic.Location.LengthBytes);
+            Assert.Equal(4, diagnostic.Location.Line);
+            Assert.Equal(11, diagnostic.Location.Column);
+            Assert.Equal(4, diagnostic.Location.EndLine);
+            Assert.Equal(13, diagnostic.Location.EndColumn);
+        }
+        var ordered = TranslationCompiler.CompileProject(Project(), [Source("translations/en.rmf2", "x =\n  .input {$n :integer select=ordinal}\n  .local $a = {$n}\n  .match $a\n  one {{one}}\n  * {{other}}")]);
+        Assert.True(ordered.Success, Errors(ordered));
+        Assert.Equal("ordinal", ordered.Catalogs[0].CanonicalResources[0].Message.Selectors[0].Function);
     }
     private static void Metadata()
     {

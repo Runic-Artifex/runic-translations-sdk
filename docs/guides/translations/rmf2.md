@@ -279,6 +279,13 @@ Unicode names, declarations, literals, options and annotations. Unformatted
 literal locals and their plain aliases fold into output without becoming caller
 inputs. Syntax support remains distinct from the bounded executor.
 
+A declaration cannot bind a variable that appeared in any previous declaration,
+including variable-valued options. Thus `.local $a = {$n}` followed by
+`.input {$n :number}` reports `RTR0067` (Duplicate Declaration) on the later
+`$n`; declare the input before the local instead. NFC-equivalent names have the
+same identity. Quoted literal or annotation text does not count as a variable
+reference. Local forward references and cycles are also data-model errors.
+
 Remaining limits are explicit: variable-valued formatter options, expression
 annotations, formatted literal operands/locals and quoted wildcard execution are
 rejected by the execution profile. C++ RMF2, terms and group-atomic fallback are

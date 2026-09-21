@@ -38,8 +38,15 @@ expression order. A declared `:string` input remains string and cannot be
 reinterpreted as numeric through a local alias.
 All declared inputs and inferred operand inputs appear in the caller contract,
 sorted by NFC name using ordinal order. Local names never become caller inputs.
-Duplicate declarations and references to a local before its declaration are
-data-model errors.
+Declaration order is validated before any inference or signature pre-seeding.
+Following [LDML 48.2 declarations](https://github.com/unicode-org/cldr/blob/release-48-2/docs/ldml/tr35-messageFormat.md#declarations),
+a declaration cannot bind a variable that appeared anywhere in a previous
+declaration, whether as a binding, operand or variable-valued option. Names use
+NFC identity; quoted literals and annotation text are not variable references.
+Violations report `RTR0067`, `Duplicate declaration 'name'.`, at the later
+binding's name span. This shared data-model rule applies to both current v4 and
+staged v5 compilation. References to a local before its declaration, including
+cycles, remain data-model errors as well.
 
 A local holds a **resolved underlying typed value**, independently of its
 formatter and selection metadata. A functionless local alias keeps both that
@@ -72,7 +79,11 @@ Type inference also follows a functionless alias:
 This declares a decimal caller input `n` and gives the alias a decimal
 `valueType`. Omitting the unannotated `.input` produces the same inferred operand
 type, although that implicit input still cannot satisfy the explicit-declaration
-requirement for dynamic options. An explicit `.input {$n :number}` also works.
+requirement for dynamic options. An explicit `.input {$n :number}` also works
+when it precedes the local. Moving either input declaration after
+`.local $a = {$n}` is a Duplicate Declaration error, not a forward input
+reference; later formatter or selector metadata cannot retroactively change the
+earlier declaration.
 
 Widening the accepted formatter domain does not widen the value's carrier:
 
