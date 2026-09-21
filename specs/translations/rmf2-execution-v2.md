@@ -286,9 +286,13 @@ points while legacy constructors retain their ASCII placeholder rules.
 
 The evaluator resolves ordered declarations, inherits or replaces formatter
 metadata, validates dynamic options, and ranks exact decimal and pinned CLDR
-matches. Input carrier and selection signatures are available throughout the
-message, including to locals appearing before the input declaration. Local
-references and dynamic option dependencies still require declaration order.
+matches. Declarations cannot bind a variable referenced anywhere in a previous
+declaration, whether as an operand or a dynamic option. The runtime rejects such
+externally constructed models as duplicate declarations; it does not hoist input
+formatters or selection metadata. Input-before-local ordering remains valid.
+An explicit input formatter establishes its caller carrier exactly: `:number`
+and `:runic:relative-time` declare decimal inputs. Int64 widening into a decimal
+formatter is valid only for subsequent local or pattern expressions.
 Invalid resolved options raise `TranslationFormatException`; they do
 not clamp or fall back. Constructors reject malformed normalized models with
 argument exceptions. Authored numeric spelling and canonical fields are checked

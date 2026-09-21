@@ -90,6 +90,13 @@ internal static class Rmf2RuntimeValidation
         TextArgumentType.DateTime => "datetime", TextArgumentType.Guid => "runic:uuid", _ => throw new ArgumentException("Invalid carrier type.", nameof(type)),
     };
     internal static string Selection(string function) => function is "integer" or "number" or "runic:relative-time" ? "plural" : function is "string" or "runic:boolean" ? "exact" : "none";
+    private static TextArgumentType FunctionInputType(string function) => function switch
+    {
+        "string" => TextArgumentType.String, "integer" => TextArgumentType.Int,
+        "number" or "runic:relative-time" => TextArgumentType.Number, "runic:boolean" => TextArgumentType.Bool,
+        "date" => TextArgumentType.Date, "time" => TextArgumentType.Time, "datetime" => TextArgumentType.DateTime,
+        "runic:uuid" => TextArgumentType.Guid, _ => throw new ArgumentException("Unknown v5 input function.", nameof(function)),
+    };
     internal static TextArgumentType OptionType(string function, string name) => (function, name) switch
     {
         ("string" or "runic:boolean" or "integer" or "number", "select") => TextArgumentType.String,
@@ -175,27 +182,22 @@ internal static class Rmf2RuntimeValidation
             if (previous is not null && string.CompareOrdinal(previous, input.Name) >= 0) throw new ArgumentException("V5 inputs must be unique and ordinally sorted.", nameof(message));
             inputs.Add(input.Name, new(input.Type, Selection(DefaultFunction(input.Type)), explicitInputs.Contains(input.Name))); previous = input.Name;
         }
-        // Input signatures and selection annotations have whole-message scope,
-        // just as in semantic lowering. Only locals require prior declarations.
-        // Do not resolve options here: their local dependencies remain ordered.
+        var referenced = new HashSet<string>(StringComparer.Ordinal);
         foreach (var declaration in message.DeclarationArray)
         {
-            if (declaration.Kind != "input") continue;
-            if (declaration.Expression.Operand.Kind != "input" || declaration.Expression.Operand.Value != declaration.Name ||
-                !inputs.TryGetValue(declaration.Name, out Symbol? input) || declaration.Expression.ValueType != input.Type)
-                throw new ArgumentException("Input declaration must annotate its own typed caller input.", nameof(message));
-            string selection = declaration.Expression.Function is null ? input.Selection : Selection(declaration.Expression.Function);
-            foreach (var option in declaration.Expression.OptionArray) if (option.Name == "select") selection = option.Value.Value;
-            inputs[declaration.Name] = input with { Selection = selection };
-        }
-        foreach (var declaration in message.DeclarationArray)
-        {
-            if (!declared.Add(declaration.Name)) throw new ArgumentException("Duplicate v5 declaration.", nameof(message));
+            // A declaration may not rebind a name already used anywhere in a
+            // previous declaration, including formatter operands and options.
+            if (!declared.Add(declaration.Name) || referenced.Contains(declaration.Name))
+                throw new ArgumentException("Duplicate v5 declaration: the variable is already bound or was referenced by a previous declaration.", nameof(message));
             if (declaration.Kind == "input" && (declaration.Expression.Operand.Kind != "input" || declaration.Expression.Operand.Value != declaration.Name || !inputs.ContainsKey(declaration.Name)))
                 throw new ArgumentException("Input declaration must annotate its own caller input.", nameof(message));
+            if (declaration.Kind == "input" && declaration.Expression.Function is { } function && FunctionInputType(function) != declaration.Expression.ValueType)
+                throw new ArgumentException("Input declaration function must establish its caller carrier.", nameof(message));
             if (declaration.Kind == "local" && inputs.ContainsKey(declaration.Name)) throw new ArgumentException("Local shadows caller input.", nameof(message));
             Symbol symbol = Expression(declaration.Expression);
             if (declaration.Kind == "input") inputs[declaration.Name] = symbol; else locals.Add(declaration.Name, symbol);
+            Reference(declaration.Expression.Operand);
+            foreach (var option in declaration.Expression.OptionArray) Reference(option.Value);
         }
         var selectorNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var selector in message.SelectorArray)
@@ -242,6 +244,9 @@ internal static class Rmf2RuntimeValidation
             if (stack.Count != 0) throw new ArgumentException("Unbalanced linked markup.", nameof(message));
         }
         if (!fallback) throw new ArgumentException("V5 matchers require all-wildcard fallback.", nameof(message));
+
+        void Reference(CompiledRmf2Value value)
+        { if (value.Kind is "input" or "local") referenced.Add(value.Value); }
 
         Symbol Resolve(CompiledRmf2Value value)
         {

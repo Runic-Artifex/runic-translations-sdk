@@ -15,7 +15,8 @@ internal static class Rmf2RuntimeV5Tests
         runner.Add("v5 dynamic options follow typed local dependencies", OptionLocals);
         runner.Add("v5 exact numeric keys outrank categories independent of source order", NumericRanking);
         runner.Add("v5 selector ranks compare lexicographically and preserve literal stars", LexicographicRanking);
-        runner.Add("v5 forward input selection metadata reaches earlier locals and direct selectors", ForwardInputSelection);
+        runner.Add("v5 declarations reject rebinding earlier operand and dynamic option references", DeclarationRebinding);
+        runner.Add("v5 explicit input annotations establish carriers before expression widening", InputAnnotationCarriers);
         runner.Add("v5 canonical decimals preserve exact precision and CLDR operands", DecimalSelection);
         runner.Add("v5 annotations remain inert ordered and separate on closing markup", Annotations);
         runner.Add("v5 caller contracts preserve NFC identities and ignore presentation hints", CallerContracts);
@@ -131,7 +132,7 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("rd", ordinal.Format([new("n", 23L)], "en"));
         Assert.Equal("th", ordinal.Format([new("n", 13L)], "en"));
     }
-    private static void ForwardInputSelection()
+    private static void DeclarationRebinding()
     {
         foreach (string selection in new[] { "exact", "ordinal" })
         {
@@ -140,9 +141,10 @@ internal static class Rmf2RuntimeV5Tests
                 new("input", "n", Expr(Input("n"), TextArgumentType.Number, "number", new CompiledRmf2Option("select", Text(selection))))];
             foreach (var operand in new[] { Input("n"), Local("alias") })
             {
-                var message = new CompiledRmf2Message([new("n", TextArgumentType.Number)], declarations,
-                    [new(operand, TextArgumentType.Number, selection)],
-                    [new([selection == "exact" ? new("23.0", "23") : new("few")], [new("selected")]), new([new()], [new("fallback")])]);
+                CompiledRmf2Selector[] selectors = [new(operand, TextArgumentType.Number, selection)];
+                CompiledRmf2Variant[] variants = [new([selection == "exact" ? new("23.0", "23") : new("few")], [new("selected")]), new([new()], [new("fallback")])];
+                Assert.Throws<ArgumentException>(() => _ = new CompiledRmf2Message([new("n", TextArgumentType.Number)], declarations, selectors, variants), "Duplicate v5 declaration");
+                var message = new CompiledRmf2Message([new("n", TextArgumentType.Number)], [declarations[1], declarations[0]], selectors, variants);
                 Assert.Equal("selected", message.Format([new("n", 23m)], "en"));
                 Assert.Equal("fallback", message.Format([new("n", 13m)], "en"));
             }
@@ -150,6 +152,16 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Throws<ArgumentException>(() => Simple([], [
             new("local", "alias", Expr(Local("later"), TextArgumentType.Number)),
             new("local", "later", Expr(Number("1"), TextArgumentType.Number))], new CompiledRmf2Node("x")));
+        Assert.Throws<ArgumentException>(() => Simple([new("n", TextArgumentType.Number)], [
+            new("local", "alias", Expr(Input("n"), TextArgumentType.Number, "number")),
+            new("input", "n", Expr(Input("n"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Text("percent"))))],
+            Output(Local("alias"), TextArgumentType.Number)), "Duplicate v5 declaration");
+        Assert.Throws<ArgumentException>(() => Simple([new("digits", TextArgumentType.Int)], [
+            new("local", "formatted", Expr(Number("1.234"), TextArgumentType.Number, "number", new CompiledRmf2Option("maximumFractionDigits", Input("digits")))),
+            Declare("digits", TextArgumentType.Int, "integer")], Output(Local("formatted"), TextArgumentType.Number)), "Duplicate v5 declaration");
+        Assert.Throws<ArgumentException>(() => Simple([new("n", TextArgumentType.Number), new("style", TextArgumentType.String)], [
+            new("input", "n", Expr(Input("n"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Input("style")))),
+            Declare("style", TextArgumentType.String, "string")], Output(Input("n"), TextArgumentType.Number)), "Duplicate v5 declaration");
     }
     private static void Annotations()
     {
@@ -165,6 +177,20 @@ internal static class Rmf2RuntimeV5Tests
         }
         Assert.Equal("ok", content.Nodes.Span[1].Value);
         Assert.Throws<TranslationFormatException>(() => message.Format([], "en"));
+    }
+    private static void InputAnnotationCarriers()
+    {
+        foreach (string function in new[] { "number", "runic:relative-time" })
+        {
+            Assert.Throws<ArgumentException>(() => Simple([new("n", TextArgumentType.Int)],
+                [new("input", "n", Expr(Input("n"), TextArgumentType.Int, function))], Output(Input("n"), TextArgumentType.Int)), "establish its caller carrier");
+            string expected = function == "number" ? "2" : "in 2 days";
+            var pattern = Simple([new("n", TextArgumentType.Int)], [Declare("n", TextArgumentType.Int, "integer")], Output(Input("n"), TextArgumentType.Int, function));
+            Assert.Equal(expected, pattern.Format([new("n", 2L)], "en"));
+            var local = Simple([new("n", TextArgumentType.Int)], [Declare("n", TextArgumentType.Int, "integer"),
+                new("local", "a", Expr(Input("n"), TextArgumentType.Int, function))], Output(Local("a"), TextArgumentType.Int));
+            Assert.Equal(expected, local.Format([new("n", 2L)], "en"));
+        }
     }
     private static void CallerContracts()
     {

@@ -12,7 +12,7 @@ internal static class Rmf2RuntimeV5Tests
         runner.Add("RMF2 v5 normalized compiler values execute without a v4 adapter", CompilerValues);
         runner.Add("RMF2 v5 locale grammars execute against the same typed caller contract", CallerContracts);
         runner.Add("RMF2 v5 normalized annotation and markup ordering survives runtime lowering", Annotations);
-        runner.Add("RMF2 v5 forward input selection annotations survive runtime lowering", ForwardInputSelection);
+        runner.Add("RMF2 v5 declaration rebinding cannot reach runtime execution", DeclarationRebinding);
     }
     private static void CompilerValues()
     {
@@ -43,16 +43,30 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("100", content.Nodes.Span[1].Annotations.Span[1].Value!.Canonical);
         Assert.Equal("close", content.Nodes.Span[2].Annotations.Span[0].Name);
     }
-    private static void ForwardInputSelection()
+    private static void DeclarationRebinding()
     {
         foreach (string selector in new[] { "n", "a" })
         {
-            var ordinal = Compile(".local $a = {$n}\n.input {$n :number select=ordinal}\n.match $" + selector + "\nfew {{ordinal}}\n* {{fallback}}");
+            RejectBeforeExecution(".local $a = {$n}\n.input {$n :number select=ordinal}\n.match $" + selector + "\nfew {{ordinal}}\n* {{fallback}}");
+            RejectBeforeExecution(".local $a = {$n}\n.input {$n :number select=exact}\n.match $" + selector + "\n23 {{exact}}\n* {{fallback}}");
+            var ordinal = Compile(".input {$n :number select=ordinal}\n.local $a = {$n}\n.match $" + selector + "\nfew {{ordinal}}\n* {{fallback}}");
             Assert.Equal("ordinal", ordinal.Format([new("n", 23m)], "en"));
             Assert.Equal("fallback", ordinal.Format([new("n", 13m)], "en"));
-            var exact = Compile(".local $a = {$n}\n.input {$n :number select=exact}\n.match $" + selector + "\n23 {{exact}}\n* {{fallback}}");
+            var exact = Compile(".input {$n :number select=exact}\n.local $a = {$n}\n.match $" + selector + "\n23 {{exact}}\n* {{fallback}}");
             Assert.Equal("exact", exact.Format([new("n", 23m)], "en"));
         }
+        RejectBeforeExecution(".local $a = {$n :number}\n.input {$n :number style=percent}\n{{{$a}}}");
+        RejectBeforeExecution(".local $a = {1.234 :number maximumFractionDigits=$digits}\n.input {$digits :integer}\n{{{$a}}}");
+        RejectBeforeExecution(".input {$n :number style=$style}\n.input {$style :string}\n{{{$n}}}");
+    }
+    private static void RejectBeforeExecution(string text)
+    {
+        var result = Rmf2SemanticCompilerV5.Compile(new TranslationSource("test.mf2", Encoding.UTF8.GetBytes(text)));
+        if (!result.Success) return;
+        // Even an older semantic producer cannot activate this invalid model.
+        try { _ = Lower(result.Message!); }
+        catch (ArgumentException exception) when (exception.Message.Contains("Duplicate v5 declaration", StringComparison.Ordinal)) { return; }
+        throw new InvalidOperationException("Declaration rebinding reached runtime execution.");
     }
     // Test-only direct lowering. Project linking, generated emission and pack
     // dispatch deliberately remain outside this runtime implementation slice.
@@ -60,12 +74,12 @@ internal static class Rmf2RuntimeV5Tests
     {
         var result = Rmf2SemanticCompilerV5.Compile(new TranslationSource("test.mf2", Encoding.UTF8.GetBytes(text)));
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
-        var message = result.Message!;
-        return new(message.Inputs.Select(item => new CompiledRmf2Input(item.Name, Type(item.Type))).ToArray(),
+        return Lower(result.Message!);
+    }
+    private static CompiledRmf2Message Lower(Rmf2MessageV5 message) => new(message.Inputs.Select(item => new CompiledRmf2Input(item.Name, Type(item.Type))).ToArray(),
             message.Declarations.Select(item => new CompiledRmf2Declaration(item.Kind, item.Name, Expression(item.Expression))).ToArray(),
             message.Selectors.Select(item => new CompiledRmf2Selector(Value(item.Value), Type(item.Type), item.Function)).ToArray(),
             message.Variants.Select(item => new CompiledRmf2Variant(item.Keys.Select(key => new CompiledRmf2Key(key.Value, key.Canonical)).ToArray(), item.Nodes.Select(Node).ToArray())).ToArray());
-    }
     private static CompiledRmf2Value Value(Rmf2ValueV5 value) => new(value.Kind, value.Value, value.Canonical);
     private static CompiledRmf2Option Option(Rmf2OptionV5 option) => new(option.Name, Value(option.Value));
     private static CompiledRmf2Annotation Annotation(Rmf2AnnotationV5 annotation) => new(annotation.Name, annotation.Value is null ? null : Value(annotation.Value));
