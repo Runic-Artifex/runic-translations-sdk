@@ -95,6 +95,8 @@ internal static class Rmf2MarkupTests
                 const slots = { terms: linkBinding({href:'/terms'}), privacy: linkBinding({href:'/privacy'}), retry: actionBinding({onActivate:()=>calls++}), star: iconBinding({asset:{},decorative:false,accessibleName: locale => locale === 'en' ? 'Star' : 'Stern'}) };
                 const badge = defineMarkup({name:'shop:badge',kind:'paired',children:'inline',interactive:false,plainText:'children',options:{tone:enumOption(['neutral','positive'],'neutral')}});
                 const custom = [bindMarkup(badge, ({children,options})=>{ check(options.tone==='positive','option resolution'); return children.join(''); })];
+                const incompatibleBadge = defineMarkup({name:'shop:badge',kind:'standalone',children:'none',interactive:false,plainText:'children',options:{}});
+                let incompatible=false; try { createInlineRenderer({text:value=>value,element:node=>node},[bindMarkup(incompatibleBadge,node=>node)]); } catch { incompatible=true; } check(incompatible,'renderer contract child/kind mismatch accepted');
                 const content = m.payment({tone:'positive'});
                 check(content.key==='payment' && content.locale==='en','content identity');
                 for (const href of ['javascript:alert(1)','java\\tscript:alert(1)','data:text/html,bad']) {
@@ -104,6 +106,8 @@ internal static class Rmf2MarkupTests
                 let rejected=false; try { toPlainText(content,{slots,custom}); } catch { rejected=true; } check(rejected,'implicit action projection');
                 const text = toPlainText(content,{slots,custom,allowActionLabels:true});
                 check(text === 'Read terms and privacy. Retry Star Available','plain text: '+text);
+                check(toPlainText(content,{slots,allowActionLabels:true})===text,'policy-driven custom plain text projection');
+                check(!Object.hasOwn(content.nodes.find(node=>node.name==='shop:badge'),'annotations'),'annotations leaked into ESM content');
                 check(calls===0,'render invoked callback');
                 check(m.items({count:0})==='Empty','numeric exact selection');
                 check(m.items({count:1})==='One','default cardinal selection');

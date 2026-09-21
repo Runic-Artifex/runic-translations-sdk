@@ -24,12 +24,26 @@ export function enumOption(values, defaultValue) {
   return Object.freeze({ type: "enum", values: Object.freeze([...values]), ...(defaultValue === undefined ? {} : { default: defaultValue }) });
 }
 export function defineMarkup(contract) {
-  if (!contract || !/^[A-Za-z_][\w-]*:[A-Za-z_][\w-]*$/.test(contract.name) || contract.name.startsWith("runic:") || !["paired", "standalone"].includes(contract.kind)) throw new TypeError("Invalid custom markup contract.");
+  if (!contract || !/^[A-Za-z_][\w-]*:[A-Za-z_][\w-]*$/.test(contract.name) || contract.name.startsWith("runic:") || !["paired", "standalone"].includes(contract.kind) || contract.children !== (contract.kind === "standalone" ? "none" : "inline") || typeof contract.interactive !== "boolean" || !["children", "lineBreak", "alternateText", "explicit", "omit"].includes(contract.plainText) || (contract.options !== undefined && (!contract.options || typeof contract.options !== "object" || Array.isArray(contract.options)))) throw new TypeError("Invalid custom markup contract.");
   return freezeRmf2Contract(JSON.parse(JSON.stringify(contract)));
 }
 export function bindMarkup(contract, render) {
   if (typeof render !== "function") throw new TypeError("A markup renderer must be a function.");
   return Object.freeze({ contract, render });
+}
+function contractChildren(contract) { return contract.children ?? (contract.kind === "standalone" ? "none" : "inline"); }
+function optionContractsMatch(declared, supplied) {
+  declared ??= {};
+  const actual = supplied ?? {};
+  const names = Object.keys(declared);
+  return names.length === Object.keys(actual).length && names.every(name => {
+    const expected = declared[name];
+    const received = actual[name];
+    return received && received.type === expected.type && JSON.stringify(received.values ?? []) === JSON.stringify(expected.values ?? []) && (received.default ?? null) === (expected.default ?? null) && !!received.literalOnly === !!expected.literalOnly;
+  });
+}
+function rendererContractMatches(declared, supplied, expectedName) {
+  return supplied && supplied.name === (declared.name ?? expectedName) && supplied.kind === declared.kind && contractChildren(supplied) === contractChildren(declared) && supplied.plainText === declared.plainText && supplied.interactive === declared.interactive && optionContractsMatch(declared.options, supplied.options);
 }
 function rmf2Option(schema, value) {
   if (typeof value !== "string") return false;
@@ -41,16 +55,14 @@ function rmf2Option(schema, value) {
   }
 }
 export function createInlineRenderer(factory, bindings = []) {
+  return createInlineRendererCore(factory, bindings, false);
+}
+function createInlineRendererCore(factory, bindings = [], allowUnboundCustom = false) {
   if (!factory || typeof factory.text !== "function" || typeof factory.element !== "function") throw new TypeError("An inline renderer requires text and element factories.");
   const custom = new Map();
   for (const binding of bindings) {
-    const declared = rmf2Contract.contracts[binding.contract.name];
-    if (!declared || custom.has(binding.contract.name) || declared.kind !== binding.contract.kind || declared.plainText !== binding.contract.plainText || declared.interactive !== binding.contract.interactive) throw new TypeError("Incompatible or duplicate renderer contract.");
-    const supplied = binding.contract.options ?? {};
-    if (Object.keys(declared.options).length !== Object.keys(supplied).length || Object.entries(declared.options).some(([name, schema]) => {
-      const actual = supplied[name];
-      return !actual || actual.type !== schema.type || JSON.stringify(actual.values ?? []) !== JSON.stringify(schema.values) || (actual.default ?? null) !== schema.default || !!actual.literalOnly !== schema.literalOnly;
-    })) throw new TypeError("Renderer option contract mismatch.");
+    const declared = binding?.contract && rmf2Contract.contracts[binding.contract.name];
+    if (!declared || binding.contract.name.startsWith("runic:") || custom.has(binding.contract.name) || !rendererContractMatches(declared, binding.contract, binding.contract.name)) throw new TypeError("Incompatible or duplicate renderer contract.");
     custom.set(binding.contract.name, binding.render);
   }
   function render(content, { slots = {} } = {}) {
@@ -87,7 +99,7 @@ export function createInlineRenderer(factory, bindings = []) {
         const children = visit(node.children, interactive || contract.interactive, depth + 1, `${path}${index}.`);
         const renderer = custom.get(node.name);
         const element = { name: node.name, children, options, binding, occurrence, locale: content.locale, standalone: node.standalone };
-        if (!renderer && !node.name.startsWith("runic:")) throw new TypeError(`No renderer linked for '${node.name}'.`);
+        if (!renderer && !node.name.startsWith("runic:") && !allowUnboundCustom) throw new TypeError(`No renderer linked for '${node.name}'.`);
         return element;
       });
     }
@@ -100,10 +112,10 @@ export function createInlineRenderer(factory, bindings = []) {
     }
     return output.map(materialize);
   }
-  return Object.freeze({ render, extend(extra) { return createInlineRenderer(factory, [...bindings, ...extra]); } });
+  return Object.freeze({ render, extend(extra) { return createInlineRendererCore(factory, [...bindings, ...extra], allowUnboundCustom); } });
 }
 export function toPlainText(content, { slots = {}, allowActionLabels = false, annotateLinkDestinations = false, custom = [] } = {}) {
-  const renderer = createInlineRenderer({
+  const renderer = createInlineRendererCore({
     text: value => value,
     element({ name, children, binding, locale }) {
       if (name === "runic:br") return "\n";
@@ -114,10 +126,14 @@ export function toPlainText(content, { slots = {}, allowActionLabels = false, an
         if (typeof label !== "string" || !label.trim()) throw new TypeError("Meaningful icon alternate text is empty.");
         return label;
       }
+      const contract = rmf2Contract.contracts[name];
+      if (!name.startsWith("runic:") && contract?.plainText === "lineBreak") return "\n";
+      if (!name.startsWith("runic:") && contract?.plainText === "omit") return "";
+      if (!name.startsWith("runic:") && (contract?.plainText === "explicit" || contract?.plainText === "alternateText")) throw new TypeError("Custom markup requires an explicit plain-text adapter.");
       const text = children.join("");
       return name === "runic:link" && annotateLinkDestinations ? `${text} (${binding.href})` : text;
     },
-  }, custom);
+  }, custom, true);
   return renderer.render(content, { slots }).join("");
 }
 export function createDomInlineRenderer(document, custom = []) {

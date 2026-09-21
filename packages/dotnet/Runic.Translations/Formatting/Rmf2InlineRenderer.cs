@@ -42,8 +42,16 @@ public sealed class Rmf2InlineRenderer
             var options = new Dictionary<string, Option>(StringComparer.Ordinal);
             foreach (JsonProperty option in item.Value.GetProperty("options").EnumerateObject())
                 options.Add(option.Name, new Option(option.Value.GetProperty("type").GetString()!, option.Value.GetProperty("values").EnumerateArray().Select(v => v.GetString()!).ToArray(), option.Value.GetProperty("literalOnly").GetBoolean()));
-            _tags.Add(item.Name, new Tag(item.Value.GetProperty("kind").GetString() == "standalone",
-                item.Value.GetProperty("interactive").GetBoolean(), item.Value.GetProperty("plainText").GetString()!, options));
+            string kind = item.Value.GetProperty("kind").GetString()!;
+            if (kind is not ("paired" or "standalone")) throw new ArgumentException("Unsupported RMF2 markup kind.", nameof(contractJson));
+            bool standalone = kind == "standalone";
+            string children = item.Value.TryGetProperty("children", out JsonElement childrenElement)
+                ? childrenElement.GetString()!
+                : standalone ? "none" : "inline";
+            if (children != (standalone ? "none" : "inline")) throw new ArgumentException("RMF2 markup child model does not match its kind.", nameof(contractJson));
+            string plainText = item.Value.GetProperty("plainText").GetString()!;
+            if (plainText is not ("children" or "lineBreak" or "alternateText" or "explicit" or "omit")) throw new ArgumentException("Unsupported RMF2 plain-text projection policy.", nameof(contractJson));
+            _tags.Add(item.Name, new Tag(standalone, children, item.Value.GetProperty("interactive").GetBoolean(), plainText, options));
         }
         foreach (JsonProperty message in root.GetProperty("messages").EnumerateObject())
         {
@@ -233,7 +241,7 @@ public sealed class Rmf2InlineRenderer
     }
     private static bool Matches(string kind, InlineMarkupBinding binding) => kind switch
     { "runic:link" => binding is InlineLinkBinding { Destination: not null } link && (!link.Destination.IsAbsoluteUri || link.Destination.Scheme is "http" or "https" or "mailto" or "tel"), "runic:action" => binding is InlineActionBinding { Activate: not null }, "runic:icon" => binding is InlineIconBinding, _ => false };
-    private sealed record Tag(bool Standalone, bool Interactive, string PlainText, Dictionary<string, Option> Options);
+    private sealed record Tag(bool Standalone, string Children, bool Interactive, string PlainText, Dictionary<string, Option> Options);
     private sealed record Option(string Type, string[] Values, bool LiteralOnly)
     {
         internal bool AcceptsType(TextArgumentType type) => Type switch { "number" => type is TextArgumentType.Int or TextArgumentType.Number, "boolean" => type == TextArgumentType.Bool, _ => type == TextArgumentType.String };
