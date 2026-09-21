@@ -30,6 +30,8 @@ and [machine-readable option table](../../../specs/translations/rmf2-execution-v
 describe these rules and the integration boundary. Public schema mirrors are
 [message AST v5](/schemas/translations/message-ast-v5.schema.json) and
 [locale artifact v5](/schemas/translations/locale-artifact-v5.schema.json).
+The CLI `schema` command also exports both v5 schemas for offline validation;
+schema distribution does not enable v5 project generation or runtime loading.
 Resource syntax and markup contracts remain version 1.
 
 The next integration slice must evaluate typed locals/options, link project
