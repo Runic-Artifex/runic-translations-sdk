@@ -7,7 +7,13 @@ profile, with its existing supported features and refusal diagnostics.
 
 The new model preserves input/local references, formatted literal operands,
 formatter metadata through local chains, ordered typed options, and inert
-annotations. Variant keys distinguish bare wildcard `*` from literal `|*|`.
+annotations. Expressions carry an underlying `valueType` independently of their
+formatter: an int64 input formatted by `:number` remains int64 and can later use
+`:integer`. Type inference follows aliases back to unannotated or implicit inputs;
+explicitly annotated caller types remain fixed. UUID literal binding requires
+exactly 36 UUID D-format characters without padding.
+
+Variant keys distinguish bare wildcard `*` from literal `|*|`.
 Selection compares per-selector ranks in order: numeric exact, plural/ordinal
 category, then wildcard. String and boolean exact matches outrank wildcard.
 Unicode comparisons use NFC while keeping authored text.

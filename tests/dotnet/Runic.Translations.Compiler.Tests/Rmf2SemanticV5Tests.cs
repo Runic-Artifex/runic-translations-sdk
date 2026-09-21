@@ -15,6 +15,8 @@ internal static class Rmf2SemanticV5Tests
     internal static void Register(TestRunner runner)
     {
         runner.Add("RMF2 v5 keeps typed formatted local chains and literal formatting", LocalsAndLiterals);
+        runner.Add("RMF2 v5 infers through aliases and preserves underlying types across formatter overrides", LocalValueTypes);
+        runner.Add("RMF2 v5 UUID literals require exactly 36 D-format characters", UuidLiterals);
         runner.Add("RMF2 v5 dynamic options require declared typed caller inputs", DynamicOptions);
         runner.Add("RMF2 v5 finite option table validates enums ranges defaults and runtime errors", Options);
         runner.Add("RMF2 v5 annotations retain order absence empty and numeric values without inputs", Annotations);
@@ -81,6 +83,49 @@ internal static class Rmf2SemanticV5Tests
         Reject(".input {$n :number} .input {$select :string} {{{$n :number select=$select}}}", "RTR0065");
         Reject(".local $style = {$implicit} {{ {1 :number style=$style} }}", "RTR0065");
         Message(".local $style = {|percent|} {{ {1 :number style=$style} }}");
+    }
+    private static void LocalValueTypes()
+    {
+        foreach (string declaration in new[] { "", ".input {$n} ", ".input {$n :number} " })
+        {
+            var message = Message(declaration + ".local $a = {$n} .local $b = {$a} {{ {$b :number} }}");
+            Assert.Equal("decimal", Assert.Single(message.Inputs).Type);
+            Assert.True(message.Declarations.All(item => item.Expression.ValueType == "decimal"), "Alias lost its underlying inferred input type.");
+            Assert.Equal("decimal", message.Variants[0].Nodes.OfType<Rmf2ExpressionNodeV5>().Single().Expression.ValueType);
+        }
+        foreach (string declaration in new[] { "", ".input {$n} ", ".input {$n :integer} " })
+        {
+            var message = Message(declaration + ".local $a = {$n :number style=percent} .local $alias = {$a} {{ {$alias :integer} }}");
+            Assert.Equal("int64", Assert.Single(message.Inputs).Type);
+            Assert.True(message.Declarations.All(item => item.Expression.ValueType == "int64"), "A number formatter widened the underlying int64 carrier.");
+            var formatted = message.Declarations.Single(item => item.Name == "a").Expression;
+            Assert.Equal("number", formatted.Function);
+            Assert.Equal("percent", Assert.Single(formatted.Options).Value.Value);
+            Assert.True(message.Declarations.Single(item => item.Name == "alias").Expression.Function is null, "Alias replaced the inherited formatter.");
+            var output = message.Variants[0].Nodes.OfType<Rmf2ExpressionNodeV5>().Single().Expression;
+            Assert.Equal("int64", output.ValueType);
+            Assert.Equal("integer", output.Function);
+        }
+        var literal = Message(".local $n = {42 :integer} .local $a = {$n :number} {{ {$a :integer} }}");
+        Assert.Equal(0, literal.Inputs.Count);
+        Assert.True(literal.Declarations.All(item => item.Expression.ValueType == "int64"), "Formatter retagged a bound literal local.");
+        var selection = Message(".input {$n :integer select=ordinal} .local $a = {$n :number select=exact} .local $alias = {$a} .match $alias 1 {{exact}} * {{other}}");
+        Assert.Equal("int64", selection.Selectors[0].Type);
+        Assert.Equal("exact", selection.Selectors[0].Function);
+        var options = Message(".input {$digits :integer} .local $d = {$digits :number} {{ {1 :number maximumFractionDigits=$d} }}");
+        Assert.Equal("int64", options.Declarations[1].Expression.ValueType);
+        Reject(".input {$n :number} .local $a = {$n} {{ {$a :integer} }}", "RTR0065");
+        Reject(".input {$n :string} .local $a = {$n} {{ {$a :number} }}", "RTR0065");
+        Reject(".local $a = {$n} {{ {$a :number} {$a :string} }}", "RTR0065");
+    }
+    private static void UuidLiterals()
+    {
+        const string uuid = "00112233-4455-6677-8899-aAbBcCdDeEfF";
+        var message = Message(".local $id = {|" + uuid + "| :runic:uuid} .local $alias = {$id} {{ {$alias :runic:uuid style=n} }}");
+        Assert.Equal("guid", message.Declarations[0].Expression.ValueType);
+        Assert.Equal("guid", message.Declarations[1].Expression.ValueType);
+        foreach (string invalid in new[] { " " + uuid, uuid + " ", " " + uuid + " ", "\t" + uuid, uuid + "\n", uuid[..^1], "{" + uuid + "}", uuid.Replace("-", "", StringComparison.Ordinal) })
+            Reject("{|" + invalid + "| :runic:uuid}", "RTR0065");
     }
     private static void Options()
     {

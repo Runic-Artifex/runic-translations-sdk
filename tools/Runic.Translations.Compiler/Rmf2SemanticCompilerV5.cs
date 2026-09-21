@@ -17,7 +17,7 @@ internal static class Rmf2SemanticCompilerV5
         return new Lowerer(syntax, options, cancellationToken).Lower();
     }
 
-    private sealed record Symbol(string Kind, string Type, string Selection, IReadOnlyList<string> Inputs);
+    private sealed record Symbol(string Kind, string ValueType, string Selection, IReadOnlyList<string> Inputs);
     private sealed class Lowerer(Mf2SyntaxDocument syntax, TranslationCompilerOptions options, CancellationToken cancellation)
     {
         private readonly DiagnosticBag _diagnostics = new();
@@ -41,19 +41,28 @@ internal static class Rmf2SemanticCompilerV5
                 _inputs[declaration.Name] = type;
                 _symbols[declaration.Name] = new("input", type, Selection(declaration.Expression, function?.Selection ?? "exact"), new[] { declaration.Name });
             }
-            // Infer undeclared operand types from all formatter uses, so reversing
-            // pattern expressions does not change the caller contract. Option-only
-            // variables are never declared by this inference pass.
+            // Infer unconstrained input types through complete local operand chains.
+            // Formatter metadata on a local does not create a new underlying value.
+            // Annotated input declarations are fixed contracts; unannotated ones can
+            // be constrained by uses. Option-only variables are not inferred here.
+            var declaredTypes = syntax.Declarations.Where(declaration => declaration.Kind == "input" && declaration.Expression.Function is not null)
+                .Select(declaration => declaration.Name).ToHashSet(StringComparer.Ordinal);
+            var localOperands = syntax.Declarations.Where(declaration => declaration.Kind == "local")
+                .ToDictionary(declaration => declaration.Name, declaration => declaration.Expression.Operand, StringComparer.Ordinal);
+            var inferredTypes = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var expression in syntax.Expressions)
             {
-                if (expression.Operand is not { Kind: Mf2OperandKind.Variable } operand || _explicitInputs.Contains(operand.Value) || _locals.Contains(operand.Value) ||
-                    expression.Function is not string name || Rmf2FunctionRegistryV2.Find(name) is not { } function) continue;
+                if (expression.Function is not string name || Rmf2FunctionRegistryV2.Find(name) is not { } function) continue;
+                var operand = expression.Operand;
+                while (operand is { Kind: Mf2OperandKind.Variable } && localOperands.TryGetValue(operand.Value, out var underlying)) operand = underlying;
+                if (operand is not { Kind: Mf2OperandKind.Variable } || declaredTypes.Contains(operand.Value)) continue;
                 string type = function.InputType;
-                if (_inputs.TryGetValue(operand.Value, out string? previous) && previous != type)
+                if (inferredTypes.TryGetValue(operand.Value, out string? previous) && previous != type)
                 {
                     if (previous is "int64" or "decimal" && type is "int64" or "decimal") type = "int64";
                     else Error("Conflicting formatter input types for '" + operand.Value + "'.", operand.Location);
                 }
+                inferredTypes[operand.Value] = type;
                 _inputs[operand.Value] = type;
                 _symbols[operand.Value] = new("input", type, DefaultSelection(type), new[] { operand.Value });
             }
@@ -73,8 +82,8 @@ internal static class Rmf2SemanticCompilerV5
                 foreach (string name in match.Selectors)
                 {
                     var symbol = Resolve(name, null, match.Location);
-                    if (symbol.Type is not ("string" or "boolean" or "int64" or "decimal")) Error("This type cannot select a variant.", match.Location);
-                    selectors.Add(new(new(symbol.Kind, name), symbol.Type, symbol.Selection));
+                    if (symbol.ValueType is not ("string" or "boolean" or "int64" or "decimal")) Error("This type cannot select a variant.", match.Location);
+                    selectors.Add(new(new(symbol.Kind, name), symbol.ValueType, symbol.Selection));
                 }
                 var seen = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var variant in syntax.Variants)
@@ -106,9 +115,9 @@ internal static class Rmf2SemanticCompilerV5
             if (expression.Operand is null) Error("Function-only expressions are outside rmf2-execution-v2.", expression.Location);
             var operand = expression.Operand is null ? new Rmf2ValueV5("string-literal", "") : Value(expression.Operand, function?.InputType);
             var inherited = operand.Kind is "input" or "local" ? _symbols.GetValueOrDefault(operand.Value)
-                : new Symbol("local", operand.Kind == "number-literal" ? "decimal" : "string", operand.Kind == "number-literal" ? "plural" : "exact", Array.Empty<string>());
+                : new Symbol("local", LiteralType(operand, function), operand.Kind == "number-literal" ? "plural" : "exact", Array.Empty<string>());
             inherited ??= new Symbol("input", "string", "exact", Array.Empty<string>());
-            if (function is not null && !AcceptsOperand(operand, inherited.Type, function.InputType)) Error("Function ':" + function.Name + "' requires " + function.InputType + " input.", expression.Location);
+            if (function is not null && !AcceptsOperand(operand, inherited.ValueType, function.InputType)) Error("Function ':" + function.Name + "' requires " + function.InputType + " input.", expression.Location);
             var loweredOptions = new List<Rmf2OptionV5>();
             var dependencies = new HashSet<string>(inherited.Inputs, StringComparer.Ordinal);
             foreach (var property in expression.Options)
@@ -120,7 +129,7 @@ internal static class Rmf2SemanticCompilerV5
                 if (value.Kind is "input" or "local")
                 {
                     var symbol = _symbols.GetValueOrDefault(value.Value);
-                    if (!rule.Dynamic || symbol is null || symbol.Type != rule.InputType || symbol.Inputs.Any(input => !_explicitInputs.Contains(input)))
+                    if (!rule.Dynamic || symbol is null || symbol.ValueType != rule.InputType || symbol.Inputs.Any(input => !_explicitInputs.Contains(input)))
                         Error("Dynamic option '" + property.Name + "' requires a declared " + rule.InputType + " input or a local of that type, and must permit dynamic values.", property.Location);
                     if (symbol is not null) dependencies.UnionWith(symbol.Inputs);
                 }
@@ -139,9 +148,8 @@ internal static class Rmf2SemanticCompilerV5
                 if ((min.HasValue && max.HasValue && min > max) || (percent && (min > 4 || max > 4))) Error("Invalid static fraction digit constraints.", expression.Location);
                 int? Digits(string name, int? fallback) => !supplied.TryGetValue(name, out var value) ? fallback : value.Kind == "number-literal" && int.TryParse(value.Canonical, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int digits) ? digits : null;
             }
-            string type = function?.InputType ?? inherited.Type;
             string selection = Selection(expression, function?.Selection ?? inherited.Selection);
-            return (new(operand, expression.Function, loweredOptions, Annotations(expression)), new("local", type, selection, dependencies.Order(StringComparer.Ordinal).ToArray()));
+            return (new(operand, inherited.ValueType, expression.Function, loweredOptions, Annotations(expression)), new("local", inherited.ValueType, selection, dependencies.Order(StringComparer.Ordinal).ToArray()));
         }
 
         private List<Rmf2NodeV5> Pattern(int from, int to)
@@ -213,18 +221,22 @@ internal static class Rmf2SemanticCompilerV5
         }
         private static bool AcceptsOperand(Rmf2ValueV5 value, string actual, string expected)
         {
-            if (actual == expected || (actual == "int64" && expected == "decimal")) return true;
-            if (value.Kind == "number-literal" && expected == "int64") return long.TryParse(value.Canonical, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _);
-            if (value.Kind != "string-literal") return false;
+            if (value.Kind is "input" or "local") return actual == expected || (actual == "int64" && expected == "decimal");
+            if (value.Kind == "number-literal") return expected == "decimal" || (expected == "int64" && long.TryParse(value.Canonical, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _));
             return expected switch {
+                "string" => true,
                 "boolean" => value.Value is "true" or "false",
                 "date" => DateOnly.TryParseExact(value.Value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _),
                 "time" => TimeOnly.TryParseExact(value.Value, "HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out _),
                 "datetime" => DateTimeOffset.TryParseExact(value.Value, "yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out _),
-                "guid" => Guid.TryParseExact(value.Value, "D", out _),
+                "guid" => value.Value.Length == 36 && Guid.TryParseExact(value.Value, "D", out _),
                 _ => false,
             };
         }
+        // Literal binding introduces a typed value once. Later formatting of an
+        // input/local reference must keep that value type, even when the function
+        // accepts a wider domain (for example :number consuming an int64 value).
+        private static string LiteralType(Rmf2ValueV5 value, Rmf2FunctionRuleV2? function) => function?.InputType ?? (value.Kind == "number-literal" ? "decimal" : "string");
         private static string Selection(Mf2ExpressionSyntax expression, string fallback) => expression.Options.FirstOrDefault(option => option.Name == "select")?.Value?.Value ?? fallback;
         private static string DefaultSelection(string type) => type is "int64" or "decimal" ? "plural" : type is "string" or "boolean" ? "exact" : "none";
         private static string Unescape(string value)

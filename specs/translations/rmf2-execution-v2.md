@@ -20,26 +20,33 @@ their decoded authored text. Number literals retain both their authored decimal
 spelling (`value`) and their exact portable `canonical` value. The compiler also
 retains the original shared syntax document, including raw tokens and locations.
 
-An expression contains a required operand, an optional function, an ordered
-option array and an ordered annotation array. Function-only expressions are
+An expression contains a required operand, its resolved underlying `valueType`,
+an optional formatter function, an ordered option array and an ordered annotation
+array. `valueType` is independent of the formatter's accepted input domain;
+applying a formatter to an input/local reference never changes its carrier type.
+Function-only expressions are
 outside this profile. Unknown functions or options are errors. No function,
 option, annotation, or local declaration is silently converted to plain text.
 
-Declarations remain ordered and distinguish `.input` from `.local`. Input
-declarations establish caller types. An untyped input is a string. For an
-undeclared operand, formatter constraints across the whole message infer its
-type; an unformatted operand defaults to string. Integer and decimal constraints
-intersect at int64. Conflicting types are errors, independent of expression order.
+Declarations remain ordered and distinguish `.input` from `.local`. An input
+declaration with a function annotation establishes its caller type. For an
+unannotated input declaration or an undeclared operand, formatter constraints
+across the whole message infer its type, following local operand chains back to
+the input. With no constraint, the input defaults to string. Integer and decimal
+constraints intersect at int64. Conflicting types are errors, independent of
+expression order. A declared `:string` input remains string and cannot be
+reinterpreted as numeric through a local alias.
 All declared inputs and inferred operand inputs appear in the caller contract,
 sorted by NFC name using ordinal order. Local names never become caller inputs.
 Duplicate declarations and references to a local before its declaration are
 data-model errors.
 
-A local holds a **resolved typed value with its formatter and selection
-metadata**, not the formatted display string. A functionless local alias keeps
-that value and metadata. An explicit function consumes its underlying typed
+A local holds a **resolved underlying typed value**, independently of its
+formatter and selection metadata. A functionless local alias keeps both that
+value and its metadata. An explicit function consumes the same underlying typed
 value, replacing the formatter/options with the explicit function and that
-function's defaults. It never reparses localized output. For example:
+function's defaults. It never retags the value or reparses localized output.
+For example:
 
 ```text
 .input {$amount :number}
@@ -54,9 +61,42 @@ For `amount = 0.5`, `$alias` carries the percent formatter over the number 0.5;
 not interpret the intermediate display `50%` as a string or the number 50.
 Formatting a numeric literal or a constant local creates no caller argument.
 
+Type inference also follows a functionless alias:
+
+```text
+.input {$n}
+.local $a = {$n}
+{{{$a :number}}}
+```
+
+This declares a decimal caller input `n` and gives the alias a decimal
+`valueType`. Omitting the unannotated `.input` produces the same inferred operand
+type, although that implicit input still cannot satisfy the explicit-declaration
+requirement for dynamic options. An explicit `.input {$n :number}` also works.
+
+Widening the accepted formatter domain does not widen the value's carrier:
+
+```text
+.input {$n :integer}
+.local $a = {$n :number style=percent}
+{{{$a :integer}}}
+```
+
+Here `n`, `$a`, and the output expression all retain `valueType: "int64"`.
+`$a` inherits a number formatter, while the final expression replaces it with
+the integer formatter. This is allowed because the underlying int64 was never
+converted into a decimal or formatted string. A caller input explicitly declared
+`:number` remains decimal, so an `:integer` override of that input or its aliases
+is rejected. Selector and dynamic-option type checks likewise use the underlying
+carrier, independently of the inherited formatter.
+
 The function table fixes the following operand types. Int64 can be consumed by a
 decimal function without losing its value. Other reference type conversions are
-rejected. Integer numeric literals must be integral and in signed int64 range.
+rejected. A literal is initially bound once to the function's accepted literal
+type in the table; without a function, number literals bind decimal and string
+literals bind string. Subsequent input/local formatter applications preserve
+that bound type. Integer numeric literals must be integral and in signed int64
+range.
 
 | Functions | Operand type | Literal support |
 | --- | --- | --- |
@@ -67,7 +107,7 @@ rejected. Integer numeric literals must be integral and in signed int64 range.
 | `date` | date | string literal exactly `yyyy-MM-dd`, valid calendar date |
 | `time` | time | string literal exactly `HH:mm:ss`, valid clock time |
 | `datetime` | datetime | string literal exactly `yyyy-MM-ddTHH:mm:ssZ`, UTC |
-| `runic:uuid` | guid | string literal in UUID D format |
+| `runic:uuid` | guid | exactly 36 decoded characters in UUID D format; no whitespace padding |
 
 ## Finite function options
 
@@ -198,6 +238,7 @@ messages. [locale-artifact-v5.schema.json](schemas/locale-artifact-v5.schema.jso
 defines the separate v5 envelope: each message has `contentLocale` and `ast`.
 The envelope reuses the unchanged v1 markup-contract serialization from v4.
 Schema validation does not replace semantic validation of reference binding,
+derived `valueType` consistency,
 option constraints, numeric canonical fields, NFC duplicates, key counts,
 fallback coverage, or caller and markup contracts.
 
@@ -217,7 +258,9 @@ dispatch. It must retain v4 readers and constructors and must not erase v5 data
 through the v4 AST adapter. Only that integrated work may change default emission.
 
 The [golden corpus](corpus/semantic-v5/README.md) is a schema/semantic fixture, not
-an activated locale pack. Focused verification runs with:
+an activated locale pack. Test-only JsonSchema.Net validation uses Draft 2020-12
+and locally registered schema references to check emitted ASTs, complete
+envelopes and malformed mutations. Focused verification runs with:
 
 ```sh
 dotnet run --project tests/dotnet/Runic.Translations.Compiler.Tests -- --rmf2-semantic-v5

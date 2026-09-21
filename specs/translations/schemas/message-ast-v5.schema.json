@@ -159,12 +159,25 @@
       "type": "object",
       "required": [
         "operand",
+        "valueType",
         "options",
         "annotations"
       ],
       "properties": {
         "operand": {
           "$ref": "#/$defs/value"
+        },
+        "valueType": {
+          "enum": [
+            "string",
+            "int64",
+            "decimal",
+            "boolean",
+            "date",
+            "time",
+            "datetime",
+            "guid"
+          ]
         },
         "function": {
           "enum": [

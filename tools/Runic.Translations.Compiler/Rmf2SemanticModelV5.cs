@@ -11,7 +11,9 @@ namespace Runic.Translations.Compiler;
 internal sealed record Rmf2ValueV5(string Kind, string Value, string? Canonical = null);
 internal sealed record Rmf2OptionV5(string Name, Rmf2ValueV5 Value);
 internal sealed record Rmf2AnnotationV5(string Name, Rmf2ValueV5? Value);
-internal sealed record Rmf2ExpressionV5(Rmf2ValueV5 Operand, string? Function,
+// ValueType describes the resolved underlying carrier. Function/options describe
+// its presentation and may be inherited or replaced without changing that carrier.
+internal sealed record Rmf2ExpressionV5(Rmf2ValueV5 Operand, string ValueType, string? Function,
     IReadOnlyList<Rmf2OptionV5> Options, IReadOnlyList<Rmf2AnnotationV5> Annotations);
 internal sealed record Rmf2DeclarationV5(string Kind, string Name, Rmf2ExpressionV5 Expression);
 internal sealed record Rmf2InputV5(string Name, string Type);
@@ -98,6 +100,7 @@ internal static class Rmf2MessageJsonV5
     private static void Expression(Utf8JsonWriter writer, Rmf2ExpressionV5 expression)
     {
         writer.WriteStartObject(); writer.WritePropertyName("operand"); Value(writer, expression.Operand);
+        writer.WriteString("valueType", expression.ValueType);
         if (expression.Function is not null) writer.WriteString("function", expression.Function);
         Properties(writer, expression.Options, expression.Annotations); writer.WriteEndObject();
     }
