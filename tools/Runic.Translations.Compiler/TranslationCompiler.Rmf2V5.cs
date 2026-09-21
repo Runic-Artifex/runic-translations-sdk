@@ -61,8 +61,10 @@ public static partial class TranslationCompiler
     {
         TranslationProjectProfileSelection selection = SelectProjectProfile(project, options, cancellationToken);
         if (!selection.Success)
-            return new TranslationProfileCompilation(selection.Profile,
-                new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), selection.Diagnostics), null);
+            return selection.Profile == TranslationProjectProfile.Rmf2ExecutionV2
+                ? new TranslationProfileCompilation(selection.Profile, null, new Rmf2ProjectCompilationV5(null, selection.Diagnostics))
+                : new TranslationProfileCompilation(selection.Profile,
+                    new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), selection.Diagnostics), null);
         return CompileProjectForProfile(project, messages, selection.Profile, options, cancellationToken);
     }
 

@@ -56,6 +56,20 @@ internal static class Rmf2ProjectV5Tests
             Encoding.UTF8.GetString(TranslationOutputRenderer.RenderLocaleJson(selected.Current.Catalogs[0], "en").GetUtf8Bytes()));
         var staged = TranslationCompiler.CompileProjectForProfile(project, sources, TranslationProjectProfile.Rmf2ExecutionV2);
         Assert.True(staged.Success && staged.Current is null && staged.Rmf2?.Project is not null, "v5 was lowered into the legacy carrier.");
+        var omitted = TranslationCompiler.CompileProjectForSelectedProfile(project, sources);
+        Assert.True(omitted.Profile == TranslationProjectProfile.Current && omitted.Current?.Success == true && omitted.Rmf2 is null,
+            "Omitted execution selector did not retain the current carrier.");
+        var explicitV2 = TranslationCompiler.CompileProjectForSelectedProfile(Rmf2Tests.Project(",\"executionProfile\":\"rmf2-execution-v2\""), sources);
+        Assert.True(explicitV2.Profile == TranslationProjectProfile.Rmf2ExecutionV2 && explicitV2.Current is null && explicitV2.Rmf2?.Success == true,
+            "Recognized execution-v2 selector did not return the v5 carrier.");
+        TranslationSource activated = Rmf2Tests.Project(",\"executionProfile\":\"rmf2-execution-v2\"");
+        var invalidLayout = TranslationCompiler.CompileProjectForSelectedProfile(new TranslationSource(activated.Path,
+            Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(activated.GetUtf8Bytes()).Replace("rmf2-v1", "locale-toml", StringComparison.Ordinal))), []);
+        Assert.True(!invalidLayout.Success && invalidLayout.Profile == TranslationProjectProfile.Rmf2ExecutionV2 && invalidLayout.Current is null && invalidLayout.Rmf2 is not null,
+            "Recognized execution-v2 invalid-layout diagnostics lost the v5 discriminant.");
+        var unknown = TranslationCompiler.CompileProjectForSelectedProfile(Rmf2Tests.Project(",\"executionProfile\":\"future-profile\""), sources);
+        Assert.True(!unknown.Success && unknown.Profile == TranslationProjectProfile.Current && unknown.Current is not null && unknown.Rmf2 is null,
+            "Unknown execution selector was not refused on the current discriminant.");
         const string formatted = "x =\n  .local $n = {0.1 :number style=percent}\n  {{{$n}}}";
         Assert.True(Good(formatted).CanonicalMessages.Count == 1, "v5-only local did not link.");
         Assert.True(!TranslationCompiler.CompileProject(project, [Source("translations/en.rmf2", formatted)]).Success, "Default path unexpectedly activated v5.");

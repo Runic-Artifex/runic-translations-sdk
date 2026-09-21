@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Nodes;
 using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Authoring.Tests;
@@ -21,7 +22,7 @@ internal static class Rmf2AuthoringTests
         runner.Add("RMF2 local rename changes semantic references without touching literal text", LocalRename);
         runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
         runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
-        runner.Add("RMF2 execution-v2 resource plans commit through the compatible transaction contract", ExecutionV2Transaction);
+        runner.Add("RMF2 execution-v2 locale plans preserve mounted projects and commit atomically", ExecutionV2Locales);
         runner.Add("RMF2 TOML migration validates complete catalog and retains original source", Migration);
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
@@ -166,21 +167,121 @@ internal static class Rmf2AuthoringTests
         }
         finally { Directory.Delete(root, true); }
     }
-    private static void ExecutionV2Transaction()
+    private static void ExecutionV2Locales()
     {
+        var planType = typeof(TranslationWorkspaceTransactionPlan);
+        Assert.True(planType.GetNestedType("ValidationReceipt", System.Reflection.BindingFlags.NonPublic)?.IsNestedPrivate == true,
+            "The selected-profile validation receipt is not private to the transaction plan.");
+        Assert.True(planType.GetConstructors(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            .All(constructor => constructor.GetParameters()[^1].ParameterType == typeof(TranslationCompilation) ||
+                constructor.GetParameters()[^1].ParameterType.Name == "TranslationProfileCompilation"),
+            "A transaction-plan constructor accepts a detached validation receipt.");
         string root = Path.Combine(Path.GetTempPath(), "runic-rmf2-v2-authoring-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(Path.Combine(root, "translations"));
+        Directory.CreateDirectory(Path.Combine(root, "base"));
+        Directory.CreateDirectory(Path.Combine(root, "feature"));
         try
         {
-            TranslationSource project = Source("runic.json", Encoding.UTF8.GetString(Project().GetUtf8Bytes()).TrimEnd('}') + ",\"executionProfile\":\"rmf2-execution-v2\"}");
-            TranslationSource source = Source("en.rmf2", "x = Hello\n");
-            File.WriteAllBytes(Path.Combine(root, project.Path), project.GetUtf8Bytes());
-            File.WriteAllBytes(Path.Combine(root, source.Path), source.GetUtf8Bytes());
-            TranslationWorkspaceTransactionPlan plan = new Rmf2Workspace(root, project, [source]).Rename(["x"], "greeting");
-            Assert.True(plan.Compilation.Success, "Execution-v2 resource rename did not produce a committable compatibility plan.");
-            Assert.Equal("app", plan.CatalogId);
-            TranslationWorkspaceTransaction.Commit(plan);
-            Assert.True(File.ReadAllText(Path.Combine(root, "en.rmf2")).Contains("greeting = Hello", StringComparison.Ordinal), "Execution-v2 transaction did not commit the resource edit.");
+            const string config = """
+                {
+                  "schemaVersion": 1,
+                  "catalog": "app",
+                  "code": { "namespace": "Example", "className": "AppText" },
+                  "baseLocale": "en",
+                  "sourceLayout": "rmf2-v1",
+                  "executionProfile": "rmf2-execution-v2",
+                  "sourceRoots": [
+                    { "path": "../base", "namespace": [] },
+                    { "path": "../feature", "namespace": ["shop"] }
+                  ],
+                  "locales": [
+                    { "tag": "en" },
+                    { "tag": "de", "fallback": "en" },
+                    { "tag": "fr", "fallback": "de" }
+                  ]
+                }
+                """;
+            var files = new Dictionary<string, string>(StringComparer.Ordinal) {
+                ["translations/runic.json"] = config,
+                ["base/en.rmf2"] = "amount =\n  .local $n = {0.1 :number style=percent}\n  {{{$n}}}\n",
+                ["base/de.rmf2"] = "amount = Betrag\n",
+                ["base/fr.rmf2"] = "amount = Montant\n",
+                ["feature/en.rmf2"] = "title = Shop\n",
+                ["feature/de.rmf2"] = "title = Laden\n",
+                ["feature/fr.rmf2"] = "title = Boutique\n",
+            };
+            foreach (var file in files)
+            {
+                string path = Path.Combine(root, file.Key);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, file.Value, new UTF8Encoding(false));
+            }
+
+            Rmf2Workspace Open()
+            {
+                var project = new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(root, "translations/runic.json")));
+                TranslationSource[] sources = Directory.EnumerateFiles(root, "*.rmf2", SearchOption.AllDirectories)
+                    .Order(StringComparer.Ordinal)
+                    .Select(path => new TranslationSource(Path.GetRelativePath(root, path).Replace('\\', '/'), File.ReadAllBytes(path))).ToArray();
+                return new Rmf2Workspace(root, project, sources);
+            }
+            Dictionary<string, byte[]> Snapshot() => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+                .ToDictionary(path => Path.GetRelativePath(root, path).Replace('\\', '/'), File.ReadAllBytes, StringComparer.Ordinal);
+            static void AssertSnapshot(Dictionary<string, byte[]> expected, Dictionary<string, byte[]> actual, string message)
+            {
+                Assert.Equal(string.Join('|', expected.Keys.Order(StringComparer.Ordinal)), string.Join('|', actual.Keys.Order(StringComparer.Ordinal)), message);
+                foreach (var file in expected) Assert.True(actual[file.Key].SequenceEqual(file.Value), message + ": " + file.Key);
+            }
+            JsonObject Config() => JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "translations/runic.json")))!.AsObject();
+
+            Dictionary<string, byte[]> beforeAdd = Snapshot();
+            TranslationCompilation v4Boundary = Open().Validate();
+            Assert.True(!v4Boundary.Success && v4Boundary.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0065"),
+                "Public Validate() no longer exposes the explicit v4 boundary.");
+            TranslationWorkspaceTransactionPlan add = Open().AddLocale("it", fallback: "de", copyFrom: "en");
+            Assert.Equal("app", add.CatalogId);
+            Assert.Throws<InvalidOperationException>(() => _ = add.Compilation, "unavailable");
+            AssertSnapshot(beforeAdd, Snapshot(), "Execution-v2 locale planning changed disk before commit");
+            var invalidGuard = new TranslationWorkspaceTransactionPlan(root, add.CatalogId, add.Edits, v4Boundary);
+            Assert.Throws<TranslationAuthoringException>(() => TranslationWorkspaceTransaction.Commit(invalidGuard), "compiler-invalid");
+            AssertSnapshot(beforeAdd, Snapshot(), "Invalid validation receipt changed disk");
+
+            try { TranslationWorkspaceTransaction.CommitForTesting(add, 1); }
+            catch (Exception) { }
+            Assert.True(TranslationWorkspaceTransaction.GetPending(root) is not null, "Interrupted execution-v2 add left no recovery journal.");
+            TranslationWorkspaceTransaction.Recover(root, TranslationWorkspaceRecoveryMode.Rollback);
+            AssertSnapshot(beforeAdd, Snapshot(), "Execution-v2 rollback did not restore the mounted project byte-identically");
+
+            add = Open().AddLocale("it", fallback: "de", copyFrom: "en");
+            TranslationWorkspaceTransaction.Commit(add);
+            Assert.True(File.ReadAllBytes(Path.Combine(root, "base/it.rmf2")).SequenceEqual(File.ReadAllBytes(Path.Combine(root, "base/en.rmf2"))), "Mounted base locale copy changed bytes.");
+            Assert.True(File.ReadAllBytes(Path.Combine(root, "feature/it.rmf2")).SequenceEqual(File.ReadAllBytes(Path.Combine(root, "feature/en.rmf2"))), "Mounted feature locale copy changed bytes.");
+            Assert.True(TranslationWorkspaceTransaction.GetPending(root) is null, "Successful execution-v2 add retained a transaction journal.");
+
+            Dictionary<string, byte[]> beforeCycle = Snapshot();
+            Assert.Throws<TranslationAuthoringException>(() => Open().SetFallback("de", "fr"), "Fallback cycle");
+            AssertSnapshot(beforeCycle, Snapshot(), "Rejected execution-v2 fallback cycle changed disk");
+
+            Dictionary<string, byte[]> beforeFallback = Snapshot();
+            TranslationWorkspaceTransactionPlan fallback = Open().SetFallback("fr", "en");
+            AssertSnapshot(beforeFallback, Snapshot(), "Execution-v2 fallback planning changed disk before commit");
+            TranslationWorkspaceTransaction.Commit(fallback);
+            JsonObject configured = Config();
+            Assert.Equal("rmf2-execution-v2", configured["executionProfile"]!.GetValue<string>());
+            Assert.Equal(2, configured["sourceRoots"]!.AsArray().Count, "Locale mutation lost mounted source roots.");
+            Assert.Equal("en", configured["locales"]!.AsArray().Select(node => node!.AsObject()).Single(locale => locale["tag"]!.GetValue<string>() == "fr")["fallback"]!.GetValue<string>());
+
+            Dictionary<string, byte[]> beforeRemove = Snapshot();
+            TranslationWorkspaceTransactionPlan remove = Open().RemoveLocale("de", replacementFallback: "en");
+            AssertSnapshot(beforeRemove, Snapshot(), "Execution-v2 removal planning changed disk before commit");
+            TranslationWorkspaceTransaction.Commit(remove);
+            Assert.True(!File.Exists(Path.Combine(root, "base/de.rmf2")) && !File.Exists(Path.Combine(root, "feature/de.rmf2")), "Execution-v2 removal left mounted locale sources.");
+            configured = Config();
+            JsonObject[] locales = configured["locales"]!.AsArray().Select(node => node!.AsObject()).ToArray();
+            Assert.True(locales.All(locale => locale["tag"]!.GetValue<string>() != "de"), "Removed locale remained declared.");
+            Assert.Equal("en", locales.Single(locale => locale["tag"]!.GetValue<string>() == "it")["fallback"]!.GetValue<string>(), "Dependent fallback was not redirected.");
+            Assert.Equal("rmf2-execution-v2", configured["executionProfile"]!.GetValue<string>());
+            Assert.True(TranslationWorkspaceTransaction.GetPending(root) is null, "Successful execution-v2 removal retained a transaction journal.");
         }
         finally { Directory.Delete(root, true); }
     }
