@@ -199,7 +199,6 @@
     "semanticGolden": "../semantic-v5/locale-artifact.json",
     "linkedProject": "../v5-project/expected-contract.json",
     "recoveryAndSourceMaps": [
-      "../../../../tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2Tests.cs",
       "../../../../tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2SemanticV5Tests.cs"
     ]
   }
