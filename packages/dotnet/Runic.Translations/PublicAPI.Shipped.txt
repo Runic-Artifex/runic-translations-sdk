@@ -451,8 +451,6 @@ type readonly struct Runic.Translations.TranslationPackArgumentContract : System
   property System.String Name { get; init; }
 
 type sealed class Runic.Translations.TranslationPackContract
-  ctor Runic.Translations.TranslationPackContract(System.String catalog, System.String locale, System.String contractFingerprint, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> messages, System.Int32 messageGrammarVersion = 1)
-  ctor Runic.Translations.TranslationPackContract(System.String catalog, System.String locale, System.String contractFingerprint, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> messages, System.Int32 messageGrammarVersion, System.String rmf2MarkupContract)
   method static Runic.Translations.TranslationPackContract CreateRmf2V5(System.String catalog, System.String locale, System.String contractFingerprint, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> messages, System.String rmf2MarkupContract)
   property System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract> Messages { get; }
   property System.Int32 MessageGrammarVersion { get; }

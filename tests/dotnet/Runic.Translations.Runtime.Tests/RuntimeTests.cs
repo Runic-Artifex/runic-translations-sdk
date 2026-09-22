@@ -614,7 +614,7 @@ internal static class RuntimeTests
                 new CompiledTranslationLocale("de", "en", [new(1, "compiled extra")]),
                 new CompiledTranslationLocale("en", null, [new(0, "compiled canonical")]),
             ]);
-        TranslationPackContract Contract(string locale) => new("app", locale, ExternalFingerprint,
+        TranslationPackContract Contract(string locale) => CreateRmf2PackContract("app", locale, ExternalFingerprint,
             [
                 new TranslationPackMessageContract(new TranslationKey("app", 1, "Alpha.Extra")),
                 new TranslationPackMessageContract(new TranslationKey("app", 0, "Zulu.Key")),
@@ -639,13 +639,13 @@ internal static class RuntimeTests
                 [new TranslationPackArgumentContract("count", TextArgumentType.Int, format)]);
         Func<string, TranslationPackContract>[] invalid =
         [
-            locale => new TranslationPackContract("other", locale, ExternalFingerprint, [Alpha("other")]),
-            locale => new TranslationPackContract("app", "de-DE", ExternalFingerprint, [Alpha(), Beta()]),
-            locale => new TranslationPackContract("app", locale, "sha256:1111111111111111111111111111111111111111111111111111111111111111", [Alpha(), Beta()]),
-            locale => new TranslationPackContract("app", locale, ExternalFingerprint, [Alpha(id: 99)]),
-            locale => new TranslationPackContract("app", locale, ExternalFingerprint, [Alpha(name: "alpha.wrong"), Beta()]),
-            locale => new TranslationPackContract("app", locale, ExternalFingerprint, [Alpha(), Beta(TextArgumentFormat.Plain)]),
-            locale => new TranslationPackContract("app", locale, ExternalFingerprint, [Alpha()]),
+            locale => CreateRmf2PackContract("other", locale, ExternalFingerprint, [Alpha("other")]),
+            locale => CreateRmf2PackContract("app", "de-DE", ExternalFingerprint, [Alpha(), Beta()]),
+            locale => CreateRmf2PackContract("app", locale, "sha256:1111111111111111111111111111111111111111111111111111111111111111", [Alpha(), Beta()]),
+            locale => CreateRmf2PackContract("app", locale, ExternalFingerprint, [Alpha(id: 99)]),
+            locale => CreateRmf2PackContract("app", locale, ExternalFingerprint, [Alpha(name: "alpha.wrong"), Beta()]),
+            locale => CreateRmf2PackContract("app", locale, ExternalFingerprint, [Alpha(), Beta(TextArgumentFormat.Plain)]),
+            locale => CreateRmf2PackContract("app", locale, ExternalFingerprint, [Alpha()]),
         ];
 
         foreach (Func<string, TranslationPackContract> contractFactory in invalid)
@@ -661,7 +661,7 @@ internal static class RuntimeTests
             "app", "en", [new CompiledTranslationDefinition("Alpha", []), new CompiledTranslationDefinition("Extra", [], false)],
             [new CompiledTranslationLocale("de", "en", [new(1, "extra")]), new CompiledTranslationLocale("en", null, [new(0, "alpha")])]);
         CountingSource extraSource = new(null);
-        TranslationPackContract extraContract = new("app", "en", ExternalFingerprint,
+        TranslationPackContract extraContract = CreateRmf2PackContract("app", "en", ExternalFingerprint,
             [new TranslationPackMessageContract(new TranslationKey("app", 0, "Alpha")),
              new TranslationPackMessageContract(new TranslationKey("app", 1, "Extra"))]);
         await Assert.ThrowsAsync<TranslationPackException>(() => CreateExternalFactory(extraSource, _ => extraContract)
@@ -856,13 +856,18 @@ internal static class RuntimeTests
         IExternalTranslationSource source, Func<string, TranslationPackContract> contractFactory) =>
         new(source, "app", ExternalFingerprint, contractFactory);
 
-    private static TranslationPackContract CreatePackContract(CompiledTranslationCatalog catalog, string locale) => new(
+    private static TranslationPackContract CreatePackContract(CompiledTranslationCatalog catalog, string locale) => CreateRmf2PackContract(
         "app", locale, ExternalFingerprint,
         [
             new TranslationPackMessageContract(new TranslationKey("app", 0, "alpha.greeting")),
             new TranslationPackMessageContract(new TranslationKey("app", 1, "beta.count"),
                 [new TranslationPackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Grouped)]),
         ]);
+
+    private static TranslationPackContract CreateRmf2PackContract(
+        string catalog, string locale, string fingerprint, IReadOnlyList<TranslationPackMessageContract> messages) =>
+        TranslationPackContract.CreateRmf2V5(catalog, locale, fingerprint, messages,
+            "{\"version\":1,\"contracts\":{},\"messages\":{}}");
 
     private static string ExternalPackJson(string locale, string messages) =>
         "{\"artifactVersion\":1,\"messageGrammarVersion\":1,\"catalog\":\"app\",\"locale\":\"" + locale +

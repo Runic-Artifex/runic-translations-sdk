@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Text.Json.Nodes;
 using JsonValue = System.Text.Json.Nodes.JsonValue;
@@ -13,69 +12,6 @@ namespace Runic.Translations.Internal;
 /// <summary>Executes the verified RMF2 runtime plan with inert preview bindings.</summary>
 internal static class Rmf2Preview
 {
-    internal static JsonObject Render(CompiledTextCatalog catalog, string key, string locale, JsonObject samples)
-    {
-        TextArgumentType Type(CompiledTextPlaceholder placeholder) => Enum.Parse<TextArgumentType>(
-            placeholder.Type == TranslationArgumentType.Boolean ? "Bool" : placeholder.Type.ToString(), true);
-        TextArgumentFormat Format(CompiledTextPlaceholder placeholder) => placeholder.Format.Length == 0
-            ? TextArgumentFormat.None
-            : Enum.Parse<TextArgumentFormat>(placeholder.Format, true);
-        TranslationPackMessageContract[] contracts = catalog.CanonicalResources.Select(resource =>
-            new TranslationPackMessageContract(
-                new TranslationKey(catalog.Id, resource.Id, resource.Key),
-                resource.Placeholders.Select(placeholder =>
-                    new TranslationPackArgumentContract(placeholder.Name, Type(placeholder), Format(placeholder))).ToArray())).ToArray();
-        CompiledTranslationLocale[] locales = catalog.Locales
-            .Where(value => value.Tag == locale || value.Tag == catalog.DefaultLocale)
-            .Select(value => {
-                var contract = new TranslationPackContract(
-                    catalog.Id, value.Tag, catalog.Fingerprint, contracts, 4, catalog.Rmf2MarkupContract);
-                VerifiedExternalTranslationPack verified = TranslationPackLoader.VerifyAsync(
-                    new ExternalTranslationPack(TranslationOutputRenderer.RenderLocaleJson(catalog, value.Tag).GetUtf8Bytes()),
-                    contract).AsTask().GetAwaiter().GetResult();
-                return new CompiledTranslationLocale(
-                    value.Tag,
-                    value.Tag == catalog.DefaultLocale ? null : catalog.DefaultLocale,
-                    verified.Messages.Select(message =>
-                        new CompiledTranslationValue(message.Key.Id, "", message.Message!)).ToArray());
-            }).ToArray();
-        var runtime = new CompiledTranslationCatalog(
-            catalog.Id,
-            catalog.DefaultLocale,
-            catalog.CanonicalResources.Select(resource => new CompiledTranslationDefinition(
-                resource.Key,
-                resource.Placeholders.Select(placeholder =>
-                    new TranslationPlaceholderDescriptor(placeholder.Name, Type(placeholder), Format(placeholder))).ToArray())).ToArray(),
-            locales);
-        CompiledTranslation definition = catalog.CanonicalResources.Single(value => value.Key == key);
-        TextArgument[] arguments = definition.Placeholders.Select(placeholder => {
-            string value = samples[placeholder.Name]?.ToString()
-                ?? throw new ArgumentException("A sample is required for " + placeholder.Name + ".");
-            TextArgumentFormat format = Format(placeholder);
-            return Type(placeholder) switch {
-                TextArgumentType.String => new TextArgument(placeholder.Name, value),
-                TextArgumentType.Int => new TextArgument(placeholder.Name, long.Parse(value, CultureInfo.InvariantCulture), format),
-                TextArgumentType.Number => new TextArgument(placeholder.Name, decimal.Parse(value, CultureInfo.InvariantCulture), format),
-                TextArgumentType.Bool => new TextArgument(placeholder.Name, bool.Parse(value), format),
-                TextArgumentType.Date => new TextArgument(placeholder.Name, DateOnly.Parse(value, CultureInfo.InvariantCulture), format),
-                TextArgumentType.Time => new TextArgument(placeholder.Name, TimeOnly.Parse(value, CultureInfo.InvariantCulture), format),
-                TextArgumentType.DateTime => new TextArgument(placeholder.Name, DateTimeOffset.Parse(value, CultureInfo.InvariantCulture), format),
-                TextArgumentType.Guid => new TextArgument(placeholder.Name, Guid.Parse(value), format),
-                _ => throw new ArgumentException("Unsupported preview input type."),
-            };
-        }).ToArray();
-        var snapshot = new CompiledTranslationSnapshot(runtime, locale);
-        var resourceKey = new TranslationKey(catalog.Id, definition.Id, key);
-        if (!definition.ProducesStructuredContent)
-            return TextResult(key, locale, snapshot.Format(resourceKey, arguments));
-
-        LocalizedTextContent content = snapshot.FormatContent(resourceKey, arguments);
-        IReadOnlyDictionary<string, InlineMarkupBinding> bindings = definition.Slots.ToDictionary(
-            slot => slot.Key, slot => PreviewBinding(slot.Key, slot.Value), StringComparer.Ordinal);
-        return StructuredResult(
-            key, locale, new Rmf2InlineRenderer(catalog.Rmf2MarkupContract!).Render(key, content, bindings));
-    }
-
     internal static JsonObject Render(Rmf2ProjectV5 project, string key, string locale, JsonObject samples)
     {
         ArgumentNullException.ThrowIfNull(project);
