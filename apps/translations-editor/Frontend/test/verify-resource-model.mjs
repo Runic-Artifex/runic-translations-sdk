@@ -63,6 +63,21 @@ assert.equal(groupedRows.length, 1);
 assert.equal(groupedRows[0].cells.de.document.path, "feature/de.rmf2",
   "Uppercase grouped RMF2 sources must synthesize another grouped locale, not a direct MF2 file.");
 
+uppercaseGrouped.documents.push({
+  path: "feature/de.RMF2",
+  content: "other = Andere\n",
+  revision: "target",
+  isManifest: false,
+  isMalformed: false,
+  locale: "de",
+  layer: "base",
+  entries: [{ key: "shop_other", content: "Andere", valueStartByte: 8, valueLengthBytes: 6 }],
+});
+const existingGroupedRows = model.buildRows(uppercaseGrouped, {});
+const greetingRow = existingGroupedRows.find((row) => row.key === "shop_greeting");
+assert.equal(greetingRow.cells.de.document.path, "feature/de.RMF2",
+  "A grouped locale missing the key must reuse its existing document with the original path casing.");
+
 const mountedExtra = structuredClone(snapshot);
 mountedExtra.catalog.locales.push({ tag: "fr", fallback: "en" });
 mountedExtra.documents[1] = {
@@ -78,4 +93,4 @@ assert.equal(extraRows[0].cells.en.document.path, "feature/en/extra.mf2");
 assert.equal(extraRows[0].cells.de.document.path, "feature/de/extra.mf2",
   "A mounted extra key must use its existing non-default document as the physical template.");
 
-console.log("PASS: mounted direct, extra-key, and uppercase grouped RMF2 rows synthesize missing locales beside the canonical source root.");
+console.log("PASS: mounted direct, extra-key, and uppercase grouped RMF2 rows synthesize or reuse canonical locale documents.");

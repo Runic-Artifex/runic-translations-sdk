@@ -112,7 +112,8 @@ function missingMessageDocument(
   const rmf2 = templateIsRmf2 || localeDocuments.some(document => document.path.toLowerCase().endsWith(".rmf2"));
   const rmf2Path = templateIsRmf2 ? `${template.path.slice(0, template.path.lastIndexOf("/") + 1)}${locale}.rmf2` : `${directory}${locale}.rmf2`;
   if (rmf2) {
-    const target = localeDocuments.find(document => document.path === rmf2Path);
+    const normalizedRmf2Path = rmf2Path.toLowerCase();
+    const target = localeDocuments.find(document => document.path.toLowerCase() === normalizedRmf2Path);
     if (target !== undefined) return target;
   }
   const directPath = template?.path.toLowerCase().endsWith(".mf2") === true
