@@ -70,13 +70,17 @@ export function buildRows(
   const mf2Manifest = snapshot.documents.find((document) => document.isManifest && document.path.endsWith("runic.json"));
   return [...keys].sort().map((key) => {
     const source = sourceEntries.get(key);
+    const sourceDocument = documentsByLocale.get(snapshot.catalog!.defaultLocale)?.get(key);
+    const existingDocument = sourceDocument ?? snapshot.catalog!.locales
+      .map((locale) => documentsByLocale.get(locale.tag)?.get(key))
+      .find((document) => document !== undefined);
     const cells: Record<string, TranslationCell> = {};
     for (const locale of snapshot.catalog!.locales) {
       const entry = entriesByLocale.get(locale.tag)?.get(key);
       cells[locale.tag] = {
         document: documentsByLocale.get(locale.tag)?.get(key) ??
           (mf2Manifest !== undefined
-            ? missingMessageDocument(mf2Manifest, locale.tag, key, primaryDocument(byLocale.get(locale.tag) ?? []), documentsByLocale.get(snapshot.catalog!.defaultLocale)?.get(key), byLocale.get(locale.tag) ?? [])
+            ? missingMessageDocument(mf2Manifest, locale.tag, key, existingDocument, sourceDocument, byLocale.get(locale.tag) ?? [])
             : primaryDocument(byLocale.get(locale.tag) ?? [])),
         entry,
         inheritedFrom: entry === undefined ? fallbackWithValue(snapshot, entriesByLocale, locale.tag, key) : undefined,
@@ -103,14 +107,16 @@ function missingMessageDocument(
   if (manifest === undefined) return undefined;
   const separator = manifest.path.lastIndexOf("/");
   const directory = separator < 0 ? "" : manifest.path.slice(0, separator + 1);
-  const rmf2 = source?.path.endsWith(".rmf2") === true || localeDocuments.some(document => document.path.endsWith(".rmf2"));
-  const rmf2Path = source?.path.endsWith(".rmf2") ? `${source.path.slice(0, source.path.lastIndexOf("/") + 1)}${locale}.rmf2` : `${directory}${locale}.rmf2`;
+  const template = source ?? existing;
+  const templateIsRmf2 = template?.path.toLowerCase().endsWith(".rmf2") === true;
+  const rmf2 = templateIsRmf2 || localeDocuments.some(document => document.path.toLowerCase().endsWith(".rmf2"));
+  const rmf2Path = templateIsRmf2 ? `${template.path.slice(0, template.path.lastIndexOf("/") + 1)}${locale}.rmf2` : `${directory}${locale}.rmf2`;
   if (rmf2) {
     const target = localeDocuments.find(document => document.path === rmf2Path);
     if (target !== undefined) return target;
   }
-  const directPath = source?.path.toLowerCase().endsWith(".mf2") === true
-    ? directLocalePath(source.path, locale)
+  const directPath = template?.path.toLowerCase().endsWith(".mf2") === true
+    ? directLocalePath(template.path, locale)
     : undefined;
   return {
     path: rmf2 ? rmf2Path : directPath ?? `${directory}${locale}/${key}.mf2`,

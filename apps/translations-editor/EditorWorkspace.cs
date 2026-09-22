@@ -566,9 +566,6 @@ internal sealed class EditorWorkspace : IDisposable
                 static resource => resource.Text.TrimEnd('\r', '\n'),
                 StringComparer.Ordinal);
             string configPath = FindMf2ProjectConfig()!;
-            string projectPrefix = NormalizeRelativePath(Path.GetRelativePath(_root, Path.GetDirectoryName(configPath)!));
-            if (projectPrefix == ".") projectPrefix = string.Empty;
-            else projectPrefix += "/";
             var documents = new List<PreparedInterchangeDocument>();
             string manifestContent = state.Files.Single(file => file.Kind == DocumentKind.Manifest).Content;
             bool rmf2 = state.Files.Any(file => file.Kind == DocumentKind.Resource && file.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase));
@@ -608,7 +605,7 @@ internal sealed class EditorWorkspace : IDisposable
                         after);
                     continue;
                 }
-                string targetPath = $"{projectPrefix}{import.TargetLocale}/{key}.mf2";
+                string targetPath = DirectInterchangeTargetPath(state, configPath, import.TargetLocale!, key);
                 WorkspaceFile? target = state.Files.FirstOrDefault(file => string.Equals(file.Path, targetPath, StringComparison.Ordinal));
                 byte[]? original = target is null ? null : StrictUtf8.GetBytes(target.Content);
                 documents.Add(new PreparedInterchangeDocument(
@@ -1042,6 +1039,45 @@ internal sealed class EditorWorkspace : IDisposable
         string[] localPath = workspace.LocalPath(targetPath, resolvedLogicalPath).ToArray();
         sources[targetPath] = Rmf2ResourceWriter.AddMessage(
             new TranslationSource(targetPath, existing), localPath, value);
+    }
+
+    private string DirectInterchangeTargetPath(
+        WorkspaceState state,
+        string configPath,
+        string targetLocale,
+        string logicalKey)
+    {
+        Rmf2ProjectV5 project = state.Compilation.Project
+            ?? throw new TranslationAuthoringException("The RMF2 v5 project is unavailable.");
+        Rmf2TranslationV5? existing = project.Locales
+            .Single(locale => string.Equals(locale.Tag, targetLocale, StringComparison.Ordinal))
+            .DirectResources.SingleOrDefault(resource => string.Equals(resource.Key, logicalKey, StringComparison.Ordinal));
+        if (existing is not null) return existing.SourceLocation.Path;
+
+        Rmf2TranslationV5 source = project.Locales
+            .Single(locale => string.Equals(locale.Tag, project.DefaultLocale, StringComparison.Ordinal))
+            .DirectResources.SingleOrDefault(resource => string.Equals(resource.Key, logicalKey, StringComparison.Ordinal))
+            ?? throw new TranslationAuthoringException("The imported direct MF2 key has no canonical source resource.");
+        string projectRoot = Path.GetDirectoryName(configPath)!;
+        var sourceRoots = new List<string>();
+        using (JsonDocument config = JsonDocument.Parse(File.ReadAllBytes(configPath)))
+        {
+            if (config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
+                foreach (JsonElement mount in mounts.EnumerateArray())
+                    sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
+            else sourceRoots.Add(projectRoot);
+        }
+
+        string sourceFullPath = ContainedPath(source.SourceLocation.Path);
+        string[] matches = sourceRoots.Where(root => IsWithinSourceRoot(root, sourceFullPath)).ToArray();
+        if (matches.Length != 1)
+            throw new TranslationAuthoringException("The canonical direct MF2 resource does not match exactly one source root.");
+        string[] relative = NormalizeRelativePath(Path.GetRelativePath(matches[0], sourceFullPath))
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (relative.Length != 2 || !string.Equals(relative[0], project.DefaultLocale, StringComparison.OrdinalIgnoreCase))
+            throw new TranslationAuthoringException("Direct MF2 resources require a locale directory and physical message filename.");
+        string targetFullPath = Path.Combine(matches[0], targetLocale, relative[1]);
+        return NormalizeRelativePath(Path.GetRelativePath(_root, targetFullPath));
     }
 
     private static async Task<bool> RollBackInterchangeDocumentsAsync(

@@ -450,7 +450,8 @@ public sealed class Rmf2Workspace
     /// <summary>Resolves an explicit logical path relative to a physical resource mount.</summary>
     public IReadOnlyList<string> LocalPath(string path, IReadOnlyList<string> logicalPath)
     {
-        string[] prefix = _direct ? Mount(path).Prefix : Prefix(path);
+        if (_direct) return [DirectName(Mount(path), logicalPath)];
+        string[] prefix = Prefix(path);
         if (logicalPath.Count <= prefix.Length || !logicalPath.Take(prefix.Length).SequenceEqual(prefix, StringComparer.Ordinal))
             throw new TranslationAuthoringException("The resource path is outside the destination namespace.");
         return logicalPath.Skip(prefix.Length).ToArray();

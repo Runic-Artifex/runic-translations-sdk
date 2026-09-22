@@ -51,4 +51,31 @@ assert.equal(rows[0].cells.de.document.path, "feature/de/greeting.mf2",
   "A missing direct locale must be synthesized beside the canonical sourceRoot, not beside runic.json.");
 assert.equal(rows[0].cells.de.document.revision, "new-mf2-document");
 
-console.log("PASS: mounted direct MF2 rows retain compiler keys and synthesize missing locales beside the canonical source root.");
+const uppercaseGrouped = structuredClone(snapshot);
+uppercaseGrouped.documents[1] = {
+  ...uppercaseGrouped.documents[1],
+  path: "feature/en.RMF2",
+  content: "greeting = Hello\n",
+  entries: [{ key: "shop_greeting", content: "Hello", valueStartByte: 11, valueLengthBytes: 5 }],
+};
+const groupedRows = model.buildRows(uppercaseGrouped, {});
+assert.equal(groupedRows.length, 1);
+assert.equal(groupedRows[0].cells.de.document.path, "feature/de.rmf2",
+  "Uppercase grouped RMF2 sources must synthesize another grouped locale, not a direct MF2 file.");
+
+const mountedExtra = structuredClone(snapshot);
+mountedExtra.catalog.locales.push({ tag: "fr", fallback: "en" });
+mountedExtra.documents[1] = {
+  ...mountedExtra.documents[1],
+  path: "feature/fr/extra.mf2",
+  locale: "fr",
+  content: "Supplément\n",
+  entries: [{ key: "shop_extra", content: "Supplément\n", valueStartByte: 0, valueLengthBytes: 12 }],
+};
+const extraRows = model.buildRows(mountedExtra, {});
+assert.equal(extraRows.length, 1);
+assert.equal(extraRows[0].cells.en.document.path, "feature/en/extra.mf2");
+assert.equal(extraRows[0].cells.de.document.path, "feature/de/extra.mf2",
+  "A mounted extra key must use its existing non-default document as the physical template.");
+
+console.log("PASS: mounted direct, extra-key, and uppercase grouped RMF2 rows synthesize missing locales beside the canonical source root.");

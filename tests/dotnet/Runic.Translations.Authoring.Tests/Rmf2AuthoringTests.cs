@@ -87,6 +87,20 @@ internal static class Rmf2AuthoringTests
             "Mounted direct mutation did not preserve the source-root namespace.");
         Assert.Throws<TranslationAuthoringException>(() => mounted.MutateResource(
             ["shop", "greeting"], ["account", "salutation"]), "namespace");
+
+        const string overlappingConfig = "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"sourceRoots\":[{\"path\":\"../a-broad\",\"namespace\":[\"shop\"]},{\"path\":\"../z-specific\",\"namespace\":[\"shop\",\"sale\"]}]}";
+        var overlapping = new Rmf2Workspace(Path.GetTempPath(), Source("translations/runic.json", overlappingConfig), [
+            Source("a-broad/en/title.mf2", "Broad\n"),
+            Source("z-specific/en/title.mf2", "Specific\n"),
+        ]);
+        string selected = overlapping.Documents.Select(document => document.Source.Path).Order(StringComparer.Ordinal).First(path => {
+            try { overlapping.LocalPath(path, ["shop", "sale", "new_message"]); return true; }
+            catch (TranslationAuthoringException) { return false; }
+        });
+        Assert.Equal("z-specific/en/title.mf2", selected);
+        Assert.True(overlapping.CreateResource(selected, ["shop", "sale", "new_message"], "New message\n").Edits
+            .Single().RelativePath == "z-specific/en/new_message.mf2",
+            "Direct creation selected a broader namespace mount instead of the exact source-root namespace.");
     }
     private static void Locales()
     {
