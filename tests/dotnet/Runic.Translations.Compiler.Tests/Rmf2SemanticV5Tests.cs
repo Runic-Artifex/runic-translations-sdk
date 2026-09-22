@@ -262,7 +262,7 @@ internal static class Rmf2SemanticV5Tests
         var project = new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes("{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}"));
         var selected = TranslationCompiler.CompileRmf2ProjectV5(project, [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("x = {42 :number}"))]);
         Assert.True(selected.Success && selected.Project is not null, "Selected RMF2 compilation failed.");
-        using var artifact = JsonDocument.Parse(Rmf2LocaleArtifactV5.Render(selected.Project, "en").Text);
+        using var artifact = JsonDocument.Parse(Rmf2LocaleArtifactV5.Render(selected.Project!, "en").Text);
         Assert.Equal(5, artifact.RootElement.GetProperty("artifactVersion").GetInt32());
         Message("{42 :number}");
     }

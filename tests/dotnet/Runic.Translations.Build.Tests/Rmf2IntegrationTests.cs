@@ -278,7 +278,7 @@ internal static class Rmf2IntegrationTests
             File.WriteAllText(temporary.Resolve("app.ts"), "export const text = 'x';\n");
             Send("workspace/executeCommand", new JsonObject { ["command"] = "runic.renameResource", ["arguments"] = new JsonArray(uri, new JsonArray("x"), "intentional") }, 26);
             Send("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = frenchUri } });
-            File.WriteAllText(temporary.Resolve("runic.json"), activatedProject[..^1] + """, "markup":{"slots":{"x":{"retry":{"min":1,"max":1}}}}}""");
+            File.WriteAllText(temporary.Resolve("runic.json"), Project[..^1] + """, "markup":{"slots":{"x":{"retry":{"min":1,"max":1}}}}}""");
             File.WriteAllText(temporary.Resolve("de.rmf2"), "x = {#action ref=retry}Retry{/action}\n");
             int publicationsBeforeWatch;
             lock (frameGate) publicationsBeforeWatch = frames.Count(frame => frame["method"]?.ToString() == "textDocument/publishDiagnostics");
