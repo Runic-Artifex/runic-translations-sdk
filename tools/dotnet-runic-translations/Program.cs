@@ -350,56 +350,12 @@ internal static class Program
 
         CompilerInputs inputs = InputFiles.ReadProject(invocation.ProjectPath!);
         if (invocation.Command is ToolCommand.Validate or ToolCommand.Generate or ToolCommand.Verify)
-        {
-            TranslationProjectProfileSelection selection = TranslationCompiler.SelectProjectProfile(inputs.Project);
-            WriteDiagnostics(selection.Diagnostics, result);
-            if (!selection.Success) return DiagnosticFailure;
-            if (selection.Profile == TranslationProjectProfile.Rmf2ExecutionV2)
-                return RunRmf2V5(invocation, inputs, result);
-        }
-        TranslationCompilation compilation = TranslationCompiler.CompileProject(inputs.Project, inputs.Messages);
-        WriteDiagnostics(compilation.Diagnostics, result);
-        if (!compilation.Success)
-        {
-            return DiagnosticFailure;
-        }
+            return RunSemanticV5(invocation, inputs, result);
 
-        if (invocation.Command == ToolCommand.Validate)
-        {
-            result.WriteOutputLine($"validated {compilation.Catalogs.Count} project(s) and {inputs.Messages.Count} source document(s).");
-            return Success;
-        }
-
-        if ((invocation.Emission & ToolEmission.Cpp) != 0 && compilation.Catalogs.Any(static catalog => catalog.Rmf2MarkupContract is not null))
-        {
-            result.AddDiagnostic("RCLI9013", "unsupported-output", "--emit-cpp is not supported for RMF2 projects; select --emit-csharp, --emit-json, --emit-typescript, --emit-template-manifest, or --emit-esm.", CommandDiagnosticSeverity.Error);
-            return DiagnosticFailure;
-        }
-
-        IReadOnlyList<ToolArtifact> artifacts = CompilerOutputAdapter.Render(compilation.Catalogs, invocation.Emission);
-        if (invocation.Command == ToolCommand.Generate)
-        {
-            ArtifactFiles.WriteAtomically(invocation.OutputPath!, artifacts);
-            result.WriteOutputLine($"generated {artifacts.Count} artifact(s).");
-            return Success;
-        }
-
-        IReadOnlyList<string> differences = ArtifactFiles.Verify(invocation.OutputPath!, artifacts);
-        if (differences.Count != 0)
-        {
-            for (int index = 0; index < differences.Count; index++)
-            {
-                result.AddDiagnostic("RCLI9011", "verify", $"verify: {differences[index]}", CommandDiagnosticSeverity.Error);
-            }
-
-            return DiagnosticFailure;
-        }
-
-        result.WriteOutputLine($"verified {artifacts.Count} artifact(s).");
-        return Success;
+        throw new ToolUsageException("The translations command is not supported.");
     }
 
-    private static int RunRmf2V5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result)
+    private static int RunSemanticV5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result)
     {
         Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages);
         WriteDiagnostics(compilation.Diagnostics, result);
@@ -420,7 +376,16 @@ internal static class Program
             return DiagnosticFailure;
         }
 
-        IReadOnlyList<ToolArtifact> artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission);
+        IReadOnlyList<ToolArtifact> artifacts;
+        try
+        {
+            artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission);
+        }
+        catch (ToolDiagnosticException exception)
+        {
+            result.AddDiagnostic("RCLI9013", "unsupported-output", exception.Message, CommandDiagnosticSeverity.Error);
+            return DiagnosticFailure;
+        }
         if (invocation.Command == ToolCommand.Generate)
         {
             ArtifactFiles.WriteAtomically(invocation.OutputPath!, artifacts);
@@ -470,7 +435,7 @@ internal static class Program
         writer.WriteLine("Framework transport uses --runic-output human|json; --output remains the tool destination option.");
         writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --no-starter.");
         writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest --emit-esm --emit-cpp.");
-        writer.WriteLine("With no emit switches, generate and verify use the selected execution profile's default output groups.");
+        writer.WriteLine("With no emit switches, generate and verify use the semantic translation contract's default output groups.");
         writer.WriteLine("Exit codes: 0 success; 1 validation or verification diagnostics; 2 invocation or operational failure.");
     }
 }

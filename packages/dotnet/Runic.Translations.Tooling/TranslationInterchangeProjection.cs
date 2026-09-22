@@ -51,58 +51,12 @@ internal sealed record TranslationInterchangePlaceholder(string Name, string Typ
 
 internal static class TranslationInterchangeProjectionAdapter
 {
-    internal static TranslationInterchangeProjection From(TranslationCompilation compilation)
+    internal static TranslationInterchangeProjection From(Rmf2ProjectCompilationV5 compilation)
     {
         ArgumentNullException.ThrowIfNull(compilation);
         if (!compilation.Success)
             throw new TranslationInterchangeException("XLIFF21-COMPILATION", "XLIFF export requires a successful compiler result.");
-        if (compilation.Catalogs.Count != 1)
-            throw new TranslationInterchangeException("XLIFF21-CATALOG", "XLIFF export requires exactly one compiled catalog.");
-
-        CompiledTextCatalog catalog = compilation.Catalogs[0];
-        if (catalog.Layers.Count != 1)
-            throw new TranslationInterchangeException("XLIFF21-LAYERS", "XLIFF export requires exactly one source layer so its identity can be preserved.");
-
-        TranslationInterchangeSourceUnit[] canonical = catalog.CanonicalResources
-            .OrderBy(static resource => resource.Key, StringComparer.Ordinal)
-            .Select(static resource => new TranslationInterchangeSourceUnit(
-                resource.Key,
-                resource.Pattern,
-                !resource.IsTextInterchangeLossless,
-                new TranslationInterchangeUnitMetadata(
-                    resource.Description,
-                    resource.Since,
-                    resource.DeprecatedReason,
-                    resource.Tags.OrderBy(static tag => tag, StringComparer.Ordinal).ToArray(),
-                    resource.Placeholders
-                        .OrderBy(static placeholder => placeholder.Name, StringComparer.Ordinal)
-                        .Select(static placeholder => new TranslationInterchangePlaceholder(
-                            placeholder.Name, TypeName(placeholder.Type), placeholder.Format))
-                        .ToArray())))
-            .ToArray();
-        TranslationInterchangeLocale[] locales = catalog.Locales
-            .OrderBy(static locale => locale.Tag, StringComparer.Ordinal)
-            .Select(static locale => new TranslationInterchangeLocale(
-                locale.Tag,
-                locale.FallbackTag,
-                locale.DirectResources
-                    .OrderBy(static resource => resource.Key, StringComparer.Ordinal)
-                    .Select(static resource => new TranslationInterchangeTargetUnit(
-                        resource.Key, resource.Pattern, !resource.IsTextInterchangeLossless))
-                    .ToArray()))
-            .ToArray();
-
-        return Create(catalog.Id, catalog.DefaultLocale, catalog.Layers[0].Name, catalog.SchemaVersion,
-            canonical, locales, compilation.Diagnostics, sourceFreshness: null);
-    }
-
-    internal static TranslationInterchangeProjection From(TranslationProfileCompilation compilation)
-    {
-        ArgumentNullException.ThrowIfNull(compilation);
-        if (!compilation.Success)
-            throw new TranslationInterchangeException("XLIFF21-COMPILATION", "XLIFF export requires a successful compiler result.");
-        if (compilation.Current is not null) return From(compilation.Current);
-        if (compilation.Rmf2?.Project is not { } project)
+        if (compilation.Project is not { } project)
             throw new TranslationInterchangeException("XLIFF21-CATALOG", "XLIFF export requires exactly one compiled catalog.");
         return From(project, compilation.Diagnostics);
     }
@@ -192,17 +146,6 @@ internal static class TranslationInterchangeProjectionAdapter
         message.Variants.Count != 1 ||
         message.Variants[0].Nodes.Any(static node => node is not Rmf2TextV5);
 
-    private static string TypeName(TranslationArgumentType type) => type switch
-    {
-        TranslationArgumentType.Int => "int",
-        TranslationArgumentType.Number => "number",
-        TranslationArgumentType.Boolean => "bool",
-        TranslationArgumentType.Date => "date",
-        TranslationArgumentType.Time => "time",
-        TranslationArgumentType.DateTime => "datetime",
-        TranslationArgumentType.Guid => "guid",
-        _ => "string",
-    };
 }
 
 internal static class TranslationInterchangeFingerprint

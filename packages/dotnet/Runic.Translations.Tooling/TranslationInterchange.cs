@@ -25,26 +25,15 @@ public static class TranslationInterchange
     private const int MaximumReviewEntries = 50_000;
     private const int MaximumReviewBytes = 8 * 1024 * 1024;
 
-    /// <summary>Exports one compiler-valid catalog as one XLIFF document per non-default locale.</summary>
-    public static TranslationXliffExportResult ExportXliff21(
-        TranslationCompilation compilation,
-        TranslationInterchangeReview? review = null) =>
-        ExportXliff21(TranslationInterchangeProjectionAdapter.From(compilation), review);
-
-    // Kept internal because TranslationProfileCompilation and the v5 project are
-    // compiler implementation contracts. The editor can use this path without
-    // publishing either model as part of Tooling's public API.
+    // Kept internal because the semantic project carrier is a compiler implementation
+    // contract. Coordinated hosts use this v5 path without publishing it as Tooling API.
     internal static TranslationXliffExportResult ExportXliff21(
-        TranslationProfileCompilation compilation,
+        Rmf2ProjectCompilationV5 compilation,
         TranslationInterchangeReview? review = null) =>
         ExportXliff21(TranslationInterchangeProjectionAdapter.From(compilation), review);
 
     internal static TranslationInterchangeProjection PreflightXliff21(
-        TranslationProfileCompilation compilation) =>
-        TranslationInterchangeProjectionAdapter.From(compilation);
-
-    internal static TranslationInterchangeProjection PreflightXliff21(
-        TranslationCompilation compilation) =>
+        Rmf2ProjectCompilationV5 compilation) =>
         TranslationInterchangeProjectionAdapter.From(compilation);
 
     private static TranslationXliffExportResult ExportXliff21(
@@ -251,26 +240,27 @@ public static class TranslationInterchange
             messages.Add(new TranslationSource("interchange/" + sourceLocale + "/" + key + ".mf2", Encoding.UTF8.GetBytes(unit.SourcePattern)));
             messages.Add(new TranslationSource("interchange/" + targetLocale + "/" + key + ".mf2", Encoding.UTF8.GetBytes(unit.Pattern)));
         }
-        TranslationCompilation compilation = TranslationCompiler.CompileMf2Project(
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
             new TranslationSource("interchange/runic.json", Encoding.UTF8.GetBytes(project)), messages);
-        if (!compilation.Success || compilation.Catalogs.Count != 1) throw new TranslationInterchangeException("XLIFF21-CONTRACT", "XLIFF target text or placeholder metadata does not satisfy the compiler contract.");
-        CompiledTextCatalog compiled = compilation.Catalogs[0];
-        if (compiled.CanonicalResources.Any(static resource => !resource.IsTextInterchangeLossless) ||
-            compiled.Locales.SelectMany(static locale => locale.DirectResources)
-                .Any(static resource => !resource.IsTextInterchangeLossless))
-            throw new TranslationInterchangeException("XLIFF21-STRUCTURED-IMPORT", "A structured Runic message cannot be imported from the XLIFF text profile.");
-        var canonical = compiled.CanonicalResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
+        if (!compilation.Success || compilation.Project is not { } compiled)
+            throw new TranslationInterchangeException("XLIFF21-CONTRACT", "XLIFF target text or placeholder metadata does not satisfy the compiler contract.");
+        var canonical = compiled.Locales.Single(locale => string.Equals(locale.Tag, sourceLocale, StringComparison.Ordinal))
+            .DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
         var targets = compiled.Locales.Single(locale => string.Equals(locale.Tag, targetLocale, StringComparison.Ordinal))
             .DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
         foreach ((string key, ImportedUnit unit) in units)
         {
             if (!IsTextInterchangeSyntaxLossless(unit.SourcePattern) || !IsTextInterchangeSyntaxLossless(unit.Pattern) ||
-                !string.Equals(canonical[key].Pattern, unit.SourcePattern, StringComparison.Ordinal) ||
-                !targets.TryGetValue(key, out CompiledTranslation? target) ||
-                !string.Equals(target.Pattern, unit.Pattern, StringComparison.Ordinal))
+                !canonical.TryGetValue(key, out Rmf2TranslationV5? source) ||
+                !string.Equals(RawSyntax(source.Message), unit.SourcePattern, StringComparison.Ordinal) ||
+                !targets.TryGetValue(key, out Rmf2TranslationV5? target) ||
+                !string.Equals(RawSyntax(target.Message), unit.Pattern, StringComparison.Ordinal))
                 throw new TranslationInterchangeException("XLIFF21-STRUCTURED-IMPORT", "A structured Runic message cannot be imported from the XLIFF text profile.");
         }
     }
+
+    private static string RawSyntax(Rmf2MessageV5 message) =>
+        Encoding.UTF8.GetString(message.Syntax.Source.GetUtf8Bytes());
 
     private static bool IsTextInterchangeSyntaxLossless(string pattern)
     {
