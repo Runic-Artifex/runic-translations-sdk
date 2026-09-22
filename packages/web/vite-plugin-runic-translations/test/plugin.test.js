@@ -77,10 +77,15 @@ test("rejects hostile, stale, and forged v3 output", async () => {
   try {
     const generated = join(root, "app.esm-v5");
     const manifest = await writeV3Fixture(generated);
+    await writeFile(join(generated, "extra.js"), "export {};\n");
     const valid = JSON.parse(await readFile(manifest, "utf8"));
     const rejected = [
       ["unknown root member", document => { document.extra = true; }, /unknown member/],
       ["unknown asset member", document => { document.assets[0].extra = true; }, /unknown asset member/],
+      ["duplicate non-entrypoint asset path", document => {
+        const asset = document.assets.find(item => item.path === "messages.js");
+        document.assets.push({ ...asset, path: "extra.js" }, { ...asset, path: "extra.js", mediaType: "text/typescript" });
+      }, /invalid generated asset/],
       ["path traversal", document => { document.assets[0].path = "x/../messages.js"; }, /invalid generated asset/],
       ["wrong entrypoint", document => { document.entrypoints.dynamic = "other.js"; }, /invalid entrypoints/],
       ["runtime ABI marker", document => { document.rmf2RuntimeAbiVersion = 1; }, /execution contract/],

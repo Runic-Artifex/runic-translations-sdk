@@ -196,13 +196,15 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/option"
-          }
+          },
+          "maxItems": 256
         },
         "annotations": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/annotation"
-          }
+          },
+          "maxItems": 256
         }
       },
       "additionalProperties": false
@@ -385,13 +387,15 @@
               "type": "array",
               "items": {
                 "$ref": "#/$defs/option"
-              }
+              },
+              "maxItems": 256
             },
             "annotations": {
               "type": "array",
               "items": {
                 "$ref": "#/$defs/annotation"
-              }
+              },
+              "maxItems": 256
             }
           },
           "additionalProperties": false

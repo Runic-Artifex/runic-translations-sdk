@@ -13,7 +13,7 @@ internal static class Rmf2SemanticV5SchemaTests
     internal static void Register(TestRunner runner)
     {
         runner.Add("RMF2 v5 emitted ASTs and golden envelope validate against Draft 2020-12", ValidInstances);
-        runner.Add("RMF2 v5 Draft 2020-12 schemas reject malformed AST and envelope mutations", InvalidInstances);
+        runner.Add("RMF2 v5 Draft 2020-12 schemas reject malformed AST, envelope, and manifest mutations", InvalidInstances);
     }
 
     private static void ValidInstances()
@@ -43,6 +43,7 @@ internal static class Rmf2SemanticV5SchemaTests
     {
         var astSchema = ReadSchema("message-ast-v5.schema.json");
         var artifactSchema = ReadSchema("locale-artifact-v5.schema.json");
+        var manifestSchema = ReadSchema("web-module-manifest-v3.schema.json");
         var astMutations = new (string Name, Action<JsonObject> Mutate)[] {
             ("old AST version", ast => ast["astVersion"] = 4),
             ("missing underlying value type", ast => ast["declarations"]![3]!["expression"]!.AsObject().Remove("valueType")),
@@ -76,6 +77,46 @@ internal static class Rmf2SemanticV5SchemaTests
             var artifact = GoldenArtifact(); mutation.Mutate(artifact);
             AssertValidation(artifactSchema, artifact, false, mutation.Name);
         }
+
+        var collectionBounds = new (string Name, Func<JsonObject, JsonObject> Owner, string Property, JsonObject Item)[] {
+            ("expression options", ast => ast["declarations"]![3]!["expression"]!.AsObject(), "options",
+                new JsonObject { ["name"] = "style", ["value"] = new JsonObject { ["kind"] = "string-literal", ["value"] = "percent" } }),
+            ("expression annotations", ast => ast["declarations"]![3]!["expression"]!.AsObject(), "annotations",
+                new JsonObject { ["name"] = "note" }),
+            ("markup options", ast => ast["variants"]![2]!["nodes"]![1]!.AsObject(), "options",
+                new JsonObject { ["name"] = "ref", ["value"] = new JsonObject { ["kind"] = "string-literal", ["value"] = "icon" } }),
+            ("markup annotations", ast => ast["variants"]![2]!["nodes"]![1]!.AsObject(), "annotations",
+                new JsonObject { ["name"] = "note" }),
+        };
+        foreach (var boundary in collectionBounds)
+        {
+            JsonObject artifact = GoldenArtifact();
+            JsonObject ast = artifact["messages"]!["Example"]!["ast"]!.AsObject();
+            JsonArray values = Repeated(boundary.Item, 256);
+            boundary.Owner(ast)[boundary.Property] = values;
+            AssertValidation(astSchema, ast, true, boundary.Name + " at structural schema limit");
+            values.Add(boundary.Item.DeepClone());
+            AssertValidation(astSchema, ast, false, boundary.Name + " above reader limit");
+            AssertValidation(artifactSchema, artifact, false, "Envelope: " + boundary.Name + " above reader limit");
+        }
+
+        JsonObject manifest = WebManifest();
+        AssertValidation(manifestSchema, manifest, true, "Complete web module manifest at schema byte-length limit");
+        for (int index = 0; index < 6; index++)
+        {
+            JsonObject incomplete = WebManifest();
+            incomplete["assets"]![index]!["path"] = "extra-" + index + ".js";
+            AssertValidation(manifestSchema, incomplete, false, "Web module manifest missing required entrypoint asset " + index);
+        }
+        JsonObject empty = WebManifest();
+        empty["assets"] = new JsonArray();
+        AssertValidation(manifestSchema, empty, false, "Web module manifest with no assets");
+        JsonObject duplicate = WebManifest();
+        duplicate["assets"]!.AsArray().Add(duplicate["assets"]![0]!.DeepClone());
+        AssertValidation(manifestSchema, duplicate, false, "Web module manifest with a duplicate required asset");
+        JsonObject unsafeLength = WebManifest();
+        unsafeLength["assets"]![0]!["byteLength"] = 9_007_199_254_740_992L;
+        AssertValidation(manifestSchema, unsafeLength, false, "Web module manifest byte length above JavaScript safe integer");
     }
 
     internal static JsonSchema ReadSchema(string fileName)
@@ -93,6 +134,51 @@ internal static class Rmf2SemanticV5SchemaTests
         using var document = JsonDocument.Parse(instance.ToJsonString());
         var result = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
         Assert.Equal(expected, result.IsValid, context + ": " + JsonSerializer.Serialize(result));
+    }
+    private static JsonArray Repeated(JsonObject item, int count)
+    {
+        JsonArray values = [];
+        for (int index = 0; index < count; index++)
+        {
+            JsonObject value = item.DeepClone().AsObject();
+            value["name"] = item["name"]!.GetValue<string>() + index;
+            values.Add(value);
+        }
+        return values;
+    }
+    private static JsonObject WebManifest()
+    {
+        JsonArray assets = [];
+        string[] paths = ["messages.js", "messages.d.ts", "runtime.js", "server.js", "transport.js", "dynamic.js"];
+        foreach (string path in paths)
+        {
+            assets.Add(new JsonObject {
+                ["path"] = path,
+                ["sha256"] = new string('0', 64),
+                ["byteLength"] = 9_007_199_254_740_991L,
+                ["mediaType"] = path.EndsWith(".d.ts", StringComparison.Ordinal) ? "text/typescript" : "text/javascript",
+            });
+        }
+        return new JsonObject {
+            ["webModuleManifestVersion"] = 3,
+            ["esmAbiVersion"] = 4,
+            ["rmf2RuntimeAbiVersion"] = 2,
+            ["messageGrammarVersion"] = 5,
+            ["profile"] = "rmf2-execution-v2",
+            ["generatedNameVersion"] = 1,
+            ["catalog"] = "app",
+            ["contractFingerprint"] = "sha256:" + new string('1', 64),
+            ["sourceHash"] = "sha256:" + new string('2', 64),
+            ["entrypoints"] = new JsonObject {
+                ["messages"] = "messages.js",
+                ["types"] = "messages.d.ts",
+                ["runtime"] = "runtime.js",
+                ["server"] = "server.js",
+                ["transport"] = "transport.js",
+                ["dynamic"] = "dynamic.js",
+            },
+            ["assets"] = assets,
+        };
     }
     private static JsonObject GoldenArtifact() => JsonNode.Parse(File.ReadAllText(RepositoryPaths.Resolve("specs", "translations", "corpus", "semantic-v5", "locale-artifact.json")))!.AsObject();
     private static string GoldenSource() => File.ReadAllText(RepositoryPaths.Resolve("specs", "translations", "corpus", "semantic-v5", "message.mf2"));
