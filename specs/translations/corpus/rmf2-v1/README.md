@@ -33,5 +33,5 @@ cases also prove that a missing or non-string `kind` remains malformed even
 when the object contains an additive member.
 
 The corpus intentionally excludes terms, references, group fallback, C++, rich
-XLIFF, application call-site rewriting, direct legacy-to-RMF2 migration, and
-marketplace concerns. Those are outside the frozen RMF2 v1 release boundary.
+XLIFF, application call-site rewriting, migration from non-RMF2 legacy formats,
+and marketplace concerns. Those are outside the frozen RMF2 v1 release boundary.

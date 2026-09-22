@@ -98,15 +98,15 @@ dotnet run -c Release --project tests/dotnet/Runic.Translations.Compiler.Tests -
 
 On this Linux development machine, 2026-09-11, .NET runtime 10.0.11 and Bun 1.4.2:
 
-| Operation | Mean µs/op | .NET allocated bytes/op |
-| --- | ---: | ---: |
-| Plain .NET message | 0.51 | approximately 0 |
-| Rich .NET content | 2.14 | 2,080 |
-| Linked .NET rich rendering | 2.78 | 3,576 |
-| Parse a resource with 1,000 messages | 3,725 | 3,937,249 |
-| Plain ESM message | 0.34 | not measured |
-| Rich ESM content | 2.63 | not measured |
-| Linked ESM rich rendering | 2.54 | not measured |
+| Operation                            | Mean µs/op | .NET allocated bytes/op |
+| ------------------------------------ | ---------: | ----------------------: |
+| Plain .NET message                   |       0.51 |         approximately 0 |
+| Rich .NET content                    |       2.14 |                   2,080 |
+| Linked .NET rich rendering           |       2.78 |                   3,576 |
+| Parse a resource with 1,000 messages |      3,725 |               3,937,249 |
+| Plain ESM message                    |       0.34 |            not measured |
+| Rich ESM content                     |       2.63 |            not measured |
+| Linked ESM rich rendering            |       2.54 |            not measured |
 
 These are observations, not latency guarantees or a cross-runtime ranking.
 Formatting/rendering uses 10,000 iterations; parsing uses 30. Registry linking
@@ -147,7 +147,7 @@ fingerprint, while source freshness remains a separate conflict check.
 
 The editor smoke fixture covers mounted
 resource mutations, locale/fallback transactions, save/reload, deterministic
-plain XLIFF export/import, and the rule that an import never creates legacy
-`.mf2` files. Focused interchange tests cover approved-review fingerprints and
+plain XLIFF export/import, and the rule that an import never converts an RMF2
+project into direct `.mf2` files. Focused interchange tests cover approved-review fingerprints and
 structured loss/refusal. Structured preview tests route AST 5 through the
 verified .NET runtime with inert link, action, and custom-markup runs.

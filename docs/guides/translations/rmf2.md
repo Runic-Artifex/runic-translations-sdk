@@ -3,8 +3,10 @@
 Runic projects use either direct `.mf2` messages or recursive grouped `.rmf2`
 resources with inline markup contracts. The representation is inferred from the
 source files; mixing them in one project is rejected. This implementation is a
-bounded execution profile of the accepted proposals, **not full Unicode MF2 conformance**.
-The remaining proposal work is listed below.
+bounded execution profile of the supported contract, **not full Unicode MF2 conformance**.
+The `rmf2-execution-v2` release boundary is frozen for this preview; the
+exclusions near the end of this guide are deliberate contract boundaries, not
+unfinished work inside this release.
 
 ## Resources and discovery
 
@@ -204,7 +206,7 @@ Definitions return explicit declarations; an implicitly used input has no
 declaration target unless another translation declares it. Application call-site
 navigation remains owned by native language services; Runic's resource
 references are intentionally scoped to catalog sources. Standard resource F2
-therefore refuses a workspace containing application or legacy sources (or
+therefore refuses a workspace containing application or other non-resource sources (or
 unindexable links) instead of returning a partial edit. The explicit
 resource-source transaction is the opt-in boundary; callers must update native
 application call sites separately.
@@ -296,8 +298,15 @@ terms, and group-atomic fallback remain unsupported.
 Arbitrary rich XLIFF is outside the supported text-profile
 scope; exports report semantic loss. Application-language call-site refactors
 are delegated or refused, never implemented as blind text replacement.
-Direct legacy-to-RMF2 migration, marketplace distribution, and rich XLIFF are
-also outside the frozen RMF2 v1 release boundary.
+Terms, group-atomic fallback, C++ RMF2, rich XLIFF, application-language
+call-site rewriting, marketplace distribution, and migration from non-RMF2
+legacy formats are outside the frozen RMF2 v1 release boundary. They require a
+separately versioned contract and are not prerequisites for this preview.
+
+Retained ABI-1 constructors and compatibility constants are documented in the
+[compatibility-retention ledger](compatibility-retention.md). They are read-side
+compatibility only: current writers emit the v5/RMF2 ABI-2 contract described
+above.
 
 See [validation and measurements](rmf2-validation.md) for reproducible checks
 and the recorded native Windows host results.

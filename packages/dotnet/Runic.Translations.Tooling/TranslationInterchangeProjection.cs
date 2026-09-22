@@ -9,9 +9,9 @@ using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tooling;
 
-// This is deliberately an interchange-only carrier. In particular, a v5
-// project is never squeezed through CompiledTextCatalog: that would erase its
-// raw MF2 syntax, v5 caller contract, direct-resource identity, and freshness.
+// This is deliberately an interchange-only carrier. A v5 project is never
+// squeezed through a reduced catalog projection: that would erase its raw MF2
+// syntax, caller contract, direct-resource identity, and freshness.
 internal sealed record TranslationInterchangeProjection(
     string CatalogId,
     string SourceLocale,

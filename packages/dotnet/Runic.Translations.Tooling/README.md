@@ -20,7 +20,7 @@ conformance.
 Compile with `TranslationCompiler.CompileProject` (or the explicit
 `CompileMf2Project` entry point) and pass its `Rmf2ProjectCompilationV5` result
 directly to `TranslationInterchange.ExportXliff21`. The first-party editor uses
-the same typed boundary and never fabricates a legacy catalog carrier. Approved review stamps use a dedicated
+the same typed boundary and never fabricates a retired catalog carrier. Approved review stamps use a dedicated
 closed-text-profile fingerprint, while workspace source freshness remains a
 separate conflict check.
 

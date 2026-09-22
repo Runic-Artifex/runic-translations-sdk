@@ -6,8 +6,8 @@ using System.Text.Json;
 
 namespace Runic.Translations.Compiler;
 
-// Deliberately separate from CompiledMessagePattern: v4 consumers cannot represent
-// these values without losing local formatting, option types or key identity.
+// Deliberately separate from reduced runtime message carriers, which cannot
+// represent local formatting, option types or key identity.
 internal sealed record Rmf2ValueV5(string Kind, string Value, string? Canonical = null);
 internal sealed record Rmf2OptionV5(string Name, Rmf2ValueV5 Value);
 internal sealed record Rmf2AnnotationV5(string Name, Rmf2ValueV5? Value);

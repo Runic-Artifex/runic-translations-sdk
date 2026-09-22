@@ -37,7 +37,7 @@ feature-local resources. The editor uses the compiler's RMF2 source model and
 diagnostics, including the resource/markup contracts that apply to that layout.
 The editor uses the compiler's v5 project carrier. Its internal interchange
 projection normalizes the typed result only for closed text interchange. It
-never converts a project into a legacy catalog, which would lose direct-resource
+never converts a project into a retired catalog carrier, which would lose direct-resource
 identity, raw syntax, caller contracts, and freshness information.
 
 Discovery is reconciled from the configured roots on every load/check, so
@@ -79,8 +79,8 @@ markup appear as explicit semantic-loss entries and are refused on text-profile
 import. A review approval uses the closed-text-profile fingerprint, separately
 from source freshness, so a compatible review state cannot hide a stale catalog.
 Imports and structural transactions write only declared translation resources
-and editor review state. They never edit application call sites or create legacy
-`.mf2` files for an RMF2 project.
+and editor review state. They never edit application call sites or convert an
+RMF2 project into direct `.mf2` files.
 
 For rich preview, the editor host renders typed v5 requests through the
 verified .NET artifact/pack path. The bridge returns validated semantic runs;
