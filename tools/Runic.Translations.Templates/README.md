@@ -53,11 +53,13 @@ Choose the project template for a complete .NET and ESM setup. Choose the item t
 
 ## RMF2 output
 
-All templates and `runic-translations init` create RMF2 resources and select the
-canonical RMF2 execution profile. Generated projects produce typed v5 C# and
-ESM ABI 4 output. The standard templates create structured message paths; the
-`-rmf2` template identities remain available for existing projects that use
-flat message IDs. Both use the same RMF2 source layout and execution profile.
+All templates and `runic-translations init` create RMF2 resources. The templates
+select the canonical RMF2 execution profile and produce typed v5 C# and ESM ABI
+4 output. The standalone `init` scaffold currently selects the RMF2 source
+layout only, so it retains the existing v4 execution and artifact contract. The
+standard templates create structured message paths; the `-rmf2` template
+identities remain available for existing projects that use flat message IDs.
+Both use the same RMF2 source layout and execution profile.
 
 ## Compatibility and status
 
