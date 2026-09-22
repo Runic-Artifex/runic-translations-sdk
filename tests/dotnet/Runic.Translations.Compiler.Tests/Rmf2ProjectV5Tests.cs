@@ -13,7 +13,7 @@ internal static class Rmf2ProjectV5Tests
 {
     internal static void Register(TestRunner runner)
     {
-        runner.Add("RMF2 v5 explicit project profile dispatch preserves current artifact bytes", Dispatch);
+        runner.Add("RMF2 selects the semantic contract when profile is omitted", Dispatch);
         runner.Add("RMF2 v5 canonical multilingual fixture links and executes typed locals", Fixture);
         runner.Add("RMF2 v5 target callers inherit canonical carriers and may omit inputs", Callers);
         runner.Add("RMF2 v5 project composition matches flat split and external mounts", Composition);
@@ -29,9 +29,11 @@ internal static class Rmf2ProjectV5Tests
     }
 
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
+    internal static TranslationSource Project(string extra = "") => Source("translations/runic.json",
+        "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"" + extra + "}");
     private static Rmf2ProjectCompilationV5 Compile(string english, string? german = null, string config = "")
-        => TranslationCompiler.CompileProjectForProfile(Rmf2Tests.Project(config), german is null
-            ? [Source("translations/en.rmf2", english)] : [Source("translations/en.rmf2", english), Source("translations/de.rmf2", german)], TranslationProjectProfile.Rmf2ExecutionV2).Rmf2!;
+        => TranslationCompiler.CompileRmf2ProjectV5(Project(config), german is null
+            ? [Source("translations/en.rmf2", english)] : [Source("translations/en.rmf2", english), Source("translations/de.rmf2", german)]);
     private static Rmf2ProjectV5 Good(string english, string? german = null, string config = "")
     {
         var result = Compile(english, german, config);
@@ -46,35 +48,24 @@ internal static class Rmf2ProjectV5Tests
     }
     private static void Dispatch()
     {
-        var project = Rmf2Tests.Project();
+        var project = Project();
         TranslationSource[] sources = [Source("translations/en.rmf2", "hello = Hello {$name}")];
-        var legacy = TranslationCompiler.CompileProject(project, sources);
-        var selected = TranslationCompiler.CompileProjectForProfile(project, sources, TranslationProjectProfile.Current);
-        Assert.True(selected.Success && selected.Rmf2 is null, "Current profile dispatch changed carrier.");
-        Assert.Equal(4, selected.Current!.Catalogs[0].MessageGrammarVersion);
-        Assert.Equal(Encoding.UTF8.GetString(TranslationOutputRenderer.RenderLocaleJson(legacy.Catalogs[0], "en").GetUtf8Bytes()),
-            Encoding.UTF8.GetString(TranslationOutputRenderer.RenderLocaleJson(selected.Current.Catalogs[0], "en").GetUtf8Bytes()));
-        var staged = TranslationCompiler.CompileProjectForProfile(project, sources, TranslationProjectProfile.Rmf2ExecutionV2);
-        Assert.True(staged.Success && staged.Current is null && staged.Rmf2?.Project is not null, "v5 was lowered into the legacy carrier.");
-        var omitted = TranslationCompiler.CompileProjectForSelectedProfile(project, sources);
-        Assert.True(omitted.Profile == TranslationProjectProfile.Current && omitted.Current?.Success == true && omitted.Rmf2 is null,
-            "Omitted execution selector did not retain the current carrier.");
-        var explicitV2 = TranslationCompiler.CompileProjectForSelectedProfile(Rmf2Tests.Project(",\"executionProfile\":\"rmf2-execution-v2\""), sources);
-        Assert.True(explicitV2.Profile == TranslationProjectProfile.Rmf2ExecutionV2 && explicitV2.Current is null && explicitV2.Rmf2?.Success == true,
-            "Recognized execution-v2 selector did not return the v5 carrier.");
-        TranslationSource activated = Rmf2Tests.Project(",\"executionProfile\":\"rmf2-execution-v2\"");
-        var invalidLayout = TranslationCompiler.CompileProjectForSelectedProfile(new TranslationSource(activated.Path,
-            Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(activated.GetUtf8Bytes()).Replace("rmf2-v1", "mf2-v1", StringComparison.Ordinal))), []);
-        Assert.True(!invalidLayout.Success && invalidLayout.Profile == TranslationProjectProfile.Rmf2ExecutionV2 && invalidLayout.Current is null && invalidLayout.Rmf2 is not null,
-            "Recognized execution-v2 invalid-layout diagnostics lost the v5 discriminant.");
-        var unknown = TranslationCompiler.CompileProjectForSelectedProfile(Rmf2Tests.Project(",\"executionProfile\":\"future-profile\""), sources);
-        Assert.True(!unknown.Success && unknown.Profile == TranslationProjectProfile.Current && unknown.Current is not null && unknown.Rmf2 is null,
-            "Unknown execution selector was not refused on the current discriminant.");
-        const string formatted = "x =\n  .local $n = {0.1 :number style=percent}\n  {{{$n}}}";
-        Assert.True(Good(formatted).CanonicalMessages.Count == 1, "v5-only local did not link.");
-        Assert.True(!TranslationCompiler.CompileProject(project, [Source("translations/en.rmf2", formatted)]).Success, "Default path unexpectedly activated v5.");
-        var incompatible = Source("translations/runic.json", Encoding.UTF8.GetString(project.GetUtf8Bytes()).Replace("rmf2-v1", "mf2-v1", StringComparison.Ordinal));
-        Assert.True(!TranslationCompiler.CompileProjectForProfile(incompatible, [], TranslationProjectProfile.Rmf2ExecutionV2).Success, "Profile accepted incompatible resource layout.");
+        var selected = TranslationCompiler.CompileRmf2ProjectV5(project, sources);
+        Assert.True(selected.Success && selected.Project is not null,
+            "Omitted configuration did not select the semantic carrier.");
+        TranslationSource[] direct = [Source("translations/en/hello.mf2", "Hello {$name}")];
+        var directResult = TranslationCompiler.CompileRmf2ProjectV5(project, direct);
+        Assert.True(directResult.Success && directResult.Project!.CanonicalMessages.Single().Key == "hello",
+            "Direct MF2 did not normalize into the selected semantic model.");
+        var mixed = TranslationCompiler.CompileRmf2ProjectV5(project,
+            [Source("translations/en.rmf2", "hello = Hello"), Source("translations/en/other.mf2", "Other")]);
+        Assert.True(!mixed.Success && mixed.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0052"),
+            "Mixed direct and grouped source representations were accepted.");
+        var retiredSelector = TranslationCompiler.CompileRmf2ProjectV5(
+            Source("translations/runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"executionProfile\":\"rmf2-execution-v1\"}"), sources);
+        Assert.True(!retiredSelector.Success,
+            "A retired selector was allowed to revive an older contract.");
+        Assert.True(selected.Project!.CanonicalMessages.Count == 1, "Selected semantic project did not link.");
     }
     private static void Fixture()
     {
@@ -120,8 +111,8 @@ internal static class Rmf2ProjectV5Tests
     private static void Composition()
     {
         var flat = Good("checkout {\n  cart {\n    title = {$name}\n  }\n}");
-        var split = TranslationCompiler.CompileRmf2ProjectV5(Rmf2Tests.Project(), [Source("translations/checkout/cart/en.rmf2", "title = {$name}")]);
-        var mounted = TranslationCompiler.CompileRmf2ProjectV5(Rmf2Tests.Project(",\"sourceRoots\":[{\"path\":\"../src/shop/i18n\",\"namespace\":[\"checkout\"]}]"), [Source("src/shop/i18n/cart/en.rmf2", "title = {$name}")]);
+        var split = TranslationCompiler.CompileRmf2ProjectV5(Project(), [Source("translations/checkout/cart/en.rmf2", "title = {$name}")]);
+        var mounted = TranslationCompiler.CompileRmf2ProjectV5(Project(",\"sourceRoots\":[{\"path\":\"../src/shop/i18n\",\"namespace\":[\"checkout\"]}]"), [Source("src/shop/i18n/cart/en.rmf2", "title = {$name}")]);
         Assert.True(split.Success, Errors(split)); Assert.True(mounted.Success, Errors(mounted));
         Assert.Equal(flat.CallerFingerprint, split.Project!.CallerFingerprint);
         Assert.Equal(flat.CallerFingerprint, mounted.Project!.CallerFingerprint);
@@ -142,9 +133,9 @@ internal static class Rmf2ProjectV5Tests
         Bad("x = X", "x = X", ",\"locales\":[\"en\"]", "RTR0004");
         Bad("x = X", "x = X", ",\"locales\":[\"en\",{\"tag\":\"de\",\"fallback\":\"de\"}]");
         Good("a {\n  b = B\n}\na {\n  c = C\n}");
-        var duplicate = TranslationCompiler.CompileRmf2ProjectV5(Rmf2Tests.Project(), [Source("translations/en.rmf2", "x = X"), Source("translations/en.rmf2", "y = Y")]);
+        var duplicate = TranslationCompiler.CompileRmf2ProjectV5(Project(), [Source("translations/en.rmf2", "x = X"), Source("translations/en.rmf2", "y = Y")]);
         Assert.True(!duplicate.Success, "Duplicate paths accepted.");
-        var caseAlias = TranslationCompiler.CompileRmf2ProjectV5(Rmf2Tests.Project(), [Source("translations/one/en.rmf2", "x = X"), Source("translations/One/de.rmf2", "x = X")]);
+        var caseAlias = TranslationCompiler.CompileRmf2ProjectV5(Project(), [Source("translations/one/en.rmf2", "x = X"), Source("translations/One/de.rmf2", "x = X")]);
         Assert.True(!caseAlias.Success, "Case-only alias accepted.");
     }
     private const string Custom = ",\"markup\":{\"contracts\":[{\"name\":\"app:badge\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"amount\":{\"type\":\"number\",\"default\":\"1e2\"},\"enabled\":{\"type\":\"boolean\",\"default\":\"true\"},\"tone\":{\"type\":\"enum\",\"values\":[\"positive\",\"neutral\"],\"default\":\"neutral\"}}}],\"aliases\":{\"badge\":\"app:badge\"}}";
@@ -243,11 +234,11 @@ internal static class Rmf2ProjectV5Tests
         Assert.Equal("int64", extra.ExtraMessages[0].Inputs[0].Type);
         using var markup = JsonDocument.Parse(extra.MarkupContract);
         Assert.True(markup.RootElement.GetProperty("messages").TryGetProperty("extra", out _), "Extra renderer contract was erased.");
-        var compiled = TranslationCompiler.CompileRmf2ProjectV5(Rmf2Tests.Project(settings),
+        var compiled = TranslationCompiler.CompileRmf2ProjectV5(Project(settings),
             [Source("translations/en.rmf2", "x = X"), Source("translations/de.rmf2", "x = X\nextra = {$n :integer}"), Source("translations/fr.rmf2", "x = X\nextra = {$n}")]);
         Assert.True(compiled.Success, Errors(compiled));
         Assert.Equal("int64", compiled.Project!.Locales.Single(locale => locale.Tag == "fr").DirectResources.Single(resource => resource.Key == "extra").Message.Inputs[0].Type);
-        var invalid = TranslationCompiler.CompileRmf2ProjectV5(Rmf2Tests.Project(settings),
+        var invalid = TranslationCompiler.CompileRmf2ProjectV5(Project(settings),
             [Source("translations/en.rmf2", "x = X"), Source("translations/de.rmf2", "x = X\nextra = {$n :integer}"), Source("translations/fr.rmf2", "x = X\nextra = {$other}")]);
         Assert.True(!invalid.Success && invalid.Diagnostics.Any(d => d.Id == "RTR0016"), "Allowed extra keys lost caller validation.");
     }
@@ -259,10 +250,10 @@ internal static class Rmf2ProjectV5Tests
         Bad("@example {\"café\":\"Ada\",\"cafe\u0301\":\"A\"}\nx = {$café}", diagnostic: "RTR0051");
         var invalid = Compile("# heading\nx = Good\ny =\n  .local $a = {$n}\n  .input {$n :number}\n  {{{$a}}}");
         Assert.True(invalid.Diagnostics.Any(d => d.Id == "RTR0067" && d.Location.Path == "translations/en.rmf2" && d.Location.Line == 5), "Semantic diagnostics lost physical source mapping.");
-        var limit = TranslationCompiler.CompileRmf2ProjectV5(Rmf2Tests.Project(), [Source("translations/en.rmf2", "a = A\nb = B")], new(maximumKeysPerCatalog: 1));
+        var limit = TranslationCompiler.CompileRmf2ProjectV5(Project(), [Source("translations/en.rmf2", "a = A\nb = B")], new(maximumKeysPerCatalog: 1));
         Assert.True(!limit.Success && limit.Diagnostics.Any(d => d.Id == "RTR0022" || d.Id == "RTR0050"), "Project bypassed resource limits.");
         using var canceled = new CancellationTokenSource(); canceled.Cancel();
-        try { TranslationCompiler.CompileRmf2ProjectV5(Rmf2Tests.Project(), [], cancellationToken: canceled.Token); throw new InvalidOperationException("Canceled compilation proceeded."); }
+        try { TranslationCompiler.CompileRmf2ProjectV5(Project(), [], cancellationToken: canceled.Token); throw new InvalidOperationException("Canceled compilation proceeded."); }
         catch (OperationCanceledException) { }
     }
 }

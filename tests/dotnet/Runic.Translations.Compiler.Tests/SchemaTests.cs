@@ -15,8 +15,8 @@ internal static class SchemaTests
         runner.Add("schemas are strict versioned JSON Schema 2020-12 documents", SchemasAreVersionedAndClosed);
         runner.Add("schemas contain only resolvable local references", LocalReferencesResolve);
         runner.Add("published schema identifiers match their bundled file names", CanonicalIdentifiersMatchFiles);
-        runner.Add("v3 source and locale-pack schemas publish closed profile boundaries", V3SchemaBoundaries);
-        runner.Add("project schema constrains RMF2 execution-v2 activation", ProjectExecutionProfileBoundary);
+        runner.Add("semantic schemas publish closed v5 profile boundaries", V3SchemaBoundaries);
+        runner.Add("project schema rejects retired RMF2 selectors", ProjectExecutionProfileBoundary);
         runner.Add("valid corpus sources are strict JSON", ValidCorpusSourcesAreStrictJson);
     }
 
@@ -25,11 +25,10 @@ internal static class SchemaTests
         JsonSchema schema = JsonSchema.FromFile(ReadSchemaPath("project-v1.schema.json"),
             new BuildOptions { Dialect = Dialect.Draft202012 });
         const string Prefix = "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"";
-        AssertProject(Prefix + "}", true, "omitted profile");
-        AssertProject(Prefix + ",\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"}", true, "selected RMF2 profile");
-        AssertProject(Prefix + ",\"executionProfile\":\"rmf2-execution-v2\"}", false, "profile without layout");
-        AssertProject(Prefix + ",\"sourceLayout\":\"mf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"}", false, "profile with wrong layout");
-        AssertProject(Prefix + ",\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"future-profile\"}", false, "unknown profile");
+        AssertProject(Prefix + "}", true, "canonical project");
+        AssertProject(Prefix + ",\"executionProfile\":\"rmf2-execution-v2\"}", false, "retired execution selector");
+        AssertProject(Prefix + ",\"sourceLayout\":\"rmf2-v1\"}", false, "retired grouped layout selector");
+        AssertProject(Prefix + ",\"sourceLayout\":\"mf2-v1\"}", false, "retired direct layout selector");
 
         void AssertProject(string json, bool expected, string context)
         {
@@ -62,13 +61,8 @@ internal static class SchemaTests
 
     private static void LocalReferencesResolve()
     {
-        AssertReferencesResolve(ReadSchemaPath("catalog-v1.schema.json"));
-        AssertReferencesResolve(ReadSchemaPath("resources-v1.schema.json"));
-        AssertReferencesResolve(ReadSchemaPath("catalog-v2.schema.json"));
-        AssertReferencesResolve(ReadSchemaPath("resources-v2.schema.json"));
-        AssertReferencesResolve(ReadSchemaPath("message-ast-v2.schema.json"));
-        AssertReferencesResolve(ReadSchemaPath("template-manifest-v2.schema.json"));
-        AssertReferencesResolve(ReadSchemaPath("web-module-manifest-v2.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("message-ast-v5.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("web-module-manifest-v3.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("capabilities-v1.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("project-v1.schema.json"));
     }
@@ -99,12 +93,13 @@ internal static class SchemaTests
 
     private static void V3SchemaBoundaries()
     {
-        using JsonDocument resources = ReadSchema("resources-v3.schema.json");
-        using JsonDocument ast = ReadSchema("message-ast-v3.schema.json");
-        using JsonDocument pack = ReadSchema("locale-pack-v2.schema.json");
-        Assert.Equal(3, resources.RootElement.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetInt32());
-        Assert.Equal("runic-mf2-subset/1", ast.RootElement.GetProperty("properties").GetProperty("profile").GetProperty("const").GetString());
-        Assert.Equal("locale-artifact-v2.schema.json", pack.RootElement.GetProperty("$ref").GetString());
+        using JsonDocument ast = ReadSchema("message-ast-v5.schema.json");
+        using JsonDocument artifact = ReadSchema("locale-artifact-v5.schema.json");
+        using JsonDocument manifest = ReadSchema("web-module-manifest-v3.schema.json");
+        Assert.Equal(5, ast.RootElement.GetProperty("properties").GetProperty("astVersion").GetProperty("const").GetInt32());
+        Assert.Equal("rmf2-execution-v2", ast.RootElement.GetProperty("properties").GetProperty("profile").GetProperty("const").GetString());
+        Assert.Equal(5, artifact.RootElement.GetProperty("properties").GetProperty("artifactVersion").GetProperty("const").GetInt32());
+        Assert.Equal(4, manifest.RootElement.GetProperty("properties").GetProperty("esmAbiVersion").GetProperty("const").GetInt32());
     }
 
     private static void CanonicalIdentifiersMatchFiles()

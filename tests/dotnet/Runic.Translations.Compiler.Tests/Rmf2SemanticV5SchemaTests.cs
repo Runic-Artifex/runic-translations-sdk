@@ -80,11 +80,11 @@ internal static class Rmf2SemanticV5SchemaTests
 
     internal static JsonSchema ReadSchema(string fileName)
     {
-        // All references resolve from the checked-in schemas. No remote fetch or
-        // dialect downgrade is involved, including the unchanged markup v1 shape.
+        // All references resolve from the checked-in semantic schemas. No remote
+        // fetch or dialect downgrade is involved.
         var registry = new SchemaRegistry();
         var options = new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = registry };
-        foreach (string dependency in new[] { "locale-artifact-v4.schema.json", "message-ast-v5.schema.json" })
+        foreach (string dependency in new[] { "locale-artifact-v5.schema.json", "message-ast-v5.schema.json" })
             if (dependency != fileName) registry.Register(JsonSchema.FromFile(RepositoryPaths.Resolve("specs", "translations", "schemas", dependency), options));
         return JsonSchema.FromFile(RepositoryPaths.Resolve("specs", "translations", "schemas", fileName), options);
     }

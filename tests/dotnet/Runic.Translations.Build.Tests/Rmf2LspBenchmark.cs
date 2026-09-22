@@ -24,7 +24,7 @@ internal static class Rmf2LspBenchmark
         int messageCount = baseline["catalogMessages"]!.GetValue<int>();
         int samples = baseline["samples"]!.GetValue<int>();
         int cancellationQueueDepth = baseline["cancellationQueueDepth"]!.GetValue<int>();
-        string project = "{\"schemaVersion\":1,\"catalog\":\"benchmark\",\"code\":{\"namespace\":\"Example\",\"className\":\"Text\"},\"baseLocale\":\"en\",\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"}";
+        string project = "{\"schemaVersion\":1,\"catalog\":\"benchmark\",\"code\":{\"namespace\":\"Example\",\"className\":\"Text\"},\"baseLocale\":\"en\"}";
         string largeText = string.Join('\n', Enumerable.Range(0, messageCount).Select(index => $"item_{index:D5} = Value{index}")) + "\n";
         List<double> largeCatalog = new();
         for (int sample = 0; sample < samples; sample++)
@@ -43,7 +43,7 @@ internal static class Rmf2LspBenchmark
                     ["command"] = "runic.preview",
                     ["arguments"] = new JsonArray(uri, "item_00000", "en"),
                 });
-                Assert.Equal(5, preview["result"]?["ast"]?["astVersion"]?.GetValue<int>() ?? 0, "LSP benchmark did not exercise execution-v2 preview validation");
+                Assert.Equal(5, preview["result"]?["ast"]?["astVersion"]?.GetValue<int>() ?? 0, "LSP benchmark did not exercise semantic preview validation");
             }
         }
 
@@ -107,7 +107,6 @@ internal static class Rmf2LspBenchmark
         JsonObject report = new() {
             ["protocol"] = "runic-rmf2-lsp-benchmark",
             ["baseline"] = BaselinePath,
-            ["executionProfile"] = "rmf2-execution-v2",
             ["latencyTransport"] = "child-process-stdio",
             ["cancellationTransport"] = "in-process-framed-streams",
             ["catalogMessages"] = messageCount,

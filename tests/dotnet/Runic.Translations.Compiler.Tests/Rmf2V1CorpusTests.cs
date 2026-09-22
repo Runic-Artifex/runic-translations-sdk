@@ -29,9 +29,6 @@ internal static class Rmf2V1CorpusTests
         JsonElement contracts = index.RootElement.GetProperty("contracts");
         Assert.Equal(1, index.RootElement.GetProperty("corpusVersion").GetInt32());
         Assert.Equal("runic-rmf2-v1-conformance", index.RootElement.GetProperty("identity").GetString());
-        using JsonDocument manifestContract = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(Root, "runic.json")));
-        Assert.Equal(contracts.GetProperty("sourceSyntax").GetString(), manifestContract.RootElement.GetProperty("sourceLayout").GetString());
-        Assert.Equal(contracts.GetProperty("executionProfile").GetString(), manifestContract.RootElement.GetProperty("executionProfile").GetString());
         Assert.Equal("rmf2-execution-v2", Rmf2ProjectV5.Profile);
         Assert.Equal(contracts.GetProperty("messageAstVersion").GetInt32(), Rmf2ProjectV5.MessageGrammarVersion);
         Assert.Equal(contracts.GetProperty("localeArtifactVersion").GetInt32(), Rmf2LocaleArtifactV5.ArtifactVersion);
@@ -152,7 +149,7 @@ internal static class Rmf2V1CorpusTests
             string config = layout.TryGetProperty("mountPath", out JsonElement mount)
                 ? ",\"sourceRoots\":[{\"path\":" + JsonSerializer.Serialize(mount.GetString()) + ",\"namespace\":" + layout.GetProperty("namespace").GetRawText() + "}]"
                 : string.Empty;
-            string manifest = "{\"schemaVersion\":1,\"catalog\":\"layout\",\"code\":{\"namespace\":\"Corpus\",\"className\":\"LayoutText\"},\"baseLocale\":\"en\",\"locales\":[\"en\"],\"sourceLayout\":\"rmf2-v1\"" + config + "}";
+            string manifest = "{\"schemaVersion\":1,\"catalog\":\"layout\",\"code\":{\"namespace\":\"Corpus\",\"className\":\"LayoutText\"},\"baseLocale\":\"en\",\"locales\":[\"en\"]" + config + "}";
             TranslationSource project = new("translations/runic.json", Encoding.UTF8.GetBytes(manifest));
             string text = File.ReadAllText(Path.Combine(Root, layout.GetProperty("source").GetString()!));
             if (layout.TryGetProperty("newline", out JsonElement newline) && newline.GetString() == "crlf")

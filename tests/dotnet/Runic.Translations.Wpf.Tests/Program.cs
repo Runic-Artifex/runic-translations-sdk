@@ -19,16 +19,17 @@ internal static class Program
     private static int Main()
     {
         string directory = Path.Combine(AppContext.BaseDirectory, "payment");
-        var compiled = TranslationCompiler.CompileProject(Source("runic.json"), [Source("en.rmf2"), Source("de.rmf2")]);
+        var compiled = TranslationCompiler.CompileRmf2ProjectV5(Source("runic.json"), [Source("en.rmf2"), Source("de.rmf2")]);
         Require(compiled.Success, string.Join("; ", compiled.Diagnostics.Select(d => d.Message)));
-        var catalog = compiled.Catalogs.Single();
-        var key = new TranslationKey("checkout", 0, "payment");
-        var arguments = new[] { new TranslationPackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Plain), new TranslationPackArgumentContract("tone", TextArgumentType.String, TextArgumentFormat.None) };
-        var contract = new TranslationPackContract("checkout", "en", catalog.Fingerprint,
-            [new TranslationPackMessageContract(key, arguments), new TranslationPackMessageContract(new TranslationKey("checkout", 1, "plain"), [])], 4, catalog.Rmf2MarkupContract);
-        var verified = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(TranslationOutputRenderer.RenderLocaleJson(catalog, "en").GetUtf8Bytes()), contract).AsTask().GetAwaiter().GetResult();
+        Rmf2ProjectV5 project = compiled.Project!;
+        Rmf2MessageContractV5 payment = project.CanonicalMessages.Single(message => message.Key == "payment");
+        var key = new TranslationKey(project.Id, payment.Id, payment.Key);
+        var contract = TranslationPackContract.CreateRmf2V5(project.Id, "en", project.CallerFingerprint,
+            project.CanonicalMessages.Select(message => TranslationPackMessageContract.FromRmf2Inputs(
+                new TranslationKey(project.Id, message.Id, message.Key), Inputs(message.Inputs))).ToArray(), project.MarkupContract);
+        var verified = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(Rmf2LocaleArtifactV5.Render(project, "en").GetUtf8Bytes()), contract).AsTask().GetAwaiter().GetResult();
         var runtime = new CompiledTranslationCatalog("checkout", "en",
-            [new CompiledTranslationDefinition("payment", [new TranslationPlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain), new TranslationPlaceholderDescriptor("tone", TextArgumentType.String, TextArgumentFormat.None)]), new CompiledTranslationDefinition("plain", [])],
+            project.CanonicalMessages.Select(message => CompiledTranslationDefinition.FromRmf2Inputs(message.Key, Inputs(message.Inputs))).ToArray(),
             [new CompiledTranslationLocale("en", null, verified.Messages.Select(message => new CompiledTranslationValue(message.Key.Id, "", message.Message!)).ToArray())]);
         var snapshot = new CompiledTranslationSnapshot(runtime, "en");
         var content = snapshot.FormatContent(key, [new TextArgument("count", 1), new TextArgument("tone", "positive")]);
@@ -37,9 +38,9 @@ internal static class Program
             ["terms"] = new InlineLinkBinding(new Uri("https://example.test/terms")), ["privacy"] = new InlineLinkBinding(new Uri("https://example.test/privacy")),
             ["retry"] = new InlineActionBinding(() => calls++), ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock { Text = "★" }), false, _ => "Star"),
         };
-        var renderer = new WpfInlineRenderer(catalog.Rmf2MarkupContract!, _ => { }, new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (run, children) => { Require(run.Options["tone"] == "positive", "Badge lost its options."); Require(!run.Options.ContainsKey("@note"), "Annotation leaked into WPF markup options."); var span = new Span(); span.Inlines.AddRange(children); return span; } });
+        var renderer = new WpfInlineRenderer(project.MarkupContract, _ => { }, new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (run, children) => { Require(run.Options["tone"] == "positive", "Badge lost its options."); Require(!run.Options.ContainsKey("@note"), "Annotation leaked into WPF markup options."); var span = new Span(); span.Inlines.AddRange(children); return span; } });
         var target = new TextBlock();
-        JsonObject strictContract = JsonNode.Parse(catalog.Rmf2MarkupContract!)!.AsObject();
+        JsonObject strictContract = JsonNode.Parse(project.MarkupContract)!.AsObject();
         strictContract["messages"]!["payment"]!["slots"]!["retry"]!["min"] = 1;
         int prematureFactories = 0;
         var guardedSlots = new Dictionary<string, InlineMarkupBinding>(slots) {
@@ -87,5 +88,11 @@ internal static class Program
             return new TranslationSource(Path.Combine(directory, name), bytes);
         }
     }
+    private static CompiledRmf2Input[] Inputs(IReadOnlyList<Rmf2InputV5> inputs) => inputs.Select(input => new CompiledRmf2Input(input.Name, input.Type switch
+    {
+        "string" => TextArgumentType.String, "int64" => TextArgumentType.Int, "decimal" => TextArgumentType.Number,
+        "boolean" => TextArgumentType.Bool, "date" => TextArgumentType.Date, "time" => TextArgumentType.Time,
+        "datetime" => TextArgumentType.DateTime, "guid" => TextArgumentType.Guid, _ => throw new InvalidOperationException("Unknown input type."),
+    })).ToArray();
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 }

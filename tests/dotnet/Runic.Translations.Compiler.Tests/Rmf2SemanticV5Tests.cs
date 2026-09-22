@@ -25,7 +25,7 @@ internal static class Rmf2SemanticV5Tests
         runner.Add("RMF2 v5 ranks numeric exact above categories and selectors lexicographically", Selection);
         runner.Add("RMF2 v5 rejects malformed and normalized duplicate key vectors", InvalidKeys);
         runner.Add("RMF2 v5 decimal canonicalization is exact bounded and culture independent", Numbers);
-        runner.Add("RMF2 v5 keeps the v4 project emission and refusal boundary unchanged", V4Boundary);
+        runner.Add("RMF2 project sources lower through the selected semantic contract", V4Boundary);
         runner.Add("RMF2 v5 normalized AST equals the golden schema instance", Golden);
         runner.Add("RMF2 v5 schemas are versioned closed and mirrored", Schemas);
         runner.Add("RMF2 v2 registry agrees with its frozen execution profile", Registry);
@@ -259,12 +259,11 @@ internal static class Rmf2SemanticV5Tests
     }
     private static void V4Boundary()
     {
-        var v4 = TranslationCompiler.CompileProject(Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("x = Hello {$name}"))]);
-        Assert.True(v4.Success, "Existing RMF2 compilation failed.");
-        using var artifact = JsonDocument.Parse(TranslationOutputRenderer.RenderLocaleJson(v4.Catalogs[0], "en").Text);
-        Assert.Equal(4, artifact.RootElement.GetProperty("artifactVersion").GetInt32());
-        var unsupported = TranslationCompiler.CompileProject(Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("x = {42 :number}"))]);
-        Assert.True(!unsupported.Success && unsupported.Diagnostics.Any(d => d.Id == "RTR0065"), "v4 silently switched to v5 semantics.");
+        var project = new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes("{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}"));
+        var selected = TranslationCompiler.CompileRmf2ProjectV5(project, [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("x = {42 :number}"))]);
+        Assert.True(selected.Success && selected.Project is not null, "Selected RMF2 compilation failed.");
+        using var artifact = JsonDocument.Parse(Rmf2LocaleArtifactV5.Render(selected.Project, "en").Text);
+        Assert.Equal(5, artifact.RootElement.GetProperty("artifactVersion").GetInt32());
         Message("{42 :number}");
     }
     private static void Golden()

@@ -16,8 +16,8 @@ internal static class Rmf2IntegrationTests
     {
         runner.Add("RMF2 payment fixture generates and verifies all supported outputs", PaymentExample);
         runner.Add("RMF2 --emit-cpp fails before creating output", CppEmissionIsUnsupported);
-        runner.Add("RMF2 CLI discovers feature mounts and produces version 4 packs", MountedCli);
-        runner.Add("RMF2 CLI project activation emits and verifies the cohesive v5 contract", ActivatedV5Cli);
+        runner.Add("RMF2 CLI discovers feature mounts and produces cohesive packs", MountedCli);
+        runner.Add("RMF2 CLI emits and verifies the cohesive contract", ActivatedV5Cli);
         runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
         runner.Add("RMF2 CLI re-discovers mounted add, change, rename, and delete", MountedCliMembership);
         runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
@@ -26,7 +26,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 LSP isolates watched diagnostics by project", LspWatchProjectIsolation);
         runner.Add("RMF2 workspace project indexing is entry-bounded, cancellable, and atomic", ProjectIndexBounds);
     }
-    private const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en","sourceLayout":"rmf2-v1"}""";
+    private const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en"}""";
     private static void PaymentExample()
     {
         using TemporaryDirectory temporary = new();
@@ -35,7 +35,7 @@ internal static class Rmf2IntegrationTests
         Assert.Equal(0, generate.ExitCode, generate.Combined);
         var verify = TestFixture.RunTool(temporary, "verify", "--project", project, "--output", "generated");
         Assert.Equal(0, verify.ExitCode, verify.Combined);
-        string german = File.ReadAllText(temporary.Resolve("generated/checkout.de.locale-v4.json"));
+        string german = File.ReadAllText(temporary.Resolve("generated/checkout.de.locale-v5.json"));
         Assert.Contains("account_heading", german); Assert.Contains("runic:action", german);
     }
     private static void CppEmissionIsUnsupported()
@@ -54,19 +54,18 @@ internal static class Rmf2IntegrationTests
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
-        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"", "\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", StringComparison.Ordinal));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}" );
         File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = {#strong}Shop{/strong}\n");
         var generated = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "out", "--emit-json", "--emit-esm");
         Assert.Equal(0, generated.ExitCode, generated.Combined);
-        string json = File.ReadAllText(temporary.Resolve("out/app.en.locale-v4.json"));
+        string json = File.ReadAllText(temporary.Resolve("out/app.en.locale-v5.json"));
         Assert.Contains("shop_title", json); Assert.Contains("runic:strong", json);
     }
     private static void ActivatedV5Cli()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations"));
-        string config = Project.Replace("\"sourceLayout\":\"rmf2-v1\"",
-            "\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal);
+        string config = Project;
         string path = temporary.Resolve("translations/runic.json");
         File.WriteAllText(path, config);
         File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "literal = {1e+2 :number}\n");
@@ -82,9 +81,9 @@ internal static class Rmf2IntegrationTests
         string manifest = File.ReadAllText(manifestPath);
         Assert.Contains("\"esmAbiVersion\":4", manifest);
         Assert.Contains("\"profile\":\"rmf2-execution-v2\"", manifest);
-        Assert.False(Directory.EnumerateFiles(temporary.Resolve("out"), "*.locale-v4.json", SearchOption.AllDirectories).Any(), "v5 activation emitted v4 artifacts");
-        Assert.False(File.Exists(temporary.Resolve("out/app.translations-v1.d.ts")), "v5 default emitted the v4 TypeScript contract");
-        Assert.False(Directory.EnumerateFiles(temporary.Resolve("out"), "app.template-manifest-*.json", SearchOption.TopDirectoryOnly).Any(), "v5 default emitted a v4 template manifest");
+        Assert.False(Directory.EnumerateFiles(temporary.Resolve("out"), "*.locale-v4.json", SearchOption.AllDirectories).Any(), "semantic contract emitted retired artifacts");
+        Assert.False(File.Exists(temporary.Resolve("out/app.translations-v1.d.ts")), "semantic contract emitted the retired TypeScript edge contract");
+        Assert.False(Directory.EnumerateFiles(temporary.Resolve("out"), "app.template-manifest-*.json", SearchOption.TopDirectoryOnly).Any(), "semantic contract emitted a retired template manifest");
         Assert.True(Directory.EnumerateFiles(temporary.Resolve("out"), "*.g.cs", SearchOption.TopDirectoryOnly).Count() == 4, "v5 typed C# output is incomplete");
         ProcessResult verify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "out");
         Assert.Equal(0, verify.ExitCode, verify.Combined);
@@ -118,7 +117,7 @@ internal static class Rmf2IntegrationTests
         Assert.Equal(1, unsupportedVerify.ExitCode, unsupportedVerify.Combined);
         Assert.Contains("RTR0065", unsupportedVerify.Combined);
 
-        File.WriteAllText(path, config.Replace("rmf2-execution-v2", "future-profile", StringComparison.Ordinal));
+        File.WriteAllText(path, Project[..^1] + ",\"executionProfile\":\"future-profile\"}");
         ProcessResult invalid = TestFixture.RunTool(temporary, "validate", "--project", "translations");
         Assert.Equal(1, invalid.ExitCode, invalid.Combined);
         Assert.Contains("RTR0065", invalid.Combined);
@@ -127,8 +126,7 @@ internal static class Rmf2IntegrationTests
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations"));
-        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"",
-            "\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project);
         ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "translations");
         Assert.Equal(0, validate.ExitCode, validate.Combined);
         foreach ((string Command, string? Flag) in new (string, string?)[]
@@ -149,7 +147,7 @@ internal static class Rmf2IntegrationTests
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
-        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"", "\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", StringComparison.Ordinal));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}" );
         string english = temporary.Resolve("feature/en.rmf2");
         File.WriteAllText(english, "title = Shop\n");
         Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "translations").ExitCode);
@@ -170,7 +168,7 @@ internal static class Rmf2IntegrationTests
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
-        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project.Replace("\"sourceLayout\":\"rmf2-v1\"", "\"sourceLayout\":\"rmf2-v1\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", StringComparison.Ordinal));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}" );
         File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = Shop\n");
         string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
         string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
@@ -196,10 +194,7 @@ internal static class Rmf2IntegrationTests
         foreach (string encoding in new[] { "utf-8", "utf-16", "utf-32" })
         {
             using TemporaryDirectory temporary = new();
-            bool executionV2 = encoding == "utf-16";
-            string activatedProject = executionV2 ? Project.Replace("\"sourceLayout\":\"rmf2-v1\"",
-                "\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal) : Project;
-            File.WriteAllText(temporary.Resolve("runic.json"), activatedProject);
+            File.WriteAllText(temporary.Resolve("runic.json"), Project);
             File.WriteAllText(temporary.Resolve("en.rmf2"), "x = Hello\n");
             File.WriteAllText(temporary.Resolve("de.rmf2"), "x = Guten Tag\n");
             string uri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
@@ -290,7 +285,7 @@ internal static class Rmf2IntegrationTests
             Send("workspace/didChangeWatchedFiles", new JsonObject {
                 ["changes"] = new JsonArray(new JsonObject { ["uri"] = new Uri(temporary.Resolve("runic.json")).AbsoluteUri, ["type"] = 2 }, new JsonObject { ["uri"] = new Uri(temporary.Resolve("de.rmf2")).AbsoluteUri, ["type"] = 2 }),
             });
-            Send("workspace/didChangeConfiguration", new JsonObject { ["settings"] = new JsonObject { ["runicTranslations"] = new JsonObject { ["sourceLayout"] = "rmf2-v1" } } });
+            Send("workspace/didChangeConfiguration", new JsonObject { ["settings"] = new JsonObject { ["runicTranslations"] = new JsonObject() } });
             var watchDeadline = Stopwatch.StartNew();
             lock (frameGate) while (frames.Count(frame => frame["method"]?.ToString() == "textDocument/publishDiagnostics") <= publicationsBeforeWatch)
             {
@@ -303,15 +298,15 @@ internal static class Rmf2IntegrationTests
             Send("shutdown", new JsonObject(), 3); Send("exit", new JsonObject()); process.StandardInput.Close();
             if (!process.WaitForExit(15000)) { process.Kill(true); throw new TimeoutException("LSP did not exit."); }
             Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
-            JsonNode v4Preview = frames.Single(frame => frame["id"]?.ToString() == "29")["result"]!;
-            string v4Runs = v4Preview["runs"]!.ToJsonString();
-            Assert.Equal("payment", v4Preview["key"]!.GetValue<string>());
-            Assert.Equal("de", v4Preview["locale"]!.GetValue<string>());
-            Assert.Contains("Bereit", v4Runs);
-            Assert.Contains("shop:badge", v4Runs);
-            Assert.Contains("runic:link", v4Runs);
-            Assert.Contains("runic:action", v4Runs);
-            Assert.False(v4Runs.Contains("example.invalid", StringComparison.Ordinal), "Preview bindings leaked into the semantic run tree.");
+            JsonNode paymentPreview = frames.Single(frame => frame["id"]?.ToString() == "29")["result"]!;
+            string paymentRuns = paymentPreview["runs"]!.ToJsonString();
+            Assert.Equal("payment", paymentPreview["key"]!.GetValue<string>());
+            Assert.Equal("de", paymentPreview["locale"]!.GetValue<string>());
+            Assert.Contains("Bereit", paymentRuns);
+            Assert.Contains("shop:badge", paymentRuns);
+            Assert.Contains("runic:link", paymentRuns);
+            Assert.Contains("runic:action", paymentRuns);
+            Assert.False(paymentRuns.Contains("example.invalid", StringComparison.Ordinal), "Preview bindings leaked into the semantic run tree.");
             JsonNode v5Preview = frames.Single(frame => frame["id"]?.ToString() == "30")["result"]!;
             string v5Runs = v5Preview["runs"]!.ToJsonString();
             Assert.Equal("core_rich", v5Preview["key"]!.GetValue<string>());
@@ -337,8 +332,8 @@ internal static class Rmf2IntegrationTests
                 Assert.Equal(0, tokenValues[index + 4], "RMF2 semantic tokens do not advertise modifiers.");
             }
             JsonNode previewAst = frames.Single(n => n["id"]?.ToString() == "20")["result"]!["ast"]!;
-            Assert.Equal(executionV2 ? 5 : 4, previewAst["astVersion"]!.GetValue<int>());
-            if (executionV2) Assert.Equal("rmf2-execution-v2", previewAst["profile"]!.GetValue<string>());
+            Assert.Equal(5, previewAst["astVersion"]!.GetValue<int>());
+            Assert.Equal("rmf2-execution-v2", previewAst["profile"]!.GetValue<string>());
             Assert.Equal(encoding, frames.Single(n => n["id"]?.ToString() == "1")["result"]!["capabilities"]!["positionEncoding"]!.ToString());
             var diagnostic = frames.First(n => n["method"]?.ToString() == "textDocument/publishDiagnostics")["params"]!["diagnostics"]![0]!;
             Assert.Equal(encoding == "utf-8" ? 9 : encoding == "utf-16" ? 7 : 6, diagnostic["range"]!["start"]!["character"]!.GetValue<int>());
@@ -452,7 +447,7 @@ internal static class Rmf2IntegrationTests
         Assert.Equal(initialMessage, watched["params"]!["diagnostics"]![0]!["message"]!.GetValue<string>());
 
         int beforeConfiguration = Publications();
-        Send("workspace/didChangeConfiguration", new JsonObject { ["settings"] = new JsonObject { ["runicTranslations"] = new JsonObject { ["sourceLayout"] = "rmf2-v1" } } });
+        Send("workspace/didChangeConfiguration", new JsonObject { ["settings"] = new JsonObject { ["runicTranslations"] = new JsonObject() } });
         Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } }, 4);
         WaitForPublication(beforeConfiguration);
         JsonObject configured = LatestDiagnostics();
@@ -471,7 +466,7 @@ internal static class Rmf2IntegrationTests
         string sharedOne = temporary.Resolve("shared-one"), sharedTwo = temporary.Resolve("shared-two");
         foreach (string directory in new[] { one, two, zeta, sharedOne, sharedTwo }) Directory.CreateDirectory(directory);
         static string Config(string catalog, string className, string sourceRoot, string slot) =>
-            """{"schemaVersion":1,"catalog":"$catalog","code":{"namespace":"Example","className":"$class"},"baseLocale":"en","sourceLayout":"rmf2-v1","sourceRoots":[{"path":"../$root","namespace":[]}],"markup":{"slots":{"x":{"$slot":{"min":1,"max":1}}}}}"""
+            """{"schemaVersion":1,"catalog":"$catalog","code":{"namespace":"Example","className":"$class"},"baseLocale":"en","sourceRoots":[{"path":"../$root","namespace":[]}],"markup":{"slots":{"x":{"$slot":{"min":1,"max":1}}}}}"""
                 .Replace("$catalog", catalog, StringComparison.Ordinal)
                 .Replace("$class", className, StringComparison.Ordinal)
                 .Replace("$root", sourceRoot, StringComparison.Ordinal)

@@ -103,7 +103,7 @@ internal static class Rmf2EsmV5Tests
         string indented = string.Join('\n', semantic.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n').Select(line => "  " + line));
         string source = "sample =\n" + indented + "\nhuge =\n  .input {$n :number select=exact}\n  .match $n\n  9007199254740993 {{exact}}\n  * {{other}}\n";
         Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
-            Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
+            Rmf2ProjectV5Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
         Assert.True(compilation.Success, string.Join("; ", compilation.Diagnostics.Select(item => item.Message)));
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(compilation.Project!));
         try
@@ -143,7 +143,7 @@ internal static class Rmf2EsmV5Tests
             """;
         const string source = "children = {#app:children @note}keep{/app:children @end=0}\nomit = before {#app:omit}{#app:explicit}hidden{/app:explicit}{/app:omit} after\nbreak = before{#app:break/}after\nexplicit = {#app:explicit}label{/app:explicit}\nalternate = {#app:alternate}alt{/app:alternate}\nvalidated = {#app:children}keep{/app:children} {#link ref=destination}link{/link}\n";
         Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
-            Rmf2Tests.Project(contracts), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
+            Rmf2ProjectV5Tests.Project(contracts), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!));
         try
@@ -217,7 +217,7 @@ internal static class Rmf2EsmV5Tests
     {
         const string message = "__proto__ = Proto\nconstructor = Constructor\nx =\n  .input {$__proto__ :string}\n  .input {$constructor :string}\n  .input {$user-name :string}\n  .input {$用户 :string}\n  {{ {$__proto__} {$constructor} {$user-name} {$用户} }}";
         Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
-            Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(message))]);
+            Rmf2ProjectV5Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(message))]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
         IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!);
         string declarations = outputs.Single(item => item.Kind == TranslationGeneratedOutputKind.EsmMessagesTypes).Text;
@@ -297,7 +297,6 @@ internal static class Rmf2EsmV5Tests
             code = new { @namespace = "Example", className = "Text" },
             baseLocale,
             locales,
-            sourceLayout = "rmf2-v1",
             validation = allowExtras ? new { extraLocaleKeys = "allow" } : null,
         }, ProjectJsonOptions);
         Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
