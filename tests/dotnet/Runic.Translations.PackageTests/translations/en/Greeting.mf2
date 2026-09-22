@@ -1,2 +1,2 @@
 .input {$name :string}
-Hello {$name}
+{{Hello {$name}}}
