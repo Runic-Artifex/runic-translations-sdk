@@ -116,7 +116,7 @@ test("pre-generated manifests reject assets that escape through symbolic links",
 
     await assert.rejects(
       () => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }),
-      /escapes its manifest root through a symbolic link/,
+      /must not traverse symbolic links/,
     );
   } finally { await rm(root, { recursive: true, force: true }); }
 });

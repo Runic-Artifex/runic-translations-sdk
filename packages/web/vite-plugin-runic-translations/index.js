@@ -333,6 +333,12 @@ function contained(root, relativePath) {
 
 async function containedReal(root, realRoot, relativePath) {
   const path = contained(root, relativePath);
+  let current = root;
+  for (const component of normalize(relativePath).split(sep)) {
+    current = join(current, component);
+    if (lstatSync(current).isSymbolicLink())
+      throw new Error(`Generated module paths must not traverse symbolic links: '${relativePath}'.`);
+  }
   const realPath = await realpath(path);
   if (!isWithin(realRoot, realPath))
     throw new Error(`Generated module path escapes its manifest root through a symbolic link: '${relativePath}'.`);
