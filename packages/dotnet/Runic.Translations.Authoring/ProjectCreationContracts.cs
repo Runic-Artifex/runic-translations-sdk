@@ -63,18 +63,18 @@ public sealed class TranslationProjectPlan
         TranslationProjectCreationRequest request,
         IReadOnlyList<TranslationProjectLocale> locales,
         IReadOnlyList<TranslationProjectFile> files,
-        TranslationCompilation compilation)
+        Rmf2ProjectCompilationV5 compilation)
     {
         Request = request;
         Locales = locales;
         Files = files;
-        Compilation = compilation;
+        IsValid = compilation.Success;
     }
 
     public TranslationProjectCreationRequest Request { get; }
     public IReadOnlyList<TranslationProjectLocale> Locales { get; }
     public IReadOnlyList<TranslationProjectFile> Files { get; }
-    public TranslationCompilation Compilation { get; }
+    public bool IsValid { get; }
 }
 
 public sealed class TranslationAuthoringException : Exception

@@ -63,8 +63,7 @@ public sealed class Rmf2Workspace
             .SelectMany(document => document.Nodes.Where(node => !node.IsGroup && LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal))).FirstOrDefault();
         return LanguageService.Complete(origin.MessageSyntax, byteOffset, baseMessage?.MessageSyntax);
     }
-    public TranslationCompilation Validate() => TranslationCompiler.CompileProject(_project, _sources.Values, null, _cancellationToken);
-    internal TranslationProfileCompilation ValidateForProfile() => TranslationCompiler.CompileProjectForSelectedProfile(_project, _sources.Values, null, _cancellationToken);
+    internal Rmf2ProjectCompilationV5 Validate() => TranslationCompiler.CompileRmf2ProjectV5(_project, _sources.Values, null, _cancellationToken);
 
     /// <summary>Finds locals in one message, or caller inputs across translations of the same logical resource.</summary>
     public IReadOnlyList<Rmf2VariableReference> VariableReferences(string path, string key, string name)
@@ -321,14 +320,8 @@ public sealed class Rmf2Workspace
 
     private ProfileLocaleView ValidateLocaleView()
     {
-        TranslationProfileCompilation compilation = ValidateForProfile();
-        if (compilation.Current is { Catalogs.Count: 1 } current)
-        {
-            CompiledTextCatalog catalog = current.Catalogs[0];
-            return new ProfileLocaleView(catalog.Id, catalog.DefaultLocale,
-                catalog.Locales.Select(locale => new ProfileLocale(locale.Tag, locale.FallbackTag)).ToArray(), compilation.Diagnostics);
-        }
-        if (compilation.Rmf2?.Project is { } project)
+        Rmf2ProjectCompilationV5 compilation = Validate();
+        if (compilation.Project is { } project)
             return new ProfileLocaleView(project.Id, project.DefaultLocale,
                 project.Locales.Select(locale => new ProfileLocale(locale.Tag, locale.FallbackTag)).ToArray(), compilation.Diagnostics);
         return new ProfileLocaleView(null, null, Array.Empty<ProfileLocale>(), compilation.Diagnostics);
@@ -377,10 +370,10 @@ public sealed class Rmf2Workspace
             else if (change.Value is null) sources.Remove(change.Key);
             else if (change.Key.EndsWith(".rmf2", StringComparison.Ordinal)) sources[change.Key] = new TranslationSource(change.Key, change.Value);
         }
-        TranslationProfileCompilation profileCompilation = TranslationCompiler.CompileProjectForSelectedProfile(project, sources.Values, null, _cancellationToken);
-        if (!profileCompilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", profileCompilation.Diagnostics.Select(d => d.Message)));
-        string catalogId = profileCompilation.Current?.Catalogs[0].Id ?? profileCompilation.Rmf2!.Project!.Id;
-        return new TranslationWorkspaceTransactionPlan(_root, catalogId, edits.AsReadOnly(), profileCompilation);
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, sources.Values, null, _cancellationToken);
+        if (!compilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
+        string catalogId = compilation.Project!.Id;
+        return new TranslationWorkspaceTransactionPlan(_root, catalogId, edits.AsReadOnly(), compilation);
     }
 
     private sealed record ProfileLocale(string Tag, string? Fallback);

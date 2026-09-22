@@ -103,8 +103,7 @@ function missingMessageDocument(
   if (manifest === undefined) return undefined;
   const separator = manifest.path.lastIndexOf("/");
   const directory = separator < 0 ? "" : manifest.path.slice(0, separator + 1);
-  let rmf2 = false;
-  try { rmf2 = JSON.parse(manifest.content).sourceLayout === "rmf2-v1"; } catch { /* Invalid manifest is diagnosed by the compiler. */ }
+  const rmf2 = source?.path.endsWith(".rmf2") === true || localeDocuments.some(document => document.path.endsWith(".rmf2"));
   const rmf2Path = source?.path.endsWith(".rmf2") ? `${source.path.slice(0, source.path.lastIndexOf("/") + 1)}${locale}.rmf2` : `${directory}${locale}.rmf2`;
   if (rmf2) {
     const target = localeDocuments.find(document => document.path === rmf2Path);

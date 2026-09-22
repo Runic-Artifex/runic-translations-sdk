@@ -43,7 +43,7 @@ test("RMF2 source watcher plans dedupe nested mounts and reject workspace escape
     mkdirSync(join(root, "feature", "nested"));
     if (process.platform !== "win32") symlinkSync(outside, join(root, "escaped-link"), "dir");
     writeFileSync(join(root, "translations", "runic.json"), JSON.stringify({
-      schemaVersion: 1, catalog: "app", sourceLayout: "rmf2-v1",
+      schemaVersion: 1, catalog: "app",
       sourceRoots: [
         { path: "../feature", namespace: ["shop"] },
         { path: "../feature/nested", namespace: ["nested"] },
@@ -54,8 +54,7 @@ test("RMF2 source watcher plans dedupe nested mounts and reject workspace escape
     expect(sourceWatchRoots(root)).toEqual([canonicalRoot]);
     mkdirSync(join(root, "new-feature"));
     writeFileSync(join(root, "translations", "runic.json"), JSON.stringify({
-      schemaVersion: 1, catalog: "app", sourceLayout: "rmf2-v1",
-      executionProfile: "rmf2-execution-v2",
+      schemaVersion: 1, catalog: "app",
       sourceRoots: [{ path: "../new-feature", namespace: ["new-shop"] }],
     }));
     writeFileSync(join(root, "new-feature", "de.rmf2"), "title = Neu\n");

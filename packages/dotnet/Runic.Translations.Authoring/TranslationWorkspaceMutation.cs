@@ -273,7 +273,7 @@ public static class TranslationWorkspaceMutation
                 if (edit.Kind == TranslationWorkspaceEditKind.Delete) proposed.Remove(edit.RelativePath);
                 else proposed[edit.RelativePath] = edit.Bytes!;
             }
-            TranslationCompilation compilation = TranslationCompiler.CompileProject(
+            Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
                 new TranslationSource(configRelative, proposedConfig),
                 proposed.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new TranslationSource(pair.Key, pair.Value)));
             if (!compilation.Success)

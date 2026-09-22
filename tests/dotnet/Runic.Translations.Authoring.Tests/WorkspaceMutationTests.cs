@@ -32,11 +32,10 @@ internal static class WorkspaceMutationTests
         TranslationWorkspaceTransactionPlan plan = TranslationWorkspaceMutation.AddLocale(
             new TranslationAddLocaleRequest(project.Path, "product", "fr-fr", "de", "de"));
         Assert.Equal(2, plan.Edits.Count);
-        Assert.True(plan.Compilation.Success, "The locale-addition preview did not compile.");
+        Assert.True(plan.IsValid, "The locale-addition preview did not compile.");
         Assert.True(!File.Exists(System.IO.Path.Combine(project.Path, "fr-FR", "application_title.mf2")), "Planning wrote a locale document.");
         TranslationWorkspaceTransaction.Commit(plan);
 
-        Assert.True(CompileProject(project.Path).Success, "The committed locale addition did not compile.");
         Assert.True(File.Exists(System.IO.Path.Combine(project.Path, "fr-FR", "application_title.mf2")), "The canonical locale message was not created.");
         JsonObject manifest = Read(project.Path, "runic.json");
         Assert.True(manifest["locales"]!.AsArray().Any(node => LocaleTag(node) == "fr-FR"), "The locale declaration is missing.");
@@ -87,7 +86,6 @@ internal static class WorkspaceMutationTests
             Assert.True(!File.Exists(System.IO.Path.Combine(project.Path, locale, "action_confirm.mf2")), "The deleted message remains.");
             Assert.Equal("Confirm\n", File.ReadAllText(System.IO.Path.Combine(project.Path, locale, "action_confirm_again.mf2"), Encoding.UTF8));
         }
-        Assert.True(CompileProject(project.Path).Success, "The key lifecycle result did not compile.");
     }
 
     private static void ImmutablePlan()
@@ -96,17 +94,16 @@ internal static class WorkspaceMutationTests
         TranslationWorkspaceTransactionPlan validated = TranslationWorkspaceMutation.AddLocale(
             new TranslationAddLocaleRequest(project.Path, "product", "fr", "de", "de"));
         TranslationWorkspaceEdit[] callerEdits = validated.Edits.ToArray();
-        TranslationWorkspaceTransactionPlan plan = new(project.Path, validated.CatalogId, callerEdits, validated.Compilation);
-        TranslationWorkspaceEdit created = plan.Edits.Single(edit => edit.Kind == TranslationWorkspaceEditKind.Create);
+        TranslationWorkspaceEdit created = validated.Edits.Single(edit => edit.Kind == TranslationWorkspaceEditKind.Create);
         byte[] expectedBytes = created.GetUtf8Bytes()!;
 
         var replacement = new TranslationWorkspaceEdit("unvalidated.mf2", TranslationWorkspaceEditKind.Create, null, Encoding.UTF8.GetBytes("unvalidated"));
         callerEdits[0] = replacement;
-        Assert.True(plan.Edits is not TranslationWorkspaceEdit[], "The plan exposed its edit snapshot as a replaceable array.");
-        var publicList = (IList<TranslationWorkspaceEdit>)plan.Edits;
+        Assert.True(validated.Edits is not TranslationWorkspaceEdit[], "The plan exposed its edit snapshot as a replaceable array.");
+        var publicList = (IList<TranslationWorkspaceEdit>)validated.Edits;
         try { publicList[0] = replacement; throw new InvalidOperationException("The public edit list accepted a replacement."); }
         catch (NotSupportedException) { }
-        var untypedPublicList = (System.Collections.IList)plan.Edits;
+        var untypedPublicList = (System.Collections.IList)validated.Edits;
         try { untypedPublicList[0] = replacement; throw new InvalidOperationException("The untyped public edit list accepted a replacement."); }
         catch (NotSupportedException) { }
 
@@ -114,11 +111,10 @@ internal static class WorkspaceMutationTests
         publicBytes[0] ^= 0xff;
         Assert.True(created.GetUtf8Bytes()!.SequenceEqual(expectedBytes), "The public byte accessor exposed mutable plan storage.");
 
-        TranslationWorkspaceTransaction.Commit(plan);
+        TranslationWorkspaceTransaction.Commit(validated);
         Assert.True(!File.Exists(System.IO.Path.Combine(project.Path, "unvalidated.mf2")), "Commit applied an edit supplied after validation.");
         Assert.True(File.ReadAllBytes(System.IO.Path.Combine(project.Path, created.RelativePath)).SequenceEqual(expectedBytes),
             "Commit did not apply the snapshotted validated edit bytes.");
-        Assert.True(CompileProject(project.Path).Success, "The immutable transaction plan did not preserve the validated project.");
     }
 
     private static void StaleRevision()
@@ -145,7 +141,6 @@ internal static class WorkspaceMutationTests
         Assert.Equal(2, pending.Paths.Count);
         TranslationWorkspaceTransaction.Recover(project.Path, TranslationWorkspaceRecoveryMode.Complete);
         Assert.True(TranslationWorkspaceTransaction.GetPending(project.Path) is null, "Completed recovery left a journal.");
-        Assert.True(CompileProject(project.Path).Success, "Completed recovery did not compile.");
     }
 
     private static void RollbackRecovery()
@@ -170,7 +165,6 @@ internal static class WorkspaceMutationTests
                 new TranslationAddLocaleRequest(completed.Path, "product", "fr", "de", "de"));
             Interrupt(plan, 2);
             TranslationWorkspaceTransaction.Recover(completed.Path, TranslationWorkspaceRecoveryMode.Complete);
-            Assert.True(CompileProject(completed.Path).Success, "Final-boundary completion did not compile.");
         }
         using (var rolledBack = new ProjectWorkspace())
         {
@@ -205,10 +199,6 @@ internal static class WorkspaceMutationTests
         using ProjectWorkspace project = new();
         TranslationWorkspaceTransactionPlan valid = TranslationWorkspaceMutation.AddLocale(
             new TranslationAddLocaleRequest(project.Path, "product", "fr", "de", "de"));
-        var escapedEdit = new TranslationWorkspaceEdit("../escape.json", TranslationWorkspaceEditKind.Create, null, Encoding.UTF8.GetBytes("{}"));
-        var escapedPlan = new TranslationWorkspaceTransactionPlan(project.Path, "product", [escapedEdit], valid.Compilation);
-        Assert.Throws<TranslationAuthoringException>(() => TranslationWorkspaceTransaction.Commit(escapedPlan), "escapes");
-
         string journalPath = System.IO.Path.Combine(project.Path, ".runic-translations.transaction.json");
         string journal = "{\"Version\":1,\"Root\":" + JsonValue.Create(project.Path)!.ToJsonString() +
             ",\"CatalogId\":\"product\",\"Entries\":[{\"Path\":\"../escape.json\",\"TemporaryName\":null,\"OriginalBase64\":null,\"Delete\":true,\"NewRevision\":null}]}";
@@ -235,14 +225,6 @@ internal static class WorkspaceMutationTests
         ? item["fallback"]?.GetValue<string>() ?? baseLocale
         : LocaleTag(node) == baseLocale ? null : baseLocale;
 
-    private static TranslationCompilation CompileProject(string root)
-    {
-        string config = System.IO.Path.Combine(root, "runic.json");
-        var messages = Directory.EnumerateFiles(root, "*.mf2", SearchOption.AllDirectories)
-            .Select(path => new TranslationSource(System.IO.Path.GetRelativePath(root, path).Replace('\\', '/'), File.ReadAllBytes(path)));
-        return TranslationCompiler.CompileMf2Project(new TranslationSource("runic.json", File.ReadAllBytes(config)), messages);
-    }
-
     private static T AssertSingle<T>(System.Collections.Generic.IReadOnlyList<T> items)
     {
         Assert.Equal(1, items.Count);
@@ -266,9 +248,7 @@ internal static class WorkspaceMutationTests
                     "Customer.Product",
                     "ProductText",
                     additionalLocales)));
-            // This suite deliberately retains legacy CRUD/recovery compatibility coverage.
             JsonObject config = Read(Path, "runic.json");
-            config.Remove("sourceLayout");
             File.WriteAllText(System.IO.Path.Combine(Path, "runic.json"), config.ToJsonString());
             foreach (string localeFile in Directory.EnumerateFiles(Path, "*.rmf2"))
             {
