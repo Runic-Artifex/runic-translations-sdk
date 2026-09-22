@@ -69,6 +69,18 @@ internal static class Rmf2EsmV5Tests
                 check(decodeLocaleArtifact(hostile).reason === "RTR0023/argument-contract-mismatch", "unbound AST accepted");
                 const decimalDrift = structuredClone(raw); decimalDrift.messages.account_total.ast.declarations[1].expression.options[1].value.canonical = "125";
                 check(!decodeLocaleArtifact(decimalDrift).ok, "canonical decimal drift accepted");
+                const malformedOptions = [
+                  ["expression-options-null", artifact => artifact.messages.account_total.ast.declarations.find(item => item.expression.function === undefined).expression.options = null, "RTR0023/malformed-pattern"],
+                  ["expression-options-object", artifact => artifact.messages.account_total.ast.declarations.find(item => item.expression.function === undefined).expression.options = Object.create(null), "RTR0023/malformed-pattern"],
+                  ["close-markup-options-null", artifact => artifact.messages.account_bill.ast.variants[0].nodes.find(item => item.kind === "markup" && item.markupKind === "close").options = null, "RTR0023/argument-contract-mismatch"],
+                  ["close-markup-options-object", artifact => artifact.messages.account_bill.ast.variants[0].nodes.find(item => item.kind === "markup" && item.markupKind === "close").options = Object.create(null), "RTR0023/argument-contract-mismatch"],
+                ];
+                for (const [name, mutate, expected] of malformedOptions) {
+                  const directArtifact=structuredClone(raw);mutate(directArtifact);const direct=decodeLocaleArtifact(directArtifact);
+                  check(!direct.ok&&direct.reason===expected,`${name} direct decode: ${direct.reason}`);
+                  const packedArtifact=structuredClone(raw);mutate(packedArtifact);const packedResult=await decodeLocalePack(new TextEncoder().encode(JSON.stringify(packedArtifact)),"de");
+                  check(!packedResult.ok&&packedResult.reason===expected,`${name} byte decode: ${packedResult.reason}`);
+                }
                 const largeValid=structuredClone(raw);for(const variant of largeValid.messages.account_bill.ast.variants)for(let index=0;index<2100;index++)variant.nodes.push({kind:"text",value:""});check(decodeLocaleArtifact(largeValid).ok,"per-pattern node limit was incorrectly accumulated across variants");
                 const independentPatterns=structuredClone(raw);for(const variant of independentPatterns.messages.account_bill.ast.variants)variant.nodes.push({kind:"text",value:"x".repeat(40000)});check(decodeLocaleArtifact(independentPatterns).ok,"per-pattern byte limit was incorrectly accumulated across variants");
                 const duplicate = new TextEncoder().encode(JSON.stringify(raw).replace('{"artifactVersion":5','{"artifactVersion":5,"artifactVersion":5'));

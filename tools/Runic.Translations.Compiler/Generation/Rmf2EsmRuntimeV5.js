@@ -449,6 +449,7 @@ function validateExpression(expression, symbols, references) {
   const valueError=validateValue(expression.operand);if(valueError)return valueError;
   const annotationError=validateAnnotations(expression.annotations,"malformed-pattern");if(annotationError)return annotationError;
   if (!["string","int64","decimal","boolean","date","time","datetime","guid"].includes(expression.valueType)) return "malformed-pattern";
+  if (!Array.isArray(expression.options)) return "malformed-pattern";
   if (["input","local"].includes(expression.operand.kind)) { if (!Object.hasOwn(symbols,expression.operand.value) || symbols[expression.operand.value].type !== expression.valueType) return "argument-contract-mismatch"; }
   else { try { literal(expression.operand, expression.valueType); } catch { return "malformed-pattern"; } }
   if (expression.function === undefined) return expression.options.length === 0 ? null : "malformed-pattern";
@@ -466,10 +467,11 @@ function validateOptions(options, symbols, fn) {
 }
 function validateMarkupNode(node,symbols,requirements,counts,stack) {
   const contract=rmf2Contract.contracts[node.name],functional=["runic:link","runic:action","runic:icon"].includes(node.name);
+  if(!Array.isArray(node.options))return "argument-contract-mismatch";
   if(node.markupKind==="close") return node.options.length===0?null:"argument-contract-mismatch";
   if((contract.kind==="standalone")!==(node.markupKind==="standalone"))return "argument-contract-mismatch";
   if(contract.interactive&&stack.some(name=>rmf2Contract.contracts[name]?.interactive))return "argument-contract-mismatch";
-  if(!Array.isArray(node.options)||node.options.length>256)return "limit-exceeded";
+  if(node.options.length>256)return "limit-exceeded";
   const values=Object.create(null);
   for(const option of node.options){const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name)||Object.hasOwn(values,option.name))return "argument-contract-mismatch";values[option.name]=option.value;}
   if(functional){const reference=values.ref;if(!reference||reference.kind!=="string-literal"||!Object.hasOwn(requirements,reference.value)||requirements[reference.value].kind!==node.name)return "argument-contract-mismatch";counts[reference.value]=(counts[reference.value]??0)+1;}
