@@ -17,10 +17,6 @@ public enum TranslationGeneratedOutputKind
     CSharpRegistration,
     /// <summary>A resolved, canonical locale artifact.</summary>
     LocaleJson,
-    /// <summary>The versioned template compiler edge contract.</summary>
-    TemplateManifestJson,
-    /// <summary>The versioned TypeScript key and argument edge contract.</summary>
-    TypeScriptContract,
     /// <summary>The versioned host asset inventory for selected non-C# outputs.</summary>
     AssetManifestJson,
     /// <summary>The generated ESM locale and formatting runtime.</summary>
@@ -39,11 +35,7 @@ public enum TranslationGeneratedOutputKind
     EsmTransportTypes,
     /// <summary>The versioned inventory for one generated ESM catalog.</summary>
     WebModuleManifestJson,
-    /// <summary>Experimental generated C++ declarations over the portable AST.</summary>
-    CppHeader,
-    /// <summary>Experimental generated C++ implementation over the portable AST.</summary>
-    CppSource,
-    /// <summary>Validated interpreter for explicit runtime-loaded v2 locale artifacts.</summary>
+    /// <summary>Validated interpreter for explicit runtime-loaded locale artifacts.</summary>
     EsmDynamic,
     /// <summary>TypeScript declarations for explicit runtime-loaded v2 locale artifacts.</summary>
     EsmDynamicTypes,

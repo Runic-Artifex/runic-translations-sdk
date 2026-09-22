@@ -169,51 +169,27 @@ type sealed class Runic.Translations.Compiler.Generation.TranslationGeneratedOut
 
 type enum Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
   field System.Int32 value__
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind AssetManifestJson = 7
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind AssetManifestJson = 5
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind CSharpAccessors = 1
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind CSharpCatalogData = 2
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind CSharpKeys = 0
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind CSharpRegistration = 3
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind CppHeader = 16
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind CppSource = 17
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmDynamic = 18
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmDynamicTypes = 19
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessage = 10
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessageNamespace = 20
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessagesIndex = 11
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessagesTypes = 12
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmRuntime = 8
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmRuntimeTypes = 9
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmServer = 21
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmServerTypes = 22
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmTransport = 13
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmTransportTypes = 14
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmDynamic = 14
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmDynamicTypes = 15
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessage = 8
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessageNamespace = 16
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessagesIndex = 9
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmMessagesTypes = 10
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmRuntime = 6
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmRuntimeTypes = 7
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmServer = 17
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmServerTypes = 18
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmTransport = 11
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind EsmTransportTypes = 12
   field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind LocaleJson = 4
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind TemplateManifestJson = 5
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind TypeScriptContract = 6
-  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind WebModuleManifestJson = 15
+  field const Runic.Translations.Compiler.Generation.TranslationGeneratedOutputKind WebModuleManifestJson = 13
 
 type static class Runic.Translations.Compiler.Generation.TranslationOutputRenderer
-  field const System.Int32 AssetManifestVersion = 1
-  field const System.Int32 CppAbiVersion = 1
-  field const System.Int32 EsmAbiVersion = 3
-  field const System.Int32 LocaleArtifactV2Version = 2
-  field const System.Int32 LocaleArtifactV4Version = 4
-  field const System.Int32 LocaleArtifactVersion = 1
-  field const System.Int32 TemplateManifestV2Version = 2
-  field const System.Int32 TemplateManifestVersion = 1
-  field const System.Int32 TypeScriptContractVersion = 1
-  field const System.Int32 WebModuleManifestV2Version = 2
-  method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderAssetManifestJson(Runic.Translations.Compiler.CompiledTextCatalog catalog, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.Generation.TranslationGeneratedOutput> selectedOutputs)
-  method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderCSharpAccessors(Runic.Translations.Compiler.CompiledTextCatalog catalog)
-  method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderCSharpCatalogData(Runic.Translations.Compiler.CompiledTextCatalog catalog)
-  method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderCSharpKeys(Runic.Translations.Compiler.CompiledTextCatalog catalog)
-  method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderCSharpRegistration(Runic.Translations.Compiler.CompiledTextCatalog catalog)
-  method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderLocaleJson(Runic.Translations.Compiler.CompiledTextCatalog catalog, System.String locale)
-  method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderTemplateManifestJson(Runic.Translations.Compiler.CompiledTextCatalog catalog)
-  method static Runic.Translations.Compiler.Generation.TranslationGeneratedOutput RenderTypeScriptContract(Runic.Translations.Compiler.CompiledTextCatalog catalog)
-  method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Generation.TranslationGeneratedOutput> RenderCpp(Runic.Translations.Compiler.CompiledTextCatalog catalog)
-  method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Generation.TranslationGeneratedOutput> RenderEsmModules(Runic.Translations.Compiler.CompiledTextCatalog catalog)
 
 type sealed class Runic.Translations.Compiler.Mf2DeclarationSyntax : System.IEquatable<Runic.Translations.Compiler.Mf2DeclarationSyntax>
   ctor Runic.Translations.Compiler.Mf2DeclarationSyntax(System.String Kind, System.String Name, Runic.Translations.Compiler.TextSourceLocation NameLocation, Runic.Translations.Compiler.Mf2ExpressionSyntax Expression, Runic.Translations.Compiler.TextSourceLocation Location)

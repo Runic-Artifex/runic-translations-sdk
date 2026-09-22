@@ -4,9 +4,7 @@ using System.Linq;
 
 namespace Runic.Translations.Compiler.Generation;
 
-// Typed generated-code backend selected by profile-aware shipping hosts only
-// when runic.json explicitly declares executionProfile rmf2-execution-v2.
-// Omitting the selector continues through the byte-stable v4 renderer.
+// Typed generated-code backend over the selected RMF2 project carrier.
 internal static class Rmf2CSharpOutputRendererV5
 {
     internal static TranslationGeneratedOutput RenderKeys(Rmf2ProjectV5 project)
