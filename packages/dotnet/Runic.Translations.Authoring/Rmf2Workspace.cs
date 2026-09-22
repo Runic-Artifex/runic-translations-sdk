@@ -91,8 +91,23 @@ public sealed class Rmf2Workspace
 
     public TranslationWorkspaceTransactionPlan CreateResource(string path, IReadOnlyList<string> logicalPath, string message)
     {
-        var source = _sources.TryGetValue(path, out var existing) ? existing : new TranslationSource(path, Array.Empty<byte>());
-        return Plan(new Dictionary<string, byte[]?>(StringComparer.Ordinal) { [path] = Rmf2ResourceWriter.AddMessage(source, LocalPath(path, logicalPath), message) });
+        var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
+        // A catalog key is complete only when every locale receives a direct
+        // resource.  Updating just the selected base document creates a plan
+        // the compiler correctly rejects as an incomplete catalog.
+        foreach (Rmf2ResourceDocument document in Documents)
+        {
+            IReadOnlyList<string> local;
+            try { local = LocalPath(document.Source.Path, logicalPath); }
+            catch (TranslationAuthoringException) { continue; }
+            changes[document.Source.Path] = Rmf2ResourceWriter.AddMessage(document.Source, local, message);
+        }
+        if (changes.Count == 0)
+        {
+            var source = _sources.TryGetValue(path, out var existing) ? existing : new TranslationSource(path, Array.Empty<byte>());
+            changes[path] = Rmf2ResourceWriter.AddMessage(source, LocalPath(path, logicalPath), message);
+        }
+        return Plan(changes);
     }
     /// <summary>Deletes, duplicates or moves a message across its locale resources while retaining attached metadata.</summary>
     public TranslationWorkspaceTransactionPlan MutateResource(IReadOnlyList<string> logicalPath, IReadOnlyList<string>? targetPath, bool duplicate = false)

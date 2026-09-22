@@ -1320,12 +1320,15 @@ internal sealed class EditorWorkspace : IDisposable
         var documents = new List<EditorDocument>(state.Files.Count);
         foreach (WorkspaceFile file in state.Files)
         {
+            bool malformed = file.Kind == DocumentKind.Resource && state.Compilation.Diagnostics.Any(diagnostic =>
+                diagnostic.Severity == TranslationDiagnosticSeverity.Error &&
+                string.Equals(diagnostic.Location.Path, file.Path, StringComparison.Ordinal));
             documents.Add(new EditorDocument(
                 file.Path,
                 file.Content,
                 file.Revision,
                 file.Kind == DocumentKind.Manifest,
-                false,
+                malformed,
                 file.Locale,
                 file.Layer,
                 ReadEntries(file.Path, file.Content, file.Locale)));

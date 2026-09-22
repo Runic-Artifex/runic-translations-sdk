@@ -87,6 +87,16 @@ internal static class Rmf2AuthoringTests
         }
         Assert.True(workspace.MutateResource(["shop", "title"], null).Compilation.Success, "Message deletion failed.");
         Assert.True(workspace.CreateResource("en.rmf2", ["new", "message"], "New").Compilation.Success, "Message creation failed.");
+
+        var localized = new Rmf2Workspace(Path.GetTempPath(), Project(), [
+            Source("en.rmf2", "existing = English\n"),
+            Source("de.rmf2", "existing = Deutsch\n"),
+        ]);
+        TranslationWorkspaceTransactionPlan created = localized.CreateResource("en.rmf2", ["new", "message"], "New");
+        Assert.Equal(2, created.Edits.Count);
+        Assert.True(created.Compilation.Success, "RMF2 message creation did not update every locale.");
+        Assert.True(created.Edits.All(edit => Encoding.UTF8.GetString(edit.GetUtf8Bytes()!).Contains("new {", StringComparison.Ordinal)),
+            "RMF2 message creation missed a locale document.");
     }
     private static void MountedRename()
     {

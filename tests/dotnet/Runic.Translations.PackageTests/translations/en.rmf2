@@ -1,10 +1,10 @@
 Greeting =
   .input {$name :string}
-  Hello {$name}
+  {{Hello {$name}}}
 ui {
   notifications {
     Greeting =
       .input {$name :string}
-      Welcome {$name}
+      {{Welcome {$name}}}
   }
 }

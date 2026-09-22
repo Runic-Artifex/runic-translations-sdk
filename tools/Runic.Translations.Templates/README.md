@@ -51,23 +51,13 @@ The item template creates `translations/runic.json` and a default-locale RMF2 fi
 
 Choose the project template for a complete .NET and ESM setup. Choose the item template when a project already owns package versions and build configuration. Use `runic-translations init` when you need multiple locales, explicit fallback edges, or optional starter content in one command.
 
-## Opt into RMF2
+## RMF2 output
 
-The templates and `runic-translations init` create RMF2 resources by default.
-Use the RMF2 variants when their additional mounted-resource examples are useful:
-
-```bash
-dotnet new runic-translations-rmf2 --output . --catalog app --defaultLocale en --namespace Example.Translations --className AppText
-dotnet new runic-translations-project-rmf2 --name Example.Translations --output Example.Translations --packageVersion <VERSION>
-```
-
-Both RMF2 templates select `sourceLayout: "rmf2-v1"` together with
-`executionProfile: "rmf2-execution-v2"`, producing typed v5 C# and ESM ABI 4
-output. The standalone tool also offers `runic-translations init-rmf2`, or
-`runic-translations init ... --layout rmf2-v1`, for compatibility scaffolding;
-those commands omit the selector and therefore retain the v1 execution / artifact
-v4 contract. Add the execution profile to those generated projects when v5
-semantics are required. Invalid layout values fail with exit code 2.
+All templates and `runic-translations init` create RMF2 resources and select the
+canonical RMF2 execution profile. Generated projects produce typed v5 C# and
+ESM ABI 4 output. The standard templates create structured message paths; the
+`-rmf2` template identities remain available for existing projects that use
+flat message IDs. Both use the same RMF2 source layout and execution profile.
 
 ## Compatibility and status
 

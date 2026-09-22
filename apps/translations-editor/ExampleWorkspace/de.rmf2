@@ -5,7 +5,7 @@ common {
 dashboard {
   welcome =
     .input {$name :string}
-    Willkommen zurück, {$name}
+    {{Willkommen zurück, {$name}}}
 }
 files {
   selected =
