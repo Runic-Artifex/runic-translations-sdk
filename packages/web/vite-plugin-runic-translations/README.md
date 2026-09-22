@@ -38,6 +38,25 @@ build must regenerate the ESM package and manifest before the refresh is served;
 otherwise the plugin will reload the still-current manifest bytes, not detect
 that authoring sources are newer than them.
 
+## TypeScript virtual modules
+
+After validating the manifest and every generated declaration asset, the plugin
+writes an ambient `virtual.d.ts` that exposes the exact catalog message keys,
+inputs, and return types through all five virtual entry points. Project mode
+writes the file to `<output>/virtual.d.ts`; an explicit manifest writes it beside
+that manifest. TypeScript projects with a narrow `include` must add that stable
+generated file, for example:
+
+```json
+{
+  "include": ["src", ".runic/translations/virtual.d.ts"]
+}
+```
+
+No hand-written `declare module`, catalog-specific path mapping, or client
+compatibility module is needed. Use `typeDeclarations` to select another stable
+path, or set it to `false` when another tool owns virtual-module declarations.
+
 ## Render a message
 
 ```ts

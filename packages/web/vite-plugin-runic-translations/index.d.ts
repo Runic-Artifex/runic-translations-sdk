@@ -15,6 +15,8 @@ export interface RunicTranslationsOptions {
   readonly command?: string;
   /** Project-mode arguments before `generate`. Defaults to the local-tool invocation. */
   readonly commandArguments?: readonly string[];
+  /** Generated ambient declarations for the manifest's virtual modules. Defaults to `<output>/virtual.d.ts` in project mode or beside an explicit manifest. Set false to disable. */
+  readonly typeDeclarations?: string | false;
 }
 
 export declare function runicTranslations(options?: RunicTranslationsOptions): Plugin;

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, readdirSync, lstatSync } from "node:fs";
-import { readFile, realpath } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
@@ -13,7 +13,8 @@ const execFileAsync = promisify(execFile);
 /**
  * Exposes compiler-generated ESM without coupling messages to Vite or a UI framework.
  * @param {{ project?: string, output?: string, manifest?: string, sourceFiles?: readonly string[],
- *   command?: string, commandArguments?: readonly string[], cwd?: string }} [options]
+ *   command?: string, commandArguments?: readonly string[], cwd?: string,
+ *   typeDeclarations?: string | false }} [options]
  */
 export function runicTranslations(options = {}) {
   if (!options || typeof options !== "object" || Array.isArray(options))
@@ -21,6 +22,13 @@ export function runicTranslations(options = {}) {
   const project = options.manifest === undefined ? projectOptions(options) : undefined;
   let manifestPath = project?.manifest ?? resolve(options.manifest);
   const compiler = project;
+  if (options.typeDeclarations !== undefined && options.typeDeclarations !== false &&
+      (typeof options.typeDeclarations !== "string" || options.typeDeclarations.length === 0))
+    throw new TypeError("typeDeclarations must be a non-empty path or false.");
+  const typeDeclarationsPath = options.typeDeclarations === false ? undefined : resolve(
+    project?.cwd ?? process.cwd(),
+    options.typeDeclarations ?? (compiler ? join(compiler.output, "virtual.d.ts") : join(dirname(manifestPath), "virtual.d.ts")),
+  );
   const explicitSources = new Set((options.sourceFiles ?? []).map(path => resolve(path)));
   let sourceRoots = project?.sourceRoots ?? (compiler ? [compiler.project] : []);
   let watchRoots = project?.watchRoots ?? sourceRoots;
@@ -36,24 +44,20 @@ export function runicTranslations(options = {}) {
   async function compile() {
     if (!compiler) return;
     const argumentsValue = [...compiler.commandArguments, "generate", "--project", compiler.project, "--output", compiler.output, "--emit-esm"];
-    compilation = compilation.catch(() => undefined).then(() => {
+    compilation = compilation.catch(() => undefined).then(async () => {
       const current = readProject(compiler.config, compiler.output);
-      manifestPath = current.manifest;
-      sourceFiles = new Set([...explicitSources, ...current.sourceFiles]);
-      sourceRoots = current.sourceRoots;
-      watchRoots = current.watchRoots;
-      server?.watcher.add(watchRoots);
-      server?.watcher.add([...sourceFiles]);
-      return execFileAsync(compiler.command, argumentsValue, {
+      await execFileAsync(compiler.command, argumentsValue, {
         cwd: compiler.cwd,
         maxBuffer: 16 * 1024 * 1024,
       });
-    }).then(() => undefined);
+      return current;
+    });
     return compilation;
   }
 
-  async function refresh() {
-    const document = JSON.parse(await readFile(manifestPath, "utf8"));
+  async function refresh(nextProject) {
+    const nextManifestPath = nextProject?.manifest ?? manifestPath;
+    const document = JSON.parse(await readFile(nextManifestPath, "utf8"));
     if (!document || typeof document !== "object" || Array.isArray(document))
       throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest must be an object.");
     if (document.webModuleManifestVersion !== 3)
@@ -74,8 +78,7 @@ export function runicTranslations(options = {}) {
       throw new Error(`The Runic ../web/vite-plugin-runic-translations v${document.webModuleManifestVersion} module manifest has an invalid catalog ID.`);
     if (typeof document.entrypoints !== "object" || Array.isArray(document.entrypoints))
       throw new Error(`The Runic ../web/vite-plugin-runic-translations v${document.webModuleManifestVersion} module manifest has malformed entrypoints.`);
-    catalog = document.catalog;
-    const root = dirname(manifestPath);
+    const root = dirname(nextManifestPath);
     const realRoot = await realpath(root);
     const requiredEntrypoints = {
       messages: document.entrypoints.messages,
@@ -134,14 +137,32 @@ export function runicTranslations(options = {}) {
     };
     if (Object.entries(expected).some(([name, value]) => markers.get(name) !== value))
       throw new Error("The Runic ../web/vite-plugin-runic-translations v3 module manifest does not match its generated RMF2 runtime contract.");
-    generatedPaths = new Set(assets.values());
-    entries = Object.freeze({
+    const nextGeneratedPaths = new Set(assets.values());
+    const nextEntries = Object.freeze({
       messages: assets.get(requiredEntrypoints.messages),
+      types: assets.get(requiredEntrypoints.types),
       runtime: assets.get(requiredEntrypoints.runtime),
       server: assets.get(document.entrypoints.server),
       transport: assets.get(document.entrypoints.transport),
       dynamic: assets.get(document.entrypoints.dynamic),
     });
+    const declarationCollides = typeDeclarationsPath && (typeDeclarationsPath === nextManifestPath ||
+      [...assets.keys()].some(relativePath => contained(root, relativePath) === typeDeclarationsPath));
+    if (declarationCollides)
+      throw new Error("Generated Runic virtual type declarations must not overwrite the manifest or one of its assets.");
+    if (typeDeclarationsPath)
+      await writeTypeDeclarations(typeDeclarationsPath, document.catalog, root, assets, requiredEntrypoints);
+    manifestPath = nextManifestPath;
+    if (nextProject) {
+      sourceFiles = new Set([...explicitSources, ...nextProject.sourceFiles]);
+      sourceRoots = nextProject.sourceRoots;
+      watchRoots = nextProject.watchRoots;
+      server?.watcher.add(watchRoots);
+      server?.watcher.add([...sourceFiles]);
+    }
+    catalog = document.catalog;
+    generatedPaths = nextGeneratedPaths;
+    entries = nextEntries;
     return document;
   }
 
@@ -162,8 +183,8 @@ export function runicTranslations(options = {}) {
     const operation = updates.catch(() => undefined).then(async () => {
       const previousCatalog = catalog;
       const previousPaths = generatedPaths;
-      if (compiler && source) await compile();
-      await refresh();
+      const nextProject = compiler && source ? await compile() : undefined;
+      await refresh(nextProject);
       const ids = new Set([previousCatalog, catalog].filter(Boolean));
       const modules = [...ids].flatMap(id => ["messages", "runtime", "server", "transport", "dynamic"]
         .map(kind => targetServer.moduleGraph.getModuleById(`${prefix}${id}/${kind}`))).filter(Boolean);
@@ -207,8 +228,8 @@ export function runicTranslations(options = {}) {
     },
 
     async buildStart() {
-      await compile();
-      await refresh();
+      const nextProject = await compile();
+      await refresh(nextProject);
       if (compiler) this.addWatchFile(compiler.project);
       if (!compiler) this.addWatchFile(manifestPath);
       for (const path of sourceFiles) this.addWatchFile(path);
@@ -271,6 +292,62 @@ function projectOptions(options) {
     command: options.command ?? "dotnet",
     commandArguments: Object.freeze(options.commandArguments ?? ["tool", "run", "runic-translations", "--"]),
   });
+}
+
+async function writeTypeDeclarations(path, catalog, root, assets, entrypoints) {
+  const typeEntrypoints = {
+    messages: entrypoints.types,
+    runtime: "runtime.d.ts",
+    server: "server.d.ts",
+    transport: "transport.d.ts",
+    dynamic: "dynamic.d.ts",
+  };
+  const sources = new Map();
+  for (const [kind, relativePath] of Object.entries(typeEntrypoints)) {
+    contained(root, relativePath);
+    const asset = assets.get(relativePath);
+    if (!asset)
+      throw new Error(`The Runic ../web/vite-plugin-runic-translations module manifest omits the '${kind}' generated type declarations.`);
+    sources.set(kind, await readFile(asset, "utf8"));
+  }
+  const virtual = kind => `virtual:runic-translations/${catalog}${kind === "messages" ? "" : `/${kind}`}`;
+  const rewrite = source => source
+    .replace(/^\s*\/\/ <auto-generated \/>\s*/u, "")
+    .replaceAll("export declare ", "export ")
+    .replaceAll('from "./runtime.js"', `from ${JSON.stringify(virtual("runtime"))}`);
+  const moduleDeclaration = (specifier, source) => {
+    const body = rewrite(source).trimEnd().split("\n").map(line => `  ${line}`).join("\n");
+    return `declare module ${JSON.stringify(specifier)} {\n${body}\n}`;
+  };
+  const messages = sources.get("messages");
+  const declarations = [
+    "// <auto-generated />",
+    "// Generated from the validated Runic web module manifest. Do not edit.",
+    moduleDeclaration(virtual("messages"), messages),
+    moduleDeclaration(`${virtual("messages")}/messages`, messages),
+    ...["runtime", "server", "transport", "dynamic"].map(kind =>
+      moduleDeclaration(virtual(kind), sources.get(kind))),
+    "",
+  ].join("\n\n");
+
+  let previous;
+  try {
+    if (lstatSync(path).isSymbolicLink())
+      throw new Error(`Generated Runic type declaration path must not be a symbolic link: '${path}'.`);
+    previous = await readFile(path, "utf8");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  if (previous === declarations) return;
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, declarations, { flag: "wx" });
+    await rename(temporary, path);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
 }
 
 function readProject(config, output) {
