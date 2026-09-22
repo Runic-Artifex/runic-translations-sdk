@@ -31,6 +31,13 @@ frontend/backend layout, use `runicTranslations({ project: "../translations" })`
 When another build owns generation, pass its generated `manifest` and optional
 `sourceFiles` instead.
 
+Manifest mode treats the supplied generated directory as externally owned.
+Changes to `sourceFiles` trigger a Vite refresh, but the plugin cannot recompile
+the project or recompute `sourceHash` without a compiler command. The owning
+build must regenerate the ESM package and manifest before the refresh is served;
+otherwise the plugin will reload the still-current manifest bytes, not detect
+that authoring sources are newer than them.
+
 ## Render a message
 
 ```ts

@@ -7,7 +7,7 @@ export interface RunicTranslationsOptions {
   readonly output?: string;
   /** Pre-generated RMF2 web-module-manifest-v3.json path when generation is owned by another build. */
   readonly manifest?: string;
-  /** Authoring inputs to watch; regeneration remains owned by the host build. */
+  /** Authoring inputs to watch in manifest mode. The host must regenerate before refresh; the plugin cannot recompute sourceHash. */
   readonly sourceFiles?: readonly string[];
   /** Project-mode invocation working directory. Defaults to the Vite process working directory. */
   readonly cwd?: string;

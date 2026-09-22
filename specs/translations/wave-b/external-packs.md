@@ -12,8 +12,9 @@ artifactVersion, messageGrammarVersion, profile, catalog, locale,
 contractFingerprint, messages, markupContract
 ```
 
-Every root, message, and argument member is required. Unknown or duplicate
-members are rejected. A pack may contain a subset of known messages; every
+Every member required by the root envelope, message wrapper, and normalized AST
+shape is required. Unknown or duplicate members are rejected. A pack may contain
+a subset of known messages; every
 present key must be a known compiled key. Its typed AST and linked markup/slot
 contract must exactly match the compiled caller contract. A pack cannot add a
 key, descriptor, locale, layer, or fallback edge.

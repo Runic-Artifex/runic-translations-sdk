@@ -1,6 +1,8 @@
 # Runic.Translations.Build
 
-Connect a conventional Runic MF2 project to MSBuild. The package discovers the project, feeds its inputs to the C# generator, and can invoke a pinned local tool to produce JSON, TypeScript, ESM, template manifests, or the experimental C++20 output.
+Connect a conventional Runic MF2 project to MSBuild. The package discovers the
+project, feeds its inputs to the typed C# source generator, and can invoke a
+pinned local tool to produce locale-v5 JSON or the ESM ABI-4 package.
 
 ## Install
 
@@ -39,16 +41,14 @@ Set one or more of these properties to `true`:
 
 | Property | Output |
 |---|---|
-| `TranslationsEmitJson` | Compiled locale JSON |
-| `TranslationsEmitTypeScript` | TypeScript contract |
-| `TranslationsEmitTemplateManifest` | Template manifest |
-| `TranslationsEmitEsm` | Tree-shakable ESM modules and declarations |
-| `TranslationsEmitCpp` | Experimental C++20 output |
+| `TranslationsEmitJson` | `{catalog}.{locale}.locale-v5.json` plus `asset-manifest-v1` |
+| `TranslationsEmitEsm` | Cohesive ESM-v5 modules, declarations, and `web-module-manifest-v3.json` |
 
-`TranslationsGenerateOnBuild=true` with no individual selection emits v5 JSON
-and ESM groups; C# remains source-generator owned. Explicit TypeScript, template,
-and C++ selection fails with `RTR0065` because version-correct renderers do not
-exist. Generated C# is never written
+`TranslationsGenerateOnBuild=true` with no individual selection emits the JSON
+and ESM groups; C# remains source-generator owned. The retired
+`TranslationsEmitTypeScript`, `TranslationsEmitTemplateManifest`, and
+`TranslationsEmitCpp` selections are unsupported and fail with `RTR0065`; they
+never activate an older renderer. Generated C# is never written
 to disk by this package—it belongs to the source generator.
 
 Choose this package for generated C# and whenever MSBuild owns input classification or non-C# artifact generation. Use the CLI directly when generation is owned by Vite, CI, or another host.

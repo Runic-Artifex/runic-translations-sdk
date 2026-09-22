@@ -1,54 +1,62 @@
 # Deterministic compiler outputs
 
-All generator, build, and CLI surfaces consume the same canonical source IR.
+All generator, build, and CLI surfaces consume the same linked v5 project model.
 For identical normalized inputs and options they produce byte-identical outputs
 independent of input enumeration, source partitioning, absolute paths, current
 directory, operating system, clock, current culture, username, or process ID.
 
-## Output set and names
+## Output groups and names
 
-The C# generator emits these hint files per catalog class:
+The C# source generator and `--emit-csharp` renderer emit four hint files per
+catalog class:
 
 1. `{ClassName}.Keys.g.cs`
 2. `{ClassName}.Accessors.g.cs`
 3. `{ClassName}.CatalogData.g.cs`
 4. `{ClassName}.Registration.g.cs`
 
-Hint names compare ordinally. Generated C# enables nullable analysis, uses fully
-qualified framework names where ambiguity is possible, uses LF line endings,
-and ends with one LF. Groups mirror the resource hierarchy. Placeholder
-parameters and serialized contracts are ordered by ordinal placeholder name.
-Key IDs follow the source contract's ordinal dotted-key order.
+Generated C# uses the v5 caller and markup contracts, generated-name mapping 1,
+and requires RMF2 runtime ABI 2. Hint names and generated members compare
+ordinally. Source-generator output enters the current compilation; the Build
+package does not copy those files into its generated-asset directory.
 
-Non-C# artifact names are relative safe names:
+The JSON output group contains:
 
-- `{catalog}.{locale}.locale-v1.json` for a resolved locale artifact;
-- `{catalog}.translations-v1.d.ts` for the versioned TypeScript declaration edge;
-- `{catalog}.asset-manifest-v1.json` for the selected non-C# asset inventory.
+- `{catalog}.{locale}.locale-v5.json` for each declared locale;
+- `{catalog}.asset-manifest-v1.json`, which inventories exactly those locale
+  artifact bytes with their SHA-256, byte length, media type, and locale.
 
-The Asset Manifest v1 is emitted whenever at least one locale, template manifest,
-or TypeScript declaration is selected. It inventories every selected non-C# asset
-except itself. Hosts may verify and copy the listed bytes, but cannot use their own
-frontend manifest as a substitute for this contract.
+The ESM output group is rooted at `{catalog}.esm-v5/`. It contains the runtime,
+transport, dynamic-pack, server, message modules, their declaration files, and
+`web-module-manifest-v3.json`. The manifest declares ESM ABI 4, RMF2 runtime ABI
+2, grammar 5, `rmf2-execution-v2`, generated-name mapping 1, caller fingerprint,
+source hash, exact entrypoints, and every owned asset.
 
-Paths never come from resource source JSON. The configured output root and every
-resolved child MUST remain under the allowed intermediate/output directory.
+Standalone TypeScript, template-manifest, and C++ output groups are not part of
+the current contract. Their retired switches fail with `RTR0065`; a host must not
+substitute old output bytes or infer a legacy renderer.
 
-## Canonical JSON bytes
+Paths never come from translated message content. The configured output root and
+every resolved child MUST remain under the allowed intermediate/output directory.
 
-Version 1 locale artifacts use this root property order:
+## Canonical locale artifact bytes
 
-1. `artifactVersion`
-2. `messageGrammarVersion`
-3. `catalog`
-4. `locale`
-5. `contractFingerprint`
-6. `messages`
+Locale artifact v5 uses this root property order:
 
-Message keys are ordinal-sorted. Each message writes `pattern`, then `arguments`.
-Arguments are ordinal-sorted by `name` and write `name`, `type`, then `format`.
-Every descriptor writes its normalized default format, including `none` for
-`string`, so readers never infer a missing wire value.
+1. `artifactVersion` (`5`)
+2. `messageGrammarVersion` (`5`)
+3. `profile` (`rmf2-execution-v2`)
+4. `catalog`
+5. `locale`
+6. `contractFingerprint`
+7. `messages`
+8. `markupContract`
+
+Message keys are ordinal-sorted. Each message writes `contentLocale`, then its
+normalized AST v5. The AST carries the canonical caller input array, full typed
+declaration and selector graph, ordered annotations, structured markup events,
+and functional-slot contracts. `markupContract` is the linked v1 markup envelope
+for the complete catalog.
 
 Release JSON is minified UTF-8 without BOM, insignificant whitespace, or a
 terminal newline. Strings use JSON short escapes for backspace, form feed,
@@ -57,33 +65,18 @@ remaining U+0000 through U+001F and unpaired UTF-16 surrogates use lowercase
 four-hex-digit `\u` escapes. Valid non-ASCII scalars, including U+2028 and U+2029,
 remain literal UTF-8. Solidus is not escaped.
 
-The locale-artifact and external-pack version 1 payloads are structurally and
-byte compatible. The complete emitted bytes have a separate asset SHA-256. The
-embedded `contractFingerprint` retains the frozen source-contract definition and excludes
-translations; it is not the hash of the artifact itself.
-
-Template and asset manifests use the property order shown in their schemas,
-ordinal message/path ordering, the same string encoding, and the same minified
-UTF-8 envelope. Their versions are independent from the locale artifact.
+The locale artifact and external-pack v5 payloads share the same closed envelope.
+The complete emitted bytes have a separate asset SHA-256. The embedded
+`contractFingerprint` is the caller-compatibility hash, not the artifact hash;
+translated text and source freshness are intentionally separate concerns.
 
 ## Typed generated surface
 
-Generated keys expose stable dotted names and optimized integer IDs. Generated
-accessors are instance members over an explicit manager, use source-contract namespace
-and class settings, and emit strongly typed parameters:
+Generated keys expose stable logical names and optimized integer IDs. Generated
+accessors are instance members over an explicit manager and emit strongly typed
+parameters from the linked caller contract. Leaf descriptions become XML
+documentation. Generated-name mapping 1 encodes NFC UTF-8 names injectively for
+C# and JavaScript rather than relying on language-keyword exceptions.
 
-| Descriptor | C# parameter |
-|---|---|
-| `string` | `string` |
-| `int` | `long` |
-| `number` | `decimal` |
-| `bool` | `bool` |
-| `date` | `System.DateOnly` |
-| `time` | `System.TimeOnly` |
-| `datetime` | `System.DateTimeOffset` |
-| `guid` | `System.Guid` |
-
-Leaf descriptions become XML documentation. `$deprecated` emits
-`ObsoleteAttribute`; `$since` and tags are metadata and do not alter lookup.
-Generator/runtime ABI version 1 is embedded in generated code. An unsafe mismatch
-is `RTR0024`; it is never guessed or silently adapted.
+Generated code embeds its literal ABI requirements. An unsafe mismatch is
+`RTR0024`; it is never guessed, downgraded, or silently adapted.
