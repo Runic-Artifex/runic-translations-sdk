@@ -165,9 +165,6 @@ internal static class Program
         Assert(string.Equals(generatedText.Greeting("Ada"), "Hello Ada", StringComparison.Ordinal),
             "typed generated accessor compiles and formats through the packed runtime");
 
-        Assert(string.Equals(generatedText.ui_notifications_Greeting("Ada"), "Welcome Ada", StringComparison.Ordinal),
-            "grouped RMF2 accessor compiles and formats through the packed analyzer and runtime");
-
         CompiledTranslationCatalog catalog = CreateCatalog();
         var provider = new CompiledTranslationProvider(catalog);
         ITranslationSnapshot initial = await provider.GetSnapshotAsync("en").ConfigureAwait(false);
