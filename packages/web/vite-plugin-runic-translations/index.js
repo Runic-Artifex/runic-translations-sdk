@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, lstatSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
@@ -76,6 +76,7 @@ export function runicTranslations(options = {}) {
       throw new Error(`The Runic ../web/vite-plugin-runic-translations v${document.webModuleManifestVersion} module manifest has malformed entrypoints.`);
     catalog = document.catalog;
     const root = dirname(manifestPath);
+    const realRoot = await realpath(root);
     const requiredEntrypoints = {
       messages: document.entrypoints.messages,
       runtime: document.entrypoints.runtime,
@@ -104,7 +105,7 @@ export function runicTranslations(options = {}) {
           !/^[a-f0-9]{64}$/.test(asset.sha256) || !Number.isSafeInteger(asset.byteLength) || asset.byteLength < 0 ||
           typeof asset.mediaType !== "string" || !["text/javascript", "text/typescript"].includes(asset.mediaType) || assets.has(asset.path))
         throw new Error("The Runic ../web/vite-plugin-runic-translations module manifest contains an invalid generated asset entry.");
-      const path = contained(root, asset.path);
+      const path = await containedReal(root, realRoot, asset.path);
       const content = await readFile(path);
       if (content.byteLength !== asset.byteLength || createHash("sha256").update(content).digest("hex") !== asset.sha256)
         throw new Error(`Generated Runic asset integrity check failed: '${asset.path}'.`);
@@ -137,9 +138,9 @@ export function runicTranslations(options = {}) {
     entries = Object.freeze({
       messages: assets.get(requiredEntrypoints.messages),
       runtime: assets.get(requiredEntrypoints.runtime),
-      server: assets.get(document.entrypoints.server ?? "server.js") ?? contained(root, document.entrypoints.server ?? "server.js"),
-      transport: assets.get(document.entrypoints.transport ?? "transport.js") ?? contained(root, document.entrypoints.transport ?? "transport.js"),
-      dynamic: assets.get(document.entrypoints.dynamic ?? "dynamic.js") ?? contained(root, document.entrypoints.dynamic ?? "dynamic.js"),
+      server: assets.get(document.entrypoints.server),
+      transport: assets.get(document.entrypoints.transport),
+      dynamic: assets.get(document.entrypoints.dynamic),
     });
     return document;
   }
@@ -207,11 +208,11 @@ export function runicTranslations(options = {}) {
 
     async buildStart() {
       await compile();
-      const document = await refresh();
+      await refresh();
       if (compiler) this.addWatchFile(compiler.project);
       if (!compiler) this.addWatchFile(manifestPath);
       for (const path of sourceFiles) this.addWatchFile(path);
-      if (!compiler) for (const asset of document.assets) this.addWatchFile(contained(dirname(manifestPath), asset.path));
+      if (!compiler) for (const path of generatedPaths) this.addWatchFile(path);
     },
 
     async resolveId(id) {
@@ -328,6 +329,14 @@ function contained(root, relativePath) {
   const boundary = root.endsWith(sep) ? root : root + sep;
   if (!path.startsWith(boundary)) throw new Error(`Generated module path escapes its manifest root: '${relativePath}'.`);
   return path;
+}
+
+async function containedReal(root, realRoot, relativePath) {
+  const path = contained(root, relativePath);
+  const realPath = await realpath(path);
+  if (!isWithin(realRoot, realPath))
+    throw new Error(`Generated module path escapes its manifest root through a symbolic link: '${relativePath}'.`);
+  return realPath;
 }
 
 function isGenerated(path, manifestPath) {

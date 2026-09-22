@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -99,6 +99,25 @@ test("rejects hostile, stale, and forged v3 output", async () => {
     forged.contractFingerprint = `sha256:${"0".repeat(64)}`;
     await writeFile(manifest, JSON.stringify(forged));
     await assert.rejects(() => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }), /fingerprint/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("pre-generated manifests reject assets that escape through symbolic links", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-symlink-"));
+  try {
+    const generated = join(root, "app.esm-v5");
+    const manifest = await writeV3Fixture(generated);
+    const outside = join(root, "outside-messages.js");
+    await writeFile(outside, "export const escaped = true;\n");
+    await rm(join(generated, "messages.js"));
+    await symlink(outside, join(generated, "messages.js"));
+    const document = JSON.parse(await readFile(manifest, "utf8"));
+    await writeGeneratedManifest(manifest, document);
+
+    await assert.rejects(
+      () => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }),
+      /escapes its manifest root through a symbolic link/,
+    );
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
