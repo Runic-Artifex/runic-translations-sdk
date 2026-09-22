@@ -44,6 +44,7 @@ export const sourceHash = ${JSON.stringify(sourceHash)};
   await writeFile(join(root, "runtime.d.ts"), `export type MessageOptions = Readonly<{ locale?: string }>;
 export declare const baseLocale: string;
 export declare function decimal(value: string): Readonly<{ readonly coefficient: bigint; readonly scale: number; readonly negative: boolean }>;
+export declare function createDomInlineRenderer(document: Document): Readonly<{ render(): readonly Node[] }>;
 `);
   await writeFile(join(root, "server.d.ts"), "export declare function runWithLocale<T>(locale: string, operation: () => T): T;\n");
   await writeFile(join(root, "transport.d.ts"), `import type { MessageOptions } from "./runtime.js";
@@ -102,18 +103,19 @@ test("generated ambient declarations expose exact manifest-owned virtual module 
     const consumer = join(root, "consumer.ts");
     await writeFile(consumer, `import { m } from "virtual:runic-translations/app";
 import { m as explicitMessages } from "virtual:runic-translations/app/messages";
-import { baseLocale, decimal } from "virtual:runic-translations/app/runtime";
+import { baseLocale, createDomInlineRenderer, decimal } from "virtual:runic-translations/app/runtime";
 import { runWithLocale } from "virtual:runic-translations/app/server";
 import { decodeTextReference } from "virtual:runic-translations/app/transport";
 import { formatDynamicMessage } from "virtual:runic-translations/app/dynamic";
 const greeting: string = m.greeting({ name: "Ada", count: 2n }, { locale: baseLocale });
 const title: string = explicitMessages.application_title();
 decimal("1.25"); runWithLocale("en", () => greeting); decodeTextReference({}); formatDynamicMessage({}, "greeting");
+const renderedNode: Node | undefined = createDomInlineRenderer(document).render()[0];
 // @ts-expect-error count is generated as bigint | number.
 m.greeting({ name: "Ada", count: "two" });
 // @ts-expect-error generated message keys are exact.
 m.missing_message();
-void title;
+void title; void renderedNode;
 `);
     const tsconfig = join(root, "tsconfig.json");
     await writeFile(tsconfig, JSON.stringify({
@@ -121,6 +123,18 @@ void title;
       files: [consumer, declarations],
     }));
     await execFileAsync(process.execPath, ["x", "tsc", "-p", tsconfig, "--pretty", "false"], { cwd: new URL("..", import.meta.url) });
+
+    const serverConsumer = join(root, "server-consumer.ts");
+    await writeFile(serverConsumer, `import { runWithLocale } from "virtual:runic-translations/app/server";
+const result: number = runWithLocale("en", () => 42);
+void result;
+`);
+    const serverTsconfig = join(root, "server-tsconfig.json");
+    await writeFile(serverTsconfig, JSON.stringify({
+      compilerOptions: { module: "ESNext", moduleResolution: "Bundler", target: "ES2022", lib: ["ES2022"], types: [], strict: true, noEmit: true },
+      files: [serverConsumer, declarations],
+    }));
+    await execFileAsync(process.execPath, ["x", "tsc", "-p", serverTsconfig, "--pretty", "false"], { cwd: new URL("..", import.meta.url) });
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -209,6 +223,28 @@ test("pre-generated manifests reject assets that escape through symbolic links",
       () => runicTranslations({ manifest }).buildStart.call({ addWatchFile() {} }),
       /must not traverse symbolic links/,
     );
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("generated type declarations reject symlinked parent escapes and canonical asset aliases", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-type-symlink-"));
+  try {
+    const generated = join(root, "app.esm-v5"), manifest = await writeV3Fixture(generated);
+    const outside = join(root, "outside"); await mkdir(outside);
+    const escape = join(root, "escape"); await symlink(outside, escape);
+    await assert.rejects(
+      () => runicTranslations({ manifest, typeDeclarations: join(escape, "virtual.d.ts") }).buildStart.call({ addWatchFile() {} }),
+      /must not traverse symbolic links/,
+    );
+    await assert.rejects(() => readFile(join(outside, "virtual.d.ts")), error => error?.code === "ENOENT");
+
+    const alias = join(root, "generated-alias"); await symlink(generated, alias);
+    const messages = join(generated, "messages.js"), before = await readFile(messages, "utf8");
+    await assert.rejects(
+      () => runicTranslations({ manifest, typeDeclarations: join(alias, "messages.js") }).buildStart.call({ addWatchFile() {} }),
+      /must not traverse symbolic links|must not overwrite/,
+    );
+    assert.equal(await readFile(messages, "utf8"), before);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

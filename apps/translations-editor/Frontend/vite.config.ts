@@ -19,6 +19,7 @@ export default defineConfig({
     }),
     runicTranslations({
       manifest,
+      typeDeclarations: "src/generated/runic-translations.d.ts",
       sourceFiles: ["../EditorResources/runic.json", "../EditorResources/en.rmf2", "../EditorResources/de.rmf2"]
     }),
     sveltekit()
