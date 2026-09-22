@@ -82,10 +82,6 @@
     <ProjectReference Include="../../packages/dotnet/Runic.Translations.Generator/Runic.Translations.Generator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
-    <Analyzer Include="$(RunicSdkRoot)tools/Runic.Translations.Compiler/bin/$(Configuration)/net10.0/Tomlyn.dll"
-              Condition="'$(RunicSdkRoot)' != ''" />
-    <Analyzer Include="$(RunicSdkRoot)tools/Runic.Translations.Compiler/bin/$(Configuration)/net10.0/Runic.Translations.Compiler.dll"
-              Condition="'$(RunicSdkRoot)' != ''" />
   </ItemGroup>
 
   <ItemGroup>
@@ -100,14 +96,13 @@
 
   <ItemGroup>
     <TranslationProject Include="EditorResources/runic.json" />
-    <TranslationToml Include="EditorResources/*.toml" />
+    <TranslationMf2 Include="EditorResources/*.rmf2" />
     <EditorFrontendInput Include="Frontend/package.json;../../bun.lock;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/**/*" />
     <None Update="ExampleWorkspace/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
     <None Include="LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="../../specs/translations/licenses/Tomlyn-LICENSE.txt" Link="licenses/Tomlyn-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="PREVIEW-NOTICE.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="launchers/runic-translations-editor" Link="runic-translations-editor" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -120,9 +115,9 @@
        them, breaking the frontend build that consumes the manifest. -->
   <Target Name="KeepGeneratedTranslationsOutOfIncrementalClean"
           BeforeTargets="_CleanGetCurrentAndPriorFileWrites"
-          Condition="'$(TranslationsOutputPath)' != '' and Exists('$(TranslationsOutputPath)/editor.esm/web-module-manifest-v2.json')">
+          Condition="'$(TranslationsOutputPath)' != '' and Exists('$(TranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json')">
     <ItemGroup>
-      <_ExistingTranslationsArtifacts Include="$(TranslationsOutputPath)/editor.esm/**/*" />
+      <_ExistingTranslationsArtifacts Include="$(TranslationsOutputPath)/editor.esm-v5/**/*" />
       <FileWrites Include="@(_ExistingTranslationsArtifacts)" />
     </ItemGroup>
   </Target>
@@ -133,11 +128,11 @@
   <Target Name="BuildTranslationsEditorFrontend"
           BeforeTargets="RunicAssetsPackFileSystem"
           DependsOnTargets="RunicTranslationsGenerateTranslationArtifacts"
-          Inputs="@(EditorFrontendInput);$(TranslationsOutputPath)/editor.esm/web-module-manifest-v2.json"
+          Inputs="@(EditorFrontendInput);$(TranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json"
           Outputs="Frontend/build/index.html">
     <Exec WorkingDirectory="Frontend"
           Command="bun run --bun build"
-          EnvironmentVariables="RUNIC_TRANSLATIONS_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm/web-module-manifest-v2.json" />
+          EnvironmentVariables="RUNIC_TRANSLATIONS_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json" />
   </Target>
 
   <Import Project="../../packages/dotnet/Runic.Assets/buildTransitive/Runic.Assets.targets"

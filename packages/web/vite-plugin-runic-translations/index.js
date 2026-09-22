@@ -162,7 +162,7 @@ export function runicTranslations(options = {}) {
     if (path === compiler.config) return true;
     if (isWithin(compiler.output, path)) return false;
     // Include either authoring extension so mixed-layout inputs reach the compiler's diagnostics.
-    return explicitSources.has(path) || (sourceRoots.some(root => isWithin(root, path)) && /\.(mf2|rmf2|toml)$/i.test(path));
+    return explicitSources.has(path) || (sourceRoots.some(root => isWithin(root, path)) && /\.(mf2|rmf2)$/i.test(path));
   }
 
   function update(path, targetServer) {
@@ -291,7 +291,7 @@ function readProject(config, output) {
   }
   if (!settings || settings.schemaVersion !== 1 || typeof settings.catalog !== "string" || settings.catalog.length === 0)
     throw new Error("The Runic translation project must declare schemaVersion 1 and a catalog ID.");
-  if (settings.sourceLayout !== undefined && settings.sourceLayout !== "locale-toml" && settings.sourceLayout !== "rmf2-v1")
+  if (settings.sourceLayout !== undefined && settings.sourceLayout !== "rmf2-v1")
     throw new Error(`Unsupported Runic translation sourceLayout '${settings.sourceLayout}'.`);
   if (settings.executionProfile !== undefined && settings.executionProfile !== "rmf2-execution-v2")
     throw new Error(`Unsupported Runic translation executionProfile '${settings.executionProfile}'.`);
@@ -307,8 +307,7 @@ function readProject(config, output) {
       if (isWithin(output, path)) continue;
       if (entry.isSymbolicLink()) throw new Error("Translation sources must not traverse symbolic links.");
       if (entry.isDirectory()) discover(path);
-      else if (entry.isFile() && (settings.sourceLayout === "locale-toml"
-        ? directory === project && /\.toml$/i.test(path) : settings.sourceLayout === "rmf2-v1" ? /\.rmf2$/i.test(path) : /\.mf2$/i.test(path))) sourceFiles.push(path);
+      else if (entry.isFile() && (settings.sourceLayout === "rmf2-v1" ? /\.rmf2$/i.test(path) : /\.mf2$/i.test(path))) sourceFiles.push(path);
     }
   }
   const roots = settings.sourceLayout === "rmf2-v1" && settings.sourceRoots

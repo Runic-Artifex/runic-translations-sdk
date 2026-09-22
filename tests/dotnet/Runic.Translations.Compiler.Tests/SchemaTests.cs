@@ -28,7 +28,7 @@ internal static class SchemaTests
         AssertProject(Prefix + "}", true, "omitted profile");
         AssertProject(Prefix + ",\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"}", true, "selected RMF2 profile");
         AssertProject(Prefix + ",\"executionProfile\":\"rmf2-execution-v2\"}", false, "profile without layout");
-        AssertProject(Prefix + ",\"sourceLayout\":\"locale-toml\",\"executionProfile\":\"rmf2-execution-v2\"}", false, "profile with wrong layout");
+        AssertProject(Prefix + ",\"sourceLayout\":\"mf2-v1\",\"executionProfile\":\"rmf2-execution-v2\"}", false, "profile with wrong layout");
         AssertProject(Prefix + ",\"sourceLayout\":\"rmf2-v1\",\"executionProfile\":\"future-profile\"}", false, "unknown profile");
 
         void AssertProject(string json, bool expected, string context)

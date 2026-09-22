@@ -270,13 +270,11 @@ internal static class WorkspaceMutationTests
             JsonObject config = Read(Path, "runic.json");
             config.Remove("sourceLayout");
             File.WriteAllText(System.IO.Path.Combine(Path, "runic.json"), config.ToJsonString());
-            foreach (string localeFile in Directory.EnumerateFiles(Path, "*.toml"))
+            foreach (string localeFile in Directory.EnumerateFiles(Path, "*.rmf2"))
             {
                 string locale = System.IO.Path.GetFileNameWithoutExtension(localeFile);
-                var document = TranslationLocaleReader.Read(new TranslationSource(localeFile, File.ReadAllBytes(localeFile)), locale);
                 Directory.CreateDirectory(System.IO.Path.Combine(Path, locale));
-                foreach (var entry in document.Entries)
-                    File.WriteAllBytes(System.IO.Path.Combine(Path, locale, entry.Key + ".mf2"), entry.Message.GetUtf8Bytes());
+                File.WriteAllText(System.IO.Path.Combine(Path, locale, "application_title.mf2"), "ProductText\n");
                 File.Delete(localeFile);
             }
         }

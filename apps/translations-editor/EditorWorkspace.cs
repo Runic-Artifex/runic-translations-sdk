@@ -83,7 +83,7 @@ internal sealed class EditorWorkspace : IDisposable
             }
 
             // FileSystemWatcher observes the containing workspace, so an edit in
-            // an unrelated RMF2/TOML file can be queued as well.  Only report a
+            // an unrelated RMF2 file can be queued as well.  Only report a
             // path that is part of the previous or current configured source
             // inventory; otherwise an unrelated file would look like a deletion.
             string[] changed = candidates
@@ -163,14 +163,7 @@ internal sealed class EditorWorkspace : IDisposable
             string? locale = SourceLocale(path);
             if (key is not null && value is not null)
             {
-                if (path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase))
-                {
-                    TranslationLocaleDocument document = TranslationLocaleReader.Read(Source(path, content), locale!, cancellationToken: cancellationToken);
-                    bool exists = document.Entries.Any(entry => entry.Key == key);
-                    content = StrictUtf8.GetString(TranslationLocaleWriter.Apply(Source(path, content), locale!,
-                        [new TranslationLocaleEdit(exists ? TranslationLocaleEditKind.SetValue : TranslationLocaleEditKind.Add, key, value)]));
-                }
-                else if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+                if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
                 {
                     var source = Source(path, content);
                     var nodes = Rmf2ResourceReader.Read(source, cancellationToken: cancellationToken).Nodes;
@@ -589,9 +582,7 @@ internal sealed class EditorWorkspace : IDisposable
             if (projectPrefix == ".") projectPrefix = string.Empty;
             else projectPrefix += "/";
             var documents = new List<PreparedInterchangeDocument>();
-            var localeEdits = new List<TranslationLocaleEdit>();
             string manifestContent = state.Files.Single(file => file.Kind == DocumentKind.Manifest).Content;
-            bool localeToml = UsesLocaleToml(manifestContent);
             bool rmf2 = UsesRmf2(manifestContent);
             Rmf2Workspace? rmf2Workspace = null;
             Dictionary<string, byte[]>? rmf2Sources = null;
@@ -619,12 +610,6 @@ internal sealed class EditorWorkspace : IDisposable
                 else changed += 1;
                 Push(ref changes, ref overflowed, new EditorKeyChange(key, direct.ContainsKey(key) ? "changed" : "added", before, after, null, null));
                 if (string.Equals(before, after, StringComparison.Ordinal)) continue;
-                if (localeToml)
-                {
-                    localeEdits.Add(new TranslationLocaleEdit(direct.ContainsKey(key)
-                        ? TranslationLocaleEditKind.SetValue : TranslationLocaleEditKind.Add, key, after));
-                    continue;
-                }
                 if (rmf2)
                 {
                     ApplyRmf2InterchangeValue(
@@ -661,17 +646,6 @@ internal sealed class EditorWorkspace : IDisposable
                 }
             }
 
-            if (localeEdits.Count != 0)
-            {
-                WorkspaceFile? target = state.Files.FirstOrDefault(file => file.Kind == DocumentKind.Resource &&
-                    file.Path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(file.Locale, import.TargetLocale, StringComparison.OrdinalIgnoreCase));
-                string targetPath = target?.Path ?? $"{projectPrefix}{import.TargetLocale}.toml";
-                byte[]? original = target is null ? null : StrictUtf8.GetBytes(target.Content);
-                byte[] updated = TranslationLocaleWriter.Apply(Source(targetPath, target?.Content ?? string.Empty),
-                    import.TargetLocale!, localeEdits);
-                documents.Add(new PreparedInterchangeDocument(targetPath, target?.Revision, original, updated));
-            }
             TranslationProfileCompilation proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
             if (!proposed.Success)
             {
@@ -1224,7 +1198,6 @@ internal sealed class EditorWorkspace : IDisposable
             string extension = sourceLayout switch
             {
                 "rmf2-v1" => ".rmf2",
-                "locale-toml" => ".toml",
                 _ => ".mf2",
             };
             if (sourceLayout == "rmf2-v1" && config.RootElement.TryGetProperty("sourceRoots", out var mounts))
@@ -1347,17 +1320,15 @@ internal sealed class EditorWorkspace : IDisposable
         var documents = new List<EditorDocument>(state.Files.Count);
         foreach (WorkspaceFile file in state.Files)
         {
-            TranslationLocaleDocument? localeDocument = file.Path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) && file.Locale is not null
-                ? TranslationLocaleReader.Read(Source(file.Path, file.Content), file.Locale) : null;
             documents.Add(new EditorDocument(
                 file.Path,
                 file.Content,
                 file.Revision,
                 file.Kind == DocumentKind.Manifest,
-                localeDocument?.Success == false,
+                false,
                 file.Locale,
                 file.Layer,
-                localeDocument is null ? ReadEntries(file.Path, file.Content, file.Locale) : ReadEntries(localeDocument)));
+                ReadEntries(file.Path, file.Content, file.Locale)));
         }
         EditorReviewSnapshot? review = _catalogId is null
             ? null
@@ -1514,7 +1485,6 @@ internal sealed class EditorWorkspace : IDisposable
             extension = sourceLayout switch
             {
                 "rmf2-v1" => ".rmf2",
-                "locale-toml" => ".toml",
                 _ => ".mf2",
             };
             if (sourceLayout == "rmf2-v1" &&
@@ -1575,7 +1545,6 @@ internal sealed class EditorWorkspace : IDisposable
 
     private static bool IsSourcePath(string path) =>
         path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase) ||
-        path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<string> EnumerateSourceFiles(string root, string extension)
@@ -1614,15 +1583,9 @@ internal sealed class EditorWorkspace : IDisposable
         return File.ReadAllBytes(path);
     }
 
-    private static string? SourceLocale(string path) => (path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+    private static string? SourceLocale(string path) => path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase)
         ? Path.GetFileNameWithoutExtension(path)
         : path.Contains('/', StringComparison.Ordinal) ? path[..path.IndexOf('/')] : null;
-
-    private static bool UsesLocaleToml(string config)
-    {
-        using JsonDocument document = JsonDocument.Parse(config);
-        return StringProperty(document.RootElement, "sourceLayout") == "locale-toml";
-    }
 
     private static bool UsesRmf2(string config)
     {
@@ -1640,9 +1603,7 @@ internal sealed class EditorWorkspace : IDisposable
         }
         if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
             return [new EditorMessageEntry(Path.GetFileNameWithoutExtension(path), content, 0, StrictUtf8.GetByteCount(content))];
-        if (!path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) || locale is null) return [];
-        TranslationLocaleDocument document = TranslationLocaleReader.Read(Source(path, content), locale);
-        return ReadEntries(document);
+        return [];
     }
 
     internal TranslationWorkspaceTransactionPlan? PlanRmf2Mutation(EditorMutationRequest request)
@@ -1685,10 +1646,6 @@ internal sealed class EditorWorkspace : IDisposable
         string config = FindMf2ProjectConfig() ?? throw new TranslationAuthoringException("No project configuration found.");
         return new Rmf2Workspace(_root, new TranslationSource(config, File.ReadAllBytes(config)), []);
     }
-
-    private static EditorMessageEntry[] ReadEntries(TranslationLocaleDocument document) =>
-        document.Entries.Select(entry => new EditorMessageEntry(entry.Key, StrictUtf8.GetString(entry.Message.GetUtf8Bytes()),
-            entry.ValueLocation.StartByte, entry.ValueLocation.LengthBytes)).ToArray();
 
     private static EditorOperationResult Failure(string kind, EditorNotice message) => new(false, kind, message, null, null);
 

@@ -154,42 +154,6 @@ public static class Rmf2ResourceWriter
         return result;
     }
 
-    /// <summary>Imports the compatible TOML profile; returns explicit notes for trivia that cannot be attached reliably.</summary>
-    public static byte[] ImportToml(TranslationSource source, string locale, out IReadOnlyList<string> notes)
-    {
-        byte[] result = ImportTomlWithReport(source, locale, out TranslationMigrationReport report);
-        notes = report.Notes;
-        return result;
-    }
-
-    /// <summary>Imports TOML and returns stable loss codes alongside the migrated bytes.</summary>
-    public static byte[] ImportTomlWithReport(TranslationSource source, string locale, out TranslationMigrationReport report)
-    {
-        TranslationLocaleDocument document = TranslationLocaleReader.Read(source, locale);
-        if (!document.Success) throw new TranslationAuthoringException("Cannot migrate invalid TOML.");
-        var output = new StringBuilder();
-        var losses = new List<TranslationMigrationLoss>();
-        string original = Utf8.GetString(source.GetUtf8Bytes());
-        if (original.Contains('#', StringComparison.Ordinal))
-        {
-            losses.Add(new TranslationMigrationLoss(
-                "RMF2-MIGRATION-COMMENT-OWNERSHIP",
-                source.Path,
-                "TOML comment ownership cannot be inferred; the transaction retains the complete original as .toml.bak."));
-        }
-        foreach (var entry in document.Entries)
-        {
-            string[] path = entry.TablePath.Concat(entry.InlinePath).Concat(entry.KeyPath).ToArray();
-            for (int i = 0; i < path.Length - 1; i++) output.Append(' ', i * 2).Append(path[i]).Append(" {\n");
-            output.Append(Entry(path[^1], Utf8.GetString(entry.Message.GetUtf8Bytes()), (path.Length - 1) * 2, "\n"));
-            for (int i = path.Length - 2; i >= 0; i--) output.Append(' ', i * 2).Append("}\n");
-        }
-        report = new TranslationMigrationReport(losses
-            .OrderBy(static loss => loss.Location, StringComparer.Ordinal)
-            .ThenBy(static loss => loss.Code, StringComparer.Ordinal));
-        return Utf8.GetBytes(output.ToString());
-    }
-
     internal static string Entry(string name, string message, int indent, string newline = "\n")
     {
         message = message.Replace("\r\n", "\n", StringComparison.Ordinal);

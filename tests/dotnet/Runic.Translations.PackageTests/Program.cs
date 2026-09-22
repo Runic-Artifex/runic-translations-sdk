@@ -86,8 +86,6 @@ internal static class Program
             "lib/net10.0/Runic.Translations.Tooling.dll",
             "lib/net10.0/Runic.Translations.Authoring.dll",
             "lib/net10.0/Runic.Translations.Compiler.dll",
-            "lib/net10.0/Tomlyn.dll",
-            "licenses/Tomlyn-LICENSE.txt",
             "schemas/project-v1.schema.json",
             "schemas/locale-pack-v2.schema.json",
             "schemas/locale-artifact-v2.schema.json");
@@ -98,9 +96,7 @@ internal static class Program
             "build/Runic.Translations.Build.props",
             "build/Runic.Translations.Build.targets",
             "analyzers/dotnet/cs/Runic.Translations.Generator.dll",
-            "analyzers/dotnet/cs/Runic.Translations.Compiler.dll",
-            "analyzers/dotnet/cs/Tomlyn.dll",
-            "licenses/Tomlyn-LICENSE.txt");
+            "analyzers/dotnet/cs/Runic.Translations.Compiler.dll");
         AssertPackageShape(tool,
             "dotnet-runic-translations.nuspec",
             "README.md",
@@ -112,9 +108,6 @@ internal static class Program
             "tools/net10.0/any/dotnet-runic-translations.runtimeconfig.json",
             "tools/net10.0/any/Runic.Translations.Authoring.dll",
             "tools/net10.0/any/Runic.Translations.Compiler.dll",
-            "tools/net10.0/any/Tomlyn.dll",
-            "tools/net10.0/any/Tomlyn.xml",
-            "licenses/Tomlyn-LICENSE.txt",
             "tools/net10.0/any/Runic.Translations.Tooling.dll",
             "tools/net10.0/any/Runic.CommandLine.dll",
             "tools/net10.0/any/Runic.CommandLine.xml");
@@ -122,11 +115,11 @@ internal static class Program
             "Runic.Translations.Templates.nuspec",
             "README.md",
             "content/templates/item/.template.config/template.json",
-            "content/templates/item/translations/_defaultLocale_.toml",
+            "content/templates/item/translations/_defaultLocale_.rmf2",
             "content/templates/item/translations/runic.json",
             "content/templates/project/.config/dotnet-tools.json",
             "content/templates/project/.template.config/template.json",
-            "content/templates/project/translations/_defaultLocale_.toml",
+            "content/templates/project/translations/_defaultLocale_.rmf2",
             "content/templates/project/translations/runic.json",
             "content/templates/project/RunicTranslationsProject.csproj",
             "content/templates/rmf2-item/.template.config/template.json",
@@ -173,7 +166,7 @@ internal static class Program
             "typed generated accessor compiles and formats through the packed runtime");
 
         Assert(string.Equals(generatedText.ui_notifications_Greeting("Ada"), "Welcome Ada", StringComparison.Ordinal),
-            "grouped TOML accessor compiles and formats through the packed analyzer and runtime");
+            "grouped RMF2 accessor compiles and formats through the packed analyzer and runtime");
 
         CompiledTranslationCatalog catalog = CreateCatalog();
         var provider = new CompiledTranslationProvider(catalog);

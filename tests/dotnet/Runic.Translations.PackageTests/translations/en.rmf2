@@ -1,0 +1,10 @@
+Greeting =
+  .input {$name :string}
+  Hello {$name}
+ui {
+  notifications {
+    Greeting =
+      .input {$name :string}
+      Welcome {$name}
+  }
+}

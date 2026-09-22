@@ -52,7 +52,7 @@ Expand-Archive .\Runic.Translations.Editor-1.0.0-preview.N-win-x64.zip
 
 The launcher accepts `edit [workspace]` and `validate [workspace]`; without
 arguments it edits the current directory. A workspace contains one `runic.json`
-translation project, which can select legacy MF2, `locale-toml`, or `rmf2-v1`.
+translation project, which can select legacy MF2 or `rmf2-v1`.
 
 ## Availability and trust
 

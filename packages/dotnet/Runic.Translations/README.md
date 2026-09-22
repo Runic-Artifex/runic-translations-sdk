@@ -47,7 +47,7 @@ This package is a public preview for .NET 10. Preview releases may contain docum
 
 - [Runtime and generated C# example](https://github.com/Runic-Artifex/runic-sdk/blob/main/tests/dotnet/Runic.Translations.PackageTests/Program.cs)
 - [NativeAOT example](https://github.com/Runic-Artifex/runic-sdk/tree/main/tests/dotnet/Runic.Translations.AotTests)
-- [Compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md)
+- [RMF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md)
 - [External translation pack contract](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/wave-b/external-packs.md)
 - [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 

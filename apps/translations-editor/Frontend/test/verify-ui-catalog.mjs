@@ -3,22 +3,11 @@ import { glob, readFile } from "node:fs/promises";
 import { parse } from "svelte/compiler";
 import { parseUiMessages, readUiMessages } from "./ui-messages.mjs";
 
-assert.deepEqual(Object.keys(parseUiMessages("notifications = []")), [], "An empty array group must not invent messages or rows.");
-
-const arrayRows = [
-  "[[notifications]]\n_id = 'saved'\ntitle = 'Saved'\n",
-  "[[notifications]]\n_id = 'dismissed'\ntitle = 'Dismissed'\n",
-];
-assert.deepEqual(parseUiMessages(arrayRows.join("")), parseUiMessages([...arrayRows].reverse().join("")),
-  "Array row order must not change logical message IDs.");
-assert.equal(parseUiMessages(arrayRows.join("")).notifications_saved_title, "Saved");
-assert.equal(parseUiMessages("notifications = [{ _id = '_saved', title = 'Saved' }]").notifications__saved_title, "Saved");
-assert.equal(parseUiMessages("[ordinary]\n_id = 'Message'").ordinary__id, "Message");
-assert.deepEqual(Object.keys(parseUiMessages(arrayRows[0])), ["notifications_saved_title"], "Row metadata must not become a message.");
-for (const invalid of [arrayRows[0] + arrayRows[0], "[[notifications]]\ntitle = 'Missing id'",
-  "notifications = ['invalid']", "[[notifications]]\n_id = 'not-valid'\ntitle = 'Invalid id'"]) {
-  assert.throws(() => parseUiMessages(invalid));
-}
+assert.deepEqual(Object.keys(parseUiMessages("notifications {\n}\n")), [],
+  "An empty RMF2 group must not invent messages or rows.");
+assert.equal(parseUiMessages("notifications {\n  saved = Saved\n}\n").notifications_saved, "Saved");
+assert.throws(() => parseUiMessages("notifications {\n  saved = First\n  saved = Second\n}\n"),
+  "Duplicate RMF2 message paths must be rejected.");
 
 const [english, german] = await Promise.all([
   readUiMessages("en"),

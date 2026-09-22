@@ -193,10 +193,9 @@ public static partial class TranslationCompiler
         }
         JsonProperty? layoutProperty = parsed.Root!.Property("sourceLayout");
         bool rmf2 = layoutProperty?.Value.Text == "rmf2-v1";
-        bool toml = layoutProperty?.Value.Text == "locale-toml";
-        if (layoutProperty is not null && !toml && !rmf2)
+        if (layoutProperty is not null && !rmf2)
         {
-            diagnostics.Add("RTR0042", TranslationDiagnosticSeverity.Error, "Unsupported sourceLayout; expected 'locale-toml' or 'rmf2-v1', or omit for legacy MF2.", project, layoutProperty.Value.Span);
+            diagnostics.Add("RTR0042", TranslationDiagnosticSeverity.Error, "Unsupported sourceLayout; expected 'rmf2-v1', or omit for legacy MF2.", project, layoutProperty.Value.Span);
             return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
         }
         if (!rmf2 && (parsed.Root!.Property("sourceRoots") is not null || parsed.Root.Property("markup") is not null))
@@ -209,11 +208,6 @@ public static partial class TranslationCompiler
         {
             cancellationToken.ThrowIfCancellationRequested();
             TranslationSource source = messageSources[index];
-            if (toml)
-            {
-                ReadTomlDocument(projectDirectory, source, manifest, documents, discoveredLocales, diagnostics, options, cancellationToken);
-                continue;
-            }
             if (!TryMf2Identity(projectDirectory, source.Path, out string localeText, out string messageId))
             {
                 diagnostics.Add("RTR0040", TranslationDiagnosticSeverity.Error,

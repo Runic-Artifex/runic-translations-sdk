@@ -1,0 +1,16 @@
+common {
+  cancel = Annuler
+  save = Enregistrer
+}
+dashboard {
+  welcome =
+    .input {$name :string}
+    Bon retour, {$name}
+}
+files {
+  selected =
+    .input {$count :integer}
+    .match $count
+    one {{Un fichier sélectionné}}
+    * {{{$count} fichiers sélectionnés}}
+}

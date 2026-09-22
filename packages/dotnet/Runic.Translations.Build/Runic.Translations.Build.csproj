@@ -19,7 +19,6 @@
     <PackageReference Include="Microsoft.Build.Framework" PrivateAssets="all" ExcludeAssets="runtime" />
     <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Runic.Translations.Generator\Runic.Translations.Generator.csproj" PrivateAssets="all" />
-    <None Include="../../../specs/translations/licenses/Tomlyn-LICENSE.txt" Pack="true" PackagePath="licenses" />
     <None Include="../../../specs/translations/THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Update="build\Runic.Translations.Build.props"
@@ -35,8 +34,6 @@
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Build.dll" PackagePath="tools/net10.0" />
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Generator.dll"
-                              PackagePath="analyzers/dotnet/cs" />
-      <TfmSpecificPackageFile Include="$(OutputPath)Tomlyn.dll"
                               PackagePath="analyzers/dotnet/cs" />
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Compiler.dll"
                               PackagePath="analyzers/dotnet/cs" />

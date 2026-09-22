@@ -11,7 +11,7 @@ internal static class BuildIntegrationTests
 {
     public static void Register(TestRunner runner)
     {
-        runner.Add("TOML discovery follows custom project paths and membership changes", TomlMembershipIsIncremental);
+        runner.Add("RMF2 discovery follows custom project paths and membership changes", Rmf2MembershipIsIncremental);
         runner.Add("build props and targets expose stable import sentinels", ImportsExposeSentinels);
         runner.Add("build maps declared items to AdditionalFiles metadata", ItemsMapToAdditionalFiles);
         runner.Add("build target declares incremental Inputs and Outputs", TargetDeclaresInputsAndOutputs);
@@ -28,16 +28,16 @@ internal static class BuildIntegrationTests
         runner.Add("build reconciles All to JSON and clean preserves unrelated files", ReconcileAndCleanRespectOwnership);
     }
 
-    private static void TomlMembershipIsIncremental()
+    private static void Rmf2MembershipIsIncremental()
     {
         using TemporaryDirectory temporary = CreateConsumer(generationEnabled: true);
         string custom = temporary.Resolve("Locale Sources");
         Directory.Move(temporary.Resolve("translations"), custom);
         Directory.Delete(Path.Combine(custom, "en"), recursive: true);
         string projectPath = Path.Combine(custom, "runic.json");
-        string project = File.ReadAllText(projectPath).Replace("\"schemaVersion\":1,", "\"schemaVersion\":1,\"sourceLayout\":\"locale-toml\",", StringComparison.Ordinal);
+        string project = File.ReadAllText(projectPath).Replace("\"schemaVersion\":1,", "\"schemaVersion\":1,\"sourceLayout\":\"rmf2-v1\",", StringComparison.Ordinal);
         File.WriteAllText(projectPath, project);
-        File.WriteAllText(Path.Combine(custom, "en.ToMl"), "[ui.dialog]\nHello = 'Hello'\n");
+        File.WriteAllText(Path.Combine(custom, "en.rmf2"), "ui {\n  dialog {\n    Hello = Hello\n  }\n}\n");
         string consumerPath = temporary.Resolve("Consumer.csproj");
         string consumer = File.ReadAllText(consumerPath);
         int lastImport = consumer.LastIndexOf("<Import Project=", StringComparison.Ordinal);
@@ -45,27 +45,27 @@ internal static class BuildIntegrationTests
         File.WriteAllText(consumerPath, consumer);
         ProcessResult first = Build(temporary);
         Assert.Equal(0, first.ExitCode, first.Combined);
-        string output = FindGeneratedDirectory(temporary);
+        string output = FindGeneratedDirectory(temporary, "minimal.en.locale-v4.json");
         string stamp = Path.Combine(output, ".generate.stamp");
         DateTime firstWrite = File.GetLastWriteTimeUtc(stamp);
         ProcessResult unchanged = Build(temporary, noRestore: true);
         Assert.Equal(0, unchanged.ExitCode, unchanged.Combined);
-        Assert.Equal(firstWrite, File.GetLastWriteTimeUtc(stamp), "unchanged TOML build regenerated");
+        Assert.Equal(firstWrite, File.GetLastWriteTimeUtc(stamp), "unchanged RMF2 build regenerated");
         Thread.Sleep(1_200);
-        File.WriteAllText(Path.Combine(custom, "en.ToMl"), "[ui.dialog]\nHello = 'Welcome'\n");
+        File.WriteAllText(Path.Combine(custom, "en.rmf2"), "ui {\n  dialog {\n    Hello = Welcome\n  }\n}\n");
         ProcessResult edited = Build(temporary, noRestore: true);
         Assert.Equal(0, edited.ExitCode, edited.Combined);
-        Assert.Contains("Welcome", File.ReadAllText(Path.Combine(output, "minimal.en.locale-v2.json")));
-        string german = Path.Combine(custom, "de.TOML");
-        File.WriteAllText(german, "[ui.dialog]\nHello = 'Hallo'\n");
+        Assert.Contains("Welcome", File.ReadAllText(Path.Combine(output, "minimal.en.locale-v4.json")));
+        string german = Path.Combine(custom, "de.rmf2");
+        File.WriteAllText(german, "ui {\n  dialog {\n    Hello = Hallo\n  }\n}\n");
         File.SetLastWriteTimeUtc(german, firstWrite.AddMinutes(-1));
         ProcessResult added = Build(temporary, noRestore: true);
         Assert.Equal(0, added.ExitCode, added.Combined);
-        Assert.True(File.Exists(Path.Combine(output, "minimal.de.locale-v2.json")), "new older-dated locale was ignored");
+        Assert.True(File.Exists(Path.Combine(output, "minimal.de.locale-v4.json")), "new older-dated locale was ignored");
         File.Delete(german);
         ProcessResult removed = Build(temporary, noRestore: true);
         Assert.Equal(0, removed.ExitCode, removed.Combined);
-        Assert.False(File.Exists(Path.Combine(output, "minimal.de.locale-v2.json")), "deleted locale artifact survived");
+        Assert.False(File.Exists(Path.Combine(output, "minimal.de.locale-v4.json")), "deleted locale artifact survived");
     }
 
     private static void ImportsExposeSentinels()
@@ -105,7 +105,6 @@ internal static class BuildIntegrationTests
         string outputs = (string?)target.Attribute("Outputs") ?? string.Empty;
         Assert.Contains("@(TranslationProject)", inputs);
         Assert.Contains("@(TranslationMf2)", inputs);
-        Assert.Contains("@(TranslationToml)", inputs);
         Assert.Contains("$(MSBuildProjectFullPath)", inputs);
         Assert.Equal("$(TranslationsOutputStamp)", outputs);
 

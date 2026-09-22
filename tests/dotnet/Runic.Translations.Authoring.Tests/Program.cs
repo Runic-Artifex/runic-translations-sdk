@@ -10,7 +10,6 @@ internal static class Program
         ProjectCreationTests.Register(runner);
         WorkspaceMutationTests.Register(runner);
         EditorStateTests.Register(runner);
-        LocaleTomlTests.Register(runner);
         Rmf2AuthoringTests.Register(runner);
         return runner.Run();
     }

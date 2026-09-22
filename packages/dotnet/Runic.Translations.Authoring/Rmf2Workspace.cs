@@ -259,41 +259,6 @@ public sealed class Rmf2Workspace
 
     public TranslationWorkspaceTransactionPlan Format(string path) => Plan(new Dictionary<string, byte[]?>(StringComparer.Ordinal) { [path] = Rmf2ResourceWriter.Format(_sources[path]) });
 
-    public TranslationWorkspaceTransactionPlan MigrateToml(out IReadOnlyList<string> notes)
-    {
-        TranslationWorkspaceTransactionPlan plan = MigrateToml(out notes, out _);
-        return plan;
-    }
-
-    /// <summary>Migrates locale TOML to RMF2 and exposes stable structured loss details.</summary>
-    public TranslationWorkspaceTransactionPlan MigrateToml(out IReadOnlyList<string> notes, out TranslationMigrationReport report)
-    {
-        var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal); var losses = new List<TranslationMigrationLoss>();
-        JsonObject config = JsonNode.Parse(_project.GetUtf8Bytes())!.AsObject();
-        if (config["sourceLayout"]?.GetValue<string>() != "locale-toml") throw new TranslationAuthoringException("TOML migration requires sourceLayout locale-toml.");
-        config["sourceLayout"] = "rmf2-v1";
-        foreach (var source in _sources.Values)
-        {
-            string path = Path.ChangeExtension(source.Path, ".rmf2"), backup = source.Path + ".bak";
-            if (_sources.ContainsKey(path) || File.Exists(Path.Combine(_root, Relative(backup)))) throw new TranslationAuthoringException("Migration destination or backup exists.");
-            changes[path] = Rmf2ResourceWriter.ImportTomlWithReport(source, Path.GetFileNameWithoutExtension(source.Path), out TranslationMigrationReport sourceReport);
-            losses.AddRange(sourceReport.Losses.Select(loss => loss with { Location = Relative(loss.Location) }));
-            changes[source.Path] = null; changes[backup] = source.GetUtf8Bytes();
-        }
-        changes[_project.Path] = Utf8.GetBytes(config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
-        report = new TranslationMigrationReport(losses
-            .OrderBy(static loss => loss.Location, StringComparer.Ordinal)
-            .ThenBy(static loss => loss.Code, StringComparer.Ordinal));
-        notes = report.Notes;
-        return Plan(changes);
-    }
-
-    /// <summary>Convenience overload for callers that only consume structured migration data.</summary>
-    public TranslationWorkspaceTransactionPlan MigrateTomlWithReport(out TranslationMigrationReport report)
-    {
-        return MigrateToml(out _, out report);
-    }
-
     /// <summary>Adds a locale by copying its physical source documents through a validated transaction.</summary>
     public TranslationWorkspaceTransactionPlan AddLocale(string locale, string? fallback = null, string? copyFrom = null) => ChangeLocale("add", locale, fallback, copyFrom);
     /// <summary>Removes a non-base locale and redirects dependent fallback edges.</summary>

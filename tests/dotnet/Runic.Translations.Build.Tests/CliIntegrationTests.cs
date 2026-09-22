@@ -9,54 +9,13 @@ internal static class CliIntegrationTests
 {
     public static void Register(TestRunner runner)
     {
-        runner.Add("CLI grouped TOML preserves flattened artifact contracts", GroupedTomlPreservesArtifacts);
-        runner.Add("CLI migration previews then preserves generated semantics", MigrationPreservesSemantics);
         runner.Add("CLI help and invalid invocation use stable exit codes", HelpAndUsageExitCodes);
-        runner.Add("CLI init creates and validates a one-locale TOML project", InitCreatesOneLocaleProject);
+        runner.Add("CLI init creates and validates a one-locale RMF2 project", InitCreatesOneLocaleProject);
         runner.Add("CLI init creates canonical locale files and explicit fallbacks", InitCreatesMultipleLocales);
         runner.Add("CLI init rejects conflicts without changing the target", InitConflictDoesNotWrite);
-        runner.Add("CLI init supports an empty TOML project", InitWithoutStarterIsValid);
-        runner.Add("CLI RMF2 init is explicit and compiler-valid", InitRmf2IsExplicit);
+        runner.Add("CLI init supports an empty RMF2 project", InitWithoutStarterIsValid);
         runner.Add("CLI project mode validates and generates conventional MF2", ProjectModeValidatesAndGenerates);
         runner.Add("CLI schema writes exact bundled versioned schemas", SchemaWritesExactSchemas);
-    }
-
-    private static void GroupedTomlPreservesArtifacts()
-    {
-        using TemporaryDirectory temporary = new();
-        Directory.CreateDirectory(temporary.Resolve("translations"));
-        File.WriteAllText(temporary.Resolve("translations", "runic.json"), "{\"schemaVersion\":1,\"sourceLayout\":\"locale-toml\",\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}\n");
-        string locale = temporary.Resolve("translations", "en.toml");
-        File.WriteAllText(locale, "ui_dialog_Greeting = 'Hello'\n");
-        ProcessResult flat = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated");
-        Assert.Equal(0, flat.ExitCode, flat.Combined);
-        File.WriteAllText(locale, "# Dialog copy\n[ui.dialog]\nGreeting = 'Hello'\n");
-        ProcessResult grouped = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "generated");
-        Assert.Equal(0, grouped.ExitCode, grouped.Combined);
-    }
-
-    private static void MigrationPreservesSemantics()
-    {
-        using TemporaryDirectory temporary = new();
-        Directory.CreateDirectory(temporary.Resolve("translations", "en"));
-        const string manifest = "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}\n";
-        File.WriteAllText(temporary.Resolve("translations", "runic.json"), manifest);
-        const string message = ".input {$name :string}\nHello {$name}\n";
-        File.WriteAllText(temporary.Resolve("translations", "en", "Greeting.mf2"), message);
-        ProcessResult before = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated");
-        Assert.Equal(0, before.ExitCode, before.Combined);
-        ProcessResult preview = TestFixture.RunTool(temporary, "migrate", "--project", "translations/runic.json", "--dry-run");
-        Assert.Equal(0, preview.ExitCode, preview.Combined);
-        Assert.Contains("create en.toml", preview.StandardOutput);
-        Assert.Equal(manifest, File.ReadAllText(temporary.Resolve("translations", "runic.json")));
-        Assert.Equal(message, File.ReadAllText(temporary.Resolve("translations", "en", "Greeting.mf2")));
-        Assert.False(File.Exists(temporary.Resolve("translations", "en.toml")), "preview wrote locale TOML");
-        ProcessResult migrate = TestFixture.RunTool(temporary, "migrate", "--project", "translations");
-        Assert.Equal(0, migrate.ExitCode, migrate.Combined);
-        Assert.True(File.Exists(temporary.Resolve("translations", "en.toml")), "migration omitted locale TOML");
-        Assert.False(File.Exists(temporary.Resolve("translations", "en", "Greeting.mf2")), "migration retained mixed-layout input");
-        ProcessResult verify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "generated");
-        Assert.Equal(0, verify.ExitCode, verify.Combined);
     }
 
     private static void ProjectModeValidatesAndGenerates()
@@ -136,7 +95,7 @@ internal static class CliIntegrationTests
         Assert.Equal(0, create.ExitCode, create.Combined);
         Assert.Contains("created 2 translation file(s)", create.StandardOutput);
         Assert.Equal(
-            "de.toml|runic.json",
+            "de.rmf2|runic.json",
             string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
         ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "Resources");
         Assert.Equal(0, validate.ExitCode, validate.Combined);
@@ -149,7 +108,7 @@ internal static class CliIntegrationTests
             "--output",
             "generated");
         Assert.Equal(0, generate.ExitCode, generate.Combined);
-        Assert.True(File.Exists(temporary.Resolve("generated", "product.de.locale-v2.json")), "The default schema-v2 locale asset was not generated.");
+        Assert.True(File.Exists(temporary.Resolve("generated", "product.de.locale-v4.json")), "The default RMF2 locale asset was not generated.");
 
         ProcessResult verify = TestFixture.RunTool(
             temporary,
@@ -184,7 +143,7 @@ internal static class CliIntegrationTests
 
         Assert.Equal(0, create.ExitCode, create.Combined);
         Assert.Equal(
-            "de-DE.toml|en-US.toml|fr.toml|runic.json",
+            "de-DE.rmf2|en-US.rmf2|fr.rmf2|runic.json",
             string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
         string manifest = File.ReadAllText(temporary.Resolve("Resources", "runic.json"), Encoding.UTF8);
         Assert.Contains("\"en-US\"", manifest);
@@ -234,42 +193,9 @@ internal static class CliIntegrationTests
             "EmptyText",
             "--no-starter");
         Assert.Equal(0, create.ExitCode, create.Combined);
-        Assert.Equal("en.toml|runic.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
+        Assert.Equal("en.rmf2|runic.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
         ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "Resources");
         Assert.Equal(0, validate.ExitCode, validate.Combined);
-    }
-
-    private static void InitRmf2IsExplicit()
-    {
-        using TemporaryDirectory temporary = new();
-        ProcessResult create = TestFixture.RunTool(
-            temporary,
-            "init-rmf2",
-            "--directory", "Resources",
-            "--catalog", "product",
-            "--default-locale", "en",
-            "--namespace", "Customer.Product",
-            "--class", "ProductText");
-
-        Assert.Equal(0, create.ExitCode, create.Combined);
-        Assert.Equal("en.rmf2|runic.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
-        string manifest = File.ReadAllText(temporary.Resolve("Resources", "runic.json"), Encoding.UTF8);
-        Assert.Contains("\"sourceLayout\": \"rmf2-v1\"", manifest);
-        Assert.Contains("application_title = ProductText", File.ReadAllText(temporary.Resolve("Resources", "en.rmf2"), Encoding.UTF8));
-        Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "Resources").ExitCode);
-
-        ProcessResult defaultInit = TestFixture.RunTool(
-            temporary,
-            "init",
-            "--directory", "LocaleResources",
-            "--catalog", "product",
-            "--default-locale", "en",
-            "--namespace", "Customer.Product",
-            "--class", "ProductText");
-        Assert.Equal(0, defaultInit.ExitCode, defaultInit.Combined);
-        Assert.True(File.Exists(temporary.Resolve("LocaleResources", "en.toml")), "default init silently changed from locale TOML");
-
-        AssertUsageFailure(temporary, "--layout expects 'locale-toml' or 'rmf2-v1'.", "init", "--directory", "Invalid", "--catalog", "product", "--default-locale", "en", "--namespace", "Customer.Product", "--class", "ProductText", "--layout", "legacy");
     }
 
     private static void SchemaWritesExactSchemas()

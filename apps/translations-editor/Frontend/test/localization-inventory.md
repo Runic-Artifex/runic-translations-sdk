@@ -1,6 +1,6 @@
 # Editor localization inventory
 
-The runtime catalog is `EditorResources/runic.json` with `sourceLayout: locale-toml`, `en.toml`, and `de.toml`. The example workspace uses `en.toml`, `de.toml`, and `fr.toml`. Migration uses the shared authoring transaction and retains decoded MF2 source; no private inputs are used.
+The runtime catalog is `EditorResources/runic.json` with `sourceLayout: rmf2-v1`, `en.rmf2`, and `de.rmf2`. The example workspace uses `en.rmf2`, `de.rmf2`, and `fr.rmf2`; no private inputs are used.
 
 | Surface | Locale keys / ownership |
 | --- | --- |
@@ -19,7 +19,7 @@ Count messages use MF2 `:integer select=plural`; plural branches contain complet
 
 Deliberate replacements: `ui_page_recovered_drafts_one` and `_many` become `ui_count_recovered_drafts`; `ui_workspace_file` / `_files` become `ui_count_malformed_files`; `ui_project_locale` / `_locales` become `ui_count_project_locales`; `ui_page_project_wizard_language` is removed in favor of `ui_count_project_summary`. The plural-named project-wizard language key remains as the independent Languages heading.
 
-Reviewed exemptions are product names (Runic Translations Editor), locale names in their native language, technical identifiers and grammar enum values (MF2/JSON/TOML, `auto`, `always`, plural categories, paths, locale tags, attribute/input/key names), keyboard shortcuts, numbers, punctuation, user-authored translations/notes/terminology, and compiler or OS diagnostic details. These details remain distinguishable from the localized editor-owned notice. English default strings in standalone palette/review model helpers support direct model callers; the rendered editor always passes its UI context.
+Reviewed exemptions are product names (Runic Translations Editor), locale names in their native language, technical identifiers and grammar enum values (MF2/JSON, `auto`, `always`, plural categories, paths, locale tags, attribute/input/key names), keyboard shortcuts, numbers, punctuation, user-authored translations/notes/terminology, and compiler or OS diagnostic details. These details remain distinguishable from the localized editor-owned notice. English default strings in standalone palette/review model helpers support direct model callers; the rendered editor always passes its UI context.
 
 Acceptance: `verify-ui-catalog.mjs` checks both locale key sets and static visible/accessibility copy, including shared UI components. `verify-localization-readiness.mjs` loads the real generated ESM manifest, runs every count message with 0/1/2/5/11/21/101/1000 in both locales through `createUiText`, checks selected exact plural outputs, and verifies stored frontend/backend notices react to locale changes. Browser/layout acceptance remains part of the parent editor verification, not established by source checks.
 

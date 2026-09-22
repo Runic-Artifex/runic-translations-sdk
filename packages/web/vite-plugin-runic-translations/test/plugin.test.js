@@ -374,17 +374,17 @@ test("published package inventory contains only declared runtime files", async (
   }
 });
 
-test("locale TOML membership, config changes and invalid recovery regenerate without output loops", async () => {
-  const root = await mkdtemp(join(tmpdir(), "runic-vite-toml-"));
+test("RMF2 membership, config changes and invalid recovery regenerate without output loops", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-rmf2-"));
   try {
     const project = join(root, "translations");
     const output = join(project, "generated");
     const config = join(project, "runic.json");
     await mkdir(project);
-    const settings = { schemaVersion: 1, catalog: "app", sourceLayout: "locale-toml" };
+    const settings = { schemaVersion: 1, catalog: "app", sourceLayout: "rmf2-v1" };
     await writeFile(config, JSON.stringify(settings));
-    const english = join(project, "en.ToMl");
-    await writeFile(english, "title = 'Hello'\n");
+    const english = join(project, "en.RmF2");
+    await writeFile(english, "title = Hello\n");
     for (const catalog of ["app", "renamed"]) {
       const generated = join(output, `${catalog}.esm`);
       await mkdir(generated, { recursive: true });
@@ -424,10 +424,10 @@ test("locale TOML membership, config changes and invalid recovery regenerate wit
       sent.once("message", value => { clearTimeout(timer); resolve(value); });
       watcher.emit(event, path);
     });
-    const german = join(project, "de.TOML");
-    await writeFile(german, "title = 'Hallo'\n");
+    const german = join(project, "de.RMF2");
+    await writeFile(german, "title = Hallo\n");
     assert.equal((await membership("add", german)).type, "full-reload");
-    const french = join(project, "fr.tOmL");
+    const french = join(project, "fr.rMf2");
     await rename(german, french);
     await membership("unlink", german);
     await membership("add", french);
@@ -437,7 +437,7 @@ test("locale TOML membership, config changes and invalid recovery regenerate wit
     assert.ok(invalidated.includes(join(output, "app.esm", "messages.js")));
     await writeFile(english, "INVALID");
     await assert.rejects(() => plugin.handleHotUpdate({ file: english, server }));
-    await writeFile(english, "title = 'Fixed'\n");
+    await writeFile(english, "title = Fixed\n");
     await plugin.handleHotUpdate({ file: english, server });
     assert.equal(await count(), 7);
     await writeFile(config, "{");
@@ -449,7 +449,7 @@ test("locale TOML membership, config changes and invalid recovery regenerate wit
     assert.ok(invalidated.includes("\0virtual:runic-translations/renamed/messages"));
     const beforeOutput = await count();
     assert.deepEqual(await plugin.handleHotUpdate({ file: join(output, "renamed.esm", "messages.js"), server }), []);
-    watcher.emit("add", join(output, "ignored.toml"));
+    watcher.emit("add", join(output, "ignored.rmf2"));
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(await count(), beforeOutput);
     await writeFile(config, JSON.stringify({ ...settings, sourceLayout: "unknown" }));

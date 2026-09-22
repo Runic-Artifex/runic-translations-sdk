@@ -21,7 +21,6 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
         runner.Add("RMF2 CLI re-discovers mounted add, change, rename, and delete", MountedCliMembership);
         runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
-        runner.Add("RMF2 migration previews and preserves backups", Migration);
         runner.Add("RMF2 LSP negotiates Unicode positions and returns versioned rename edits", Lsp);
         runner.Add("RMF2 LSP rescans watched files and configuration with unsaved overlays", LspWatchRescan);
         runner.Add("RMF2 LSP isolates watched diagnostics by project", LspWatchProjectIsolation);
@@ -191,19 +190,6 @@ internal static class Rmf2IntegrationTests
         File.Delete(temporary.Resolve("feature/de.rmf2"));
         var third = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
         Assert.Equal(0, third.ExitCode, third.Combined); Assert.False(File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/').Contains("feature/de.rmf2", StringComparison.Ordinal), "Deleted mounted source remained in MSBuild discovery.");
-    }
-    private static void Migration()
-    {
-        using TemporaryDirectory temporary = new();
-        File.WriteAllText(temporary.Resolve("runic.json"), Project.Replace("rmf2-v1", "locale-toml", StringComparison.Ordinal));
-        const string before = "# original\n[shop]\ntitle='Shop'\n";
-        File.WriteAllText(temporary.Resolve("en.toml"), before);
-        var preview = TestFixture.RunTool(temporary, "migrate-rmf2", "--project", ".", "--dry-run");
-        Assert.Equal(0, preview.ExitCode, preview.Combined); Assert.False(File.Exists(temporary.Resolve("en.rmf2")), "Preview wrote files.");
-        var migrate = TestFixture.RunTool(temporary, "migrate-rmf2", "--project", ".");
-        Assert.Equal(0, migrate.ExitCode, migrate.Combined);
-        Assert.Equal(before, File.ReadAllText(temporary.Resolve("en.toml.bak")));
-        Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", ".").ExitCode);
     }
     private static void Lsp()
     {

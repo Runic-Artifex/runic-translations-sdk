@@ -23,9 +23,9 @@ export default defineConfig({
 ```
 
 The no-argument form discovers `translations/runic.json`, compiles its locale
-TOML files to `.runic/translations`, and watches config and message edits,
+RMF2 files to `.runic/translations`, and watches config and message edits,
 including added, removed, and renamed locale files. New projects declare
-`sourceLayout: "locale-toml"`; projects without it retain legacy MF2-file input.
+`sourceLayout: "rmf2-v1"`; projects without it retain legacy MF2-file input.
 In a split
 frontend/backend layout, use `runicTranslations({ project: "../translations" })`.
 When another build owns generation, pass its generated `manifest` and optional
@@ -41,9 +41,8 @@ document.querySelector("#app")!.textContent = m.application_title();
 const greeting = m.greeting({ name: "Ada" }, { locale: "de" });
 ```
 
-TOML keys become identifier-safe message properties; their string values contain
-MF2 messages. Static ESM re-exports let Vite remove message modules that are not
-referenced.
+RMF2 resource names become identifier-safe message properties. Static ESM
+re-exports let Vite remove message modules that are not referenced.
 
 Additional entry points are available for generated locale configuration (`/runtime`), request-local SSR (`/server`), cross-process text references (`/transport`), and validated runtime-loaded locale artifacts (`/dynamic`). Wrap SSR rendering with `/server`'s `runWithLocale`; explicit per-call locale options are only needed for intentional overrides.
 
@@ -57,7 +56,7 @@ The plugin is a public preview for Vite `>=6 <9`. It accepts the supported web-m
 
 - [Ten-minute Vite workflow](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
 - [ESM backend and SSR guidance](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/esm.md)
-- [Compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md)
+- [RMF2 guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md)
 - [Plugin tests and production build examples](https://github.com/Runic-Artifex/runic-sdk/tree/main/packages/web/vite-plugin-runic-translations/test)
 - [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 

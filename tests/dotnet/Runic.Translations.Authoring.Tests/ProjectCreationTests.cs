@@ -29,7 +29,7 @@ internal static class ProjectCreationTests
         Assert.True(plan.Compilation.Success, "Generated project did not compile.");
         Assert.Equal(2, plan.Files.Count);
         Assert.Equal("de", plan.Locales[0].Tag);
-        Assert.True(Utf8(plan, "de.toml").Contains("ProductText", StringComparison.Ordinal), "Starter message is missing.");
+        Assert.True(Utf8(plan, "de.rmf2").Contains("ProductText", StringComparison.Ordinal), "Starter message is missing.");
     }
 
     private static void ThreeLocalesAreCanonical()
@@ -45,7 +45,7 @@ internal static class ProjectCreationTests
         Assert.True(plan.Compilation.Success, "Generated project did not compile.");
         Assert.Equal("de-DE|en-US:de-DE|zh-Hans-CN:en-US", string.Join('|', plan.Locales.Select(LocaleText)));
         Assert.Equal(
-            "de-DE.toml|en-US.toml|runic.json|zh-Hans-CN.toml",
+            "de-DE.rmf2|en-US.rmf2|runic.json|zh-Hans-CN.rmf2",
             string.Join('|', plan.Files.Select(file => file.RelativePath)));
     }
 
@@ -118,7 +118,7 @@ internal static class ProjectCreationTests
         string target = Path.Combine(alias, "projects", "Resources");
         string result = TranslationProjectWriter.Create(TranslationProjectScaffolder.Render(Request(target, "en")));
         Assert.Equal(Path.GetFullPath(target), result);
-        Assert.True(File.Exists(Path.Combine(real, "projects", "Resources", "en.toml")), "Project was not created beneath the resolved ancestor.");
+        Assert.True(File.Exists(Path.Combine(real, "projects", "Resources", "en.rmf2")), "Project was not created beneath the resolved ancestor.");
     }
 
     private static void LinkedParentIsRejected()
@@ -145,8 +145,8 @@ internal static class ProjectCreationTests
             "Customer.Product",
             "ProductText",
             includeStarterMessage: false));
-        Assert.True(plan.Compilation.Success, "Empty MF2 project did not compile.");
-        Assert.Equal("de.toml|runic.json", string.Join('|', plan.Files.Select(file => file.RelativePath)));
+        Assert.True(plan.Compilation.Success, "Empty RMF2 project did not compile.");
+        Assert.Equal("de.rmf2|runic.json", string.Join('|', plan.Files.Select(file => file.RelativePath)));
     }
 
     private static void ProjectConfigDeclaresSchema()
@@ -159,7 +159,7 @@ internal static class ProjectCreationTests
             "ProductText"));
         string config = Utf8(plan, "runic.json");
         Assert.True(config.Contains("project-v1.schema.json", StringComparison.Ordinal), "Project schema declaration is missing.");
-        Assert.True(config.Contains("\"sourceLayout\": \"locale-toml\"", StringComparison.Ordinal), "New projects must explicitly select locale TOML.");
+        Assert.True(config.Contains("\"sourceLayout\": \"rmf2-v1\"", StringComparison.Ordinal), "New projects must explicitly select RMF2.");
     }
 
     private static void Rmf2ProjectIsValid()
@@ -175,7 +175,7 @@ internal static class ProjectCreationTests
     {
         public static TranslationProjectPlan Build() => TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
             "unused", "product", "en", "Customer.Product", "ProductText",
-            additionalLocales: null, includeStarterMessage: true, layout: TranslationProjectLayout.Rmf2));
+            additionalLocales: null, includeStarterMessage: true));
     }
 
     private static TranslationProjectCreationRequest Request(string directory, string locale) => new(
