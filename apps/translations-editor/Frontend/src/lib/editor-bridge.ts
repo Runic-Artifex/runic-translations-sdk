@@ -7,8 +7,8 @@ import {
 } from "@runic-artifex/application-bridge";
 import { createDesktopFrameChannel } from "@runic-artifex/desktop";
 import { createSvelteApplicationBridge } from "@runic-artifex/svelte";
+import { createViteApplicationBridgeObserver } from "@runic-artifex/svelte/vite";
 import {
-  createRunicDevtoolsObserver,
   preserveRunicHmrResource,
 } from "virtual:runic/client";
 import EditorContract from "../application.bridge.generated";
@@ -102,7 +102,7 @@ const bridge = preserveRunicHmrResource("editor-bridge", () =>
             get initialConnectionEpoch() { return hostedConnectionEpoch; },
           }),
     ),
-    { observer: createRunicDevtoolsObserver() },
+    { observer: createViteApplicationBridgeObserver() },
   ));
 
 let initialization: Promise<unknown> | undefined;
