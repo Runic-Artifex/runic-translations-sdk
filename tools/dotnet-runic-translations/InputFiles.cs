@@ -30,7 +30,7 @@ internal static class InputFiles
         try { config = JsonDocument.Parse(project.GetUtf8Bytes()); }
         catch (JsonException) { return new CompilerInputs(project, messages); }
         using var configLifetime = config;
-        var roots = new List<string> { root };
+        var roots = new List<string>();
         if (config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
         {
             if (mounts.ValueKind != JsonValueKind.Array) return new CompilerInputs(project, messages);
@@ -41,6 +41,7 @@ internal static class InputFiles
                 roots.Add(Path.GetFullPath(path.GetString()!, root));
             }
         }
+        else roots.Add(root);
         foreach (string sourceRoot in roots)
         foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, projectPath))
             if (string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase) ||

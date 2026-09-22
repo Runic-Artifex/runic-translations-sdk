@@ -25,7 +25,6 @@ public sealed class Rmf2SourceDiscovery : ITask
                 string config = Path.GetFullPath(project.ItemSpec), root = Path.GetDirectoryName(config)!;
                 if (new FileInfo(config).Length > 8 * 1024 * 1024) throw new IOException("Translation project exceeds byte limit.");
                 using var json = JsonDocument.Parse(File.ReadAllBytes(config));
-                Discover(root, files);
                 if (json.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
                 {
                     if (mounts.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("sourceRoots must be an array.");
@@ -38,6 +37,7 @@ public sealed class Rmf2SourceDiscovery : ITask
                         Discover(Path.GetFullPath(path.GetString()!, root), files);
                     }
                 }
+                else Discover(root, files);
             }
             Sources = new List<string>(files).ToArray(); return true;
         }

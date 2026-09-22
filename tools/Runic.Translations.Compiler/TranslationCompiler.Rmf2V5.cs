@@ -254,8 +254,8 @@ public static partial class TranslationCompiler
             cancellationToken.ThrowIfCancellationRequested();
             bool grouped = source.Path.EndsWith(".rmf2", StringComparison.Ordinal);
             bool direct = source.Path.EndsWith(".mf2", StringComparison.Ordinal);
-            var matches = grouped ? mounts.Where(mount => source.Path.StartsWith(mount.Root, StringComparison.Ordinal)).ToArray() : Array.Empty<(string Root, string[] Prefix)>();
-            if ((!grouped && !direct) || (grouped && matches.Length != 1)) { Error("Translation sources must be .mf2 or .rmf2 beneath exactly one source root.", source, new(0, 0)); continue; }
+            var matches = (grouped || direct) ? mounts.Where(mount => source.Path.StartsWith(mount.Root, StringComparison.Ordinal)).ToArray() : Array.Empty<(string Root, string[] Prefix)>();
+            if ((!grouped && !direct) || matches.Length != 1) { Error("Translation sources must be .mf2 or .rmf2 beneath exactly one source root.", source, new(0, 0)); continue; }
             if (groupedInput is { } prior && prior != grouped)
             {
                 Error("A translation project cannot mix direct .mf2 and grouped .rmf2 sources; choose one source representation.", source, new(0, 0));
@@ -280,14 +280,14 @@ public static partial class TranslationCompiler
             }
             else
             {
-                if (!TryMf2Identity(directory, source.Path, out spelling, out string messageId)) { Error("Direct MF2 sources must use '{locale}/{message-id}.mf2' relative to runic.json.", source, new(0, 0)); continue; }
+                if (!TryMf2Identity(matches[0].Root, source.Path, out spelling, out string messageId)) { Error("Direct MF2 sources must use '{locale}/{message-id}.mf2' relative to their source root.", source, new(0, 0)); continue; }
                 namespaceParts = Array.Empty<string>();
                 directPath = new[] { messageId };
             }
             if (!TryCanonicalizeLocale(spelling, out string locale) || namespaceParts.Any(segment => !IsIdentifier(segment)) || directPath.Any(segment => !IsIdentifier(segment))) { Error("Invalid translation locale filename or directory segment.", source, new(0, 0)); continue; }
             if (spellings.TryGetValue(locale, out string? existing) && existing != spelling) Error("Duplicate canonical locale spelling.", source, new(0, 0));
             spellings[locale] = spelling; locales.Add(locale);
-            string[] mount = grouped ? matches[0].Prefix.Concat(namespaceParts).ToArray() : Array.Empty<string>();
+            string[] mount = matches[0].Prefix.Concat(namespaceParts).ToArray();
             IReadOnlyList<Rmf2ResourceNode> nodes;
             if (grouped)
             {

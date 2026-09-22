@@ -55,11 +55,13 @@ internal static class Rmf2IntegrationTests
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
         File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}" );
+        File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "stray = This project-directory source is outside the explicit mount\n");
         File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = {#strong}Shop{/strong}\n");
         var generated = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "out", "--emit-json", "--emit-esm");
         Assert.Equal(0, generated.ExitCode, generated.Combined);
         string json = File.ReadAllText(temporary.Resolve("out/app.en.locale-v5.json"));
         Assert.Contains("shop_title", json); Assert.Contains("runic:strong", json);
+        Assert.False(json.Contains("stray", StringComparison.Ordinal), "CLI discovery included a project-directory source outside explicit sourceRoots.");
     }
     private static void ActivatedV5Cli()
     {
@@ -169,6 +171,7 @@ internal static class Rmf2IntegrationTests
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
         File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}" );
+        File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "stray = This project-directory source is outside the explicit mount\n");
         File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = Shop\n");
         string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
         string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
@@ -181,7 +184,10 @@ internal static class Rmf2IntegrationTests
             </Target></Project>
             """);
         var first = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
-        Assert.Equal(0, first.ExitCode, first.Combined); Assert.Contains("feature/en.rmf2", File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/'));
+        Assert.Equal(0, first.ExitCode, first.Combined);
+        string firstSources = File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/');
+        Assert.Contains("feature/en.rmf2", firstSources);
+        Assert.False(firstSources.Contains("translations/en.rmf2", StringComparison.Ordinal), "MSBuild discovery included a project-directory source outside explicit sourceRoots.");
         File.WriteAllText(temporary.Resolve("feature/de.rmf2"), "title = Laden\n");
         var second = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
         Assert.Equal(0, second.ExitCode, second.Combined); Assert.Contains("feature/de.rmf2", File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/'));

@@ -113,10 +113,13 @@ internal static class Rmf2ProjectV5Tests
         var flat = Good("checkout {\n  cart {\n    title = {$name}\n  }\n}");
         var split = TranslationCompiler.CompileRmf2ProjectV5(Project(), [Source("translations/checkout/cart/en.rmf2", "title = {$name}")]);
         var mounted = TranslationCompiler.CompileRmf2ProjectV5(Project(",\"sourceRoots\":[{\"path\":\"../src/shop/i18n\",\"namespace\":[\"checkout\"]}]"), [Source("src/shop/i18n/cart/en.rmf2", "title = {$name}")]);
-        Assert.True(split.Success, Errors(split)); Assert.True(mounted.Success, Errors(mounted));
+        var directMounted = TranslationCompiler.CompileRmf2ProjectV5(Project(",\"sourceRoots\":[{\"path\":\"../src/shop/i18n\",\"namespace\":[\"checkout\",\"cart\"]}]"), [Source("src/shop/i18n/en/title.mf2", "{$name}")]);
+        Assert.True(split.Success, Errors(split)); Assert.True(mounted.Success, Errors(mounted)); Assert.True(directMounted.Success, Errors(directMounted));
         Assert.Equal(flat.CallerFingerprint, split.Project!.CallerFingerprint);
         Assert.Equal(flat.CallerFingerprint, mounted.Project!.CallerFingerprint);
+        Assert.Equal(flat.CallerFingerprint, directMounted.Project!.CallerFingerprint);
         Assert.Equal("checkout.cart.title", string.Join('.', mounted.Project.CanonicalMessages[0].Path));
+        Assert.Equal("checkout.cart.title", string.Join('.', directMounted.Project.CanonicalMessages[0].Path));
 
         var flatKey = Good("a_b = {$name}");
         var nestedKey = Good("a {\n  b = {$name}\n}");
