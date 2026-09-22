@@ -1,15 +1,12 @@
-# C++ feasibility backend
+# C++ feasibility study
 
-`--emit-cpp` (or `TranslationsEmitCpp`) emits a deterministic C++20 header/source
-pair from the canonical compiler AST. It provides typed argument structs,
-injective message function names, compiled locale branches, scalar formatting,
-and initial selector support. The fixture compiles with Clang under `-Werror`.
-
-This surface is experimental and excluded from default emission. Its dependency-
-free formatter intentionally makes no broad locale-equivalence claim. It rejects
-structured format and markup nodes explicitly instead of flattening them. The
-MF2 compiler fixtures prove selector lowering still consumes the canonical AST.
+The dependency-free C++20 emitter was a pre-v5 feasibility experiment. It is not
+part of the selected translation contract and is not shipped by the current
+compiler, CLI, or MSBuild integration. `--emit-cpp` and
+`TranslationsEmitCpp` fail with `RTR0065` rather than emitting an artifact under
+an older grammar or runtime ABI.
 
 [ADR 0002](adr/0002-cpp-formatter-provider.md) selects ICU4C for a future
-production formatter adapter. That work remains a generator backend, never a
-second source compiler.
+production formatter adapter. Any future C++ work remains a new, explicitly
+versioned generator backend over the v5 semantic model, never a second source
+compiler or a compatibility promise for the removed feasibility output.

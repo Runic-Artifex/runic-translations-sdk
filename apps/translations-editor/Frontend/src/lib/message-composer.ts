@@ -1,6 +1,6 @@
 import type { ResourceValue } from "./resource-model";
 
-import type { StructuredMessage, MessageInput, MessageFormat, MessagePatternNode, MessageVariant, LocalMessageArtifact, ArtifactNode, ArtifactInput, InputType, FormatFunction } from "./message-model";
+import type { StructuredMessage, MessageInput, MessageFormat, MessagePatternNode, MessageVariant } from "./message-model";
 export * from "./message-model";
 
 export function toStructuredMessage(value: ResourceValue | undefined): StructuredMessage {
@@ -119,106 +119,6 @@ export function patternText(nodes: MessagePatternNode[]): string | undefined {
     else return undefined;
   }
   return result;
-}
-
-export function sourceMessageToArtifact(value: StructuredMessage): LocalMessageArtifact {
-  const inputs = inferredInputs(value);
-  const declarations = new Map((value.declarations ?? []).map((declaration) => [declaration.name, declaration]));
-  return {
-    astVersion: 2,
-    inputs: Object.fromEntries(Object.entries(inputs).map(([name, input]) => [name, {
-      type: artifactType(input.type),
-      format: input.format ?? defaultFormat(input.type),
-    }])),
-    selectors: structuredClone(value.selectors),
-    variants: value.variants.map((variant) => ({
-      matches: structuredClone(variant.match),
-      nodes: compileNodes(patternNodes(variant.value), declarations),
-    })),
-  };
-}
-
-function inferredInputs(message: StructuredMessage): Record<string, MessageInput> {
-  const inputs = structuredClone(message.inputs);
-  const ensure = (name: string, type: InputType): void => {
-    inputs[name] ??= { type };
-  };
-  for (const selector of message.selectors) {
-    ensure(selector.input, selector.function === "literal" ? "string" : "int64");
-  }
-  for (const declaration of message.declarations ?? []) {
-    ensure(declaration.input, inputTypeForFunction(declaration.function));
-  }
-  const visit = (nodes: MessagePatternNode[]): void => {
-    for (const node of nodes) {
-      if (typeof node === "string" || "local" in node) continue;
-      if ("input" in node) ensure(node.input, "string");
-      else if ("format" in node) ensure(node.format.input, inputTypeForFunction(node.format.function));
-      else visit(node.markup.children);
-    }
-  };
-  for (const variant of message.variants) visit(patternNodes(variant.value));
-  return inputs;
-}
-
-function inputTypeForFunction(fn: FormatFunction): InputType {
-  return ({
-    string: "string",
-    integer: "int64",
-    number: "decimal",
-    date: "date",
-    time: "time",
-    datetime: "instant",
-    uuid: "uuid",
-    relativeTime: "decimal",
-  } satisfies Record<FormatFunction, InputType>)[fn];
-}
-
-function compileNodes(nodes: MessagePatternNode[], declarations: Map<string, MessageFormat>): ArtifactNode[] {
-  return nodes.map((node): ArtifactNode => {
-    if (typeof node === "string") return { kind: "text", value: node };
-    if ("input" in node) return { kind: "input", input: node.input };
-    if ("local" in node) {
-      const declaration = declarations.get(node.local);
-      if (declaration === undefined) return { kind: "text", value: "" };
-      return formatNode(declaration);
-    }
-    if ("format" in node) return formatNode(node.format);
-    return {
-      kind: "markup",
-      name: node.markup.name,
-      attributes: structuredClone(node.markup.attributes ?? {}),
-      children: compileNodes(node.markup.children, declarations),
-    };
-  });
-}
-
-function formatNode(format: Omit<MessageFormat, "name">): ArtifactNode {
-  return {
-    kind: "format",
-    input: format.input,
-    function: format.function,
-    format: format.format ?? defaultFunctionFormat(format.function),
-    ...(format.function === "relativeTime" ? { unit: format.unit ?? "day", numeric: format.numeric ?? "auto" } : {}),
-  };
-}
-
-function artifactType(type: InputType): ArtifactInput["type"] {
-  return ({ int64: "int", decimal: "number", instant: "datetime", uuid: "guid" } as const)[type as "int64"] ?? type as ArtifactInput["type"];
-}
-
-function defaultFormat(type: InputType): string {
-  return ({
-    string: "none", bool: "lower", int64: "plain", decimal: "plain",
-    date: "iso", time: "iso", instant: "iso", uuid: "d",
-  } satisfies Record<InputType, string>)[type];
-}
-
-function defaultFunctionFormat(fn: FormatFunction): string {
-  return ({
-    string: "none", integer: "plain", number: "plain", date: "iso", time: "iso",
-    datetime: "iso", uuid: "d", relativeTime: "plain",
-  } satisfies Record<FormatFunction, string>)[fn];
 }
 
 function renameInputInNodes(nodes: MessagePatternNode[], previous: string, nextName: string): void {

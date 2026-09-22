@@ -160,7 +160,6 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             string path = NormalizeKnownPath(relativePath);
-            string? locale = SourceLocale(path);
             if (key is not null && value is not null)
             {
                 if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
@@ -190,7 +189,7 @@ internal sealed class EditorWorkspace : IDisposable
                 else throw new EditorUserException(EditorNotice.Create("ui_backend_not_message_document"));
             }
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            return new EditorDocumentDraft(state.Compilation.Success, content, ReadEntries(path, content, locale), Diagnostics(state.Compilation));
+            return new EditorDocumentDraft(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state.Compilation));
         }
         catch (Exception exception) when (exception is ArgumentException or TranslationAuthoringException)
         {
@@ -237,28 +236,18 @@ internal sealed class EditorWorkspace : IDisposable
             if (!state.Compilation.Success)
                 return new EditorMessagePreview(false, null, null, null, diagnostics);
 
-            if (state.Compilation.Rmf2?.Project is { } rmf2)
-            {
-                Rmf2LocaleV5? selectedLocale = rmf2.Locales.SingleOrDefault(item => item.Tag == locale);
-                Rmf2TranslationV5? resource = selectedLocale?.ResolvedResources.SingleOrDefault(item => item.Key == key);
-                if (resource is null)
-                    return MissingPreviewKey(path, locale, key);
-                string ast = Rmf2MessageJsonV5.Serialize(resource.Message);
-                JsonObject samples = samplesJson is null ? new JsonObject() : JsonNode.Parse(samplesJson)?.AsObject()
-                    ?? throw new JsonException("Preview samples must be a JSON object.");
-                string? rendered = resource.Message.Inputs.All(input => samples.ContainsKey(input.Name))
-                    ? Rmf2Preview.Render(rmf2, key, locale, samples).ToJsonString()
-                    : null;
-                return new EditorMessagePreview(true, locale, ast, rendered, diagnostics);
-            }
-
-            TranslationGeneratedOutput artifact = TranslationOutputRenderer.RenderLocaleJson(
-                state.Compilation.Current!.Catalogs[0], locale);
-            using JsonDocument document = JsonDocument.Parse(artifact.Text);
-            JsonElement messages = document.RootElement.GetProperty("messages");
-            if (!messages.TryGetProperty(key, out JsonElement message))
+            Rmf2ProjectV5 rmf2 = state.Compilation.Project!;
+            Rmf2LocaleV5? selectedLocale = rmf2.Locales.SingleOrDefault(item => item.Tag == locale);
+            Rmf2TranslationV5? resource = selectedLocale?.ResolvedResources.SingleOrDefault(item => item.Key == key);
+            if (resource is null)
                 return MissingPreviewKey(path, locale, key);
-            return new EditorMessagePreview(true, locale, message.GetRawText(), null, diagnostics);
+            string ast = Rmf2MessageJsonV5.Serialize(resource.Message);
+            JsonObject samples = samplesJson is null ? new JsonObject() : JsonNode.Parse(samplesJson)?.AsObject()
+                ?? throw new JsonException("Preview samples must be a JSON object.");
+            string? rendered = resource.Message.Inputs.All(input => samples.ContainsKey(input.Name))
+                ? Rmf2Preview.Render(rmf2, key, locale, samples).ToJsonString()
+                : null;
+            return new EditorMessagePreview(true, locale, ast, rendered, diagnostics);
         }
         catch (Exception exception) when (exception is ArgumentException or JsonException or TranslationAuthoringException or TranslationFormatException)
         {
@@ -571,19 +560,15 @@ internal sealed class EditorWorkspace : IDisposable
                 return (new EditorXliffImportPlan(false, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, null,
                     [], 0, 0, 0, 0, 0, false, refusals.Order(InterchangeRefusalOrder.Instance).ToArray()), null);
 
-            string layer = catalog.Layer;
             TranslationInterchangeLocale targetLocale = catalog.Locales.Single(locale => string.Equals(locale.Tag, import.TargetLocale, StringComparison.Ordinal));
             Dictionary<string, string> direct = targetLocale.DirectResources.ToDictionary(
                 static resource => resource.Key,
                 static resource => resource.Text.TrimEnd('\r', '\n'),
                 StringComparer.Ordinal);
             string configPath = FindMf2ProjectConfig()!;
-            string projectPrefix = NormalizeRelativePath(Path.GetRelativePath(_root, Path.GetDirectoryName(configPath)!));
-            if (projectPrefix == ".") projectPrefix = string.Empty;
-            else projectPrefix += "/";
             var documents = new List<PreparedInterchangeDocument>();
             string manifestContent = state.Files.Single(file => file.Kind == DocumentKind.Manifest).Content;
-            bool rmf2 = UsesRmf2(manifestContent);
+            bool rmf2 = state.Files.Any(file => file.Kind == DocumentKind.Resource && file.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase));
             Rmf2Workspace? rmf2Workspace = null;
             Dictionary<string, byte[]>? rmf2Sources = null;
             Dictionary<string, string>? rmf2ExpectedRevisions = null;
@@ -620,7 +605,7 @@ internal sealed class EditorWorkspace : IDisposable
                         after);
                     continue;
                 }
-                string targetPath = $"{projectPrefix}{import.TargetLocale}/{key}.mf2";
+                string targetPath = DirectInterchangeTargetPath(state, configPath, import.TargetLocale!, key);
                 WorkspaceFile? target = state.Files.FirstOrDefault(file => string.Equals(file.Path, targetPath, StringComparison.Ordinal));
                 byte[]? original = target is null ? null : StrictUtf8.GetBytes(target.Content);
                 documents.Add(new PreparedInterchangeDocument(
@@ -646,7 +631,7 @@ internal sealed class EditorWorkspace : IDisposable
                 }
             }
 
-            TranslationProfileCompilation proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
+            Rmf2ProjectCompilationV5 proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
             if (!proposed.Success)
             {
                 string message = string.Join(" ", proposed.Diagnostics
@@ -677,7 +662,7 @@ internal sealed class EditorWorkspace : IDisposable
                 documents,
                 merged,
                 sidecar.Revision);
-            return (new EditorXliffImportPlan(true, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, layer,
+            return (new EditorXliffImportPlan(true, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, null,
                 changes.ToArray(), added, changed, removed, unchanged, reviewUpdates, overflowed, []),
                 prepared);
         }
@@ -986,7 +971,7 @@ internal sealed class EditorWorkspace : IDisposable
             .ToList();
     }
 
-    private static TranslationProfileCompilation CompileWithInterchangeDocuments(
+    private static Rmf2ProjectCompilationV5 CompileWithInterchangeDocuments(
         IReadOnlyList<WorkspaceFile> files,
         IReadOnlyList<PreparedInterchangeDocument> documents,
         CancellationToken cancellationToken)
@@ -997,7 +982,7 @@ internal sealed class EditorWorkspace : IDisposable
             .ToDictionary(static file => file.Path, static file => file.Content, StringComparer.Ordinal);
         foreach (PreparedInterchangeDocument document in documents)
             messages[document.Path] = StrictUtf8.GetString(document.Bytes);
-        return TranslationCompiler.CompileProjectForSelectedProfile(
+        return TranslationCompiler.CompileRmf2ProjectV5(
             Source(project.Path, project.Content),
             messages.OrderBy(static pair => pair.Key, StringComparer.Ordinal).Select(static pair => Source(pair.Key, pair.Value)),
             null,
@@ -1054,6 +1039,45 @@ internal sealed class EditorWorkspace : IDisposable
         string[] localPath = workspace.LocalPath(targetPath, resolvedLogicalPath).ToArray();
         sources[targetPath] = Rmf2ResourceWriter.AddMessage(
             new TranslationSource(targetPath, existing), localPath, value);
+    }
+
+    private string DirectInterchangeTargetPath(
+        WorkspaceState state,
+        string configPath,
+        string targetLocale,
+        string logicalKey)
+    {
+        Rmf2ProjectV5 project = state.Compilation.Project
+            ?? throw new TranslationAuthoringException("The RMF2 v5 project is unavailable.");
+        Rmf2TranslationV5? existing = project.Locales
+            .Single(locale => string.Equals(locale.Tag, targetLocale, StringComparison.Ordinal))
+            .DirectResources.SingleOrDefault(resource => string.Equals(resource.Key, logicalKey, StringComparison.Ordinal));
+        if (existing is not null) return existing.SourceLocation.Path;
+
+        Rmf2TranslationV5 source = project.Locales
+            .Single(locale => string.Equals(locale.Tag, project.DefaultLocale, StringComparison.Ordinal))
+            .DirectResources.SingleOrDefault(resource => string.Equals(resource.Key, logicalKey, StringComparison.Ordinal))
+            ?? throw new TranslationAuthoringException("The imported direct MF2 key has no canonical source resource.");
+        string projectRoot = Path.GetDirectoryName(configPath)!;
+        var sourceRoots = new List<string>();
+        using (JsonDocument config = JsonDocument.Parse(File.ReadAllBytes(configPath)))
+        {
+            if (config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
+                foreach (JsonElement mount in mounts.EnumerateArray())
+                    sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
+            else sourceRoots.Add(projectRoot);
+        }
+
+        string sourceFullPath = ContainedPath(source.SourceLocation.Path);
+        string[] matches = sourceRoots.Where(root => IsWithinSourceRoot(root, sourceFullPath)).ToArray();
+        if (matches.Length != 1)
+            throw new TranslationAuthoringException("The canonical direct MF2 resource does not match exactly one source root.");
+        string[] relative = NormalizeRelativePath(Path.GetRelativePath(matches[0], sourceFullPath))
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (relative.Length != 2 || !string.Equals(relative[0], project.DefaultLocale, StringComparison.OrdinalIgnoreCase))
+            throw new TranslationAuthoringException("Direct MF2 resources require a locale directory and physical message filename.");
+        string targetFullPath = Path.Combine(matches[0], targetLocale, relative[1]);
+        return NormalizeRelativePath(Path.GetRelativePath(_root, targetFullPath));
     }
 
     private static async Task<bool> RollBackInterchangeDocumentsAsync(
@@ -1194,16 +1218,14 @@ internal sealed class EditorWorkspace : IDisposable
         var sourceRoots = new List<string>();
         using (JsonDocument config = JsonDocument.Parse(replacementPath == configRelativePath && replacementContent is not null ? StrictUtf8.GetBytes(replacementContent) : File.ReadAllBytes(configPath)))
         {
-            string sourceLayout = StringProperty(config.RootElement, "sourceLayout") ?? string.Empty;
-            string extension = sourceLayout switch
-            {
-                "rmf2-v1" => ".rmf2",
-                _ => ".mf2",
-            };
-            if (sourceLayout == "rmf2-v1" && config.RootElement.TryGetProperty("sourceRoots", out var mounts))
+            if (config.RootElement.TryGetProperty("sourceRoots", out var mounts))
                 foreach (var mount in mounts.EnumerateArray()) sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
             else sourceRoots.Add(projectRoot);
-            foreach (string sourceRoot in sourceRoots) paths.AddRange(EnumerateSourceFiles(sourceRoot, extension).Order(StringComparer.Ordinal));
+            foreach (string sourceRoot in sourceRoots)
+            {
+                paths.AddRange(EnumerateSourceFiles(sourceRoot, ".mf2").Order(StringComparer.Ordinal));
+                paths.AddRange(EnumerateSourceFiles(sourceRoot, ".rmf2").Order(StringComparer.Ordinal));
+            }
         }
         var files = new List<WorkspaceFile>(paths.Count);
         TranslationSource? projectSource = null;
@@ -1226,8 +1248,7 @@ internal sealed class EditorWorkspace : IDisposable
             }
             else
             {
-                string localPath = NormalizeRelativePath(Path.GetRelativePath(projectRoot, fullPath));
-                string? locale = SourceLocale(localPath);
+                string? locale = SourceLocale(fullPath, sourceRoots);
                 messageSources.Add(Source(relativePath, content));
                 files.Add(new WorkspaceFile(relativePath, content, Revision(bytes), DocumentKind.Resource, catalogId, locale, "base"));
             }
@@ -1236,27 +1257,20 @@ internal sealed class EditorWorkspace : IDisposable
         if (replacementPath is not null && !files.Exists(file => string.Equals(file.Path, replacementPath, StringComparison.Ordinal)))
         {
             string replacementFullPath = ContainedPath(replacementPath);
-            string projectBoundary = projectRoot.EndsWith(Path.DirectorySeparatorChar)
-                ? projectRoot
-                : projectRoot + Path.DirectorySeparatorChar;
-            if (!sourceRoots.Any(root => replacementFullPath.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, StringComparison.Ordinal)) ||
+            if (!sourceRoots.Any(root => IsWithinSourceRoot(root, replacementFullPath)) ||
                 !IsSourcePath(replacementPath))
                 throw new EditorUserException(EditorNotice.Create("ui_backend_source_outside_project", ("path", replacementPath)));
-            string localPath = NormalizeRelativePath(Path.GetRelativePath(projectRoot, replacementFullPath));
-            string? locale = SourceLocale(localPath);
+            string? locale = SourceLocale(replacementFullPath, sourceRoots);
             string content = replacementContent ?? string.Empty;
             messageSources.Add(Source(replacementPath, content));
             files.Add(new WorkspaceFile(replacementPath, content, NewMf2DocumentRevision, DocumentKind.Resource, catalogId, locale, "base"));
             files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         }
 
-        TranslationProfileCompilation compilation = TranslationCompiler.CompileProjectForSelectedProfile(
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
             projectSource, messageSources, null, cancellationToken);
-        CompiledTextCatalog? current = compilation.Current?.Catalogs.Count == 1 ? compilation.Current.Catalogs[0] : null;
-        Rmf2ProjectV5? rmf2 = compilation.Rmf2?.Project;
-        (string Tag, string? Fallback)[] compiledLocales = current is not null
-            ? current.Locales.Select(static locale => (locale.Tag, locale.FallbackTag)).ToArray()
-            : rmf2?.Locales.Select(static locale => (locale.Tag, locale.FallbackTag)).ToArray() ?? [];
+        Rmf2ProjectV5? rmf2 = compilation.Project;
+        (string Tag, string? Fallback)[] compiledLocales = rmf2?.Locales.Select(static locale => (locale.Tag, locale.FallbackTag)).ToArray() ?? [];
         if (compiledLocales.Length != 0)
         {
             for (int index = 0; index < files.Count; index++)
@@ -1267,7 +1281,7 @@ internal sealed class EditorWorkspace : IDisposable
                 if (canonicalLocale is not null) files[index] = file with { Locale = canonicalLocale };
             }
         }
-        _catalogId = current?.Id ?? rmf2?.Id ?? catalogId;
+        _catalogId = rmf2?.Id ?? catalogId;
         if (replacementPath is null)
         {
             _knownRevisions.Clear();
@@ -1283,7 +1297,7 @@ internal sealed class EditorWorkspace : IDisposable
                 new[] { configRelativePath },
                 messageSources.Count,
                 compiledLocales.Length,
-                current?.CanonicalResources.Count ?? rmf2?.CanonicalMessages.Count ?? 0,
+                rmf2?.CanonicalMessages.Count ?? 0,
                 errors,
                 compilation.Diagnostics.Count - errors,
                 compilation.Success),
@@ -1299,16 +1313,7 @@ internal sealed class EditorWorkspace : IDisposable
             : state.Files.Find(file => file.Kind == DocumentKind.Manifest && string.Equals(file.CatalogId, _catalogId, StringComparison.Ordinal));
         if (manifest is not null)
             catalog = ReadCatalog(manifest.Content);
-        if (catalog is not null && state.Compilation.Current?.Catalogs.Count == 1)
-        {
-            CompiledTextCatalog compiledCatalog = state.Compilation.Current.Catalogs[0];
-            catalog = catalog with
-            {
-                DefaultLocale = compiledCatalog.DefaultLocale,
-                Locales = compiledCatalog.Locales.Select(static locale => new EditorLocale(locale.Tag, locale.FallbackTag)).ToArray(),
-            };
-        }
-        else if (catalog is not null && state.Compilation.Rmf2?.Project is { } rmf2)
+        if (catalog is not null && state.Compilation.Project is { } rmf2)
         {
             catalog = catalog with
             {
@@ -1331,7 +1336,7 @@ internal sealed class EditorWorkspace : IDisposable
                 malformed,
                 file.Locale,
                 file.Layer,
-                ReadEntries(file.Path, file.Content, file.Locale)));
+                ReadEntries(file.Path, file.Content, state.Compilation)));
         }
         EditorReviewSnapshot? review = _catalogId is null
             ? null
@@ -1348,7 +1353,7 @@ internal sealed class EditorWorkspace : IDisposable
         result.State.Terminology.Select(static term => new EditorTerminologyEntry(
             term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
 
-    private static EditorDiagnostic[] Diagnostics(TranslationProfileCompilation compilation)
+    private static EditorDiagnostic[] Diagnostics(Rmf2ProjectCompilationV5 compilation)
     {
         var result = new EditorDiagnostic[compilation.Diagnostics.Count];
         for (int index = 0; index < result.Length; index++)
@@ -1481,17 +1486,9 @@ internal sealed class EditorWorkspace : IDisposable
         if (config is null) return new Dictionary<string, byte[]>(StringComparer.Ordinal);
         string projectRoot = Path.GetDirectoryName(config)!;
         var sourceRoots = new List<string>();
-        string extension;
         using (JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(config)))
         {
-            string sourceLayout = StringProperty(document.RootElement, "sourceLayout") ?? string.Empty;
-            extension = sourceLayout switch
-            {
-                "rmf2-v1" => ".rmf2",
-                _ => ".mf2",
-            };
-            if (sourceLayout == "rmf2-v1" &&
-                document.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
+            if (document.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
             {
                 foreach (JsonElement mount in mounts.EnumerateArray())
                     sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
@@ -1506,7 +1503,7 @@ internal sealed class EditorWorkspace : IDisposable
             [NormalizeRelativePath(Path.GetRelativePath(_root, config))] = ReadSourceBytes(ContainedPath(NormalizeRelativePath(Path.GetRelativePath(_root, config)))),
         };
         foreach (string sourceRoot in sourceRoots)
-            foreach (string path in EnumerateSourceFiles(sourceRoot, extension))
+            foreach (string path in EnumerateSourceFiles(sourceRoot, ".mf2").Concat(EnumerateSourceFiles(sourceRoot, ".rmf2")))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 string relative = NormalizeRelativePath(Path.GetRelativePath(_root, path));
@@ -1590,13 +1587,21 @@ internal sealed class EditorWorkspace : IDisposable
         ? Path.GetFileNameWithoutExtension(path)
         : path.Contains('/', StringComparison.Ordinal) ? path[..path.IndexOf('/')] : null;
 
-    private static bool UsesRmf2(string config)
+    private static string? SourceLocale(string fullPath, IReadOnlyList<string> sourceRoots)
     {
-        using JsonDocument document = JsonDocument.Parse(config);
-        return StringProperty(document.RootElement, "sourceLayout") == "rmf2-v1";
+        string[] matches = sourceRoots.Where(root => IsWithinSourceRoot(root, fullPath)).ToArray();
+        return matches.Length != 1
+            ? null
+            : SourceLocale(NormalizeRelativePath(Path.GetRelativePath(matches[0], fullPath)));
     }
 
-    private EditorMessageEntry[] ReadEntries(string path, string content, string? locale)
+    private static bool IsWithinSourceRoot(string root, string path)
+    {
+        string boundary = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(path).StartsWith(boundary, StringComparison.Ordinal);
+    }
+
+    private EditorMessageEntry[] ReadEntries(string path, string content, Rmf2ProjectCompilationV5 compilation)
     {
         if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
         {
@@ -1605,7 +1610,13 @@ internal sealed class EditorWorkspace : IDisposable
                 .Select(node => new EditorMessageEntry(string.Join('_', workspace.LogicalPath(path, node)), node.Message!, node.MessageByteMap[0], node.MessageByteMap[^1] - node.MessageByteMap[0])).ToArray();
         }
         if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
-            return [new EditorMessageEntry(Path.GetFileNameWithoutExtension(path), content, 0, StrictUtf8.GetByteCount(content))];
+        {
+            string key = compilation.Project?.Locales
+                .SelectMany(static locale => locale.DirectResources)
+                .FirstOrDefault(resource => string.Equals(resource.SourceLocation.Path, path, StringComparison.Ordinal))?.Key
+                ?? Path.GetFileNameWithoutExtension(path);
+            return [new EditorMessageEntry(key, content, 0, StrictUtf8.GetByteCount(content))];
+        }
         return [];
     }
 
@@ -1614,9 +1625,9 @@ internal sealed class EditorWorkspace : IDisposable
         string? config = FindMf2ProjectConfig();
         if (config is null) return null;
         using var document = JsonDocument.Parse(File.ReadAllBytes(config));
-        if (StringProperty(document.RootElement, "sourceLayout") != "rmf2-v1") return null;
         var state = ReadStateAsync(null, null, CancellationToken.None).GetAwaiter().GetResult();
-        var sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && file.Path.EndsWith(".rmf2", StringComparison.Ordinal)).Select(file => Source(file.Path, file.Content)).ToArray();
+        var sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && IsSourcePath(file.Path)).Select(file => Source(file.Path, file.Content)).ToArray();
+        if (sources.Length == 0) return null;
         var workspace = new Rmf2Workspace(_root, new TranslationSource(Path.GetRelativePath(_root, config).Replace('\\', '/'), File.ReadAllBytes(config)), sources);
         if (request.Kind == "add-locale") return workspace.AddLocale(request.Locale ?? "", request.Fallback, request.CopyFromLocale);
         if (request.Kind == "remove-locale") return workspace.RemoveLocale(request.Locale ?? "", request.ReplacementFallback);
@@ -1625,7 +1636,7 @@ internal sealed class EditorWorkspace : IDisposable
         if (request.Kind == "create-key")
         {
             string locale = document.RootElement.GetProperty("baseLocale").GetString()!;
-            string path = sources.Where(source => Path.GetFileNameWithoutExtension(source.Path) == locale).Select(source => source.Path).Order(StringComparer.Ordinal).FirstOrDefault(path => {
+            string path = sources.Where(source => string.Equals(workspace.Locale(source.Path), locale, StringComparison.OrdinalIgnoreCase)).Select(source => source.Path).Order(StringComparer.Ordinal).FirstOrDefault(path => {
                 try { workspace.LocalPath(path, Target()); return true; }
                 catch (TranslationAuthoringException) { return false; }
             })
@@ -1671,6 +1682,6 @@ internal sealed class EditorWorkspace : IDisposable
 
     private sealed record WorkspaceState(
         List<WorkspaceFile> Files,
-        TranslationProfileCompilation Compilation,
+        Rmf2ProjectCompilationV5 Compilation,
         IReadOnlyList<EditorCatalogSummary> Catalogs);
 }

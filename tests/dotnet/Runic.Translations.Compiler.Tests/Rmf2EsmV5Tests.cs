@@ -59,9 +59,9 @@ internal static class Rmf2EsmV5Tests
                 const declared=raw.markupContract.contracts["runic:link"];let incompatible=false;try{createInlineRenderer({text:value=>value,element:element=>element.children.join("")},[{contract:{name:"runic:link",children:"none",...declared},render:()=>""}]);}catch{incompatible=true;}check(incompatible,"incompatible renderer contract accepted");
                 const decoded = decodeLocaleArtifact(raw); check(decoded.ok, decoded.reason);
                 check(formatDynamicMessage(decoded.value, "account_total", { rate: decimal("0.125") }) === "12,50%", "dynamic parity");
-                const validAst=raw.messages.account_total.ast;const changedAst=structuredClone(validAst);changedAst.variants[0].nodes=[{kind:"text",value:"unvalidated"}];let reads=0;
-                const getterWrapper={contentLocale:raw.messages.account_total.contentLocale};Object.defineProperty(getterWrapper,"ast",{enumerable:true,get(){return ++reads===1?validAst:changedAst;}});
-                const getterArtifact=structuredClone(raw);getterArtifact.messages.account_total=getterWrapper;const getterDecoded=decodeLocaleArtifact(getterArtifact);check(getterDecoded.ok,getterDecoded.reason);check(reads===1,"artifact getter was read more than once");check(formatDynamicMessage(getterDecoded.value,"account_total",{rate:decimal("0.125")})==="12,50%","decoder did not validate the exact snapshot it branded");
+                const validAst=raw.messages.account_total.ast;let reads=0;
+                const getterWrapper={contentLocale:raw.messages.account_total.contentLocale};Object.defineProperty(getterWrapper,"ast",{enumerable:true,get(){reads++;return validAst;}});
+                const getterArtifact=structuredClone(raw);getterArtifact.messages.account_total=getterWrapper;const getterDecoded=decodeLocaleArtifact(getterArtifact);check(!getterDecoded.ok&&getterDecoded.reason==="RTR0023/malformed"&&reads===0,"artifact accessor was invoked or accepted");
                 let forgedRejected=false;try{formatDynamicMessage(Object.freeze(structuredClone(decoded.value)),"account_total",{rate:decimal("0.125")});}catch{forgedRejected=true;}check(forgedRejected,"forged frozen artifact bypassed validation");
                 const bytes = new TextEncoder().encode(JSON.stringify(raw));
                 const packed = await decodeLocalePack(bytes, "de", copy => { copy[0] = 0; return true; }); check(packed.ok, packed.reason);
@@ -69,6 +69,21 @@ internal static class Rmf2EsmV5Tests
                 check(decodeLocaleArtifact(hostile).reason === "RTR0023/argument-contract-mismatch", "unbound AST accepted");
                 const decimalDrift = structuredClone(raw); decimalDrift.messages.account_total.ast.declarations[1].expression.options[1].value.canonical = "125";
                 check(!decodeLocaleArtifact(decimalDrift).ok, "canonical decimal drift accepted");
+                const malformedOptions = [
+                  ["expression-options-null", artifact => artifact.messages.account_total.ast.declarations.find(item => item.expression.function === undefined).expression.options = null, "RTR0023/malformed-pattern"],
+                  ["expression-options-object", artifact => artifact.messages.account_total.ast.declarations.find(item => item.expression.function === undefined).expression.options = Object.create(null), "RTR0023/malformed-pattern"],
+                  ["close-markup-options-null", artifact => artifact.messages.account_bill.ast.variants[0].nodes.find(item => item.kind === "markup" && item.markupKind === "close").options = null, "RTR0023/argument-contract-mismatch"],
+                  ["close-markup-options-object", artifact => artifact.messages.account_bill.ast.variants[0].nodes.find(item => item.kind === "markup" && item.markupKind === "close").options = Object.create(null), "RTR0023/argument-contract-mismatch"],
+                ];
+                for (const [name, mutate, expected] of malformedOptions) {
+                  const directArtifact=structuredClone(raw);mutate(directArtifact);const direct=decodeLocaleArtifact(directArtifact);
+                  check(!direct.ok&&direct.reason===expected,`${name} direct decode: ${direct.reason}`);
+                  const packedArtifact=structuredClone(raw);mutate(packedArtifact);const packedResult=await decodeLocalePack(new TextEncoder().encode(JSON.stringify(packedArtifact)),"de");
+                  check(!packedResult.ok&&packedResult.reason===expected,`${name} byte decode: ${packedResult.reason}`);
+                }
+                let deep=[];for(let depth=0;depth<64;depth++)deep=[deep];const deepResult=decodeLocaleArtifact(deep);check(!deepResult.ok&&deepResult.reason==="RTR0023/limit-exceeded",`deep direct object: ${deepResult.reason}`);
+                const largeResult=decodeLocaleArtifact("x".repeat(8388608));check(!largeResult.ok&&largeResult.reason==="RTR0023/limit-exceeded",`large direct object: ${largeResult.reason}`);
+                const nonJson=structuredClone(raw);nonJson.contractFingerprint=1n;const nonJsonResult=decodeLocaleArtifact(nonJson);check(!nonJsonResult.ok&&nonJsonResult.reason==="RTR0023/malformed",`non-JSON direct object: ${nonJsonResult.reason}`);
                 const largeValid=structuredClone(raw);for(const variant of largeValid.messages.account_bill.ast.variants)for(let index=0;index<2100;index++)variant.nodes.push({kind:"text",value:""});check(decodeLocaleArtifact(largeValid).ok,"per-pattern node limit was incorrectly accumulated across variants");
                 const independentPatterns=structuredClone(raw);for(const variant of independentPatterns.messages.account_bill.ast.variants)variant.nodes.push({kind:"text",value:"x".repeat(40000)});check(decodeLocaleArtifact(independentPatterns).ok,"per-pattern byte limit was incorrectly accumulated across variants");
                 const duplicate = new TextEncoder().encode(JSON.stringify(raw).replace('{"artifactVersion":5','{"artifactVersion":5,"artifactVersion":5'));
@@ -103,7 +118,7 @@ internal static class Rmf2EsmV5Tests
         string indented = string.Join('\n', semantic.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n').Select(line => "  " + line));
         string source = "sample =\n" + indented + "\nhuge =\n  .input {$n :number select=exact}\n  .match $n\n  9007199254740993 {{exact}}\n  * {{other}}\n";
         Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
-            Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
+            Rmf2ProjectV5Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
         Assert.True(compilation.Success, string.Join("; ", compilation.Diagnostics.Select(item => item.Message)));
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(compilation.Project!));
         try
@@ -143,7 +158,7 @@ internal static class Rmf2EsmV5Tests
             """;
         const string source = "children = {#app:children @note}keep{/app:children @end=0}\nomit = before {#app:omit}{#app:explicit}hidden{/app:explicit}{/app:omit} after\nbreak = before{#app:break/}after\nexplicit = {#app:explicit}label{/app:explicit}\nalternate = {#app:alternate}alt{/app:alternate}\nvalidated = {#app:children}keep{/app:children} {#link ref=destination}link{/link}\n";
         Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
-            Rmf2Tests.Project(contracts), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
+            Rmf2ProjectV5Tests.Project(contracts), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!));
         try
@@ -217,7 +232,7 @@ internal static class Rmf2EsmV5Tests
     {
         const string message = "__proto__ = Proto\nconstructor = Constructor\nx =\n  .input {$__proto__ :string}\n  .input {$constructor :string}\n  .input {$user-name :string}\n  .input {$用户 :string}\n  {{ {$__proto__} {$constructor} {$user-name} {$用户} }}";
         Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
-            Rmf2Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(message))]);
+            Rmf2ProjectV5Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(message))]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
         IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!);
         string declarations = outputs.Single(item => item.Kind == TranslationGeneratedOutputKind.EsmMessagesTypes).Text;
@@ -250,10 +265,11 @@ internal static class Rmf2EsmV5Tests
             string script = Path.Combine(europeanDirectory, "locale.mjs");
             File.WriteAllText(script, """
                 import { m } from "./numbers.esm-v5/messages.js";
-                import { decimal, decodeWireValue } from "./numbers.esm-v5/runtime.js";
+                import { decimal, decodeWireValue, resolveLocale } from "./numbers.esm-v5/runtime.js";
                 if(m.hello({locale:"nl"})!=="Hallo")throw new Error("zero-input locale options were treated as inputs");
                 const amount=m.amount({value:decimal("1.25")},{locale:"nl"});if(amount!==" 1,25 ")throw new Error(`Dutch decimal punctuation diverged from .NET: ${amount}`);
                 if(decodeWireValue("0000-01-01","date").ok||decodeWireValue("0000-01-01T00:00:00Z","datetime").ok)throw new Error("year zero date carrier accepted");
+                for(const locale of ["en-a","en-a-b","en-a-foo-a-bar","en-US-Latn","de-1901-1901"]){let rejected=false;try{resolveLocale(locale);}catch(error){rejected=error instanceof RangeError&&String(error).includes("Invalid locale");}if(!rejected)throw new Error(`invalid locale accepted: ${locale}`);}
                 """, new UTF8Encoding(false));
             Run("bun", [script], europeanDirectory);
         }
@@ -297,7 +313,6 @@ internal static class Rmf2EsmV5Tests
             code = new { @namespace = "Example", className = "Text" },
             baseLocale,
             locales,
-            sourceLayout = "rmf2-v1",
             validation = allowExtras ? new { extraLocaleKeys = "allow" } : null,
         }, ProjectJsonOptions);
         Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(

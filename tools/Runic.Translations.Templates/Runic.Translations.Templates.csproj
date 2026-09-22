@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <Content Include="templates\**\*"
-             Exclude="templates\**\bin\**;templates\**\obj\**;templates\project\.template.config\template.json;templates\rmf2-project\.template.config\template.json" />
+             Exclude="templates\**\bin\**;templates\**\obj\**;templates\project\.template.config\template.json" />
     <None Update="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
@@ -36,22 +36,6 @@
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(_ProjectTemplateDestination)">
         <PackagePath>content/templates/project/.template.config/template.json</PackagePath>
-      </TfmSpecificPackageFile>
-    </ItemGroup>
-    <PropertyGroup>
-      <_Rmf2ProjectTemplateSource>$(MSBuildProjectDirectory)/templates/rmf2-project/.template.config/template.json</_Rmf2ProjectTemplateSource>
-      <_Rmf2ProjectTemplateDestination>$(IntermediateOutputPath)versioned-rmf2-project-template.json</_Rmf2ProjectTemplateDestination>
-      <_Rmf2ProjectTemplateContent>$([System.IO.File]::ReadAllText('$(_Rmf2ProjectTemplateSource)').Replace('&quot;defaultValue&quot;: &quot;0.1.0&quot;', '&quot;defaultValue&quot;: &quot;$(PackageVersion)&quot;'))</_Rmf2ProjectTemplateContent>
-    </PropertyGroup>
-    <WriteLinesToFile
-      File="$(_Rmf2ProjectTemplateDestination)"
-      Lines="$(_Rmf2ProjectTemplateContent)"
-      Overwrite="true"
-      WriteOnlyWhenDifferent="true"
-      Encoding="UTF-8" />
-    <ItemGroup>
-      <TfmSpecificPackageFile Include="$(_Rmf2ProjectTemplateDestination)">
-        <PackagePath>content/templates/rmf2-project/.template.config/template.json</PackagePath>
       </TfmSpecificPackageFile>
     </ItemGroup>
   </Target>

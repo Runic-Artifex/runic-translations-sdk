@@ -3,28 +3,28 @@ using System.Collections.Generic;
 
 namespace Runic.Translations.Compiler.Analysis;
 
-public enum TranslationUsageSourceLanguage
+internal enum TranslationUsageSourceLanguage
 {
     CSharp,
     TypeScript,
 }
 
 [Flags]
-public enum TranslationUsageLanguage
+internal enum TranslationUsageLanguage
 {
     None = 0,
     CSharp = 1,
     TypeScript = 2,
 }
 
-public enum TranslationUsageClassification
+internal enum TranslationUsageClassification
 {
     Proven,
     PossibleDynamic,
     Unknown,
 }
 
-public enum TranslationUsageEvidenceKind
+internal enum TranslationUsageEvidenceKind
 {
     CSharpGeneratedKey,
     CSharpGeneratedAccessor,
@@ -34,21 +34,21 @@ public enum TranslationUsageEvidenceKind
     DynamicLookup,
 }
 
-public enum TranslationLocaleAvailability
+internal enum TranslationLocaleAvailability
 {
     Direct,
     FallbackOnly,
     Missing,
 }
 
-public enum TranslationContractStatus
+internal enum TranslationContractStatus
 {
     Matches,
     Drift,
     Missing,
 }
 
-public enum TranslationArtifactStatus
+internal enum TranslationArtifactStatus
 {
     Unknown,
     Current,
@@ -56,13 +56,13 @@ public enum TranslationArtifactStatus
     Missing,
 }
 
-public enum TranslationDynamicUsagePolicy
+internal enum TranslationDynamicUsagePolicy
 {
     Conservative,
     IgnoreForDeletionCandidates,
 }
 
-public sealed class TranslationUsageSource
+internal sealed class TranslationUsageSource
 {
     public TranslationUsageSource(
         string path,
@@ -84,7 +84,7 @@ public sealed class TranslationUsageSource
     public string? CatalogId { get; }
 }
 
-public sealed class TranslationArtifactSnapshot
+internal sealed class TranslationArtifactSnapshot
 {
     public TranslationArtifactSnapshot(string catalogId, string sourceFingerprint, string path)
     {
@@ -101,7 +101,7 @@ public sealed class TranslationArtifactSnapshot
     public string Path { get; }
 }
 
-public sealed class TranslationAnalysisOptions
+internal sealed class TranslationAnalysisOptions
 {
     public TranslationAnalysisOptions(
         TranslationDynamicUsagePolicy dynamicUsagePolicy = TranslationDynamicUsagePolicy.Conservative)
@@ -112,7 +112,7 @@ public sealed class TranslationAnalysisOptions
     public TranslationDynamicUsagePolicy DynamicUsagePolicy { get; }
 }
 
-public sealed class TranslationUsageEvidence
+internal sealed class TranslationUsageEvidence
 {
     internal TranslationUsageEvidence(
         string path,
@@ -135,7 +135,7 @@ public sealed class TranslationUsageEvidence
     public TranslationUsageEvidenceKind Kind { get; }
 }
 
-public sealed class TranslationLocaleAnalysis
+internal sealed class TranslationLocaleAnalysis
 {
     internal TranslationLocaleAnalysis(
         string locale,
@@ -155,7 +155,7 @@ public sealed class TranslationLocaleAnalysis
     public string? ResolvedFromLocale { get; }
 }
 
-public sealed class TranslationKeyAnalysis
+internal sealed class TranslationKeyAnalysis
 {
     internal TranslationKeyAnalysis(
         string key,
@@ -181,7 +181,7 @@ public sealed class TranslationKeyAnalysis
     public IReadOnlyList<TranslationUsageEvidence> Evidence { get; }
 }
 
-public sealed class TranslationCatalogAnalysis
+internal sealed class TranslationCatalogAnalysis
 {
     internal TranslationCatalogAnalysis(
         string catalogId,
@@ -208,7 +208,7 @@ public sealed class TranslationCatalogAnalysis
     public IReadOnlyList<TranslationKeyAnalysis> Keys { get; }
 }
 
-public sealed class TranslationAnalysisReport
+internal sealed class TranslationAnalysisReport
 {
     internal TranslationAnalysisReport(
         IReadOnlyList<TranslationCatalogAnalysis> catalogs,

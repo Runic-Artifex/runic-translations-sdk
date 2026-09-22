@@ -10,7 +10,7 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceLayout", "executionProfile", "sourceRoots", "markup" };
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup" };
     private static readonly string[] ManifestMembers = { "$schema", "schemaVersion", "catalog", "code", "defaultLocale", "locales", "layers", "validation", "runtime", "outputs" };
     private static readonly string[] DocumentMembers = { "$schema", "schemaVersion", "catalog", "locale", "layer", "resources" };
     private static readonly string[] LeafMembers = { "$value", "$description", "$placeholders", "$since", "$deprecated", "$tags" };
@@ -33,18 +33,6 @@ public static partial class TranslationCompiler
     private static readonly string[] PatternLocalMembers = { "local" };
     private static readonly string[] FormatExpressionMembers = { "input", "function", "format", "unit", "numeric" };
     private static readonly string[] MarkupExpressionMembers = { "name", "attributes", "children" };
-    private static readonly string[] V3EnvelopeMembers = { "mf2" };
-    private static readonly string[] V3Mf2Members = { "profile", "ast" };
-    private static readonly string[] V3AstMembers = { "astVersion", "profile", "inputs", "declarations", "selectors", "variants" };
-    private static readonly string[] V3DeclarationMembers = { "name", "function", "operand", "options" };
-    private static readonly string[] V3SelectorMembers = { "name", "operand", "function" };
-    private static readonly string[] V3VariantMembers = { "matches", "pattern" };
-    private static readonly string[] V3OperandMembers = { "kind", "name" };
-    private static readonly string[] V3OptionsMembers = { "format", "unit", "numeric" };
-    private static readonly string[] V3TextNodeMembers = { "kind", "value" };
-    private static readonly string[] V3ExpressionNodeMembers = { "kind", "operand" };
-    private static readonly string[] V3FormatNodeMembers = { "kind", "function", "operand", "options" };
-    private static readonly string[] V3MarkupNodeMembers = { "kind", "name", "attributes", "children" };
 
     internal static TranslationCompilation Compile(
         IEnumerable<TranslationSource> manifests,
@@ -145,7 +133,7 @@ public static partial class TranslationCompiler
     /// The project file is named <c>runic.json</c>. Message paths are relative to its directory and
     /// use the convention <c>{locale}/{message-id}.mf2</c>.
     /// </remarks>
-    public static TranslationCompilation CompileMf2Project(
+    public static Rmf2ProjectCompilationV5 CompileMf2Project(
         TranslationSource project,
         IEnumerable<TranslationSource> messages,
         TranslationCompilerOptions? options = null)
@@ -153,154 +141,23 @@ public static partial class TranslationCompiler
 
     /// <summary>Compiles a convention-based Runic MF2 project with cancellation.</summary>
     /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
-    public static TranslationCompilation CompileMf2Project(
+    public static Rmf2ProjectCompilationV5 CompileMf2Project(
         TranslationSource project,
         IEnumerable<TranslationSource> messages,
         TranslationCompilerOptions? options,
         CancellationToken cancellationToken)
-        => CompileProject(project, messages, options, cancellationToken);
+        => CompileRmf2ProjectV5(project, messages, options, cancellationToken);
 
-    public static TranslationCompilation CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
+    /// <summary>Compiles direct <c>.mf2</c> or grouped <c>.rmf2</c> sources into the RMF2 execution-v2 contract.</summary>
+    public static Rmf2ProjectCompilationV5 CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
         TranslationCompilerOptions? options = null)
         => CompileProject(project, messages, options, CancellationToken.None);
 
-    public static TranslationCompilation CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
+    /// <summary>Compiles direct <c>.mf2</c> or grouped <c>.rmf2</c> sources into the RMF2 execution-v2 contract with cancellation.</summary>
+    /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
+    public static Rmf2ProjectCompilationV5 CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
         TranslationCompilerOptions? options, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(project);
-        ArgumentNullException.ThrowIfNull(messages);
-        cancellationToken.ThrowIfCancellationRequested();
-        options ??= new TranslationCompilerOptions();
-        var diagnostics = new DiagnosticBag();
-        TranslationSource[] messageSources = Materialize(messages);
-        if (RejectDuplicateSourcePaths(new[] { project }, messageSources, diagnostics))
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-
-        ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, options, cancellationToken);
-        ManifestModel? manifest = parsed.Root is null ? null : ReadMf2Project(parsed, diagnostics, options);
-        if (manifest is null)
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-
-        TranslationProjectProfile profile = ReadProjectProfile(parsed.Root!, project, diagnostics);
-        if (diagnostics.Items.Any(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error))
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-        if (profile == TranslationProjectProfile.Rmf2ExecutionV2)
-        {
-            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error,
-                "rmf2-execution-v2 requires a profile-aware compiler host and cannot be represented by the v4 catalog carrier.",
-                project, parsed.Root!.Property("executionProfile")!.Value.Span);
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-        }
-        JsonProperty? layoutProperty = parsed.Root!.Property("sourceLayout");
-        bool rmf2 = layoutProperty?.Value.Text == "rmf2-v1";
-        if (layoutProperty is not null && !rmf2)
-        {
-            diagnostics.Add("RTR0042", TranslationDiagnosticSeverity.Error, "Unsupported sourceLayout; expected 'rmf2-v1', or omit for legacy MF2.", project, layoutProperty.Value.Span);
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-        }
-        if (!rmf2 && (parsed.Root!.Property("sourceRoots") is not null || parsed.Root.Property("markup") is not null))
-            diagnostics.Add("RTR0052", TranslationDiagnosticSeverity.Error, "sourceRoots and markup require sourceLayout rmf2-v1.", project, parsed.Root.Span);
-        string projectDirectory = ProjectDirectory(project.Path);
-        var documents = new List<DocumentModel>(messageSources.Length);
-        var discoveredLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (rmf2) ReadRmf2Documents(projectDirectory, messageSources, parsed.Root!, manifest, documents, discoveredLocales, diagnostics, options, cancellationToken);
-        for (int index = 0; !rmf2 && index < messageSources.Length; index++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            TranslationSource source = messageSources[index];
-            if (!TryMf2Identity(projectDirectory, source.Path, out string localeText, out string messageId))
-            {
-                diagnostics.Add("RTR0040", TranslationDiagnosticSeverity.Error,
-                    "MF2 message paths must use the convention '{locale}/{message-id}.mf2' relative to runic.json.",
-                    source, new ByteSpan(0, 0));
-                continue;
-            }
-            if (!TryCanonicalizeLocale(localeText, out string locale))
-            {
-                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error,
-                    "Invalid locale folder '" + localeText + "'.", source, new ByteSpan(0, 0));
-                continue;
-            }
-            if (!IsIdentifier(messageId))
-            {
-                diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error,
-                    "MF2 message filenames must be valid identifiers so generated calls can use property syntax.",
-                    source, new ByteSpan(0, 0));
-                continue;
-            }
-
-            Mf2ParsedMessage? message = Mf2MessageParser.Parse(source, diagnostics, options, cancellationToken);
-            if (message is null) continue;
-            discoveredLocales.Add(locale);
-            var document = new DocumentModel(source)
-            {
-                SchemaVersion = 2,
-                Catalog = manifest.Id,
-                Locale = locale,
-                Layer = "base",
-                CatalogSpan = new ByteSpan(0, 0),
-                LocaleSpan = new ByteSpan(0, 0),
-                LayerSpan = new ByteSpan(0, 0),
-            };
-            document.Resources.Add(new ResourceModel(
-                messageId,
-                message.Pattern,
-                message.Message,
-                null,
-                null,
-                null,
-                Array.Empty<string>(),
-                message.Placeholders,
-                source,
-                new ByteSpan(0, 0),
-                new ByteSpan(0, 0),
-                new ByteSpan(0, source.Bytes.Length)));
-            documents.Add(document);
-        }
-
-        if (discoveredLocales.Count > options.MaximumLocalesPerCatalog)
-            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", project, manifest.DefaultLocaleSpan);
-        if (manifest.Locales.Count == 0)
-        {
-            string[] locales = new List<string>(discoveredLocales).ToArray();
-            Array.Sort(locales, StringComparer.Ordinal);
-            for (int index = 0; index < locales.Length; index++)
-                manifest.Locales.Add(new LocaleModel(locales[index],
-                    string.Equals(locales[index], manifest.DefaultLocale, StringComparison.OrdinalIgnoreCase) ? null : manifest.DefaultLocale,
-                    new ByteSpan(0, 0), new ByteSpan(0, 0)));
-            if (locales.Length == 0 && manifest.DefaultLocale.Length != 0)
-                manifest.Locales.Add(new LocaleModel(manifest.DefaultLocale, null, manifest.DefaultLocaleSpan, manifest.DefaultLocaleSpan));
-        }
-        ValidateFallbackGraph(manifest, diagnostics);
-        if (messageSources.Length != 0 && !discoveredLocales.Contains(manifest.DefaultLocale))
-            diagnostics.Add("RTR0009", TranslationDiagnosticSeverity.Error,
-                "The base locale '" + manifest.DefaultLocale + "' has no translation sources.", project, manifest.DefaultLocaleSpan);
-
-        if (messageSources.Length == 0 && manifest.DefaultLocale.Length != 0)
-        {
-            documents.Add(new DocumentModel(project)
-            {
-                SchemaVersion = 2,
-                Catalog = manifest.Id,
-                Locale = manifest.DefaultLocale,
-                Layer = "base",
-                CatalogSpan = manifest.IdSpan,
-                LocaleSpan = manifest.DefaultLocaleSpan,
-                LayerSpan = new ByteSpan(0, 0),
-            });
-        }
-
-        CompiledTextCatalog? catalog = documents.Count == 0
-            ? null
-            : CompileCatalog(manifest, documents, diagnostics, options, cancellationToken);
-        if (rmf2 && catalog is not null)
-        {
-            catalog.MessageGrammarVersion = 4;
-            catalog.Rmf2MarkupContract = Rmf2ContractValidation.ValidateAndExport(catalog, parsed.Root!, project, diagnostics);
-            catalog.Fingerprint = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(catalog.Fingerprint + "\nrmf2-v1\n" + catalog.Rmf2MarkupContract)));
-        }
-        return new TranslationCompilation(catalog is null ? Array.Empty<CompiledTextCatalog>() : new[] { catalog }, diagnostics.ToSortedArray());
-    }
+        => CompileRmf2ProjectV5(project, messages, options, cancellationToken);
 
     private static ManifestModel? ReadMf2Project(ParsedJson parsed, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
@@ -535,18 +392,10 @@ public static partial class TranslationCompiler
             return 1;
         }
         if (version.Value.Kind != JsonKind.Number ||
-            (!string.Equals(version.Value.Text, "1", StringComparison.Ordinal) && !string.Equals(version.Value.Text, "2", StringComparison.Ordinal) &&
-             !(isDocument && string.Equals(version.Value.Text, "3", StringComparison.Ordinal))))
+            (!string.Equals(version.Value.Text, "1", StringComparison.Ordinal) && !string.Equals(version.Value.Text, "2", StringComparison.Ordinal)))
         {
             diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error, "Unsupported schemaVersion.", source, version.Value.Span);
             return 1;
-        }
-        if (string.Equals(version.Value.Text, "3", StringComparison.Ordinal))
-        {
-            if (schemaHint is not null && (schemaHint.Value.Kind != JsonKind.String ||
-                !string.Equals(schemaHint.Value.Text, "https://runic-artifex.eu/schemas/translations/resources-v3.schema.json", StringComparison.Ordinal)))
-                diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error, "Schema version 3 only recognizes the canonical resources-v3 $schema URI.", source, schemaHint.Value.Span);
-            return 3;
         }
         if (schemaHint is not null)
             diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error,
@@ -834,7 +683,7 @@ public static partial class TranslationCompiler
             diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Metadata leaf is missing required member '$value'.", document.Source, property.Value.Span);
             return;
         }
-        if (value.Value.Kind != JsonKind.String && !(document.SchemaVersion is 2 or 3 && value.Value.Kind == JsonKind.Object))
+        if (value.Value.Kind != JsonKind.String && !(document.SchemaVersion == 2 && value.Value.Kind == JsonKind.Object))
         {
             diagnostics.Add("RTR0008", TranslationDiagnosticSeverity.Error, "$value must be a string or a supported structured message.", document.Source, value.Value.Span);
             return;
@@ -845,9 +694,7 @@ public static partial class TranslationCompiler
         string? deprecated = ReadOptionalString(property.Value.Property("$deprecated"), document.Source, diagnostics);
         string[] tags = ReadTags(property.Value.Property("$tags"), document.Source, diagnostics);
         PlaceholderModel[] placeholders = ReadPlaceholders(property.Value.Property("$placeholders"), document.Source, diagnostics, options);
-        if (value.Value.Kind == JsonKind.Object && document.SchemaVersion == 3)
-            AddV3StructuredLeaf(document, diagnostics, options, key, property.NameSpan, pathSpan, value.Value, description, since, deprecated, tags);
-        else if (value.Value.Kind == JsonKind.Object)
+        if (value.Value.Kind == JsonKind.Object)
             AddStructuredLeaf(document, diagnostics, options, key, property.NameSpan, pathSpan, value.Value, description, since, deprecated, tags);
         else
             AddLeaf(document, diagnostics, options, key, property.NameSpan, pathSpan, value.Value.Span, value.Value.Text!, description, since, deprecated, tags, placeholders);
@@ -933,100 +780,6 @@ public static partial class TranslationCompiler
         string fallbackPattern = variants[^1].Pattern.Nodes.Count == 0 ? string.Empty : PatternText(variants[^1].Pattern);
         document.Resources.Add(new ResourceModel(key, fallbackPattern, message, description, since, deprecated, tags, placeholders,
             document.Source, keySpan, pathSpan, value.Span));
-    }
-
-    private static void AddV3StructuredLeaf(DocumentModel document, DiagnosticBag diagnostics, TranslationCompilerOptions options,
-        string key, ByteSpan keySpan, ByteSpan pathSpan, JsonValue value, string? description, string? since, string? deprecated, string[] tags)
-    {
-        ValidateKnownMembers(value, V3EnvelopeMembers, document.Source, diagnostics);
-        JsonProperty? mf2 = Required(value, "mf2", JsonKind.Object, document.Source, diagnostics);
-        if (mf2 is null) return;
-        ValidateKnownMembers(mf2.Value, V3Mf2Members, document.Source, diagnostics);
-        JsonProperty? profile = Required(mf2.Value, "profile", JsonKind.String, document.Source, diagnostics);
-        JsonProperty? ast = Required(mf2.Value, "ast", JsonKind.Object, document.Source, diagnostics);
-        if (profile is null || ast is null) return;
-        if (!string.Equals(profile.Value.Text, "runic-mf2-subset/1", StringComparison.Ordinal))
-            diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Unsupported MF2 profile.", document.Source, profile.Value.Span);
-        AddV3Ast(document, diagnostics, options, key, keySpan, pathSpan, ast.Value, description, since, deprecated, tags);
-    }
-
-    private static void AddV3Ast(DocumentModel document, DiagnosticBag diagnostics, TranslationCompilerOptions options,
-        string key, ByteSpan keySpan, ByteSpan pathSpan, JsonValue ast, string? description, string? since, string? deprecated, string[] tags)
-    {
-        ValidateKnownMembers(ast, V3AstMembers, document.Source, diagnostics);
-        JsonProperty? version = Required(ast, "astVersion", JsonKind.Number, document.Source, diagnostics);
-        JsonProperty? profile = Required(ast, "profile", JsonKind.String, document.Source, diagnostics);
-        JsonProperty? inputsProperty = Required(ast, "inputs", JsonKind.Object, document.Source, diagnostics);
-        JsonProperty? declarationsProperty = Required(ast, "declarations", JsonKind.Array, document.Source, diagnostics);
-        JsonProperty? selectorsProperty = Required(ast, "selectors", JsonKind.Array, document.Source, diagnostics);
-        JsonProperty? variantsProperty = Required(ast, "variants", JsonKind.Array, document.Source, diagnostics);
-        if (version is null || profile is null || inputsProperty is null || declarationsProperty is null || selectorsProperty is null || variantsProperty is null) return;
-        if (!string.Equals(version.Value.Text, "3", StringComparison.Ordinal) || !string.Equals(profile.Value.Text, "runic-mf2-subset/1", StringComparison.Ordinal))
-            diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Unsupported MF2 AST version or profile.", document.Source, ast.Span);
-        if (selectorsProperty.Value.Items.Count > 16 || variantsProperty.Value.Items.Count is < 1 or > 256)
-            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "MF2 AST exceeds a profile limit.", document.Source, ast.Span);
-
-        PlaceholderModel[] placeholders = ReadV3Inputs(inputsProperty.Value, document.Source, diagnostics, options);
-        var inputTypes = new Dictionary<string, TranslationArgumentType>(StringComparer.Ordinal);
-        for (int index = 0; index < placeholders.Length; index++) inputTypes[placeholders[index].Name] = placeholders[index].Type;
-        Dictionary<string, CompiledMessageFormat> declarations = ReadV3Declarations(declarationsProperty.Value, inputTypes, document.Source, diagnostics);
-        var selectors = new List<CompiledMessageSelector>();
-        var selectorNames = new HashSet<string>(StringComparer.Ordinal);
-        for (int index = 0; index < selectorsProperty.Value.Items.Count; index++)
-        {
-            JsonValue selector = selectorsProperty.Value.Items[index];
-            if (selector.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "An MF2 selector must be an object.", document.Source, selector.Span); continue; }
-            ValidateKnownMembers(selector, V3SelectorMembers, document.Source, diagnostics);
-            JsonProperty? name = Required(selector, "name", JsonKind.String, document.Source, diagnostics);
-            JsonProperty? operand = Required(selector, "operand", JsonKind.Object, document.Source, diagnostics);
-            JsonProperty? function = Required(selector, "function", JsonKind.String, document.Source, diagnostics);
-            if (name is null || operand is null || function is null) continue;
-            if (!IsIdentifier(name.Value.Text!) || !selectorNames.Add(name.Value.Text!))
-                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Selector names must be unique identifiers.", document.Source, name.Value.Span);
-            if (!TryReadV3InputOperand(operand.Value, inputTypes, document.Source, diagnostics, out string input, out TranslationArgumentType inputType)) continue;
-            if (function.Value.Text is not ("literal" or "plural" or "ordinal"))
-                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Unknown selector function.", document.Source, function.Value.Span);
-            if (function.Value.Text is "plural" or "ordinal" && inputType is not (TranslationArgumentType.Int or TranslationArgumentType.Number))
-                diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Plural selectors require an int64 or decimal input.", document.Source, operand.Value.Span);
-            selectors.Add(new CompiledMessageSelector(name.Value.Text!, input, function.Value.Text!));
-        }
-
-        var variants = new List<CompiledMessageVariant>();
-        var signatures = new HashSet<string>(StringComparer.Ordinal);
-        bool catchAll = false;
-        for (int index = 0; index < variantsProperty.Value.Items.Count; index++)
-        {
-            JsonValue variant = variantsProperty.Value.Items[index];
-            if (variant.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "An MF2 variant must be an object.", document.Source, variant.Span); continue; }
-            ValidateKnownMembers(variant, V3VariantMembers, document.Source, diagnostics);
-            JsonProperty? matchesProperty = Required(variant, "matches", JsonKind.Object, document.Source, diagnostics);
-            JsonProperty? pattern = Required(variant, "pattern", JsonKind.Array, document.Source, diagnostics);
-            if (matchesProperty is null || pattern is null) continue;
-            var matches = new SortedDictionary<string, string>(StringComparer.Ordinal);
-            for (int matchIndex = 0; matchIndex < matchesProperty.Value.Properties.Count; matchIndex++)
-            {
-                JsonProperty match = matchesProperty.Value.Properties[matchIndex];
-                if (!selectorNames.Contains(match.Name) || match.Value.Kind != JsonKind.String || match.Value.Text!.Length == 0)
-                    diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Variant matches must name every declared selector and use a non-empty string.", document.Source, match.Value.Span);
-                else matches[match.Name] = match.Value.Text!;
-            }
-            if (matches.Count != selectors.Count) diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "An MF2 variant must match every declared selector.", document.Source, matchesProperty.Value.Span);
-            if (!signatures.Add(V3VariantSignature(matches))) diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Duplicate variant match.", document.Source, matchesProperty.Value.Span);
-            bool all = matches.Count == selectors.Count;
-            foreach (KeyValuePair<string, string> match in matches) all &= match.Value == "*";
-            catchAll |= all;
-            int nodeCount = 0;
-            CompiledMessagePattern? compiled = CompileV3Pattern(pattern.Value, inputTypes, declarations, document.Source, diagnostics, 0, ref nodeCount, out HashSet<string> used);
-            foreach (string usedName in used) if (!inputTypes.ContainsKey(usedName))
-                diagnostics.Add("RTR0015", TranslationDiagnosticSeverity.Error, "Input '" + usedName + "' is used but not declared.", document.Source, pattern.Value.Span);
-            if (compiled is not null) variants.Add(new CompiledMessageVariant(matches, compiled));
-        }
-        if (!catchAll) diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "An MF2 message requires an all-'*' catch-all variant.", document.Source, variantsProperty.Value.Span);
-        if (variants.Count == 0) return;
-        CompiledMessagePattern message = new(Array.Empty<CompiledMessageNode>(), selectors.ToArray(), variants.ToArray());
-        string fallbackPattern = variants[^1].Pattern.Nodes.Count == 0 ? string.Empty : PatternText(variants[^1].Pattern);
-        document.Resources.Add(new ResourceModel(key, fallbackPattern, message, description, since, deprecated, tags, placeholders,
-            document.Source, keySpan, pathSpan, ast.Span));
     }
 
     private static CompiledMessagePattern? CompileStructuredPattern(JsonValue pattern,
@@ -1136,194 +889,6 @@ public static partial class TranslationCompiler
             used.Add(expressionInput.Value.Text!);
         }
         return new CompiledMessagePattern(nodes.ToArray());
-    }
-
-    private static Dictionary<string, CompiledMessageFormat> ReadV3Declarations(JsonValue declarations,
-        Dictionary<string, TranslationArgumentType> inputTypes, TranslationSource source, DiagnosticBag diagnostics)
-    {
-        var result = new Dictionary<string, CompiledMessageFormat>(StringComparer.Ordinal);
-        for (int index = 0; index < declarations.Items.Count; index++)
-        {
-            JsonValue declaration = declarations.Items[index];
-            if (declaration.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "An MF2 declaration must be an object.", source, declaration.Span); continue; }
-            ValidateKnownMembers(declaration, V3DeclarationMembers, source, diagnostics);
-            JsonProperty? name = Required(declaration, "name", JsonKind.String, source, diagnostics);
-            JsonProperty? function = Required(declaration, "function", JsonKind.String, source, diagnostics);
-            JsonProperty? operand = Required(declaration, "operand", JsonKind.Object, source, diagnostics);
-            JsonProperty? options = Required(declaration, "options", JsonKind.Object, source, diagnostics);
-            if (name is null || function is null || operand is null || options is null) continue;
-            if (!IsIdentifier(name.Value.Text!) || result.ContainsKey(name.Value.Text!))
-            { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Declaration names must be unique identifiers.", source, name.Value.Span); continue; }
-            if (!TryReadV3InputOperand(operand.Value, inputTypes, source, diagnostics, out string input, out TranslationArgumentType inputType)) continue;
-            CompiledMessageFormat? compiled = CompileV3Format(function.Value.Text!, input, inputType, options.Value, source, diagnostics);
-            if (compiled is not null) result.Add(name.Value.Text!, compiled);
-        }
-        return result;
-    }
-
-    private static PlaceholderModel[] ReadV3Inputs(JsonValue value, TranslationSource source, DiagnosticBag diagnostics, TranslationCompilerOptions options)
-    {
-        if (value.Properties.Count > 32 || value.Properties.Count > options.MaximumPlaceholdersPerValue)
-            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "MF2 input count exceeds a configured or profile limit.", source, value.Span);
-        var result = new List<PlaceholderModel>();
-        for (int index = 0; index < value.Properties.Count; index++)
-        {
-            JsonProperty input = value.Properties[index];
-            if (!IsIdentifier(input.Name) || input.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Invalid MF2 input declaration.", source, input.Value.Span); continue; }
-            ValidateKnownMembers(input.Value, PlaceholderMembers, source, diagnostics);
-            JsonProperty? type = Required(input.Value, "type", JsonKind.String, source, diagnostics);
-            JsonProperty? format = Required(input.Value, "format", JsonKind.String, source, diagnostics);
-            if (type is null || format is null || !TryPortableArgumentType(type.Value.Text!, out TranslationArgumentType argumentType, out _))
-            { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Unknown MF2 input type.", source, type?.Value.Span ?? input.Value.Span); continue; }
-            if (!IsAllowedFormat(argumentType, format.Value.Text!))
-            { diagnostics.Add("RTR0017", TranslationDiagnosticSeverity.Error, "Invalid MF2 input format.", source, format.Value.Span); continue; }
-            result.Add(new PlaceholderModel(input.Name, argumentType, format.Value.Text!, input.NameSpan, type.Value.Span, format.Value.Span));
-        }
-        result.Sort((left, right) => StringComparer.Ordinal.Compare(left.Name, right.Name));
-        return result.ToArray();
-    }
-
-    private static CompiledMessagePattern? CompileV3Pattern(JsonValue pattern,
-        Dictionary<string, TranslationArgumentType> inputTypes, Dictionary<string, CompiledMessageFormat> declarations,
-        TranslationSource source, DiagnosticBag diagnostics, int markupDepth, ref int nodeCount, out HashSet<string> used)
-    {
-        used = new HashSet<string>(StringComparer.Ordinal);
-        if (markupDepth > 16) { diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "MF2 markup exceeds the profile depth limit.", source, pattern.Span); return null; }
-        var nodes = new List<CompiledMessageNode>();
-        for (int index = 0; index < pattern.Items.Count; index++)
-        {
-            JsonValue item = pattern.Items[index];
-            if (++nodeCount > 4096) { diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "MF2 pattern exceeds the profile node limit.", source, item.Span); return null; }
-            if (item.Kind != JsonKind.Object) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "MF2 pattern nodes must be objects.", source, item.Span); continue; }
-            JsonProperty? kind = Required(item, "kind", JsonKind.String, source, diagnostics);
-            if (kind is null) continue;
-            switch (kind.Value.Text)
-            {
-                case "text":
-                {
-                    ValidateKnownMembers(item, V3TextNodeMembers, source, diagnostics);
-                    JsonProperty? text = Required(item, "value", JsonKind.String, source, diagnostics);
-                    if (text is not null)
-                    {
-                        if (text.Value.Text!.Length > 65_536) diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "MF2 text exceeds the profile limit.", source, text.Value.Span);
-                        else nodes.Add(new CompiledMessageText(text.Value.Text!));
-                    }
-                    break;
-                }
-                case "expression":
-                {
-                    ValidateKnownMembers(item, V3ExpressionNodeMembers, source, diagnostics);
-                    JsonProperty? operand = Required(item, "operand", JsonKind.Object, source, diagnostics);
-                    if (operand is null) break;
-                    if (TryReadV3Operand(operand.Value, source, diagnostics, out string operandKind, out string name))
-                    {
-                        if (operandKind == "input" && inputTypes.ContainsKey(name)) { nodes.Add(new CompiledMessageInput(name)); used.Add(name); }
-                        else if (operandKind == "local" && declarations.TryGetValue(name, out CompiledMessageFormat? local)) { nodes.Add(new CompiledMessageFormat(local.Input, local.Function, local.Format, local.Unit, local.Numeric)); used.Add(local.Input); }
-                        else diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "MF2 expression references an undeclared operand.", source, operand.Value.Span);
-                    }
-                    break;
-                }
-                case "format":
-                {
-                    ValidateKnownMembers(item, V3FormatNodeMembers, source, diagnostics);
-                    JsonProperty? function = Required(item, "function", JsonKind.String, source, diagnostics);
-                    JsonProperty? operand = Required(item, "operand", JsonKind.Object, source, diagnostics);
-                    JsonProperty? options = Required(item, "options", JsonKind.Object, source, diagnostics);
-                    if (function is null || operand is null || options is null) break;
-                    if (TryReadV3InputOperand(operand.Value, inputTypes, source, diagnostics, out string input, out TranslationArgumentType type))
-                    {
-                        CompiledMessageFormat? format = CompileV3Format(function.Value.Text!, input, type, options.Value, source, diagnostics);
-                        if (format is not null) { nodes.Add(format); used.Add(input); }
-                    }
-                    break;
-                }
-                case "markup":
-                {
-                    ValidateKnownMembers(item, V3MarkupNodeMembers, source, diagnostics);
-                    JsonProperty? name = Required(item, "name", JsonKind.String, source, diagnostics);
-                    JsonProperty? attributes = Required(item, "attributes", JsonKind.Object, source, diagnostics);
-                    JsonProperty? children = Required(item, "children", JsonKind.Array, source, diagnostics);
-                    if (name is null || attributes is null || children is null) break;
-                    if (!IsIdentifier(name.Value.Text!)) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "MF2 markup names must be identifiers.", source, name.Value.Span); break; }
-                    var compiledAttributes = new SortedDictionary<string, string>(StringComparer.Ordinal);
-                    for (int attributeIndex = 0; attributeIndex < attributes.Value.Properties.Count; attributeIndex++)
-                    {
-                        JsonProperty attribute = attributes.Value.Properties[attributeIndex];
-                        if (!IsIdentifier(attribute.Name) || attribute.Value.Kind != JsonKind.String)
-                            diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "MF2 markup attributes require identifier names and string values.", source, attribute.Value.Span);
-                        else compiledAttributes[attribute.Name] = attribute.Value.Text!;
-                    }
-                    CompiledMessagePattern? childPattern = CompileV3Pattern(children.Value, inputTypes, declarations, source, diagnostics, markupDepth + 1, ref nodeCount, out HashSet<string> childUsed);
-                    foreach (string childName in childUsed) used.Add(childName);
-                    if (childPattern is not null) nodes.Add(new CompiledMessageMarkup(name.Value.Text!, compiledAttributes, childPattern.Nodes));
-                    break;
-                }
-                default:
-                    diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Unsupported MF2 pattern node kind '" + kind.Value.Text + "'.", source, kind.Value.Span);
-                    break;
-            }
-        }
-        return new CompiledMessagePattern(nodes.ToArray());
-    }
-
-    private static bool TryReadV3InputOperand(JsonValue operand, Dictionary<string, TranslationArgumentType> inputTypes,
-        TranslationSource source, DiagnosticBag diagnostics, out string input, out TranslationArgumentType type)
-    {
-        input = string.Empty;
-        type = TranslationArgumentType.String;
-        if (!TryReadV3Operand(operand, source, diagnostics, out string kind, out string name)) return false;
-        if (kind != "input") { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "This MF2 operation requires an input operand.", source, operand.Span); return false; }
-        if (!inputTypes.TryGetValue(name, out type)) { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "MF2 operand references an undeclared input.", source, operand.Span); return false; }
-        input = name;
-        return true;
-    }
-
-    private static bool TryReadV3Operand(JsonValue operand, TranslationSource source, DiagnosticBag diagnostics, out string kind, out string name)
-    {
-        kind = string.Empty;
-        name = string.Empty;
-        ValidateKnownMembers(operand, V3OperandMembers, source, diagnostics);
-        JsonProperty? kindProperty = Required(operand, "kind", JsonKind.String, source, diagnostics);
-        JsonProperty? nameProperty = Required(operand, "name", JsonKind.String, source, diagnostics);
-        if (kindProperty is null || nameProperty is null) return false;
-        if (kindProperty.Value.Text is not ("input" or "local") || !IsIdentifier(nameProperty.Value.Text!))
-        { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Invalid MF2 operand.", source, operand.Span); return false; }
-        kind = kindProperty.Value.Text!;
-        name = nameProperty.Value.Text!;
-        return true;
-    }
-
-    private static CompiledMessageFormat? CompileV3Format(string function, string input, TranslationArgumentType inputType,
-        JsonValue options, TranslationSource source, DiagnosticBag diagnostics)
-    {
-        ValidateKnownMembers(options, V3OptionsMembers, source, diagnostics);
-        foreach (string optionName in V3OptionsMembers)
-        {
-            JsonProperty? option = options.Property(optionName);
-            if (option is not null && option.Value.Kind != JsonKind.String)
-            { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "MF2 format options must be strings.", source, option.Value.Span); return null; }
-        }
-        string format = options.Property("format")?.Value.Text ?? DefaultFormat(inputType);
-        string? unit = options.Property("unit")?.Value.Text;
-        string? numeric = options.Property("numeric")?.Value.Text;
-        if (function == "relativeTime")
-        {
-            if (inputType is not (TranslationArgumentType.Int or TranslationArgumentType.Number) ||
-                format is not "plain" || unit is not ("second" or "minute" or "hour" or "day" or "week" or "month" or "year") || numeric is not ("always" or "auto"))
-            { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "Relative-time format requires a numeric input, valid unit, and numeric mode.", source, options.Span); return null; }
-            return new CompiledMessageFormat(input, function, "plain", unit, numeric);
-        }
-        if (unit is not null || numeric is not null || !FunctionMatches(function, inputType) || !IsAllowedFormat(inputType, format))
-        { diagnostics.Add("RTR0030", TranslationDiagnosticSeverity.Error, "MF2 format function or options are incompatible with its input.", source, options.Span); return null; }
-        return new CompiledMessageFormat(input, function, format, null, null);
-    }
-
-    private static string V3VariantSignature(IReadOnlyDictionary<string, string> matches)
-    {
-        var builder = new StringBuilder();
-        foreach (KeyValuePair<string, string> match in matches)
-            builder.Append(match.Key.Length).Append(':').Append(match.Key).Append(match.Value.Length).Append(':').Append(match.Value);
-        return builder.ToString();
     }
 
     private static Dictionary<string, CompiledMessageFormat> ReadDeclarations(JsonProperty? property,
@@ -1549,7 +1114,7 @@ public static partial class TranslationCompiler
         {
             cancellationToken.ThrowIfCancellationRequested();
             DocumentModel document = documents[i];
-            if (document.SchemaVersion != manifest.SchemaVersion && !(manifest.SchemaVersion == 2 && document.SchemaVersion == 3))
+            if (document.SchemaVersion != manifest.SchemaVersion)
             {
                 diagnostics.Add("RTR0003", TranslationDiagnosticSeverity.Error,
                     "Resource document schemaVersion must match its catalog manifest.", document.Source, document.CatalogSpan);
@@ -2044,19 +1609,55 @@ public static partial class TranslationCompiler
         string[] parts = value.Split('-');
         if (parts.Length == 0 || parts[0].Length < 2 || parts[0].Length > 8 || !AllLetters(parts[0])) return false;
         var result = new StringBuilder(value.Length).Append(parts[0].ToLowerInvariant());
-        bool extension = false;
-        for (int i = 1; i < parts.Length; i++)
+        int index = 1;
+        if (parts[0].Length <= 3)
         {
-            string part = parts[i];
-            if (part.Length == 0 || part.Length > 8 || !AllAlphaNumeric(part)) return false;
-            result.Append('-');
-            if (part.Length == 1) { extension = true; result.Append(part.ToLowerInvariant()); continue; }
-            if (!extension && part.Length == 4 && AllLetters(part)) result.Append(char.ToUpperInvariant(part[0])).Append(part.Substring(1).ToLowerInvariant());
-            else if (!extension && ((part.Length == 2 && AllLetters(part)) || (part.Length == 3 && AllDigits(part)))) result.Append(part.ToUpperInvariant());
-            else result.Append(part.ToLowerInvariant());
+            for (int count = 0; count < 3 && index < parts.Length && parts[index].Length == 3 && AllLetters(parts[index]); count++, index++)
+                AppendLower(result, parts[index]);
         }
+        if (index < parts.Length && parts[index].Length == 4 && AllLetters(parts[index]))
+        {
+            string script = parts[index++];
+            result.Append('-').Append(char.ToUpperInvariant(script[0])).Append(script.Substring(1).ToLowerInvariant());
+        }
+        if (index < parts.Length && ((parts[index].Length == 2 && AllLetters(parts[index])) || (parts[index].Length == 3 && AllDigits(parts[index]))))
+            result.Append('-').Append(parts[index++].ToUpperInvariant());
+        var variants = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (index < parts.Length && IsLocaleVariant(parts[index]))
+        {
+            if (!variants.Add(parts[index])) return false;
+            AppendLower(result, parts[index++]);
+        }
+        var singletons = new HashSet<char>();
+        while (index < parts.Length && IsLocaleExtensionSingleton(parts[index]))
+        {
+            char singleton = char.ToLowerInvariant(parts[index++][0]);
+            if (!singletons.Add(singleton)) return false;
+            result.Append('-').Append(singleton);
+            int firstSubtag = index;
+            while (index < parts.Length && parts[index].Length is >= 2 and <= 8 && AllAlphaNumeric(parts[index])) AppendLower(result, parts[index++]);
+            if (index == firstSubtag) return false;
+        }
+        if (index < parts.Length && parts[index].Length == 1 && (parts[index][0] == 'x' || parts[index][0] == 'X'))
+        {
+            result.Append("-x");
+            index++;
+            int firstSubtag = index;
+            while (index < parts.Length && parts[index].Length is >= 1 and <= 8 && AllAlphaNumeric(parts[index])) AppendLower(result, parts[index++]);
+            if (index == firstSubtag) return false;
+        }
+        if (index != parts.Length) return false;
         canonical = result.ToString(); return true;
     }
+
+    private static void AppendLower(StringBuilder result, string part) => result.Append('-').Append(part.ToLowerInvariant());
+    private static bool IsLocaleVariant(string value) =>
+        (value.Length is >= 5 and <= 8 && AllAlphaNumeric(value)) ||
+        (value.Length == 4 && value[0] >= '0' && value[0] <= '9' && AllAlphaNumeric(value));
+    private static bool IsLocaleExtensionSingleton(string value) => value.Length == 1 &&
+        ((value[0] >= '0' && value[0] <= '9') ||
+         (value[0] >= 'A' && value[0] <= 'W') || (value[0] >= 'Y' && value[0] <= 'Z') ||
+         (value[0] >= 'a' && value[0] <= 'w') || (value[0] >= 'y' && value[0] <= 'z'));
 
     private static bool AllLetters(string value) { for (int i = 0; i < value.Length; i++) if (!((value[i] >= 'A' && value[i] <= 'Z') || (value[i] >= 'a' && value[i] <= 'z'))) return false; return true; }
     private static bool AllDigits(string value) { for (int i = 0; i < value.Length; i++) if (value[i] < '0' || value[i] > '9') return false; return true; }

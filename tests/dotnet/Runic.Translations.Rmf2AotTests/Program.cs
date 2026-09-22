@@ -17,8 +17,8 @@ internal static class Program
         try
         {
             var key = new TranslationKey("app", 0, "greeting");
-            TranslationPackContract contract = new("app", "de", Fingerprint,
-                [new TranslationPackMessageContract(key)], messageGrammarVersion: 4, rmf2MarkupContract: MarkupContract);
+            TranslationPackContract contract = TranslationPackContract.CreateRmf2V5("app", "de", Fingerprint,
+                [new TranslationPackMessageContract(key)], MarkupContract);
             VerifiedExternalTranslationPack verified = await TranslationPackLoader.VerifyAsync(
                 new ExternalTranslationPack(Encoding.UTF8.GetBytes(CreateArtifact())), contract).ConfigureAwait(false);
             CompiledTextMessage message = verified.Messages.Single().Message!;
@@ -32,7 +32,7 @@ internal static class Program
             InlineMarkupRun strong = runs.Single(run => run.Name == "runic:strong");
             Require(!strong.Options.ContainsKey("@note"), "annotation visibility");
             Require(renderer.ToPlainText("greeting", content) == "Keep\nExtern", "policy projection");
-            Console.WriteLine("PASS Native-AOT RMF2 artifact-v4 structured renderer/annotation/plain-text smoke");
+            Console.WriteLine("PASS Native-AOT RMF2 artifact-v5 structured renderer/annotation/plain-text smoke");
             return 0;
         }
         catch (Exception exception)
@@ -43,11 +43,11 @@ internal static class Program
     }
 
     private static string CreateArtifact() =>
-        "{\"artifactVersion\":4,\"messageGrammarVersion\":4,\"catalog\":\"app\",\"locale\":\"de\",\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"greeting\":{\"astVersion\":4,\"contentLocale\":\"de\",\"inputs\":{},\"selectors\":[],\"variants\":[{\"matches\":{},\"nodes\":[" +
-        "{\"kind\":\"markup\",\"name\":\"shop:children\",\"attributes\":{},\"standalone\":false,\"annotations\":{},\"variableOptions\":[],\"children\":[{\"kind\":\"text\",\"value\":\"Keep\"}]}," +
-        "{\"kind\":\"markup\",\"name\":\"shop:omit\",\"attributes\":{},\"standalone\":false,\"annotations\":{},\"variableOptions\":[],\"children\":[{\"kind\":\"text\",\"value\":\"Drop\"}]}," +
-        "{\"kind\":\"markup\",\"name\":\"shop:break\",\"attributes\":{},\"standalone\":true,\"annotations\":{},\"variableOptions\":[],\"children\":[]}," +
-        "{\"kind\":\"markup\",\"name\":\"runic:strong\",\"attributes\":{},\"standalone\":false,\"annotations\":{\"note\":\"internal\"},\"variableOptions\":[],\"children\":[{\"kind\":\"text\",\"value\":\"Extern\"}]}] }]}},\"markupContract\":" + MarkupContract + "}";
+        "{\"artifactVersion\":5,\"messageGrammarVersion\":5,\"profile\":\"rmf2-execution-v2\",\"catalog\":\"app\",\"locale\":\"de\",\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"greeting\":{\"contentLocale\":\"de\",\"ast\":{\"astVersion\":5,\"profile\":\"rmf2-execution-v2\",\"inputs\":[],\"declarations\":[],\"selectors\":[],\"variants\":[{\"keys\":[],\"nodes\":[" +
+        "{\"kind\":\"markup\",\"name\":\"shop:children\",\"markupKind\":\"open\",\"options\":[],\"annotations\":[]},{\"kind\":\"text\",\"value\":\"Keep\"},{\"kind\":\"markup\",\"name\":\"shop:children\",\"markupKind\":\"close\",\"options\":[],\"annotations\":[]}," +
+        "{\"kind\":\"markup\",\"name\":\"shop:omit\",\"markupKind\":\"open\",\"options\":[],\"annotations\":[]},{\"kind\":\"text\",\"value\":\"Drop\"},{\"kind\":\"markup\",\"name\":\"shop:omit\",\"markupKind\":\"close\",\"options\":[],\"annotations\":[]}," +
+        "{\"kind\":\"markup\",\"name\":\"shop:break\",\"markupKind\":\"standalone\",\"options\":[],\"annotations\":[]}," +
+        "{\"kind\":\"markup\",\"name\":\"runic:strong\",\"markupKind\":\"open\",\"options\":[],\"annotations\":[{\"name\":\"note\",\"value\":{\"kind\":\"string-literal\",\"value\":\"internal\"}}]},{\"kind\":\"text\",\"value\":\"Extern\"},{\"kind\":\"markup\",\"name\":\"runic:strong\",\"markupKind\":\"close\",\"options\":[],\"annotations\":[]}] }]}}},\"markupContract\":" + MarkupContract + "}";
 
     private static void Require(bool condition, string operation)
     {

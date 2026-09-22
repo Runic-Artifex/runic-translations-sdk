@@ -14,7 +14,7 @@ internal static class CliIntegrationTests
         runner.Add("CLI init creates canonical locale files and explicit fallbacks", InitCreatesMultipleLocales);
         runner.Add("CLI init rejects conflicts without changing the target", InitConflictDoesNotWrite);
         runner.Add("CLI init supports an empty RMF2 project", InitWithoutStarterIsValid);
-        runner.Add("CLI project mode validates and generates conventional MF2", ProjectModeValidatesAndGenerates);
+        runner.Add("CLI project mode validates and generates direct MF2", ProjectModeValidatesAndGenerates);
         runner.Add("CLI schema writes exact bundled versioned schemas", SchemaWritesExactSchemas);
     }
 
@@ -35,7 +35,7 @@ internal static class CliIntegrationTests
 
         ProcessResult generate = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated", "--emit-esm");
         Assert.Equal(0, generate.ExitCode, generate.Combined);
-        Assert.True(File.Exists(temporary.Resolve("generated", "app.esm", "server.js")), "Project mode did not generate the server entrypoint.");
+        Assert.True(File.Exists(temporary.Resolve("generated", "app.esm-v5", "server.js")), "Project mode did not generate the server entrypoint.");
     }
 
     private static void HelpAndUsageExitCodes()
@@ -108,7 +108,7 @@ internal static class CliIntegrationTests
             "--output",
             "generated");
         Assert.Equal(0, generate.ExitCode, generate.Combined);
-        Assert.True(File.Exists(temporary.Resolve("generated", "product.de.locale-v4.json")), "The default RMF2 locale asset was not generated.");
+        Assert.True(File.Exists(temporary.Resolve("generated", "product.de.locale-v5.json")), "The default RMF2 locale artifact was not generated.");
 
         ProcessResult verify = TestFixture.RunTool(
             temporary,
@@ -204,9 +204,8 @@ internal static class CliIntegrationTests
         ProcessResult result = TestFixture.RunTool(temporary, "schema", "--output", "schemas");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string source = RepositoryPaths.Resolve("specs", "translations", "schemas");
-        string[] excluded = ["catalog-v1.schema.json", "catalog-v2.schema.json", "resources-v1.schema.json", "resources-v2.schema.json", "resources-v3.schema.json", "message-ast-v3.schema.json"];
-        string[] expected = Directory.EnumerateFiles(source, "*.schema.json").Select(path => Path.GetFileName(path)!)
-            .Where(name => !excluded.Contains(name, StringComparer.Ordinal)).Order(StringComparer.Ordinal).ToArray();
+        string[] expected = ["asset-manifest-v1.schema.json", "capabilities-v1.schema.json", "editor-state-v1.schema.json", "external-pack-v5.schema.json", "locale-artifact-v5.schema.json", "message-ast-v5.schema.json", "project-v1.schema.json", "web-module-manifest-v3.schema.json"];
+        Array.Sort(expected, StringComparer.Ordinal);
         Assert.Equal(string.Join('|', expected), string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("schemas"))));
         foreach (string schema in expected)
             Assert.FileBytesEqual(Path.Combine(source, schema), temporary.Resolve("schemas", schema));

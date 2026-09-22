@@ -38,7 +38,8 @@ stable diagnostic and transport identity; integer IDs MUST NOT be persisted.
 belong to the snapshot. The manifest `missingKey` policy applies only after
 supported fallback is exhausted.
 
-Patterns use message grammar version 1. Formatting validates the complete caller
+Patterns use message grammar and normalized AST version 5 under
+`rmf2-execution-v2`. Formatting validates the complete caller
 argument set before producing text:
 
 - names compare ordinally;
@@ -50,9 +51,8 @@ argument set before producing text:
 - the resource locale, not current process culture, selects locale-sensitive
   formatting.
 
-Portable exact formats are culture-independent: strings are unchanged; `int`
-and `number` `plain` use invariant decimal notation without grouping or redundant
-fractional trailing zeroes; booleans
+Portable exact formats are culture-independent: strings are unchanged; integer
+and number decimal styles preserve exact typed values; booleans
 are `true` or `false`; dates use `yyyy-MM-dd`; ISO times use `HH:mm:ss` plus a
 fraction only when non-zero; ISO datetimes normalize the instant to UTC and emit
 fixed seven-digit fractional seconds plus `Z`; GUID `d` and `n` use lowercase
@@ -62,8 +62,10 @@ Their semantic value is portable, while punctuation, spacing, digits, and names
 may follow the platform globalization data. The .NET-resolved string is the
 authority when byte identity across runtimes matters.
 
-Values and arguments are plain text. Formatting performs no HTML, JavaScript,
-CSS, URL, shell, or template interpretation and returns no trusted-markup type.
+Plain formatting performs no HTML, JavaScript, CSS, URL, shell, or template
+interpretation. Structured messages return validated content nodes whose markup
+identities, options, annotations, and functional slots are governed by the v1
+markup contract; renderers remain responsible for context-appropriate escaping.
 
 ## Manager hot swap and concurrency
 

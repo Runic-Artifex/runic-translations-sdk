@@ -1,5 +1,5 @@
 {
-  "name":"Runic MF2", "scopeName":"source.rmf2", "fileTypes":["rmf2"],
+  "name":"Runic MF2", "scopeName":"source.rmf2", "fileTypes":["mf2","rmf2"],
   "patterns":[
     {"name":"comment.line.number-sign.rmf2","match":"^\\s*#.*$"},
     {"name":"storage.type.annotation.rmf2","match":"^\\s*@[A-Za-z][A-Za-z0-9_-]*"},

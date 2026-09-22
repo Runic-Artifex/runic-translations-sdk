@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Runic.Translations.Compiler.Analysis;
 
-public static class TranslationAnalysisRenderer
+internal static class TranslationAnalysisRenderer
 {
     public static string RenderJson(TranslationAnalysisReport report)
     {

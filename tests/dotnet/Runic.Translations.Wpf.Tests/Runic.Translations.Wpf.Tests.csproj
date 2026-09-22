@@ -10,8 +10,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../../packages/dotnet/Runic.Translations.Wpf/Runic.Translations.Wpf.csproj" />
-    <ProjectReference Include="../../../tools/Runic.Translations.Compiler/Runic.Translations.Compiler.csproj" />
-    <None Include="../../../specs/translations/examples/rmf2/*" Link="payment/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

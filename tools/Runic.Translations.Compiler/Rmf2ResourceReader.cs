@@ -68,6 +68,46 @@ public static class Rmf2ResourceReader
         return new Rmf2ResourceDocument(source, syntax.Nodes.ToList(), diagnostics.ToSortedArray());
     }
 
+    // Direct MF2 files have one implicit resource whose key is the filename.
+    // Keep this adapter internal: it gives authoring hosts one physical syntax
+    // model without making the compiler's normalized source representation a
+    // second public contract.
+    internal static Rmf2ResourceDocument AnalyzeDirect(TranslationSource source, TranslationCompilerOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        options ??= new TranslationCompilerOptions();
+        Rmf2ResourceDocument syntax = ReadDirect(source, options, cancellationToken);
+        var diagnostics = new DiagnosticBag();
+        foreach (var item in syntax.Diagnostics) diagnostics.Add(item.Id, item.Severity, item.Message, item.Location);
+        if (syntax.Nodes.SingleOrDefault()?.MessageSyntax is { } message)
+        {
+            foreach (var item in Mf2SyntaxReader.ValidateDataModel(message).Concat(Mf2SyntaxReader.ValidateInlineProfile(message)))
+                diagnostics.Add(item.Id, item.Severity, item.Message, item.Location);
+        }
+        return new Rmf2ResourceDocument(source, syntax.Nodes.ToList(), diagnostics.ToSortedArray());
+    }
+
+    internal static Rmf2ResourceDocument ReadDirect(TranslationSource source, TranslationCompilerOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        options ??= new TranslationCompilerOptions();
+        var diagnostics = new DiagnosticBag();
+        string key = System.IO.Path.GetFileNameWithoutExtension(source.Path);
+        if (!Identifier.IsMatch(key))
+            diagnostics.Add("RTR0050", TranslationDiagnosticSeverity.Error, "Direct MF2 filenames must be identifiers.", source, new ByteSpan(0, 0));
+        var syntax = Mf2SyntaxReader.Read(source, options, cancellationToken);
+        foreach (var item in syntax.Diagnostics) diagnostics.Add(item.Id, item.Severity, item.Message, item.Location);
+        string message;
+        try { message = StrictJsonParser.StrictUtf8.GetString(source.Bytes); }
+        catch (DecoderFallbackException) { message = string.Empty; }
+        TextSourceLocation name = DiagnosticBag.Location(source, new ByteSpan(0, 0));
+        TextSourceLocation location = DiagnosticBag.Location(source, new ByteSpan(0, source.Bytes.Length));
+        var node = new Rmf2ResourceNode([key], message, [], [], name, location,
+            Enumerable.Range(0, source.Bytes.Length + 1).ToArray()) { MessageSyntax = syntax };
+        return new Rmf2ResourceDocument(source, [node], diagnostics.ToSortedArray());
+    }
+
     public static Rmf2ResourceDocument Read(TranslationSource source, TranslationCompilerOptions? options = null,
         CancellationToken cancellationToken = default)
     {

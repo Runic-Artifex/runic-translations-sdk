@@ -7,7 +7,7 @@ using Runic.Translations.Compiler.Generation;
 
 namespace Runic.Translations.Compiler.Analysis;
 
-public static class TranslationAnalyzer
+internal static class TranslationAnalyzer
 {
     public static TranslationAnalysisReport Analyze(
         TranslationCompilation compilation,

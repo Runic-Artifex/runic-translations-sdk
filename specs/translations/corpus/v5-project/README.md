@@ -1,6 +1,6 @@
 # RMF2 v5 project fixture
 
-`runic.json` keeps project schema v1 and resource syntax `rmf2-v1`. Tests opt in
+`runic.json` keeps project schema v1 and resource syntax `rmf2-v1`. Tests compile
 through the typed `Rmf2ExecutionV2` compiler entry point.
 
 The English and German messages share caller and functional-slot contracts but

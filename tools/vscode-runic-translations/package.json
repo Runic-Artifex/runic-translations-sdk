@@ -1,7 +1,7 @@
 {
   "name": "runic-translations",
-  "displayName": "Runic RMF2 Translations",
-  "description": "RMF2 resource authoring through the project-local Runic language server.",
+  "displayName": "Runic MF2 Translations",
+  "description": "Direct MF2 and grouped RMF2 authoring through the project-local Runic language server.",
   "version": "0.0.1",
   "preview": true,
   "publisher": "runic-artifex",
@@ -39,6 +39,7 @@
           "RMF2"
         ],
         "extensions": [
+          ".mf2",
           ".rmf2"
         ],
         "configuration": "./language-configuration.json"

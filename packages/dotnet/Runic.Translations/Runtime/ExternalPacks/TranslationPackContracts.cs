@@ -159,22 +159,6 @@ public sealed class TranslationPackContract
     private readonly ReadOnlyCollection<TranslationPackMessageContract> _messages;
     private readonly Dictionary<string, TranslationPackMessageContract> _messagesByName;
 
-    /// <summary>Creates a contract for one catalog and canonical locale.</summary>
-    public TranslationPackContract(
-        string catalog,
-        string locale,
-        string contractFingerprint,
-        IReadOnlyList<TranslationPackMessageContract> messages,
-        int messageGrammarVersion = 1)
-        : this(catalog, locale, contractFingerprint, messages, messageGrammarVersion, null) { }
-
-    /// <summary>Creates a pack contract with the versioned RMF2 markup and slot manifest.</summary>
-    public TranslationPackContract(string catalog, string locale, string contractFingerprint,
-        IReadOnlyList<TranslationPackMessageContract> messages, int messageGrammarVersion, string? rmf2MarkupContract)
-        : this(catalog, locale, contractFingerprint, messages, messageGrammarVersion, rmf2MarkupContract, null)
-    {
-    }
-
     /// <summary>Creates an RMF2 execution-v2 contract for one resolved locale artifact v5.</summary>
     public static TranslationPackContract CreateRmf2V5(string catalog, string locale, string contractFingerprint,
         IReadOnlyList<TranslationPackMessageContract> messages, string rmf2MarkupContract) =>
@@ -184,9 +168,8 @@ public sealed class TranslationPackContract
     private TranslationPackContract(string catalog, string locale, string contractFingerprint,
         IReadOnlyList<TranslationPackMessageContract> messages, int messageGrammarVersion, string? rmf2MarkupContract, string? profile)
     {
-        if ((messageGrammarVersion is 4 or 5) != (rmf2MarkupContract is not null)) throw new ArgumentException("RMF2 grammars require an RMF2 markup contract.", nameof(rmf2MarkupContract));
-        if ((messageGrammarVersion == 5) != (profile is not null) || profile is not null && profile != "rmf2-execution-v2")
-            throw new ArgumentException("Grammar 5 requires the rmf2-execution-v2 profile.", nameof(profile));
+        if (messageGrammarVersion != 5 || profile != "rmf2-execution-v2" || rmf2MarkupContract is null)
+            throw new ArgumentException("External translation packs require the RMF2 v5 execution profile.", nameof(profile));
         Rmf2MarkupContract = rmf2MarkupContract;
         Profile = profile;
         ArgumentNullException.ThrowIfNull(messages);
@@ -196,9 +179,6 @@ public sealed class TranslationPackContract
             throw new ArgumentException("The locale must be a canonical structural BCP 47 tag.", nameof(locale));
         if (!TranslationPackValidation.IsFingerprint(contractFingerprint))
             throw new ArgumentException("The fingerprint must be lowercase sha256 hexadecimal text.", nameof(contractFingerprint));
-        if (messageGrammarVersion is not (1 or 2 or 4 or 5))
-            throw new ArgumentOutOfRangeException(nameof(messageGrammarVersion));
-
         Catalog = catalog;
         Locale = locale;
         ContractFingerprint = contractFingerprint;
@@ -230,7 +210,7 @@ public sealed class TranslationPackContract
     public string ContractFingerprint { get; }
     /// <summary>The message grammar expected in a matching locale artifact.</summary>
     public int MessageGrammarVersion { get; }
-    /// <summary>The execution profile, or null for legacy pack contracts.</summary>
+    /// <summary>The required RMF2 execution profile.</summary>
     public string? Profile { get; }
     /// <summary>The trusted language-neutral manifest required before RMF2 pack activation.</summary>
     public string? Rmf2MarkupContract { get; }
@@ -244,22 +224,19 @@ public sealed class TranslationPackContract
 /// <summary>One fully verified external message value.</summary>
 public sealed class VerifiedTranslationPackMessage
 {
-    internal VerifiedTranslationPackMessage(TranslationKey key, string pattern, CompiledTextMessage? message = null)
-    { Key = key; Pattern = pattern; Message = message; }
+    internal VerifiedTranslationPackMessage(TranslationKey key, CompiledTextMessage message)
+    { Key = key; Message = message; }
 
     /// <summary>The generated known key.</summary>
     public TranslationKey Key { get; }
-    /// <summary>The validated plain-text message pattern.</summary>
-    public string Pattern { get; }
-    /// <summary>The verified normalized message for grammars v2, v4, and v5, or null for grammar v1.</summary>
-    public CompiledTextMessage? Message { get; }
+    /// <summary>The verified normalized RMF2 v5 message.</summary>
+    public CompiledTextMessage Message { get; }
 }
 
 /// <summary>Immutable external pack data that passed integrity, shape, and compatibility validation.</summary>
 public sealed class VerifiedExternalTranslationPack
 {
     private readonly ReadOnlyCollection<VerifiedTranslationPackMessage> _messages;
-    private readonly Dictionary<TranslationKey, string> _patterns;
 
     internal VerifiedExternalTranslationPack(
         string catalog,
@@ -271,8 +248,6 @@ public sealed class VerifiedExternalTranslationPack
         Locale = locale;
         ContractFingerprint = contractFingerprint;
         _messages = Array.AsReadOnly(messages);
-        _patterns = new Dictionary<TranslationKey, string>(messages.Length);
-        for (int i = 0; i < messages.Length; i++) _patterns.Add(messages[i].Key, messages[i].Pattern);
     }
 
     /// <summary>The verified catalog identifier.</summary>
@@ -283,7 +258,4 @@ public sealed class VerifiedExternalTranslationPack
     public string ContractFingerprint { get; }
     /// <summary>The verified messages in ordinal key order.</summary>
     public IReadOnlyList<VerifiedTranslationPackMessage> Messages => _messages;
-
-    /// <summary>Attempts to obtain a verified replacement pattern for a generated key.</summary>
-    public bool TryGetPattern(TranslationKey key, out string pattern) => _patterns.TryGetValue(key, out pattern!);
 }

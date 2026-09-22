@@ -30,13 +30,9 @@ internal static class InputFiles
         try { config = JsonDocument.Parse(project.GetUtf8Bytes()); }
         catch (JsonException) { return new CompilerInputs(project, messages); }
         using var configLifetime = config;
-        string sourceLayout = config.RootElement.TryGetProperty("sourceLayout", out JsonElement layout) &&
-            layout.ValueKind == JsonValueKind.String ? layout.GetString() ?? string.Empty : string.Empty;
-        var roots = new List<string> { root };
-        if (sourceLayout == "rmf2-v1" &&
-            config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
+        var roots = new List<string>();
+        if (config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
         {
-            roots.Clear();
             if (mounts.ValueKind != JsonValueKind.Array) return new CompilerInputs(project, messages);
             foreach (JsonElement mount in mounts.EnumerateArray())
             {
@@ -45,14 +41,11 @@ internal static class InputFiles
                 roots.Add(Path.GetFullPath(path.GetString()!, root));
             }
         }
-        string sourceExtension = sourceLayout switch
-        {
-            "rmf2-v1" => ".rmf2",
-            _ => ".mf2",
-        };
+        else roots.Add(root);
         foreach (string sourceRoot in roots)
         foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, projectPath))
-            if (string.Equals(Path.GetExtension(candidate), sourceExtension, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(candidate), ".rmf2", StringComparison.OrdinalIgnoreCase))
                 messages.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
         messages.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         return new CompilerInputs(project, messages, roots);

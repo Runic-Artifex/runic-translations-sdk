@@ -6,25 +6,25 @@ language, schema, or validation path.
 
 ## Source and semantic authority
 
-Each workspace has one `runic.json` declaration. Its `sourceLayout` selects the
-source layout; the editor loads, validates, previews, and saves through the
+Each workspace has one `runic.json` declaration. The editor infers direct `.mf2`
+or grouped `.rmf2` sources and loads, validates, previews, and saves through the
 compiler-backed authoring model. A normal text editor remains a valid way to edit
 those sources.
 
 ```text
-translations/                 # legacy layout when sourceLayout is omitted
+translations/                 # direct MF2 messages
   runic.json
   en/
     application_title.mf2
   de/
     application_title.mf2
 
-translations/                 # sourceLayout: "rmf2-v1"
+translations/                 # grouped RMF2 resources
   runic.json
   en.rmf2
   de.rmf2
 
-translations/                 # sourceLayout: "rmf2-v1"
+translations/                 # grouped RMF2 resources
   runic.json
   en.rmf2
   checkout/
@@ -35,10 +35,9 @@ RMF2 files are recursively discovered as `{locale}.rmf2`; directory segments and
 explicit groups form their logical namespace. Explicit `sourceRoots` can mount
 feature-local resources. The editor uses the compiler's RMF2 source model and
 diagnostics, including the resource/markup contracts that apply to that layout.
-For `rmf2-execution-v2`, it selects the compiler's v5 project carrier; omission
-retains the compatible v4 profile. The editor's internal interchange projection
-normalizes either successful carrier only for closed text interchange. It never
-converts a v5 project into a public v4 catalog, which would lose direct-resource
+The editor uses the compiler's v5 project carrier. Its internal interchange
+projection normalizes the typed result only for closed text interchange. It
+never converts a project into a legacy catalog, which would lose direct-resource
 identity, raw syntax, caller contracts, and freshness information.
 
 Discovery is reconciled from the configured roots on every load/check, so
@@ -83,19 +82,19 @@ Imports and structural transactions write only declared translation resources
 and editor review state. They never edit application call sites or create legacy
 `.mf2` files for an RMF2 project.
 
-For rich preview, the editor host renders explicit v2 requests through the
+For rich preview, the editor host renders typed v5 requests through the
 verified .NET artifact/pack path. The bridge returns validated semantic runs;
 the Svelte frontend treats links, actions, icons, and custom markup as inert
 display data. It does not load application renderers, execute callbacks, or
-coerce AST 5 into the v4 JavaScript evaluator.
+coerce AST 5 into a JavaScript evaluator.
 
 ## Formats and language tooling
 
-The `rmf2-v1` layout is an implemented, bounded execution profile of RMF2; it is
-not a claim of full Unicode MF2 conformance. The [RMF2 implementation guide](../../../docs/guides/translations/rmf2.md)
+Grouped RMF2 resources implement a bounded execution profile; that is not a
+claim of full Unicode MF2 conformance. The [RMF2 implementation guide](../../../docs/guides/translations/rmf2.md)
 documents its grammar, resource discovery, inline-markup contracts, and current
-limits. Existing legacy MF2 projects retain their layouts and version
-markers.
+limits. Direct MF2 sources remain supported as the alternate source
+representation.
 
 The editor does not maintain a separate translation language or semantic model.
 Its RMF2 behavior follows the shared [compiler](../../../tools/Runic.Translations.Compiler/README.md)

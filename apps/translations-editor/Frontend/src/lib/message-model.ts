@@ -34,25 +34,16 @@ export interface StructuredMessage extends Record<string, unknown> {
   variants: MessageVariant[];
 }
 
-export interface ArtifactInput { type: "string" | "bool" | "int" | "number" | "date" | "time" | "datetime" | "guid"; format: string }
-export interface ArtifactSelector { name: string; input: string; function: SelectorFunction }
-export type ArtifactNode =
-  | { kind: "text"; value: string }
-  | { kind: "input"; input: string }
-  | { kind: "format"; input: string; function: FormatFunction; format: string; unit?: string; numeric?: string }
-  | { kind: "markup"; name: string; attributes: Record<string, string>; children: ArtifactNode[]; standalone?: boolean; variableOptions?: string[]; annotations?: Record<string, string> };
-export interface LocalMessageArtifact {
-  astVersion: 2 | 4;
-  contentLocale?: string;
-  inputs: Record<string, ArtifactInput>;
-  selectors: ArtifactSelector[];
-  variants: Array<{ matches: Record<string, string>; nodes: ArtifactNode[] }>;
-}
-
-export interface Rmf2ExecutionV2MessageArtifact {
+export interface MessageArtifact {
   astVersion: 5;
   profile: "rmf2-execution-v2";
   inputs: Array<{ name: string; type: string }>;
 }
 
-export type MessageArtifact = LocalMessageArtifact | Rmf2ExecutionV2MessageArtifact;
+export type PreviewNode =
+  | { kind: "text"; value: string }
+  | { kind: "element"; name: string; attributes: Record<string, string>; children: PreviewNode[] };
+
+export type MessagePreviewResult =
+  | { kind: "text"; value: string }
+  | { kind: "content"; nodes: PreviewNode[] };

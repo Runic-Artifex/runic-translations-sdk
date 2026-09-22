@@ -31,13 +31,15 @@ var text = new AppText(manager);
 Console.WriteLine(text.Application.Name);
 ```
 
-The generator reports compiler diagnostics at source locations and writes no files. C# becomes part of the current compilation; JSON, TypeScript, ESM, template manifests, and experimental C++ output belong to the build or CLI surfaces.
+The generator reports compiler diagnostics at source locations and writes no
+files. Typed C# becomes part of the current compilation. Locale-v5 JSON and the
+cohesive ESM-v5 package belong to the build or CLI surfaces. Standalone
+TypeScript, template-manifest, and C++ output groups are not part of the selected
+contract.
 
-For `sourceLayout: "rmf2-v1"`, declaring
-`executionProfile: "rmf2-execution-v2"` emits typed v5 C# that requires RMF2
-runtime ABI 2. Omitting the selector retains byte-stable v4 generation; that
-generated code embeds ABI requirement 1 and accepts runtime markers known to
-support it (1 or 2).
+Grouped `.rmf2` and direct `.mf2` sources emit typed v5 C# that requires RMF2
+runtime ABI 2. Retired selectors and incompatible source representations are
+rejected rather than producing an older output.
 
 ## When to choose this package
 

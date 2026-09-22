@@ -14,10 +14,9 @@ internal static class Rmf2ArtifactV5Tests
 {
     internal static void Register(TestRunner runner)
     {
-        runner.Add("RMF2 v5 locale artifact round-trips typed fallback content without v4 conversion", RoundTrip);
+        runner.Add("RMF2 locale artifact round-trips typed fallback content", RoundTrip);
         runner.Add("RMF2 v5 locale outputs produce a schema-valid deterministic asset manifest", AssetManifest);
         runner.Add("RMF2 v5 external pack rejects hostile envelope and AST mutations", HostileMatrix);
-        runner.Add("RMF2 v5 pack factories preserve legacy ASCII validation and old reader rejection", VersionIsolation);
     }
 
     private static void AssetManifest()
@@ -61,7 +60,7 @@ internal static class Rmf2ArtifactV5Tests
         Assert.Equal(5, JsonDocument.Parse(artifact.Text).RootElement.GetProperty("artifactVersion").GetInt32());
         Rmf2SemanticV5SchemaTests.AssertValidation(Rmf2SemanticV5SchemaTests.ReadSchema("locale-artifact-v5.schema.json"),
             JsonNode.Parse(artifact.Text)!.AsObject(), true, "Emitted project locale artifact");
-        Assert.True(!artifact.Text.Contains("\"astVersion\":4", StringComparison.Ordinal), "v5 emission passed through the v4 carrier.");
+        Assert.True(!artifact.Text.Contains("\"astVersion\":4", StringComparison.Ordinal), "Semantic emission passed through a retired carrier.");
 
         TranslationGeneratedOutput englishArtifact = Rmf2LocaleArtifactV5.Render(project, "en");
         VerifiedExternalTranslationPack english = TranslationPackLoader.VerifyAsync(
@@ -72,7 +71,7 @@ internal static class Rmf2ArtifactV5Tests
         [
             new CompiledTranslationLocale("de", "en", []),
             new CompiledTranslationLocale("en", null, english.Messages.Select(message =>
-                new CompiledTranslationValue(message.Key.Id, message.Pattern, message.Message!)).OrderBy(value => value.Id).ToArray()),
+                new CompiledTranslationValue(message.Key.Id, string.Empty, message.Message)).OrderBy(value => value.Id).ToArray()),
         ]);
         var factory = new ExternalTranslationSnapshotFactory(new PackSource(artifact.GetUtf8Bytes()), project.Id,
             project.CallerFingerprint, requested => Contract(project, requested));
@@ -80,7 +79,7 @@ internal static class Rmf2ArtifactV5Tests
         Assert.Equal("12,50%", snapshot.Format(new TranslationKey(project.Id, 1, "account_total"), [new TextArgument("rate", .125m)]));
 
         var fallbackCompilation = TranslationCompiler.CompileRmf2ProjectV5(
-            Rmf2Tests.Project(",\"validation\":{\"translationCompleteness\":\"allow\"},\"locales\":[\"en\",\"de\",{\"tag\":\"fr\",\"fallback\":\"de\"}]"),
+            Rmf2ProjectV5Tests.Project(",\"validation\":{\"translationCompleteness\":\"allow\"},\"locales\":[\"en\",\"de\",{\"tag\":\"fr\",\"fallback\":\"de\"}]"),
             [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("x = English")), new TranslationSource("translations/de.rmf2", Encoding.UTF8.GetBytes("x = Deutsch"))]);
         Assert.True(fallbackCompilation.Success, string.Join("; ", fallbackCompilation.Diagnostics.Select(item => item.Message)));
         Rmf2ProjectV5 fallbackProject = fallbackCompilation.Project!;
@@ -141,29 +140,6 @@ internal static class Rmf2ArtifactV5Tests
         Reject(duplicate, contract, "duplicate member");
         byte[] invalidUtf8 = artifact.GetUtf8Bytes(); invalidUtf8[Array.IndexOf(invalidUtf8, (byte)'b')] = 0xff;
         Reject(invalidUtf8, contract, "invalid UTF-8");
-    }
-
-    private static void VersionIsolation()
-    {
-        (Rmf2ProjectV5 project, TranslationGeneratedOutput artifact) = Fixture("en");
-        Rmf2MessageContractV5 source = project.CanonicalMessages.Single(item => item.Key == "account_bill");
-        TranslationPackMessageContract broad = TranslationPackMessageContract.FromRmf2Inputs(
-            new TranslationKey(project.Id, source.Id, source.Key), Inputs(source.Inputs));
-        Assert.True(broad.Arguments.Any(item => item.Name == "用户"), "The RMF2 factory rejected a valid NFC caller identity.");
-        try
-        {
-            _ = new TranslationPackMessageContract(new TranslationKey(project.Id, source.Id, source.Key),
-                [new TranslationPackArgumentContract("用户", TextArgumentType.String, TextArgumentFormat.None)]);
-            throw new InvalidOperationException("The legacy pack message constructor accepted an RMF2-only identity.");
-        }
-        catch (ArgumentException) { }
-        foreach (int grammar in new[] { 1, 2, 4 })
-        {
-            TranslationPackContract old = grammar == 4
-                ? new TranslationPackContract(project.Id, "en", project.CallerFingerprint, [broad], 4, project.MarkupContract)
-                : new TranslationPackContract(project.Id, "en", project.CallerFingerprint, [broad], grammar);
-            Reject(artifact.GetUtf8Bytes(), old, "old reader accepted v5");
-        }
     }
 
     private static void Reject(string json, TranslationPackContract contract, string name) => Reject(Encoding.UTF8.GetBytes(json), contract, name);

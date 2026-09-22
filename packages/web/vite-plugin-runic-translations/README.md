@@ -8,7 +8,7 @@ Import generated Runic Translations messages through stable Vite virtual modules
 npm install --save-dev @runic-artifex/vite-plugin-runic-translations@<VERSION>
 ```
 
-Replace `<VERSION>` with the current public preview shown on npm. The package supports Vite 6, 7, and 8. Project-owned generation uses `web-module-manifest-v2.json` by default or the v3 contract for explicitly activated RMF2 execution v2 projects; explicit `manifest` paths may also use the v1 contract. If the plugin owns generation, install `dotnet-runic-translations` in a project-local .NET 10 tool manifest at that same exact release.
+Replace `<VERSION>` with the current public preview shown on npm. The package supports Vite 6, 7, and 8 and accepts only the RMF2 `web-module-manifest-v3.json` contract (ESM ABI 4, runtime ABI 2). If the plugin owns generation, install `dotnet-runic-translations` in a project-local .NET 10 tool manifest at that same exact release.
 
 ## Configure Vite
 
@@ -22,14 +22,40 @@ export default defineConfig({
 });
 ```
 
-The no-argument form discovers `translations/runic.json`, compiles its locale
-RMF2 files to `.runic/translations`, and watches config and message edits,
-including added, removed, and renamed locale files. New projects declare
-`sourceLayout: "rmf2-v1"`; projects without it retain legacy MF2-file input.
-In a split
+The no-argument form discovers `translations/runic.json`, compiles either its
+direct locale `.mf2` files or grouped `.rmf2` files to `.runic/translations`,
+and watches config and message edits, including added, removed, and renamed
+source files. A project may select additional source trees with `sourceRoots`;
+mixing the two source forms is rejected by the shared compiler. In a split
 frontend/backend layout, use `runicTranslations({ project: "../translations" })`.
 When another build owns generation, pass its generated `manifest` and optional
 `sourceFiles` instead.
+
+Manifest mode treats the supplied generated directory as externally owned.
+Changes to `sourceFiles` trigger a Vite refresh, but the plugin cannot recompile
+the project or recompute `sourceHash` without a compiler command. The owning
+build must regenerate the ESM package and manifest before the refresh is served;
+otherwise the plugin will reload the still-current manifest bytes, not detect
+that authoring sources are newer than them.
+
+## TypeScript virtual modules
+
+After validating the manifest and every generated declaration asset, the plugin
+writes an ambient `virtual.d.ts` that exposes the exact catalog message keys,
+inputs, and return types through all five virtual entry points. Project mode
+writes the file to `<output>/virtual.d.ts`; an explicit manifest writes it beside
+that manifest. TypeScript projects with a narrow `include` must add that stable
+generated file, for example:
+
+```json
+{
+  "include": ["src", ".runic/translations/virtual.d.ts"]
+}
+```
+
+No hand-written `declare module`, catalog-specific path mapping, or client
+compatibility module is needed. Use `typeDeclarations` to select another stable
+path, or set it to `false` when another tool owns virtual-module declarations.
 
 ## Render a message
 
@@ -64,4 +90,4 @@ Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob
 
 ## RMF2
 
-Project mode accepts `sourceLayout: "rmf2-v1"`, recursively discovers `.rmf2`, and watches `runic.json`, the project directory, and all explicit `sourceRoots` for additions, edits and removals. Add `executionProfile: "rmf2-execution-v2"` to select the typed grammar 5 / ESM ABI 4 output and its `web-module-manifest-v3.json`; omitting the selector retains the existing v4 / manifest-v2 output. It invokes the shared compiler and retains its diagnostic failures. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the generated inline renderer API.
+Project mode recursively discovers direct `.mf2` and grouped `.rmf2` sources and watches `runic.json`, the project directory, and all explicit `sourceRoots` for additions, edits and removals. It emits the typed grammar 5 / ESM ABI 4 `web-module-manifest-v3.json` output, invokes the shared compiler, and retains its diagnostic failures, including mixed-source rejection. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the generated inline renderer API.

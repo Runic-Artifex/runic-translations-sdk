@@ -1,0 +1,157 @@
+# Public API approval baseline
+# Assembly: Runic.Translations.Tooling
+# Generated deterministically; intentional changes require baseline review.
+# Nullability metadata is intentionally normalized away; readonly/init/ref/constraints and contract attributes are retained.
+
+type static class Runic.CommandLine.Generated.GeneratedCommandCatalog
+  method static Runic.CommandLine.CommandCatalog Create(System.Action<Runic.CommandLine.CommandCatalogBuilder> configure = null)
+
+type sealed class Runic.Translations.Tooling.ArtifactInspection
+  method System.String ToReport()
+  property System.Boolean HasIntegrityMetadata { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.ArtifactInspectionFinding> Findings { get; }
+  property System.Int32 MessageCount { get; }
+  property System.Int32 ResourceCount { get; }
+  property System.Int32 ReviewEntryCount { get; }
+  property System.Int32 StructuredMessageCount { get; }
+  property System.Int32 UnitCount { get; }
+  property System.Int64 ByteLength { get; }
+  property System.Nullable<System.Int32> FormatVersion { get; }
+  property System.String Catalog { get; }
+  property System.String ContractFingerprint { get; }
+  property System.String Kind { get; }
+  property System.String Layer { get; }
+  property System.String Locale { get; }
+
+type sealed class Runic.Translations.Tooling.ArtifactInspectionFinding
+  property System.String Code { get; }
+  property System.String Message { get; }
+
+type static class Runic.Translations.Tooling.ArtifactInspector
+  field const System.Int32 DefaultMaximumBytes = 8388608
+  method static Runic.Translations.Tooling.ArtifactInspection Inspect(System.ReadOnlyMemory<System.Byte> content, System.Int32 maximumBytes = 8388608)
+
+type interface Runic.Translations.Tooling.ITranslationsToolCommandOperations
+  method Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult> Execute(Runic.Translations.Tooling.TranslationsToolCommandRequest request)
+
+type static class Runic.Translations.Tooling.TranslationInterchange
+  field const System.Int32 XliffProfileVersion = 2
+  field const System.String XliffProfile = "runic.xliff21.closed-text"
+  method static Runic.Translations.Tooling.TranslationInterchangeReview ImportReviewJson(System.ReadOnlyMemory<System.Byte> source)
+  method static Runic.Translations.Tooling.TranslationXliffExportResult ExportXliff21(Runic.Translations.Compiler.Rmf2ProjectCompilationV5 compilation, Runic.Translations.Tooling.TranslationInterchangeReview review = null)
+  method static Runic.Translations.Tooling.TranslationXliffImportResult ImportXliff21(System.ReadOnlyMemory<System.Byte> source)
+  method static System.Byte[] ExportReviewJson(Runic.Translations.Tooling.TranslationInterchangeReview review)
+
+type sealed class Runic.Translations.Tooling.TranslationInterchangeException : System.Exception, System.Runtime.Serialization.ISerializable
+  property System.String Code { get; }
+
+type sealed class Runic.Translations.Tooling.TranslationInterchangeLoss
+  property System.Boolean SemanticLoss { get; }
+  property System.String Code { get; }
+  property System.String Location { get; }
+  property System.String Message { get; }
+
+type sealed class Runic.Translations.Tooling.TranslationInterchangeReport
+  property System.Boolean IsLossless { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.TranslationInterchangeLoss> Losses { get; }
+
+type sealed class Runic.Translations.Tooling.TranslationInterchangeReview
+  ctor Runic.Translations.Tooling.TranslationInterchangeReview(System.String catalogId, System.Collections.Generic.IEnumerable<Runic.Translations.Tooling.TranslationInterchangeReviewEntry> entries)
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.TranslationInterchangeReviewEntry> Entries { get; }
+  property System.String CatalogId { get; }
+
+type sealed class Runic.Translations.Tooling.TranslationInterchangeReviewEntry
+  ctor Runic.Translations.Tooling.TranslationInterchangeReviewEntry(System.String key, System.String locale, System.String state, System.String note = null, System.String sourceFingerprint = null)
+  property System.String Key { get; }
+  property System.String Locale { get; }
+  property System.String Note { get; }
+  property System.String SourceFingerprint { get; }
+  property System.String State { get; }
+
+type sealed class Runic.Translations.Tooling.TranslationMf2Document
+  property System.Byte[] Bytes { get; }
+  property System.String MessageId { get; }
+
+type sealed class Runic.Translations.Tooling.TranslationXliffDocument
+  property System.Byte[] Bytes { get; }
+  property System.String CatalogId { get; }
+  property System.String SourceLocale { get; }
+  property System.String TargetLocale { get; }
+
+type sealed class Runic.Translations.Tooling.TranslationXliffExportResult
+  property Runic.Translations.Tooling.TranslationInterchangeReport Report { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.TranslationXliffDocument> Documents { get; }
+
+type sealed class Runic.Translations.Tooling.TranslationXliffImportResult
+  property Runic.Translations.Tooling.TranslationInterchangeReport Report { get; }
+  property Runic.Translations.Tooling.TranslationInterchangeReview Review { get; }
+  property System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.TranslationMf2Document> Messages { get; }
+  property System.String CatalogId { get; }
+  property System.String SourceLocale { get; }
+  property System.String TargetLocale { get; }
+
+type sealed class Runic.Translations.Tooling.TranslationsToolCommandJsonContext : System.Text.Json.Serialization.JsonSerializerContext, System.Text.Json.Serialization.Metadata.IBuiltInJsonTypeInfoResolver, System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Text.Json.SourceGeneration", "10.0.14.37416"), System.Text.Json.Serialization.JsonSerializableAttribute(typeof(Runic.Translations.Tooling.TranslationsToolCommandResult))]
+  ctor Runic.Translations.Tooling.TranslationsToolCommandJsonContext()
+  ctor Runic.Translations.Tooling.TranslationsToolCommandJsonContext(System.Text.Json.JsonSerializerOptions options)
+  method System.Text.Json.Serialization.Metadata.JsonTypeInfo GetTypeInfo(System.Type type)
+  property System.Text.Json.Serialization.Metadata.JsonTypeInfo<Runic.Translations.Tooling.TranslationsToolCommandResult> TranslationsToolCommandResult { get; }
+  property System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.String> String { get; }
+  property static Runic.Translations.Tooling.TranslationsToolCommandJsonContext Default { get; }
+
+type static class Runic.Translations.Tooling.TranslationsToolCommandModule
+  method static Runic.CommandLine.CommandCatalog CreateCatalog()
+  method static Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult> Generate([Runic.CommandLine.FromServicesAttribute] Runic.Translations.Tooling.ITranslationsToolCommandOperations operations, [Runic.CommandLine.OptionAttribute("--project", [], Required = true)] System.String project, [Runic.CommandLine.OptionAttribute("--output", [], Required = true)] System.String output, [Runic.CommandLine.OptionAttribute("--emit-csharp", [])] System.Boolean csharp, [Runic.CommandLine.OptionAttribute("--emit-json", [])] System.Boolean json, [Runic.CommandLine.OptionAttribute("--emit-typescript", [])] System.Boolean typescript, [Runic.CommandLine.OptionAttribute("--emit-template-manifest", [])] System.Boolean manifest, [Runic.CommandLine.OptionAttribute("--emit-esm", [])] System.Boolean esm, [Runic.CommandLine.OptionAttribute("--emit-cpp", [])] System.Boolean cpp) [Runic.CommandLine.CommandAttribute("generate", Description = "Generate translation artifacts."), Runic.CommandLine.CommandResultAttribute("runic.translations.tool/1", typeof(Runic.Translations.Tooling.TranslationsToolCommandJsonContext))]
+  method static Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult> Init([Runic.CommandLine.FromServicesAttribute] Runic.Translations.Tooling.ITranslationsToolCommandOperations operations, [Runic.CommandLine.OptionAttribute("--directory", [], Required = true)] System.String directory, [Runic.CommandLine.OptionAttribute("--catalog", [], Required = true)] System.String catalog, [Runic.CommandLine.OptionAttribute("--default-locale", [], Required = true)] System.String defaultLocale, [Runic.CommandLine.OptionAttribute("--namespace", [], Required = true)] System.String codeNamespace, [Runic.CommandLine.OptionAttribute("--class", [], Required = true)] System.String className, [Runic.CommandLine.OptionAttribute("--locale", [], AllowMultipleValues = true)] System.Collections.Generic.IReadOnlyList<System.String> locales, [Runic.CommandLine.OptionAttribute("--no-starter", [])] System.Boolean noStarter) [Runic.CommandLine.CommandAttribute("init", Description = "Create an RMF2 translation project and starter resources."), Runic.CommandLine.CommandResultAttribute("runic.translations.tool/1", typeof(Runic.Translations.Tooling.TranslationsToolCommandJsonContext))]
+  method static Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult> Lsp([Runic.CommandLine.FromServicesAttribute] Runic.Translations.Tooling.ITranslationsToolCommandOperations operations) [Runic.CommandLine.CommandAttribute("lsp", Description = "Run the RMF2 language server over standard input/output."), Runic.CommandLine.CommandResultAttribute("runic.translations.tool/1", typeof(Runic.Translations.Tooling.TranslationsToolCommandJsonContext))]
+  method static Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult> Schema([Runic.CommandLine.FromServicesAttribute] Runic.Translations.Tooling.ITranslationsToolCommandOperations operations, [Runic.CommandLine.OptionAttribute("--output", [], Required = true)] System.String output) [Runic.CommandLine.CommandAttribute("schema"), Runic.CommandLine.CommandResultAttribute("runic.translations.tool/1", typeof(Runic.Translations.Tooling.TranslationsToolCommandJsonContext))]
+  method static Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult> Validate([Runic.CommandLine.FromServicesAttribute] Runic.Translations.Tooling.ITranslationsToolCommandOperations operations, [Runic.CommandLine.OptionAttribute("--project", [], Required = true)] System.String project) [Runic.CommandLine.CommandAttribute("validate", Description = "Validate catalogs and report translation diagnostics."), Runic.CommandLine.CommandResultAttribute("runic.translations.tool/1", typeof(Runic.Translations.Tooling.TranslationsToolCommandJsonContext))]
+  method static Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult> Verify([Runic.CommandLine.FromServicesAttribute] Runic.Translations.Tooling.ITranslationsToolCommandOperations operations, [Runic.CommandLine.OptionAttribute("--project", [], Required = true)] System.String project, [Runic.CommandLine.OptionAttribute("--output", [], Required = true)] System.String output, [Runic.CommandLine.OptionAttribute("--emit-csharp", [])] System.Boolean csharp, [Runic.CommandLine.OptionAttribute("--emit-json", [])] System.Boolean json, [Runic.CommandLine.OptionAttribute("--emit-typescript", [])] System.Boolean typescript, [Runic.CommandLine.OptionAttribute("--emit-template-manifest", [])] System.Boolean manifest, [Runic.CommandLine.OptionAttribute("--emit-esm", [])] System.Boolean esm, [Runic.CommandLine.OptionAttribute("--emit-cpp", [])] System.Boolean cpp) [Runic.CommandLine.CommandAttribute("verify"), Runic.CommandLine.CommandResultAttribute("runic.translations.tool/1", typeof(Runic.Translations.Tooling.TranslationsToolCommandJsonContext))]
+  method static System.Threading.Tasks.ValueTask PresentAsync(Runic.CommandLine.CommandOutputMode outputMode, Runic.CommandLine.ICommandConsole console, System.Globalization.CultureInfo culture, System.String command, System.Int32 exitCode, Runic.Translations.Tooling.TranslationsToolCommandResult result, Runic.CommandLine.CommandFault fault, System.Collections.Generic.IReadOnlyList<Runic.CommandLine.CommandDiagnostic> diagnostics, System.String humanFailureOutput = null, Runic.Translations.Tooling.TranslationsToolFailurePresentation failurePresentation = Standard, System.Threading.CancellationToken cancellationToken = default)
+
+type sealed class Runic.Translations.Tooling.TranslationsToolCommandRequest : System.IEquatable<Runic.Translations.Tooling.TranslationsToolCommandRequest>
+  ctor Runic.Translations.Tooling.TranslationsToolCommandRequest(System.String Command, System.String Project = null, System.String Output = null, System.String Directory = null, System.String Catalog = null, System.String DefaultLocale = null, System.String Namespace = null, System.String ClassName = null, System.Collections.Generic.IReadOnlyList<System.String> Locales = null, System.Boolean NoStarter = false, System.Boolean EmitCSharp = false, System.Boolean EmitJson = false, System.Boolean EmitTypeScript = false, System.Boolean EmitTemplateManifest = false, System.Boolean EmitEsm = false, System.Boolean EmitCpp = false, System.Boolean DryRun = false)
+  method Runic.Translations.Tooling.TranslationsToolCommandRequest <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Tooling.TranslationsToolCommandRequest other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Command, out System.String Project, out System.String Output, out System.String Directory, out System.String Catalog, out System.String DefaultLocale, out System.String Namespace, out System.String ClassName, out System.Collections.Generic.IReadOnlyList<System.String> Locales, out System.Boolean NoStarter, out System.Boolean EmitCSharp, out System.Boolean EmitJson, out System.Boolean EmitTypeScript, out System.Boolean EmitTemplateManifest, out System.Boolean EmitEsm, out System.Boolean EmitCpp, out System.Boolean DryRun)
+  method static System.Boolean op_Equality(Runic.Translations.Tooling.TranslationsToolCommandRequest left, Runic.Translations.Tooling.TranslationsToolCommandRequest right)
+  method static System.Boolean op_Inequality(Runic.Translations.Tooling.TranslationsToolCommandRequest left, Runic.Translations.Tooling.TranslationsToolCommandRequest right)
+  property System.Boolean DryRun { get; init; }
+  property System.Boolean EmitCSharp { get; init; }
+  property System.Boolean EmitCpp { get; init; }
+  property System.Boolean EmitEsm { get; init; }
+  property System.Boolean EmitJson { get; init; }
+  property System.Boolean EmitTemplateManifest { get; init; }
+  property System.Boolean EmitTypeScript { get; init; }
+  property System.Boolean NoStarter { get; init; }
+  property System.Collections.Generic.IReadOnlyList<System.String> Locales { get; init; }
+  property System.String Catalog { get; init; }
+  property System.String ClassName { get; init; }
+  property System.String Command { get; init; }
+  property System.String DefaultLocale { get; init; }
+  property System.String Directory { get; init; }
+  property System.String Namespace { get; init; }
+  property System.String Output { get; init; }
+  property System.String Project { get; init; }
+
+type sealed class Runic.Translations.Tooling.TranslationsToolCommandResult : System.IEquatable<Runic.Translations.Tooling.TranslationsToolCommandResult>
+  ctor Runic.Translations.Tooling.TranslationsToolCommandResult(System.String Output, System.String Error)
+  method Runic.Translations.Tooling.TranslationsToolCommandResult <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Tooling.TranslationsToolCommandResult other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Output, out System.String Error)
+  method static System.Boolean op_Equality(Runic.Translations.Tooling.TranslationsToolCommandResult left, Runic.Translations.Tooling.TranslationsToolCommandResult right)
+  method static System.Boolean op_Inequality(Runic.Translations.Tooling.TranslationsToolCommandResult left, Runic.Translations.Tooling.TranslationsToolCommandResult right)
+  property System.String Error { get; init; }
+  property System.String Output { get; init; }
+
+type enum Runic.Translations.Tooling.TranslationsToolFailurePresentation : System.Int32, System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+  field System.Int32 value__
+  field const Runic.Translations.Tooling.TranslationsToolFailurePresentation DiagnosticsOnly = 3
+  field const Runic.Translations.Tooling.TranslationsToolFailurePresentation ErrorOnly = 1
+  field const Runic.Translations.Tooling.TranslationsToolFailurePresentation OutputOnly = 2
+  field const Runic.Translations.Tooling.TranslationsToolFailurePresentation Standard = 0

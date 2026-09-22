@@ -1,6 +1,7 @@
 Frontend/.svelte-kit/
 Frontend/build/
 Frontend/node_modules/
+Frontend/src/generated/runic-translations.d.ts
 artifacts/
 bin/
 obj/

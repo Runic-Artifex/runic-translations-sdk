@@ -1,6 +1,6 @@
 # ADR 0002: ICU4C for a production C++ formatter backend
 
-Status: accepted for a future production backend  
+Status: superseded as an active output; retained as feasibility rationale
 Date: 8 August 2026
 
 ## Context
@@ -19,19 +19,17 @@ date/time formatting, relative time, and bounded error conversion. Generated
 message functions and semantic markup values remain Runic-owned and consume the
 same normalized AST as .NET and ESM.
 
-The current dependency-free `--emit-cpp` output remains an explicitly
-experimental feasibility surface. It supports text, typed scalar substitution,
-literal selectors, and the closed plural subset exercised by its conformance
-fixture. It rejects structured formatter and markup nodes before emitting files;
-it does not flatten them or claim locale equivalence.
+The dependency-free C++ output described by this decision was removed when the
+translation stack collapsed onto the single v5 contract. The current CLI and
+MSBuild surfaces reject C++ emission with `RTR0065`. ICU4C remains the preferred
+foundation if a future, explicitly versioned C++ backend is proposed.
 
 ## Consequences
 
 - ICU data/version selection becomes part of the production C++ deployment
   contract and reproducible-build policy.
-- Applications that cannot accept ICU may keep using the feasibility subset or
-  provide a future compatible formatter adapter, but unsupported AST functions
-  fail generation.
+- Applications cannot select the removed feasibility subset from current
+  packages. A future adapter must define a new supported output contract.
 - C++ formatting is tested semantically against the shared corpus for the exact
   locales/functions enabled by the adapter.
 - No C++ source parser or authoring-schema implementation is introduced.

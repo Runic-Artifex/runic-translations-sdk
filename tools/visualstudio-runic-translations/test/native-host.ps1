@@ -35,9 +35,6 @@ function Close-Preview($window) { $window.GetCurrentPattern([Windows.Automation.
 $root = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
 $fixture = Join-Path $env:TEMP ('runic-vs-host-' + [Guid]::NewGuid().ToString('N'))
 Copy-Item "$root\specs\translations\examples\rmf2" $fixture -Recurse
-$project = Get-Content "$fixture\runic.json" -Raw | ConvertFrom-Json
-$project | Add-Member -NotePropertyName executionProfile -NotePropertyValue 'rmf2-execution-v2' -Force
-[IO.File]::WriteAllText("$fixture\runic.json", ($project | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
 $priorDocument = $dte.ActiveDocument
 $document = $null; $preview = $null
 try {
@@ -87,7 +84,7 @@ try {
     $dte.ExecuteCommand('Tools.RunicPreviewMessage', '')
     $preview = Preview 'plain'
     Wait-For { if ((Texts $preview) -like '*UNSAVED preview marker*') { $true } } 'Restart lost the unsaved buffer.' | Out-Null
-    $receipt = @{sessionId=[Diagnostics.Process]::GetCurrentProcess().SessionId;windowName='Visual Studio RMF2';snapshotName='execution-v2 preview, validation, locale, unsaved restart';ideProcessId=$ideId;serverBefore=$before;serverAfter=$after.ProcessId;checks=@('explicit rmf2-execution-v2 project','registered preview command','native inert rich content','invalid-number recovery','locale selection','registered restart command','unsaved buffer after restart')}
+    $receipt = @{sessionId=[Diagnostics.Process]::GetCurrentProcess().SessionId;windowName='Visual Studio RMF2';snapshotName='preview, validation, locale, unsaved restart';ideProcessId=$ideId;serverBefore=$before;serverAfter=$after.ProcessId;checks=@('selected semantic project','registered preview command','native inert rich content','invalid-number recovery','locale selection','registered restart command','unsaved buffer after restart')}
 }
 finally {
     if ($preview) { Close-Preview $preview }

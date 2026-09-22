@@ -4,90 +4,35 @@ import {
   createMessagePreviewOwnership,
   createMessagePreviewScheduler,
   createPreviewSamples,
-  executeMessagePreview,
   flattenPreview,
+  parseMessageArtifact,
   parseRenderedMessagePreview,
   previewSampleOr,
   routeMessagePreview,
   withPreviewSample,
 } from "../src/lib/message-preview.js";
-import { sourceMessageToArtifact, toStructuredMessage } from "../src/lib/message-composer.ts";
 
-const artifact = {
-  astVersion: 2,
-  inputs: {
-    count: { type: "int", format: "plain" },
-    delta: { type: "number", format: "plain" },
-    owner: { type: "string", format: "plain" },
-  },
-  selectors: [
-    { name: "quantity", input: "count", function: "plural" },
-    { name: "ownerKind", input: "owner", function: "literal" },
-  ],
-  variants: [
-    {
-      matches: { quantity: "one", ownerKind: "admin" },
-      nodes: [{ kind: "text", value: "Exactly " }, { kind: "input", input: "count" }],
-    },
-    {
-      matches: { quantity: "*", ownerKind: "*" },
-      nodes: [{
-        kind: "markup",
-        name: "script",
-        attributes: { tone: "critical", payload: "<img src=x onerror=alert(1)>" },
-        children: [
-          { kind: "format", input: "count", function: "integer", format: "grouped" },
-          { kind: "text", value: " items for " },
-          { kind: "input", input: "owner" },
-        ],
-      }, { kind: "text", value: ", " }, {
-        kind: "format", input: "delta", function: "relativeTime", format: "plain",
-        unit: "day", numeric: "auto",
-      }],
-    },
-  ],
-};
-
-const exact = executeMessagePreview(artifact, "en", { count: "1", delta: "-1", owner: "admin" });
-if (exact.kind !== "text" || exact.value !== "Exactly 1") throw new Error("Exact multi-selector preview diverged.");
-
-const rich = executeMessagePreview(artifact, "en", { count: "1234", delta: "-1", owner: "guest" });
-if (rich.kind !== "content") throw new Error("Semantic markup did not produce structured content.");
-if (rich.nodes[0].kind !== "element" || rich.nodes[0].name !== "script") throw new Error("Markup name was altered.");
-if (rich.nodes[0].attributes.payload !== "<img src=x onerror=alert(1)>") throw new Error("Markup attributes were altered.");
-if (flattenPreview(rich.nodes) !== "1,234 items for guest, yesterday") throw new Error("Formatted preview diverged from generated ESM semantics.");
-if (typeof rich.nodes[0] !== "object" || "outerHTML" in rich.nodes[0]) throw new Error("Semantic data became an HTML node.");
-
-const inferredArtifact = sourceMessageToArtifact(toStructuredMessage("Welcome back, {name}"));
-if (inferredArtifact.inputs.name?.type !== "string" || inferredArtifact.inputs.name.format !== "none") {
-  throw new Error("Plain-message placeholders were not inferred as string inputs.");
-}
-const inferred = executeMessagePreview(inferredArtifact, "en", { name: "Viktor" });
-if (inferred.kind !== "text" || inferred.value !== "Welcome back, Viktor") {
-  throw new Error("An inferred plain-message placeholder could not be previewed.");
-}
-
-const rmf2 = {
-  astVersion: 4, contentLocale: "en",
-  inputs: { count: { type: "int", format: "plain" }, tone: { type: "string", format: "none" } },
-  selectors: [{ name: "count", input: "count", function: "plural" }],
-  variants: [
-    { matches: { count: "*" }, nodes: [{ kind: "text", value: "Fallback" }] },
-    { matches: { count: "0" }, nodes: [{ kind: "markup", name: "shop:badge", standalone: false, attributes: { tone: "tone" }, variableOptions: ["tone"], children: [{ kind: "text", value: "Empty" }] }] },
-  ],
-};
-const result = executeMessagePreview(rmf2, "de", { count: "0", tone: "positive" });
-if (result.kind !== "content" || result.nodes[0].attributes.tone !== "positive" || flattenPreview(result.nodes) !== "Empty") throw new Error("RMF2 exact numeric selection or dynamic markup options diverged.");
-
-const executionV2 = {
+const selectedArtifact = parseMessageArtifact(JSON.stringify({
   astVersion: 5,
   profile: "rmf2-execution-v2",
-  inputs: [{ name: "target", type: "string" }],
-};
+  inputs: [{ name: "__proto__", type: "string" }, { name: "count", type: "int64" }],
+  declarations: [], selectors: [], variants: [],
+}));
+assert.deepEqual(selectedArtifact.inputs.map((input) => input.name), ["__proto__", "count"]);
 assert.throws(
-  () => executeMessagePreview(executionV2, "en", { target: "account" }),
-  /must be rendered by the compiler host/,
-  "The v5 AST was incorrectly coerced through the v4 JavaScript evaluator.",
+  () => parseMessageArtifact('{"astVersion":999,"profile":"rmf2-execution-v2","inputs":[]}'),
+  /unsupported message preview contract/,
+  "An unknown AST contract was accepted.",
+);
+assert.throws(
+  () => parseMessageArtifact('{"astVersion":5,"profile":"rmf2-execution-v2","inputs":[{"name":"count","type":"int64","callback":"alert(1)"}]}'),
+  /invalid message preview input contract/,
+  "An active field escaped the bounded input contract.",
+);
+assert.throws(
+  () => parseMessageArtifact('{"astVersion":5,"profile":"rmf2-execution-v2","inputs":[{"name":"count","type":"int64"},{"name":"count","type":"int64"}]}'),
+  /invalid message preview input contract/,
+  "Duplicate input identities were accepted.",
 );
 
 const serverText = parseRenderedMessagePreview(JSON.stringify({
@@ -301,4 +246,4 @@ await routeMessagePreview(async () => {
 }, rowRequest, hostileSamples, () => "default", () => staleCurrent);
 assert.equal(staleCalls, 1, "A superseded AST 5 preview issued its second host request.");
 
-console.log("PASS: editor preview captures row/locale identity, routes prototype-safe AST 5 samples, keeps runs inert, and rejects cross-profile execution.");
+console.log("PASS: editor preview captures row/locale identity, routes prototype-safe AST 5 samples, keeps runs inert, and rejects malformed contracts.");

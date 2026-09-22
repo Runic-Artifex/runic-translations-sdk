@@ -1,24 +1,18 @@
 # RMF2 v5 project linking
 
-The compiler has a separate `Rmf2ProjectV5` carrier for
-`rmf2-execution-v2`. It contains v5 messages directly. It never constructs a
-`CompiledMessagePattern` or passes messages through the v4 parser/adapter.
+The compiler uses the `Rmf2ProjectV5` carrier for the supported
+`rmf2-execution-v2` contract. It contains v5 messages directly and never
+constructs a `CompiledMessagePattern` or passes messages through an older
+parser/adapter.
 
-Profile-aware generator, CLI, MSBuild, and Vite hosts inspect `runic.json` and
-select `TranslationCompiler.CompileProjectForProfile(...,
-TranslationProjectProfile.Rmf2ExecutionV2)`; `Current` calls the existing public
-compiler unchanged. The discriminated result carries either a current
-`TranslationCompilation` or an `Rmf2ProjectCompilationV5`, never both.
-`CompileRmf2ProjectV5` is the dedicated typed entry point. Failed v5 compilations
-return diagnostics without a project that could accidentally reach emission.
+Generator, CLI, MSBuild, and Vite hosts compile projects through the typed v5
+carrier. `CompileRmf2ProjectV5` is the dedicated typed entry point. Failed
+compilations return diagnostics without a project that could accidentally reach
+emission.
 
-An `rmf2-v1` project activates this carrier with
-`executionProfile: "rmf2-execution-v2"`; omission keeps existing v4 output.
-The low-level public `CompileProject` method remains the v4 carrier and rejects
-the selector, so callers cannot accidentally erase v5 data by compiling it as
-v4. Project schema v1, resource syntax `rmf2-v1`, and exported markup contract v1
-remain unchanged:
-artifact v5 does not imply a project schema version bump. The v5 linker uses the
+Project schema v1 and exported markup contract v1 remain unchanged: artifact v5
+does not imply a project schema version bump. The linker infers direct `.mf2`
+versus grouped `.rmf2` sources and rejects mixed representations. It uses the
 existing locale, mount, completeness, extra-key, empty-value and runtime policies.
 
 ## Caller contracts and executable content

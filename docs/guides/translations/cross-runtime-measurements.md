@@ -1,9 +1,8 @@
 # Cross-runtime measurements
 
-The reproducible harness is `eng/measure-cross-runtime.mjs`. It generates
-fallback-resolved ESM at the two planned key scales and locale counts, then
-measures the experimental C++ fixture. Run it inside the repository development
-shell; `--quick` limits ESM generation to 100 messages and two locales.
+The reproducible harness is `eng/measure-cross-runtime.mjs`. The ESM measurements
+below remain useful historical scale data. The harness also measured the
+pre-v5 experimental C++ fixture; that backend is no longer a shipping output.
 
 The checked values below were collected on 8 August 2026 in the Linux x64 Nix
 development shell. They are engineering baselines, not cross-machine performance
@@ -22,6 +21,6 @@ is absent from the resulting bundle.
 |    10000 |      20 |         26211 | 10009 |        19612210 |
 |    10000 |      50 |         64899 | 10009 |        36679510 |
 
-C++ (100 messages, one locale): compile 610 ms; binary 54,816 bytes;
-100,000 formatted calls completed in 2 ms. The harness checks that every call
-returns a non-empty localized value.
+Historical removed C++ feasibility backend (100 messages, one locale): compile
+610 ms; binary 54,816 bytes; 100,000 formatted calls completed in 2 ms. These
+numbers do not describe a current CLI or MSBuild capability.

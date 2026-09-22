@@ -20,8 +20,6 @@ if (urlOrPrepare === "--prepare") {
   await writeFile(join(workspace, "runic.json"), JSON.stringify({
     schemaVersion: 1,
     catalog: "runic-hosted-e2e",
-    sourceLayout: "rmf2-v1",
-    executionProfile: "rmf2-execution-v2",
     code: { namespace: "Runic.HostedBrowserProof", className: "Messages" },
     baseLocale: "de",
     locales: ["de", "en", "fr"],
@@ -37,8 +35,8 @@ assert.equal(await readFile(join(workspace, ".hosted-rmf2-ui-fixture"), "utf8"),
   "External-write checks require the test-owned prepared workspace.");
 const config = JSON.parse(await readFile(join(workspace, "runic.json"), "utf8"));
 assert.equal(config.catalog, "runic-hosted-e2e");
-assert.equal(config.sourceLayout, "rmf2-v1");
-assert.equal(config.executionProfile, "rmf2-execution-v2");
+assert.ok(!Object.hasOwn(config, "sourceLayout"));
+assert.ok(!Object.hasOwn(config, "executionProfile"));
 const diskPath = join(workspace, "de.rmf2");
 assert.ok((await lstat(diskPath)).isFile() && !(await lstat(diskPath)).isSymbolicLink());
 

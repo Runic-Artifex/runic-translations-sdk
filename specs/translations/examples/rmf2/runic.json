@@ -1,6 +1,5 @@
 {
   "schemaVersion": 1,
-  "sourceLayout": "rmf2-v1",
   "catalog": "checkout",
   "code": {
     "namespace": "Example",

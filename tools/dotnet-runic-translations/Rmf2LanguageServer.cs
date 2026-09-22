@@ -167,36 +167,21 @@ internal sealed class Rmf2LanguageServer
             if (command is "runic.preview" or "runic.renderPreview")
             {
                 string key = arguments[1]!.GetValue<string>(), locale = arguments[2]!.GetValue<string>();
-                TranslationProfileCompilation compilation = workspace.ValidateForProfile();
+                Rmf2ProjectCompilationV5 compilation = workspace.Validate();
                 if (!compilation.Success) throw new TranslationAuthoringException(string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
+                Rmf2ProjectV5 project = compilation.Project!;
                 JsonNode message;
                 JsonNode markup;
                 JsonArray inputContract;
-                if (compilation.Current is { } current)
-                {
-                    CompiledTextCatalog catalog = current.Catalogs.Single();
-                    if (command == "runic.renderPreview") return Rmf2Preview.Render(catalog, key, locale, arguments[3]!.AsObject());
-                    JsonNode artifact = JsonNode.Parse(TranslationOutputRenderer.RenderLocaleJson(catalog, locale).Text)!;
-                    message = artifact["messages"]?[key] ?? throw new TranslationAuthoringException("Unknown preview message.");
-                    markup = JsonNode.Parse(catalog.Rmf2MarkupContract!)!;
-                    inputContract = new JsonArray(message["inputs"]!.AsObject().Select(input => (JsonNode)new JsonObject {
-                        ["name"] = input.Key,
-                        ["type"] = input.Value?["type"]?.GetValue<string>() ?? "string",
-                    }).ToArray());
-                }
-                else
-                {
-                    Rmf2ProjectV5 project = compilation.Rmf2!.Project!;
-                    if (command == "runic.renderPreview") return Rmf2Preview.Render(project, key, locale, arguments[3]!.AsObject());
-                    JsonNode artifact = JsonNode.Parse(Rmf2LocaleArtifactV5.Render(project, locale).Text)!;
-                    message = artifact["messages"]?[key]?["ast"] ?? throw new TranslationAuthoringException("Unknown preview message.");
-                    markup = JsonNode.Parse(project.MarkupContract)!;
-                    Rmf2MessageContractV5 contract = project.CanonicalMessages.Concat(project.ExtraMessages).Single(item => item.Key == key);
-                    inputContract = new JsonArray(contract.Inputs.Select(input => (JsonNode)new JsonObject {
-                        ["name"] = input.Name,
-                        ["type"] = input.Type,
-                    }).ToArray());
-                }
+                if (command == "runic.renderPreview") return Rmf2Preview.Render(project, key, locale, arguments[3]!.AsObject());
+                JsonNode artifact = JsonNode.Parse(Rmf2LocaleArtifactV5.Render(project, locale).Text)!;
+                message = artifact["messages"]?[key]?["ast"] ?? throw new TranslationAuthoringException("Unknown preview message.");
+                markup = JsonNode.Parse(project.MarkupContract)!;
+                Rmf2MessageContractV5 contract = project.CanonicalMessages.Concat(project.ExtraMessages).Single(item => item.Key == key);
+                inputContract = new JsonArray(contract.Inputs.Select(input => (JsonNode)new JsonObject {
+                    ["name"] = input.Name,
+                    ["type"] = input.Type,
+                }).ToArray());
                 var examples = workspace.Documents.SelectMany(doc => doc.Nodes.Where(node => !node.IsGroup && string.Join('_', workspace.LogicalPath(doc.Source.Path, node)) == key))
                     .SelectMany(node => node.Properties.Where(value => value.StartsWith("example ", StringComparison.Ordinal)).Select(value => JsonNode.Parse(value.Substring(8))));
                 return new JsonObject { ["key"] = key, ["locale"] = locale, ["ast"] = message.DeepClone(), ["inputs"] = inputContract, ["markup"] = markup, ["examples"] = new JsonArray(examples.ToArray()) };
@@ -286,8 +271,8 @@ internal sealed class Rmf2LanguageServer
                 ["key"] = string.Join('_', workspace.LogicalPath(sourcePath, entry)), ["localKey"] = entry.Key, ["isGroup"] = entry.IsGroup,
                 ["logicalPath"] = new JsonArray(workspace.LogicalPath(sourcePath, entry).Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
                 ["path"] = new JsonArray(entry.Path.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
-                ["locale"] = Path.GetFileNameWithoutExtension(sourcePath),
-                ["locales"] = new JsonArray(workspace.Documents.Select(document => Path.GetFileNameWithoutExtension(document.Source.Path)).Distinct(StringComparer.OrdinalIgnoreCase).Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
+                ["locale"] = workspace.Locale(sourcePath),
+                ["locales"] = new JsonArray(workspace.Documents.Select(document => workspace.Locale(document.Source.Path)).Distinct(StringComparer.OrdinalIgnoreCase).Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
                 ["inputs"] = new JsonArray(inputs.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
                 ["slots"] = new JsonArray(slots.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
             };
@@ -318,32 +303,17 @@ internal sealed class Rmf2LanguageServer
             string path = LocalPath(uri); var workspace = Workspace(path);
             string key = string.Join('_', workspace.LogicalPath(path, entry));
             string content = entry.MessageSyntax is { } messageSyntax ? workspace.LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte)) ?? key : key;
-            TranslationProfileCompilation compiled = workspace.ValidateForProfile();
+            Rmf2ProjectCompilationV5 compiled = workspace.Validate();
             if (compiled.Success && !entry.IsGroup)
             {
-                string locale = Path.GetFileNameWithoutExtension(path);
-                if (compiled.Current is { } current)
-                {
-                    CompiledTextCatalog catalog = current.Catalogs.Single();
-                    CompiledTranslation? value = catalog.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
-                    if (value is not null)
-                    {
-                        content += "\nContent locale: " + Path.GetFileNameWithoutExtension(value.SourceLocation.Path);
-                        if (value.Placeholders.Count > 0) content += "\nInputs: " + string.Join(", ", value.Placeholders.Select(input => "$" + input.Name + ": " + input.Type + (input.Format.Length == 0 ? "" : " (" + input.Format + ")")));
-                    }
-                    string? fallback = catalog.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
-                    if (fallback is not null) content += "\nFallback: " + fallback;
-                }
-                else
-                {
-                    Rmf2ProjectV5 project = compiled.Rmf2!.Project!;
-                    Rmf2TranslationV5? value = project.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
-                    Rmf2MessageContractV5? contract = project.CanonicalMessages.Concat(project.ExtraMessages).FirstOrDefault(item => item.Key == key);
-                    if (value is not null) content += "\nContent locale: " + value.ContentLocale;
-                    if (contract is { Inputs.Count: > 0 }) content += "\nInputs: " + string.Join(", ", contract.Inputs.Select(input => "$" + input.Name + ": " + input.Type));
-                    string? fallback = project.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
-                    if (fallback is not null) content += "\nFallback: " + fallback;
-                }
+                string locale = workspace.Locale(path);
+                Rmf2ProjectV5 project = compiled.Project!;
+                Rmf2TranslationV5? value = project.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
+                Rmf2MessageContractV5? contract = project.CanonicalMessages.Concat(project.ExtraMessages).FirstOrDefault(item => item.Key == key);
+                if (value is not null) content += "\nContent locale: " + value.ContentLocale;
+                if (contract is { Inputs.Count: > 0 }) content += "\nInputs: " + string.Join(", ", contract.Inputs.Select(input => "$" + input.Name + ": " + input.Type));
+                string? fallback = project.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
+                if (fallback is not null) content += "\nFallback: " + fallback;
             }
             content += "\n" + string.Join("\n", entry.Comments) + "\n" + string.Join("\n", entry.Properties);
             return new JsonObject { ["contents"] = new JsonObject { ["kind"] = "plaintext", ["value"] = content } };
@@ -384,7 +354,7 @@ internal sealed class Rmf2LanguageServer
             string sourcePath = LocalPath(uri); var workspace = Workspace(sourcePath);
             var completions = entry is { IsGroup: false } ? workspace.Complete(sourcePath, entry.Key, MessageOffset(entry, atByte)) : workspace.LanguageService.Complete(null, 0);
             var items = completions.ToDictionary(item => item.Label, item => item.Detail, StringComparer.Ordinal);
-            foreach (string label in labels) items.TryAdd(label, "RMF2 execution profile");
+            foreach (string label in labels) items.TryAdd(label, "Runic semantic translation contract");
             return new JsonArray(items.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => (JsonNode)new JsonObject { ["label"] = item.Key, ["detail"] = item.Value, ["kind"] = 14 }).ToArray());
         }
         return null;
@@ -611,8 +581,7 @@ internal sealed class Rmf2LanguageServer
         try
         {
             using var document = System.Text.Json.JsonDocument.Parse(text);
-            if (!document.RootElement.TryGetProperty("sourceLayout", out var layout) || layout.GetString() != "rmf2-v1" ||
-                !document.RootElement.TryGetProperty("sourceRoots", out var mounts) || mounts.ValueKind != System.Text.Json.JsonValueKind.Array)
+            if (!document.RootElement.TryGetProperty("sourceRoots", out var mounts) || mounts.ValueKind != System.Text.Json.JsonValueKind.Array)
                 return [directory];
             return mounts.EnumerateArray()
                 .Where(mount => mount.ValueKind == System.Text.Json.JsonValueKind.Object &&
@@ -647,7 +616,9 @@ internal sealed class Rmf2LanguageServer
         {
             Buffer buffer = _buffers[uri];
             string file = LocalPath(uri);
-            if (sources.ContainsKey(file) || (Path.GetExtension(file).Equals(".rmf2", StringComparison.OrdinalIgnoreCase) && inputs.SourceRoots?.Any(sourceRoot => IsWithin(sourceRoot, file)) == true))
+            if (sources.ContainsKey(file) || ((Path.GetExtension(file).Equals(".rmf2", StringComparison.OrdinalIgnoreCase) ||
+                Path.GetExtension(file).Equals(".mf2", StringComparison.OrdinalIgnoreCase)) &&
+                (inputs.SourceRoots?.Any(sourceRoot => IsWithin(sourceRoot, file)) == true || IsWithin(directory, file))))
                 sources[file] = new TranslationSource(file, Utf8.GetBytes(buffer.Text));
         }
         string root = directory;
@@ -691,9 +662,13 @@ internal sealed class Rmf2LanguageServer
         if (Utf8.GetByteCount(text) > 8 * 1024 * 1024) throw new ArgumentException("Document exceeds RMF2 byte limit.");
         if (!_buffers.ContainsKey(uri) && _buffers.Count >= 256) throw new ArgumentException("Too many open resource buffers.");
         bool configuration = Path.GetFileName(LocalPath(uri)) == "runic.json";
-        if (!configuration && !Path.GetExtension(LocalPath(uri)).Equals(".rmf2", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("The RMF2 language server supports .rmf2 resources and runic.json synchronization; use the native service for application and legacy sources.");
-        var syntax = Rmf2ResourceReader.Analyze(new TranslationSource(LocalPath(uri), configuration ? Array.Empty<byte>() : Utf8.GetBytes(text)));
+        string extension = Path.GetExtension(LocalPath(uri));
+        if (!configuration && !extension.Equals(".rmf2", StringComparison.OrdinalIgnoreCase) && !extension.Equals(".mf2", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("The Runic language server supports .mf2, .rmf2, and runic.json synchronization; use the native service for application sources.");
+        var source = new TranslationSource(LocalPath(uri), configuration ? Array.Empty<byte>() : Utf8.GetBytes(text));
+        var syntax = extension.Equals(".mf2", StringComparison.OrdinalIgnoreCase)
+            ? Rmf2ResourceReader.AnalyzeDirect(source)
+            : Rmf2ResourceReader.Analyze(source);
         var buffer = new Buffer(text, version, syntax); _buffers[uri] = buffer;
         if (configuration)
         {
@@ -709,7 +684,7 @@ internal sealed class Rmf2LanguageServer
         {
             string project = BufferProjectDirectory(LocalPath(uri));
             group = BufferUris(project).ToArray();
-            catalogDiagnostics = Workspace(project, group).ValidateForProfile().Diagnostics;
+            catalogDiagnostics = Workspace(project, group).Validate().Diagnostics;
         }
         catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException) {
             if (configuration) catalogDiagnostics = ConfigDiagnostics(new TranslationSource(LocalPath(uri), Utf8.GetBytes(text)));
@@ -755,7 +730,7 @@ internal sealed class Rmf2LanguageServer
         foreach (var group in groups)
         {
             IReadOnlyList<TranslationDiagnostic> diagnostics = Array.Empty<TranslationDiagnostic>();
-            try { diagnostics = Workspace(group.Key, group.Value).ValidateForProfile().Diagnostics; }
+            try { diagnostics = Workspace(group.Key, group.Value).Validate().Diagnostics; }
             catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException)
             {
                 string configUri = new Uri(Path.Combine(group.Key, "runic.json")).AbsoluteUri;
@@ -785,7 +760,7 @@ internal sealed class Rmf2LanguageServer
     }
 
     private IReadOnlyList<TranslationDiagnostic> ConfigDiagnostics(TranslationSource project)
-        => TranslationCompiler.CompileProjectForSelectedProfile(project, Array.Empty<TranslationSource>(), null, _requestCancellation).Diagnostics;
+        => TranslationCompiler.CompileRmf2ProjectV5(project, Array.Empty<TranslationSource>(), null, _requestCancellation).Diagnostics;
     private void Publish(string uri, JsonArray diagnostics)
     {
         lock (_revisionGate)

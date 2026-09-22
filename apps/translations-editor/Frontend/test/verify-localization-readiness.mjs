@@ -38,7 +38,7 @@ console.log(`PASS: mounted shared localization readiness fixtures (${localizatio
 // Exercise real generated MF2 functions through the same locale-reactive UI adapter.
 const resourceRoot = new URL("../../EditorResources/", import.meta.url);
 const config = JSON.parse(await readFile(new URL("runic.json", resourceRoot), "utf8"));
-assert.equal(config.sourceLayout, "rmf2-v1");
+assert.ok(!Object.hasOwn(config, "sourceLayout"));
 assert.deepEqual((await readdir(resourceRoot)).filter((name) => name.endsWith(".rmf2")).sort(), ["de.rmf2", "en.rmf2"]);
 const manifestPath = process.env.RUNIC_TRANSLATIONS_MANIFEST;
 assert.ok(manifestPath, "Generate the editor ESM module and provide RUNIC_TRANSLATIONS_MANIFEST before plural acceptance.");

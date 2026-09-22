@@ -29,6 +29,7 @@ internal static class Program
             {
                 (typeof(TranslationsCompatibility).Assembly, "Runic.Translations"),
                 (typeof(Compiler.TranslationCompiler).Assembly, "Runic.Translations.Compiler"),
+                (typeof(Tooling.TranslationInterchange).Assembly, "Runic.Translations.Tooling"),
                 (LoadGeneratorAssembly(root), "Runic.Translations.Generator"),
             };
             int totalTypes = 0;
