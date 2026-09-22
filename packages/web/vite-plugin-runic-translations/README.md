@@ -8,7 +8,7 @@ Import generated Runic Translations messages through stable Vite virtual modules
 npm install --save-dev @runic-artifex/vite-plugin-runic-translations@<VERSION>
 ```
 
-Replace `<VERSION>` with the current public preview shown on npm. The package supports Vite 6, 7, and 8. Project-owned generation uses `web-module-manifest-v2.json` by default or the v3 contract for explicitly activated RMF2 execution v2 projects; explicit `manifest` paths may also use the v1 contract. If the plugin owns generation, install `dotnet-runic-translations` in a project-local .NET 10 tool manifest at that same exact release.
+Replace `<VERSION>` with the current public preview shown on npm. The package supports Vite 6, 7, and 8 and accepts only the RMF2 `web-module-manifest-v3.json` contract (ESM ABI 4, runtime ABI 2). If the plugin owns generation, install `dotnet-runic-translations` in a project-local .NET 10 tool manifest at that same exact release.
 
 ## Configure Vite
 
@@ -24,9 +24,7 @@ export default defineConfig({
 
 The no-argument form discovers `translations/runic.json`, compiles its locale
 RMF2 files to `.runic/translations`, and watches config and message edits,
-including added, removed, and renamed locale files. New projects declare
-`sourceLayout: "rmf2-v1"`; projects without it retain legacy MF2-file input.
-In a split
+including added, removed, and renamed locale files. In a split
 frontend/backend layout, use `runicTranslations({ project: "../translations" })`.
 When another build owns generation, pass its generated `manifest` and optional
 `sourceFiles` instead.
@@ -64,4 +62,4 @@ Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob
 
 ## RMF2
 
-Project mode accepts `sourceLayout: "rmf2-v1"`, recursively discovers `.rmf2`, and watches `runic.json`, the project directory, and all explicit `sourceRoots` for additions, edits and removals. Add `executionProfile: "rmf2-execution-v2"` to select the typed grammar 5 / ESM ABI 4 output and its `web-module-manifest-v3.json`; omitting the selector retains the existing v4 / manifest-v2 output. It invokes the shared compiler and retains its diagnostic failures. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the generated inline renderer API.
+Project mode recursively discovers `.rmf2` and watches `runic.json`, the project directory, and all explicit `sourceRoots` for additions, edits and removals. It emits the typed grammar 5 / ESM ABI 4 `web-module-manifest-v3.json` output, invokes the shared compiler, and retains its diagnostic failures. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the generated inline renderer API.

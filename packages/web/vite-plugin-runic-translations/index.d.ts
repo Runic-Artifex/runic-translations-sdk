@@ -1,11 +1,11 @@
 import type { Plugin } from "vite";
 
 export interface RunicTranslationsOptions {
-  /** Runic translation directory or runic.json path. Defaults to ./translations. Watches RMF2 or legacy MF2 inputs according to runic.json. */
+  /** Runic translation directory or runic.json path. Defaults to ./translations. Watches recursive RMF2 inputs. */
   readonly project?: string;
   /** Generated artifact directory for project mode. Defaults to ./.runic/translations. */
   readonly output?: string;
-  /** Pre-generated web-module-manifest-v1/v2.json or RMF2 execution-v2 web-module-manifest-v3.json path when generation is owned by another build. */
+  /** Pre-generated RMF2 web-module-manifest-v3.json path when generation is owned by another build. */
   readonly manifest?: string;
   /** Authoring inputs to watch; regeneration remains owned by the host build. */
   readonly sourceFiles?: readonly string[];
