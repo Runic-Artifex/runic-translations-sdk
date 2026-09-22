@@ -14,6 +14,7 @@ internal static class Rmf2ProjectV5Tests
     internal static void Register(TestRunner runner)
     {
         runner.Add("RMF2 selects the semantic contract when profile is omitted", Dispatch);
+        runner.Add("RMF2 source extensions are matched case-insensitively", ExtensionCase);
         runner.Add("RMF2 v5 canonical multilingual fixture links and executes typed locals", Fixture);
         runner.Add("RMF2 v5 target callers inherit canonical carriers and may omit inputs", Callers);
         runner.Add("RMF2 v5 project composition matches flat split and external mounts", Composition);
@@ -67,6 +68,23 @@ internal static class Rmf2ProjectV5Tests
         Assert.True(!retiredSelector.Success,
             "A retired selector was allowed to revive an older contract.");
         Assert.True(selected.Project!.CanonicalMessages.Count == 1, "Selected semantic project did not link.");
+    }
+    private static void ExtensionCase()
+    {
+        var grouped = TranslationCompiler.CompileRmf2ProjectV5(Project(),
+            [Source("translations/en.RMF2", "hello = Hello")]);
+        Assert.True(grouped.Success && grouped.Project!.CanonicalMessages.Single().Key == "hello",
+            "Uppercase grouped RMF2 extension was rejected.\n" + Errors(grouped));
+
+        var direct = TranslationCompiler.CompileRmf2ProjectV5(Project(),
+            [Source("translations/en/hello.MF2", "Hello")]);
+        Assert.True(direct.Success && direct.Project!.CanonicalMessages.Single().Key == "hello",
+            "Uppercase direct MF2 extension was rejected.\n" + Errors(direct));
+
+        var mixed = TranslationCompiler.CompileRmf2ProjectV5(Project(),
+            [Source("translations/en.RMF2", "hello = Hello"), Source("translations/en/other.MF2", "Other")]);
+        Assert.True(!mixed.Success && mixed.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0052"),
+            "Mixed direct and grouped source representations escaped rejection through uppercase extensions.");
     }
     private static void Fixture()
     {

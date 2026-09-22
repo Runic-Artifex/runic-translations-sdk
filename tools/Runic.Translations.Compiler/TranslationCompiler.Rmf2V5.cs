@@ -252,8 +252,8 @@ public static partial class TranslationCompiler
         foreach (var source in sources)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            bool grouped = source.Path.EndsWith(".rmf2", StringComparison.Ordinal);
-            bool direct = source.Path.EndsWith(".mf2", StringComparison.Ordinal);
+            bool grouped = source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
+            bool direct = source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase);
             var matches = (grouped || direct) ? mounts.Where(mount => source.Path.StartsWith(mount.Root, StringComparison.Ordinal)).ToArray() : Array.Empty<(string Root, string[] Prefix)>();
             if ((!grouped && !direct) || matches.Length != 1) { Error("Translation sources must be .mf2 or .rmf2 beneath exactly one source root.", source, new(0, 0)); continue; }
             if (groupedInput is { } prior && prior != grouped)
