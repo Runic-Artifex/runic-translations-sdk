@@ -265,10 +265,11 @@ internal static class Rmf2EsmV5Tests
             string script = Path.Combine(europeanDirectory, "locale.mjs");
             File.WriteAllText(script, """
                 import { m } from "./numbers.esm-v5/messages.js";
-                import { decimal, decodeWireValue } from "./numbers.esm-v5/runtime.js";
+                import { decimal, decodeWireValue, resolveLocale } from "./numbers.esm-v5/runtime.js";
                 if(m.hello({locale:"nl"})!=="Hallo")throw new Error("zero-input locale options were treated as inputs");
                 const amount=m.amount({value:decimal("1.25")},{locale:"nl"});if(amount!==" 1,25 ")throw new Error(`Dutch decimal punctuation diverged from .NET: ${amount}`);
                 if(decodeWireValue("0000-01-01","date").ok||decodeWireValue("0000-01-01T00:00:00Z","datetime").ok)throw new Error("year zero date carrier accepted");
+                for(const locale of ["en-a","en-a-b","en-a-foo-a-bar","en-US-Latn","de-1901-1901"]){let rejected=false;try{resolveLocale(locale);}catch(error){rejected=error instanceof RangeError&&String(error).includes("Invalid locale");}if(!rejected)throw new Error(`invalid locale accepted: ${locale}`);}
                 """, new UTF8Encoding(false));
             Run("bun", [script], europeanDirectory);
         }

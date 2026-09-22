@@ -71,7 +71,7 @@ internal static class Rmf2ArtifactV5Tests
         [
             new CompiledTranslationLocale("de", "en", []),
             new CompiledTranslationLocale("en", null, english.Messages.Select(message =>
-                new CompiledTranslationValue(message.Key.Id, message.Pattern, message.Message!)).OrderBy(value => value.Id).ToArray()),
+                new CompiledTranslationValue(message.Key.Id, string.Empty, message.Message)).OrderBy(value => value.Id).ToArray()),
         ]);
         var factory = new ExternalTranslationSnapshotFactory(new PackSource(artifact.GetUtf8Bytes()), project.Id,
             project.CallerFingerprint, requested => Contract(project, requested));

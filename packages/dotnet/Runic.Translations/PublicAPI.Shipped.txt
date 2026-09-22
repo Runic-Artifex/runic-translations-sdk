@@ -582,7 +582,6 @@ type enum Runic.Translations.UnsupportedLocalePolicy : System.Int32, System.ICom
   field const Runic.Translations.UnsupportedLocalePolicy ParentsThenDefault = 1
 
 type sealed class Runic.Translations.VerifiedExternalTranslationPack
-  method System.Boolean TryGetPattern(Runic.Translations.TranslationKey key, out System.String pattern)
   property System.Collections.Generic.IReadOnlyList<Runic.Translations.VerifiedTranslationPackMessage> Messages { get; }
   property System.String Catalog { get; }
   property System.String ContractFingerprint { get; }
@@ -591,4 +590,3 @@ type sealed class Runic.Translations.VerifiedExternalTranslationPack
 type sealed class Runic.Translations.VerifiedTranslationPackMessage
   property Runic.Translations.CompiledTextMessage Message { get; }
   property Runic.Translations.TranslationKey Key { get; }
-  property System.String Pattern { get; }

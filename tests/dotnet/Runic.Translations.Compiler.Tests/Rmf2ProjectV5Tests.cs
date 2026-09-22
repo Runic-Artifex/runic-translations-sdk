@@ -18,6 +18,7 @@ internal static class Rmf2ProjectV5Tests
         runner.Add("RMF2 v5 target callers inherit canonical carriers and may omit inputs", Callers);
         runner.Add("RMF2 v5 project composition matches flat split and external mounts", Composition);
         runner.Add("RMF2 v5 project discovery rejects collisions undeclared locales and invalid fallback", InvalidProjects);
+        runner.Add("RMF2 v5 locale tags enforce structural BCP 47 extension grammar", LocaleTags);
         runner.Add("RMF2 v5 markup canonicalizes aliases typed defaults locals and annotations", Markup);
         runner.Add("RMF2 v5 markup validates every variant and functional slot obligation", InvalidMarkup);
         runner.Add("RMF2 v5 caller fingerprint excludes content but source hash detects it", Fingerprints);
@@ -140,6 +141,28 @@ internal static class Rmf2ProjectV5Tests
         Assert.True(!duplicate.Success, "Duplicate paths accepted.");
         var caseAlias = TranslationCompiler.CompileRmf2ProjectV5(Project(), [Source("translations/one/en.rmf2", "x = X"), Source("translations/One/de.rmf2", "x = X")]);
         Assert.True(!caseAlias.Success, "Case-only alias accepted.");
+    }
+
+    private static void LocaleTags()
+    {
+        foreach (string locale in new[] { "en-a", "en-a-b", "en-a-foo-a-bar", "en-US-Latn", "de-1901-1901" })
+        {
+            Rmf2ProjectCompilationV5 invalid = TranslationCompiler.CompileRmf2ProjectV5(
+                Project(",\"locales\":[\"en\",\"" + locale + "\"]"),
+                [Source("translations/en.rmf2", "x = X")]);
+            Assert.True(!invalid.Success && invalid.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0004"),
+                "Invalid locale tag was accepted: " + locale);
+        }
+
+        foreach (string locale in new[] { "de-CH-1901", "en-a-foo-b-bar", "en-x-a", "en-9-foo", "zh-cmn-Hans-CN" })
+        {
+            TranslationSource project = Source("translations/runic.json",
+                "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"" + locale + "\"}");
+            Rmf2ProjectCompilationV5 valid = TranslationCompiler.CompileRmf2ProjectV5(
+                project, [Source("translations/" + locale + ".rmf2", "x = X")]);
+            Assert.True(valid.Success, "Valid locale tag was rejected: " + locale + "\n" + Errors(valid));
+            Assert.Equal(locale, valid.Project!.DefaultLocale);
+        }
     }
     private const string Custom = ",\"markup\":{\"contracts\":[{\"name\":\"app:badge\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"amount\":{\"type\":\"number\",\"default\":\"1e2\"},\"enabled\":{\"type\":\"boolean\",\"default\":\"true\"},\"tone\":{\"type\":\"enum\",\"values\":[\"positive\",\"neutral\"],\"default\":\"neutral\"}}}],\"aliases\":{\"badge\":\"app:badge\"}}";
     private static void Markup()

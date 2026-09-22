@@ -224,22 +224,19 @@ public sealed class TranslationPackContract
 /// <summary>One fully verified external message value.</summary>
 public sealed class VerifiedTranslationPackMessage
 {
-    internal VerifiedTranslationPackMessage(TranslationKey key, string pattern, CompiledTextMessage? message = null)
-    { Key = key; Pattern = pattern; Message = message; }
+    internal VerifiedTranslationPackMessage(TranslationKey key, CompiledTextMessage message)
+    { Key = key; Message = message; }
 
     /// <summary>The generated known key.</summary>
     public TranslationKey Key { get; }
-    /// <summary>The validated plain-text message pattern.</summary>
-    public string Pattern { get; }
     /// <summary>The verified normalized RMF2 v5 message.</summary>
-    public CompiledTextMessage? Message { get; }
+    public CompiledTextMessage Message { get; }
 }
 
 /// <summary>Immutable external pack data that passed integrity, shape, and compatibility validation.</summary>
 public sealed class VerifiedExternalTranslationPack
 {
     private readonly ReadOnlyCollection<VerifiedTranslationPackMessage> _messages;
-    private readonly Dictionary<TranslationKey, string> _patterns;
 
     internal VerifiedExternalTranslationPack(
         string catalog,
@@ -251,8 +248,6 @@ public sealed class VerifiedExternalTranslationPack
         Locale = locale;
         ContractFingerprint = contractFingerprint;
         _messages = Array.AsReadOnly(messages);
-        _patterns = new Dictionary<TranslationKey, string>(messages.Length);
-        for (int i = 0; i < messages.Length; i++) _patterns.Add(messages[i].Key, messages[i].Pattern);
     }
 
     /// <summary>The verified catalog identifier.</summary>
@@ -263,7 +258,4 @@ public sealed class VerifiedExternalTranslationPack
     public string ContractFingerprint { get; }
     /// <summary>The verified messages in ordinal key order.</summary>
     public IReadOnlyList<VerifiedTranslationPackMessage> Messages => _messages;
-
-    /// <summary>Attempts to obtain a verified replacement pattern for a generated key.</summary>
-    public bool TryGetPattern(TranslationKey key, out string pattern) => _patterns.TryGetValue(key, out pattern!);
 }
