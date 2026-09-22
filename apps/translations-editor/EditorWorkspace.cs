@@ -160,7 +160,6 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             string path = NormalizeKnownPath(relativePath);
-            string? locale = SourceLocale(path);
             if (key is not null && value is not null)
             {
                 if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
@@ -190,7 +189,7 @@ internal sealed class EditorWorkspace : IDisposable
                 else throw new EditorUserException(EditorNotice.Create("ui_backend_not_message_document"));
             }
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            return new EditorDocumentDraft(state.Compilation.Success, content, ReadEntries(path, content, locale), Diagnostics(state.Compilation));
+            return new EditorDocumentDraft(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state.Compilation));
         }
         catch (Exception exception) when (exception is ArgumentException or TranslationAuthoringException)
         {
@@ -561,7 +560,6 @@ internal sealed class EditorWorkspace : IDisposable
                 return (new EditorXliffImportPlan(false, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, null,
                     [], 0, 0, 0, 0, 0, false, refusals.Order(InterchangeRefusalOrder.Instance).ToArray()), null);
 
-            string layer = catalog.Layer;
             TranslationInterchangeLocale targetLocale = catalog.Locales.Single(locale => string.Equals(locale.Tag, import.TargetLocale, StringComparison.Ordinal));
             Dictionary<string, string> direct = targetLocale.DirectResources.ToDictionary(
                 static resource => resource.Key,
@@ -667,7 +665,7 @@ internal sealed class EditorWorkspace : IDisposable
                 documents,
                 merged,
                 sidecar.Revision);
-            return (new EditorXliffImportPlan(true, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, layer,
+            return (new EditorXliffImportPlan(true, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, null,
                 changes.ToArray(), added, changed, removed, unchanged, reviewUpdates, overflowed, []),
                 prepared);
         }
@@ -1214,8 +1212,7 @@ internal sealed class EditorWorkspace : IDisposable
             }
             else
             {
-                string localPath = NormalizeRelativePath(Path.GetRelativePath(projectRoot, fullPath));
-                string? locale = SourceLocale(localPath);
+                string? locale = SourceLocale(fullPath, sourceRoots);
                 messageSources.Add(Source(relativePath, content));
                 files.Add(new WorkspaceFile(relativePath, content, Revision(bytes), DocumentKind.Resource, catalogId, locale, "base"));
             }
@@ -1224,14 +1221,10 @@ internal sealed class EditorWorkspace : IDisposable
         if (replacementPath is not null && !files.Exists(file => string.Equals(file.Path, replacementPath, StringComparison.Ordinal)))
         {
             string replacementFullPath = ContainedPath(replacementPath);
-            string projectBoundary = projectRoot.EndsWith(Path.DirectorySeparatorChar)
-                ? projectRoot
-                : projectRoot + Path.DirectorySeparatorChar;
-            if (!sourceRoots.Any(root => replacementFullPath.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, StringComparison.Ordinal)) ||
+            if (!sourceRoots.Any(root => IsWithinSourceRoot(root, replacementFullPath)) ||
                 !IsSourcePath(replacementPath))
                 throw new EditorUserException(EditorNotice.Create("ui_backend_source_outside_project", ("path", replacementPath)));
-            string localPath = NormalizeRelativePath(Path.GetRelativePath(projectRoot, replacementFullPath));
-            string? locale = SourceLocale(localPath);
+            string? locale = SourceLocale(replacementFullPath, sourceRoots);
             string content = replacementContent ?? string.Empty;
             messageSources.Add(Source(replacementPath, content));
             files.Add(new WorkspaceFile(replacementPath, content, NewMf2DocumentRevision, DocumentKind.Resource, catalogId, locale, "base"));
@@ -1307,7 +1300,7 @@ internal sealed class EditorWorkspace : IDisposable
                 malformed,
                 file.Locale,
                 file.Layer,
-                ReadEntries(file.Path, file.Content, file.Locale)));
+                ReadEntries(file.Path, file.Content, state.Compilation)));
         }
         EditorReviewSnapshot? review = _catalogId is null
             ? null
@@ -1558,7 +1551,21 @@ internal sealed class EditorWorkspace : IDisposable
         ? Path.GetFileNameWithoutExtension(path)
         : path.Contains('/', StringComparison.Ordinal) ? path[..path.IndexOf('/')] : null;
 
-    private EditorMessageEntry[] ReadEntries(string path, string content, string? locale)
+    private static string? SourceLocale(string fullPath, IReadOnlyList<string> sourceRoots)
+    {
+        string[] matches = sourceRoots.Where(root => IsWithinSourceRoot(root, fullPath)).ToArray();
+        return matches.Length != 1
+            ? null
+            : SourceLocale(NormalizeRelativePath(Path.GetRelativePath(matches[0], fullPath)));
+    }
+
+    private static bool IsWithinSourceRoot(string root, string path)
+    {
+        string boundary = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(path).StartsWith(boundary, StringComparison.Ordinal);
+    }
+
+    private EditorMessageEntry[] ReadEntries(string path, string content, Rmf2ProjectCompilationV5 compilation)
     {
         if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
         {
@@ -1567,7 +1574,13 @@ internal sealed class EditorWorkspace : IDisposable
                 .Select(node => new EditorMessageEntry(string.Join('_', workspace.LogicalPath(path, node)), node.Message!, node.MessageByteMap[0], node.MessageByteMap[^1] - node.MessageByteMap[0])).ToArray();
         }
         if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
-            return [new EditorMessageEntry(Path.GetFileNameWithoutExtension(path), content, 0, StrictUtf8.GetByteCount(content))];
+        {
+            string key = compilation.Project?.Locales
+                .SelectMany(static locale => locale.DirectResources)
+                .FirstOrDefault(resource => string.Equals(resource.SourceLocation.Path, path, StringComparison.Ordinal))?.Key
+                ?? Path.GetFileNameWithoutExtension(path);
+            return [new EditorMessageEntry(key, content, 0, StrictUtf8.GetByteCount(content))];
+        }
         return [];
     }
 
@@ -1577,7 +1590,7 @@ internal sealed class EditorWorkspace : IDisposable
         if (config is null) return null;
         using var document = JsonDocument.Parse(File.ReadAllBytes(config));
         var state = ReadStateAsync(null, null, CancellationToken.None).GetAwaiter().GetResult();
-        var sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && file.Path.EndsWith(".rmf2", StringComparison.Ordinal)).Select(file => Source(file.Path, file.Content)).ToArray();
+        var sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && IsSourcePath(file.Path)).Select(file => Source(file.Path, file.Content)).ToArray();
         if (sources.Length == 0) return null;
         var workspace = new Rmf2Workspace(_root, new TranslationSource(Path.GetRelativePath(_root, config).Replace('\\', '/'), File.ReadAllBytes(config)), sources);
         if (request.Kind == "add-locale") return workspace.AddLocale(request.Locale ?? "", request.Fallback, request.CopyFromLocale);
@@ -1587,7 +1600,7 @@ internal sealed class EditorWorkspace : IDisposable
         if (request.Kind == "create-key")
         {
             string locale = document.RootElement.GetProperty("baseLocale").GetString()!;
-            string path = sources.Where(source => Path.GetFileNameWithoutExtension(source.Path) == locale).Select(source => source.Path).Order(StringComparer.Ordinal).FirstOrDefault(path => {
+            string path = sources.Where(source => string.Equals(workspace.Locale(source.Path), locale, StringComparison.OrdinalIgnoreCase)).Select(source => source.Path).Order(StringComparer.Ordinal).FirstOrDefault(path => {
                 try { workspace.LocalPath(path, Target()); return true; }
                 catch (TranslationAuthoringException) { return false; }
             })

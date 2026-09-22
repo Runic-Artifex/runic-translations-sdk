@@ -109,8 +109,11 @@ function missingMessageDocument(
     const target = localeDocuments.find(document => document.path === rmf2Path);
     if (target !== undefined) return target;
   }
+  const directPath = source?.path.toLowerCase().endsWith(".mf2") === true
+    ? directLocalePath(source.path, locale)
+    : undefined;
   return {
-    path: rmf2 ? rmf2Path : `${directory}${locale}/${key}.mf2`,
+    path: rmf2 ? rmf2Path : directPath ?? `${directory}${locale}/${key}.mf2`,
     content: "",
     revision: newMf2DocumentRevision,
     isManifest: false,
@@ -154,8 +157,19 @@ function flattenDocument(content: string, path: string, entries?: EditorMessageE
     structured: /^\s*\.(?:input|local|match)\b/m.test(entry.content) || entry.content.includes("{#"),
   }));
   if (!path.toLowerCase().endsWith(".mf2")) return [];
-  const key = path.slice(path.lastIndexOf("/") + 1, -".mf2".length);
+  const key = entries?.length === 1
+    ? entries[0].key
+    : path.slice(path.lastIndexOf("/") + 1, -".mf2".length);
   return [{ key, value: content, tags: [], structured: /^\s*\.(?:input|local|match)\b/m.test(content) || content.includes("{#") }];
+}
+
+function directLocalePath(path: string, locale: string): string | undefined {
+  const filenameSeparator = path.lastIndexOf("/");
+  if (filenameSeparator < 0) return undefined;
+  const localeDirectory = path.slice(0, filenameSeparator);
+  const localeSeparator = localeDirectory.lastIndexOf("/");
+  const sourceRoot = localeSeparator < 0 ? "" : localeDirectory.slice(0, localeSeparator + 1);
+  return `${sourceRoot}${locale}/${path.slice(filenameSeparator + 1)}`;
 }
 
 function primaryDocument(documents: EditorDocument[]): EditorDocument | undefined {

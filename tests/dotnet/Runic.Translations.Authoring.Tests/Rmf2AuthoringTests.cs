@@ -64,6 +64,29 @@ internal static class Rmf2AuthoringTests
         Assert.True(created.IsValid && created.Edits.Select(edit => edit.RelativePath).Order(StringComparer.Ordinal)
             .SequenceEqual(["de/new_message.mf2", "en/new_message.mf2"]), "Direct message creation did not cover every locale.");
         Assert.True(workspace.Format("en/hello.mf2").IsValid, "Direct formatting validation failed.");
+
+        const string mountedConfig = "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}";
+        var mounted = new Rmf2Workspace(Path.GetTempPath(), Source("translations/runic.json", mountedConfig), [
+            Source("feature/en/greeting.mf2", english),
+            Source("feature/de/greeting.mf2", german),
+        ]);
+        Rmf2ResourceNode mountedEnglish = mounted.Documents.Single(document => document.Source.Path == "feature/en/greeting.mf2").Nodes.Single();
+        Assert.Equal("shop.greeting", string.Join('.', mounted.LogicalPath("feature/en/greeting.mf2", mountedEnglish)));
+        Assert.Equal("greeting", string.Join('.', mounted.LocalPath("feature/en/greeting.mf2", ["shop", "greeting"])));
+
+        TranslationWorkspaceTransactionPlan mountedCreated = mounted.CreateResource(
+            "feature/en/greeting.mf2", ["shop", "new_message"], "New message\n");
+        Assert.True(mountedCreated.IsValid && mountedCreated.Edits.Select(edit => edit.RelativePath).Order(StringComparer.Ordinal)
+            .SequenceEqual(["feature/de/new_message.mf2", "feature/en/new_message.mf2"]),
+            "Mounted direct creation lost the source-root namespace or locale directories.");
+
+        TranslationWorkspaceTransactionPlan mountedRenamed = mounted.MutateResource(
+            ["shop", "greeting"], ["shop", "salutation"]);
+        Assert.True(mountedRenamed.IsValid && mountedRenamed.Edits.Any(edit =>
+            edit.RelativePath == "feature/de/salutation.mf2" && edit.Kind == TranslationWorkspaceEditKind.Create),
+            "Mounted direct mutation did not preserve the source-root namespace.");
+        Assert.Throws<TranslationAuthoringException>(() => mounted.MutateResource(
+            ["shop", "greeting"], ["account", "salutation"]), "namespace");
     }
     private static void Locales()
     {

@@ -33,7 +33,42 @@ internal static class EditorSmokeTest
                 string.Equals(document.Locale, initial.Catalog!.DefaultLocale, StringComparison.OrdinalIgnoreCase) &&
                 document.Entries?.Any(entry => entry.Key == "application_subtitle" && entry.Content == "Untertitel") == true) == true,
                 "The RMF2 create-key mutation did not produce the expected resource.");
-            Console.WriteLine("PASS: editor loads, edits, saves, and mutates RMF2 sources.");
+
+            string mountedRoot = Path.Combine(container, "mounted-direct");
+            string mountedProject = Path.Combine(mountedRoot, "translations");
+            string mountedFeature = Path.Combine(mountedRoot, "feature");
+            Directory.CreateDirectory(mountedProject);
+            Directory.CreateDirectory(Path.Combine(mountedFeature, "en"));
+            await File.WriteAllTextAsync(Path.Combine(mountedProject, "runic.json"),
+                "{\"schemaVersion\":1,\"catalog\":\"mounted-direct\",\"code\":{\"namespace\":\"Smoke.Translations\",\"className\":\"SmokeText\"},\"baseLocale\":\"en\",\"locales\":[{\"tag\":\"en\"},{\"tag\":\"de\",\"fallback\":\"en\"}],\"validation\":{\"translationCompleteness\":\"allow\"},\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}\n").ConfigureAwait(false);
+            await File.WriteAllTextAsync(Path.Combine(mountedFeature, "en", "greeting.mf2"), "Hello\n").ConfigureAwait(false);
+
+            using var mountedSession = new EditorSession(mountedRoot);
+            WorkspaceSnapshot mounted = await mountedSession.LoadAsync().ConfigureAwait(false);
+            EditorDocument[] mountedGreeting = mounted.Documents.Where(document => document.Path.EndsWith("greeting.mf2", StringComparison.OrdinalIgnoreCase)).ToArray();
+            Require(mounted.Success && mountedGreeting.Length == 1 && mountedGreeting[0].Locale == "en" &&
+                mountedGreeting[0].Entries?.Single().Key == "shop_greeting",
+                "The editor did not preserve compiler identity for external mounted direct MF2 resources.");
+            EditorDocumentDraft mountedGerman = await mountedSession.TransformDocumentAsync(
+                "feature/de/greeting.mf2", "Hallo\n", "shop_greeting", "Hallo").ConfigureAwait(false);
+            Require(mountedGerman.Success && mountedGerman.Entries.Single().Key == "shop_greeting",
+                "The editor did not resolve a synthesized direct document against its external source root.");
+            EditorOperationResult mountedSaved = await mountedSession.SaveAsync(
+                "feature/de/greeting.mf2", mountedGerman.Content, EditorWorkspace.NewMf2DocumentRevision).ConfigureAwait(false);
+            WorkspaceSnapshot mountedReloaded = await mountedSession.LoadAsync().ConfigureAwait(false);
+            Require(mountedSaved.Ok && mountedReloaded.Documents.Single(document => document.Path == "feature/de/greeting.mf2").Locale == "de",
+                "The editor did not save the synthesized locale beside its canonical mounted source.");
+            var rename = new EditorMutationRequest("rename-key", null, null, null, null, "shop_greeting", "shop.salutation", null);
+            EditorMutationPreview renamePreview = mountedSession.PreviewMutation(rename);
+            Require(renamePreview.Ok && renamePreview.Files.Any(file => file.Path == "feature/de/salutation.mf2"),
+                "The editor did not plan mounted direct MF2 mutation beside the matched source root.");
+            EditorOperationResult renamed = await mountedSession.ApplyMutationAsync(rename with { ConfirmationToken = renamePreview.ConfirmationToken }).ConfigureAwait(false);
+            EditorDocument[] renamedSalutation = renamed.Snapshot?.Documents.Where(document => document.Path.EndsWith("salutation.mf2", StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
+            Require(renamed.Ok && renamedSalutation.Length == 2 && renamedSalutation
+                .All(document => document.Locale is "en" or "de" && document.Entries?.Single().Key == "shop_salutation"),
+                "The editor did not apply compiler-consistent mounted direct MF2 mutation.");
+
+            Console.WriteLine("PASS: editor loads, edits, saves, and mutates grouped and mounted direct RMF2 v5 sources.");
             return 0;
         }
         catch (Exception exception)
