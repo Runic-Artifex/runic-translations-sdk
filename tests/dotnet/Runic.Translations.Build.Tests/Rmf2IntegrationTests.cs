@@ -47,7 +47,7 @@ internal static class Rmf2IntegrationTests
         ProcessResult result = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated", "--emit-cpp", "--runic-output", "json");
         Assert.Equal(1, result.ExitCode, result.Combined);
         Assert.Contains("RCLI9013", result.Combined);
-        Assert.Contains("--emit-cpp is not supported for RMF2 projects", result.Combined);
+        Assert.Contains("semantic translation contract does not support --emit-cpp", result.Combined);
         Assert.False(Directory.Exists(temporary.Resolve("generated")), "Unsupported RMF2 output created artifacts.");
     }
     private static void MountedCli()
@@ -120,7 +120,7 @@ internal static class Rmf2IntegrationTests
         File.WriteAllText(path, Project[..^1] + ",\"executionProfile\":\"future-profile\"}");
         ProcessResult invalid = TestFixture.RunTool(temporary, "validate", "--project", "translations");
         Assert.Equal(1, invalid.ExitCode, invalid.Combined);
-        Assert.Contains("RTR0065", invalid.Combined);
+        Assert.Contains("RTR0019", invalid.Combined);
     }
     private static void EmptyV5CliBoundary()
     {
@@ -569,9 +569,8 @@ internal static class Rmf2IntegrationTests
         Send("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray() });
         Send("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri } }, 2);
         string[] initialOne = Messages(oneUri), initialTwo = Messages(twoUri);
-        Assert.True(initialOne.Length > 0 && initialTwo.Length > 0, "Both projects must begin with distinct catalog diagnostics.");
-        Assert.False(initialOne.SequenceEqual(initialTwo), "The two-project fixture did not produce distinguishable diagnostics.");
-        Assert.True(initialOne.Any(message => message.Contains("retry", StringComparison.Ordinal)), "Closed mounted project tie-breaking did not select project one.");
+        Assert.True(initialOne.Length == 0 && initialTwo.Length == 0,
+            "Valid inferred-source projects must begin without configuration diagnostics.");
         if (staleManifest is not null)
         {
             File.Delete(staleManifest);

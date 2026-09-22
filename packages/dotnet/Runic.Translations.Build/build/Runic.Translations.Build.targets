@@ -33,7 +33,6 @@
     </PropertyGroup>
     <Runic.Translations.Build.Rmf2SourceDiscovery Projects="@(TranslationProject)" Condition="'@(TranslationProject)' != '' and Exists('$(_Rmf2DiscoveryAssembly)')">
       <Output TaskParameter="Sources" ItemName="_TranslationsDiscoveredSource" />
-      <Output TaskParameter="ExecutionProfile" PropertyName="_TranslationsExecutionProfile" />
     </Runic.Translations.Build.Rmf2SourceDiscovery>
     <ItemGroup Condition="'@(TranslationProject)' != '' and !Exists('$(_Rmf2DiscoveryAssembly)')">
       <_TranslationsDiscoveredSource Include="$(_TranslationsSourceDiscoveryGlobs)" />
@@ -136,12 +135,10 @@
       <_TranslationsEmitArguments Condition="'$(TranslationsEmitTemplateManifest)' == 'true'">$(_TranslationsEmitArguments) --emit-template-manifest</_TranslationsEmitArguments>
       <_TranslationsEmitArguments Condition="'$(TranslationsEmitEsm)' == 'true'">$(_TranslationsEmitArguments) --emit-esm</_TranslationsEmitArguments>
       <_TranslationsEmitArguments Condition="'$(TranslationsEmitCpp)' == 'true'">$(_TranslationsEmitArguments) --emit-cpp</_TranslationsEmitArguments>
-      <_TranslationsEmitArguments Condition="'$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true' and '$(_TranslationsExecutionProfile)' == 'rmf2-execution-v2'"> --emit-json --emit-esm</_TranslationsEmitArguments>
-      <_TranslationsEmitArguments Condition="'$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true' and '$(_TranslationsExecutionProfile)' != 'rmf2-execution-v2'"> --emit-json --emit-typescript --emit-template-manifest --emit-esm</_TranslationsEmitArguments>
+      <_TranslationsEmitArguments Condition="'$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true'"> --emit-json --emit-esm</_TranslationsEmitArguments>
     </PropertyGroup>
     <ItemGroup>
       <_TranslationsDesiredStateLine Include="tool-command=$(TranslationsToolCommand)" />
-      <_TranslationsDesiredStateLine Include="execution-profile=$(_TranslationsExecutionProfile)" />
       <_TranslationsDesiredStateLine Include="emit-arguments=$(_TranslationsEmitArguments)" />
       <_TranslationsDesiredStateLine Include="additional-arguments=$(TranslationsToolAdditionalArguments)" />
       <_TranslationsDesiredStateLine Include="output=$(_TranslationsOutputDirectory)" />
@@ -164,8 +161,8 @@
       <_TranslationsDesiredResponseLine Include="--output" />
       <_TranslationsDesiredResponseLine Include="&quot;$(_TranslationsStagingDirectory)&quot;" />
       <_TranslationsDesiredResponseLine Include="--emit-json" Condition="'$(TranslationsEmitJson)' == 'true' or ('$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
-      <_TranslationsDesiredResponseLine Include="--emit-typescript" Condition="'$(TranslationsEmitTypeScript)' == 'true' or ('$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true' and '$(_TranslationsExecutionProfile)' != 'rmf2-execution-v2')" />
-      <_TranslationsDesiredResponseLine Include="--emit-template-manifest" Condition="'$(TranslationsEmitTemplateManifest)' == 'true' or ('$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true' and '$(_TranslationsExecutionProfile)' != 'rmf2-execution-v2')" />
+      <_TranslationsDesiredResponseLine Include="--emit-typescript" Condition="'$(TranslationsEmitTypeScript)' == 'true'" />
+      <_TranslationsDesiredResponseLine Include="--emit-template-manifest" Condition="'$(TranslationsEmitTemplateManifest)' == 'true'" />
       <_TranslationsDesiredResponseLine Include="--emit-esm" Condition="'$(TranslationsEmitEsm)' == 'true' or ('$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
       <_TranslationsDesiredResponseLine Include="--emit-cpp" Condition="'$(TranslationsEmitCpp)' == 'true'" />
       <_TranslationsDesiredResponseLine Include="$(TranslationsToolAdditionalArguments)" Condition="'$(TranslationsToolAdditionalArguments)' != ''" />

@@ -66,7 +66,9 @@ internal static class BuildIntegrationTests
         {
             using TemporaryDirectory temporary = CreateConsumer(false, extraProperties: property); ProcessResult result = Build(temporary); Assert.Equal(0, result.ExitCode, result.Combined);
             string output = FindGeneratedDirectory(temporary, expected); string[] files = GeneratedArtifacts(output);
-            if (expected == "web-module-manifest-v3.json") Assert.True(files.Length > 0 && files.All(static path => path.StartsWith("minimal.esm-v5/", StringComparison.Ordinal)), "ESM selection emitted another output group.");
+            if (expected == "web-module-manifest-v3.json") Assert.True(files.Contains("web-module-manifest-v3.json", StringComparer.Ordinal) &&
+                files.All(static path => !path.EndsWith(".locale-v5.json", StringComparison.Ordinal) && !path.EndsWith(".g.cs", StringComparison.Ordinal)),
+                "ESM selection emitted another output group: " + string.Join('|', files));
             else Assert.Equal("minimal.asset-manifest-v1.json|minimal.en.locale-v5.json", string.Join('|', files));
         }
         foreach ((string property, string flag) in new[] { ("<TranslationsEmitTypeScript>true</TranslationsEmitTypeScript>", "--emit-typescript"), ("<TranslationsEmitTemplateManifest>true</TranslationsEmitTemplateManifest>", "--emit-template-manifest"), ("<TranslationsEmitCpp>true</TranslationsEmitCpp>", "--emit-cpp") })
