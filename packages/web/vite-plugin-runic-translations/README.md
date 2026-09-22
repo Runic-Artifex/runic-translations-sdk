@@ -22,9 +22,11 @@ export default defineConfig({
 });
 ```
 
-The no-argument form discovers `translations/runic.json`, compiles its locale
-RMF2 files to `.runic/translations`, and watches config and message edits,
-including added, removed, and renamed locale files. In a split
+The no-argument form discovers `translations/runic.json`, compiles either its
+direct locale `.mf2` files or grouped `.rmf2` files to `.runic/translations`,
+and watches config and message edits, including added, removed, and renamed
+source files. A project may select additional source trees with `sourceRoots`;
+mixing the two source forms is rejected by the shared compiler. In a split
 frontend/backend layout, use `runicTranslations({ project: "../translations" })`.
 When another build owns generation, pass its generated `manifest` and optional
 `sourceFiles` instead.
@@ -62,4 +64,4 @@ Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob
 
 ## RMF2
 
-Project mode recursively discovers `.rmf2` and watches `runic.json`, the project directory, and all explicit `sourceRoots` for additions, edits and removals. It emits the typed grammar 5 / ESM ABI 4 `web-module-manifest-v3.json` output, invokes the shared compiler, and retains its diagnostic failures. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the generated inline renderer API.
+Project mode recursively discovers direct `.mf2` and grouped `.rmf2` sources and watches `runic.json`, the project directory, and all explicit `sourceRoots` for additions, edits and removals. It emits the typed grammar 5 / ESM ABI 4 `web-module-manifest-v3.json` output, invokes the shared compiler, and retains its diagnostic failures, including mixed-source rejection. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the generated inline renderer API.

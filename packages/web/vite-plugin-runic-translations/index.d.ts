@@ -1,7 +1,7 @@
 import type { Plugin } from "vite";
 
 export interface RunicTranslationsOptions {
-  /** Runic translation directory or runic.json path. Defaults to ./translations. Watches recursive RMF2 inputs. */
+  /** Runic translation directory or runic.json path. Defaults to ./translations. Watches recursive .mf2 and .rmf2 inputs. */
   readonly project?: string;
   /** Generated artifact directory for project mode. Defaults to ./.runic/translations. */
   readonly output?: string;

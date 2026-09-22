@@ -152,7 +152,7 @@ export function runicTranslations(options = {}) {
     if (!compiler) return sourceFiles.has(path);
     if (path === compiler.config) return true;
     if (isWithin(compiler.output, path)) return false;
-    return explicitSources.has(path) || (sourceRoots.some(root => isWithin(root, path)) && /\.rmf2$/i.test(path));
+    return explicitSources.has(path) || (sourceRoots.some(root => isWithin(root, path)) && /\.(?:mf2|rmf2)$/i.test(path));
   }
 
   function update(path, targetServer) {
@@ -291,7 +291,7 @@ function readProject(config, output) {
       if (isWithin(output, path)) continue;
       if (entry.isSymbolicLink()) throw new Error("Translation sources must not traverse symbolic links.");
       if (entry.isDirectory()) discover(path);
-      else if (entry.isFile() && /\.rmf2$/i.test(path)) sourceFiles.push(path);
+      else if (entry.isFile() && /\.(?:mf2|rmf2)$/i.test(path)) sourceFiles.push(path);
     }
   }
   if (settings.sourceRoots !== undefined && (!Array.isArray(settings.sourceRoots) || settings.sourceRoots.some(mount => !mount || typeof mount.path !== "string" || mount.path.length === 0)))

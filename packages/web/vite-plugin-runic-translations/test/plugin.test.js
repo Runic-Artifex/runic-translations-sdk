@@ -130,6 +130,57 @@ test("project mode compiles and watches canonical RMF2 v3 output", async () => {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("project mode discovers and watches direct MF2 sources in sourceRoots", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-direct-mf2-"));
+  try {
+    const project = join(root, "translations"), feature = join(root, "feature"), output = join(root, "generated");
+    const config = join(project, "runic.json"), english = join(feature, "en.mf2");
+    await mkdir(project); await mkdir(feature);
+    await writeFile(config, JSON.stringify({ schemaVersion: 1, catalog: "app", sourceRoots: [{ path: "../feature", namespace: ["shop"] }] }));
+    await writeFile(english, "title = Shop\n");
+    await writeV3Fixture(join(output, "app.esm-v5"));
+    const calls = join(root, "calls.txt"), compiler = join(root, "compiler.mjs");
+    await writeFile(compiler, `import { appendFile } from "node:fs/promises"; await appendFile(${JSON.stringify(calls)}, process.argv.slice(2).join("|") + "\\n");`);
+    const plugin = runicTranslations({ project, output, command: process.execPath, commandArguments: [compiler] });
+    const watcher = new EventEmitter(), watched = [], reloads = new EventEmitter();
+    watcher.add = paths => watched.push(...(Array.isArray(paths) ? paths : [paths]));
+    const server = { watcher, httpServer: new EventEmitter(), ws: { send: value => reloads.emit("reload", value) }, moduleGraph: { getModuleById: () => undefined, getModulesByFile: () => new Set(), invalidateModule() {} } };
+    plugin.configureServer(server);
+    await plugin.buildStart.call({ addWatchFile: path => watched.push(path) });
+    assert.ok(watched.includes(config)); assert.ok(watched.includes(feature)); assert.ok(watched.includes(english));
+    const german = join(feature, "de.mf2"); await writeFile(german, "title = Laden\n");
+    const changed = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("No direct MF2 membership update")), 5000); reloads.once("reload", value => { clearTimeout(timer); resolve(value); }); });
+    watcher.emit("add", german);
+    assert.equal((await changed).type, "full-reload"); assert.ok(watched.includes(german));
+    plugin.closeBundle();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("project mode propagates compiler rejection of mixed direct and grouped sources", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-mixed-sources-"));
+  try {
+    const project = join(root, "translations"), output = join(root, "generated");
+    await mkdir(project);
+    await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app" }));
+    await writeFile(join(project, "en.mf2"), "title = Shop\n");
+    await writeFile(join(project, "de.rmf2"), "title = Laden\n");
+    await writeV3Fixture(join(output, "app.esm-v5"));
+    const compiler = join(root, "compiler.mjs");
+    await writeFile(compiler, `import { readdir } from "node:fs/promises";
+const projectIndex = process.argv.indexOf("--project");
+const files = await readdir(process.argv[projectIndex + 1]);
+if (files.some(file => file.endsWith(".mf2")) && files.some(file => file.endsWith(".rmf2"))) {
+  process.stderr.write("RTR0019: direct .mf2 and grouped .rmf2 sources cannot be mixed\\n");
+  process.exitCode = 1;
+}`);
+    const plugin = runicTranslations({ project, output, command: process.execPath, commandArguments: [compiler] });
+    await assert.rejects(
+      () => plugin.buildStart.call({ addWatchFile() {} }),
+      error => error?.stderr?.includes("RTR0019") === true,
+    );
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("Vite production builds retain static v3 message re-exports", async () => {
   const root = await mkdtemp(join(tmpdir(), "runic-vite-production-"));
   try {
