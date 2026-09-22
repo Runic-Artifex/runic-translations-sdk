@@ -36,7 +36,9 @@ public sealed class Rmf2WorkspaceCache
                 }
                 _documents.Remove(source.Path); _recent.Remove(cached.Node);
             }
-            var document = Rmf2ResourceReader.Read(source, cancellationToken: cancellationToken);
+            var document = source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
+                ? Rmf2ResourceReader.ReadDirect(source, cancellationToken: cancellationToken)
+                : Rmf2ResourceReader.Read(source, cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (_documents.Count == _capacity)
             {

@@ -24,6 +24,7 @@ public sealed class Rmf2Workspace
     private readonly string _projectDirectory;
     private readonly List<(string Root, string[] Prefix)> _mounts = new();
     private readonly bool _hasMounts;
+    private readonly bool _direct;
     private readonly Dictionary<string, TranslationSource> _sources;
     private readonly Dictionary<string, Rmf2ResourceDocument> _syntax = new(StringComparer.Ordinal);
     private static readonly UTF8Encoding Utf8 = new(false, true);
@@ -43,7 +44,14 @@ public sealed class Rmf2Workspace
                 _mounts.Add((Path.GetFullPath(mount.GetProperty("path").GetString()!, _projectDirectory), mount.GetProperty("namespace").EnumerateArray().Select(v => v.GetString()!).ToArray()));
         else _mounts.Add((_projectDirectory, Array.Empty<string>()));
         _sources = sources.ToDictionary(s => s.Path, StringComparer.Ordinal);
-        foreach (var source in _sources.Values) if (source.Path.EndsWith(".rmf2", StringComparison.Ordinal)) _syntax.Add(source.Path, cache?.Read(source, cancellationToken) ?? Rmf2ResourceReader.Read(source, cancellationToken: _cancellationToken));
+        _direct = _sources.Values.Any(source => source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase));
+        foreach (var source in _sources.Values)
+        {
+            if (!source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) && !source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) continue;
+            _syntax.Add(source.Path, cache?.Read(source, cancellationToken) ?? (source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
+                ? Rmf2ResourceReader.ReadDirect(source, cancellationToken: _cancellationToken)
+                : Rmf2ResourceReader.Read(source, cancellationToken: _cancellationToken)));
+        }
     }
     public IReadOnlyList<Rmf2ResourceDocument> Documents => _syntax.Values.OrderBy(d => d.Source.Path, StringComparer.Ordinal).ToArray();
     public string BaseLocale => _baseLocale;
@@ -51,7 +59,10 @@ public sealed class Rmf2Workspace
     public void Update(string path, byte[] content, string expectedRevision)
     {
         if (Revision(path) != expectedRevision) throw new TranslationAuthoringException("The resource buffer revision changed.");
-        var source = new TranslationSource(path, content); _sources[path] = source; _syntax[path] = Rmf2ResourceReader.Read(source, cancellationToken: _cancellationToken);
+        var source = new TranslationSource(path, content); _sources[path] = source;
+        _syntax[path] = path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
+            ? Rmf2ResourceReader.ReadDirect(source, cancellationToken: _cancellationToken)
+            : Rmf2ResourceReader.Read(source, cancellationToken: _cancellationToken);
     }
     public Rmf2LanguageService LanguageService => Rmf2LanguageService.Create(_project, _cancellationToken);
     /// <summary>Completes syntax using the base message as the functional-slot authority.</summary>
@@ -59,7 +70,7 @@ public sealed class Rmf2Workspace
     {
         var origin = _syntax[path].Nodes.Single(node => !node.IsGroup && node.Key == key);
         var logical = LogicalPath(path, origin);
-        var baseMessage = Documents.Where(document => string.Equals(Path.GetFileNameWithoutExtension(document.Source.Path), _baseLocale, StringComparison.OrdinalIgnoreCase))
+        var baseMessage = Documents.Where(document => string.Equals(Locale(document.Source.Path), _baseLocale, StringComparison.OrdinalIgnoreCase))
             .SelectMany(document => document.Nodes.Where(node => !node.IsGroup && LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal))).FirstOrDefault();
         return LanguageService.Complete(origin.MessageSyntax, byteOffset, baseMessage?.MessageSyntax);
     }
@@ -91,6 +102,21 @@ public sealed class Rmf2Workspace
     public TranslationWorkspaceTransactionPlan CreateResource(string path, IReadOnlyList<string> logicalPath, string message)
     {
         var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
+        if (_direct)
+        {
+            if (logicalPath.Count != 1 || !Rmf2ResourceReader.Identifier.IsMatch(logicalPath[0]))
+                throw new TranslationAuthoringException("Direct MF2 resources require one identifier filename.");
+            foreach (string locale in Documents.Select(document => Locale(document.Source.Path)).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                string localeDirectory = _sources.Values.Select(source => source.Path)
+                    .Where(sourcePath => string.Equals(Locale(sourcePath), locale, StringComparison.OrdinalIgnoreCase))
+                    .Select(Path.GetDirectoryName).First()!;
+                string target = Path.Combine(localeDirectory, logicalPath[0] + ".mf2").Replace('\\', '/');
+                if (_sources.ContainsKey(target)) throw new TranslationAuthoringException("The resource path already exists.");
+                changes[target] = Utf8.GetBytes(message);
+            }
+            return Plan(changes);
+        }
         // A catalog key is complete only when every locale receives a direct
         // resource.  Updating just the selected base document creates a plan
         // the compiler correctly rejects as an incomplete catalog.
@@ -112,6 +138,24 @@ public sealed class Rmf2Workspace
     public TranslationWorkspaceTransactionPlan MutateResource(IReadOnlyList<string> logicalPath, IReadOnlyList<string>? targetPath, bool duplicate = false)
     {
         var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
+        if (_direct)
+        {
+            if (logicalPath.Count != 1 || (targetPath is not null && (targetPath.Count != 1 || !Rmf2ResourceReader.Identifier.IsMatch(targetPath[0]))))
+                throw new TranslationAuthoringException("Direct MF2 resources require one identifier filename.");
+            foreach (var source in _sources.Values.Where(source => Path.GetFileNameWithoutExtension(source.Path) == logicalPath[0]))
+            {
+                if (targetPath is not null)
+                {
+                    string target = Path.Combine(Path.GetDirectoryName(source.Path) ?? string.Empty, targetPath[0] + ".mf2").Replace('\\', '/');
+                    if (_sources.ContainsKey(target) || changes.ContainsKey(target)) throw new TranslationAuthoringException("The resource path already exists.");
+                    changes[target] = source.GetUtf8Bytes();
+                }
+                if (!duplicate) changes[source.Path] = null;
+            }
+            if (changes.Count == 0) throw new TranslationAuthoringException("No matching message was found.");
+            UpdateSlotKeys(changes, new Dictionary<string, string?> { [logicalPath[0]] = targetPath?[0] }, duplicate);
+            return Plan(changes);
+        }
         foreach (var document in Documents)
         {
             var node = document.Nodes.SingleOrDefault(n => !n.IsGroup && LogicalPath(document.Source.Path, n).SequenceEqual(logicalPath, StringComparer.Ordinal));
@@ -178,6 +222,7 @@ public sealed class Rmf2Workspace
     public TranslationWorkspaceTransactionPlan Rename(IReadOnlyList<string> logicalPath, string newName)
     {
         if (logicalPath.Count == 0 || !System.Text.RegularExpressions.Regex.IsMatch(newName, "^[A-Za-z_][A-Za-z0-9_]*$")) throw new TranslationAuthoringException("A resource path and identifier are required.");
+        if (_direct) return MutateResource(logicalPath, [newName]);
         var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
         var renamedMounts = _mounts.Select((mount, index) => (mount, index))
             .Where(item => logicalPath.Count <= item.mount.Prefix.Length && item.mount.Prefix.Take(logicalPath.Count).SequenceEqual(logicalPath, StringComparer.Ordinal)).Select(item => item.index).ToHashSet();
@@ -233,6 +278,7 @@ public sealed class Rmf2Workspace
     /// <summary>Moves a complete physical group into its matching directory, retaining attached documentation.</summary>
     public TranslationWorkspaceTransactionPlan Extract(string sourcePath, IReadOnlyList<string> localGroup)
     {
+        if (_direct) throw new TranslationAuthoringException("Direct MF2 resources do not contain extractable groups.");
         TranslationSource source = _sources[sourcePath];
         var document = Rmf2ResourceWriter.Require(source);
         var group = document.Nodes.Single(n => n.IsGroup && n.Path.SequenceEqual(localGroup, StringComparer.Ordinal));
@@ -258,6 +304,7 @@ public sealed class Rmf2Workspace
 
     public TranslationWorkspaceTransactionPlan Inline(string sourcePath, string destinationPath)
     {
+        if (_direct) throw new TranslationAuthoringException("Direct MF2 resources do not contain inlineable groups.");
         string[] sourcePrefix = Prefix(sourcePath), targetPrefix = Prefix(destinationPath);
         if (sourcePrefix.Length <= targetPrefix.Length || !sourcePrefix.Take(targetPrefix.Length).SequenceEqual(targetPrefix, StringComparer.Ordinal) || Path.GetFileName(sourcePath) != Path.GetFileName(destinationPath))
             throw new TranslationAuthoringException("Inline destination must be an ancestor resource for the same locale.");
@@ -293,9 +340,11 @@ public sealed class Rmf2Workspace
             if (locales.ContainsKey(locale)) throw new TranslationAuthoringException("The locale already exists.");
             copyFrom = TranslationProjectScaffolder.CanonicalizeLocale((copyFrom ?? catalog.DefaultLocale!).Trim());
             if (!locales.ContainsKey(copyFrom)) throw new TranslationAuthoringException("The source locale does not exist.");
-            foreach (var source in _sources.Values.Where(source => string.Equals(Path.GetFileNameWithoutExtension(source.Path), copyFrom, StringComparison.OrdinalIgnoreCase)))
+            foreach (var source in _sources.Values.Where(source => string.Equals(Locale(source.Path), copyFrom, StringComparison.OrdinalIgnoreCase)))
             {
-                string target = Path.Combine(Path.GetDirectoryName(source.Path) ?? "", locale + ".rmf2").Replace('\\', '/');
+                string target = _direct
+                    ? Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(source.Path)) ?? "", locale, Path.GetFileName(source.Path)).Replace('\\', '/')
+                    : Path.Combine(Path.GetDirectoryName(source.Path) ?? "", locale + ".rmf2").Replace('\\', '/');
                 if (_sources.ContainsKey(target)) throw new TranslationAuthoringException("A destination source file already exists.");
                 changes.Add(target, source.GetUtf8Bytes());
             }
@@ -309,7 +358,7 @@ public sealed class Rmf2Workspace
             {
                 locales.Remove(locale);
                 foreach (string dependent in locales.Where(pair => pair.Value == locale).Select(pair => pair.Key).ToArray()) locales[dependent] = fallback;
-                foreach (var source in _sources.Values.Where(source => string.Equals(Path.GetFileNameWithoutExtension(source.Path), locale, StringComparison.OrdinalIgnoreCase))) changes[source.Path] = null;
+                foreach (var source in _sources.Values.Where(source => string.Equals(Locale(source.Path), locale, StringComparison.OrdinalIgnoreCase))) changes[source.Path] = null;
             }
         }
         var config = JsonNode.Parse(_project.GetUtf8Bytes())!.AsObject();
@@ -368,7 +417,7 @@ public sealed class Rmf2Workspace
                 original is null ? null : Hash(original.GetUtf8Bytes()), change.Value));
             if (change.Key == _project.Path) project = new TranslationSource(change.Key, change.Value!);
             else if (change.Value is null) sources.Remove(change.Key);
-            else if (change.Key.EndsWith(".rmf2", StringComparison.Ordinal)) sources[change.Key] = new TranslationSource(change.Key, change.Value);
+            else if (change.Key.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) || change.Key.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) sources[change.Key] = new TranslationSource(change.Key, change.Value);
         }
         Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, sources.Values, null, _cancellationToken);
         if (!compilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
@@ -384,7 +433,10 @@ public sealed class Rmf2Workspace
             !Diagnostics.Any(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
     }
 
-    public IReadOnlyList<string> LogicalPath(string path, Rmf2ResourceNode node) => Prefix(path).Concat(node.Path).ToArray();
+    public IReadOnlyList<string> LogicalPath(string path, Rmf2ResourceNode node) => _direct ? node.Path : Prefix(path).Concat(node.Path).ToArray();
+    public string Locale(string path) => _direct
+        ? Path.GetFileName(Path.GetDirectoryName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))) ?? string.Empty
+        : Path.GetFileNameWithoutExtension(path);
     /// <summary>Resolves an explicit logical path relative to a physical resource mount.</summary>
     public IReadOnlyList<string> LocalPath(string path, IReadOnlyList<string> logicalPath)
     {

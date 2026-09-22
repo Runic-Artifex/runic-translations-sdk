@@ -23,6 +23,7 @@ internal static class Rmf2AuthoringTests
         runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
         runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
         runner.Add("RMF2 locale plans preserve mounted projects and commit atomically", ExecutionV2Locales);
+        runner.Add("Direct MF2 workspaces expose semantic authoring and filename transactions", DirectSources);
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     private static TranslationSource Project() => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}");
@@ -36,6 +37,33 @@ internal static class Rmf2AuthoringTests
         Assert.True(!ReferenceEquals(original, changed), "Changed source reused stale syntax.");
         cache.Create(Path.GetTempPath(), Project(), [Source("de.rmf2", "x = Zwei\n")]);
         Assert.True(!ReferenceEquals(changed, cache.Create(Path.GetTempPath(), Project(), [Source("en.rmf2", "x = Two\n")]).Documents[0]), "Syntax cache exceeded its capacity.");
+    }
+    private static void DirectSources()
+    {
+        const string english = ".input {$name :string}\n{{Hello {$name}}}\n";
+        const string german = ".input {$name :string}\n{{Hallo {$name}}}\n";
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [
+            Source("en/hello.mf2", english),
+            Source("de/hello.mf2", german),
+        ]);
+        Assert.Equal(2, workspace.Documents.Count);
+        Assert.Equal("en", workspace.Locale("en/hello.mf2"));
+        Assert.Equal("hello", string.Join('.', workspace.LogicalPath("en/hello.mf2", workspace.Documents.Single(document => document.Source.Path == "en/hello.mf2").Nodes.Single())));
+        TranslationWorkspaceTransactionPlan input = workspace.RenameInput("en/hello.mf2", "hello", "name", "person");
+        Assert.Equal(2, input.Edits.Count);
+        Assert.True(input.IsValid && input.Edits.All(edit => Encoding.UTF8.GetString(edit.GetUtf8Bytes()!).Contains("$person", StringComparison.Ordinal)),
+            "Direct input rename did not cover each locale.");
+
+        TranslationWorkspaceTransactionPlan renamed = workspace.Rename(["hello"], "greeting");
+        Assert.True(renamed.IsValid, "Direct filename rename did not validate.");
+        Assert.True(renamed.Edits.Any(edit => edit.RelativePath == "en/hello.mf2" && edit.Kind == TranslationWorkspaceEditKind.Delete) &&
+            renamed.Edits.Any(edit => edit.RelativePath == "de/greeting.mf2" && edit.Kind == TranslationWorkspaceEditKind.Create),
+            "Direct filename rename did not create and delete every locale path.");
+
+        TranslationWorkspaceTransactionPlan created = workspace.CreateResource("en/hello.mf2", ["new_message"], "New message\n");
+        Assert.True(created.IsValid && created.Edits.Select(edit => edit.RelativePath).Order(StringComparer.Ordinal)
+            .SequenceEqual(["de/new_message.mf2", "en/new_message.mf2"]), "Direct message creation did not cover every locale.");
+        Assert.True(workspace.Format("en/hello.mf2").IsValid, "Direct formatting validation failed.");
     }
     private static void Locales()
     {
