@@ -382,9 +382,17 @@ async function safeTypeDeclarationsPath(path, manifestPath, assets) {
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
-  const canonical = join(await realpath(dirname(path)), basename(path));
+  let canonical;
+  try {
+    canonical = await realpath(path);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    canonical = join(await realpath(dirname(path)), basename(path));
+  }
   const manifest = await realpath(manifestPath);
-  if (canonical === manifest || [...assets.values()].some(asset => asset === canonical))
+  const folded = canonical.toLowerCase();
+  if ([manifest, ...assets.values()].some(protectedPath =>
+    protectedPath === canonical || protectedPath.toLowerCase() === folded))
     throw new Error("Generated Runic virtual type declarations must not overwrite the manifest or one of its assets.");
   return canonical;
 }

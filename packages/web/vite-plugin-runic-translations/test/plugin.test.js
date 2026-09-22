@@ -245,6 +245,18 @@ test("generated type declarations reject symlinked parent escapes and canonical 
       /must not traverse symbolic links|must not overwrite/,
     );
     assert.equal(await readFile(messages, "utf8"), before);
+
+    await assert.rejects(
+      () => runicTranslations({ manifest, typeDeclarations: join(generated, "MESSAGES.JS") }).buildStart.call({ addWatchFile() {} }),
+      /must not overwrite/,
+    );
+    assert.equal(await readFile(messages, "utf8"), before);
+    const manifestBefore = await readFile(manifest, "utf8");
+    await assert.rejects(
+      () => runicTranslations({ manifest, typeDeclarations: join(generated, "WEB-MODULE-MANIFEST-V3.JSON") }).buildStart.call({ addWatchFile() {} }),
+      /must not overwrite/,
+    );
+    assert.equal(await readFile(manifest, "utf8"), manifestBefore);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
