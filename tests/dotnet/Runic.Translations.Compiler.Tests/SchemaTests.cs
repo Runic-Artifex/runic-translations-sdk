@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Json.Schema;
@@ -8,11 +7,8 @@ namespace Runic.Translations.Compiler.Tests;
 
 internal static class SchemaTests
 {
-    private const string JsonSchemaDialect = "https://json-schema.org/draft/2020-12/schema";
-
     public static void Register(TestRunner runner)
     {
-        runner.Add("schemas are strict versioned JSON Schema 2020-12 documents", SchemasAreVersionedAndClosed);
         runner.Add("schemas contain only resolvable local references", LocalReferencesResolve);
         runner.Add("published schema identifiers match their bundled file names", CanonicalIdentifiersMatchFiles);
         runner.Add("semantic schemas publish closed v5 profile boundaries", V3SchemaBoundaries);
@@ -36,27 +32,6 @@ internal static class SchemaTests
             EvaluationResults result = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
             Assert.Equal(expected, result.IsValid, context + ": " + result);
         }
-    }
-
-    private static void SchemasAreVersionedAndClosed()
-    {
-        using JsonDocument catalog = ReadSchema("catalog-v1.schema.json");
-        using JsonDocument resources = ReadSchema("resources-v1.schema.json");
-
-        AssertSchemaRoot(catalog.RootElement, "catalog", "code", "defaultLocale", "locales", "layers");
-        AssertSchemaRoot(resources.RootElement, "catalog", "locale", "layer", "resources");
-
-        JsonElement catalogDefinitions = catalog.RootElement.GetProperty("$defs");
-        Assert.True(catalogDefinitions.TryGetProperty("locale", out _), "The catalog schema must define locale declarations.");
-        Assert.True(catalogDefinitions.TryGetProperty("layer", out _), "The catalog schema must define layers.");
-        Assert.True(catalogDefinitions.TryGetProperty("validation", out _), "The catalog schema must define validation policies.");
-        Assert.True(catalogDefinitions.TryGetProperty("runtime", out _), "The catalog schema must define runtime policies.");
-
-        JsonElement resourceDefinitions = resources.RootElement.GetProperty("$defs");
-        Assert.True(resourceDefinitions.TryGetProperty("resourceGroup", out _), "The resource schema must define recursive groups.");
-        Assert.True(resourceDefinitions.TryGetProperty("metadataLeaf", out _), "The resource schema must define metadata leaves.");
-        Assert.True(resourceDefinitions.TryGetProperty("placeholderDescriptor", out _), "The resource schema must define placeholder descriptors.");
-        Assert.True(resourceDefinitions.TryGetProperty("guidPlaceholder", out _), "All eight version 1 placeholder types must be represented.");
     }
 
     private static void LocalReferencesResolve()
@@ -108,6 +83,10 @@ internal static class SchemaTests
         string[] paths = Directory.GetFiles(directory, "*.schema.json", SearchOption.TopDirectoryOnly);
         Array.Sort(paths, StringComparer.Ordinal);
         Assert.True(paths.Length != 0, "No published schemas were found.");
+        Assert.Equal(
+            "asset-manifest-v1.schema.json,capabilities-v1.schema.json,editor-state-v1.schema.json,external-pack-v5.schema.json,locale-artifact-v5.schema.json,message-ast-v5.schema.json,project-v1.schema.json,web-module-manifest-v3.schema.json",
+            string.Join(',', Array.ConvertAll(paths, Path.GetFileName)),
+            "The published schema set must match the selected translation contract");
         foreach (string path in paths)
         {
             using JsonDocument schema = ReadSchema(Path.GetFileName(path));
@@ -131,27 +110,6 @@ internal static class SchemaTests
 
     private static string ReadSchemaPath(string fileName) =>
         RepositoryPaths.Resolve("specs", "translations", "schemas", fileName);
-
-    private static void AssertSchemaRoot(JsonElement root, params string[] requiredMembers)
-    {
-        Assert.Equal(JsonSchemaDialect, root.GetProperty("$schema").GetString());
-        Assert.Equal("object", root.GetProperty("type").GetString());
-        Assert.True(!root.GetProperty("additionalProperties").GetBoolean(), "Version 1 schema roots must reject unknown members.");
-        Assert.True(!root.GetProperty("unevaluatedProperties").GetBoolean(), "Version 1 schema roots must reject unevaluated members.");
-        Assert.Equal(1, root.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetInt32());
-
-        HashSet<string> required = new(StringComparer.Ordinal);
-        foreach (JsonElement item in root.GetProperty("required").EnumerateArray())
-        {
-            required.Add(item.GetString() ?? string.Empty);
-        }
-
-        Assert.True(required.Contains("schemaVersion"), "schemaVersion must be required.");
-        foreach (string member in requiredMembers)
-        {
-            Assert.True(required.Contains(member), $"'{member}' must be required.");
-        }
-    }
 
     private static void AssertReferencesResolve(string schemaPath)
     {
