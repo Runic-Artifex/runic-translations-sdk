@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, realpathSyn
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { serverLaunch, sourceWatchRoots } from "../src/server.js";
-import { previewHtml, resolvePreviewHtml } from "../src/preview.js";
+import { resolvePreviewHtml } from "../src/preview.js";
 import { ForwardedWatchers, type DisposableLike, type WatcherLike } from "../src/watchers.js";
 
 class MockWatcher implements WatcherLike<string> {
@@ -33,7 +33,7 @@ test("local tool resolution respects a root manifest and preserves argument boun
     expect(serverLaunch(root, "dotnet", "server with spaces.dll").args).toEqual([join(root, "server with spaces.dll"), "lsp"]);
   } finally { rmSync(root, { recursive: true }); }
 });
-test("RMF2 source watcher plans dedupe nested mounts and reject workspace escapes", () => {
+test("translation source watcher plans dedupe nested mounts and reject workspace escapes", () => {
   const root = mkdtempSync(join(tmpdir(), "runic-vscode-mounts-"));
   const outside = mkdtempSync(join(tmpdir(), "runic-vscode-outside-"));
   try {
@@ -85,17 +85,17 @@ test("refreshed source watchers forward events and dispose replaced subscription
   expect(old.disposeCount).toBe(1);
   expect(created).toHaveLength(2);
   created[1].fireChange("new/de.rmf2");
-  expect(events).toEqual([{ uri: "runic.json", type: 2 }, { uri: "new/de.rmf2", type: 2 }]);
+  created[1].fireChange("new/de/title.mf2");
+  expect(events).toEqual([
+    { uri: "runic.json", type: 2 },
+    { uri: "new/de.rmf2", type: 2 },
+    { uri: "new/de/title.mf2", type: 2 },
+  ]);
   forwarded.dispose();
   expect(manifest.disposeCount).toBe(1);
   expect(manifest.changed).toHaveLength(0);
   expect(created[1].disposeCount).toBe(1);
   expect(created[1].changed).toHaveLength(0);
-});
-test("preview reuses normalized execution and never creates application navigation or active markup", () => {
-  const html = previewHtml({ key: "<script>", locale: "en", examples: [], inputs: [], ast: { astVersion: 4, inputs: {}, selectors: [], variants: [{ matches: {}, nodes: [{ kind: "text", value: "<script>alert(1)</script>" }, { kind: "markup", name: "runic:link", attributes: { ref: "help" }, children: [{ kind: "text", value: "Help" }] }, { kind: "markup", name: "runic:action", attributes: {}, children: [{ kind: "text", value: "Retry" }] }] }] } }, {});
-  expect(html).toContain("&lt;script&gt;"); expect(html).not.toContain("<script>");
-  expect(html).toContain("aria-disabled=\"true\""); expect(html).toContain("<button disabled>"); expect(html).not.toContain("href=");
 });
 test("execution-v2 preview selects server rendering and remains inert", async () => {
   let rendered = false;

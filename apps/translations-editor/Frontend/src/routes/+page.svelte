@@ -64,13 +64,12 @@
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
   import { Spinner } from "$lib/components/ui/spinner/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
-  import type { MessageArtifact } from "$lib/message-composer";
+  import type { MessageArtifact, MessagePreviewResult, PreviewNode } from "$lib/message-composer";
   import {
     createMessagePreviewRequest,
     createMessagePreviewOwnership,
     createMessagePreviewScheduler,
     createPreviewSamples,
-    executeMessagePreview,
     parseRenderedMessagePreview,
     previewSampleOr,
     routeMessagePreview,
@@ -117,8 +116,6 @@
   type StoredDraft = { content: string; baseRevision: string };
   type RecentProject = { root: string; catalogId: string; openedAt: string };
   type MutationKind = EditorMutationRequest["kind"];
-  type MessagePreviewResult = ReturnType<typeof executeMessagePreview>;
-  type PreviewNode = Extract<MessagePreviewResult, { kind: "content" }>["nodes"][number];
   type PreviewRequest = ReturnType<typeof createMessagePreviewRequest>;
 
   const bridge = createEditorBridge();
@@ -737,17 +734,13 @@
         previewAst = ast;
         previewSamples = routed.samples;
         previewError = undefined;
-        if (ast.astVersion === 5) {
-          const rendered = routed.rendered;
-          if (!rendered?.success || rendered.renderedJson === undefined) {
-            previewResult = undefined;
-            previewError = rendered?.diagnostics[0]?.notice ?? rendered?.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
-            return;
-          }
-          previewResult = parseRenderedMessagePreview(rendered.renderedJson);
-        } else {
-          renderLocalPreview(result.locale);
+        const rendered = routed.rendered;
+        if (!rendered?.success || rendered.renderedJson === undefined) {
+          previewResult = undefined;
+          previewError = rendered?.diagnostics[0]?.notice ?? rendered?.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
+          return;
         }
+        previewResult = parseRenderedMessagePreview(rendered.renderedJson);
       }).catch((error) => {
         if (previewScheduler.isCurrent(epoch)) previewError = errorNotice(error);
       }).finally(() => {
@@ -760,18 +753,14 @@
     previewSamples = withPreviewSample(previewSamples, name, value);
     const request = previewRequest;
     if (!previewOwnership.canRenderSample(request, previewAst)) return;
-    if (previewAst?.astVersion === 5) {
-      previewBusy = true;
-      previewScheduler.schedule(150, (epoch) => {
-        void renderCompilerPreview(request, epoch).catch((error) => {
-          if (previewScheduler.isCurrent(epoch)) previewError = errorNotice(error);
-        }).finally(() => {
-          if (previewScheduler.isCurrent(epoch)) previewBusy = false;
-        });
+    previewBusy = true;
+    previewScheduler.schedule(150, (epoch) => {
+      void renderCompilerPreview(request, epoch).catch((error) => {
+        if (previewScheduler.isCurrent(epoch)) previewError = errorNotice(error);
+      }).finally(() => {
+        if (previewScheduler.isCurrent(epoch)) previewBusy = false;
       });
-    } else {
-      renderLocalPreview(request.locale);
-    }
+    });
   }
 
   function updateReview(
@@ -1069,17 +1058,6 @@
     editResourceValue(value);
   }
 
-  function renderLocalPreview(locale: string): void {
-    if (previewAst === undefined || previewAst.astVersion === 5) return;
-    try {
-      previewResult = executeMessagePreview(previewAst, locale, previewSamples);
-      previewError = undefined;
-    } catch (error) {
-      previewResult = undefined;
-      previewError = errorNotice(error);
-    }
-  }
-
   async function renderCompilerPreview(request: PreviewRequest, epoch: number): Promise<void> {
     const result = await bridge.previewMessage(
       request.path,
@@ -1099,9 +1077,7 @@
   }
 
   function previewInputEntries(ast: MessageArtifact): Array<[string, { type: string }]> {
-    return ast.astVersion === 5
-      ? ast.inputs.map((input) => [input.name, input])
-      : Object.entries(ast.inputs);
+    return ast.inputs.map((input) => [input.name, input]);
   }
 
   function defaultSample(type: string): string {
