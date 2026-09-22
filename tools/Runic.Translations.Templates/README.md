@@ -24,7 +24,10 @@ dotnet tool restore
 dotnet build
 ```
 
-The project template creates a class library with `translations/runic.json` with `sourceLayout: "rmf2-v1"`, a default-locale RMF2 resource, generated C# APIs, a pinned local tool manifest, and build-time ESM output. After building, application code can use the generated catalog:
+The project template creates a class library with `translations/runic.json`, a
+default-locale grouped RMF2 resource, generated C# APIs, a pinned local tool
+manifest, and build-time ESM output. After building, application code can use the
+generated catalog:
 
 ```csharp
 using Example.Translations;

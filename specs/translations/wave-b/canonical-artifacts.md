@@ -23,7 +23,6 @@ Key IDs follow the source contract's ordinal dotted-key order.
 Non-C# artifact names are relative safe names:
 
 - `{catalog}.{locale}.locale-v1.json` for a resolved locale artifact;
-- `{catalog}.template-manifest-v1.json` for the versioned value-free edge;
 - `{catalog}.translations-v1.d.ts` for the versioned TypeScript declaration edge;
 - `{catalog}.asset-manifest-v1.json` for the selected non-C# asset inventory.
 

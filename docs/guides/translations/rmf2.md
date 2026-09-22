@@ -1,9 +1,9 @@
 # RMF2 implementation guide
 
-`sourceLayout: "rmf2-v1"` opts one catalog into recursive `.rmf2` resources and
-Runic inline markup contracts. Legacy `.mf2` projects
-keep their existing formats and version markers. This implementation is a bounded
-execution profile of the accepted proposals, **not full Unicode MF2 conformance**.
+Runic projects use either direct `.mf2` messages or recursive grouped `.rmf2`
+resources with inline markup contracts. The representation is inferred from the
+source files; mixing them in one project is rejected. This implementation is a
+bounded execution profile of the accepted proposals, **not full Unicode MF2 conformance**.
 The remaining proposal work is listed below.
 
 ## Resources and discovery
@@ -11,25 +11,14 @@ The remaining proposal work is listed below.
 ```json
 {
   "schemaVersion": 1,
-  "sourceLayout": "rmf2-v1",
   "catalog": "app",
   "code": { "namespace": "Example", "className": "AppText" },
   "baseLocale": "en"
 }
 ```
 
-Typed execution is a separate, explicit opt-in on the same resource layout:
-
-```json
-{
-  "schemaVersion": 1,
-  "sourceLayout": "rmf2-v1",
-  "executionProfile": "rmf2-execution-v2",
-  "catalog": "app",
-  "code": { "namespace": "Example", "className": "AppText" },
-  "baseLocale": "en"
-}
-```
+All supported projects use the typed `rmf2-execution-v2` model and emit v5
+artifacts. A configuration selector cannot opt back into a retired carrier.
 
 ```rmf2
 # Checkout copy
@@ -54,7 +43,8 @@ Files are named `{locale}.rmf2`. Directory segments and explicit group names for
 the namespace. Groups may reopen across files; only one declaration per locale
 may own a group's documentation. Leaves may not duplicate or collide with groups.
 Duplicate diagnostics identify both declarations. Case-only directories, filename
-aliases for one canonical locale, overlapping mounts, mixed source layouts, and
+aliases for one canonical locale, overlapping mounts, mixed source
+representations, and
 symlink traversal are rejected.
 
 Without `sourceRoots`, discovery starts beside `runic.json`. Feature sources can
@@ -240,14 +230,14 @@ rows backed by physical files, edits message values, creates missing translation
 in the corresponding locale file, previews and validates through the shared
 compiler, and preserves physical revisions. Structural create/move/rename/
 duplicate/delete and locale/fallback workflows use shared transactions, and rich
-preview controls render the normalized inline tree. Explicit execution-v2
-projects are compiled with the v5 carrier; AST 5 preview requests execute the
-verified .NET artifact/pack plan on the editor host and return inert semantic
-runs. The frontend never coerces AST 5 into the v4 JavaScript executor.
+preview controls render the normalized inline tree. Projects compile with the
+v5 carrier; AST 5 preview requests execute the verified .NET artifact/pack plan
+on the editor host and return inert semantic runs. The frontend never coerces
+AST 5 into a JavaScript executor.
 
 Editor changes are resource-only and do not rewrite application call sites.
 Its closed XLIFF 2.1 text profile losslessly round-trips direct plain resources
-for either execution profile. Structured declarations, expressions, selectors,
+for the supported execution contract. Structured declarations, expressions, selectors,
 or markup produce the existing semantic-loss report, and the corresponding
 text-profile import is refused rather than approximated.
 
@@ -255,7 +245,7 @@ The version-explicit [RMF2 v1 corpus](../../../specs/translations/corpus/rmf2-v1
 is the shared release oracle for the execution-v2 boundary. The compiler,
 generated C#, .NET artifact-v5 loader, generated ESM, and ESM dynamic-pack
 loader consume its common typed execution and rejection expectations. It is
-evidence for the implemented profile, not a claim of general Unicode MF2 or
+evidence for the implemented contract, not a claim of general Unicode MF2 or
 general XLIFF conformance.
 
 The [VS Code extension](../../../tools/vscode-runic-translations/README.md) and
@@ -265,21 +255,18 @@ Their READMEs describe configuration, supported refactor scope and host checks.
 
 ## Versions and execution limits
 
-RMF2 resource syntax and markup contract/renderer ABI remain version **1**. When
-`executionProfile` is omitted, profile **rmf2-execution-v1** uses normalized AST
-and resolved locale artifact **4**, .NET RMF2 ABI requirement **1**, and ESM ABI
-**3**. Explicit **rmf2-execution-v2** uses grammar/artifact **5**, .NET RMF2 ABI
-requirement **2**, and ESM ABI **4**. The generator, CLI/MSBuild integration, and
-Vite plugin dispatch from this selector; they never infer v5 from `.rmf2` files.
+RMF2 resource syntax and markup contract/renderer ABI remain version **1**. The
+supported execution contract is **rmf2-execution-v2**: normalized AST and
+resolved locale artifact **5**, .NET RMF2 ABI requirement **2**, and ESM ABI
+**4**. The generator, CLI/MSBuild integration, and Vite plugin use that contract
+for both direct `.mf2` and grouped `.rmf2` sources.
 
-Artifacts 4 and 5 include the trusted markup registry, slot requirements, and
+Artifact 5 includes the trusted markup registry, slot requirements, and
 effective content locales. External pack loading checks these before activation;
-payloads never register UI implementations. The public tooling
-`BuildRmf2LocalePacks` facade remains v4, while profile-aware build and CLI hosts
-own v5 emission. `BuildLocalePackV2` remains version 2.
+payloads never register UI implementations.
 
 The named MF2 baseline is LDML **48.2**; the implemented execution subset is
-explicit in [rmf2-execution-v1.json](../../../specs/translations/rmf2-execution-v1.json).
+explicit in [the RMF2 option table](../../../specs/translations/rmf2-execution-v2.json).
 The existing nine-family locale matrix still applies. Unsupported function
 options produce `RTR0065` rather than being silently ignored or clamped.
 
@@ -303,10 +290,9 @@ An `.input` can use its own variable as the operand but not within its function
 options. For example, `.input {$s :string select=$s}` reports the same Duplicate
 Declaration diagnostic at the input binding's name.
 
-When the execution selector is omitted, variable-valued formatter options,
-expression annotations, formatted literal operands/locals, and quoted wildcard
-execution remain v1 limitations. Execution-v2 implements those typed semantics.
-C++ RMF2, terms, and group-atomic fallback remain unsupported in both profiles.
+Variable-valued formatter options, expression annotations, formatted literal
+operands/locals, and quoted wildcard execution use typed v5 semantics. C++ RMF2,
+terms, and group-atomic fallback remain unsupported.
 Arbitrary rich XLIFF is outside the supported text-profile
 scope; exports report semantic loss. Application-language call-site refactors
 are delegated or refused, never implemented as blind text replacement.
@@ -316,6 +302,5 @@ also outside the frozen RMF2 v1 release boundary.
 See [validation and measurements](rmf2-validation.md) for reproducible checks
 and the recorded native Windows host results.
 
-The additive [semantic v5 profile](rmf2-semantic-v5.md) defines typed locals,
-literal formatting, dynamic options, and precise key selection. Select it
-explicitly for .NET/C# and ESM output; omission retains the v1/v4 contract.
+The [semantic v5 contract](rmf2-semantic-v5.md) defines typed locals, literal
+formatting, dynamic options, and precise key selection.

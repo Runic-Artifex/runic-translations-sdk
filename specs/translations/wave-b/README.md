@@ -17,14 +17,13 @@ The normative topics are split as follows:
 - [versioning-and-edges.md](versioning-and-edges.md) defines independent versions
   and the boundaries for TypeScript, templates, and hosting.
 
-The machine-readable [conformance corpus](../corpus/wave-b/index.json) is the shared
-language-neutral compatibility input. The schemas are:
+The RMF2 v5 corpus is the shared language-neutral compatibility input. The
+schemas are:
 
 | Contract | Writer version | File |
 |---|---:|---|
-| Resolved locale artifact | 1 | `schemas/locale-artifact-v1.schema.json` |
-| External locale pack | 1 | `schemas/external-pack-v1.schema.json` |
-| Template manifest edge | 1 | `schemas/template-manifest-v1.schema.json` |
+| Resolved locale artifact | 5 | `schemas/locale-artifact-v5.schema.json` |
+| External locale pack | 5 | `schemas/external-pack-v5.schema.json` |
 | Asset manifest edge | 1 | `schemas/asset-manifest-v1.schema.json` |
 
 These schemas deliberately have no custom `$id`. A canonical schema URI remains

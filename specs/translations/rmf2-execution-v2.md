@@ -1,18 +1,17 @@
 # RMF2 execution profile v2 and normalized AST v5
 
-`rmf2-execution-v2` is additive. Its message grammar, normalized AST and locale
-artifact versions are **5**. Resource syntax and the declarative markup contract
-remain version **1**. The [finite profile table](rmf2-execution-v2.json) is
+`rmf2-execution-v2` is the supported execution contract. Its message grammar,
+normalized AST and locale artifact versions are **5**. Resource syntax and the
+declarative markup contract remain version **1**. The [finite option table](rmf2-execution-v2.json) is
 normative together with this document. The LDML 48.2 baseline and existing locale
 capability table remain pinned.
 
-An `rmf2-v1` project explicitly selects this profile with
-`executionProfile: "rmf2-execution-v2"`. Profile-aware CLI, MSBuild/source
-generator, and Vite hosts then emit typed C#/.NET and ESM artifacts from the v5
-model. Omitting the selector retains `rmf2-execution-v1`, grammar/artifact v4,
-and ESM ABI 3 byte-for-byte. A runtime must explicitly recognize v5 before
-accepting its artifacts;
-changing a version number on a v4 tree is not a conversion.
+CLI, MSBuild/source-generator, and Vite hosts emit typed C#/.NET and ESM
+artifacts from this v5 model. Projects infer their representation from the
+authoring files: direct `.mf2` messages or grouped `.rmf2` resources. The two
+representations cannot be mixed. A runtime must explicitly recognize v5 before
+accepting its artifacts; unknown or retired selectors are rejected rather than
+selecting an older contract.
 
 ## Values, declarations and expressions
 
@@ -50,8 +49,7 @@ options: `.input {$n :number maximumFractionDigits=$n}` and
 `.input {$s :string select=$s}` are Duplicate Declaration errors.
 Violations report `RTR0067`, `Duplicate declaration 'name'.`, at the later
 binding's name span (or the input's own name span for a self-option). This shared
-data-model rule applies to both current v4 and
-v5 compilation. References to a local before its declaration, including
+data-model rule applies throughout v5 compilation. References to a local before its declaration, including
 cycles, remain data-model errors as well.
 
 A local holds a **resolved underlying typed value**, independently of its
@@ -253,7 +251,7 @@ canonical string through a binary float is not a valid exact-key comparison.
 [message-ast-v5.schema.json](schemas/message-ast-v5.schema.json) defines normalized
 messages. [locale-artifact-v5.schema.json](schemas/locale-artifact-v5.schema.json)
 defines the separate v5 envelope: each message has `contentLocale` and `ast`.
-The envelope reuses the unchanged v1 markup-contract serialization from v4.
+The envelope owns the unchanged v1 markup-contract serialization directly.
 Schema validation does not replace semantic validation of reference binding,
 derived `valueType` consistency,
 option constraints, numeric canonical fields, NFC duplicates, key counts,
@@ -269,9 +267,8 @@ Limits are 32 caller inputs (or a lower configured limit), 256 declarations,
 
 The typed evaluator, exact decimal/CLDR behavior, v5 project and markup linker,
 caller fingerprint, C# and ESM generators, strict pack validation, and explicit
-version dispatch are implemented together. V4 readers and constructors remain
-available and v5 data never passes through the v4 AST adapter. Activation is
-explicit; it does not change emission for a project that omits the selector.
+version dispatch are implemented together. V5 data never passes through an
+older AST adapter.
 
 ### Additive .NET runtime boundary
 
@@ -279,7 +276,7 @@ The .NET runtime now provides immutable `CompiledRmf2Value`, `Option`,
 `Annotation`, `Expression`, `Input`, `Declaration`, `Selector`, `Key`, `Node`,
 `Variant`, and `Message` types (each name uses the `CompiledRmf2` prefix).
 `CompiledTextMessage.FromRmf2(CompiledRmf2Message)` explicitly dispatches existing snapshot
-formatting to that evaluator. Existing constructors retain v4 behavior. Caller
+formatting to that evaluator. Caller
 contracts match NFC input name and underlying `TextArgumentType`, independently
 of display formats. `TextArgument.CreateRmf2(name, carrier)` and
 `CompiledTranslationDefinition.FromRmf2Inputs` provide explicit NFC-name entry
@@ -319,21 +316,15 @@ validation without converting v5 messages through the v4 model.
 `Rmf2RuntimeAbiVersion` is **2**; legacy `RuntimeAbiVersion = 1` and
 `MessageGrammarVersion = 2` remain unchanged. Generated v5 consumers must embed
 the literal requirement **2**, then call `EnsureRmf2RuntimeAbi(2)` or
-`SupportsRmf2RuntimeAbi(2)`. These methods execute against the loaded runtime and
-accept requirements 1 and 2. A generated constant that aliases the runtime's
-constant is not a compatibility check. Existing v4 emission embeds its own
-literal requirement **1**; its generator accepts the known supporting RMF2
-runtime markers 1 and 2, but rejects missing or unknown markers. The separate
-legacy runtime ABI check still requires exactly 1. The ABI marker alone does not
-activate v5 emission; profile-aware hosts must read the project selector and
-choose the v5 carrier explicitly.
+`SupportsRmf2RuntimeAbi(2)`. These methods execute against the loaded runtime
+and accept requirement 2. A generated constant that aliases the runtime's
+constant is not a compatibility check. Missing or unknown ABI markers are
+rejected.
 
-The source generator, CLI, MSBuild integration, and Vite plugin perform that
-dispatch for `executionProfile: "rmf2-execution-v2"`. Their activated backends
-are .NET/C# and ESM, including strict v5 pack readers and web manifest v3.
-Omission continues to select v4. C++ and standalone v5 TypeScript/template
-contracts remain unsupported and are refused rather than emitted under a v4
-contract.
+The source generator, CLI, MSBuild integration, and Vite plugin emit the v5
+contract for .NET/C# and ESM, including strict v5 pack readers and web manifest
+v3. C++ and standalone TypeScript/template contracts remain unsupported and are
+refused rather than emitted under a different contract.
 
 The [golden corpus](corpus/semantic-v5/README.md) is a schema/semantic fixture, not
 an activated locale pack. Test-only JsonSchema.Net validation uses Draft 2020-12

@@ -11,12 +11,11 @@ diagnostic identities.
 | Contract | Current writer version |
 |---|---:|
 | MF2 project schema | 1 |
-| Authoring messages | MessageFormat 2 `.mf2` files |
-| Message grammar | MF2 with the documented Runic v1 profile |
-| Normalized message AST | 2 execution AST; 3 MF2-subset interchange AST |
-| Resolved locale artifact | 1 (grammar 1), locale-pack-v2 (grammar 2), RMF2 artifact 4 by omission, and RMF2 artifact 5 with `rmf2-execution-v2` |
-| Runtime/generated-code ABI | Legacy 1; RMF2 ABI 1 by omission and 2 with `rmf2-execution-v2` |
-| ESM ABI | 3 by omission; 4 with `rmf2-execution-v2` |
+| Authoring messages | Direct `.mf2` or grouped `.rmf2` files |
+| Message grammar and normalized AST | 5 (`rmf2-execution-v2`) |
+| Resolved locale artifact | 5 |
+| Runtime/generated-code ABI | RMF2 ABI 2 |
+| ESM ABI | 4 (`web-module-manifest-v3`) |
 | Transport contract | 1 |
 
 Package versions are independent from these integers. New cross-runtime schemas
@@ -74,26 +73,25 @@ contract. Schema validation alone is intentionally insufficient for normalized
 uniqueness, BCP 47 canonicalization, fallback graphs, cross-file merge rules,
 pattern/descriptor parity, compiler limits, and generated identifier collisions.
 
-The supported authoring profile and project convention are documented in
-[`../../docs/guides/translations/rmf2.md`](../../docs/guides/translations/rmf2.md). `locale-pack-v2` is
-documented in [`../../docs/guides/translations/locale-pack-v2.md`](../../docs/guides/translations/locale-pack-v2.md).
+The supported authoring convention is documented in
+[`../../docs/guides/translations/rmf2.md`](../../docs/guides/translations/rmf2.md).
 
-## RMF2 opt-in profile
+## RMF2 execution contract
 
-[`rmf2-execution-v1.json`](rmf2-execution-v1.json) pins the implemented MF2 subset.
 The [RMF2 guide](../../docs/guides/translations/rmf2.md) specifies resource composition,
-markup contracts, external artifact 4, migration, and remaining proposal work.
+markup contracts, artifact v5, migration, and remaining proposal work.
 RMF2 fingerprints include caller input/slot contracts, markup registries and effective
 locale mappings; source selector trees and physical file organization are excluded.
 
-The additive [semantic v5 foundation](rmf2-execution-v2.md) and
-[v2 option table](rmf2-execution-v2.json) specify the typed model. For an
-`rmf2-v1` project, `executionProfile: "rmf2-execution-v2"` activates typed v5
-C#/.NET and ESM generation in profile-aware hosts; omission preserves the v1/v4
-contract. The low-level public v4 compiler carrier remains separate.
+The [semantic v5 foundation](rmf2-execution-v2.md) and
+[option table](rmf2-execution-v2.json) specify the typed model. Every supported
+project uses this contract for C#/.NET and ESM generation. Direct `.mf2` sources
+are one message per file; grouped `.rmf2` sources carry resource namespaces.
+Hosts reject mixed source representations and unknown or retired contract
+selectors rather than falling back to an older carrier.
 The [v5 project linker](rmf2-project-v5.md) provides an explicit typed
-compiler profile, cross-locale caller/markup contracts, separate compatibility
-and freshness hashes, and the generated-name mapping for the dependent backends.
+compiler model, cross-locale caller/markup contracts, separate compatibility and
+freshness hashes, and the generated-name mapping for the dependent backends.
 The version-explicit [`rmf2-v1` corpus](corpus/rmf2-v1/README.md) is the shared
 release oracle for that activated profile: compiler, generated C#, .NET
 artifact-v5 loading, generated ESM, and ESM dynamic loading run the same typed

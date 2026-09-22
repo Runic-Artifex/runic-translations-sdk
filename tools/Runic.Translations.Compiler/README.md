@@ -31,7 +31,9 @@ if (!result.Success)
 }
 ```
 
-For RMF2 inputs, set `"sourceLayout": "rmf2-v1"` in `runic.json`. RMF2 resources preserve explicit directory namespaces. Omitting the discriminator retains the legacy `{locale}/{message-id}.mf2` layout.
+Grouped `.rmf2` inputs preserve explicit directory namespaces; direct `.mf2`
+inputs use one message per locale/key path. The compiler infers the representation
+and rejects mixed inputs.
 
 Inputs are copied by `TranslationSource`; pass normalized logical paths when stable diagnostic locations and fingerprints matter. Use `TranslationCompilerOptions` and cancellation for untrusted or interactive inputs rather than increasing the built-in size, depth, locale, key, value, and placeholder limits without a resource budget.
 
@@ -41,11 +43,9 @@ Tool builders consume the compiler API through `Runic.Translations.Tooling`. App
 
 Compilation is deterministic for the same classified UTF-8 inputs and options. It does not read files, mutate a workspace, or provide a user interface. The authoring package adds supported discovery and mutation operations on top of this kernel.
 
-Profile-aware shipping hosts inspect `executionProfile` and explicitly select the
-internal `Rmf2ExecutionV2` project profile, receiving a separate typed v5 carrier.
-The public low-level `CompileProject` entry point remains v4-only and rejects the
-selector. See the [v5 project-linking contract](../../specs/translations/rmf2-project-v5.md)
-for cross-locale contracts, fingerprint/freshness separation and generated names.
+Shipping hosts use the typed `Rmf2ExecutionV2` project carrier. See the
+[v5 project-linking contract](../../specs/translations/rmf2-project-v5.md) for
+cross-locale contracts, fingerprint/freshness separation and generated names.
 
 ## Compatibility and status
 

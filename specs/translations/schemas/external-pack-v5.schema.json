@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/external-pack-v5.schema.json",
+  "title": "Runic RMF2 external locale pack v5",
+  "description": "Closed external-pack payload for grammar and artifact version 5. Integrity metadata is evaluated over the complete raw bytes outside this payload before parsing.",
+  "$ref": "locale-artifact-v5.schema.json"
+}

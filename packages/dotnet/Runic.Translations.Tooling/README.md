@@ -17,26 +17,22 @@ provenance are never silently flattened: export records deterministic loss
 events and import rejects structured units. This is not general XLIFF or MF2
 conformance.
 
-The public low-level export overload remains the v4 compiler boundary. The
-first-party editor also uses an internal profile-neutral projection for explicit
-execution-v2 projects; it reads v5 direct resources and never exposes or
-fabricates a public v5 catalog carrier. Approved review stamps use a dedicated
+The public export overload preserves the typed compiler boundary. The first-party
+editor uses an internal projection for v5 projects; it reads typed resources and
+never fabricates a legacy catalog carrier. Approved review stamps use a dedicated
 closed-text-profile fingerprint, while workspace source freshness remains a
 separate conflict check.
 
-The package carries the schemas needed for the generated runtime artifacts,
-including locale-pack-v2 and locale-artifact-v2.
+The package carries the schemas needed for the generated v5 runtime artifacts.
 
 The compiler and authoring assemblies are implementation parts of this package,
 not separately versioned products.
 
 ## RMF2
 
-The public `CompileProject` surface also accepts v4 RMF2 projects, and
-`BuildRmf2LocalePacks` emits artifact 4; `BuildLocalePackV2` retains its version 2
-contract. Use `Runic.Translations.Build` or `dotnet-runic-translations` for
-execution-v2 project emission. `Rmf2ResourceReader`, `Rmf2ResourceWriter` and
-`Rmf2Workspace` provide recoverable resources, explicit segment edits and
-revisioned transaction plans. The package includes the artifact 4 schema. See
+Use `Runic.Translations.Build` or `dotnet-runic-translations` for project
+emission. `Rmf2ResourceReader`, `Rmf2ResourceWriter` and `Rmf2Workspace` provide
+recoverable resources, explicit segment edits and revisioned transaction plans.
+The package includes the v5 artifact schema. See
 the [RMF2 guide](../../../docs/guides/translations/rmf2.md) for the supported
 subset, the closed plain-text interchange boundary, and frozen exclusions.

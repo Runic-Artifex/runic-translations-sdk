@@ -4,28 +4,28 @@ External packs are optional, caller-supplied, untrusted UTF-8 bytes. The runtime
 does not open a path, URI, socket, embedded resource, or assembly to discover
 them. `IExternalTranslationSource` is the only acquisition boundary.
 
-Version 1 packs use `external-pack-v1.schema.json`, which is deliberately the
-same six-field payload as `locale-artifact-v1.schema.json`:
+Version 5 packs use `external-pack-v5.schema.json`, which is deliberately the
+same closed payload as `locale-artifact-v5.schema.json`:
 
 ```text
-artifactVersion, messageGrammarVersion, catalog, locale,
-contractFingerprint, messages
+artifactVersion, messageGrammarVersion, profile, catalog, locale,
+contractFingerprint, messages, markupContract
 ```
 
 Every root, message, and argument member is required. Unknown or duplicate
 members are rejected. A pack may contain a subset of known messages; every
-present key must be a known compiled key. Its pattern must be valid grammar v1,
-and its ordinal argument list must exactly match the compiled name/type/format
-contract. A pack cannot add a key, descriptor, locale, layer, or fallback edge.
+present key must be a known compiled key. Its typed AST and linked markup/slot
+contract must exactly match the compiled caller contract. A pack cannot add a
+key, descriptor, locale, layer, or fallback edge.
 
 Validation order is security-significant:
 
 1. Acquire bounded raw bytes from the caller interface.
 2. Invoke the optional integrity callback over the complete raw bytes.
 3. Parse strict UTF-8 JSON with duplicate detection and cancellation.
-4. Check artifact/grammar version, catalog, canonical locale, and source-contract
-   fingerprint.
-5. Enforce known-key, pattern, descriptor, count, size, and depth rules.
+4. Check artifact/grammar/profile version, catalog, canonical locale, and
+   source-contract fingerprint.
+5. Enforce known-key, typed AST, markup/slot, count, size, and depth rules.
 6. Build a complete immutable candidate snapshot with compiled fallback.
 7. Publish to cache or manager only after every step succeeds.
 
