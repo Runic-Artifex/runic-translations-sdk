@@ -5,7 +5,7 @@ using System.Text;
 namespace Runic.Translations.Compiler.Generation;
 
 /// <summary>Identifies one independently rendered compiler output.</summary>
-public enum TranslationGeneratedOutputKind
+internal enum TranslationGeneratedOutputKind
 {
     /// <summary>Strongly typed key declarations.</summary>
     CSharpKeys,
@@ -48,7 +48,7 @@ public enum TranslationGeneratedOutputKind
 }
 
 /// <summary>A deterministic, UTF-8 compiler output for exactly one concern.</summary>
-public sealed class TranslationGeneratedOutput
+internal sealed class TranslationGeneratedOutput
 {
     private readonly byte[] _utf8Bytes;
 

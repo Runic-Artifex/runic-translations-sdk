@@ -17,11 +17,32 @@ provenance are never silently flattened: export records deterministic loss
 events and import rejects structured units. This is not general XLIFF or MF2
 conformance.
 
-The public export overload preserves the typed compiler boundary. The first-party
-editor uses an internal projection for v5 projects; it reads typed resources and
-never fabricates a legacy catalog carrier. Approved review stamps use a dedicated
+Compile with `TranslationCompiler.CompileProject` (or the explicit
+`CompileMf2Project` entry point) and pass its `Rmf2ProjectCompilationV5` result
+directly to `TranslationInterchange.ExportXliff21`. The first-party editor uses
+the same typed boundary and never fabricates a legacy catalog carrier. Approved review stamps use a dedicated
 closed-text-profile fingerprint, while workspace source freshness remains a
 separate conflict check.
+
+```csharp
+using Runic.Translations.Compiler;
+using Runic.Translations.Tooling;
+
+Rmf2ProjectCompilationV5 compilation =
+    TranslationCompiler.CompileProject(projectSource, messageSources);
+if (!compilation.Success)
+{
+    // Inspect compilation.Diagnostics.
+}
+else
+{
+    TranslationXliffExportResult xliff =
+        TranslationInterchange.ExportXliff21(compilation);
+}
+```
+
+`TranslationCompiler` is bundled in this package's
+`Runic.Translations.Compiler.dll`; no separate compiler package is required.
 
 The package carries the schemas needed for the generated v5 runtime artifacts.
 

@@ -146,7 +146,7 @@ public sealed class TranslationDiagnostic
     public TextSourceLocation Location { get; }
 }
 
-public sealed class TranslationCompilation
+internal sealed class TranslationCompilation
 {
     internal TranslationCompilation(IReadOnlyList<CompiledTextCatalog> catalogs, IReadOnlyList<TranslationDiagnostic> diagnostics)
     {
@@ -167,7 +167,7 @@ public sealed class TranslationCompilation
     }
 }
 
-public sealed class CompiledTextCatalog
+internal sealed class CompiledTextCatalog
 {
     internal CompiledTextCatalog(string id, string codeNamespace, string className, TranslationVisibility visibility,
         string defaultLocale, IReadOnlyList<CompiledTextLayer> layers, IReadOnlyList<CompiledTextLocale> locales,
@@ -205,14 +205,14 @@ public sealed class CompiledTextCatalog
     public string Fingerprint { get; internal set; }
 }
 
-public sealed class CompiledTextLayer
+internal sealed class CompiledTextLayer
 {
     internal CompiledTextLayer(string name, int priority) { Name = name; Priority = priority; }
     public string Name { get; }
     public int Priority { get; }
 }
 
-public sealed class CompiledTextLocale
+internal sealed class CompiledTextLocale
 {
     internal CompiledTextLocale(string tag, string? fallbackTag, IReadOnlyList<CompiledTranslation> directResources,
         IReadOnlyList<CompiledTranslation> resolvedResources)
@@ -229,7 +229,7 @@ public sealed class CompiledTextLocale
     public IReadOnlyList<CompiledTranslation> ResolvedResources { get; }
 }
 
-public sealed class CompiledTranslation
+internal sealed class CompiledTranslation
 {
     internal CompiledTranslation(int id, string key, string pattern, string? description, string? since,
         string? deprecatedReason, IReadOnlyList<string> tags, IReadOnlyList<CompiledTextPlaceholder> placeholders,
@@ -265,7 +265,7 @@ public sealed class CompiledTranslation
     internal CompiledMessagePattern Message { get; }
 }
 
-public sealed class CompiledTextPlaceholder
+internal sealed class CompiledTextPlaceholder
 {
     internal CompiledTextPlaceholder(string name, TranslationArgumentType type, string format)
     {

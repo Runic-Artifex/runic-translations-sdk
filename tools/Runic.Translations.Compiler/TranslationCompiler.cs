@@ -133,7 +133,7 @@ public static partial class TranslationCompiler
     /// The project file is named <c>runic.json</c>. Message paths are relative to its directory and
     /// use the convention <c>{locale}/{message-id}.mf2</c>.
     /// </remarks>
-    public static TranslationCompilation CompileMf2Project(
+    public static Rmf2ProjectCompilationV5 CompileMf2Project(
         TranslationSource project,
         IEnumerable<TranslationSource> messages,
         TranslationCompilerOptions? options = null)
@@ -141,128 +141,23 @@ public static partial class TranslationCompiler
 
     /// <summary>Compiles a convention-based Runic MF2 project with cancellation.</summary>
     /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
-    public static TranslationCompilation CompileMf2Project(
+    public static Rmf2ProjectCompilationV5 CompileMf2Project(
         TranslationSource project,
         IEnumerable<TranslationSource> messages,
         TranslationCompilerOptions? options,
         CancellationToken cancellationToken)
-        => CompileProject(project, messages, options, cancellationToken);
+        => CompileRmf2ProjectV5(project, messages, options, cancellationToken);
 
-    public static TranslationCompilation CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
+    /// <summary>Compiles direct <c>.mf2</c> or grouped <c>.rmf2</c> sources into the RMF2 execution-v2 contract.</summary>
+    public static Rmf2ProjectCompilationV5 CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
         TranslationCompilerOptions? options = null)
         => CompileProject(project, messages, options, CancellationToken.None);
 
-    public static TranslationCompilation CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
+    /// <summary>Compiles direct <c>.mf2</c> or grouped <c>.rmf2</c> sources into the RMF2 execution-v2 contract with cancellation.</summary>
+    /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
+    public static Rmf2ProjectCompilationV5 CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
         TranslationCompilerOptions? options, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(project);
-        ArgumentNullException.ThrowIfNull(messages);
-        cancellationToken.ThrowIfCancellationRequested();
-        options ??= new TranslationCompilerOptions();
-        var diagnostics = new DiagnosticBag();
-        TranslationSource[] messageSources = Materialize(messages);
-        if (RejectDuplicateSourcePaths(new[] { project }, messageSources, diagnostics))
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-
-        ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, options, cancellationToken);
-        ManifestModel? manifest = parsed.Root is null ? null : ReadMf2Project(parsed, diagnostics, options);
-        if (manifest is null)
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-
-        string projectDirectory = ProjectDirectory(project.Path);
-        var documents = new List<DocumentModel>(messageSources.Length);
-        var discoveredLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (int index = 0; index < messageSources.Length; index++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            TranslationSource source = messageSources[index];
-            if (!TryMf2Identity(projectDirectory, source.Path, out string localeText, out string messageId))
-            {
-                diagnostics.Add("RTR0040", TranslationDiagnosticSeverity.Error,
-                    "MF2 message paths must use the convention '{locale}/{message-id}.mf2' relative to runic.json.",
-                    source, new ByteSpan(0, 0));
-                continue;
-            }
-            if (!TryCanonicalizeLocale(localeText, out string locale))
-            {
-                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error,
-                    "Invalid locale folder '" + localeText + "'.", source, new ByteSpan(0, 0));
-                continue;
-            }
-            if (!IsIdentifier(messageId))
-            {
-                diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error,
-                    "MF2 message filenames must be valid identifiers so generated calls can use property syntax.",
-                    source, new ByteSpan(0, 0));
-                continue;
-            }
-
-            Mf2ParsedMessage? message = Mf2MessageParser.Parse(source, diagnostics, options, cancellationToken);
-            if (message is null) continue;
-            discoveredLocales.Add(locale);
-            var document = new DocumentModel(source)
-            {
-                SchemaVersion = 2,
-                Catalog = manifest.Id,
-                Locale = locale,
-                Layer = "base",
-                CatalogSpan = new ByteSpan(0, 0),
-                LocaleSpan = new ByteSpan(0, 0),
-                LayerSpan = new ByteSpan(0, 0),
-            };
-            document.Resources.Add(new ResourceModel(
-                messageId,
-                message.Pattern,
-                message.Message,
-                null,
-                null,
-                null,
-                Array.Empty<string>(),
-                message.Placeholders,
-                source,
-                new ByteSpan(0, 0),
-                new ByteSpan(0, 0),
-                new ByteSpan(0, source.Bytes.Length)));
-            documents.Add(document);
-        }
-
-        if (discoveredLocales.Count > options.MaximumLocalesPerCatalog)
-            diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", project, manifest.DefaultLocaleSpan);
-        if (manifest.Locales.Count == 0)
-        {
-            string[] locales = new List<string>(discoveredLocales).ToArray();
-            Array.Sort(locales, StringComparer.Ordinal);
-            for (int index = 0; index < locales.Length; index++)
-                manifest.Locales.Add(new LocaleModel(locales[index],
-                    string.Equals(locales[index], manifest.DefaultLocale, StringComparison.OrdinalIgnoreCase) ? null : manifest.DefaultLocale,
-                    new ByteSpan(0, 0), new ByteSpan(0, 0)));
-            if (locales.Length == 0 && manifest.DefaultLocale.Length != 0)
-                manifest.Locales.Add(new LocaleModel(manifest.DefaultLocale, null, manifest.DefaultLocaleSpan, manifest.DefaultLocaleSpan));
-        }
-        ValidateFallbackGraph(manifest, diagnostics);
-        if (messageSources.Length != 0 && !discoveredLocales.Contains(manifest.DefaultLocale))
-            diagnostics.Add("RTR0009", TranslationDiagnosticSeverity.Error,
-                "The base locale '" + manifest.DefaultLocale + "' has no translation sources.", project, manifest.DefaultLocaleSpan);
-
-        if (messageSources.Length == 0 && manifest.DefaultLocale.Length != 0)
-        {
-            documents.Add(new DocumentModel(project)
-            {
-                SchemaVersion = 2,
-                Catalog = manifest.Id,
-                Locale = manifest.DefaultLocale,
-                Layer = "base",
-                CatalogSpan = manifest.IdSpan,
-                LocaleSpan = manifest.DefaultLocaleSpan,
-                LayerSpan = new ByteSpan(0, 0),
-            });
-        }
-
-        CompiledTextCatalog? catalog = documents.Count == 0
-            ? null
-            : CompileCatalog(manifest, documents, diagnostics, options, cancellationToken);
-        return new TranslationCompilation(catalog is null ? Array.Empty<CompiledTextCatalog>() : new[] { catalog }, diagnostics.ToSortedArray());
-    }
+        => CompileRmf2ProjectV5(project, messages, options, cancellationToken);
 
     private static ManifestModel? ReadMf2Project(ParsedJson parsed, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {

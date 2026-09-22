@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Runic.Translations.Compiler.Generation;
 
 /// <summary>Pure deterministic renderers over the selected RMF2 compilation carrier.</summary>
-public static class TranslationOutputRenderer
+internal static class TranslationOutputRenderer
 {
     internal const int AssetManifestVersion = 1;
     internal const int EsmAbiVersion = 4;

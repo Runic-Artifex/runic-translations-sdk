@@ -15,8 +15,10 @@ namespace Runic.Translations.Tooling;
 internal sealed record TranslationInterchangeProjection(
     string CatalogId,
     string SourceLocale,
-    string Layer,
-    int SchemaVersion,
+    string ExecutionProfile,
+    int MessageGrammarVersion,
+    string InterchangeProfile,
+    int InterchangeProfileVersion,
     IReadOnlyList<TranslationInterchangeSourceUnit> CanonicalUnits,
     IReadOnlyList<TranslationInterchangeLocale> Locales,
     IReadOnlyList<TranslationDiagnostic> Diagnostics,
@@ -105,27 +107,31 @@ internal static class TranslationInterchangeProjectionAdapter
                     .ToArray()))
             .ToArray();
 
-        return Create(project.Id, project.DefaultLocale, "base", 2, canonical, locales, diagnostics,
+        return Create(project.Id, project.DefaultLocale, canonical, locales, diagnostics,
             project.SourceHash);
     }
 
     private static TranslationInterchangeProjection Create(
         string catalog,
         string sourceLocale,
-        string layer,
-        int schemaVersion,
         IReadOnlyList<TranslationInterchangeSourceUnit> canonical,
         IReadOnlyList<TranslationInterchangeLocale> locales,
         IReadOnlyList<TranslationDiagnostic> diagnostics,
         string? sourceFreshness)
     {
         string textFingerprint = TranslationInterchangeFingerprint.TextProfile(
-            catalog, sourceLocale, layer, schemaVersion, canonical);
+            catalog, sourceLocale, Rmf2ProjectCompilationV5.ExecutionProfile,
+            Rmf2ProjectCompilationV5.MessageGrammarVersion,
+            TranslationInterchange.XliffProfile,
+            TranslationInterchange.XliffProfileVersion,
+            canonical);
         var projection = new TranslationInterchangeProjection(
             catalog,
             sourceLocale,
-            layer,
-            schemaVersion,
+            Rmf2ProjectCompilationV5.ExecutionProfile,
+            Rmf2ProjectCompilationV5.MessageGrammarVersion,
+            TranslationInterchange.XliffProfile,
+            TranslationInterchange.XliffProfileVersion,
             canonical,
             locales,
             diagnostics,
@@ -150,14 +156,16 @@ internal static class TranslationInterchangeProjectionAdapter
 
 internal static class TranslationInterchangeFingerprint
 {
-    private const string TextProfileDomain = "runic.xliff21.closed-text-profile/1";
-    private const string ProjectionSourceDomain = "runic.xliff21.projection-source/1";
+    private const string TextProfileDomain = "runic.xliff21.closed-text-profile/2";
+    private const string ProjectionSourceDomain = "runic.xliff21.projection-source/2";
 
     internal static string TextProfile(
         string catalog,
         string sourceLocale,
-        string layer,
-        int schemaVersion,
+        string executionProfile,
+        int messageGrammarVersion,
+        string interchangeProfile,
+        int interchangeProfileVersion,
         IEnumerable<TranslationInterchangeSourceUnit> units)
     {
         using var stream = new MemoryStream();
@@ -167,8 +175,10 @@ internal static class TranslationInterchangeFingerprint
             writer.WriteString("profile", TextProfileDomain);
             writer.WriteString("catalog", catalog);
             writer.WriteString("sourceLocale", sourceLocale);
-            writer.WriteString("layer", layer);
-            writer.WriteNumber("schemaVersion", schemaVersion);
+            writer.WriteString("executionProfile", executionProfile);
+            writer.WriteNumber("messageGrammarVersion", messageGrammarVersion);
+            writer.WriteString("interchangeProfile", interchangeProfile);
+            writer.WriteNumber("interchangeProfileVersion", interchangeProfileVersion);
             writer.WriteStartArray("units");
             foreach (TranslationInterchangeSourceUnit unit in units.OrderBy(static unit => unit.Key, StringComparer.Ordinal))
                 WriteSourceUnit(writer, unit);
@@ -187,8 +197,10 @@ internal static class TranslationInterchangeFingerprint
             writer.WriteString("profile", ProjectionSourceDomain);
             writer.WriteString("catalog", projection.CatalogId);
             writer.WriteString("sourceLocale", projection.SourceLocale);
-            writer.WriteString("layer", projection.Layer);
-            writer.WriteNumber("schemaVersion", projection.SchemaVersion);
+            writer.WriteString("executionProfile", projection.ExecutionProfile);
+            writer.WriteNumber("messageGrammarVersion", projection.MessageGrammarVersion);
+            writer.WriteString("interchangeProfile", projection.InterchangeProfile);
+            writer.WriteNumber("interchangeProfileVersion", projection.InterchangeProfileVersion);
             writer.WriteStartArray("canonicalUnits");
             foreach (TranslationInterchangeSourceUnit unit in projection.CanonicalUnits.OrderBy(static unit => unit.Key, StringComparer.Ordinal))
                 WriteSourceUnit(writer, unit);

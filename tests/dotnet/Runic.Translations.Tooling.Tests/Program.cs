@@ -20,10 +20,12 @@ internal static class Program
             SemanticXliffReportsStructuredLossAndRefusesImport();
             XliffRefusesStructuredTextWithStaleMetadata();
             XliffPreflightSeparatesTextContractAndFreshness();
+            XliffRequiresSelectedV5ContractIdentity();
+            PublicCompilationOverloadsHonorCancellation();
             ArtifactInspectionRecognizesXliff();
             ToolRequestHasCanonicalShape();
             ToolCommandHasCanonicalInitShape();
-            Console.WriteLine("RESULT 8/8 passed");
+            Console.WriteLine("RESULT 10/10 passed");
             return 0;
         }
         catch (Exception exception)
@@ -35,7 +37,7 @@ internal static class Program
 
     private static void SemanticXliffRoundTripsDirectMf2AndReview()
     {
-        object compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
+        Rmf2ProjectCompilationV5 compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
         object preflight = Preflight(compilation);
         string fingerprint = Property<string>(preflight, "TextProfileFingerprint");
         var review = new TranslationInterchangeReview("app",
@@ -55,7 +57,7 @@ internal static class Program
 
     private static void SemanticXliffAcceptsGroupedRmf2()
     {
-        object compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: true);
+        Rmf2ProjectCompilationV5 compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: true);
         TranslationXliffExportResult exported = Export(compilation);
         if (exported.Documents.Count != 1 || !exported.Report.IsLossless)
             throw new InvalidOperationException("Grouped RMF2 input did not reach the semantic interchange path.");
@@ -101,15 +103,13 @@ internal static class Program
 
     private static void XliffPreflightSeparatesTextContractAndFreshness()
     {
-        object first = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
-        object changed = CompileSemantic("hello = Hello again", "hello = Hallo", grouped: false);
+        Rmf2ProjectCompilationV5 first = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
+        Rmf2ProjectCompilationV5 changed = CompileSemantic("hello = Hello again", "hello = Hallo", grouped: false);
         object firstPreflight = Preflight(first);
         object changedPreflight = Preflight(changed);
-        object firstProject = Project(first);
-        object changedProject = Project(changed);
-        string caller = Property<string>(firstProject, "CallerFingerprint");
-        string changedCaller = Property<string>(changedProject, "CallerFingerprint");
-        string sourceHash = Property<string>(firstProject, "SourceHash");
+        string caller = first.CallerFingerprint!;
+        string changedCaller = changed.CallerFingerprint!;
+        string sourceHash = first.SourceHash!;
         string fingerprint = Property<string>(firstPreflight, "TextProfileFingerprint");
         string freshness = Property<string>(firstPreflight, "SourceFreshness");
 
@@ -120,6 +120,69 @@ internal static class Program
             fingerprint == Property<string>(changedPreflight, "TextProfileFingerprint") ||
             freshness == Property<string>(changedPreflight, "SourceFreshness"))
             throw new InvalidOperationException("XLIFF preflight conflated caller compatibility, source freshness, or the closed text profile.");
+    }
+
+    private static void XliffRequiresSelectedV5ContractIdentity()
+    {
+        byte[] exported = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single().Bytes;
+        string metadata = UnitMetadata(exported);
+        if (!metadata.Contains("\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal) ||
+            !metadata.Contains("\"messageGrammarVersion\":5", StringComparison.Ordinal) ||
+            !metadata.Contains("\"interchangeProfile\":\"runic.xliff21.closed-text\"", StringComparison.Ordinal) ||
+            !metadata.Contains("\"interchangeProfileVersion\":2", StringComparison.Ordinal) ||
+            metadata.Contains("schemaVersion", StringComparison.Ordinal) || metadata.Contains("\"layer\"", StringComparison.Ordinal))
+            throw new InvalidOperationException("XLIFF metadata did not identify only the selected v5 execution and interchange contracts.");
+
+        RejectContractMutation(exported, "\"rmf2-execution-v2\"", "\"rmf2-execution-v1\"", "XLIFF21-CONTRACT");
+        RejectContractMutation(exported, "\"messageGrammarVersion\":5", "\"messageGrammarVersion\":4", "XLIFF21-CONTRACT");
+        RejectContractMutation(exported, "\"runic.xliff21.closed-text\"", "\"runic.xliff21.other\"", "XLIFF21-PROFILE");
+        RejectContractMutation(exported, "\"interchangeProfileVersion\":2", "\"interchangeProfileVersion\":1", "XLIFF21-PROFILE");
+    }
+
+    private static void PublicCompilationOverloadsHonorCancellation()
+    {
+        TranslationSource project = Source("translations/runic.json", """
+            {"schemaVersion":1,"catalog":"app","code":{"namespace":"App","className":"Text"},"baseLocale":"en"}
+            """);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        AssertCanceled(() => TranslationCompiler.CompileProject(project, [], null, cancellation.Token));
+        AssertCanceled(() => TranslationCompiler.CompileMf2Project(project, [], null, cancellation.Token));
+
+        static void AssertCanceled(Action action)
+        {
+            try { action(); }
+            catch (OperationCanceledException) { return; }
+            throw new InvalidOperationException("A public compilation overload ignored cancellation.");
+        }
+    }
+
+    private static void RejectContractMutation(byte[] exported, string before, string after, string code)
+    {
+        byte[] mutated = ReplaceUnitMetadata(exported, metadata => metadata.Replace(before, after, StringComparison.Ordinal));
+        try { _ = TranslationInterchange.ImportXliff21(mutated); }
+        catch (TranslationInterchangeException exception) when (exception.Code == code) { return; }
+        throw new InvalidOperationException("XLIFF accepted mismatched contract metadata: " + before);
+    }
+
+    private static string UnitMetadata(byte[] document)
+    {
+        string xml = Encoding.UTF8.GetString(document);
+        const string marker = "<note category=\"runic:unit\">";
+        int start = xml.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        int end = xml.IndexOf("</note>", start, StringComparison.Ordinal);
+        if (start < marker.Length || end < start) throw new InvalidOperationException("XLIFF unit metadata note is missing.");
+        return Encoding.UTF8.GetString(Convert.FromBase64String(xml[start..end]));
+    }
+
+    private static byte[] ReplaceUnitMetadata(byte[] document, Func<string, string> mutate)
+    {
+        string xml = Encoding.UTF8.GetString(document);
+        const string marker = "<note category=\"runic:unit\">";
+        int start = xml.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        int end = xml.IndexOf("</note>", start, StringComparison.Ordinal);
+        string replacement = Convert.ToBase64String(Encoding.UTF8.GetBytes(mutate(UnitMetadata(document))));
+        return Encoding.UTF8.GetBytes(xml[..start] + replacement + xml[end..]);
     }
 
     private static void ArtifactInspectionRecognizesXliff()
@@ -153,7 +216,7 @@ internal static class Program
             throw new InvalidOperationException("TranslationsToolCommandModule.Init retained an obsolete layout overload.");
     }
 
-    private static object CompileSemantic(string english, string german, bool grouped)
+    private static Rmf2ProjectCompilationV5 CompileSemantic(string english, string german, bool grouped)
     {
         TranslationSource project = Source("translations/runic.json", """
             {
@@ -167,21 +230,18 @@ internal static class Program
         TranslationSource[] messages = grouped
             ? [Source("translations/en.rmf2", english), Source("translations/de.rmf2", german)]
             : [Source("translations/en/hello.mf2", DirectPattern(english)), Source("translations/de/hello.mf2", DirectPattern(german))];
-        Type carrier = ExportMethod().GetParameters()[0].ParameterType;
-        MethodInfo compiler = typeof(TranslationCompiler).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
-            .SingleOrDefault(method => method.ReturnType == carrier &&
-                method.GetParameters().Length >= 2 && method.GetParameters()[0].ParameterType == typeof(TranslationSource)) ??
-            throw new InvalidOperationException("Semantic compiler entry point is missing.");
-        object?[] arguments = compiler.GetParameters().Select(parameter => parameter.Position switch
-        {
-            0 => (object?)project,
-            1 => messages,
-            _ when parameter.ParameterType == typeof(CancellationToken) => CancellationToken.None,
-            _ => null,
-        }).ToArray();
-        object compilation = compiler.Invoke(null, arguments) ?? throw new InvalidOperationException("Semantic compiler returned no result.");
-        if (!Property<bool>(compilation, "Success"))
+        Rmf2ProjectCompilationV5 compilation = grouped
+            ? TranslationCompiler.CompileProject(project, messages)
+            : TranslationCompiler.CompileMf2Project(project, messages);
+        if (!compilation.Success)
             throw new InvalidOperationException("Semantic fixture did not compile.");
+        if (compilation.CatalogId != "app" || compilation.DefaultLocale != "en" ||
+            !compilation.Locales.SequenceEqual(["de", "en"]) ||
+            compilation.CallerFingerprint is null || compilation.SourceHash is null ||
+            Rmf2ProjectCompilationV5.ExecutionProfile != "rmf2-execution-v2" ||
+            Rmf2ProjectCompilationV5.MessageGrammarVersion != 5 ||
+            Rmf2ProjectCompilationV5.RuntimeAbiVersion != 2)
+            throw new InvalidOperationException("The public v5 compilation result omitted selected contract metadata.");
         return compilation;
     }
 
@@ -189,28 +249,15 @@ internal static class Program
         ? source.Substring("hello =".Length).TrimStart(' ', '\n', '\r')
         : source;
 
-    private static TranslationXliffExportResult Export(object compilation, TranslationInterchangeReview? review = null) =>
-        (TranslationXliffExportResult)(ExportMethod().Invoke(null, [compilation, review]) ??
-            throw new InvalidOperationException("Semantic XLIFF export returned no result."));
+    private static TranslationXliffExportResult Export(Rmf2ProjectCompilationV5 compilation, TranslationInterchangeReview? review = null) =>
+        TranslationInterchange.ExportXliff21(compilation, review);
 
-    private static MethodInfo ExportMethod() => typeof(TranslationInterchange).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
-        .Single(candidate => candidate.Name == "ExportXliff21" && candidate.GetParameters().Length == 2 &&
-            candidate.GetParameters()[0].ParameterType.Name != "TranslationInterchangeProjection");
-
-    private static object Preflight(object compilation)
+    private static object Preflight(Rmf2ProjectCompilationV5 compilation)
     {
         MethodInfo method = typeof(TranslationInterchange).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
             .Single(candidate => candidate.Name == "PreflightXliff21" && candidate.GetParameters().Length == 1 &&
                 candidate.GetParameters()[0].ParameterType.IsInstanceOfType(compilation));
         return method.Invoke(null, [compilation]) ?? throw new InvalidOperationException("XLIFF preflight returned no projection.");
-    }
-
-    private static object Project(object compilation)
-    {
-        PropertyInfo? project = compilation.GetType().GetProperty("Project", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        if (project?.GetValue(compilation) is { } direct) return direct;
-        object rmf2 = Property<object>(compilation, "Rmf2");
-        return Property<object>(rmf2, "Project");
     }
 
     private static T Property<T>(object value, string name) =>
