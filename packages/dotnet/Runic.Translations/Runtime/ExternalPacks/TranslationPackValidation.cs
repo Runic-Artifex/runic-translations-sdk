@@ -93,15 +93,4 @@ internal static class TranslationPackValidation
     private static bool IsAsciiLetter(char character) =>
         (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z');
 
-    private static bool AllLetters(ReadOnlySpan<char> value)
-    {
-        for (int i = 0; i < value.Length; i++) if (!IsAsciiLetter(value[i])) return false;
-        return true;
-    }
-
-    private static bool AllDigits(ReadOnlySpan<char> value)
-    {
-        for (int i = 0; i < value.Length; i++) if (value[i] < '0' || value[i] > '9') return false;
-        return true;
-    }
 }
