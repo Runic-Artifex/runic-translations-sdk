@@ -34,7 +34,6 @@ public sealed class Rmf2SourceDiscovery : ITask
                 string extension = layout switch
                 {
                     "rmf2-v1" => ".rmf2",
-                    "locale-toml" => ".toml",
                     _ => ".mf2",
                 };
                 if (layout == "rmf2-v1" && json.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))

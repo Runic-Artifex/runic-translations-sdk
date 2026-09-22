@@ -57,8 +57,8 @@ Choose this package for generated C# and whenever MSBuild owns input classificat
 
 ## Important build behavior
 
-- Discovery follows the declared `TranslationProject` directory, including nondefault paths. Explicit `TranslationToml` and legacy `TranslationMf2` items override the corresponding discovery. File membership is recorded in generation state so additions and removals invalidate artifacts.
-- The current target accepts exactly one `runic.json` project and its discovered sibling `{locale}.toml` files (`sourceLayout: "locale-toml"`), legacy `.mf2` messages, or recursive RMF2 `.rmf2` sources (`sourceLayout: "rmf2-v1"`).
+- Discovery follows the declared `TranslationProject` directory, including nondefault paths. Explicit legacy `TranslationMf2` items override corresponding discovery. File membership is recorded in generation state so additions and removals invalidate artifacts.
+- The current target accepts exactly one `runic.json` project and either legacy `.mf2` messages or recursive RMF2 `.rmf2` sources (`sourceLayout: "rmf2-v1"`).
 - The default launcher is the project-local `dotnet tool run runic-translations --`; restore the committed tool manifest before building.
 - Output must resolve beneath `IntermediateOutputPath`. Unsafe paths fail with `RTR0020`.
 - Incremental generation tracks inputs, settings, the tool manifest, declared outputs, and an owned-output inventory.
@@ -72,7 +72,7 @@ This package is a public preview for .NET 10. Preview targets and properties may
 - [Complete project template](https://github.com/Runic-Artifex/runic-sdk/tree/main/tools/Runic.Translations.Templates/templates/project)
 - [Vite quick start](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
 - [ESM backend](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/esm.md)
-- [Compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md)
+- [RMF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md)
 - [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
 Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE).

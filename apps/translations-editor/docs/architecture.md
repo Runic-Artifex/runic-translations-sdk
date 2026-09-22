@@ -19,10 +19,10 @@ translations/                 # legacy layout when sourceLayout is omitted
   de/
     application_title.mf2
 
-translations/                 # sourceLayout: "locale-toml"
+translations/                 # sourceLayout: "rmf2-v1"
   runic.json
-  en.toml
-  de.toml
+  en.rmf2
+  de.rmf2
 
 translations/                 # sourceLayout: "rmf2-v1"
   runic.json
@@ -94,7 +94,7 @@ coerce AST 5 into the v4 JavaScript evaluator.
 The `rmf2-v1` layout is an implemented, bounded execution profile of RMF2; it is
 not a claim of full Unicode MF2 conformance. The [RMF2 implementation guide](../../../docs/guides/translations/rmf2.md)
 documents its grammar, resource discovery, inline-markup contracts, and current
-limits. Existing TOML and legacy MF2 projects retain their layouts and version
+limits. Existing legacy MF2 projects retain their layouts and version
 markers.
 
 The editor does not maintain a separate translation language or semantic model.

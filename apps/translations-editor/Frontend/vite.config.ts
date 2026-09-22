@@ -19,7 +19,7 @@ export default defineConfig({
     }),
     runicTranslations({
       manifest,
-      sourceFiles: ["../EditorResources/runic.json", "../EditorResources/en.toml", "../EditorResources/de.toml"]
+      sourceFiles: ["../EditorResources/runic.json", "../EditorResources/en.rmf2", "../EditorResources/de.rmf2"]
     }),
     sveltekit()
   ],

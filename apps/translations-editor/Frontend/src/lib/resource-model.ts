@@ -103,17 +103,15 @@ function missingMessageDocument(
   if (manifest === undefined) return undefined;
   const separator = manifest.path.lastIndexOf("/");
   const directory = separator < 0 ? "" : manifest.path.slice(0, separator + 1);
-  let localeToml = false;
   let rmf2 = false;
-  try { const layout = JSON.parse(manifest.content).sourceLayout; localeToml = layout === "locale-toml"; rmf2 = layout === "rmf2-v1"; } catch { /* Invalid manifest is diagnosed by the compiler. */ }
+  try { rmf2 = JSON.parse(manifest.content).sourceLayout === "rmf2-v1"; } catch { /* Invalid manifest is diagnosed by the compiler. */ }
   const rmf2Path = source?.path.endsWith(".rmf2") ? `${source.path.slice(0, source.path.lastIndexOf("/") + 1)}${locale}.rmf2` : `${directory}${locale}.rmf2`;
   if (rmf2) {
     const target = localeDocuments.find(document => document.path === rmf2Path);
     if (target !== undefined) return target;
   }
-  if (localeToml && existing !== undefined) return existing;
   return {
-    path: rmf2 ? rmf2Path : localeToml ? `${directory}${locale}.toml` : `${directory}${locale}/${key}.mf2`,
+    path: rmf2 ? rmf2Path : `${directory}${locale}/${key}.mf2`,
     content: "",
     revision: newMf2DocumentRevision,
     isManifest: false,
@@ -152,7 +150,7 @@ export function coverage(rows: TranslationRow[], locale: string): { translated: 
 }
 
 function flattenDocument(content: string, path: string, entries?: EditorMessageEntry[]): ResourceEntry[] {
-  if (path.toLowerCase().endsWith(".toml") || path.toLowerCase().endsWith(".rmf2")) return (entries ?? []).map((entry) => ({
+  if (path.toLowerCase().endsWith(".rmf2")) return (entries ?? []).map((entry) => ({
     key: entry.key, value: entry.content, tags: [],
     structured: /^\s*\.(?:input|local|match)\b/m.test(entry.content) || entry.content.includes("{#"),
   }));

@@ -11,8 +11,6 @@ internal enum ToolCommand
     Help,
     Init,
     Validate,
-    Migrate,
-    MigrateRmf2,
     Generate,
     Verify,
     Schema,

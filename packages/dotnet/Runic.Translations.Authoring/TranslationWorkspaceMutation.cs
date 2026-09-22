@@ -28,10 +28,8 @@ public static class TranslationWorkspaceMutation
         if (locale == fallback) throw Error($"Locale '{locale}' cannot fall back to itself.");
         workspace.Locales.Add(new Locale(locale, fallback));
         workspace.ReplaceConfig();
-        if (workspace.IsToml && !workspace.Messages.Any(file => file.Locale == copyFrom))
-            workspace.Create($"{workspace.ProjectPrefix}{locale}.toml", []);
         foreach (FileState source in workspace.Messages.Where(file => file.Locale == copyFrom))
-            workspace.Create(workspace.IsToml ? $"{workspace.ProjectPrefix}{locale}.toml" : $"{workspace.ProjectPrefix}{locale}/{source.MessageId}.mf2", source.Bytes);
+            workspace.Create($"{workspace.ProjectPrefix}{locale}/{source.MessageId}.mf2", source.Bytes);
         return workspace.Plan();
     }
 
@@ -76,12 +74,6 @@ public static class TranslationWorkspaceMutation
         Workspace workspace = Load(request.Root, request.CatalogId);
         string key = Identifier(request.Key);
         byte[] content = Utf8.GetBytes(request.InitialValue + (request.InitialValue.EndsWith('\n') ? string.Empty : "\n"));
-        if (workspace.IsToml)
-        {
-            foreach (Locale locale in workspace.Locales)
-                workspace.EditLocale(locale.Tag, [new(TranslationLocaleEditKind.Add, key, request.InitialValue)]);
-            return workspace.Plan();
-        }
         foreach (Locale locale in workspace.Locales)
             workspace.Create($"{workspace.ProjectPrefix}{locale.Tag}/{key}.mf2", content);
         return workspace.Plan();
@@ -93,28 +85,6 @@ public static class TranslationWorkspaceMutation
         Workspace workspace = Load(request.Root, request.CatalogId);
         string sourceKey = Identifier(request.SourceKey);
         string? targetKey = request.Kind == TranslationKeyMutationKind.Delete ? null : Identifier(request.TargetKey ?? string.Empty);
-        if (workspace.IsToml)
-        {
-            bool foundBase = false;
-            foreach (FileState file in workspace.Messages)
-            {
-                var document = TranslationLocaleReader.Read(new TranslationSource(file.Path, file.Bytes), file.Locale);
-                if (targetKey is not null && document.Entries.Any(entry => entry.Key == targetKey)) throw Error($"Message '{targetKey}' already exists.");
-                var entry = document.Entries.FirstOrDefault(entry => entry.Key == sourceKey);
-                if (entry is null) continue;
-                if (file.Locale == workspace.BaseLocale) foundBase = true;
-                TranslationLocaleEdit edit = request.Kind switch
-                {
-                    TranslationKeyMutationKind.Delete => new(TranslationLocaleEditKind.Delete, sourceKey),
-                    TranslationKeyMutationKind.RenameOrMove => new(TranslationLocaleEditKind.Rename, sourceKey, TargetKey: targetKey),
-                    TranslationKeyMutationKind.Duplicate => new(TranslationLocaleEditKind.Add, targetKey!, Utf8.GetString(entry.Message.GetUtf8Bytes())),
-                    _ => throw Error("Unknown key mutation kind."),
-                };
-                workspace.EditLocale(file.Locale, [edit]);
-            }
-            if (!foundBase) throw Error($"Message '{sourceKey}' does not exist in the base locale.");
-            return workspace.Plan();
-        }
         List<FileState> sources = workspace.Messages.Where(file => file.MessageId == sourceKey).ToList();
         if (!sources.Any(file => file.Locale == workspace.BaseLocale)) throw Error($"Message '{sourceKey}' does not exist in the base locale.");
         if (targetKey is not null && workspace.Messages.Any(file => file.MessageId == targetKey))
@@ -124,30 +94,6 @@ public static class TranslationWorkspaceMutation
             if (targetKey is not null)
                 workspace.Create($"{workspace.ProjectPrefix}{source.Locale}/{targetKey}.mf2", source.Bytes);
             if (request.Kind != TranslationKeyMutationKind.Duplicate) workspace.Delete(source);
-        }
-        return workspace.Plan();
-    }
-
-    public static TranslationWorkspaceTransactionPlan MigrateToLocaleToml(string root, string catalogId)
-    {
-        Workspace workspace = Load(root, catalogId);
-        workspace.Migrate();
-        return workspace.Plan();
-    }
-
-    public static TranslationWorkspaceTransactionPlan ApplyLocaleEdits(string root, string catalogId, IEnumerable<TranslationLocaleFileEdit> changes)
-    {
-        ArgumentNullException.ThrowIfNull(changes);
-        Workspace workspace = Load(root, catalogId);
-        if (!workspace.IsToml) throw Error("Entry edits require sourceLayout locale-toml.");
-        foreach (var group in changes.GroupBy(change => Normalize(change.RelativePath), StringComparer.Ordinal))
-        {
-            FileState file = workspace.Messages.SingleOrDefault(file => file.Path == group.Key)
-                ?? throw Error($"Locale document '{group.Key}' was not found.");
-            foreach (TranslationLocaleFileEdit change in group)
-                if (Canonical(change.Locale) != file.Locale || !string.Equals(change.ExpectedRevision, Revision(file.Bytes), StringComparison.Ordinal))
-                    throw Error($"'{file.Path}' changed after the operation was planned.");
-            workspace.EditLocale(file.Locale, group.SelectMany(change => change.Edits).ToArray());
         }
         return workspace.Plan();
     }
@@ -198,25 +144,8 @@ public static class TranslationWorkspaceMutation
         if (prefix == ".") prefix = string.Empty;
         else prefix += "/";
 
-        bool isToml = config["sourceLayout"]?.GetValue<string>() == "locale-toml";
         var messages = new List<FileState>();
-        if (isToml)
-        {
-            foreach (string path in SafeFiles(projectRoot).Where(path => HasExtension(path, ".toml") || HasExtension(path, ".mf2")).Order(StringComparer.Ordinal))
-            {
-                string local = Normalize(Path.GetRelativePath(projectRoot, path));
-                if (!HasExtension(path, ".toml") || local.Contains('/')) throw Error($"Unsupported mixed or nested locale source '{local}'.");
-                string locale = Canonical(Path.GetFileNameWithoutExtension(path));
-                if (messages.Any(file => file.Locale == locale)) throw Error($"Locale '{locale}' has colliding source files.");
-                byte[] bytes = ReadBounded(path);
-                var document = TranslationLocaleReader.Read(new TranslationSource(prefix + local, bytes), locale);
-                if (!document.Success) throw Error("Invalid locale document: " + string.Join("; ", document.Diagnostics.Select(item => item.Message)));
-                messages.Add(new FileState(prefix + local, locale, string.Empty, bytes));
-            }
-        }
-        else
-        {
-            foreach (string path in SafeFiles(projectRoot).Where(path => HasExtension(path, ".mf2")).Order(StringComparer.Ordinal))
+        foreach (string path in SafeFiles(projectRoot).Where(path => HasExtension(path, ".mf2")).Order(StringComparer.Ordinal))
         {
             string local = Normalize(Path.GetRelativePath(projectRoot, path));
             string[] parts = local.Split('/');
@@ -225,8 +154,6 @@ public static class TranslationWorkspaceMutation
             if (messages.Any(file => file.Locale == locale && !file.Path.StartsWith(prefix + parts[0] + "/", StringComparison.Ordinal)))
                 throw Error($"Locale '{locale}' has colliding source directories.");
             messages.Add(new FileState(prefix + local, locale, Path.GetFileNameWithoutExtension(parts[1]), ReadBounded(path)));
-        }
-
         }
 
         List<Locale> locales = ReadLocales(config, messages, baseLocale);
@@ -289,7 +216,6 @@ public static class TranslationWorkspaceMutation
         List<FileState> messages)
     {
         private readonly List<TranslationWorkspaceEdit> _edits = [];
-        public bool IsToml => config["sourceLayout"]?.GetValue<string>() == "locale-toml";
         public string Root { get; } = root;
         public string CatalogId { get; } = catalogId;
         public string ProjectPrefix { get; } = projectPrefix;
@@ -321,33 +247,6 @@ public static class TranslationWorkspaceMutation
             byte[] bytes = Utf8.GetBytes(config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
             string relative = Normalize(Path.GetRelativePath(Root, configPath));
             _edits.Add(new TranslationWorkspaceEdit(relative, TranslationWorkspaceEditKind.Replace, Revision(configBytes), bytes));
-        }
-
-        public void EditLocale(string locale, IReadOnlyList<TranslationLocaleEdit> edits)
-        {
-            FileState? file = Messages.SingleOrDefault(file => file.Locale == locale);
-            string path = file?.Path ?? $"{ProjectPrefix}{locale}.toml";
-            byte[] bytes = TranslationLocaleWriter.Apply(new TranslationSource(path, file?.Bytes ?? []), locale, edits);
-            if (file is null) Create(path, bytes);
-            else _edits.Add(new TranslationWorkspaceEdit(path, TranslationWorkspaceEditKind.Replace, Revision(file.Bytes), bytes));
-        }
-
-        public void Migrate()
-        {
-            if (IsToml) throw Error("The project already uses locale-toml.");
-            if (SafeFiles(Path.GetDirectoryName(configPath)!).Any(path => HasExtension(path, ".toml")))
-                throw Error("Migration destination collides with an existing TOML file.");
-            var legacy = TranslationCompiler.CompileProject(new TranslationSource(Normalize(Path.GetRelativePath(Root, configPath)), configBytes), Messages.Select(file => new TranslationSource(file.Path, file.Bytes)));
-            if (!legacy.Success) throw Error("The legacy project is invalid: " + string.Join("; ", legacy.Diagnostics.Select(item => item.Message)));
-            foreach (Locale locale in Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
-            {
-                byte[] bytes = TranslationLocaleWriter.Render(Messages.Where(file => file.Locale == locale.Tag)
-                    .Select(file => new KeyValuePair<string, string>(file.MessageId, Utf8.GetString(file.Bytes))));
-                Create($"{ProjectPrefix}{locale.Tag}.toml", bytes);
-            }
-            foreach (FileState file in Messages) Delete(file);
-            config["sourceLayout"] = "locale-toml";
-            ReplaceConfig();
         }
 
         public void Create(string path, byte[] bytes)

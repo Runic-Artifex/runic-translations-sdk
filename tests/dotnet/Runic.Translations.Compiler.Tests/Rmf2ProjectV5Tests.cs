@@ -64,7 +64,7 @@ internal static class Rmf2ProjectV5Tests
             "Recognized execution-v2 selector did not return the v5 carrier.");
         TranslationSource activated = Rmf2Tests.Project(",\"executionProfile\":\"rmf2-execution-v2\"");
         var invalidLayout = TranslationCompiler.CompileProjectForSelectedProfile(new TranslationSource(activated.Path,
-            Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(activated.GetUtf8Bytes()).Replace("rmf2-v1", "locale-toml", StringComparison.Ordinal))), []);
+            Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(activated.GetUtf8Bytes()).Replace("rmf2-v1", "mf2-v1", StringComparison.Ordinal))), []);
         Assert.True(!invalidLayout.Success && invalidLayout.Profile == TranslationProjectProfile.Rmf2ExecutionV2 && invalidLayout.Current is null && invalidLayout.Rmf2 is not null,
             "Recognized execution-v2 invalid-layout diagnostics lost the v5 discriminant.");
         var unknown = TranslationCompiler.CompileProjectForSelectedProfile(Rmf2Tests.Project(",\"executionProfile\":\"future-profile\""), sources);
@@ -73,8 +73,8 @@ internal static class Rmf2ProjectV5Tests
         const string formatted = "x =\n  .local $n = {0.1 :number style=percent}\n  {{{$n}}}";
         Assert.True(Good(formatted).CanonicalMessages.Count == 1, "v5-only local did not link.");
         Assert.True(!TranslationCompiler.CompileProject(project, [Source("translations/en.rmf2", formatted)]).Success, "Default path unexpectedly activated v5.");
-        var toml = Source("translations/runic.json", Encoding.UTF8.GetString(project.GetUtf8Bytes()).Replace("rmf2-v1", "locale-toml", StringComparison.Ordinal));
-        Assert.True(!TranslationCompiler.CompileProjectForProfile(toml, [], TranslationProjectProfile.Rmf2ExecutionV2).Success, "Profile accepted incompatible resource layout.");
+        var incompatible = Source("translations/runic.json", Encoding.UTF8.GetString(project.GetUtf8Bytes()).Replace("rmf2-v1", "mf2-v1", StringComparison.Ordinal));
+        Assert.True(!TranslationCompiler.CompileProjectForProfile(incompatible, [], TranslationProjectProfile.Rmf2ExecutionV2).Success, "Profile accepted incompatible resource layout.");
     }
     private static void Fixture()
     {

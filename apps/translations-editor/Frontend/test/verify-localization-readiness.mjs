@@ -38,8 +38,8 @@ console.log(`PASS: mounted shared localization readiness fixtures (${localizatio
 // Exercise real generated MF2 functions through the same locale-reactive UI adapter.
 const resourceRoot = new URL("../../EditorResources/", import.meta.url);
 const config = JSON.parse(await readFile(new URL("runic.json", resourceRoot), "utf8"));
-assert.equal(config.sourceLayout, "locale-toml");
-assert.deepEqual((await readdir(resourceRoot)).filter((name) => name.endsWith(".toml")).sort(), ["de.toml", "en.toml"]);
+assert.equal(config.sourceLayout, "rmf2-v1");
+assert.deepEqual((await readdir(resourceRoot)).filter((name) => name.endsWith(".rmf2")).sort(), ["de.rmf2", "en.rmf2"]);
 const manifestPath = process.env.RUNIC_TRANSLATIONS_MANIFEST;
 assert.ok(manifestPath, "Generate the editor ESM module and provide RUNIC_TRANSLATIONS_MANIFEST before plural acceptance.");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -72,7 +72,7 @@ for (locale of ["en", "de"]) {
   assert.equal(ui.text("ui_loading"), locale === "en" ? "Loading" : "Wird geladen");
 }
 assert.doesNotMatch(page, /length === 1\s*\? ui\.text/, "UI count grammar must be chosen by MF2, not JavaScript.");
-console.log("PASS: real editor TOML messages format all plural stress counts in English and German through the reactive UI adapter.");
+console.log("PASS: real editor RMF2 messages format all plural stress counts in English and German through the reactive UI adapter.");
 
 const { notice, displayNotice } = await import(`data:text/javascript;base64,${Buffer.from(adapterJs).toString("base64")}`);
 const stored = notice("ui_count_review_marked", { count: 2, state: "approved" });
@@ -80,10 +80,10 @@ locale = "en";
 assert.match(displayNotice(stored, ui), /2 visible messages marked approved/);
 locale = "de";
 assert.match(displayNotice(stored, ui), /2 sichtbare Nachrichten.*freigegeben/);
-const backendNotice = { code: "ui_backend_document_conflict", args: [{ name: "path", value: "de.toml" }] };
-assert.match(displayNotice(backendNotice, ui), /de\.toml.*Datenträger/);
+const backendNotice = { code: "ui_backend_document_conflict", args: [{ name: "path", value: "de.rmf2" }] };
+assert.match(displayNotice(backendNotice, ui), /de\.rmf2.*Datenträger/);
 locale = "en";
-assert.match(displayNotice(backendNotice, ui), /de\.toml.*changed on disk/);
+assert.match(displayNotice(backendNotice, ui), /de\.rmf2.*changed on disk/);
 const external = { code: "ui_backend_external_error", args: [], detail: "IO-E42" };
 assert.equal(displayNotice(external, ui), "The operation could not be completed. Technical details: IO-E42");
 locale = "de";

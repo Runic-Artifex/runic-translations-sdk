@@ -19,20 +19,21 @@ restores the same compiler with `dotnet tool restore`.
 ```text
 translations/
 ├── runic.json
-├── en.toml
-└── de.toml
+├── en.rmf2
+└── de.rmf2
 ```
 
 Declare the catalog, C# names, and base locale once in `translations/runic.json`.
-Set `sourceLayout` to `"locale-toml"`; locale tags come from the TOML filenames.
-Group messages with TOML tables, for example:
+Set `sourceLayout` to `"rmf2-v1"`; locale tags come from the RMF2 filenames.
+Group messages directly, for example:
 
-```toml
-[application]
-title = 'Runic application'
+```rmf2
+application {
+  title = Runic application
+}
 ```
 
-See the [TOML locale project convention](mf2-projects.md)
+See the [RMF2 guide](rmf2.md)
 for the complete config and supported authoring syntax. Add `.runic/` to
 `.gitignore` when Vite owns generation.
 
@@ -49,7 +50,7 @@ export default defineConfig({
 ```
 
 The plugin discovers `translations/runic.json`, runs the pinned local tool before
-Vite loads generated modules, and watches the config and locale `.toml` files,
+Vite loads generated modules, and watches the config and locale `.rmf2` files,
 including file additions and removals. A
 watched authoring change is compiled before the virtual modules are invalidated.
 
@@ -61,8 +62,7 @@ import { m } from 'virtual:runic-translations/app';
 document.querySelector('#app')!.textContent = m.application_title();
 ```
 
-TOML key-path segments join with underscores: `[application] title` produces
-`m.application_title()`. Nested tables, dotted keys and inline tables use the same mapping.
+RMF2 resource names produce `m.application_title()`.
 
 ## 5. Validate in CI
 

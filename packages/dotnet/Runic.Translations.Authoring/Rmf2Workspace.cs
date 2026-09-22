@@ -91,8 +91,23 @@ public sealed class Rmf2Workspace
 
     public TranslationWorkspaceTransactionPlan CreateResource(string path, IReadOnlyList<string> logicalPath, string message)
     {
-        var source = _sources.TryGetValue(path, out var existing) ? existing : new TranslationSource(path, Array.Empty<byte>());
-        return Plan(new Dictionary<string, byte[]?>(StringComparer.Ordinal) { [path] = Rmf2ResourceWriter.AddMessage(source, LocalPath(path, logicalPath), message) });
+        var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
+        // A catalog key is complete only when every locale receives a direct
+        // resource.  Updating just the selected base document creates a plan
+        // the compiler correctly rejects as an incomplete catalog.
+        foreach (Rmf2ResourceDocument document in Documents)
+        {
+            IReadOnlyList<string> local;
+            try { local = LocalPath(document.Source.Path, logicalPath); }
+            catch (TranslationAuthoringException) { continue; }
+            changes[document.Source.Path] = Rmf2ResourceWriter.AddMessage(document.Source, local, message);
+        }
+        if (changes.Count == 0)
+        {
+            var source = _sources.TryGetValue(path, out var existing) ? existing : new TranslationSource(path, Array.Empty<byte>());
+            changes[path] = Rmf2ResourceWriter.AddMessage(source, LocalPath(path, logicalPath), message);
+        }
+        return Plan(changes);
     }
     /// <summary>Deletes, duplicates or moves a message across its locale resources while retaining attached metadata.</summary>
     public TranslationWorkspaceTransactionPlan MutateResource(IReadOnlyList<string> logicalPath, IReadOnlyList<string>? targetPath, bool duplicate = false)
@@ -258,41 +273,6 @@ public sealed class Rmf2Workspace
     }
 
     public TranslationWorkspaceTransactionPlan Format(string path) => Plan(new Dictionary<string, byte[]?>(StringComparer.Ordinal) { [path] = Rmf2ResourceWriter.Format(_sources[path]) });
-
-    public TranslationWorkspaceTransactionPlan MigrateToml(out IReadOnlyList<string> notes)
-    {
-        TranslationWorkspaceTransactionPlan plan = MigrateToml(out notes, out _);
-        return plan;
-    }
-
-    /// <summary>Migrates locale TOML to RMF2 and exposes stable structured loss details.</summary>
-    public TranslationWorkspaceTransactionPlan MigrateToml(out IReadOnlyList<string> notes, out TranslationMigrationReport report)
-    {
-        var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal); var losses = new List<TranslationMigrationLoss>();
-        JsonObject config = JsonNode.Parse(_project.GetUtf8Bytes())!.AsObject();
-        if (config["sourceLayout"]?.GetValue<string>() != "locale-toml") throw new TranslationAuthoringException("TOML migration requires sourceLayout locale-toml.");
-        config["sourceLayout"] = "rmf2-v1";
-        foreach (var source in _sources.Values)
-        {
-            string path = Path.ChangeExtension(source.Path, ".rmf2"), backup = source.Path + ".bak";
-            if (_sources.ContainsKey(path) || File.Exists(Path.Combine(_root, Relative(backup)))) throw new TranslationAuthoringException("Migration destination or backup exists.");
-            changes[path] = Rmf2ResourceWriter.ImportTomlWithReport(source, Path.GetFileNameWithoutExtension(source.Path), out TranslationMigrationReport sourceReport);
-            losses.AddRange(sourceReport.Losses.Select(loss => loss with { Location = Relative(loss.Location) }));
-            changes[source.Path] = null; changes[backup] = source.GetUtf8Bytes();
-        }
-        changes[_project.Path] = Utf8.GetBytes(config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
-        report = new TranslationMigrationReport(losses
-            .OrderBy(static loss => loss.Location, StringComparer.Ordinal)
-            .ThenBy(static loss => loss.Code, StringComparer.Ordinal));
-        notes = report.Notes;
-        return Plan(changes);
-    }
-
-    /// <summary>Convenience overload for callers that only consume structured migration data.</summary>
-    public TranslationWorkspaceTransactionPlan MigrateTomlWithReport(out TranslationMigrationReport report)
-    {
-        return MigrateToml(out _, out report);
-    }
 
     /// <summary>Adds a locale by copying its physical source documents through a validated transaction.</summary>
     public TranslationWorkspaceTransactionPlan AddLocale(string locale, string? fallback = null, string? copyFrom = null) => ChangeLocale("add", locale, fallback, copyFrom);

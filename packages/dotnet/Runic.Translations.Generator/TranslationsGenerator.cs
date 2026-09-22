@@ -118,7 +118,6 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         InputKind kind;
         if (string.Equals(kindValue, "Project", StringComparison.Ordinal)) kind = InputKind.Project;
         else if (string.Equals(kindValue, "Rmf2", StringComparison.Ordinal) || string.Equals(kindValue, "Mf2", StringComparison.Ordinal)) kind = InputKind.Mf2;
-        else if (string.Equals(kindValue, "Toml", StringComparison.Ordinal)) kind = InputKind.Toml;
         else return default;
 
         SourceText? sourceText = additionalText.GetText(cancellationToken);
@@ -363,7 +362,6 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         None,
         Project,
         Mf2,
-        Toml,
     }
 
     private readonly struct GeneratorInput : IEquatable<GeneratorInput>

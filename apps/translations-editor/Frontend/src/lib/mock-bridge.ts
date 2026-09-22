@@ -697,7 +697,7 @@ async function handle(command: EditorCommand): Promise<EditorReceipt> {
       return receipt({ _tag: "RedoApplied", result: wire(await redo()) });
     case "TransformDocument": {
       // Mock fixtures intentionally exercise the legacy MF2 layout. Production
-      // TOML edits always use the shared compiler reader and authoring writer.
+      // Resource edits always use the shared compiler and authoring model.
       const content = command.value === undefined ? command.content
         : command.value.endsWith("\n") ? command.value : `${command.value}\n`;
       const validation = await validate(command.path, content);

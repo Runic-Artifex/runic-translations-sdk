@@ -49,8 +49,7 @@ The containing Build package is a public preview. It requires a .NET 10 compiler
 
 - [Generated package consumer](https://github.com/Runic-Artifex/runic-sdk/tree/main/tests/dotnet/Runic.Translations.PackageTests)
 - [Generator tests and examples](https://github.com/Runic-Artifex/runic-sdk/tree/main/tests/dotnet/Runic.Translations.Generator.Tests)
-- [MF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/mf2-projects.md)
-- [Compatibility policy](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/compatibility.md)
+- [RMF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md)
 - [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
 Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for bundled data attribution.

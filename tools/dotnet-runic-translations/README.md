@@ -19,20 +19,9 @@ dotnet tool run runic-translations -- validate \
 ```
 
 The project path may name the conventional directory or its `runic.json`.
-New projects declare `sourceLayout: "locale-toml"` and keep MF2 messages as
-string values in sibling files such as `en.toml` and `de.toml`. Projects without
-that field retain the legacy locale-directory `.mf2` layout.
-
-## Migrate an existing catalog
-
-```bash
-dotnet tool run runic-translations -- migrate --project translations --dry-run
-dotnet tool run runic-translations -- migrate --project translations
-```
-
-Migration validates the complete proposed catalog before committing its file
-transaction. It preserves decoded MF2 content and refuses collisions or stale
-files. The dry run leaves the original project unchanged.
+New projects declare `sourceLayout: "rmf2-v1"` and keep resources in sibling
+files such as `en.rmf2` and `de.rmf2`. Projects without that field retain the
+legacy locale-directory `.mf2` layout.
 
 ## Generate C# and ESM
 
@@ -73,7 +62,7 @@ Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`.
 This tool is a public preview for .NET 10. Preview commands and generated output can change with documented migrations. Pin one exact version in the local manifest and coordinate upgrades with all consumers of its generated artifacts.
 
 - [Vite quick start](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
-- [MF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/mf2-projects.md)
+- [RMF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md)
 - [CLI source and examples](https://github.com/Runic-Artifex/runic-sdk/tree/main/tools/dotnet-runic-translations)
 - [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
 
@@ -87,11 +76,6 @@ typed grammar 5/runtime ABI 2 generation, also set
 all dispatch from that selector. Omission preserves grammar/artifact v4 and ESM
 ABI 3. Generated v5 JSON is `{catalog}.{locale}.locale-v5.json`; ESM output is
 under `{catalog}.esm-v5/` with `web-module-manifest-v3.json`.
-For
-legacy projects, run `migrate` and validate first, then use
-`migrate-rmf2 --project translations --dry-run` to preview the TOML-to-RMF2
-step. Applying that second step retains byte-preserving sibling `.toml.bak`
-files; keep a durable VCS or external backup for the first legacy-to-TOML step.
 `lsp` starts the bounded stdio language service. See the [RMF2 guide](../../docs/guides/translations/rmf2.md) for capabilities and limits.
 
 The LSP's standard resource rename is deliberately resource-only: it refuses

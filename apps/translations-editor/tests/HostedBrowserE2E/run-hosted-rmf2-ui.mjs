@@ -1,5 +1,5 @@
 // Independently rerunnable Linux acceptance against a prebuilt editor assembly.
-// Does not build, install dependencies, or acquire browsers.
+// It never builds, installs dependencies, or downloads a browser.
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, readFile, rm, access } from "node:fs/promises";
@@ -17,13 +17,12 @@ const reportDirectory = process.env.RUNIC_EDITOR_HOSTED_E2E_REPORT_DIR
   ? resolve(process.env.RUNIC_EDITOR_HOSTED_E2E_REPORT_DIR)
   : await mkdtemp(join(process.env.RUNIC_EDITOR_HOSTED_E2E_TEMP_ROOT ?? "/tmp", "runic-editor-hosted-report-"));
 await mkdir(reportDirectory, { recursive: true });
-// A rerun must not leave a prior run's screenshot or version in its new receipt.
-for (const name of ["browser-metadata.json", "failure.png", "failure.html", "failure.json", "conflict-de.png", "repaired-en.png"])
+for (const name of ["browser-metadata.json", "failure.png", "failure.html", "failure.json", "conflict-en.png", "repaired-en.png"])
   await rm(join(reportDirectory, name), { force: true });
 const temporaryRoot = await mkdtemp(join(process.env.RUNIC_EDITOR_HOSTED_E2E_TEMP_ROOT ?? "/tmp", "runic-editor-hosted-work-"));
 const workspace = join(temporaryRoot, "workspace");
 const state = join(temporaryRoot, "state");
-const driver = join(fixtureDirectory, "hosted-toml-ui.mjs");
+const driver = join(fixtureDirectory, "hosted-rmf2-ui.mjs");
 const childEnvironment = { ...process.env, XDG_STATE_HOME: state, RUNIC_EDITOR_HOSTED_E2E_REPORT_DIR: reportDirectory };
 let host;
 let hostOutput = "";
@@ -39,15 +38,14 @@ const runDriver = (argumentsValue) => new Promise((resolveRun, reject) => {
   child.on("exit", (code) => {
     clearTimeout(timer);
     if (code === 0 && !timedOut) resolveRun();
-    else reject(new Error(`Hosted TOML browser driver ${timedOut ? "timed out" : `exited ${code}`}.`));
+    else reject(new Error(`Hosted RMF2 browser driver ${timedOut ? "timed out" : `exited ${code}`}.`));
   });
 });
 try {
   await runDriver(["--prepare", workspace]);
   const ready = new Promise((resolveReady, reject) => {
     host = spawn("dotnet", [assembly, "serve", "--workspace", workspace], {
-      cwd: dirname(assembly), env: { ...childEnvironment, RUNIC_EDITOR_HOSTED_E2E_ASSETS: fixtureDirectory },
-      stdio: ["ignore", "pipe", "pipe"],
+      cwd: dirname(assembly), env: childEnvironment, stdio: ["ignore", "pipe", "pipe"],
     });
     const timer = setTimeout(() => reject(new Error("Hosted editor did not announce its loopback URL within 30 seconds.")), 30_000);
     const consume = (bytes) => {
@@ -77,9 +75,9 @@ try {
   await writeFile(join(reportDirectory, "result.json"), JSON.stringify({
     passed, assembly, assemblySha256, sourceRevision: process.env.GITHUB_SHA ?? null,
     platform: process.platform, architecture: process.arch, browserVersion: browserMetadata.browserVersion ?? null,
-    runner: "real-hosted-toml-ui", workspaceRetained: !passed ? workspace : undefined,
+    runner: "real-hosted-rmf2-ui", workspaceRetained: !passed ? workspace : undefined,
   }, null, 2) + "\n");
   if (passed) await rm(temporaryRoot, { recursive: true });
-  console.log(`Hosted TOML acceptance ${passed ? "passed" : "failed"}; reports: ${reportDirectory}`);
+  console.log(`Hosted RMF2 acceptance ${passed ? "passed" : "failed"}; reports: ${reportDirectory}`);
   if (!passed) console.log(`Task-owned failed workspace retained for diagnosis: ${temporaryRoot}`);
 }

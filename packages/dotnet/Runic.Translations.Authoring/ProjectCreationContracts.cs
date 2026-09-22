@@ -6,15 +6,6 @@ namespace Runic.Translations.Authoring;
 
 public sealed record TranslationProjectLocale(string Tag, string? Fallback = null);
 
-/// <summary>Authoring source layout selected for a newly created project.</summary>
-public enum TranslationProjectLayout
-{
-    /// <summary>The conventional one-file-per-locale TOML layout.</summary>
-    LocaleToml,
-    /// <summary>The opt-in recursive Runic Message Format 2 layout.</summary>
-    Rmf2,
-}
-
 public sealed class TranslationProjectCreationRequest
 {
     public TranslationProjectCreationRequest(
@@ -25,19 +16,6 @@ public sealed class TranslationProjectCreationRequest
         string className,
         IEnumerable<TranslationProjectLocale>? additionalLocales = null,
         bool includeStarterMessage = true)
-        : this(directory, catalogId, defaultLocale, codeNamespace, className, additionalLocales, includeStarterMessage, TranslationProjectLayout.LocaleToml)
-    {
-    }
-
-    public TranslationProjectCreationRequest(
-        string directory,
-        string catalogId,
-        string defaultLocale,
-        string codeNamespace,
-        string className,
-        IEnumerable<TranslationProjectLocale>? additionalLocales,
-        bool includeStarterMessage,
-        TranslationProjectLayout layout)
     {
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(catalogId);
@@ -53,8 +31,6 @@ public sealed class TranslationProjectCreationRequest
             ? Array.Empty<TranslationProjectLocale>()
             : new List<TranslationProjectLocale>(additionalLocales).ToArray();
         IncludeStarterMessage = includeStarterMessage;
-        if (!Enum.IsDefined(layout)) throw new ArgumentOutOfRangeException(nameof(layout));
-        Layout = layout;
     }
 
     public string Directory { get; }
@@ -64,7 +40,6 @@ public sealed class TranslationProjectCreationRequest
     public string ClassName { get; }
     public IReadOnlyList<TranslationProjectLocale> AdditionalLocales { get; }
     public bool IncludeStarterMessage { get; }
-    public TranslationProjectLayout Layout { get; }
 }
 
 public sealed class TranslationProjectFile

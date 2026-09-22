@@ -18,10 +18,9 @@
     },
     "sourceLayout": {
       "enum": [
-        "locale-toml",
         "rmf2-v1"
       ],
-      "description": "locale-toml keeps TOML locale files beside runic.json; rmf2-v1 discovers grouped .rmf2 files with directory namespaces. Omit for legacy MF2 files."
+      "description": "rmf2-v1 discovers grouped .rmf2 files with directory namespaces. Omit for legacy MF2 files."
     },
     "executionProfile": {
       "const": "rmf2-execution-v2",

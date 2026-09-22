@@ -34,7 +34,7 @@ Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an 
 ./runic-translations-editor report /path/to/workspace --format review --source .runic-translations/export/catalog.review.json
 ```
 
-`--output` belongs to `export`; select the command response envelope with `--runic-output json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). An XLIFF import updates only the selected project's translation resources: conventional `.mf2` files, locale TOML, or RMF2 `.rmf2` files according to its source layout. A report or import that is refused returns exit code `1` and lists its refusal codes in both human output and the JSON fault details.
+`--output` belongs to `export`; select the command response envelope with `--runic-output json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). An XLIFF import updates only the selected project's translation resources: conventional `.mf2` files or RMF2 `.rmf2` files according to its source layout. A report or import that is refused returns exit code `1` and lists its refusal codes in both human output and the JSON fault details.
 
 ## Local support diagnostics
 
@@ -79,7 +79,7 @@ For frontend-only development, build once to generate the localized ESM module,
 then run this from the SDK root:
 
 ```sh
-RUNIC_TRANSLATIONS_MANIFEST="$PWD/apps/translations-editor/obj/Debug/net10.0/translations/editor.esm/web-module-manifest-v2.json" \
+RUNIC_TRANSLATIONS_MANIFEST="$PWD/apps/translations-editor/obj/Debug/net10.0/translations/editor.esm-v5/web-module-manifest-v3.json" \
   bun run --cwd apps/translations-editor/Frontend dev:mock
 ```
 

@@ -44,13 +44,8 @@
       <TranslationMf2 Include="@(_TranslationsDiscoveredSource)"
                       Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.mf2' or '%(_TranslationsDiscoveredSource.Extension)' == '.rmf2'" />
     </ItemGroup>
-    <ItemGroup Condition="'@(TranslationToml)' == ''">
-      <TranslationToml Include="@(_TranslationsDiscoveredSource)"
-                       Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.toml'" />
-    </ItemGroup>
     <ItemGroup>
       <AdditionalFiles Include="@(TranslationMf2)" RunicTranslationKind="Mf2" />
-      <AdditionalFiles Include="@(TranslationToml)" RunicTranslationKind="Toml" />
     </ItemGroup>
   </Target>
 
@@ -58,7 +53,7 @@
           DependsOnTargets="_RunicTranslationsDiscoverTranslationSources"
           BeforeTargets="CoreCompile;RunicTranslationsGenerateTranslationArtifacts">
     <ItemGroup>
-      <_TranslationsCheckedSource Include="@(TranslationProject);@(TranslationMf2);@(TranslationToml)" />
+      <_TranslationsCheckedSource Include="@(TranslationProject);@(TranslationMf2)" />
       <_TranslationsCheckedDirectory Include="@(_TranslationsCheckedSource->'%(RootDir)%(Directory)')" />
     </ItemGroup>
     <Error Condition="Exists('%(_TranslationsCheckedSource.Identity)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('%(_TranslationsCheckedSource.Identity)')))), 1024)) != 0"
@@ -152,7 +147,6 @@
       <_TranslationsDesiredStateLine Include="output=$(_TranslationsOutputDirectory)" />
       <_TranslationsDesiredStateLine Include="@(TranslationProject->'project=%(FullPath)')" />
       <_TranslationsDesiredStateLine Include="@(TranslationMf2->'mf2=%(FullPath)')" />
-      <_TranslationsDesiredStateLine Include="@(TranslationToml->'toml=%(FullPath)')" />
     </ItemGroup>
     <WriteLinesToFile File="$(_TranslationsGenerationStatePath)"
                       Lines="@(_TranslationsDesiredStateLine)"
@@ -197,7 +191,7 @@
 
   <!-- This target is reached only after deferred path defaults and generation state exist. -->
   <Target Name="_RunicTranslationsGenerateTranslationArtifactsCore"
-          Inputs="@(TranslationProject);@(TranslationMf2);@(TranslationToml);@(TranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
+          Inputs="@(TranslationProject);@(TranslationMf2);@(TranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
           Outputs="$(TranslationsOutputStamp)">
     <Error Condition="'@(TranslationProject->Count())' &gt; '1'"
            Text="RTR0002: At most one TranslationProject item is supported." />

@@ -22,7 +22,6 @@ internal static class Program
         CppGenerationTests.Register(runner);
         SchemaV2Tests.Register(runner);
         Mf2ProjectTests.Register(runner);
-        TomlProjectTests.Register(runner);
         Rmf2Tests.Register(runner);
         Mf2SyntaxTests.Register(runner);
         Rmf2MarkupTests.Register(runner);

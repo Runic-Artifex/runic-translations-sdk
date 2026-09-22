@@ -225,26 +225,19 @@ internal static class Program
         return result;
     }
 
-    internal static ToolOperationResult ExecuteInit(string directory, string catalog, string defaultLocale, string codeNamespace, string className, IReadOnlyList<string> locales, bool noStarter, string layout = "locale-toml")
+    internal static ToolOperationResult ExecuteInit(string directory, string catalog, string defaultLocale, string codeNamespace, string className, IReadOnlyList<string> locales, bool noStarter)
     {
         try
         {
             return Execute(new ToolInvocation(ToolCommand.Init, null, ToolEmission.None,
                 new TranslationProjectCreationRequest(directory, catalog, defaultLocale, codeNamespace, className,
-                    ParseLocales(locales), !noStarter, ParseLayout(layout))));
+                    ParseLocales(locales), !noStarter)));
         }
         catch (ToolUsageException exception)
         {
             return Usage(exception.Message);
         }
     }
-
-    private static TranslationProjectLayout ParseLayout(string value) => value switch
-    {
-        "locale-toml" => TranslationProjectLayout.LocaleToml,
-        "rmf2-v1" => TranslationProjectLayout.Rmf2,
-        _ => throw new ToolUsageException("--layout expects 'locale-toml' or 'rmf2-v1'."),
-    };
 
     internal static ToolEmission Emission(bool csharp, bool json, bool typescript, bool templateManifest, bool esm, bool cpp)
     {
@@ -371,28 +364,6 @@ internal static class Program
             return DiagnosticFailure;
         }
 
-        if (invocation.Command is ToolCommand.Migrate or ToolCommand.MigrateRmf2)
-        {
-            string supplied = Path.GetFullPath(invocation.ProjectPath!);
-            string root = Directory.Exists(supplied) ? supplied : Path.GetDirectoryName(supplied)!;
-            TranslationWorkspaceTransactionPlan plan;
-            if (invocation.Command == ToolCommand.MigrateRmf2)
-            {
-                // InputFiles paths are relative to the process cwd; make their identity absolute before planning within the project root.
-                var workspace = new Rmf2Workspace(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()),
-                    inputs.Messages.Select(source => new TranslationSource(Path.GetFullPath(source.Path), source.GetUtf8Bytes())));
-                plan = workspace.MigrateToml(out _, out TranslationMigrationReport report);
-                foreach (TranslationMigrationLoss loss in report.Losses)
-                    result.WriteOutputLine($"{loss.Code} {loss.Location}: {loss.Message}");
-            }
-            else plan = TranslationWorkspaceMutation.MigrateToLocaleToml(root, compilation.Catalogs[0].Id);
-            foreach (TranslationWorkspaceEdit edit in plan.Edits)
-                result.WriteOutputLine($"{edit.Kind.ToString().ToLowerInvariant()} {edit.RelativePath}");
-            if (!invocation.DryRun) TranslationWorkspaceTransaction.Commit(plan);
-            result.WriteOutputLine(invocation.DryRun ? "migration preview; no files written." : invocation.Command == ToolCommand.MigrateRmf2 ? "migrated project to RMF2." : "migrated project to locale TOML.");
-            return Success;
-        }
-
         if (invocation.Command == ToolCommand.Validate)
         {
             result.WriteOutputLine($"validated {compilation.Catalogs.Count} project(s) and {inputs.Messages.Count} source document(s).");
@@ -489,10 +460,7 @@ internal static class Program
     {
         writer.WriteLine("Usage:");
         writer.WriteLine("  runic-translations init --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [init-options]");
-        writer.WriteLine("  runic-translations init-rmf2 --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [init-options]");
         writer.WriteLine("  runic-translations lsp");
-        writer.WriteLine("  runic-translations migrate-rmf2 --project <translations-directory> [--dry-run]");
-        writer.WriteLine("  runic-translations migrate --project <translations-directory> [--dry-run]");
         writer.WriteLine("  runic-translations validate --project <translations-directory>");
         writer.WriteLine("  runic-translations generate --project <translations-directory> --output <directory> [emit-switches]");
         writer.WriteLine("  runic-translations verify --project <translations-directory> --output <directory> [emit-switches]");
@@ -500,8 +468,7 @@ internal static class Program
         writer.WriteLine();
         writer.WriteLine("Arguments may be read from a UTF-8 response file with @<file>.");
         writer.WriteLine("Framework transport uses --runic-output human|json; --output remains the tool destination option.");
-        writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --no-starter --layout locale-toml|rmf2-v1.");
-        writer.WriteLine("The init command defaults to locale-toml; use init-rmf2 or --layout rmf2-v1 to opt into RMF2.");
+        writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --no-starter.");
         writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest --emit-esm --emit-cpp.");
         writer.WriteLine("With no emit switches, generate and verify use the selected execution profile's default output groups.");
         writer.WriteLine("Exit codes: 0 success; 1 validation or verification diagnostics; 2 invocation or operational failure.");
@@ -586,9 +553,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
     {
         ToolOperationResult result = request.Command switch
         {
-            "init" or "init-rmf2" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter, request.Layout),
-            "migrate-rmf2" => Program.Execute(new ToolInvocation(ToolCommand.MigrateRmf2, null, ToolEmission.None, null, request.Project, request.DryRun)),
-            "migrate" => Program.Execute(new ToolInvocation(ToolCommand.Migrate, null, ToolEmission.None, null, request.Project, request.DryRun)),
+            "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter),
             "validate" => ExecuteCompilation(request, ToolCommand.Validate, null, ToolEmission.None),
             "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp)),
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp)),

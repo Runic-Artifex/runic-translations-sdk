@@ -11,5 +11,6 @@
     "en",
     "de"
   ],
-  "sourceLayout": "locale-toml"
+  "sourceLayout": "rmf2-v1",
+  "executionProfile": "rmf2-execution-v2"
 }

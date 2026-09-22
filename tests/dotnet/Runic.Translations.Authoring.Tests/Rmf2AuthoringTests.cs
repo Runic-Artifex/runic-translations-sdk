@@ -23,7 +23,6 @@ internal static class Rmf2AuthoringTests
         runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
         runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
         runner.Add("RMF2 execution-v2 locale plans preserve mounted projects and commit atomically", ExecutionV2Locales);
-        runner.Add("RMF2 TOML migration validates complete catalog and retains original source", Migration);
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     private static TranslationSource Project(string layout = "rmf2-v1") => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"" + layout + "\"}");
@@ -88,6 +87,16 @@ internal static class Rmf2AuthoringTests
         }
         Assert.True(workspace.MutateResource(["shop", "title"], null).Compilation.Success, "Message deletion failed.");
         Assert.True(workspace.CreateResource("en.rmf2", ["new", "message"], "New").Compilation.Success, "Message creation failed.");
+
+        var localized = new Rmf2Workspace(Path.GetTempPath(), Project(), [
+            Source("en.rmf2", "existing = English\n"),
+            Source("de.rmf2", "existing = Deutsch\n"),
+        ]);
+        TranslationWorkspaceTransactionPlan created = localized.CreateResource("en.rmf2", ["new", "message"], "New");
+        Assert.Equal(2, created.Edits.Count);
+        Assert.True(created.Compilation.Success, "RMF2 message creation did not update every locale.");
+        Assert.True(created.Edits.All(edit => Encoding.UTF8.GetString(edit.GetUtf8Bytes()!).Contains("new {", StringComparison.Ordinal)),
+            "RMF2 message creation missed a locale document.");
     }
     private static void MountedRename()
     {
@@ -282,29 +291,6 @@ internal static class Rmf2AuthoringTests
             Assert.Equal("en", locales.Single(locale => locale["tag"]!.GetValue<string>() == "it")["fallback"]!.GetValue<string>(), "Dependent fallback was not redirected.");
             Assert.Equal("rmf2-execution-v2", configured["executionProfile"]!.GetValue<string>());
             Assert.True(TranslationWorkspaceTransaction.GetPending(root) is null, "Successful execution-v2 removal retained a transaction journal.");
-        }
-        finally { Directory.Delete(root, true); }
-    }
-    private static void Migration()
-    {
-        string root = Path.Combine(Path.GetTempPath(), "runic-rmf2-migration-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
-        try
-        {
-            var project = Project("locale-toml"); var source = Source("en.toml", "# Translator note\n[shop]\ntitle='Shop'\n");
-            File.WriteAllBytes(Path.Combine(root, "runic.json"), project.GetUtf8Bytes()); File.WriteAllBytes(Path.Combine(root, "en.toml"), source.GetUtf8Bytes());
-            var plan = new Rmf2Workspace(root, project, [source]).MigrateToml(out var notes, out TranslationMigrationReport report);
-            Assert.True(notes.Count == 1 && plan.Compilation.Success, "Migration failed to report trivia.");
-            Assert.Equal(1, report.Losses.Count);
-            Assert.Equal("RMF2-MIGRATION-COMMENT-OWNERSHIP", report.Losses[0].Code);
-            Assert.Equal("en.toml", report.Losses[0].Location);
-            _ = new Rmf2Workspace(root, Source(Path.Combine(root, "runic.json"), Encoding.UTF8.GetString(project.GetUtf8Bytes())), [Source(Path.Combine(root, "en.toml"), "# Translator note\n[shop]\ntitle='Shop'\n")])
-                .MigrateTomlWithReport(out TranslationMigrationReport absoluteReport);
-            Assert.Equal("en.toml", absoluteReport.Losses[0].Location);
-            new Rmf2Workspace(root, project, [source]).MigrateToml(out IReadOnlyList<string> compatibilityNotes);
-            Assert.Equal(report.Losses[0].Message, compatibilityNotes.Single());
-            TranslationWorkspaceTransaction.Commit(plan);
-            Assert.Equal(Encoding.UTF8.GetString(source.GetUtf8Bytes()), File.ReadAllText(Path.Combine(root, "en.toml.bak")));
-            Assert.True(File.Exists(Path.Combine(root, "en.rmf2")) && !File.Exists(Path.Combine(root, "en.toml")), "Migration did not replace the source layout.");
         }
         finally { Directory.Delete(root, true); }
     }

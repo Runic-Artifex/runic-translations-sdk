@@ -48,7 +48,6 @@ internal static class InputFiles
         string sourceExtension = sourceLayout switch
         {
             "rmf2-v1" => ".rmf2",
-            "locale-toml" => ".toml",
             _ => ".mf2",
         };
         foreach (string sourceRoot in roots)

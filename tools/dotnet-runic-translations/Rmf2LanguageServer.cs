@@ -416,7 +416,7 @@ internal sealed class Rmf2LanguageServer
                 {
                     if (Path.GetFileName(entry) is not (".git" or "node_modules" or "bin" or "obj" or "dist" or "artifacts" or ".cache" or ".direnv" or ".vs")) directories.Push(entry);
                 }
-                else if (Path.GetExtension(entry).ToLowerInvariant() is ".cs" or ".ts" or ".tsx" or ".js" or ".jsx" or ".svelte" or ".toml" or ".resx" or ".razor" or ".xaml" or ".cpp" or ".h" or ".mf2")
+                else if (Path.GetExtension(entry).ToLowerInvariant() is ".cs" or ".ts" or ".tsx" or ".js" or ".jsx" or ".svelte" or ".resx" or ".razor" or ".xaml" or ".cpp" or ".h" or ".mf2")
                     throw new TranslationAuthoringException("Rename refused: this workspace contains application or legacy sources whose references Runic cannot safely rewrite. Use the native language refactor, or explicitly choose Rename Resource in Resource Sources and update call sites separately.");
             }
         }
