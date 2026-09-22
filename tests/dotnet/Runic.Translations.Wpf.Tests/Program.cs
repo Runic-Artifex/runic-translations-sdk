@@ -1,16 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using Runic.Translations;
-using Runic.Translations.Compiler;
-using Runic.Translations.Compiler.Generation;
 using Runic.Translations.Wpf;
 
 internal static class Program
@@ -18,29 +14,17 @@ internal static class Program
     [STAThread]
     private static int Main()
     {
-        string directory = Path.Combine(AppContext.BaseDirectory, "payment");
-        var compiled = TranslationCompiler.CompileRmf2ProjectV5(Source("runic.json"), [Source("en.rmf2"), Source("de.rmf2")]);
-        Require(compiled.Success, string.Join("; ", compiled.Diagnostics.Select(d => d.Message)));
-        Rmf2ProjectV5 project = compiled.Project!;
-        Rmf2MessageContractV5 payment = project.CanonicalMessages.Single(message => message.Key == "payment");
-        var key = new TranslationKey(project.Id, payment.Id, payment.Key);
-        var contract = TranslationPackContract.CreateRmf2V5(project.Id, "en", project.CallerFingerprint,
-            project.CanonicalMessages.Select(message => TranslationPackMessageContract.FromRmf2Inputs(
-                new TranslationKey(project.Id, message.Id, message.Key), Inputs(message.Inputs))).ToArray(), project.MarkupContract);
-        var verified = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(Rmf2LocaleArtifactV5.Render(project, "en").GetUtf8Bytes()), contract).AsTask().GetAwaiter().GetResult();
-        var runtime = new CompiledTranslationCatalog("checkout", "en",
-            project.CanonicalMessages.Select(message => CompiledTranslationDefinition.FromRmf2Inputs(message.Key, Inputs(message.Inputs))).ToArray(),
-            [new CompiledTranslationLocale("en", null, verified.Messages.Select(message => new CompiledTranslationValue(message.Key.Id, "", message.Message!)).ToArray())]);
-        var snapshot = new CompiledTranslationSnapshot(runtime, "en");
-        var content = snapshot.FormatContent(key, [new TextArgument("count", 1), new TextArgument("tone", "positive")]);
+        CompiledTranslationSnapshot snapshot = PaymentFixture.CreateSnapshot();
+        LocalizedTextContent content = snapshot.FormatContent(PaymentFixture.Key,
+            [new TextArgument("count", 1), new TextArgument("tone", "positive")]);
         int calls = 0;
         var slots = new Dictionary<string, InlineMarkupBinding> {
             ["terms"] = new InlineLinkBinding(new Uri("https://example.test/terms")), ["privacy"] = new InlineLinkBinding(new Uri("https://example.test/privacy")),
             ["retry"] = new InlineActionBinding(() => calls++), ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock { Text = "★" }), false, _ => "Star"),
         };
-        var renderer = new WpfInlineRenderer(project.MarkupContract, _ => { }, new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (run, children) => { Require(run.Options["tone"] == "positive", "Badge lost its options."); Require(!run.Options.ContainsKey("@note"), "Annotation leaked into WPF markup options."); var span = new Span(); span.Inlines.AddRange(children); return span; } });
+        var renderer = new WpfInlineRenderer(PaymentFixture.MarkupContract, _ => { }, new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (run, children) => { Require(run.Options["tone"] == "positive", "Badge lost its options."); Require(!run.Options.ContainsKey("@note"), "Annotation leaked into WPF markup options."); var span = new Span(); span.Inlines.AddRange(children); return span; } });
         var target = new TextBlock();
-        JsonObject strictContract = JsonNode.Parse(project.MarkupContract)!.AsObject();
+        JsonObject strictContract = JsonNode.Parse(PaymentFixture.MarkupContract)!.AsObject();
         strictContract["messages"]!["payment"]!["slots"]!["retry"]!["min"] = 1;
         int prematureFactories = 0;
         var guardedSlots = new Dictionary<string, InlineMarkupBinding>(slots) {
@@ -51,7 +35,7 @@ internal static class Program
             new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (_, _) => { prematureFactories++; return new Span(); } },
             (_, _) => prematureFactories++);
         bool rejectedSelectedTree = false;
-        try { guardedRenderer.SetContent(target, "payment", snapshot.FormatContent(key, [new TextArgument("count", 0), new TextArgument("tone", "positive")]), guardedSlots); }
+        try { guardedRenderer.SetContent(target, "payment", snapshot.FormatContent(PaymentFixture.Key, [new TextArgument("count", 0), new TextArgument("tone", "positive")]), guardedSlots); }
         catch (TranslationFormatException) { rejectedSelectedTree = true; }
         Require(rejectedSelectedTree && prematureFactories == 0 && target.Inlines.Count == 0,
             "Invalid selected content reached a WPF renderer, asset or theme callback.");
@@ -81,18 +65,103 @@ internal static class Program
         WpfInlineRenderer.ClearContent(target); Require(target.Inlines.Count == 0, "Clear did not dispose content.");
         Console.WriteLine("PASS WPF payment consumer, custom badge, icon accessibility and callback lifetime.");
         return 0;
-        TranslationSource Source(string name)
-        {
-            byte[] bytes = File.ReadAllBytes(Path.Combine(directory, name));
-            if (name == "en.rmf2") bytes = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(bytes).Replace("{#badge tone=$tone}", "{#badge tone=$tone @note=|internal|}"));
-            return new TranslationSource(Path.Combine(directory, name), bytes);
-        }
     }
-    private static CompiledRmf2Input[] Inputs(IReadOnlyList<Rmf2InputV5> inputs) => inputs.Select(input => new CompiledRmf2Input(input.Name, input.Type switch
-    {
-        "string" => TextArgumentType.String, "int64" => TextArgumentType.Int, "decimal" => TextArgumentType.Number,
-        "boolean" => TextArgumentType.Bool, "date" => TextArgumentType.Date, "time" => TextArgumentType.Time,
-        "datetime" => TextArgumentType.DateTime, "guid" => TextArgumentType.Guid, _ => throw new InvalidOperationException("Unknown input type."),
-    })).ToArray();
+
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
+}
+
+internal static class PaymentFixture
+{
+    internal static TranslationKey Key { get; } = new("checkout", 0, "payment");
+
+    internal const string MarkupContract = """
+        {
+          "version": 1,
+          "contracts": {
+            "runic:action": { "kind": "paired", "interactive": true, "plainText": "explicit", "options": {} },
+            "runic:icon": { "kind": "standalone", "interactive": false, "plainText": "alternateText", "options": {} },
+            "runic:link": { "kind": "paired", "interactive": true, "plainText": "children", "options": {} },
+            "shop:badge": {
+              "kind": "paired",
+              "interactive": false,
+              "plainText": "children",
+              "options": {
+                "tone": { "type": "enum", "values": ["neutral", "positive"], "default": "neutral", "literalOnly": false }
+              }
+            }
+          },
+          "messages": {
+            "payment": {
+              "slots": {
+                "privacy": { "kind": "runic:link", "min": 1, "max": 1 },
+                "retry": { "kind": "runic:action", "min": 0, "max": 1 },
+                "star": { "kind": "runic:icon", "min": 1, "max": 1 },
+                "terms": { "kind": "runic:link", "min": 1, "max": 1 }
+              },
+              "structured": true,
+              "contentLocales": { "en": "en" }
+            }
+          }
+        }
+        """;
+
+    internal static CompiledTranslationSnapshot CreateSnapshot()
+    {
+        CompiledRmf2Input[] inputs =
+        [
+            new("count", TextArgumentType.Int),
+            new("tone", TextArgumentType.String),
+        ];
+        var message = new CompiledRmf2Message(
+            inputs,
+            [
+                new("input", "count", new(new("input", "count"), TextArgumentType.Int, "integer")),
+                new("input", "tone", new(new("input", "tone"), TextArgumentType.String, "string")),
+            ],
+            [new(new("input", "count"), TextArgumentType.Int, "plural")],
+            [
+                new([new("0", "0")], Nodes(includeRetry: false)),
+                new([new()], Nodes(includeRetry: true)),
+            ],
+            "en");
+        var catalog = new CompiledTranslationCatalog(
+            "checkout",
+            "en",
+            [CompiledTranslationDefinition.FromRmf2Inputs("payment", inputs)],
+            [new CompiledTranslationLocale("en", null,
+                [new CompiledTranslationValue(0, "", CompiledTextMessage.FromRmf2(message))])]);
+        return new CompiledTranslationSnapshot(catalog, "en");
+    }
+
+    private static CompiledRmf2Node[] Nodes(bool includeRetry)
+    {
+        var nodes = new List<CompiledRmf2Node>
+        {
+            new("Read "), Link("terms", "open"), new("terms"), Link("terms", "close"),
+            new(" and "), Link("privacy", "open"), new("privacy"), Link("privacy", "close"), new(". "),
+        };
+        if (includeRetry)
+        {
+            nodes.Add(Action("retry", "open"));
+            nodes.Add(new("Retry"));
+            nodes.Add(Action("retry", "close"));
+            nodes.Add(new(" "));
+        }
+        nodes.Add(Icon("star"));
+        nodes.Add(new(" "));
+        nodes.Add(new CompiledRmf2Node("shop:badge", "open",
+            [new("tone", new("input", "tone"))],
+            [new("note", new("string-literal", "internal"))]));
+        nodes.Add(new("Ready"));
+        nodes.Add(new CompiledRmf2Node("shop:badge", "close"));
+        return nodes.ToArray();
+    }
+
+    private static CompiledRmf2Node Link(string slot, string kind) => Functional("runic:link", slot, kind);
+    private static CompiledRmf2Node Action(string slot, string kind) => Functional("runic:action", slot, kind);
+    private static CompiledRmf2Node Icon(string slot) => Functional("runic:icon", slot, "standalone");
+    private static CompiledRmf2Node Functional(string name, string slot, string kind) =>
+        kind == "close"
+            ? new CompiledRmf2Node(name, kind)
+            : new CompiledRmf2Node(name, kind, [new("ref", new("string-literal", slot))]);
 }
