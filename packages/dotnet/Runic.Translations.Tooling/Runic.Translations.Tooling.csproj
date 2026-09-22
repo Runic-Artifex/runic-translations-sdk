@@ -31,6 +31,7 @@
     <None Include="..\..\..\specs\translations\schemas\project-v1.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="..\..\..\specs\translations\schemas\message-ast-v5.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="..\..\..\specs\translations\schemas\locale-artifact-v5.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\..\specs\translations\schemas\external-pack-v5.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="..\..\..\specs\translations\schemas\web-module-manifest-v3.schema.json" Pack="true" PackagePath="schemas" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />

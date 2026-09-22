@@ -89,6 +89,7 @@ internal static class Program
             "schemas/project-v1.schema.json",
             "schemas/message-ast-v5.schema.json",
             "schemas/locale-artifact-v5.schema.json",
+            "schemas/external-pack-v5.schema.json",
             "schemas/web-module-manifest-v3.schema.json");
         AssertPackageShape(build,
             "Runic.Translations.Build.nuspec",
