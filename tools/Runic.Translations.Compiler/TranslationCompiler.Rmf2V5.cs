@@ -12,6 +12,8 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
+    private static readonly string[] Rmf2MountMembers = { "path", "namespace" };
+
     internal static TranslationProjectProfileSelection SelectProjectProfile(TranslationSource project,
         TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -19,41 +21,9 @@ public static partial class TranslationCompiler
         cancellationToken.ThrowIfCancellationRequested();
         options ??= new TranslationCompilerOptions();
         var diagnostics = new DiagnosticBag();
-        ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, options, cancellationToken);
-        TranslationProjectProfile profile = parsed.Root is { Kind: JsonKind.Object } root
-            ? ReadProjectProfile(root, project, diagnostics)
-            : TranslationProjectProfile.Current;
-        return new(profile, Array.AsReadOnly(diagnostics.ToSortedArray()));
+        _ = StrictJsonParser.Parse(project, diagnostics, options, cancellationToken);
+        return new(TranslationProjectProfile.Rmf2ExecutionV2, Array.AsReadOnly(diagnostics.ToSortedArray()));
     }
-
-    private static TranslationProjectProfile ReadProjectProfile(JsonValue root, TranslationSource project, DiagnosticBag diagnostics)
-    {
-        JsonProperty? property = root.Property("executionProfile");
-        if (property is null) return TranslationProjectProfile.Current;
-        if (property.Value.Kind != JsonKind.String ||
-            !string.Equals(property.Value.Text, Rmf2ProjectV5.Profile, StringComparison.Ordinal))
-        {
-            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error,
-                "Unsupported executionProfile; expected 'rmf2-execution-v2', or omit it for the current v4 contract.",
-                project, property.Value.Span);
-            return TranslationProjectProfile.Current;
-        }
-        JsonProperty? layout = root.Property("sourceLayout");
-        if (layout?.Value.Kind != JsonKind.String || !string.Equals(layout.Value.Text, "rmf2-v1", StringComparison.Ordinal))
-            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error,
-                "rmf2-execution-v2 requires sourceLayout rmf2-v1.", project, property.Value.Span);
-        return TranslationProjectProfile.Rmf2ExecutionV2;
-    }
-
-    internal static TranslationProfileCompilation CompileProjectForProfile(TranslationSource project,
-        IEnumerable<TranslationSource> messages, TranslationProjectProfile profile,
-        TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
-        => profile switch
-        {
-            TranslationProjectProfile.Current => new(profile, CompileProject(project, messages, options, cancellationToken), null),
-            TranslationProjectProfile.Rmf2ExecutionV2 => new(profile, null, CompileRmf2ProjectV5(project, messages, options, cancellationToken)),
-            _ => throw new ArgumentOutOfRangeException(nameof(profile)),
-        };
 
     internal static TranslationProfileCompilation CompileProjectForSelectedProfile(TranslationSource project,
         IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options = null,
@@ -61,11 +31,10 @@ public static partial class TranslationCompiler
     {
         TranslationProjectProfileSelection selection = SelectProjectProfile(project, options, cancellationToken);
         if (!selection.Success)
-            return selection.Profile == TranslationProjectProfile.Rmf2ExecutionV2
-                ? new TranslationProfileCompilation(selection.Profile, null, new Rmf2ProjectCompilationV5(null, selection.Diagnostics))
-                : new TranslationProfileCompilation(selection.Profile,
-                    new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), selection.Diagnostics), null);
-        return CompileProjectForProfile(project, messages, selection.Profile, options, cancellationToken);
+            return new TranslationProfileCompilation(selection.Profile,
+                new Rmf2ProjectCompilationV5(null, selection.Diagnostics));
+        return new TranslationProfileCompilation(selection.Profile,
+            CompileRmf2ProjectV5(project, messages, options, cancellationToken));
     }
 
     private sealed record Rmf2ProjectSourceV5(string Key, string[] Path, string Locale, TranslationSource Source, Rmf2ResourceNode Node);
@@ -91,13 +60,6 @@ public static partial class TranslationCompiler
         ManifestModel? manifest = parsed.Root is null ? null : ReadMf2Project(parsed, diagnostics, options);
         if (manifest is null || Failed()) return Result();
         JsonValue config = parsed.Root!;
-        _ = ReadProjectProfile(config, project, diagnostics);
-        if (Failed()) return Result();
-        if (config.Property("sourceLayout")?.Value.Text != "rmf2-v1")
-        {
-            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, "rmf2-execution-v2 requires sourceLayout rmf2-v1.", project, config.Span);
-            return Result();
-        }
         var markup = new Rmf2ProjectMarkupV5(config, project, diagnostics);
         if (Failed()) return Result();
         var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -286,11 +248,20 @@ public static partial class TranslationCompiler
         var identities = new Dictionary<string, (bool Group, string Metadata, TextSourceLocation Location)>(StringComparer.Ordinal);
         var pathKinds = new Dictionary<string, bool>(StringComparer.Ordinal);
         var generated = new Dictionary<string, string>(StringComparer.Ordinal);
+        bool? groupedInput = null;
         foreach (var source in sources)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var matches = mounts.Where(mount => source.Path.StartsWith(mount.Root, StringComparison.Ordinal)).ToArray();
-            if (matches.Length != 1 || !source.Path.EndsWith(".rmf2", StringComparison.Ordinal)) { Error("RMF2 sources must be {locale}.rmf2 beneath exactly one source root.", source, new(0, 0)); continue; }
+            bool grouped = source.Path.EndsWith(".rmf2", StringComparison.Ordinal);
+            bool direct = source.Path.EndsWith(".mf2", StringComparison.Ordinal);
+            var matches = grouped ? mounts.Where(mount => source.Path.StartsWith(mount.Root, StringComparison.Ordinal)).ToArray() : Array.Empty<(string Root, string[] Prefix)>();
+            if ((!grouped && !direct) || (grouped && matches.Length != 1)) { Error("Translation sources must be .mf2 or .rmf2 beneath exactly one source root.", source, new(0, 0)); continue; }
+            if (groupedInput is { } prior && prior != grouped)
+            {
+                Error("A translation project cannot mix direct .mf2 and grouped .rmf2 sources; choose one source representation.", source, new(0, 0));
+                continue;
+            }
+            groupedInput = grouped;
             string currentPath = source.Path;
             while (currentPath.Length != 0)
             {
@@ -298,16 +269,45 @@ public static partial class TranslationCompiler
                 portable[currentPath] = currentPath;
                 int slash = currentPath.LastIndexOf('/'); currentPath = slash < 0 ? "" : currentPath.Substring(0, slash);
             }
-            string[] parts = source.Path.Substring(matches[0].Root.Length).Split('/');
-            string spelling = parts[^1].Substring(0, parts[^1].Length - 5);
-            if (!TryCanonicalizeLocale(spelling, out string locale) || parts.Take(parts.Length - 1).Any(segment => !IsIdentifier(segment))) { Error("Invalid RMF2 locale filename or directory segment.", source, new(0, 0)); continue; }
+            string[] parts = grouped ? source.Path.Substring(matches[0].Root.Length).Split('/') : Array.Empty<string>();
+            string spelling;
+            string[] namespaceParts;
+            string[] directPath = Array.Empty<string>();
+            if (grouped)
+            {
+                spelling = parts[^1].Substring(0, parts[^1].Length - 5);
+                namespaceParts = parts.Take(parts.Length - 1).ToArray();
+            }
+            else
+            {
+                if (!TryMf2Identity(directory, source.Path, out spelling, out string messageId)) { Error("Direct MF2 sources must use '{locale}/{message-id}.mf2' relative to runic.json.", source, new(0, 0)); continue; }
+                namespaceParts = Array.Empty<string>();
+                directPath = new[] { messageId };
+            }
+            if (!TryCanonicalizeLocale(spelling, out string locale) || namespaceParts.Any(segment => !IsIdentifier(segment)) || directPath.Any(segment => !IsIdentifier(segment))) { Error("Invalid translation locale filename or directory segment.", source, new(0, 0)); continue; }
             if (spellings.TryGetValue(locale, out string? existing) && existing != spelling) Error("Duplicate canonical locale spelling.", source, new(0, 0));
             spellings[locale] = spelling; locales.Add(locale);
-            string[] mount = matches[0].Prefix.Concat(parts.Take(parts.Length - 1)).ToArray();
-            var resource = Rmf2ResourceReader.Read(source, options, cancellationToken);
-            foreach (var diagnostic in resource.Diagnostics) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+            string[] mount = grouped ? matches[0].Prefix.Concat(namespaceParts).ToArray() : Array.Empty<string>();
+            IReadOnlyList<Rmf2ResourceNode> nodes;
+            if (grouped)
+            {
+                var resource = Rmf2ResourceReader.Read(source, options, cancellationToken);
+                foreach (var diagnostic in resource.Diagnostics) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+                nodes = resource.Nodes;
+            }
+            else
+            {
+                string message;
+                try { message = StrictJsonParser.StrictUtf8.GetString(source.Bytes); }
+                catch (DecoderFallbackException) { Error("MF2 requires valid UTF-8.", source, new(0, 0)); continue; }
+                var location = DiagnosticBag.Location(source, new(0, source.Bytes.Length));
+                var node = new Rmf2ResourceNode(directPath, message, Array.Empty<string>(), Array.Empty<string>(), location, location,
+                    Enumerable.Range(0, source.Bytes.Length + 1).ToArray());
+                node.MessageSyntax = Mf2SyntaxReader.Read(source, options, cancellationToken);
+                nodes = new[] { node };
+            }
             for (int index = 1; index <= mount.Length; index++) Register(mount.Take(index).ToArray(), true, "", DiagnosticBag.Location(source, new(0, 0)));
-            foreach (var node in resource.Nodes)
+            foreach (var node in nodes)
             {
                 string[] path = mount.Concat(node.Path).ToArray();
                 Register(path, node.IsGroup, string.Join("\n", node.Comments.Concat(node.Properties)), node.NameLocation);
@@ -332,6 +332,19 @@ public static partial class TranslationCompiler
         }
         return result;
         void Error(string message, TranslationSource source, ByteSpan span) => diagnostics.Add("RTR0052", TranslationDiagnosticSeverity.Error, message, source, span);
+    }
+
+    private static string NormalizeResourceRoot(string directory, string path)
+    {
+        string combined = path.StartsWith('/') ? path : directory + path;
+        var segments = new List<string>();
+        foreach (string part in combined.Replace('\\', '/').Split('/'))
+        {
+            if (part == "." || part.Length == 0) continue;
+            if (part == ".." && segments.Count > 0 && segments[^1] != "..") segments.RemoveAt(segments.Count - 1);
+            else segments.Add(part);
+        }
+        return (combined.StartsWith('/') ? "/" : "") + string.Join("/", segments) + (segments.Count == 0 ? "" : "/");
     }
 
     private static void ValidateMetadataV5(Rmf2ResourceNode node, Rmf2MessageV5 message, DiagnosticBag diagnostics)

@@ -230,7 +230,7 @@ public sealed class TranslationPackContract
     public string ContractFingerprint { get; }
     /// <summary>The message grammar expected in a matching locale artifact.</summary>
     public int MessageGrammarVersion { get; }
-    /// <summary>The execution profile, or null for legacy pack contracts.</summary>
+    /// <summary>The required RMF2 execution profile.</summary>
     public string? Profile { get; }
     /// <summary>The trusted language-neutral manifest required before RMF2 pack activation.</summary>
     public string? Rmf2MarkupContract { get; }
@@ -251,7 +251,7 @@ public sealed class VerifiedTranslationPackMessage
     public TranslationKey Key { get; }
     /// <summary>The validated plain-text message pattern.</summary>
     public string Pattern { get; }
-    /// <summary>The verified normalized message for grammars v2, v4, and v5, or null for grammar v1.</summary>
+    /// <summary>The verified normalized RMF2 v5 message.</summary>
     public CompiledTextMessage? Message { get; }
 }
 

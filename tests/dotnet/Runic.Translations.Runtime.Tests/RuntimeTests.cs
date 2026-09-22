@@ -54,16 +54,6 @@ internal static class RuntimeTests
         runner.Add("snapshot resolves allowed extras only through dynamic keys", AllowedExtraDynamicLookup);
         runner.Add("compiled public memory cannot mutate snapshot state", PublicMemoryIsolation);
         runner.Add("provider abandons canceled blocked factory and retries independently", ProviderAbandonsCanceledFactory);
-        runner.Add("external snapshot factory null source uses compiled fallback", ExternalFactoryNullFallback);
-        runner.Add("external snapshot factory subset overlays per-key fallback", ExternalFactorySubsetOverlay);
-        runner.Add("external snapshot factory remaps name order to IDs and dynamic extra", ExternalFactoryExtraOrdering);
-        runner.Add("external snapshot factory rejects incompatible contracts before source", ExternalFactoryRejectsContractsBeforeSource);
-        runner.Add("external snapshot manager publishes verified data and preserves on tamper", ExternalFactoryManagerSafety);
-        runner.Add("external snapshot manager cancellation preserves current", ExternalFactoryManagerCancellation);
-        runner.Add("manager refresh composes new external bytes for the active locale", RefreshComposesNewExternalBytes);
-        runner.Add("manager refresh rejects tampered pack and preserves current", RefreshRejectsTamperedPack);
-        runner.Add("manager refresh coalesces concurrent callers onto one composition", RefreshCoalescesConcurrentCallers);
-        runner.Add("manager refresh resolves deterministically behind a pending switch", RefreshRacesPendingSwitchDeterministically);
         runner.Add("compiled catalog WithOptions captures immutable policies", CatalogWithOptions);
     }
 

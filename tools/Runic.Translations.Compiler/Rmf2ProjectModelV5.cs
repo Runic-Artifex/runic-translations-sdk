@@ -5,19 +5,20 @@ using System.Text;
 
 namespace Runic.Translations.Compiler;
 
-// Profile selection is explicit. Coordinated hosts consume the typed v5
-// carrier directly; a v5 result can never masquerade as a v4 catalog.
-internal enum TranslationProjectProfile { Current, Rmf2ExecutionV2 }
+// Project hosts now have one execution contract. Keep the named selection
+// carrier so callers can retain their explicit v5 hand-off without a second,
+// incompatible catalog result.
+internal enum TranslationProjectProfile { Rmf2ExecutionV2 }
 internal sealed record TranslationProjectProfileSelection(TranslationProjectProfile Profile,
     IReadOnlyList<TranslationDiagnostic> Diagnostics)
 {
     internal bool Success => !Diagnostics.Any(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
 }
 internal sealed record TranslationProfileCompilation(TranslationProjectProfile Profile,
-    TranslationCompilation? Current, Rmf2ProjectCompilationV5? Rmf2)
+    Rmf2ProjectCompilationV5 Rmf2)
 {
-    internal bool Success => Current?.Success ?? Rmf2?.Success ?? false;
-    internal IReadOnlyList<TranslationDiagnostic> Diagnostics => Current?.Diagnostics ?? Rmf2!.Diagnostics;
+    internal bool Success => Rmf2.Success;
+    internal IReadOnlyList<TranslationDiagnostic> Diagnostics => Rmf2.Diagnostics;
 }
 
 internal sealed record Rmf2ProjectCompilationV5(Rmf2ProjectV5? Project, IReadOnlyList<TranslationDiagnostic> Diagnostics)

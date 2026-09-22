@@ -10,7 +10,7 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceLayout", "executionProfile", "sourceRoots", "markup" };
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup" };
     private static readonly string[] ManifestMembers = { "$schema", "schemaVersion", "catalog", "code", "defaultLocale", "locales", "layers", "validation", "runtime", "outputs" };
     private static readonly string[] DocumentMembers = { "$schema", "schemaVersion", "catalog", "locale", "layer", "resources" };
     private static readonly string[] LeafMembers = { "$value", "$description", "$placeholders", "$since", "$deprecated", "$tags" };
@@ -181,30 +181,10 @@ public static partial class TranslationCompiler
         if (manifest is null)
             return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
 
-        TranslationProjectProfile profile = ReadProjectProfile(parsed.Root!, project, diagnostics);
-        if (diagnostics.Items.Any(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error))
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-        if (profile == TranslationProjectProfile.Rmf2ExecutionV2)
-        {
-            diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error,
-                "rmf2-execution-v2 requires a profile-aware compiler host and cannot be represented by the v4 catalog carrier.",
-                project, parsed.Root!.Property("executionProfile")!.Value.Span);
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-        }
-        JsonProperty? layoutProperty = parsed.Root!.Property("sourceLayout");
-        bool rmf2 = layoutProperty?.Value.Text == "rmf2-v1";
-        if (layoutProperty is not null && !rmf2)
-        {
-            diagnostics.Add("RTR0042", TranslationDiagnosticSeverity.Error, "Unsupported sourceLayout; expected 'rmf2-v1', or omit for legacy MF2.", project, layoutProperty.Value.Span);
-            return new TranslationCompilation(Array.Empty<CompiledTextCatalog>(), diagnostics.ToSortedArray());
-        }
-        if (!rmf2 && (parsed.Root!.Property("sourceRoots") is not null || parsed.Root.Property("markup") is not null))
-            diagnostics.Add("RTR0052", TranslationDiagnosticSeverity.Error, "sourceRoots and markup require sourceLayout rmf2-v1.", project, parsed.Root.Span);
         string projectDirectory = ProjectDirectory(project.Path);
         var documents = new List<DocumentModel>(messageSources.Length);
         var discoveredLocales = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (rmf2) ReadRmf2Documents(projectDirectory, messageSources, parsed.Root!, manifest, documents, discoveredLocales, diagnostics, options, cancellationToken);
-        for (int index = 0; !rmf2 && index < messageSources.Length; index++)
+        for (int index = 0; index < messageSources.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             TranslationSource source = messageSources[index];
@@ -293,12 +273,6 @@ public static partial class TranslationCompiler
         CompiledTextCatalog? catalog = documents.Count == 0
             ? null
             : CompileCatalog(manifest, documents, diagnostics, options, cancellationToken);
-        if (rmf2 && catalog is not null)
-        {
-            catalog.MessageGrammarVersion = 4;
-            catalog.Rmf2MarkupContract = Rmf2ContractValidation.ValidateAndExport(catalog, parsed.Root!, project, diagnostics);
-            catalog.Fingerprint = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(catalog.Fingerprint + "\nrmf2-v1\n" + catalog.Rmf2MarkupContract)));
-        }
         return new TranslationCompilation(catalog is null ? Array.Empty<CompiledTextCatalog>() : new[] { catalog }, diagnostics.ToSortedArray());
     }
 
