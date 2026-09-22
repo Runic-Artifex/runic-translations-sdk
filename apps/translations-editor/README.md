@@ -48,7 +48,7 @@ compiler model. Diagnostics remain privacy-bounded and writes use revision
 checks plus atomic replacement.
 
 The editor uses the RMF2 v5 compiler/runtime pipeline without fabricating a
-legacy catalog carrier. Previews are formatted by the verified .NET artifact/pack
+retired catalog carrier. Previews are formatted by the verified .NET artifact/pack
 path; the browser receives validated inert semantic runs and never approximates
 AST 5 in JavaScript. Editor refactors and XLIFF imports are resource-only: they
 do not rewrite application call sites.

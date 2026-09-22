@@ -10,7 +10,7 @@ The current release contract is exercised by three complementary fixtures:
 - [`v5-project`](v5-project/README.md) isolates project linking, caller and
   freshness hashes, generated backends, and strict pack decoding.
 
-The name `rmf2-v1` denotes the resource-file syntax. It does not select a legacy
+The name `rmf2-v1` denotes the resource-file syntax. It does not select a retired
 runtime, artifact, or emitter. Current runners compile every fixture through the
 typed v5 project model.
 

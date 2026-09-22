@@ -147,7 +147,7 @@ fingerprint, while source freshness remains a separate conflict check.
 
 The editor smoke fixture covers mounted
 resource mutations, locale/fallback transactions, save/reload, deterministic
-plain XLIFF export/import, and the rule that an import never creates legacy
-`.mf2` files. Focused interchange tests cover approved-review fingerprints and
+plain XLIFF export/import, and the rule that an import never converts an RMF2
+project into direct `.mf2` files. Focused interchange tests cover approved-review fingerprints and
 structured loss/refusal. Structured preview tests route AST 5 through the
 verified .NET runtime with inert link, action, and custom-markup runs.

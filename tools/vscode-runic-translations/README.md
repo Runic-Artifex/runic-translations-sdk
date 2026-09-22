@@ -28,9 +28,9 @@ callbacks or application startup are involved. Custom renderer code is never
 loaded by the extension.
 
 The LSP owns direct and grouped MF2 plus configuration synchronization. Existing C#, TypeScript,
-Svelte and TOML language services retain their files. Resource-source
-edits are not application-call-site refactors. Standard resource F2 refuses
-workspaces containing application/legacy sources or unindexable links; the
+Svelte language services retain their files. Resource-source edits are not
+application-call-site refactors. Standard resource F2 refuses workspaces
+containing application or other non-resource sources or unindexable links; the
 explicit **Rename Resource in Resource Sources** command intentionally applies
 the narrower transaction. Use the native language service
 for generated API usages and review source-only input/slot operations against

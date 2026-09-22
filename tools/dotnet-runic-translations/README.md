@@ -76,6 +76,6 @@ with `web-module-manifest-v3.json`.
 `lsp` starts the bounded stdio language service. See the [RMF2 guide](../../docs/guides/translations/rmf2.md) for capabilities and limits.
 
 The LSP's standard resource rename is deliberately resource-only: it refuses
-workspaces containing application or legacy source files rather than emitting a
+workspaces containing application or other non-translation source files rather than emitting a
 partial application refactor. Use the explicit source transaction in an IDE or
 the editor, then update application call sites with the native language service.

@@ -34,7 +34,7 @@ Within an MF2 editor:
 - **Tools → Runic: Restart Language Server** stops and restarts the server.
 - Standard IDE navigation, Find All References, Format Document and Rename use
   Visual Studio's LSP support. F2 refuses a resource rename when application or
-  legacy files make whole-workspace correctness unsupported. MF2 local rename
+  other non-resource files make whole-workspace correctness unsupported. MF2 local rename
   stays within its lexical scope. Explicit resource-only input/slot/structural
   transactions are available in the CLI, Editor and VS Code; this client does
   not implement a second workspace-edit engine for those commands.
@@ -42,8 +42,8 @@ Within an MF2 editor:
 `runic.json` retains Visual Studio's JSON language service. Save configuration
 changes before invoking preview. Configuration-changing refactors are refused
 because this client cannot safely include unsaved JSON buffers; resource buffers remain synchronized
-through LSP. C#, TypeScript, Svelte, TOML and legacy MF2 retain their existing
-language services. Runic does not silently rename their application call sites.
+through LSP. C#, TypeScript and Svelte retain their existing language services.
+Runic does not silently rename their application call sites.
 The client watches direct `.mf2`, grouped `.rmf2`, and manifests under the containing solution;
 when `sourceRoots` points outside the config directory, open the common
 containing workspace so those declared files remain inside the host watch

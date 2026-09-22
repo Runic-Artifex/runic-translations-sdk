@@ -68,7 +68,8 @@ The supported authoring convention is documented in
 ## RMF2 execution contract
 
 The [RMF2 guide](../../docs/guides/translations/rmf2.md) specifies resource composition,
-markup contracts, artifact v5, migration, and remaining proposal work.
+markup contracts, artifact v5, migration boundaries, and deliberate release
+exclusions.
 RMF2 fingerprints include caller input/slot contracts, markup registries and effective
 locale mappings; source selector trees and physical file organization are excluded.
 
@@ -86,6 +87,7 @@ unchanged resource syntax, not a retired execution profile. It is the shared
 release oracle for the current v5 contract: compiler, generated C#, .NET
 artifact-v5 loading, generated ESM, and ESM dynamic loading run the same typed
 execution and rejection cases. Its exclusions—terms, references, group fallback,
-C++ RMF2, rich XLIFF, application call-site rewriting, direct legacy-to-RMF2
-migration, and marketplace concerns—are deliberate release-boundary exclusions,
-not unversioned omissions from the protocol.
+C++ RMF2, rich XLIFF, application call-site rewriting, migration from non-RMF2
+legacy formats, and marketplace concerns are deliberate release-boundary
+exclusions, not unversioned omissions from the protocol. Read-side compatibility
+retentions are listed in the [compatibility-retention ledger](../../docs/guides/translations/compatibility-retention.md).
