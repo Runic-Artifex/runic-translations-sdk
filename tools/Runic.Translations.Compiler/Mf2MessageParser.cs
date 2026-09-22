@@ -126,8 +126,7 @@ internal static partial class Mf2MessageParser
         foreach (Declaration declaration in declarations.Values)
         {
             if (declaration.Constant is not null || (!rmf2 && !usedInputs.Contains(declaration.Input)) || !included.Add(declaration.Input)) continue;
-            placeholders.Add(new PlaceholderModel(declaration.Input, declaration.Type, declaration.Format,
-                new ByteSpan(0, 0), new ByteSpan(0, 0), new ByteSpan(0, 0)));
+            placeholders.Add(new PlaceholderModel(declaration.Input, declaration.Type, declaration.Format));
         }
         placeholders.Sort((left, right) => StringComparer.Ordinal.Compare(left.Name, right.Name));
         if (placeholders.Count > options.MaximumPlaceholdersPerValue)
