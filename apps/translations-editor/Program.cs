@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CsWebUi;
 using Microsoft.Extensions.DependencyInjection;
-using Runic.Application.Views.CsWebUi.DependencyInjection;
+using Runic.Application.Views.CsWebUi;
 using Runic.CommandLine;
 
 namespace Runic.Translations.Editor;

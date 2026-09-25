@@ -1,27 +1,33 @@
 using System.Text.Json;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
+using ReactiveUI;
+using ReactiveUI.Primitives;
 
 namespace Runic.Translations.Editor;
 
 /// <summary>The application Window's editor commands, owned by its DI scope.</summary>
-public sealed partial class EditorViewModel : ObservableObject, IDisposable
+public sealed class EditorViewModel : ReactiveObject, IDisposable
 {
     private readonly EditorSession _session;
+    private readonly IDisposable _commandErrors;
     private string _resultJson = "null";
 
     internal EditorViewModel(EditorSession session)
     {
         _session = session;
+        ExecuteCommand = ReactiveCommand.CreateFromTask<string>(ExecuteAsync);
+        // The Bridge awaits and returns command failures to its caller. ReactiveUI
+        // also requires an observer on ThrownExceptions for handled failures.
+        _commandErrors = ExecuteCommand.ThrownExceptions.Subscribe(_ => { });
     }
+
+    public ReactiveCommand<string, RxVoid> ExecuteCommand { get; }
 
     public string ResultJson
     {
         get => _resultJson;
-        private set => SetProperty(ref _resultJson, value);
+        private set => this.RaiseAndSetIfChanged(ref _resultJson, value);
     }
 
-    [RelayCommand]
     private async Task ExecuteAsync(string request)
     {
         using JsonDocument document = JsonDocument.Parse(request);
@@ -82,5 +88,10 @@ public sealed partial class EditorViewModel : ObservableObject, IDisposable
         };
     }
 
-    public void Dispose() => _session.Dispose();
+    public void Dispose()
+    {
+        ExecuteCommand.Dispose();
+        _commandErrors.Dispose();
+        _session.Dispose();
+    }
 }

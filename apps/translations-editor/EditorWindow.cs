@@ -1,9 +1,10 @@
 using Runic.Application.Views;
-using Runic.Application.Views.CsWebUi.DependencyInjection;
+using Runic.Application.Views.CsWebUi;
+using Runic.Application.Views.ReactiveUI;
 
 namespace Runic.Translations.Editor;
 
-public sealed partial class EditorWindow : RunicWindow<EditorViewModel>, IDisposable, IAsyncDisposable
+public sealed partial class EditorWindow : ReactiveRunicWindow<EditorViewModel>, IDisposable, IAsyncDisposable
 {
     private readonly CsWebUiBridgeWindow<EditorViewModel> _host;
 
