@@ -332,7 +332,15 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         services.AddScoped(_ => new EditorSession(workspacePath));
         services.AddScoped(provider => new EditorViewModel(provider.GetRequiredService<EditorSession>()));
         services.AddScoped<IRunicViewLocator>(_ => new ReactiveRunicViewLocator(
-            new DefaultViewLocator().Map<EditorDocumentViewModel, EditorDocumentView>(() => new EditorDocumentView())));
+            new DefaultViewLocator()
+                .Map<EditorWorkspaceViewModel, EditorWorkspaceView>(() => new EditorWorkspaceView())
+                .Map<EditorDocumentToolsViewModel, EditorDocumentToolsView>(() => new EditorDocumentToolsView())
+                .Map<EditorReviewViewModel, EditorReviewView>(() => new EditorReviewView())
+                .Map<EditorInterchangeViewModel, EditorInterchangeView>(() => new EditorInterchangeView())
+                .Map<EditorDiagnosticsViewModel, EditorDiagnosticsView>(() => new EditorDiagnosticsView())
+                .Map<EditorLocalStateViewModel, EditorLocalStateView>(() => new EditorLocalStateView())
+                .Map<EditorProjectViewModel, EditorProjectView>(() => new EditorProjectView())
+                .Map<EditorDocumentViewModel, EditorDocumentView>(() => new EditorDocumentView())));
         services.AddRunicBridges();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }

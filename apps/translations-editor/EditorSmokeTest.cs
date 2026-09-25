@@ -1,4 +1,8 @@
 using Runic.Translations.Authoring;
+using ReactiveUI;
+using ReactiveUI.Primitives;
+using ReactiveUI.Primitives.Signals;
+using System.Text.Json;
 using System.Xml.Linq;
 
 namespace Runic.Translations.Editor;
@@ -34,6 +38,48 @@ internal static class EditorSmokeTest
                 string.Equals(document.Locale, initial.Catalog!.DefaultLocale, StringComparison.OrdinalIgnoreCase) &&
                 document.Entries?.Any(entry => entry.Key == "application_subtitle" && entry.Content == "Untertitel") == true) == true,
                 "The RMF2 create-key mutation did not produce the expected resource.");
+
+            // Exercise each generated feature owner with a real compiler-backed
+            // session. The hosted browser test covers routed document editing.
+            using (var editor = new EditorViewModel(new EditorSession(project)))
+            {
+                await ExecuteRouteAsync(editor.Workspace.LoadCommand, () => editor.Workspace.LoadResultJson, "{}");
+                WorkspaceSnapshot loaded = editor.Workspace.LastLoad
+                    ?? throw new InvalidOperationException("The workspace ViewModel did not publish a typed snapshot.");
+                Require(loaded.Success && editor.Documents.Count > 0,
+                    "The workspace ViewModel did not publish its typed snapshot and routed documents.");
+                EditorDocument routedGerman = loaded.Documents.Single(document => document.Path == german.Path);
+                await ExecuteRouteAsync(editor.DocumentTools.TransformDocumentCommand,
+                    () => editor.DocumentTools.TransformDocumentResultJson,
+                    JsonSerializer.Serialize(new { path = routedGerman.Path, content = routedGerman.Content,
+                        key = "application_title", value = "ViewModel edit" }));
+                Require(editor.DocumentTools.LastTransformDocument?.Success == true,
+                    "The document tools ViewModel did not publish its typed draft.");
+                var review = new EditorReviewSaveRequest(loaded.Review?.Revision,
+                    loaded.Review?.Entries ?? [], loaded.Review?.Terminology ?? []);
+                await ExecuteRouteAsync(editor.Review.SaveReviewCommand, () => editor.Review.SaveReviewResultJson,
+                    JsonSerializer.Serialize(review, EditorJsonContext.Default.EditorReviewSaveRequest));
+                Require(editor.Review.LastSaveReview?.Ok == true,
+                    "The review ViewModel did not save through the compiler-backed session.");
+                await ExecuteRouteAsync(editor.Interchange.ExportReviewJsonCommand,
+                    () => editor.Interchange.ExportReviewJsonResultJson, "{}");
+                Require(editor.Interchange.LastExportReviewJson?.Ok == true,
+                    "The interchange ViewModel did not export review state.");
+                await ExecuteRouteAsync(editor.Diagnostics.AboutCommand, () => editor.Diagnostics.AboutResultJson, "{}");
+                Require(editor.Diagnostics.LastAbout?.Product is not null,
+                    "The diagnostics ViewModel did not publish its typed product description.");
+                await ExecuteRouteAsync(editor.LocalState.LoadLocalStateCommand,
+                    () => editor.LocalState.LoadLocalStateResultJson, "{}");
+                Require(editor.LocalState.LastLoadLocalState is not null,
+                    "The local state ViewModel did not publish its typed snapshot.");
+                var newProject = new EditorProjectCreationRequest(Path.Combine(container, "preview-project"),
+                    "preview-project", "en", [], "Smoke.Translations", "SmokeText", false);
+                await ExecuteRouteAsync(editor.Project.PreviewProjectCommand,
+                    () => editor.Project.PreviewProjectResultJson,
+                    JsonSerializer.Serialize(newProject, EditorJsonContext.Default.EditorProjectCreationRequest));
+                Require(editor.Project.LastPreviewProject?.Ok == true,
+                    "The project ViewModel did not publish its typed plan.");
+            }
 
             string mountedRoot = Path.Combine(container, "mounted-direct");
             string mountedProject = Path.Combine(mountedRoot, "translations");
@@ -94,7 +140,7 @@ internal static class EditorSmokeTest
                 .All(document => document.Locale is "en" or "de" && document.Entries?.Single().Key == "shop_salutation"),
                 "The editor did not apply compiler-consistent mounted direct MF2 mutation.");
 
-            Console.WriteLine("PASS: editor loads, edits, saves, and mutates grouped and mounted direct RMF2 v5 sources.");
+            Console.WriteLine("PASS: editor feature ViewModels and grouped/mounted RMF2 v5 authoring journeys.");
             return 0;
         }
         catch (Exception exception)
@@ -113,5 +159,19 @@ internal static class EditorSmokeTest
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
+    }
+
+    private static async Task ExecuteRouteAsync(ReactiveCommand<string, RxVoid> command,
+        Func<string> response, string argumentJson)
+    {
+        string requestId = Guid.NewGuid().ToString("N");
+        string request = "{\"requestId\":" + JsonSerializer.Serialize(requestId, EditorJsonContext.Default.String)
+            + ",\"argument\":" + argumentJson + "}";
+        await Signal.ToTask(command.Execute(request), CancellationToken.None).ConfigureAwait(false);
+        using var result = JsonDocument.Parse(response());
+        Require(result.RootElement.GetProperty("requestId").GetString() == requestId,
+            "The routed feature result was not correlated with its command.");
+        Require(result.RootElement.TryGetProperty("result", out _),
+            "The routed feature did not publish a result.");
     }
 }

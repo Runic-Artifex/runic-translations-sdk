@@ -16,6 +16,8 @@ public sealed class EditorDocumentViewModel : ReactiveObject, IDisposable
     private string _content;
     private string _fileRevision;
     private bool _isMalformed;
+    private ValidationResult? _lastValidation;
+    private EditorOperationResult? _lastSave;
     private string _validationResultJson = "null";
     private string _saveResultJson = "null";
 
@@ -39,6 +41,8 @@ public sealed class EditorDocumentViewModel : ReactiveObject, IDisposable
     public bool IsMalformed { get => _isMalformed; private set => this.RaiseAndSetIfChanged(ref _isMalformed, value); }
     public string ValidationResultJson { get => _validationResultJson; private set => this.RaiseAndSetIfChanged(ref _validationResultJson, value); }
     public string SaveResultJson { get => _saveResultJson; private set => this.RaiseAndSetIfChanged(ref _saveResultJson, value); }
+    internal ValidationResult? LastValidation { get => _lastValidation; private set => this.RaiseAndSetIfChanged(ref _lastValidation, value); }
+    internal EditorOperationResult? LastSave { get => _lastSave; private set => this.RaiseAndSetIfChanged(ref _lastSave, value); }
     public ReactiveCommand<string, RxVoid> ValidateCommand { get; }
     public ReactiveCommand<string, RxVoid> SaveCommand { get; }
 
@@ -55,6 +59,7 @@ public sealed class EditorDocumentViewModel : ReactiveObject, IDisposable
         var root = parsed.RootElement;
         string requestId = Required(root, "requestId");
         ValidationResult result = await _session.ValidateAsync(Path, Required(root, "content")).ConfigureAwait(false);
+        LastValidation = result;
         ValidationResultJson = Envelope(requestId, JsonSerializer.Serialize(result, EditorJsonContext.Default.ValidationResult));
     }
 
@@ -65,6 +70,7 @@ public sealed class EditorDocumentViewModel : ReactiveObject, IDisposable
         string requestId = Required(root, "requestId");
         EditorOperationResult result = await _session.SaveAsync(Path, Required(root, "content"), Required(root, "revision")).ConfigureAwait(false);
         if (result.Snapshot is { } snapshot) _owner.SyncDocuments(snapshot);
+        LastSave = result;
         SaveResultJson = Envelope(requestId, JsonSerializer.Serialize(result, EditorJsonContext.Default.EditorOperationResult));
     }
 
