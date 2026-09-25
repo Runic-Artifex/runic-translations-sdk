@@ -152,7 +152,7 @@ function sharedRouteFor(runtime: SharedRuntime, bridge: RunicBridgeClient, route
   callbacks[callbackName] = sharedRoute.callback;
   return sharedRoute;
 }
-const bridgeContract = "Runic.Translations.Editor.EditorViewModel:16D7AC94B0CD8426AA25AED9475D47764C861680B190E942E012F3D97D7C6A7A";
+const bridgeContract = "Runic.Translations.Editor.EditorViewModel:93BDCF8B754A94E2F8F85D3603FFA3F27D11CBA5EAC66F85CF8BABC42795B1EB";
 
 export function connectEditor(): Promise<EditorView> { return connectEditorAt("editor"); }
 async function connectEditorAt(route: string, needsMount = false): Promise<EditorView> {
