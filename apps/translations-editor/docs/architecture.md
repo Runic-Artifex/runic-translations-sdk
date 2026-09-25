@@ -67,6 +67,18 @@ workspace operations. The browser profile does not hold durable editor state;
 preferences, recent projects, and recovery drafts live in one native per-user
 record. Clearing that record does not change workspace files or in-memory work.
 
+The root ViewModel publishes stable routed ViewModels for workspace, document
+tools, review, interchange, diagnostics, local state, and project setup, plus a
+collection of `EditorDocumentViewModel` instances. Each feature owns named
+ReactiveUI commands and its latest typed result. The generated web routes
+carry correlated command responses to the typed TypeScript editor bridge.
+Selecting a document reads its path, content, and file revision. Validation
+and save run on that document's generated commands; `EditorSession` checks the
+file revision before atomic replacement. The active input draft and unsaved
+review edits stay in the browser UI so they can be discarded or recovered
+without changing the shared workspace. Persisted review state and workspace
+mutations remain in the compiler-backed session.
+
 Headless commands use the same workspace and compiler path as the interface:
 
 - `validate` reports compiler-backed workspace diagnostics;

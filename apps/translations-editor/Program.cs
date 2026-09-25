@@ -5,8 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using CsWebUi;
 using Microsoft.Extensions.DependencyInjection;
+using ReactiveUI;
+using Runic.Application.Views;
 using Runic.Application.Views.CsWebUi;
+using Runic.Application.Views.ReactiveUI;
 using Runic.CommandLine;
+using Splat;
 
 namespace Runic.Translations.Editor;
 
@@ -322,9 +326,21 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
 
     private static ServiceProvider CreateEditorServices(string workspacePath)
     {
+        AppLocator.CurrentMutable.RegisterConstant(new NullLogger(), typeof(ILogger));
+        AppLocator.CurrentMutable.RegisterConstant(new DefaultLogManager(AppLocator.Current), typeof(ILogManager));
         var services = new ServiceCollection();
         services.AddScoped(_ => new EditorSession(workspacePath));
         services.AddScoped(provider => new EditorViewModel(provider.GetRequiredService<EditorSession>()));
+        services.AddScoped<IRunicViewLocator>(_ => new ReactiveRunicViewLocator(
+            new DefaultViewLocator()
+                .Map<EditorWorkspaceViewModel, EditorWorkspaceView>(() => new EditorWorkspaceView())
+                .Map<EditorDocumentToolsViewModel, EditorDocumentToolsView>(() => new EditorDocumentToolsView())
+                .Map<EditorReviewViewModel, EditorReviewView>(() => new EditorReviewView())
+                .Map<EditorInterchangeViewModel, EditorInterchangeView>(() => new EditorInterchangeView())
+                .Map<EditorDiagnosticsViewModel, EditorDiagnosticsView>(() => new EditorDiagnosticsView())
+                .Map<EditorLocalStateViewModel, EditorLocalStateView>(() => new EditorLocalStateView())
+                .Map<EditorProjectViewModel, EditorProjectView>(() => new EditorProjectView())
+                .Map<EditorDocumentViewModel, EditorDocumentView>(() => new EditorDocumentView())));
         services.AddRunicBridges();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }

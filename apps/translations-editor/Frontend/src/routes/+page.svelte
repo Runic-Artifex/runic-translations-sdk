@@ -34,6 +34,7 @@
   import CommandPalette from "$lib/CommandPalette.svelte";
   import { buildEditorCommandPalette } from "$lib/command-palette";
   import { createEditorBridge } from "$lib/editor-bridge";
+  import type { EditorDocumentState } from "../generated/editorDocument";
   import { createUiText, setUiText, notice, displayNotice, UiNoticeError, type UiMessage } from "$lib/ui-text";
   import { editorShortcut } from "$lib/editor-keyboard";
   import EditorModeSwitcher, { type EditorMode } from "$lib/EditorModeSwitcher.svelte";
@@ -135,6 +136,7 @@
   let selectedKey = $state("");
   let selectedLocale = $state("");
   let selectedDocumentPath = $state("");
+  let selectedDocumentViewState = $state.raw<EditorDocumentState>();
   let filter = $state<MessageFilter>("all");
   let query = $state("");
   let mode = $state<EditorMode>("translation");
@@ -344,9 +346,13 @@
     selectedLocale,
     selectedKey,
   ));
-  let currentDocument = $derived.by(() =>
-    snapshot?.documents.find((document) => document.path === selectedDocumentPath) ?? currentCell?.document,
-  );
+  let currentDocument = $derived.by(() => {
+    const document = snapshot?.documents.find((candidate) => candidate.path === selectedDocumentPath) ?? currentCell?.document;
+    return document && selectedDocumentViewState?.path === document.path
+      && selectedDocumentViewState.fileRevision === document.revision
+      ? { ...document, content: selectedDocumentViewState.content, revision: selectedDocumentViewState.fileRevision }
+      : document;
+  });
   let currentContent = $derived(
     currentDocument === undefined
       ? undefined
@@ -614,6 +620,17 @@
     const cell = row?.cells[locale];
     const document = cell?.document;
     selectedDocumentPath = document?.path ?? "";
+    selectedDocumentViewState = undefined;
+    if (document !== undefined) {
+      const path = document.path;
+      const generation = workspaceGeneration;
+      void bridge.openDocument(path).then((opened) => {
+        if (!opened || selectedDocumentPath !== path || workspaceGeneration !== generation) return;
+        if (snapshot?.documents.find((candidate) => candidate.path === path)?.revision !== opened.fileRevision) return;
+        selectedDocumentViewState = opened;
+        if (mode === "raw" && drafts[path] === undefined) editorText = opened.content;
+      }).catch((error) => { if (selectedDocumentPath === path) clientError = errorNotice(error); });
+    }
     const sourceEntry = row?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry;
     previewSamples = createPreviewSamples(reviewIndex.get(reviewIdentity(key, locale))?.samples);
     const nextMode = preferredMode ?? "translation";

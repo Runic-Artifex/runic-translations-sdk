@@ -73,6 +73,21 @@ try {
 
   stage = "two-logical-keys";
   await select("common_cancel");
+  await page.evaluate(() => {
+    const bridge = window.__runicBridge;
+    const call = bridge.call.bind(bridge);
+    window.__runicEditorDocumentCalls = [];
+    bridge.call = async (name, ...args) => {
+      try {
+        const response = await call(name, ...args);
+        window.__runicEditorDocumentCalls.push({ name, response: name.endsWith("Mount") ? response : undefined });
+        return response;
+      } catch (error) {
+        window.__runicEditorDocumentCalls.push({ name, error: String(error) });
+        throw error;
+      }
+    };
+  });
   await editor().fill("Queued cancel from the real editor");
   await select("common_save");
   await editor().fill("Queued save from the real editor");
@@ -81,6 +96,12 @@ try {
   const savedBytes = await readFile(diskPath, "utf8");
   assert.ok(savedBytes.includes("Queued cancel from the real editor"));
   assert.ok(savedBytes.startsWith(preservedComment), "Unchanged RMF2 comments must survive authoring.");
+  await waitFor(async () => (await page.evaluate(() => window.__runicEditorDocumentCalls))
+    .some(call => /^content.+Save$/.test(call.name)), "routed document save completion");
+  const routedCalls = await page.evaluate(() => window.__runicEditorDocumentCalls);
+  assert.ok(routedCalls.some(call => /^content.+Snapshot$/.test(call.name)), "Opening a document must read its routed ViewModel.");
+  assert.ok(routedCalls.some(call => /^content.+Validate$/.test(call.name)), "Validation must use the routed document ViewModel.");
+  assert.ok(routedCalls.some(call => /^content.+Save$/.test(call.name)), "Save must use the routed document ViewModel.");
   await page.reload({ waitUntil: "domcontentloaded" });
   await select("common_cancel");
   assert.equal(await editor().inputValue(), "Queued cancel from the real editor");
@@ -118,7 +139,8 @@ try {
     await Promise.allSettled([
       page.screenshot({ path: join(reportDirectory, "failure.png"), fullPage: true }),
       page.content().then(html => writeFile(join(reportDirectory, "failure.html"), html)),
-      writeFile(join(reportDirectory, "failure.json"), JSON.stringify({ stage, pageErrors }, null, 2) + "\n"),
+      page.evaluate(() => window.__runicEditorDocumentCalls ?? []).then(calls =>
+        writeFile(join(reportDirectory, "failure.json"), JSON.stringify({ stage, pageErrors, calls }, null, 2) + "\n")),
     ]);
   }
   throw error;
