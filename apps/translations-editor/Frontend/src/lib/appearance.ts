@@ -20,6 +20,7 @@ export function setDesktopAppearance(value: DesktopAppearance | null): void {
 
 // One request at a time. Remount/reload obtains a fresh value; failures restore browser preferences.
 export function observeDesktopAppearance(): () => void {
+  if (!("runicDesktop" in globalThis)) return () => undefined;
   const stop = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   async function read(): Promise<void> {

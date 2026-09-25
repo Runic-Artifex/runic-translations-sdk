@@ -11,12 +11,12 @@ For a Runic Desktop application:
   the rest of the frontend;
 - development ESM modules and locale HMR remain owned by the Runic Translations
   Vite plugin while the Runic Vite plugin injects the Desktop bootstrap;
-- runtime locale changes remain `ITranslationManager` or generated-ESM state
-  and may cross Application Bridge only through an application-owned command
-  or event contract;
+- runtime locale changes remain `ITranslationManager` or generated-ESM state;
+  an application can connect them to its typed application model through its
+  chosen application API;
 - Runic Desktop does not interpret catalogs, locales, fallbacks, messages, or
   translation diagnostics.
 
 This absence of a `Runic.Translations.Desktop` package is intentional: adding
-one would duplicate either Assets delivery, Vite/HMR, or Application Bridge
-domain ownership.
+one would duplicate either Assets delivery, Vite/HMR, or translation-domain
+ownership.

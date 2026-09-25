@@ -18,7 +18,7 @@ const runtimePath = resolve(
 const matrixPath = resolve(root, "specs/translations/capabilities-v1.json");
 // Capability support is declared for the next translations preview; package
 // versions are advanced separately by the release tooling.
-const releaseTarget = "0.4.0-preview.1";
+const releaseTarget = "0.5.0-preview.1";
 const check = process.argv.slice(2).includes("--check");
 
 if (process.argv.length > (check ? 3 : 2))

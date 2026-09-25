@@ -50,7 +50,7 @@ try {
     const timer = setTimeout(() => reject(new Error("Hosted editor did not announce its loopback URL within 30 seconds.")), 30_000);
     const consume = (bytes) => {
       hostOutput += bytes;
-      const match = /Runic Translations Editor is serving .* at (http:\/\/127\.0\.0\.1:\d+\/?)/.exec(hostOutput);
+      const match = /Runic Translations Editor is serving .* at (http:\/\/(?:127\.0\.0\.1|localhost):\d+\/?)/.exec(hostOutput);
       if (match) { clearTimeout(timer); resolveReady(match[1]); }
     };
     host.stdout.on("data", consume);

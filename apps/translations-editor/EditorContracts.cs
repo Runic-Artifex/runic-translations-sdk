@@ -287,7 +287,8 @@ internal sealed record PreparedInterchangeDocument(
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    GenerationMode = JsonSourceGenerationMode.Metadata)]
+    GenerationMode = JsonSourceGenerationMode.Metadata,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(WorkspaceSnapshot))]
 [JsonSerializable(typeof(ValidationResult))]
 [JsonSerializable(typeof(EditorMessagePreview))]
@@ -317,4 +318,9 @@ internal sealed record PreparedInterchangeDocument(
 [JsonSerializable(typeof(EditorInterchangeRefusal))]
 [JsonSerializable(typeof(EditorReviewImportPlan))]
 [JsonSerializable(typeof(EditorReviewChange))]
+[JsonSerializable(typeof(EditorLocalStateEntry[]))]
+[JsonSerializable(typeof(EditorDocumentDraft))]
+[JsonSerializable(typeof(EditorLocalStateSnapshot))]
+[JsonSerializable(typeof(EditorLocalStateClearResult))]
+[JsonSerializable(typeof(string))]
 internal sealed partial class EditorJsonContext : JsonSerializerContext;

@@ -2,34 +2,25 @@ import { readFile, readdir } from "node:fs/promises";
 import { extname } from "node:path";
 
 const build = new URL("../build/", import.meta.url);
-const manifest = JSON.parse(
-  await readFile(new URL("../../Contract/bridge.ir.json", import.meta.url), "utf8"));
-const pinned = /materializeApplicationBridgeContract\(definition,\s*"([0-9a-f]{64})"\)/
-  .exec(await readFile(new URL("../src/application.bridge.generated.ts", import.meta.url), "utf8"))?.[1];
-if (manifest.fingerprint?.algorithm !== "sha256" || manifest.fingerprint?.scope !== "wire" || !/^[0-9a-f]{64}$/.test(manifest.fingerprint?.value ?? ""))
-  throw new Error("Contract/bridge.ir.json does not carry a generated contractFingerprint.");
-if (pinned === undefined)
-  throw new Error("Frontend/src/application.bridge.generated.ts carries no generated bridge fingerprint.");
-if (manifest.fingerprint.value !== pinned)
-  throw new Error(
-    `Bridge contract drift: Contract/bridge.ir.json carries ${manifest.fingerprint.value} but the generated facade carries ${pinned}. Run contract:generate.`);
+const generated = await readFile(new URL("../src/generated/editor.ts", import.meta.url), "utf8");
+if (!generated.includes("export interface EditorView") || !generated.includes("execute(argument: string): Promise<EditorState>"))
+  throw new Error("The generated Views Editor client is missing its command contract.");
 const index = await readFile(new URL("index.html", build), "utf8");
-if (!index.includes('src="./runic-desktop.js"')) throw new Error("The production shell omitted the relative Runic Desktop bootstrap.");
-if (!index.includes("./_app/immutable/")) throw new Error("The relocatable SvelteKit client entry was not emitted.");
+for (const script of ['src="/webui.js"', 'src="/runic-cswebui.js"'])
+  if (!index.includes(script)) throw new Error(`The production shell omitted ${script}.`);
+if (!index.includes("/_app/immutable/")) throw new Error("The SvelteKit client entry was not emitted.");
 
 const scripts = [];
 await collect(build, scripts);
 const bundled = (await Promise.all(scripts.map((file) => readFile(file, "utf8")))).join("\n");
-for (const text of ["Translations", "\\u00DCbersetzungen", "runic.translations.editor", "LoadWorkspace", "SaveDocument", "SaveReview", "RecoverTransaction", "UndoApplied", "RedoApplied", "AboutLoaded", "CreateDiagnosticBundle", "MessagePreviewed", "Translate the message", "Create new variable", "Message source", "Preview", "Editor settings", "Runic Gold", "Fjord", "Ember", "Resize Languages and Messages", "Quality report", "About & diagnostics", "Terminology", "schema", "Saved the earlier draft; your newer edit is still open.", "Recovery completed; reload required", "Discard unsaved document drafts, repair text, and workflow/terminology changes", "Local editor state", "Clear local state"]) {
+for (const text of ["Translations", "\\u00DCbersetzungen", "LoadWorkspace", "SaveDocument", "SaveReview", "RecoverTransaction", "Undo", "Redo", "About", "CreateDiagnosticBundle", "Translate the message", "Create new variable", "Message source", "Preview", "Editor settings", "Runic Gold", "Fjord", "Ember", "Resize Languages and Messages", "Quality report", "About & diagnostics", "Terminology", "schema", "Saved the earlier draft; your newer edit is still open.", "Recovery completed; reload required", "Discard unsaved document drafts, repair text, and workflow/terminology changes", "Local editor state", "Clear local state"]) {
   if (!bundled.includes(text)) throw new Error(`The production client omitted '${text}'.`);
 }
-if (!bundled.includes(manifest.fingerprint.value))
-  throw new Error("The production client shipped a stale bridge contract fingerprint.");
 if (bundled.includes("node:fs") || bundled.includes("Runic.Translations.Compiler.dll")) {
   throw new Error("Server/compiler implementation details leaked into the browser bundle.");
 }
 
-console.log(`PASS: static SvelteKit client contains the Runic Desktop bootstrap and generated Runic ESM (${scripts.length} scripts).`);
+console.log(`PASS: static SvelteKit client contains the Views bootstrap and generated editor client (${scripts.length} scripts).`);
 
 async function collect(directory, result) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {

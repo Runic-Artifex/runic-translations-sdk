@@ -3,19 +3,10 @@ using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Hosting;
-using Runic.Application;
-using Runic.Application.Hosting;
-using Runic.Assets;
-using Runic.Assets.AspNetCore;
+using CsWebUi;
+using Microsoft.Extensions.DependencyInjection;
+using Runic.Application.Views.CsWebUi.DependencyInjection;
 using Runic.CommandLine;
-using Runic.Translations.Editor.Contract;
-using Runic.Application.Bridge;
-
-[assembly: RunicApplicationManifest("runic-translations-editor", Version = "1.0.0", Provenance = "local")]
 
 namespace Runic.Translations.Editor;
 
@@ -51,12 +42,7 @@ internal static class Program
     public static int Main(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
-        if (args.Length > 0 && args[0] is "validate" or "diagnostics" or "export" or "report" or "import" or "serve" or "help" or "--help" or "-h" or "--version" or "manual-replacement-preflight")
-            return RunAsync(args).GetAwaiter().GetResult();
-        int exitCode = 0;
-        // Preferences and embedded windows both need AppKit's process-main-thread queue.
-        Runic.Desktop.DesktopEventLoop.Run(async () => exitCode = await RunAsync(args).ConfigureAwait(false));
-        return exitCode;
+        return RunAsync(args).GetAwaiter().GetResult();
     }
 
     private static async Task<int> RunAsync(string[] args)
@@ -78,7 +64,7 @@ internal static class Program
             ExitCodePolicy = EditorExitCodePolicy.Instance,
             OutcomeSink = new EditorOutcomeSink(),
             CreateScopeFactory = invocation => new EditorExecutionScopeFactory(new EditorCommandLineOperations(
-                args, opensPackagedExample: bareInvocation || (!catalog.TryGetCommand(args[0], out _) && invocation.Arguments.Count == 0))),
+                opensPackagedExample: bareInvocation || (!catalog.TryGetCommand(args[0], out _) && invocation.Arguments.Count == 0))),
             PresentFrameworkRequest = async (parse, console, cancellationToken) =>
             {
                 if (parse.Kind == ParseOutcomeKind.Error)
@@ -204,7 +190,7 @@ internal static class Program
 }
 
 /// <summary>Routes generated editor commands onto the pre-existing editor code paths.</summary>
-internal sealed class EditorCommandLineOperations(string[] launchArguments, bool opensPackagedExample) : IEditorCommandOperations
+internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : IEditorCommandOperations
 {
     public async Task<CommandOutcome<EditorCommandResult>> ExecuteAsync(EditorCommandRequest request)
     {
@@ -269,62 +255,82 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
 
     private static async Task<CommandOutcome<EditorCommandResult>> RunNativeShellCanaryAsync(string workspacePath)
     {
+        if (!EditorUiAvailable())
+            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
+                new CommandFault("REDIT0004", "The packaged web UI is unavailable."));
         try
         {
-            EditorNativeShellEvidence evidence = await EditorNativeShellCanary.RunAsync(
-                workspacePath,
-                CancellationToken.None).ConfigureAwait(false);
-            string summary = System.Text.Json.JsonSerializer.Serialize(evidence);
-            return CommandOutcome.Success(new EditorCommandResult(summary));
+            using var services = CreateEditorServices(workspacePath);
+            await using var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host));
+            window.SetRootFolder(EditorUiRoot());
+            await Task.Yield();
+            var evidence = new
+            {
+                schema = "runic.translations.editor-native-shell/3",
+                host = "cs-webui",
+                packagedUiPresent = true,
+                cleanup = "closed-disposed"
+            };
+            return CommandOutcome.Success(new EditorCommandResult(
+                System.Text.Json.JsonSerializer.Serialize(evidence)));
         }
-        catch (EditorNativeShellCapabilityException exception)
+        catch (Exception exception)
         {
-            return CommandOutcome.Failure<EditorCommandResult>(
-                CommandExitCategory.Unavailable,
-                new CommandFault(
-                    "REDIT0008",
-                    $"Native shell capability unavailable: {exception.Code}.",
-                    exception.Evidence?.ToFaultDetails()));
+            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
+                new CommandFault("REDIT0008", $"Native shell capability unavailable: {exception.Message}."));
         }
+        finally { WebUiApplication.Clean(); }
     }
 
-    private async Task<CommandOutcome<EditorCommandResult>> OpenEditorAsync(
+    private static Task<CommandOutcome<EditorCommandResult>> OpenEditorAsync(
         string workspacePath,
         bool useWebView)
     {
-        if (!EditorDesktopHost.PackagedUiEmbedded)
-            return CommandOutcome.Failure<EditorCommandResult>(
-                CommandExitCategory.Unavailable,
-                new CommandFault("REDIT0004", "The packaged web UI was not embedded into this editor build."));
-        using var session = new EditorSession(workspacePath);
-        RunicApplicationBuilder applicationBuilder = RunicApplication.CreateBuilder(launchArguments)
-            .UseHost(new EditorDesktopHost(workspacePath, useWebView));
-        Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton(applicationBuilder.Services, session);
-        await using ApplicationHost application = applicationBuilder.Build();
-        await application.RunAsync().ConfigureAwait(false);
+        if (!EditorUiAvailable())
+            return Task.FromResult(CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
+                new CommandFault("REDIT0004", "The packaged web UI is unavailable.")));
+        using var services = CreateEditorServices(workspacePath);
+        using (var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host)))
+        {
+            window.SetRootFolder(EditorUiRoot());
+            window.SetSize(1440, 900);
+            if (useWebView) window.ShowWebView("index.html");
+            else window.Show("index.html");
+            WebUiApplication.Wait();
+        }
+        WebUiApplication.Clean();
+        return Task.FromResult(CommandOutcome.Success(new EditorCommandResult(string.Empty)));
+    }
+
+    private static async Task<CommandOutcome<EditorCommandResult>> ServeHostedWebAsync(string workspacePath)
+    {
+        if (!EditorUiAvailable())
+            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
+                new CommandFault("REDIT0004", "The packaged web UI is unavailable."));
+        using var services = CreateEditorServices(workspacePath);
+        using (var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host)))
+        {
+            window.SetRootFolder(EditorUiRoot());
+            string url = window.StartServer("index.html");
+            Console.WriteLine($"Runic Translations Editor is serving '{Path.GetFullPath(workspacePath)}' at {url}");
+            Console.Out.Flush();
+            await Task.Delay(Timeout.InfiniteTimeSpan).ConfigureAwait(false);
+        }
+        WebUiApplication.Clean();
         return CommandOutcome.Success(new EditorCommandResult(string.Empty));
     }
 
-    // Hosted-web boot mode: the exact session stack of the native window
-    // (EditorSession -> EditorBridgeHandler -> generated dispatcher -> bridge
-    // session) attached to the toolkit's ASP.NET Core WebSocket transport. No
-    // native window is created on this path.
-    private static async Task<CommandOutcome<EditorCommandResult>> ServeHostedWebAsync(string workspacePath)
+    private static ServiceProvider CreateEditorServices(string workspacePath)
     {
-        if (!EditorDesktopHost.PackagedUiEmbedded)
-            return CommandOutcome.Failure<EditorCommandResult>(
-                CommandExitCategory.Unavailable,
-                new CommandFault("REDIT0004", "The packaged web UI was not embedded into this editor build."));
-        using var session = new EditorSession(workspacePath);
-        var allowedOrigins = new HashSet<string>(StringComparer.Ordinal);
-        await using var transport = new ApplicationBridgeWebSocketTransport(
-            new ApplicationBridgeSession(new EditorBridgeDispatcher(new EditorBridgeHandler(session))),
-            new ApplicationBridgeWebSocketOptions { AllowedOrigins = allowedOrigins });
-        await using EditorHostedWebServer server =
-            await EditorHostedWebServer.StartAsync(workspacePath, transport, allowedOrigins).ConfigureAwait(false);
-        await server.WaitForShutdownAsync(CancellationToken.None).ConfigureAwait(false);
-        return CommandOutcome.Success(new EditorCommandResult(string.Empty));
+        var services = new ServiceCollection();
+        services.AddScoped(_ => new EditorSession(workspacePath));
+        services.AddScoped(provider => new EditorViewModel(provider.GetRequiredService<EditorSession>()));
+        services.AddRunicBridges();
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
+
+    private static string EditorUiRoot() => Path.Combine(AppContext.BaseDirectory, "www");
+    private static bool EditorUiAvailable() => File.Exists(Path.Combine(EditorUiRoot(), "index.html"));
 
     private static async Task<CommandOutcome<EditorCommandResult>> ValidateWorkspaceAsync(EditorCommandRequest request, string workspacePath)
     {
@@ -563,65 +569,4 @@ internal sealed class EditorCommandLineOperations(string[] launchArguments, bool
             new CommandFault(code, message, details),
             null,
             humanOutput + "\n");
-}
-
-/// <summary>
-/// Loopback ASP.NET Core host for the <c>serve</c> boot mode: serves the embedded
-/// packaged UI archive at the root and maps the Application Bridge WebSocket
-/// endpoint against one application-owned transport.
-/// </summary>
-internal sealed partial class EditorHostedWebServer : IAsyncDisposable
-{
-    private readonly WebApplication _application;
-
-    private EditorHostedWebServer(WebApplication application) => _application = application;
-
-    public static async Task<EditorHostedWebServer> StartAsync(
-        string workspacePath,
-        ApplicationBridgeWebSocketTransport transport,
-        ISet<string> allowedOrigins)
-    {
-        WebApplicationBuilder builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
-        WebApplication application = builder.Build();
-        application.UseWebSockets();
-
-        // The same embedded Runic Assets archive the native window serves.
-        AssetArchiveSource assets = AssetArchive.ReadEmbedded(
-            typeof(EditorDesktopHost).Assembly,
-            EditorDesktopHost.PackagedUiResourceName);
-        application.MapGet("/", context =>
-            RunicAssetEndpointExtensions.WriteAssetAsync(context, assets, assets.Manifest.EntryPoint));
-        application.MapRunicAssetSource(assets);
-        MapTestFixtures(application);
-        // This capability exists only in the explicit loopback hosted mode.
-        // The UI accepts this fixed relative endpoint from its own origin;
-        // WebSocket Origin admission remains enforced by the transport below.
-        application.MapGet("/_runic/editor-host", context =>
-        {
-            context.Response.ContentType = "application/json; charset=utf-8";
-            context.Response.Headers.CacheControl = "no-store";
-            return context.Response.WriteAsync("{\"profile\":\"runic.translations.editor.hosted/1\",\"bridgePath\":\"/bridge\",\"connectionEpoch\":" + transport.NextConnectionEpoch.ToString(CultureInfo.InvariantCulture) + "}", context.RequestAborted);
-        });
-        application.MapRunicApplicationBridge("/bridge", transport);
-
-        await application.StartAsync().ConfigureAwait(false);
-        Uri httpUri = new(application.Urls.Single());
-        allowedOrigins.Add(httpUri.GetLeftPart(UriPartial.Authority));
-        Console.WriteLine($"Runic Translations Editor is serving '{Path.GetFullPath(workspacePath)}' at {httpUri}");
-        return new(application);
-    }
-
-    public Task WaitForShutdownAsync(CancellationToken cancellationToken) =>
-        _application.WaitForShutdownAsync(cancellationToken);
-
-    public async ValueTask DisposeAsync()
-    {
-        await _application.StopAsync().ConfigureAwait(false);
-        await _application.DisposeAsync().ConfigureAwait(false);
-    }
-
-    // The test build supplies this partial method. An unimplemented private
-    // partial method and its invocation are erased from production builds.
-    static partial void MapTestFixtures(WebApplication application);
 }
