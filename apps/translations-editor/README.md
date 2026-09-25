@@ -71,7 +71,7 @@ bun run dev:editor
 ```
 
 All Runic dependencies resolve from source in the workspace. `bun run test` checks
-the frontend, generated contract, editor save/recovery smoke and example workspace.
+the frontend, generated Views client, editor save/recovery smoke and example workspace.
 `bun run verify-packages` checks the SDK's isolated package consumers. See the
 [contributor guide](../../CONTRIBUTING.md) for the complete verification sequence.
 

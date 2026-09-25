@@ -35,8 +35,8 @@ assert.ok(editorJob.steps.some(step => step.env?.RUNIC_TRANSLATIONS_MANIFEST?.in
   "The SDK verifier must supply the generated translation manifest.");
 assert.doesNotMatch(viteConfig, /desktop:\s*true/,
   "The Vite plugin must not duplicate SvelteKit Desktop output ownership.");
-assert.match(svelteConfig, /runicToolkitAdapter\(\{[^}]*mode:\s*["']spa["'][^}]*desktop:\s*true[^}]*\}\)/s,
-  "The Runic SvelteKit adapter must own relocatable Desktop output.");
+assert.match(svelteConfig, /runicToolkitAdapter\(\{[^}]*mode:\s*["']spa["'][^}]*desktop:\s*false[^}]*\}\)/s,
+  "The Runic SvelteKit adapter must emit the Views host SPA output.");
 assert.match(svelteConfig, /router:\s*\{\s*type:\s*["']hash["']\s*\}/,
   "The Desktop SPA must retain hash routing under generated surface paths.");
 

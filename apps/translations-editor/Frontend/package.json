@@ -9,8 +9,6 @@
   },
   "scripts": {
     "build": "vite build",
-    "contract:generate": "runic-bridge generate --authority effect --source src/application.bridge.ts",
-    "contract:check": "runic-bridge check --authority effect --source src/application.bridge.ts",
     "dev": "vite dev",
     "dev:mock": "vite dev --mode mock",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -19,19 +17,14 @@
     "verify": "bun run --bun verify:checks && bun run --bun build && bun test/verify-production.mjs"
   },
   "dependencies": {
-    "@runic-artifex/application-bridge": "workspace:*",
-    "@runic-artifex/desktop": "workspace:*",
     "@runic-artifex/svelte": "workspace:*",
-    "effect": "4.0.0-rc.112",
     "svelte": "5.57.0"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.3.0",
     "@internationalized/date": "^3.12.4",
     "@lucide/svelte": "^1.42.0",
-    "@runic-artifex/application-bridge-tooling": "workspace:*",
     "@runic-artifex/sveltekit": "workspace:*",
-    "@runic-artifex/vite-plugin-runic": "workspace:*",
     "@runic-artifex/vite-plugin-runic-translations": "workspace:*",
     "@sveltejs/adapter-static": "3.0.10",
     "@sveltejs/kit": "2.70.3",

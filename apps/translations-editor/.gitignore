@@ -6,3 +6,5 @@ bin/
 obj/
 .packages/
 .direnv/
+Frontend/static/runic-cswebui.js
+Frontend/.runic-translations-manifest-path

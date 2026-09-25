@@ -4,8 +4,10 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <RunicApplicationBridgeAuthority>effect</RunicApplicationBridgeAuthority>
-    <RunicApplicationBridgeGenerate>false</RunicApplicationBridgeGenerate>
+    <RunicBridgeRegisterGlobally>false</RunicBridgeRegisterGlobally>
+    <RunicBridgeCompositionType>Runic.Translations.Editor.RunicBridgeComposition</RunicBridgeCompositionType>
+    <RunicBridgeFrontendBuildCommand>bun run --bun build</RunicBridgeFrontendBuildCommand>
+    <RunicBridgeTypescriptDir>$(MSBuildProjectDirectory)/Frontend/src/generated</RunicBridgeTypescriptDir>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Runic.Translations.Editor</AssemblyName>
     <RootNamespace>Runic.Translations.Editor</RootNamespace>
@@ -19,12 +21,9 @@
     <TranslationsToolCommand>dotnet tool run runic-translations --</TranslationsToolCommand>
     <TranslationsToolCommand Condition="'$(RunicSdkRoot)' != ''">dotnet run --project &quot;$(RunicSdkRoot)tools/dotnet-runic-translations/dotnet-runic-translations.csproj&quot; --configuration Release --</TranslationsToolCommand>
     <TranslationsRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TranslationsRuntimePath>
-    <TranslationsOutputPath>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</TranslationsOutputPath>
+    <TranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' != 'true'">$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</TranslationsOutputPath>
+    <TranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' == 'true'">obj/runic-bridge/bootstrap/obj/$(Configuration)/$(TargetFramework)/translations</TranslationsOutputPath>
     <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
-    <!-- The frontend build is packed and embedded as a Runic Assets archive;
-         Runic Desktop serves it through a request-scoped content handler. -->
-    <RunicAssetsDist>$(MSBuildProjectDirectory)/Frontend/build</RunicAssetsDist>
-    <RunicAssetsEntryPoint>index.html</RunicAssetsEntryPoint>
     <!-- The editor hosts its own generated Runic.CommandLine catalog beside the one
          published inside Runic.Translations.Tooling; the identical well-known
          generated type name is expected and the locally generated catalog wins. -->
@@ -50,27 +49,10 @@
     <AssemblyMetadata Include="RepositoryCommit" Value="$(SourceRevisionId)" Condition="'$(SourceRevisionId)' != ''" />
   </ItemGroup>
 
-  <!-- Hosted-browser fixtures are compiled only for the disposable E2E host.
-       Release and package builds have no route or environment switch for them. -->
   <ItemGroup>
-    <Compile Remove="tests/HostedBrowserE2E/EditorHostedE2EFixtures.cs" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(RunicEditorHostedE2E)' == 'true'">
-    <Compile Include="tests/HostedBrowserE2E/EditorHostedE2EFixtures.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../../packages/dotnet/Runic.Application.Desktop/Runic.Application.Desktop.csproj" />
-    <ProjectReference Include="../../packages/dotnet/Runic.Application.Hosting/Runic.Application.Hosting.csproj" />
-    <ProjectReference Include="../../packages/dotnet/Runic.Application.Bridge/Runic.Application.Bridge.csproj" />
-    <ProjectReference Include="../../packages/dotnet/Runic.Application.Bridge.Generators/Runic.Application.Bridge.Generators.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
-    <ProjectReference Include="../../packages/dotnet/Runic.Assets.Desktop/Runic.Assets.Desktop.csproj" />
-    <ProjectReference Include="../../packages/dotnet/Runic.Assets.AspNetCore/Runic.Assets.AspNetCore.csproj" />
-    <!-- The base package owns the archive build/embed targets even when the
-         runtime adapters are supplied by workspace project references. -->
-    <ProjectReference Include="../../packages/dotnet/Runic.Assets/Runic.Assets.csproj" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <ProjectReference Include="../../packages/dotnet/Runic.Application.Views.CsWebUi.DependencyInjection/Runic.Application.Views.CsWebUi.DependencyInjection.csproj" />
     <ProjectReference Include="../../packages/dotnet/Runic.CommandLine/Runic.CommandLine.csproj" />
     <ProjectReference Include="../../packages/dotnet/Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj"
                       OutputItemType="Analyzer"
@@ -89,20 +71,16 @@
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <ItemGroup>
-    <AdditionalFiles Include="Contract/bridge.ir.json" />
+  <PropertyGroup Condition="'$(RunicBridgeBootstrap)' == 'true'">
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RunicBridgeBootstrap)' == 'true'">
+    <Compile Remove="Program.cs" />
   </ItemGroup>
-
-  <Target Name="GenerateApplicationBridgeContract"
-          BeforeTargets="CoreCompile"
-          Condition="'$(RunicBridgeInspect)' != 'true' and '$(DesignTimeBuild)' != 'true'">
-    <Exec WorkingDirectory="Frontend" Command="bun run --bun contract:generate" />
-  </Target>
 
   <ItemGroup>
     <TranslationProject Include="EditorResources/runic.json" />
     <TranslationMf2 Include="EditorResources/*.rmf2" />
-    <EditorFrontendInput Include="Frontend/package.json;../../bun.lock;Frontend/svelte.config.js;Frontend/tsconfig.json;Frontend/vite.config.ts;Frontend/src/**/*;EditorResources/**/*" />
     <None Update="ExampleWorkspace/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -127,25 +105,39 @@
     </ItemGroup>
   </Target>
 
-  <!-- The Runic Assets pack/embed targets consume Frontend/build during the
-       resource-preparation phase, so the frontend build must run immediately
-       before packing on both build and publish. -->
-  <Target Name="BuildTranslationsEditorFrontend"
-          BeforeTargets="RunicAssetsPackFileSystem"
-          DependsOnTargets="RunicTranslationsGenerateTranslationArtifacts"
-          Inputs="@(EditorFrontendInput);$(TranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json"
-          Outputs="Frontend/build/index.html">
-    <Exec WorkingDirectory="Frontend"
-          Command="bun run --bun build"
-          EnvironmentVariables="RUNIC_TRANSLATIONS_MANIFEST=$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json" />
+  <Target Name="PrepareTranslationsEditorViewsFrontend"
+          BeforeTargets="RunicViewsGenerateBridge"
+          DependsOnTargets="RunicTranslationsGenerateTranslationArtifacts">
+    <Copy SourceFiles="../../packages/dotnet/Runic.Application.Views.CsWebUi/www/runic-cswebui.js"
+          DestinationFiles="Frontend/static/runic-cswebui.js"
+          SkipUnchangedFiles="true" />
+    <WriteLinesToFile File="Frontend/.runic-translations-manifest-path"
+                      Lines="$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json"
+                      Overwrite="true" />
   </Target>
 
-  <Import Project="../../packages/dotnet/Runic.Assets/buildTransitive/Runic.Assets.targets"
-          Condition="Exists('../../packages/dotnet/Runic.Assets/buildTransitive/Runic.Assets.targets')" />
+  <Target Name="CopyTranslationsEditorFrontend" AfterTargets="Build"
+          Condition="'$(RunicBridgeBootstrap)' != 'true'">
+    <ItemGroup>
+      <EditorBuiltFile Include="Frontend/build/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(EditorBuiltFile)"
+          DestinationFiles="@(EditorBuiltFile->'$(TargetDir)www/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyTranslationsEditorFrontendForPublish" AfterTargets="Publish"
+          Condition="'$(RunicBridgeBootstrap)' != 'true'">
+    <ItemGroup><EditorPublishedFile Include="Frontend/build/**/*" /></ItemGroup>
+    <Copy SourceFiles="@(EditorPublishedFile)"
+          DestinationFiles="@(EditorPublishedFile->'$(PublishDir)www/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
   <Import Project="$(RunicSdkRoot)packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets"
           Condition="'$(RunicSdkRoot)' != ''" />
   <ItemGroup>
     <ProjectReference Include="../../packages/dotnet/Runic.CommandLine.Spectre/Runic.CommandLine.Spectre.csproj" />
   </ItemGroup>
+  <Import Project="../../packages/dotnet/Runic.Application.Views/build/Runic.Application.Views.targets" />
+  <Import Project="../../packages/dotnet/Runic.Application.Views.CsWebUi/build/Runic.Application.Views.CsWebUi.targets" />
 </Project>

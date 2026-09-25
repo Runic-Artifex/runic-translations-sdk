@@ -1,6 +1,3 @@
-import { Effect } from "effect";
-import { MockApplicationBridge } from "@runic-artifex/application-bridge";
-import type { EditorCommand, EditorReceipt } from "../application.bridge";
 import type {
   EditorDocument,
   EditorNotice,
@@ -645,19 +642,6 @@ async function openWorkspace(request: { readonly directory: string; readonly cat
   return { ok: true, kind: "opened", snapshot: opened };
 }
 
-// The dev:mock fixture speaks the same generated contract as the native host:
-// tagged commands in, tagged receipts out, with review-entry samples encoded
-// as { key, value } pairs exactly like the C# bridge codec emits them.
-export const mockApplicationBridgeLayer = MockApplicationBridge<
-  EditorCommand,
-  EditorReceipt,
-  never,
-  unknown
->({
-  initialize: () => Effect.succeed(wire(structuredClone(snapshot))),
-  dispatch: (command) => Effect.promise(async () => handle(command)),
-});
-
 type MockMutationRequest = {
   kind: string;
   locale?: string | undefined;
@@ -671,149 +655,59 @@ type MockMutationRequest = {
   confirmationToken?: string | undefined;
 };
 
-async function handle(command: EditorCommand): Promise<EditorReceipt> {
-  switch (command._tag) {
-    case "LoadWorkspace":
-      return receipt({ _tag: "WorkspaceLoaded", snapshot: wire(await load()) });
-    case "CheckExternalChanges":
-      return receipt({ _tag: "ExternalChangesChecked", changes: await checkExternalChanges() });
-    case "PickWorkspace":
-      return receipt({ _tag: "WorkspacePicked", result: await pickWorkspace() });
-    case "PreviewMutation":
-      return receipt({
-        _tag: "MutationPreviewed",
-        preview: wire(await previewMutation(command.request as unknown as MockMutationRequest)),
-      });
-    case "ApplyMutation":
-      return receipt({
-        _tag: "MutationApplied",
-        result: wire(await applyMutation(command.request as unknown as MockMutationRequest)),
-      });
-    case "RecoverTransaction":
-      return receipt({ _tag: "TransactionRecovered", result: wire(await recoverTransaction()) });
-    case "Undo":
-      return receipt({ _tag: "UndoApplied", result: wire(await undo()) });
-    case "Redo":
-      return receipt({ _tag: "RedoApplied", result: wire(await redo()) });
+export async function mockExecute(operation: string, argument: unknown): Promise<unknown> {
+  const value = argument as Record<string, unknown>;
+  switch (operation) {
+    case "LoadWorkspace": return load();
+    case "CheckExternalChanges": return checkExternalChanges();
+    case "PickWorkspace": return pickWorkspace();
+    case "PreviewMutation": return previewMutation(argument as MockMutationRequest);
+    case "ApplyMutation": return applyMutation(argument as MockMutationRequest);
+    case "RecoverTransaction": return recoverTransaction();
+    case "Undo": return undo();
+    case "Redo": return redo();
+    case "ValidateDocument": return validate(value.path as string, value.content as string);
     case "TransformDocument": {
-      // Mock fixtures intentionally exercise the legacy MF2 layout. Production
-      // Resource edits always use the shared compiler and authoring model.
-      const content = command.value === undefined ? command.content
-        : command.value.endsWith("\n") ? command.value : `${command.value}\n`;
-      const validation = await validate(command.path, content);
-      const key = command.path.slice(command.path.lastIndexOf("/") + 1, -4);
-      return receipt({ _tag: "DocumentTransformed", result: {
-        ...validation, content,
-        entries: command.path.endsWith(".mf2") ? [{ key, content, valueStartByte: 0, valueLengthBytes: new TextEncoder().encode(content).length }] : [],
-      } });
+      const content = value.value === undefined ? value.content as string
+        : (value.value as string).endsWith("\n") ? value.value as string : `${value.value}\n`;
+      const validation = await validate(value.path as string, content);
+      const path = value.path as string;
+      const key = path.slice(path.lastIndexOf("/") + 1, -4);
+      return { ...validation, content, entries: path.endsWith(".mf2")
+        ? [{ key, content, valueStartByte: 0, valueLengthBytes: new TextEncoder().encode(content).length }] : [] };
     }
-    case "ValidateDocument":
-      return receipt({
-        _tag: "DocumentValidated",
-        result: await validate(command.path, command.content),
-      });
-    case "PreviewMessage":
-      return receipt({
-        _tag: "MessagePreviewed",
-        preview: await previewMessage(command.path, command.content, command.locale, command.key),
-      });
-    case "SaveDocument":
-      return receipt({
-        _tag: "DocumentSaved",
-        result: wire(await save(command.path, command.content, command.revision)),
-      });
-    case "SaveReview":
-      return receipt({ _tag: "ReviewSaved", result: wire(await saveReview(domainReviewRequest(command.request))) });
-    case "About":
-      return receipt({ _tag: "AboutLoaded", about: await about() });
-    case "CreateDiagnosticBundle":
-      return receipt({ _tag: "DiagnosticBundleCreated", result: await createDiagnosticBundle() });
-    case "RevealDiagnosticBundle":
-      return receipt({ _tag: "DiagnosticBundleRevealed", result: await revealDiagnosticBundle() });
-    case "DeleteDiagnosticBundle":
-      return receipt({ _tag: "DiagnosticBundleDeleted", result: await deleteDiagnosticBundle() });
-    case "LoadLocalState":
-      return receipt({ _tag: "LocalStateLoaded", state: localStateSnapshot(false) });
-    case "SaveLocalState":
-      localState = new Map(command.entries.map((entry) => [entry.key, entry.value]));
-      return receipt({ _tag: "LocalStateSaved", state: localStateSnapshot(false) });
+    case "PreviewMessage": return previewMessage(value.path as string, value.content as string, value.locale as string, value.key as string);
+    case "SaveDocument": return save(value.path as string, value.content as string, value.revision as string);
+    case "SaveReview": return saveReview(argument as EditorReviewSaveRequest);
+    case "About": return about();
+    case "CreateDiagnosticBundle": return createDiagnosticBundle();
+    case "RevealDiagnosticBundle": return revealDiagnosticBundle();
+    case "DeleteDiagnosticBundle": return deleteDiagnosticBundle();
+    case "LoadLocalState": return localStateSnapshot(false);
+    case "SaveLocalState": {
+      localState = new Map((argument as { key: string; value: string }[]).map(entry => [entry.key, entry.value]));
+      return localStateSnapshot(false);
+    }
     case "ClearLocalState": {
       const removedEntries = localState.size;
       localState.clear();
-      return receipt({ _tag: "LocalStateCleared", result: { removedEntries, recovered: false } });
+      return { removedEntries, recovered: false };
     }
-    case "PreviewProject":
-      return receipt({
-        _tag: "ProjectPreviewed",
-        plan: await previewProject(command.request as unknown as EditorProjectCreationRequest),
-      });
-    case "CreateProject":
-      return receipt({
-        _tag: "ProjectCreated",
-        result: wire(await createProject(command.request as unknown as EditorProjectCreationRequest)),
-      });
-    case "OpenWorkspace":
-      return receipt({ _tag: "WorkspaceOpened", result: wire(await openWorkspace(command.request)) });
-    case "ExportXliff":
-      return receipt({ _tag: "XliffExported", result: await exportXliff(command.directory) });
-    case "PreviewXliffImport":
-      return receipt({ _tag: "XliffImportPreviewed", preview: await previewXliffImport(command.path) });
-    case "ApplyXliffImport":
-      return receipt({ _tag: "XliffImportApplied", result: wire(await applyXliffImport(command.confirmationToken)) });
-    case "ExportReviewJson":
-      return receipt({ _tag: "ReviewJsonExported", result: await exportReviewJson(command.path) });
-    case "PreviewReviewJsonImport":
-      return receipt({ _tag: "ReviewJsonImportPreviewed", preview: await previewReviewJsonImport(command.path) });
-    case "ApplyReviewJsonImport":
-      return receipt({ _tag: "ReviewJsonImportApplied", result: wire(await applyReviewJsonImport(command.confirmationToken)) });
+    case "PreviewProject": return previewProject(argument as EditorProjectCreationRequest);
+    case "CreateProject": return createProject(argument as EditorProjectCreationRequest);
+    case "OpenWorkspace": return openWorkspace(argument as { directory: string; catalogId?: string });
+    case "ExportXliff": return exportXliff(value.directory as string | undefined);
+    case "PreviewXliffImport": return previewXliffImport(value.path as string);
+    case "ApplyXliffImport": return applyXliffImport(value.confirmationToken as string);
+    case "ExportReviewJson": return exportReviewJson(value.path as string | undefined);
+    case "PreviewReviewJsonImport": return previewReviewJsonImport(value.path as string);
+    case "ApplyReviewJsonImport": return applyReviewJsonImport(value.confirmationToken as string);
+    default: throw new Error(`Unknown mock editor operation: ${operation}`);
   }
-}
-
-function receipt<T extends object>(value: T): EditorReceipt {
-  return wire(value) as EditorReceipt;
 }
 
 function localStateSnapshot(recovered: boolean): { entries: { key: string; value: string }[]; recovered: boolean } {
   return { entries: [...localState].map(([key, value]) => ({ key, value })), recovered };
-}
-
-// Inbound: the wire carries samples as pairs; the mock state keeps Records.
-type SaveReviewWireRequest = Extract<EditorCommand, { _tag: "SaveReview" }>["request"];
-
-function domainReviewRequest(request: SaveReviewWireRequest): EditorReviewSaveRequest {
-  return {
-    expectedRevision: request.expectedRevision,
-    entries: request.entries.map((entry) => ({
-      key: entry.key,
-      locale: entry.locale,
-      state: entry.state,
-      note: entry.note,
-      sourceFingerprint: entry.sourceFingerprint,
-      samples: Object.fromEntries(entry.samples.map((sample) => [sample.key, sample.value])),
-    })),
-    terminology: request.terminology.map((term) => ({
-      source: term.source,
-      preferred: term.preferred,
-      locale: term.locale,
-      note: term.note,
-    })),
-  };
-}
-
-// Outbound: encode samples Records back into the wire pair representation.
-function wire<T>(value: T): T {
-  if (Array.isArray(value)) return value.map((item) => wire(item)) as T;
-  if (value === null || typeof value !== "object") return value;
-  const source = value as Record<string, unknown>;
-  const output: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(source)) {
-    output[key] = key === "message" && typeof item === "string" && !("severity" in source) && !("semanticLoss" in source)
-      ? { code: "ui_backend_external_error", args: [], detail: item }
-      : key === "samples" && item !== null && typeof item === "object" && !Array.isArray(item)
-      ? Object.entries(item).map(([sampleKey, sampleValue]) => ({ key: sampleKey, value: sampleValue }))
-      : wire(item);
-  }
-  return output as T;
 }
 
 function projectLocales(request: EditorProjectCreationRequest) {

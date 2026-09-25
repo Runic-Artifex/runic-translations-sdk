@@ -169,8 +169,8 @@ internal static class EditorCommandModule
             Format: format, Source: source, Apply: apply));
 
     /// <summary>
-    /// Hosts the editor over an HTTP + WebSocket bridge without a native window;
-    /// the same session stack as <c>edit</c>, served to browsers at a loopback URL.
+    /// Hosts the same Views Window and editor session as <c>edit</c> over the
+    /// CS-WebUI loopback server without opening a native presentation.
     /// </summary>
     [Command("serve", Description = "Serve the editor in a browser.")]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]

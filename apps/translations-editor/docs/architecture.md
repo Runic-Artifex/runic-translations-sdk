@@ -61,8 +61,9 @@ reformatted.
 
 ## User interfaces
 
-The Svelte frontend renders the editor workflow. Its native host serves the
-frontend and owns local application state, diagnostics, and filesystem-facing
+The Svelte frontend renders the editor workflow. A generated Runic Views
+Window connects typed TypeScript calls to an application-scoped `EditorViewModel`
+and `EditorSession` through the CS-WebUI host. The host serves the frontend and owns local application state, diagnostics, and filesystem-facing
 workspace operations. The browser profile does not hold durable editor state;
 preferences, recent projects, and recovery drafts live in one native per-user
 record. Clearing that record does not change workspace files or in-memory work.
@@ -84,7 +85,7 @@ and editor review state. They never edit application call sites or create legacy
 `.mf2` files for an RMF2 project.
 
 For rich preview, the editor host renders explicit v2 requests through the
-verified .NET artifact/pack path. The bridge returns validated semantic runs;
+verified .NET artifact/pack path. The Views command returns validated semantic runs;
 the Svelte frontend treats links, actions, icons, and custom markup as inert
 display data. It does not load application renderers, execute callbacks, or
 coerce AST 5 into the v4 JavaScript evaluator.

@@ -5,8 +5,8 @@ source, as described in the [editor README](../README.md). SDK package publicati
 does not create an Editor archive.
 
 If an archive is produced for `linux-x64`, `win-x64`, or `osx-arm64`, it should be
-self-contained: the .NET runtime, Runic Desktop presentation host, required native
-WebView assets, static SvelteKit application, launchers, example workspace, license,
+self-contained: the .NET runtime, Runic Views CS-WebUI host, required native
+browser assets, static SvelteKit application, launchers, example workspace, license,
 third-party notices, per-file manifest, and sibling SHA-256 checksum travel together.
 Users should not need an SDK, Node.js installation, package-registry authentication,
 or a separate runtime to start it.
