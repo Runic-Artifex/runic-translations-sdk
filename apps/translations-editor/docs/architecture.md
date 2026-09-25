@@ -67,6 +67,16 @@ workspace operations. The browser profile does not hold durable editor state;
 preferences, recent projects, and recovery drafts live in one native per-user
 record. Clearing that record does not change workspace files or in-memory work.
 
+The root ViewModel publishes a stable routed collection of
+`EditorDocumentViewModel` instances. Selecting a document reads its typed path,
+content, and file revision. Validation and save run on that document's generated
+commands, with request IDs correlating their results and the compiler-backed
+`EditorSession` checking the file revision before atomic replacement. The active
+input draft stays in the browser UI so an unfinished edit can be discarded or
+recovered without changing the shared source document. Workspace, review, and
+interchange operations still use the root operation facade while their own
+ViewModels are migrated.
+
 Headless commands use the same workspace and compiler path as the interface:
 
 - `validate` reports compiler-backed workspace diagnostics;

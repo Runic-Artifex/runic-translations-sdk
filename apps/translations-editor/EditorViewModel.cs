@@ -9,7 +9,9 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
 {
     private readonly EditorSession _session;
     private readonly IDisposable _commandErrors;
+    private readonly Dictionary<string, EditorDocumentViewModel> _documents = new(StringComparer.Ordinal);
     private string _resultJson = "null";
+    private IReadOnlyList<EditorDocumentViewModel> _documentViews = [];
 
     internal EditorViewModel(EditorSession session)
     {
@@ -21,6 +23,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     }
 
     public ReactiveCommand<string, RxVoid> ExecuteCommand { get; }
+    public IReadOnlyList<EditorDocumentViewModel> Documents => _documentViews;
 
     public string ResultJson
     {
@@ -38,8 +41,32 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
             ?? throw new ArgumentException("An editor operation is required.");
         JsonElement argument = root.GetProperty("argument");
         object result = await ExecuteOperationAsync(operation, argument).ConfigureAwait(false);
+        if (result is WorkspaceSnapshot snapshot) SyncDocuments(snapshot);
+        else if (result is EditorOperationResult { Snapshot: { } changed }) SyncDocuments(changed);
         ResultJson = "{\"requestId\":" + JsonSerializer.Serialize(requestId, EditorJsonContext.Default.String)
             + ",\"result\":" + JsonSerializer.Serialize(result, result.GetType(), EditorJsonContext.Default) + "}";
+    }
+
+    internal void SyncDocuments(WorkspaceSnapshot snapshot)
+    {
+        var current = new HashSet<string>(StringComparer.Ordinal);
+        var ordered = new List<EditorDocumentViewModel>(snapshot.Documents.Count);
+        foreach (var document in snapshot.Documents)
+        {
+            current.Add(document.Path);
+            if (!_documents.TryGetValue(document.Path, out var view))
+                _documents.Add(document.Path, view = new EditorDocumentViewModel(_session, this, document));
+            else view.Update(document);
+            ordered.Add(view);
+        }
+        foreach (var (path, view) in _documents.ToArray())
+        {
+            if (current.Contains(path)) continue;
+            _documents.Remove(path);
+            view.Dispose();
+        }
+        _documentViews = ordered;
+        this.RaisePropertyChanged(nameof(Documents));
     }
 
     private async Task<object> ExecuteOperationAsync(string operation, JsonElement argument)
@@ -92,6 +119,8 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     {
         ExecuteCommand.Dispose();
         _commandErrors.Dispose();
+        foreach (var document in _documents.Values) document.Dispose();
+        _documents.Clear();
         _session.Dispose();
     }
 }
