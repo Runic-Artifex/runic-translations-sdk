@@ -324,7 +324,9 @@ export function freezeGeneratedMessage(key, value) {
 }
 
 export function decodeLocaleArtifactV5(value) {
-  let snapshot; try { snapshot = cloneFreeze(value); } catch { return failure("RTR0023/malformed"); }
+  const captured = snapshotJson(value, limits.maximumDepth, limits.maximumDocumentBytes);
+  if (!captured.ok) return failure(`RTR0023/${captured.reason}`);
+  const snapshot = captured.value;
   const envelope = validateEnvelope(snapshot); if (envelope) return failure(envelope);
   const entries = [];
   for (const [key, message] of Object.entries(snapshot.messages)) {
@@ -449,6 +451,7 @@ function validateExpression(expression, symbols, references) {
   const valueError=validateValue(expression.operand);if(valueError)return valueError;
   const annotationError=validateAnnotations(expression.annotations,"malformed-pattern");if(annotationError)return annotationError;
   if (!["string","int64","decimal","boolean","date","time","datetime","guid"].includes(expression.valueType)) return "malformed-pattern";
+  if (!Array.isArray(expression.options)) return "malformed-pattern";
   if (["input","local"].includes(expression.operand.kind)) { if (!Object.hasOwn(symbols,expression.operand.value) || symbols[expression.operand.value].type !== expression.valueType) return "argument-contract-mismatch"; }
   else { try { literal(expression.operand, expression.valueType); } catch { return "malformed-pattern"; } }
   if (expression.function === undefined) return expression.options.length === 0 ? null : "malformed-pattern";
@@ -466,10 +469,11 @@ function validateOptions(options, symbols, fn) {
 }
 function validateMarkupNode(node,symbols,requirements,counts,stack) {
   const contract=rmf2Contract.contracts[node.name],functional=["runic:link","runic:action","runic:icon"].includes(node.name);
+  if(!Array.isArray(node.options))return "argument-contract-mismatch";
   if(node.markupKind==="close") return node.options.length===0?null:"argument-contract-mismatch";
   if((contract.kind==="standalone")!==(node.markupKind==="standalone"))return "argument-contract-mismatch";
   if(contract.interactive&&stack.some(name=>rmf2Contract.contracts[name]?.interactive))return "argument-contract-mismatch";
-  if(!Array.isArray(node.options)||node.options.length>256)return "limit-exceeded";
+  if(node.options.length>256)return "limit-exceeded";
   const values=Object.create(null);
   for(const option of node.options){const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name)||Object.hasOwn(values,option.name))return "argument-contract-mismatch";values[option.name]=option.value;}
   if(functional){const reference=values.ref;if(!reference||reference.kind!=="string-literal"||!Object.hasOwn(requirements,reference.value)||requirements[reference.value].kind!==node.name)return "argument-contract-mismatch";counts[reference.value]=(counts[reference.value]??0)+1;}
@@ -495,11 +499,85 @@ function validName(value, qualified = false) {
 function validDate(value) { if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000-")) return false; const date = new Date(`${value}T00:00:00Z`); return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0,10) === value; }
 function validTime(value) { if (!/^\d{2}:\d{2}:\d{2}$/.test(value)) return false; return Number(value.slice(0,2)) < 24 && Number(value.slice(3,5)) < 60 && Number(value.slice(6,8)) < 60; }
 function validDateTime(value) { if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value) || value.startsWith("0000-")) return false; const date = new Date(value); return !Number.isNaN(date.valueOf()) && date.toISOString().replace(".000Z","Z") === value; }
-function canonicalLocale(value) { if (typeof value!=="string"||!value||value.startsWith("-")||value.endsWith("-"))return null;const parts=value.split("-");if(parts[0].length<2||parts[0].length>8||!/^[A-Za-z]+$/.test(parts[0]))return null;const result=[parts[0].toLowerCase()];let extension=false;for(let index=1;index<parts.length;index++){const part=parts[index];if(part.length<1||part.length>8||!/^[A-Za-z0-9]+$/.test(part))return null;if(part.length===1){extension=true;result.push(part.toLowerCase());}else if(!extension&&part.length===4&&/^[A-Za-z]+$/.test(part))result.push(part[0].toUpperCase()+part.slice(1).toLowerCase());else if(!extension&&part.length===2&&/^[A-Za-z]+$/.test(part))result.push(part.toUpperCase());else if(!extension&&part.length===3&&/^\d+$/.test(part))result.push(part);else result.push(part.toLowerCase());}return result.join("-");}
+function canonicalLocale(value) {
+  if (typeof value!=="string"||!value||value.startsWith("-")||value.endsWith("-")) return null;
+  const parts=value.split("-");
+  if(parts[0].length<2||parts[0].length>8||!/^[A-Za-z]+$/.test(parts[0])) return null;
+  const result=[parts[0].toLowerCase()]; let index=1;
+  if(parts[0].length<=3) for(let count=0;count<3&&index<parts.length&&/^[A-Za-z]{3}$/.test(parts[index]);count++,index++) result.push(parts[index].toLowerCase());
+  if(index<parts.length&&/^[A-Za-z]{4}$/.test(parts[index])) { const part=parts[index++]; result.push(part[0].toUpperCase()+part.slice(1).toLowerCase()); }
+  if(index<parts.length&&(/^[A-Za-z]{2}$/.test(parts[index])||/^\d{3}$/.test(parts[index]))) result.push(parts[index++].toUpperCase());
+  const variants=new Set();
+  while(index<parts.length&&(/^[A-Za-z0-9]{5,8}$/.test(parts[index])||/^\d[A-Za-z0-9]{3}$/.test(parts[index]))) { const part=parts[index++].toLowerCase(); if(variants.has(part))return null; variants.add(part); result.push(part); }
+  const singletons=new Set();
+  while(index<parts.length&&/^[0-9A-WY-Za-wy-z]$/.test(parts[index])) { const singleton=parts[index++].toLowerCase(); if(singletons.has(singleton))return null; singletons.add(singleton); result.push(singleton); const first=index; while(index<parts.length&&/^[A-Za-z0-9]{2,8}$/.test(parts[index]))result.push(parts[index++].toLowerCase()); if(index===first)return null; }
+  if(index<parts.length&&/^[xX]$/.test(parts[index])) { result.push("x"); index++; const first=index; while(index<parts.length&&/^[A-Za-z0-9]{1,8}$/.test(parts[index]))result.push(parts[index++].toLowerCase()); if(index===first)return null; }
+  return index===parts.length?result.join("-"):null;
+}
 function isRecord(value) { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function closedMemberError(value,allowed,required=allowed){if(!isRecord(value))return "malformed-pattern";if(Object.keys(value).some(name=>!allowed.includes(name)))return "unknown-member";return required.every(name=>Object.hasOwn(value,name))?null:"malformed-pattern";}
 function exactKeys(value, names) { if (!isRecord(value)) return false; const actual = Object.keys(value).sort(), expected = [...names].sort(); return actual.length === expected.length && actual.every((name,index) => name === expected[index] && Object.hasOwn(value,name)); }
 function cloneFreeze(value) { if (Array.isArray(value)) return Object.freeze(value.map(cloneFreeze)); if (isRecord(value)) return freezeOwnRecord(Object.keys(value).map(key => [key,cloneFreeze(value[key])])); return value; }
+function snapshotJson(value, maximumDepth, maximumBytes) {
+  const active = new WeakSet(), state = { bytes: 0, reason: null };
+  const consume = count => { state.bytes += count; if (!state.reason && state.bytes > maximumBytes) state.reason = "limit-exceeded"; };
+  const visit = (current, depth) => {
+    if (state.reason) return undefined;
+    if (current === null) { consume(4); return null; }
+    if (typeof current === "string") { consume(jsonStringByteLength(current, maximumBytes - state.bytes)); return current; }
+    if (typeof current === "boolean") { consume(current ? 4 : 5); return current; }
+    if (typeof current === "number") { if (!Number.isFinite(current)) { state.reason = "malformed"; return undefined; } consume(Object.is(current,-0) ? 1 : String(current).length); return Object.is(current,-0) ? 0 : current; }
+    if (typeof current !== "object") { state.reason = "malformed"; return undefined; }
+    if (depth >= maximumDepth) { state.reason = "limit-exceeded"; return undefined; }
+    if (active.has(current)) { state.reason = "malformed"; return undefined; }
+    active.add(current);
+    let keys;
+    try { keys = Reflect.ownKeys(current); } catch { state.reason = "malformed"; active.delete(current); return undefined; }
+    const nextDepth = depth + 1;
+    if (Array.isArray(current)) {
+      let lengthDescriptor; try { lengthDescriptor = Object.getOwnPropertyDescriptor(current,"length"); } catch { state.reason = "malformed"; }
+      const length = lengthDescriptor?.value;
+      if (!state.reason && (!Number.isSafeInteger(length) || length < 0)) state.reason = "malformed";
+      else if (!state.reason && length > Math.floor((maximumBytes - 1) / 2)) state.reason = "limit-exceeded";
+      else if (!state.reason && (keys.length !== length + 1 || keys[length] !== "length")) state.reason = "malformed";
+      const result = state.reason ? undefined : new Array(length); consume(2);
+      for (let index = 0; !state.reason && index < length; index++) {
+        if (keys[index] !== String(index)) { state.reason = "malformed"; break; }
+        let descriptor; try { descriptor = Object.getOwnPropertyDescriptor(current, keys[index]); } catch { state.reason = "malformed"; break; }
+        if (!descriptor?.enumerable || !Object.hasOwn(descriptor,"value")) { state.reason = "malformed"; break; }
+        if (index) consume(1);
+        result[index] = visit(descriptor.value, nextDepth);
+      }
+      active.delete(current); return state.reason ? undefined : Object.freeze(result);
+    }
+    consume(2); const result = Object.create(null);
+    for (let index = 0; !state.reason && index < keys.length; index++) {
+      const key = keys[index];
+      if (typeof key !== "string") { state.reason = "malformed"; break; }
+      let descriptor; try { descriptor = Object.getOwnPropertyDescriptor(current,key); } catch { state.reason = "malformed"; break; }
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor,"value")) { state.reason = "malformed"; break; }
+      if (index) consume(1); consume(jsonStringByteLength(key, maximumBytes - state.bytes)); consume(1);
+      const captured = visit(descriptor.value, nextDepth);
+      if (!state.reason) Object.defineProperty(result,key,{value:captured,enumerable:true,configurable:false,writable:false});
+    }
+    active.delete(current); return state.reason ? undefined : Object.freeze(result);
+  };
+  const snapshot = visit(value,0);
+  return state.reason ? Object.freeze({ok:false,reason:state.reason}) : Object.freeze({ok:true,value:snapshot});
+}
+function jsonStringByteLength(value, remaining) {
+  let bytes = 2;
+  for (let index = 0; index < value.length && bytes <= remaining; index++) {
+    const code = value.charCodeAt(index);
+    if (code === 34 || code === 92 || code === 8 || code === 9 || code === 10 || code === 12 || code === 13) bytes += 2;
+    else if (code < 32 || code >= 0xd800 && code <= 0xdfff && !(code <= 0xdbff && index + 1 < value.length && value.charCodeAt(index + 1) >= 0xdc00 && value.charCodeAt(index + 1) <= 0xdfff)) bytes += 6;
+    else if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) { bytes += 4; index++; }
+    else bytes += 3;
+  }
+  return bytes;
+}
 function success(value) { return Object.freeze({ ok: true, value }); }
 function failure(reason) { return Object.freeze({ ok: false, reason }); }
 function withinJsonDepth(bytes, maximum) { let depth = 0, quoted = false, escaped = false; for (const byte of bytes) { if (quoted) { if (escaped) escaped = false; else if (byte === 92) escaped = true; else if (byte === 34) quoted = false; } else if (byte === 34) quoted = true; else if (byte === 123 || byte === 91) { if (++depth > maximum) return false; } else if (byte === 125 || byte === 93) --depth; } return true; }

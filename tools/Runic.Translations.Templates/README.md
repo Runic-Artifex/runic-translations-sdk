@@ -24,7 +24,10 @@ dotnet tool restore
 dotnet build
 ```
 
-The project template creates a class library with `translations/runic.json` with `sourceLayout: "rmf2-v1"`, a default-locale RMF2 resource, generated C# APIs, a pinned local tool manifest, and build-time ESM output. After building, application code can use the generated catalog:
+The project template creates a class library with `translations/runic.json`, a
+default-locale grouped RMF2 resource, generated C# APIs, a pinned local tool
+manifest, and build-time ESM output. After building, application code can use the
+generated catalog:
 
 ```csharp
 using Example.Translations;
@@ -54,12 +57,9 @@ Choose the project template for a complete .NET and ESM setup. Choose the item t
 ## RMF2 output
 
 All templates and `runic-translations init` create RMF2 resources. The templates
-select the canonical RMF2 execution profile and produce typed v5 C# and ESM ABI
-4 output. The standalone `init` scaffold currently selects the RMF2 source
-layout only, so it retains the existing v4 execution and artifact contract. The
-standard templates create structured message paths; the `-rmf2` template
-identities remain available for existing projects that use flat message IDs.
-Both use the same RMF2 source layout and execution profile.
+produce typed v5 C# and ESM ABI 4 output. The canonical item and project
+templates create structured message paths; use `runic-translations init` when
+you need a more customized source layout.
 
 ## Compatibility and status
 

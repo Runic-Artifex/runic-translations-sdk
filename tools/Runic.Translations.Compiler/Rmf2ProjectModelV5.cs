@@ -5,24 +5,58 @@ using System.Text;
 
 namespace Runic.Translations.Compiler;
 
-// Profile selection is explicit. Coordinated hosts consume the typed v5
-// carrier directly; a v5 result can never masquerade as a v4 catalog.
-internal enum TranslationProjectProfile { Current, Rmf2ExecutionV2 }
+// Project hosts now have one execution contract. Keep the named selection
+// carrier so callers can retain their explicit v5 hand-off without a second,
+// incompatible catalog result.
+internal enum TranslationProjectProfile { Rmf2ExecutionV2 }
 internal sealed record TranslationProjectProfileSelection(TranslationProjectProfile Profile,
     IReadOnlyList<TranslationDiagnostic> Diagnostics)
 {
     internal bool Success => !Diagnostics.Any(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
 }
 internal sealed record TranslationProfileCompilation(TranslationProjectProfile Profile,
-    TranslationCompilation? Current, Rmf2ProjectCompilationV5? Rmf2)
+    Rmf2ProjectCompilationV5 Rmf2)
 {
-    internal bool Success => Current?.Success ?? Rmf2?.Success ?? false;
-    internal IReadOnlyList<TranslationDiagnostic> Diagnostics => Current?.Diagnostics ?? Rmf2!.Diagnostics;
+    internal bool Success => Rmf2.Success;
+    internal IReadOnlyList<TranslationDiagnostic> Diagnostics => Rmf2.Diagnostics;
 }
 
-internal sealed record Rmf2ProjectCompilationV5(Rmf2ProjectV5? Project, IReadOnlyList<TranslationDiagnostic> Diagnostics)
+/// <summary>The result of compiling a project for the single supported RMF2 execution contract.</summary>
+public sealed class Rmf2ProjectCompilationV5
 {
-    internal bool Success => Project is not null && !Diagnostics.Any(d => d.Severity == TranslationDiagnosticSeverity.Error);
+    /// <summary>The semantic execution profile produced by this compiler.</summary>
+    public const string ExecutionProfile = "rmf2-execution-v2";
+    /// <summary>The normalized message grammar version produced by this compiler.</summary>
+    public const int MessageGrammarVersion = 5;
+    /// <summary>The required .NET runtime ABI version.</summary>
+    public const int RuntimeAbiVersion = 2;
+
+    internal Rmf2ProjectCompilationV5(Rmf2ProjectV5? project, IReadOnlyList<TranslationDiagnostic> diagnostics)
+    {
+        Project = project;
+        Diagnostics = diagnostics;
+        CatalogId = project?.Id;
+        DefaultLocale = project?.DefaultLocale;
+        Locales = project is null
+            ? Array.Empty<string>()
+            : Array.AsReadOnly(project.Locales.Select(static locale => locale.Tag).ToArray());
+        CallerFingerprint = project?.CallerFingerprint;
+        SourceHash = project?.SourceHash;
+    }
+
+    internal Rmf2ProjectV5? Project { get; }
+    /// <summary>The compiled catalog identifier, or <see langword="null"/> when compilation failed.</summary>
+    public string? CatalogId { get; }
+    /// <summary>The compiled default locale, or <see langword="null"/> when compilation failed.</summary>
+    public string? DefaultLocale { get; }
+    /// <summary>The deterministic locale set. It is empty when compilation failed.</summary>
+    public IReadOnlyList<string> Locales { get; }
+    /// <summary>The generated caller-contract fingerprint, or <see langword="null"/> when compilation failed.</summary>
+    public string? CallerFingerprint { get; }
+    /// <summary>The complete project-source freshness hash, or <see langword="null"/> when compilation failed.</summary>
+    public string? SourceHash { get; }
+    public IReadOnlyList<TranslationDiagnostic> Diagnostics { get; }
+    public bool Success => Project is not null && !Diagnostics.Any(d => d.Severity == TranslationDiagnosticSeverity.Error);
 }
 
 // The canonical caller contract and the executable locale payload are separate:

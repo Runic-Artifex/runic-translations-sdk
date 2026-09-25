@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace Runic.Translations.Compiler;
 
-/// <summary>The opt-in semantic foundation. The default project path still uses the v4 adapter.</summary>
+/// <summary>Compiles RMF2 source into the typed semantic model used by current backends.</summary>
 internal static class Rmf2SemanticCompilerV5
 {
     internal static Rmf2SemanticResultV5 Compile(TranslationSource source, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)

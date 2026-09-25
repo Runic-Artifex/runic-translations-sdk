@@ -34,7 +34,7 @@ Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an 
 ./runic-translations-editor report /path/to/workspace --format review --source .runic-translations/export/catalog.review.json
 ```
 
-`--output` belongs to `export`; select the command response envelope with `--runic-output json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). An XLIFF import updates only the selected project's translation resources: conventional `.mf2` files or RMF2 `.rmf2` files according to its source layout. A report or import that is refused returns exit code `1` and lists its refusal codes in both human output and the JSON fault details.
+`--output` belongs to `export`; select the command response envelope with `--runic-output json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). An XLIFF import updates only the selected project's declared `.mf2` or `.rmf2` translation resources. A report or import that is refused returns exit code `1` and lists its refusal codes in both human output and the JSON fault details.
 
 ## Local support diagnostics
 
@@ -47,13 +47,11 @@ MF2 messages, watches external changes, and previews through the canonical
 compiler model. Diagnostics remain privacy-bounded and writes use revision
 checks plus atomic replacement.
 
-Both the compatible RMF2 execution profile and explicit
-`rmf2-execution-v2` projects use their selected compiler/runtime pipeline. The
-editor's internal interchange projection accepts either profile without
-fabricating a public v5 catalog from the v4 carrier. Execution-v2 previews are
-formatted by the verified .NET artifact/pack path; the browser receives validated
-inert semantic runs and never approximates AST 5 in JavaScript. Editor refactors
-and XLIFF imports are resource-only: they do not rewrite application call sites.
+The editor uses the RMF2 v5 compiler/runtime pipeline without fabricating a
+retired catalog carrier. Previews are formatted by the verified .NET artifact/pack
+path; the browser receives validated inert semantic runs and never approximates
+AST 5 in JavaScript. Editor refactors and XLIFF imports are resource-only: they
+do not rewrite application call sites.
 The closed XLIFF 2.1 profile deterministically round-trips direct plain-text
 RMF2 resources, reports structured messages as semantic loss, and refuses
 structured imports instead of flattening them.

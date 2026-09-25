@@ -1,6 +1,8 @@
 # Editor localization inventory
 
-The runtime catalog is `EditorResources/runic.json` with `sourceLayout: rmf2-v1`, `en.rmf2`, and `de.rmf2`. The example workspace uses `en.rmf2`, `de.rmf2`, and `fr.rmf2`; no private inputs are used.
+The runtime catalog is `EditorResources/runic.json` with grouped `en.rmf2` and
+`de.rmf2` resources. The example workspace uses `en.rmf2`, `de.rmf2`, and
+`fr.rmf2`; no private inputs are used.
 
 | Surface | Locale keys / ownership |
 | --- | --- |

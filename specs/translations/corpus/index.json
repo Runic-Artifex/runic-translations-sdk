@@ -1,6 +1,9 @@
 {
   "formatVersion": 1,
   "identity": "Runic.Translations.Conformance",
+  "fixtureStatus": "historical-published-release",
+  "publishedReleaseBoundary": "0.3",
+  "currentContract": false,
   "sourceContracts": {
     "catalogSchemaVersion": 1,
     "resourceSchemaVersion": 1,

@@ -7,8 +7,8 @@ using System.Text.Json;
 
 namespace Runic.Translations.Compiler.Generation;
 
-// Profile-selected v5 emission consumes the typed project carrier directly. It must not
-// pass through CompiledTextCatalog because that carrier cannot represent v5.
+// RMF2 emission consumes the typed v5 project carrier directly rather than a
+// reduced catalog projection that would erase execution-v2 semantics.
 internal static class Rmf2LocaleArtifactV5
 {
     internal const int ArtifactVersion = 5;

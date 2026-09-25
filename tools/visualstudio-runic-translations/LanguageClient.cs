@@ -19,7 +19,9 @@ internal static class ContentTypes
     [Export, Name("rmf2"), BaseDefinition(CodeRemoteContentDefinition.CodeRemoteContentTypeName)]
     internal static ContentTypeDefinition Definition = null!;
     [Export, FileExtension(".rmf2"), ContentType("rmf2")]
-    internal static FileExtensionToContentTypeDefinition Extension = null!;
+    internal static FileExtensionToContentTypeDefinition GroupedExtension = null!;
+    [Export, FileExtension(".mf2"), ContentType("rmf2")]
+    internal static FileExtensionToContentTypeDefinition DirectExtension = null!;
 }
 
 [Export(typeof(ILanguageClient)), Export(typeof(RunicLanguageClient)), ContentType("rmf2")]
@@ -27,10 +29,10 @@ public sealed class RunicLanguageClient : ILanguageClient, ILanguageClientCustom
 {
     private Process? process;
     private JsonRpc? rpc;
-    public string Name => "Runic RMF2";
+    public string Name => "Runic MF2";
     public IEnumerable<string> ConfigurationSections => Array.Empty<string>();
     public object? InitializationOptions => null;
-    public IEnumerable<string> FilesToWatch => new[] { "**/*.rmf2", "**/runic.json" };
+    public IEnumerable<string> FilesToWatch => new[] { "**/*.mf2", "**/*.rmf2", "**/runic.json" };
     public bool ShowNotificationOnInitializeFailed => true;
     public object? MiddleLayer => null;
     public object? CustomMessageTarget => null;
@@ -42,7 +44,7 @@ public sealed class RunicLanguageClient : ILanguageClient, ILanguageClientCustom
         var dte = (EnvDTE.DTE)ServiceProvider.GlobalProvider.GetService(typeof(EnvDTE.DTE));
         string? file = dte?.ActiveDocument?.FullName;
         if (string.IsNullOrEmpty(file)) file = dte?.Solution?.FullName;
-        if (string.IsNullOrEmpty(file)) throw new InvalidOperationException("Open an RMF2 document in the solution or folder containing the local Runic tool manifest.");
+        if (string.IsNullOrEmpty(file)) throw new InvalidOperationException("Open an MF2 document in the solution or folder containing the local Runic tool manifest.");
         var launch = ServerLaunch.Find(Path.GetDirectoryName(file)!, Environment.GetEnvironmentVariable("RUNIC_TRANSLATIONS_SERVER"));
         DisposeProcess();
         process = new Process { StartInfo = new ProcessStartInfo {
@@ -100,7 +102,7 @@ internal sealed class ServerLaunch
                     return new ServerLaunch(current, "tool run runic-translations -- lsp");
             if (json.Value<bool?>("isRoot") == true) break;
         }
-        throw new InvalidOperationException("No project-local runic-translations tool manifest found. Restore the local tool before opening RMF2 resources.");
+        throw new InvalidOperationException("No project-local runic-translations tool manifest found. Restore the local tool before opening MF2 resources.");
     }
     // Windows CommandLineToArgvW escaping; ProcessStartInfo on .NET Framework has no ArgumentList.
     internal static string Quote(string value)

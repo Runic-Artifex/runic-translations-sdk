@@ -2,8 +2,6 @@
   "corpusVersion": 1,
   "identity": "runic-rmf2-v1-conformance",
   "contracts": {
-    "sourceSyntax": "rmf2-v1",
-    "executionProfile": "rmf2-execution-v2",
     "messageAstVersion": 5,
     "localeArtifactVersion": 5,
     "runtimeAbiVersion": 2,
@@ -25,7 +23,7 @@
   "localeOnlyKeys": ["locale_extra"],
   "determinism": {
     "callerFingerprint": "sha256:7e1daafd0eb60cfb1688568d2be0160dc190db392f869af1df5846beebc155b0",
-    "sourceHash": "sha256:ff7b63d6d8147200ddff0acb36e25d3bd546e8a278dabc6d4b7cc8118678f5e5",
+    "sourceHash": "sha256:2cbe590dba3e210aa805f13e3458876a796e7a64636c4345601c5a775b46ec60",
     "assetManifestSha256": "sha256:24d5ce3c223e4f29162ec1a0d719548fe4bfcc6d0e971752d2602062af253ea6",
     "localeArtifactSha256": {
       "de": "sha256:8e9cd5f06851c19d90785cad83d0a5f38274a559da0261bf29f8dd85185e0d06",
@@ -201,7 +199,6 @@
     "semanticGolden": "../semantic-v5/locale-artifact.json",
     "linkedProject": "../v5-project/expected-contract.json",
     "recoveryAndSourceMaps": [
-      "../../../../tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2Tests.cs",
       "../../../../tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2SemanticV5Tests.cs"
     ]
   }

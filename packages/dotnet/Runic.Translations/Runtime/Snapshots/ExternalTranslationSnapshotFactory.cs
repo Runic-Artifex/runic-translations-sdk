@@ -243,9 +243,7 @@ public sealed class ExternalTranslationSnapshotFactory : ITranslationSnapshotFac
                 throw PackError("A verified external pack message has an invalid compiled key identity.");
             }
 
-            replacements[i] = message.Message is null
-                ? new CompiledTranslationValue(id, message.Pattern)
-                : new CompiledTranslationValue(id, message.Pattern, message.Message);
+            replacements[i] = new CompiledTranslationValue(id, string.Empty, message.Message);
         }
 
         Array.Sort(replacements, static (left, right) => left.Id.CompareTo(right.Id));

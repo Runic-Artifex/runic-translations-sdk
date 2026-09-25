@@ -1,16 +1,16 @@
-# Runic RMF2 Translations for Visual Studio
+# Runic MF2 Translations for Visual Studio
 
 Development preview declares a Visual Studio host range of 17.14 through 18.x
 (`[17.14,19.0)`), Windows x64. The in-process API is pinned to 17.14. Native
 evidence currently covers only Visual Studio Community 2026 18.8.2; the range
 declaration is not evidence that every host in it has been run. The MEF client
-registers `.rmf2` with Visual Studio's remote-code content type and uses the same
+registers direct `.mf2` and grouped `.rmf2` with Visual Studio's remote-code content type and uses the same
 stdio language server as VS Code. TextMate highlighting, diagnostics, completion,
 hover, symbols, definition/references, formatting and bounded F2 resource/local
 rename use the shared compiler and language service.
 
 Restore the solution's local `runic-translations` .NET tool before opening an
-RMF2 document. Activation finds the nearest `.config/dotnet-tools.json` from the
+MF2 document. Activation finds the nearest `.config/dotnet-tools.json` from the
 active document (or solution), respecting `isRoot`, and starts
 `dotnet tool run runic-translations -- lsp`. The installed tool requires its
 matching .NET runtime; it runs outside Visual Studio's .NET Framework process.
@@ -25,7 +25,7 @@ session. Restart it after switching solutions or changing the selected tool.
 Commands appear in the Tools menu. Assign preferred shortcuts in Visual Studio’s
 keyboard options; the extension does not override existing IDE bindings.
 
-Within an RMF2 editor:
+Within an MF2 editor:
 
 - **Tools → Runic: Preview Message** opens the native message preview. Select a locale, edit example
   values and choose **Render preview**. The server executes its verified runtime
@@ -34,7 +34,7 @@ Within an RMF2 editor:
 - **Tools → Runic: Restart Language Server** stops and restarts the server.
 - Standard IDE navigation, Find All References, Format Document and Rename use
   Visual Studio's LSP support. F2 refuses a resource rename when application or
-  legacy files make whole-workspace correctness unsupported. MF2 local rename
+  other non-resource files make whole-workspace correctness unsupported. MF2 local rename
   stays within its lexical scope. Explicit resource-only input/slot/structural
   transactions are available in the CLI, Editor and VS Code; this client does
   not implement a second workspace-edit engine for those commands.
@@ -42,9 +42,9 @@ Within an RMF2 editor:
 `runic.json` retains Visual Studio's JSON language service. Save configuration
 changes before invoking preview. Configuration-changing refactors are refused
 because this client cannot safely include unsaved JSON buffers; resource buffers remain synchronized
-through LSP. C#, TypeScript, Svelte, TOML and legacy MF2 retain their existing
-language services. Runic does not silently rename their application call sites.
-The client watches RMF2 resources and manifests under the containing solution;
+through LSP. C#, TypeScript and Svelte retain their existing language services.
+Runic does not silently rename their application call sites.
+The client watches direct `.mf2`, grouped `.rmf2`, and manifests under the containing solution;
 when `sourceRoots` points outside the config directory, open the common
 containing workspace so those declared files remain inside the host watch
 boundary. Symlink/reparse-point mounts are rejected by the shared server rather
@@ -96,7 +96,7 @@ so the updated path still requires a fresh interactive receipt:
 1. Build the language server and VSIX, then install with
    `VSIXInstaller.exe /rootSuffix:RunicRmf2 /quiet <native-built.vsix>`.
 2. Set `RUNIC_TRANSLATIONS_SERVER` to the absolute tool DLL before starting
-   `devenv.exe /RootSuffix RunicRmf2 /Log`. Open an RMF2 document to activate LSP.
+   `devenv.exe /RootSuffix RunicRmf2 /Log`. Open an MF2 document to activate LSP.
 3. Run the native interaction check from the repository root:
 
 ```powershell

@@ -8,9 +8,12 @@ span for equivalent input.
 ## Project convention
 
 Every operation starts from one project directory containing `runic.json`.
-Messages use `{locale}/{message-id}.mf2` paths relative to that file. Catalog
-manifests, resource JSON documents, document globs, response files, and implicit
-package-management operations are not part of the command contract.
+Messages are either direct `{locale}/{message-id}.mf2` files or grouped
+`{locale}.rmf2` resources. Explicit `sourceRoots` may mount either representation.
+The representation is inferred from discovered sources, and mixing `.mf2` with
+`.rmf2` is an error. Catalog manifests, resource JSON documents, retired behavior
+selectors, document globs, and implicit package-management operations are not
+part of the current command contract.
 
 ## CLI grammar
 
@@ -19,8 +22,8 @@ The exact command forms are:
 ```text
 init     --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [--locale <tag[:fallback]>...] [--no-starter]
 validate --project <directory>
-generate --project <directory> --output <directory> [emit-options]
-verify   --project <directory> --output <directory> [emit-options]
+generate --project <directory> --output <directory> [--emit-csharp] [--emit-json] [--emit-esm]
+verify   --project <directory> --output <directory> [--emit-csharp] [--emit-json] [--emit-esm]
 schema   --output <directory>
 help | --help | -h
 ```
@@ -34,6 +37,9 @@ Each scalar option occurs once. Exit categories are stable:
 `validate` performs no writes. `schema` writes only the currently supported
 project and generated-artifact schemas. Diagnostics go to the diagnostic stream
 in deterministic order; generated artifact bytes never share that stream.
+Standalone TypeScript, template-manifest, and C++ emitters are not part of v5.
+Retired `--emit-typescript`, `--emit-template-manifest`, and `--emit-cpp` requests
+fail with `RTR0065`; they never select an older renderer.
 
 ## Generate and verify
 
@@ -56,8 +62,10 @@ rejected. Containment is rechecked immediately before each replacement.
 ## Build integration
 
 The build package discovers exactly one configured or conventional `runic.json`
-project and its locale MF2 files. Outputs live beneath the intermediate root,
-declare deterministic inputs and outputs, and are exposed as items for downstream
-packaging. A normal build never writes tracked source artifacts. Clean removes
-only files listed in the owned output manifest and never traverses an
-unconstrained consumer directory.
+project and its direct or grouped MF2 sources. Generated C# belongs to the
+incremental source generator. Optional build-owned output is locale-v5 JSON plus
+its asset manifest and/or the ESM-v5 package. Outputs live beneath the
+intermediate root, declare deterministic inputs and outputs, and are exposed as
+items for downstream packaging. A normal build never writes tracked source
+artifacts. Clean removes only files listed in the owned output manifest and never
+traverses an unconstrained consumer directory.

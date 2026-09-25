@@ -3,6 +3,5 @@
   "catalog": "billing",
   "code": { "namespace": "Example", "className": "BillingText" },
   "baseLocale": "en",
-  "locales": ["en", "de"],
-  "sourceLayout": "rmf2-v1"
+  "locales": ["en", "de"]
 }

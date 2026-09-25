@@ -1,11 +1,10 @@
-# RMF2 semantic v5 foundation
+# RMF2 semantic v5 contract
 
-The additive `rmf2-execution-v2` profile has a typed compiler model,
+The supported `rmf2-execution-v2` contract has a typed compiler model,
 resolved-locale artifact writer, strict .NET external-pack loading, and published
-v5 message/artifact schemas. Add `executionProfile: "rmf2-execution-v2"` to an
-`rmf2-v1` project to activate typed v5 C#/.NET and ESM output. Omit it to retain
-the existing v4/v1 behavior. C++ and standalone v5 TypeScript/template contracts
-remain unsupported and are refused deterministically.
+v5 message/artifact schemas. It is used for typed C#/.NET and ESM output without
+a project selector. C++ and standalone TypeScript/template contracts remain
+unsupported and are refused deterministically.
 An empty project is valid as an authoring scaffold; generation and verification
 require at least one canonical key in the effective default locale.
 
@@ -21,8 +20,7 @@ Declarations cannot bind a variable already mentioned in an earlier declaration,
 including operands and dynamic options. For example, `.local $a = {$n}` followed
 by `.input {$n :number}` is a Duplicate Declaration (`RTR0067` at the later `$n`),
 not a forward input reference. Put the input first or leave it implicit where
-the profile permits. Local forward references and cycles remain invalid. This
-shared validation also protects the current v4 compiler.
+the profile permits. Local forward references and cycles remain invalid.
 An input's own operand is allowed, but its function options cannot refer to
 itself: `.input {$n :number maximumFractionDigits=$n}` is also `RTR0067`, at the
 input binding's `$n`.
@@ -45,7 +43,7 @@ describe these rules and the integration boundary. Public schema mirrors are
 [message AST v5](/schemas/translations/message-ast-v5.schema.json) and
 [locale artifact v5](/schemas/translations/locale-artifact-v5.schema.json).
 The CLI `schema` command also exports both v5 schemas for offline validation;
-schema distribution alone does not activate a project; the explicit selector does.
+schema distribution alone does not change a project's source representation.
 Resource syntax and markup contracts remain version 1.
 
 The v5 pack path is explicitly dispatched by artifact version, grammar and
@@ -54,19 +52,18 @@ contract, declaration graph, exact decimals, selectors and fallback vectors,
 effective content locales, and linked markup/slot obligations before composing
 through the existing immutable snapshot path. The caller supplies integrity
 verification when authenticity is required; a matching fingerprint proves
-compatibility, not provenance. Legacy v1/v2/v4 constructors and readers remain
-unchanged and reject v5 artifacts.
+compatibility, not provenance. Artifact, grammar, profile, and ABI mismatches
+are rejected before an artifact can activate.
 
-The CLI, source generator/MSBuild integration, and Vite plugin dispatch the
-selected profile to the v5 C#/ESM backends. Checkout verification includes an
+The CLI, source generator/MSBuild integration, and Vite plugin use the v5
+C#/ESM backends. Checkout verification includes an
 isolated package-only C# and ESM consumer, strict external-pack composition, and
 NativeAOT execution from the packed build/runtime graph. Cross-backend corpus
 checks cover the maintained execution-v2 contract. These checks do not claim
 evidence from a published 0.4.0 release; they consume local package candidates.
 
-The first-party Translations Editor is also profile-aware, but it is not a
-second v5 compiler or renderer. Internally it projects v4 or v5 results into the
-closed text-interchange shape; a v5 project is never forced through the public
-v4 catalog carrier. AST 5 preview is rendered through the verified .NET
-artifact/pack path and returned to the browser as validated inert semantic runs.
-The browser neither executes application bindings nor approximates AST 5.
+The first-party Translations Editor is not a second compiler or renderer.
+Internally it projects typed results into the closed text-interchange shape;
+AST 5 preview is rendered through the verified .NET artifact/pack path and
+returned to the browser as validated inert semantic runs. The browser neither
+executes application bindings nor approximates AST 5.

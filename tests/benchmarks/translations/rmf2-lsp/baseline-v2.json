@@ -1,7 +1,6 @@
 {
   "protocol": "runic-rmf2-lsp-benchmark",
   "version": 2,
-  "executionProfile": "rmf2-execution-v2",
   "latencyTransport": "child-process-stdio",
   "cancellationTransport": "in-process-framed-streams",
   "catalogMessages": 2000,

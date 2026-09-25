@@ -149,7 +149,7 @@ public static class TranslationWorkspaceMutation
         {
             string local = Normalize(Path.GetRelativePath(projectRoot, path));
             string[] parts = local.Split('/');
-            if (parts.Length != 2) throw Error($"Unsupported legacy message path '{local}'.");
+            if (parts.Length != 2) throw Error($"Unsupported direct MF2 message path '{local}'.");
             string locale = Canonical(parts[0]);
             if (messages.Any(file => file.Locale == locale && !file.Path.StartsWith(prefix + parts[0] + "/", StringComparison.Ordinal)))
                 throw Error($"Locale '{locale}' has colliding source directories.");
@@ -273,7 +273,7 @@ public static class TranslationWorkspaceMutation
                 if (edit.Kind == TranslationWorkspaceEditKind.Delete) proposed.Remove(edit.RelativePath);
                 else proposed[edit.RelativePath] = edit.Bytes!;
             }
-            TranslationCompilation compilation = TranslationCompiler.CompileProject(
+            Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
                 new TranslationSource(configRelative, proposedConfig),
                 proposed.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new TranslationSource(pair.Key, pair.Value)));
             if (!compilation.Success)

@@ -30,13 +30,23 @@
     },
     "assets": {
       "type": "array",
+      "$comment": "The Vite reader additionally enforces unique path values for every asset; Draft 2020-12 has no portable unique-by-property keyword.",
+      "minItems": 6,
+      "allOf": [
+        { "contains": { "type": "object", "required": ["path"], "properties": { "path": { "const": "messages.js" } } }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "type": "object", "required": ["path"], "properties": { "path": { "const": "messages.d.ts" } } }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "type": "object", "required": ["path"], "properties": { "path": { "const": "runtime.js" } } }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "type": "object", "required": ["path"], "properties": { "path": { "const": "server.js" } } }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "type": "object", "required": ["path"], "properties": { "path": { "const": "transport.js" } } }, "minContains": 1, "maxContains": 1 },
+        { "contains": { "type": "object", "required": ["path"], "properties": { "path": { "const": "dynamic.js" } } }, "minContains": 1, "maxContains": 1 }
+      ],
       "items": {
         "type": "object",
         "required": ["path", "sha256", "byteLength", "mediaType"],
         "properties": {
           "path": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9_$.-]+(?:/[A-Za-z0-9_$.-]+)*$" },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-          "byteLength": { "type": "integer", "minimum": 0 },
+          "byteLength": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
           "mediaType": { "enum": ["text/javascript", "text/typescript"] }
         },
         "additionalProperties": false

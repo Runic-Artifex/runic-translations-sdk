@@ -21,7 +21,7 @@ internal static class Program
     private const string RepositoryUrl = "https://github.com/Runic-Artifex/runic-sdk";
     private static readonly Guid SourceLinkKind = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
     private static readonly string PackageVersion =
-        Environment.GetEnvironmentVariable("RUNIC_PACKAGE_VERSION") ?? "0.3.0-preview.1";
+        Environment.GetEnvironmentVariable("RUNIC_PACKAGE_VERSION") ?? "0.4.0-preview.1";
     private static int _passed;
 
     public static async Task<int> Main(string[] args)
@@ -87,8 +87,10 @@ internal static class Program
             "lib/net10.0/Runic.Translations.Authoring.dll",
             "lib/net10.0/Runic.Translations.Compiler.dll",
             "schemas/project-v1.schema.json",
-            "schemas/locale-pack-v2.schema.json",
-            "schemas/locale-artifact-v2.schema.json");
+            "schemas/message-ast-v5.schema.json",
+            "schemas/locale-artifact-v5.schema.json",
+            "schemas/external-pack-v5.schema.json",
+            "schemas/web-module-manifest-v3.schema.json");
         AssertPackageShape(build,
             "Runic.Translations.Build.nuspec",
             "README.md",
@@ -96,7 +98,8 @@ internal static class Program
             "build/Runic.Translations.Build.props",
             "build/Runic.Translations.Build.targets",
             "analyzers/dotnet/cs/Runic.Translations.Generator.dll",
-            "analyzers/dotnet/cs/Runic.Translations.Compiler.dll");
+            "analyzers/dotnet/cs/Runic.Translations.Compiler.dll",
+            "tools/net10.0/Runic.Translations.Build.dll");
         AssertPackageShape(tool,
             "dotnet-runic-translations.nuspec",
             "README.md",
@@ -109,8 +112,16 @@ internal static class Program
             "tools/net10.0/any/Runic.Translations.Authoring.dll",
             "tools/net10.0/any/Runic.Translations.Compiler.dll",
             "tools/net10.0/any/Runic.Translations.Tooling.dll",
+            "tools/net10.0/any/Runic.Translations.dll",
+            "tools/net10.0/any/Runic.Translations.xml",
             "tools/net10.0/any/Runic.CommandLine.dll",
-            "tools/net10.0/any/Runic.CommandLine.xml");
+            "tools/net10.0/any/Runic.CommandLine.xml",
+            "tools/net10.0/any/Runic.CommandLine.Spectre.dll",
+            "tools/net10.0/any/Runic.CommandLine.Spectre.xml",
+            "tools/net10.0/any/Spectre.Console.dll",
+            "tools/net10.0/any/Spectre.Console.xml",
+            "tools/net10.0/any/Spectre.Console.Ansi.dll",
+            "tools/net10.0/any/Spectre.Console.Ansi.xml");
         AssertPackageShape(templates,
             "Runic.Translations.Templates.nuspec",
             "README.md",
@@ -121,15 +132,7 @@ internal static class Program
             "content/templates/project/.template.config/template.json",
             "content/templates/project/translations/_defaultLocale_.rmf2",
             "content/templates/project/translations/runic.json",
-            "content/templates/project/RunicTranslationsProject.csproj",
-            "content/templates/rmf2-item/.template.config/template.json",
-            "content/templates/rmf2-item/translations/_defaultLocale_.rmf2",
-            "content/templates/rmf2-item/translations/runic.json",
-            "content/templates/rmf2-project/.config/dotnet-tools.json",
-            "content/templates/rmf2-project/.template.config/template.json",
-            "content/templates/rmf2-project/translations/_defaultLocale_.rmf2",
-            "content/templates/rmf2-project/translations/runic.json",
-            "content/templates/rmf2-project/RunicTranslationsProject.csproj");
+            "content/templates/project/RunicTranslationsProject.csproj");
 
         AssertDependencies(runtime, Array.Empty<string>());
         AssertDependencies(tooling, ["Runic.CommandLine"]);
@@ -155,6 +158,7 @@ internal static class Program
         AssertEmbeddedSourceLink(tooling, "lib/net10.0/Runic.Translations.Compiler.dll");
         AssertToolingSchemaClosure(tooling);
         AssertEmbeddedSourceLink(build, "analyzers/dotnet/cs/Runic.Translations.Generator.dll");
+        AssertEmbeddedSourceLink(build, "tools/net10.0/Runic.Translations.Build.dll");
         AssertEmbeddedSourceLink(tool, "tools/net10.0/any/dotnet-runic-translations.dll");
     }
 
@@ -162,7 +166,7 @@ internal static class Program
     {
         ITranslationManager generatedManager = await ConsumerTextCatalog.CreateManagerAsync().ConfigureAwait(false);
         var generatedText = new ConsumerText(generatedManager);
-        Assert(string.Equals(generatedText.Greeting("Ada"), "Hello Ada", StringComparison.Ordinal),
+        Assert(string.Equals(generatedText.r_4772656574696e67("Ada"), "Hello Ada", StringComparison.Ordinal),
             "typed generated accessor compiles and formats through the packed runtime");
 
         CompiledTranslationCatalog catalog = CreateCatalog();
@@ -187,17 +191,22 @@ internal static class Program
         Assert(transitions == 1, "one successful swap raises one event");
         Assert(string.Equals(manager.Current.Get(title), "Application", StringComparison.Ordinal), "compiled locale fallback resolves default text");
 
-        TranslationPackContract contract = CreatePackContract();
+        const string MarkupContract = "{\"version\":1,\"contracts\":{},\"messages\":{\"title\":{\"slots\":{},\"contentLocales\":{\"de\":\"de\"}}}}";
+        TranslationPackContract contract = TranslationPackContract.CreateRmf2V5(
+            "app", "de", Fingerprint, [new TranslationPackMessageContract(title)], MarkupContract);
         byte[] packBytes = Encoding.UTF8.GetBytes(
-            "{\"artifactVersion\":1,\"messageGrammarVersion\":1,\"catalog\":\"app\",\"locale\":\"de\"," +
-            "\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"greeting\":{" +
-            "\"pattern\":\"Extern {name}\",\"arguments\":[{\"name\":\"name\",\"type\":\"string\",\"format\":\"none\"}]}}}");
+            "{\"artifactVersion\":5,\"messageGrammarVersion\":5,\"profile\":\"rmf2-execution-v2\",\"catalog\":\"app\",\"locale\":\"de\"," +
+            "\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"title\":{\"contentLocale\":\"de\",\"ast\":{" +
+            "\"astVersion\":5,\"profile\":\"rmf2-execution-v2\",\"inputs\":[],\"declarations\":[],\"selectors\":[]," +
+            "\"variants\":[{\"keys\":[],\"nodes\":[{\"kind\":\"text\",\"value\":\"External title\"}]}]}}},\"markupContract\":" + MarkupContract + "}");
         VerifiedExternalTranslationPack verified = await TranslationPackLoader.VerifyAsync(
             new ExternalTranslationPack(packBytes),
             contract,
             integrityVerifier: static (content, _) => ValueTask.FromResult(content.Length > 0)).ConfigureAwait(false);
-        Assert(verified.TryGetPattern(greeting, out string externalPattern), "verified external pack contains the generated key");
-        Assert(string.Equals(externalPattern, "Extern {name}", StringComparison.Ordinal), "external pack preserves the verified pattern");
+        Assert(verified.Messages.Count == 1 && verified.Messages[0].Key.Equals(title),
+            "verified external pack contains the generated key");
+        Assert(string.Equals(verified.Messages[0].Message.Rmf2V5!.Format(Array.Empty<TextArgument>(), "de"),
+            "External title", StringComparison.Ordinal), "external pack preserves the verified v5 message");
     }
 
     private static CompiledTranslationCatalog CreateCatalog() => new(
@@ -212,16 +221,6 @@ internal static class Program
             new CompiledTranslationLocale("de", "en", [new CompiledTranslationValue(0, "Hallo {name}")]),
             new CompiledTranslationLocale("en", null,
                 [new CompiledTranslationValue(0, "Hello {name}"), new CompiledTranslationValue(1, "Application")]),
-        ]);
-
-    private static TranslationPackContract CreatePackContract() => new(
-        "app",
-        "de",
-        Fingerprint,
-        [
-            new TranslationPackMessageContract(
-                new TranslationKey("app", 0, "greeting"),
-                [new TranslationPackArgumentContract("name", TextArgumentType.String, TextArgumentFormat.None)]),
         ]);
 
     private static void AssertExactFeedContents(string feed)

@@ -14,15 +14,6 @@ internal static class GeneratorTestHost
 {
     internal static GeneratorRun Run(params TestInput[] inputs) => Run(RuntimeReferenceMode.Matching, inputs);
 
-    internal static GeneratorRun RunRmf2V5(params TestInput[] inputs) =>
-        Run(TranslationsGenerator.CreateRmf2ExecutionV2(), RuntimeReferenceMode.Matching, null, inputs);
-
-    internal static GeneratorRun RunRmf2V5(RuntimeReferenceMode runtimeReferenceMode, params TestInput[] inputs) =>
-        Run(TranslationsGenerator.CreateRmf2ExecutionV2(), runtimeReferenceMode, null, inputs);
-
-    internal static GeneratorRun RunRmf2V5WithConsumer(string source, params TestInput[] inputs) =>
-        Run(TranslationsGenerator.CreateRmf2ExecutionV2(), RuntimeReferenceMode.Matching, source, inputs);
-
     internal static GeneratorRun RunWithConsumer(string source, params TestInput[] inputs) =>
         Run(new TranslationsGenerator(), RuntimeReferenceMode.Matching, source, inputs);
 

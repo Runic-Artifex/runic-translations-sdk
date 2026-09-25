@@ -24,7 +24,7 @@ internal static class Rmf2RuntimeV5Tests
         runner.Add("v5 hostile decimal spellings reject overflow underflow and rounding", DecimalDomain);
         runner.Add("v5 output bounds and locale capability errors use public format errors", RuntimeErrors);
         runner.Add("v5 snapshot constant evaluation content locale and contract checking are additive", SnapshotDispatch);
-        runner.Add("v5 immutable arrays and compatibility checks preserve v4 ABI", Compatibility);
+        runner.Add("v5 immutable arrays and compatibility checks require ABI 2", Compatibility);
     }
     private static CompiledRmf2Value Input(string name) => new("input", name);
     private static CompiledRmf2Value Local(string name) => new("local", name);
@@ -264,12 +264,9 @@ internal static class Rmf2RuntimeV5Tests
     private static void Compatibility()
     {
         Assert.Equal(2, TranslationsCompatibility.Rmf2RuntimeAbiVersion); Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion); Assert.Equal(2, TranslationsCompatibility.MessageGrammarVersion);
-        Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(1), "ABI 1 remains supported"); Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(2), "ABI 2 is supported");
-        // Each generated generation embeds its own requirement, not the runtime's marker.
-        const int v4Requirement = 1, v5Requirement = 2;
-        TranslationsCompatibility.EnsureRmf2RuntimeAbi(v4Requirement);
-        TranslationsCompatibility.EnsureRmf2RuntimeAbi(v5Requirement);
-        foreach (int version in new[] { -1, 0, 3, int.MaxValue }) Assert.Throws<NotSupportedException>(() => TranslationsCompatibility.EnsureRmf2RuntimeAbi(version));
+        Assert.False(TranslationsCompatibility.SupportsRmf2RuntimeAbi(1), "Retired ABI 1 must not remain accepted"); Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(2), "ABI 2 is supported");
+        TranslationsCompatibility.EnsureRmf2RuntimeAbi(2);
+        foreach (int version in new[] { -1, 0, 1, 3, int.MaxValue }) Assert.Throws<NotSupportedException>(() => TranslationsCompatibility.EnsureRmf2RuntimeAbi(version));
         CompiledRmf2Node[] nodes = [new("original")]; var message = Simple([], [], nodes); nodes[0] = new("changed");
         message.Variants.ToArray()[0] = new([], [new("changed")]);
         Assert.Equal("original", message.Format([], "en"));

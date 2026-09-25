@@ -19,9 +19,9 @@ dotnet tool run runic-translations -- validate \
 ```
 
 The project path may name the conventional directory or its `runic.json`.
-New projects declare `sourceLayout: "rmf2-v1"` and keep resources in sibling
-files such as `en.rmf2` and `de.rmf2`. Projects without that field retain the
-legacy locale-directory `.mf2` layout.
+New projects use grouped RMF2 resources in sibling files such as `en.rmf2` and
+`de.rmf2`. Direct locale-directory `.mf2` messages are also supported; the
+representation is inferred from source files and cannot be mixed.
 
 ## Generate C# and ESM
 
@@ -33,9 +33,7 @@ dotnet tool run runic-translations -- generate \
   --emit-esm
 ```
 
-When no emit option is present, projects that omit `executionProfile` retain the
-existing output set. An `rmf2-v1` project with
-`executionProfile: "rmf2-execution-v2"` defaults to typed C#, locale-v5 JSON plus
+When no emit option is present, projects default to typed C#, locale-v5 JSON plus
 its asset manifest, and the cohesive ESM-v5 package. When any option is present,
 only that group is rendered. V5 supports `--emit-csharp`, `--emit-json`, and
 `--emit-esm`; `--emit-typescript`, `--emit-template-manifest`, and `--emit-cpp`
@@ -70,15 +68,14 @@ Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob
 
 ## RMF2
 
-`sourceLayout: "rmf2-v1"` enables recursive resources and markup contracts. For
-typed grammar 5/runtime ABI 2 generation, also set
-`executionProfile: "rmf2-execution-v2"`; `validate`, `generate`, and `verify`
-all dispatch from that selector. Omission preserves grammar/artifact v4 and ESM
-ABI 3. Generated v5 JSON is `{catalog}.{locale}.locale-v5.json`; ESM output is
-under `{catalog}.esm-v5/` with `web-module-manifest-v3.json`.
+Grouped `.rmf2` sources enable recursive resources and markup contracts; direct
+`.mf2` sources are also supported. `validate`, `generate`, and `verify` use
+grammar 5/runtime ABI 2 consistently. Generated JSON is
+`{catalog}.{locale}.locale-v5.json`; ESM output is under `{catalog}.esm-v5/`
+with `web-module-manifest-v3.json`.
 `lsp` starts the bounded stdio language service. See the [RMF2 guide](../../docs/guides/translations/rmf2.md) for capabilities and limits.
 
 The LSP's standard resource rename is deliberately resource-only: it refuses
-workspaces containing application or legacy source files rather than emitting a
+workspaces containing application or other non-translation source files rather than emitting a
 partial application refactor. Use the explicit source transaction in an IDE or
 the editor, then update application call sites with the native language service.

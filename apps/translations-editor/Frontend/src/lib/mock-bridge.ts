@@ -6,7 +6,6 @@ import type {
   EditorReviewSnapshot,
   WorkspaceSnapshot,
 } from "./contracts";
-import { sourceMessageToArtifact, toStructuredMessage } from "./message-composer";
 
 const manifest = document("runic.json", undefined, undefined, {
   $schema: "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
@@ -361,17 +360,14 @@ async function validate(path: string, content: string) {
   }
 }
 
-async function previewMessage(path: string, content: string, locale: string, key: string) {
+async function previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string) {
   try {
-    let value: unknown = content;
-    if (!path.endsWith(".mf2")) {
-      const root = JSON.parse(content) as Record<string, unknown>;
-      value = root.resources;
-      for (const segment of key.split(".")) value = (value as Record<string, unknown>)[segment];
-      if (typeof value === "object" && value !== null && "$value" in value) value = (value as Record<string, unknown>).$value;
-    }
-    const artifact = sourceMessageToArtifact(toStructuredMessage(value as string | Record<string, unknown>));
-    return { success: true, locale, astJson: JSON.stringify(artifact), diagnostics: [] };
+    const inputs = mockPreviewInputs(content);
+    const astJson = JSON.stringify({ astVersion: 5, profile: "rmf2-execution-v2", inputs });
+    const renderedJson = samplesJson === undefined
+      ? undefined
+      : JSON.stringify({ key, locale, runs: [{ text: mockPreviewText(content, parseMockSamples(samplesJson)) }] });
+    return { success: true, locale, astJson, renderedJson, diagnostics: [] };
   } catch (error) {
     return {
       success: false,
@@ -382,6 +378,40 @@ async function previewMessage(path: string, content: string, locale: string, key
       }],
     };
   }
+}
+
+function mockPreviewInputs(content: string): Array<{ name: string; type: string }> {
+  const types = new Map<string, string>();
+  const typeNames: Record<string, string> = {
+    string: "string", boolean: "bool", integer: "int64", number: "decimal",
+    date: "date", time: "time", datetime: "instant", uuid: "uuid",
+  };
+  for (const match of content.matchAll(/\.input\s+\{\$([\p{L}_][\p{L}\p{N}_-]*)(?:\s+:([\p{L}_][\p{L}\p{N}_-]*))?[^}]*\}/gu)) {
+    types.set(match[1], typeNames[match[2] ?? "string"] ?? "string");
+  }
+  for (const match of content.matchAll(/\{\$([\p{L}_][\p{L}\p{N}_-]*)/gu)) {
+    if (!types.has(match[1])) types.set(match[1], "string");
+  }
+  return [...types].map(([name, type]) => ({ name, type }));
+}
+
+function parseMockSamples(samplesJson: string): Record<string, string> {
+  const value: unknown = JSON.parse(samplesJson);
+  if (value === null || typeof value !== "object" || Array.isArray(value) ||
+      Object.values(value).some((sample) => typeof sample !== "string")) {
+    throw new TypeError("Preview samples must be a JSON object of strings.");
+  }
+  return value as Record<string, string>;
+}
+
+function mockPreviewText(content: string, samples: Record<string, string>): string {
+  const fallback = /^\s*\*\s+\{\{([\s\S]*?)\}\}\s*$/mu.exec(content)?.[1];
+  const exactOne = /^\s*one\s+\{\{([\s\S]*?)\}\}\s*$/mu.exec(content)?.[1];
+  const count = Object.hasOwn(samples, "count") ? samples.count : undefined;
+  const selected = count === "1" && exactOne !== undefined ? exactOne : fallback;
+  const pattern = selected ?? content.split("\n").filter((line) => !line.trimStart().startsWith(".")).join("\n");
+  return pattern.replace(/\{\$([\p{L}_][\p{L}\p{N}_-]*)(?:\s+:[^}]*)?\}/gu, (_, name: string) =>
+    Object.hasOwn(samples, name) ? samples[name] : `{${name}}`);
 }
 
 async function saveReview(request: EditorReviewSaveRequest) {
@@ -676,7 +706,7 @@ export async function mockExecute(operation: string, argument: unknown): Promise
       return { ...validation, content, entries: path.endsWith(".mf2")
         ? [{ key, content, valueStartByte: 0, valueLengthBytes: new TextEncoder().encode(content).length }] : [] };
     }
-    case "PreviewMessage": return previewMessage(value.path as string, value.content as string, value.locale as string, value.key as string);
+    case "PreviewMessage": return previewMessage(value.path as string, value.content as string, value.locale as string, value.key as string, value.samplesJson as string | undefined);
     case "SaveDocument": return save(value.path as string, value.content as string, value.revision as string);
     case "SaveReview": return saveReview(argument as EditorReviewSaveRequest);
     case "About": return about();

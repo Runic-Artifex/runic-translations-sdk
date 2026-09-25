@@ -1,9 +1,0 @@
-{
-  "artifactVersion": 1,
-  "messageGrammarVersion": 1,
-  "catalog": "app",
-  "locale": "de",
-  "contractFingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "messages": {},
-  "sourceUri": "https://invalid.example/pack.json"
-}

@@ -41,7 +41,7 @@ public static class TranslationProjectScaffolder
         }
         files.Sort((left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
 
-        TranslationCompilation compilation = TranslationCompiler.CompileProject(
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
             new TranslationSource("runic.json", files.Find(static file => file.RelativePath == "runic.json")!.Bytes),
             MessageSources(files));
         if (!compilation.Success) throw new TranslationAuthoringException(FormatDiagnostics(compilation.Diagnostics));
@@ -59,7 +59,6 @@ public static class TranslationProjectScaffolder
             writer.WriteStartObject();
             writer.WriteString("$schema", "https://runic-artifex.eu/schemas/translations/project-v1.schema.json");
             writer.WriteNumber("schemaVersion", 1);
-            writer.WriteString("sourceLayout", "rmf2-v1");
             writer.WriteString("catalog", RequireValue(request.CatalogId, "catalog ID"));
             writer.WriteStartObject("code");
             writer.WriteString("namespace", RequireValue(request.CodeNamespace, "code namespace"));

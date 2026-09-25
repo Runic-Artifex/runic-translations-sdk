@@ -22,6 +22,12 @@ public static class Rmf2ResourceWriter
         var document = Require(source);
         var node = document.Nodes.SingleOrDefault(n => !n.IsGroup && n.Key == key);
         if (node is null) throw new TranslationAuthoringException("Unknown RMF2 message '" + key + "'.");
+        if (IsDirect(source))
+        {
+            byte[] direct = Utf8.GetBytes(message);
+            Require(new TranslationSource(source.Path, direct));
+            return direct;
+        }
         byte[] raw = source.GetUtf8Bytes();
         int from = node.NameLocation.StartByte, end = node.Location.StartByte + node.Location.LengthBytes;
         string newline = Utf8.GetString(raw).Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
@@ -34,6 +40,7 @@ public static class Rmf2ResourceWriter
     {
         ArgumentNullException.ThrowIfNull(path); ArgumentNullException.ThrowIfNull(message);
         if (path.Count == 0 || path.Any(segment => !Identifier.IsMatch(segment))) throw new TranslationAuthoringException("A message path requires identifier segments.");
+        if (IsDirect(source)) throw new TranslationAuthoringException("A direct MF2 file contains exactly one filename-addressed message.");
         var document = Require(source);
         if (document.Nodes.Any(node => node.Path.SequenceEqual(path, StringComparer.Ordinal))) throw new TranslationAuthoringException("The resource path already exists.");
         var output = new StringBuilder(Utf8.GetString(source.GetUtf8Bytes()));
@@ -111,6 +118,7 @@ public static class Rmf2ResourceWriter
 
     public static byte[] Rename(TranslationSource source, IReadOnlyList<string> path, string name)
     {
+        if (IsDirect(source)) throw new TranslationAuthoringException("Rename a direct MF2 resource by renaming its file.");
         if (!Identifier.IsMatch(name)) throw new TranslationAuthoringException("RMF2 names must be identifiers.");
         var document = Require(source);
         var changes = document.Nodes.Where(n => n.Path.SequenceEqual(path, StringComparer.Ordinal))
@@ -124,6 +132,11 @@ public static class Rmf2ResourceWriter
     /// <summary>Normalizes structural indentation while preserving message text, margins, comments and variant order.</summary>
     public static byte[] Format(TranslationSource source)
     {
+        if (IsDirect(source))
+        {
+            Require(source);
+            return source.GetUtf8Bytes();
+        }
         var document = Require(source);
         string text = Utf8.GetString(source.GetUtf8Bytes());
         string[] lines = text.Split('\n');
@@ -164,8 +177,8 @@ public static class Rmf2ResourceWriter
     }
     internal static Rmf2ResourceDocument Require(TranslationSource source)
     {
-        var document = Rmf2ResourceReader.Read(source);
-        if (!document.Success) throw new TranslationAuthoringException("Invalid RMF2 source: " + string.Join("; ", document.Diagnostics.Select(d => d.Message)));
+        var document = IsDirect(source) ? Rmf2ResourceReader.ReadDirect(source) : Rmf2ResourceReader.Read(source);
+        if (!document.Success) throw new TranslationAuthoringException("Invalid translation source: " + string.Join("; ", document.Diagnostics.Select(d => d.Message)));
         return document;
     }
     internal static byte[] Replace(byte[] source, IEnumerable<(int Start, int Length, byte[] Bytes)> changes)
@@ -179,4 +192,5 @@ public static class Rmf2ResourceWriter
         output.Write(source, at, source.Length - at); return output.ToArray();
     }
     private static int Leading(string value) => value.Length - value.TrimStart(' ').Length;
+    private static bool IsDirect(TranslationSource source) => source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase);
 }

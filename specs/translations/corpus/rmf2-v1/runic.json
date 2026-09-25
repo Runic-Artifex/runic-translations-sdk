@@ -13,8 +13,6 @@
     { "tag": "fr", "fallback": "de" },
     { "tag": "fr-FR", "fallback": "fr" }
   ],
-  "sourceLayout": "rmf2-v1",
-  "executionProfile": "rmf2-execution-v2",
   "validation": {
     "translationCompleteness": "allow",
     "extraLocaleKeys": "allow"

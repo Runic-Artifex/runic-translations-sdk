@@ -26,7 +26,7 @@ internal static class ProjectCreationTests
     private static void GermanOnlyIsValid()
     {
         TranslationProjectPlan plan = TranslationProjectScaffolder.Render(Request("unused", "de"));
-        Assert.True(plan.Compilation.Success, "Generated project did not compile.");
+        Assert.True(plan.IsValid, "Generated project did not compile.");
         Assert.Equal(2, plan.Files.Count);
         Assert.Equal("de", plan.Locales[0].Tag);
         Assert.True(Utf8(plan, "de.rmf2").Contains("ProductText", StringComparison.Ordinal), "Starter message is missing.");
@@ -42,7 +42,7 @@ internal static class ProjectCreationTests
             "ProductText",
             [new("en-us"), new("zh-hans-cn", "EN-us")]));
 
-        Assert.True(plan.Compilation.Success, "Generated project did not compile.");
+        Assert.True(plan.IsValid, "Generated project did not compile.");
         Assert.Equal("de-DE|en-US:de-DE|zh-Hans-CN:en-US", string.Join('|', plan.Locales.Select(LocaleText)));
         Assert.Equal(
             "de-DE.rmf2|en-US.rmf2|runic.json|zh-Hans-CN.rmf2",
@@ -145,7 +145,7 @@ internal static class ProjectCreationTests
             "Customer.Product",
             "ProductText",
             includeStarterMessage: false));
-        Assert.True(plan.Compilation.Success, "Empty RMF2 project did not compile.");
+        Assert.True(plan.IsValid, "Empty RMF2 project did not compile.");
         Assert.Equal("de.rmf2|runic.json", string.Join('|', plan.Files.Select(file => file.RelativePath)));
     }
 
@@ -159,15 +159,15 @@ internal static class ProjectCreationTests
             "ProductText"));
         string config = Utf8(plan, "runic.json");
         Assert.True(config.Contains("project-v1.schema.json", StringComparison.Ordinal), "Project schema declaration is missing.");
-        Assert.True(config.Contains("\"sourceLayout\": \"rmf2-v1\"", StringComparison.Ordinal), "New projects must explicitly select RMF2.");
+        Assert.True(!config.Contains("sourceLayout", StringComparison.Ordinal), "New projects must not retain a source-layout selector.");
     }
 
     private static void Rmf2ProjectIsValid()
     {
         TranslationProjectPlan plan = TranslationProjectPlanBuilder.Build();
-        Assert.True(plan.Compilation.Success, "Generated RMF2 project did not compile.");
+        Assert.True(plan.IsValid, "Generated RMF2 project did not compile.");
         Assert.Equal("en.rmf2|runic.json", string.Join('|', plan.Files.Select(file => file.RelativePath)));
-        Assert.True(Utf8(plan, "runic.json").Contains("\"sourceLayout\": \"rmf2-v1\"", StringComparison.Ordinal), "RMF2 source layout was not selected.");
+        Assert.True(!Utf8(plan, "runic.json").Contains("sourceLayout", StringComparison.Ordinal), "RMF2 projects must not retain a source-layout selector.");
         Assert.True(Utf8(plan, "en.rmf2").Contains("application_title = ProductText", StringComparison.Ordinal), "RMF2 starter resource is missing.");
     }
 

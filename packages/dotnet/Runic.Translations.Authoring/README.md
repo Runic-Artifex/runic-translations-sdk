@@ -33,16 +33,17 @@ Consume these authoring APIs through the preview `Runic.Translations.Tooling` pa
 
 Mutation and recovery APIs use expected revisions and contained paths to detect concurrent or unsafe changes. Callers still own user authorization, backups, source control, and any product-specific review workflow.
 
-`TranslationWorkspaceTransactionPlan.Compilation` retains the exact v4 compiler
-result for default-profile projects. Explicit `rmf2-execution-v2` plans are
-validated and commit-guarded through their selected profile, but cannot be
-represented by that v4 carrier; accessing `Compilation` for such a plan throws
-`InvalidOperationException` rather than returning a fabricated successful v4
-catalog.
+`TranslationWorkspaceTransactionPlan.Compilation` retains the compiler result
+for direct MF2 projects. Typed RMF2 plans are validated and commit-guarded
+through the v5 carrier; accessing `Compilation` for such a plan throws
+`InvalidOperationException` rather than returning a fabricated catalog.
 
 ## RMF2 authoring
 
-New scaffolds select `sourceLayout: "rmf2-v1"` and create one `{locale}.rmf2` source per declared locale, including empty starter-free locales. `Rmf2Workspace` and `Rmf2ResourceWriter` provide revision-aware, source-preserving resource and locale mutations. Projects without the discriminator retain the legacy `{locale}/{key}.mf2` layout.
+New scaffolds create one `{locale}.rmf2` source per declared locale, including
+empty starter-free locales. `Rmf2Workspace` and `Rmf2ResourceWriter` provide
+revision-aware, source-preserving resource and locale mutations. Direct `.mf2`
+sources remain the alternate supported representation.
 
 ## Compatibility and status
 

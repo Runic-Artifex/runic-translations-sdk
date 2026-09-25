@@ -14,8 +14,7 @@ export function sourceWatchRoots(root: string): string[] {
   if (!config) return [workspace];
   let settings: unknown;
   try { settings = JSON.parse(readFileSync(config, "utf8")); } catch { return [workspace]; }
-  if (!settings || typeof settings !== "object" ||
-      (settings as { sourceLayout?: unknown }).sourceLayout !== "rmf2-v1") return [workspace];
+  if (!settings || typeof settings !== "object") return [workspace];
   const mounts = (settings as { sourceRoots?: unknown }).sourceRoots;
   if (!Array.isArray(mounts)) return [workspace];
   const roots = [workspace];

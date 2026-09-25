@@ -30,7 +30,7 @@ public sealed class Rmf2LanguageService
     {
         var items = new SortedDictionary<string, string>(StringComparer.Ordinal);
         foreach (string function in new[] { "string", "integer", "number", "date", "time", "datetime", "runic:uuid", "runic:boolean", "runic:relative-time" })
-            items[":" + function] = "rmf2-execution-v1 · options: " + Mf2MessageParser.FunctionOptions(function);
+            items[":" + function] = Rmf2ProjectV5.Profile + " · options: " + Mf2MessageParser.FunctionOptions(function);
         foreach (var pair in _registry.Contracts) Tag(pair.Key, pair.Value);
         foreach (var pair in _registry.Aliases) Tag(pair.Key, _registry.Contracts[pair.Value]);
         if (syntax is not null)

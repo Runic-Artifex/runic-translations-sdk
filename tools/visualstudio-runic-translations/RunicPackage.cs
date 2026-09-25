@@ -35,7 +35,8 @@ public sealed class RunicPackage : AsyncPackage
                 if (restart) { await client.RestartAsync(); return; }
                 var dte = await GetServiceAsync(typeof(EnvDTE.DTE)) as EnvDTE.DTE ?? throw new InvalidOperationException("Visual Studio document service is unavailable.");
                 var document = dte.ActiveDocument;
-                if (document == null || !document.FullName.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Place the cursor inside an RMF2 message.");
+                if (document == null || (!document.FullName.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) && !document.FullName.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("Place the cursor inside an MF2 message.");
                 var selection = (EnvDTE.TextSelection)document.Selection;
                 string uri = new Uri(document.FullName).AbsoluteUri;
                 var info = await client.RequestAsync("runic/message", new { textDocument = new { uri }, position = new { line = selection.ActivePoint.Line - 1, character = selection.ActivePoint.LineCharOffset - 1 } }, DisposalToken);

@@ -1,8 +1,6 @@
 {
   "$schema": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
   "schemaVersion": 1,
-  "sourceLayout": "rmf2-v1",
-  "executionProfile": "rmf2-execution-v2",
   "catalog": "__CATALOG__",
   "code": {
     "namespace": "__NAMESPACE__",

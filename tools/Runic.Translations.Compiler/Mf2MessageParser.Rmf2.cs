@@ -7,7 +7,7 @@ namespace Runic.Translations.Compiler;
 
 internal static partial class Mf2MessageParser
 {
-    // RMF2 lowers the shared data model. Legacy MF2 retains its compatibility parser.
+    // RMF2 lowers the shared data model. Direct MF2 uses the compatibility parser.
     private static Mf2ParsedMessage? LowerRmf2(Mf2SyntaxDocument syntax, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
         if (diagnostics.Items.Any(d => d.Severity == TranslationDiagnosticSeverity.Error)) return null;
@@ -58,7 +58,7 @@ internal static partial class Mf2MessageParser
             if (!HasInputDeclaration(declarations, input)) declarations.Add(input, Declaration.CreateInput(input, input, TranslationArgumentType.String, "none", null));
         var placeholders = declarations.Values.Where(d => d.Constant is null).GroupBy(d => d.Input, StringComparer.Ordinal)
             .Select(group => group.First()).OrderBy(d => d.Input, StringComparer.Ordinal)
-            .Select(d => new PlaceholderModel(d.Input, d.Type, d.Format, new ByteSpan(0, 0), new ByteSpan(0, 0), new ByteSpan(0, 0))).ToArray();
+            .Select(d => new PlaceholderModel(d.Input, d.Type, d.Format)).ToArray();
         if (placeholders.Length > options.MaximumPlaceholdersPerValue) Error(diagnostics, syntax.Source, "RTR0022", "MF2 input count exceeds the configured limit.");
         return new Mf2ParsedMessage(StrictJsonParser.StrictUtf8.GetString(syntax.Source.Bytes), message, placeholders);
 

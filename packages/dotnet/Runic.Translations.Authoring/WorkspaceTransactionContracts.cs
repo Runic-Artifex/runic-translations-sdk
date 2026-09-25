@@ -36,42 +36,25 @@ public sealed class TranslationWorkspaceEdit
 
 public sealed class TranslationWorkspaceTransactionPlan
 {
-    private readonly TranslationCompilation? _compilation;
     private readonly ValidationReceipt _validation;
 
     internal TranslationWorkspaceTransactionPlan(
         string root,
         string catalogId,
         IReadOnlyList<TranslationWorkspaceEdit> edits,
-        TranslationCompilation compilation)
+        Rmf2ProjectCompilationV5 compilation)
     {
         Root = root;
         CatalogId = catalogId;
         Edits = SnapshotEdits(edits);
-        _compilation = compilation;
-        _validation = ValidationReceipt.From(compilation);
-    }
-
-    internal TranslationWorkspaceTransactionPlan(
-        string root,
-        string catalogId,
-        IReadOnlyList<TranslationWorkspaceEdit> edits,
-        TranslationProfileCompilation compilation)
-    {
-        Root = root;
-        CatalogId = catalogId;
-        Edits = SnapshotEdits(edits);
-        _compilation = compilation.Current;
         _validation = ValidationReceipt.From(compilation);
     }
 
     public string Root { get; }
     public string CatalogId { get; }
     public IReadOnlyList<TranslationWorkspaceEdit> Edits { get; }
-    /// <summary>The exact v4 compilation that validated the plan.</summary>
-    /// <exception cref="InvalidOperationException">The selected profile has no v4 compilation carrier.</exception>
-    public TranslationCompilation Compilation => _compilation ?? throw new InvalidOperationException(
-        "Compilation is unavailable because this plan was validated as rmf2-execution-v2 rather than the v4 compiler profile.");
+    /// <summary>Whether the selected RMF2 contract validated the proposed edits.</summary>
+    public bool IsValid => _validation.Success;
     internal bool IsCompilerValid => _validation.Success;
 
     private static System.Collections.ObjectModel.ReadOnlyCollection<TranslationWorkspaceEdit> SnapshotEdits(IReadOnlyList<TranslationWorkspaceEdit> edits)
@@ -87,9 +70,7 @@ public sealed class TranslationWorkspaceTransactionPlan
     {
         private ValidationReceipt(bool success) => Success = success;
         internal bool Success { get; }
-        internal static ValidationReceipt From(TranslationCompilation compilation) =>
-            new((compilation ?? throw new ArgumentNullException(nameof(compilation))).Success);
-        internal static ValidationReceipt From(TranslationProfileCompilation compilation) =>
+        internal static ValidationReceipt From(Rmf2ProjectCompilationV5 compilation) =>
             new((compilation ?? throw new ArgumentNullException(nameof(compilation))).Success);
     }
 }

@@ -1,103 +1,93 @@
 # Runic Translations contracts
 
-This directory freezes the TR0–TR1 language-neutral contracts for
-`Runic.Translations`. Together, these contracts form the portable protocol
-family `runic.translations/1`. The standalone planning document remains the source
-for product intent; ADR 0001 and ADR 0005 replace its retired product and
-diagnostic identities.
+This directory defines the single translation contract emitted by the current
+preview. Source organization can be direct `.mf2` messages or grouped `.rmf2`
+resources, but both forms link to the same semantic model. They are not separate
+execution profiles and cannot be mixed in one project.
 
 ## Version set
 
 | Contract | Current writer version |
 |---|---:|
-| MF2 project schema | 1 |
-| Authoring messages | MessageFormat 2 `.mf2` files |
-| Message grammar | MF2 with the documented Runic v1 profile |
-| Normalized message AST | 2 execution AST; 3 MF2-subset interchange AST |
-| Resolved locale artifact | 1 (grammar 1), locale-pack-v2 (grammar 2), RMF2 artifact 4 by omission, and RMF2 artifact 5 with `rmf2-execution-v2` |
-| Runtime/generated-code ABI | Legacy 1; RMF2 ABI 1 by omission and 2 with `rmf2-execution-v2` |
-| ESM ABI | 3 by omission; 4 with `rmf2-execution-v2` |
+| Project schema | 1 |
+| Resource syntax | `rmf2-v1` |
+| Authoring representation | Direct `.mf2` or grouped `.rmf2` files |
+| Message grammar and normalized AST | 5 (`rmf2-execution-v2`) |
+| Resolved locale artifact | 5 |
+| Runtime/generated-code ABI | RMF2 ABI 2 |
+| ESM ABI | 4 (`web-module-manifest-v3`) |
 | Transport contract | 1 |
 
 Package versions are independent from these integers. New cross-runtime schemas
 use canonical `https://runic-artifex.eu/schemas/translations/` identifiers. An
-instance `$schema` member is a semantic compiler concern and is not a behavior
-selector; `schemaVersion` selects compiler behavior.
+instance `$schema` member identifies the project schema and is not a behavior
+selector. `schemaVersion` identifies the project document shape; source files
+select their representation, and all valid projects use `rmf2-execution-v2`.
 
 Every bundled schema's `$id` is its public URL beneath that canonical root. CI
 checks that the URL suffix and bundled filename remain identical. The same bytes
 can be exported for pinned or offline tooling with `runic-translations schema`.
 
-## Canonical compiler IR
+## Canonical compiler model
 
-The pure compiler consumes one `runic.json` project source and explicitly
-classified MF2 message sources. Source display paths are normalized to `/`
-separators and affect diagnostics only. Compilation order never depends on
-absolute paths, current directory, environment, clock, current culture, or
-input enumeration order.
+The pure compiler consumes one `runic.json` source and classified MF2 sources.
+Source display paths are normalized to `/` separators. Compilation order never
+depends on absolute paths, current directory, environment, clock, current
+culture, or input enumeration order. Locale tags, resource keys, caller names,
+and generated names use the deterministic ordering and normalization rules in
+the [v5 project-linking contract](rmf2-project-v5.md).
 
-Successful IR observes these orders:
-
-1. catalogs by ordinal catalog ID;
-2. layers by ascending signed priority, then ordinal name;
-3. locales by ordinal canonical tag;
-4. dotted resource keys and placeholder names by ordinal comparison.
-
-The effective default locale after whole-leaf layer replacement defines the
-canonical key set and zero-based key IDs. Each other locale retains direct
-effective resources and resolved per-key fallback resources. A higher-priority
-leaf replaces its entire value and metadata. File paths never establish merge
-precedence.
-
-The contract fingerprint is `sha256:` followed by lowercase hexadecimal SHA-256
-of canonical UTF-8 JSON containing only the catalog ID, message grammar version,
-and the default locale's ordered key/input/selector contracts. It excludes source
-paths, translated patterns, descriptions, tags, and insignificant whitespace.
+`CallerFingerprint` is the compatibility hash of the v5 caller and markup
+contract. `SourceHash` independently records complete project and source bytes.
+Translated text, selector layout, and physical source partitioning do not become
+caller compatibility merely because they affect freshness.
 
 ## Diagnostics and locations
 
-Wave A reserves `RTR0001` through `RTR0022` and `RTR0099` under ADR
-0005. Source diagnostics use normalized paths and one-based line/column values;
+Source diagnostics use normalized paths and one-based line/column values;
 columns count UTF-16 code units. Byte spans are zero-based, start-inclusive, and
 end-exclusive in the original UTF-8 byte sequence, including any optional BOM. Diagnostics
 target the most specific offending property or value token.
 
-`RTR0020` is reserved but not emitted by the TR0–TR1 compiler kernel because
-output paths do not enter the pure compilation API. It becomes executable in the
-later build/CLI surface. `RTR0023`, `RTR0024`, and `RTR0099` belong to
-later external-pack, generator/runtime-ABI, and unexpected-failure surfaces.
-MF2 profile validation uses `RTR0030`; `RTR0031` reports a locale outside a
-selected backend's built-in selector registry.
+`RTR0020` belongs to the build/CLI output-containment surface. `RTR0023`
+classifies external-pack rejection, `RTR0024` reports an unsafe generated/runtime
+ABI mismatch, and `RTR0031` reports a locale outside the selected backend's
+built-in capability registry. Unknown project members, retired selectors, mixed
+source representations, and unsupported output switches fail explicitly.
 
-The machine-readable [corpus](corpus/README.md) is the executable compatibility
-contract. Schema validation alone is intentionally insufficient for normalized
-uniqueness, BCP 47 canonicalization, fallback graphs, cross-file merge rules,
-pattern/descriptor parity, compiler limits, and generated identifier collisions.
+The machine-readable [corpus](corpus/README.md) contains the current v5 release
+oracles. Schema validation alone is intentionally insufficient for normalized
+uniqueness, BCP 47 canonicalization, fallback graphs, cross-file linking,
+caller/markup parity, compiler limits, and generated identifier collisions.
+The root Wave A JSON corpus is retained only as a published-0.3 historical
+fixture and is not an accepted input contract for the current preview.
 
-The supported authoring profile and project convention are documented in
-[`../../docs/guides/translations/rmf2.md`](../../docs/guides/translations/rmf2.md). `locale-pack-v2` is
-documented in [`../../docs/guides/translations/locale-pack-v2.md`](../../docs/guides/translations/locale-pack-v2.md).
+The supported authoring convention is documented in
+[`../../docs/guides/translations/rmf2.md`](../../docs/guides/translations/rmf2.md).
 
-## RMF2 opt-in profile
+## RMF2 execution contract
 
-[`rmf2-execution-v1.json`](rmf2-execution-v1.json) pins the implemented MF2 subset.
 The [RMF2 guide](../../docs/guides/translations/rmf2.md) specifies resource composition,
-markup contracts, external artifact 4, migration, and remaining proposal work.
+markup contracts, artifact v5, migration boundaries, and deliberate release
+exclusions.
 RMF2 fingerprints include caller input/slot contracts, markup registries and effective
 locale mappings; source selector trees and physical file organization are excluded.
 
-The additive [semantic v5 foundation](rmf2-execution-v2.md) and
-[v2 option table](rmf2-execution-v2.json) specify the typed model. For an
-`rmf2-v1` project, `executionProfile: "rmf2-execution-v2"` activates typed v5
-C#/.NET and ESM generation in profile-aware hosts; omission preserves the v1/v4
-contract. The low-level public v4 compiler carrier remains separate.
+The [semantic v5 foundation](rmf2-execution-v2.md) and
+[option table](rmf2-execution-v2.json) specify the typed model. Every supported
+project uses this contract for C#/.NET and ESM generation. Direct `.mf2` sources
+are one message per file; grouped `.rmf2` sources carry resource namespaces.
+Hosts reject mixed source representations and unknown or retired contract
+selectors rather than falling back to an older carrier.
 The [v5 project linker](rmf2-project-v5.md) provides an explicit typed
-compiler profile, cross-locale caller/markup contracts, separate compatibility
-and freshness hashes, and the generated-name mapping for the dependent backends.
-The version-explicit [`rmf2-v1` corpus](corpus/rmf2-v1/README.md) is the shared
-release oracle for that activated profile: compiler, generated C#, .NET
+compiler model, cross-locale caller/markup contracts, separate compatibility and
+freshness hashes, and the generated-name mapping for the dependent backends.
+The version-explicit [`rmf2-v1` corpus](corpus/rmf2-v1/README.md) names the
+unchanged resource syntax, not a retired execution profile. It is the shared
+release oracle for the current v5 contract: compiler, generated C#, .NET
 artifact-v5 loading, generated ESM, and ESM dynamic loading run the same typed
 execution and rejection cases. Its exclusions—terms, references, group fallback,
-C++ RMF2, rich XLIFF, application call-site rewriting, direct legacy-to-RMF2
-migration, and marketplace concerns—are deliberate release-boundary exclusions,
-not unversioned omissions from the protocol.
+C++ RMF2, rich XLIFF, application call-site rewriting, migration from non-RMF2
+legacy formats, and marketplace concerns are deliberate release-boundary
+exclusions, not unversioned omissions from the protocol. Read-side compatibility
+retentions are listed in the [compatibility-retention ledger](../../docs/guides/translations/compatibility-retention.md).

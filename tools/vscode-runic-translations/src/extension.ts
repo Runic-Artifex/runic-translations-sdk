@@ -20,7 +20,7 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
       const config = vscode.workspace.getConfiguration("runicTranslations", uri);
       const launch = serverLaunch(folder.uri.fsPath, config.get<string>("dotnetPath", "dotnet"), config.get<string>("serverAssembly", ""));
       // The manifest is also synchronized by the LSP and must be watched even
-      // when a project has no RMF2 files yet.
+      // when a project has no translation files yet.
       const manifestWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, "**/runic.json"));
       let client: LanguageClient | undefined;
       let started = false;
@@ -30,12 +30,12 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
       const watcher = new ForwardedWatchers(
         manifestWatcher,
         () => sourceWatchRoots(folder.uri.fsPath),
-        root => vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root), "**/*.rmf2")),
+        root => vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root), "**/*.{mf2,rmf2}")),
         forward,
       );
       watchers.set(key, watcher);
       const options: LanguageClientOptions = {
-        documentSelector: [{ scheme: "file", language: "rmf2", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/*.rmf2` }, { scheme: "file", language: "json", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/runic.json` }],
+        documentSelector: [{ scheme: "file", language: "rmf2", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/*.{mf2,rmf2}` }, { scheme: "file", language: "json", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/runic.json` }],
         workspaceFolder: folder, outputChannel: output,
         initializationOptions: { runicConfigurationSync: true },
         // Watchers are forwarded explicitly so a manifest refresh can replace
@@ -54,7 +54,7 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
 }
 async function active() {
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.languageId !== "rmf2") throw new Error("Place the cursor in an RMF2 resource.");
+  if (!editor || editor.document.languageId !== "rmf2") throw new Error("Place the cursor in a Runic MF2 resource.");
   const client = await clientFor(editor.document.uri);
   const info = await client.sendRequest<MessageInfo>("runic/message", { textDocument: { uri: editor.document.uri.toString() }, position: client.code2ProtocolConverter.asPosition(editor.selection.active) });
   return { editor, client, info };

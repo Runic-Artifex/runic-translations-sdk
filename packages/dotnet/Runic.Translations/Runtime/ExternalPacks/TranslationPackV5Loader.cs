@@ -77,7 +77,7 @@ internal static class TranslationPackV5Loader
         CompiledRmf2Message message = ReadAst(wrapper["ast"], contract, limits, contentLocale);
         try { markup.ValidatePlanV5(contract, message); }
         catch (TranslationFormatException exception) { throw Error(exception.Message, TranslationPackFailureReason.ArgumentContractMismatch); }
-        return new VerifiedTranslationPackMessage(contract.Key, string.Empty, CompiledTextMessage.FromRmf2(message));
+        return new VerifiedTranslationPackMessage(contract.Key, CompiledTextMessage.FromRmf2(message));
     }
 
     private static CompiledRmf2Message ReadAst(JsonElement value, TranslationPackMessageContract contract,

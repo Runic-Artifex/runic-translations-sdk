@@ -63,57 +63,8 @@ internal static class TranslationPackValidation
     }
 
     internal static bool IsCanonicalLocale(string? value)
-    {
-        if (string.IsNullOrEmpty(value) || value[0] == '-' || value[^1] == '-') return false;
-        int segmentStart = 0;
-        int segmentIndex = 0;
-        bool extension = false;
-        for (int i = 0; i <= value.Length; i++)
-        {
-            if (i != value.Length && value[i] != '-') continue;
-            int length = i - segmentStart;
-            if (length is < 1 or > 8) return false;
-            for (int p = segmentStart; p < i; p++)
-            {
-                char character = value[p];
-                if (!IsAsciiLetter(character) && (character < '0' || character > '9')) return false;
-            }
-            if (segmentIndex == 0)
-            {
-                if (length is < 2 or > 8) return false;
-                for (int p = segmentStart; p < i; p++) if (value[p] < 'a' || value[p] > 'z') return false;
-            }
-            else if (length == 1)
-            {
-                extension = true;
-                if (value[segmentStart] < 'a' || value[segmentStart] > 'z') return false;
-            }
-            else if (!extension && length == 4 && AllLetters(value.AsSpan(segmentStart, length)))
-            {
-                if (value[segmentStart] < 'A' || value[segmentStart] > 'Z') return false;
-                for (int p = segmentStart + 1; p < i; p++) if (value[p] < 'a' || value[p] > 'z') return false;
-            }
-            else if (!extension && length == 2 && AllLetters(value.AsSpan(segmentStart, length)))
-            {
-                for (int p = segmentStart; p < i; p++) if (value[p] < 'A' || value[p] > 'Z') return false;
-            }
-            else if (!extension && length == 3 && AllDigits(value.AsSpan(segmentStart, length)))
-            {
-                // Numeric regions have no casing.
-            }
-            else
-            {
-                for (int p = segmentStart; p < i; p++)
-                {
-                    char character = value[p];
-                    if (character >= 'A' && character <= 'Z') return false;
-                }
-            }
-            segmentStart = i + 1;
-            segmentIndex++;
-        }
-        return segmentIndex > 0;
-    }
+        => value is not null && LocaleTag.TryCanonicalize(value, out string canonical) &&
+            string.Equals(value, canonical, StringComparison.Ordinal);
 
     internal static bool IsFingerprint(string? value)
     {
@@ -142,15 +93,4 @@ internal static class TranslationPackValidation
     private static bool IsAsciiLetter(char character) =>
         (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z');
 
-    private static bool AllLetters(ReadOnlySpan<char> value)
-    {
-        for (int i = 0; i < value.Length; i++) if (!IsAsciiLetter(value[i])) return false;
-        return true;
-    }
-
-    private static bool AllDigits(ReadOnlySpan<char> value)
-    {
-        for (int i = 0; i < value.Length; i++) if (value[i] < '0' || value[i] > '9') return false;
-        return true;
-    }
 }

@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -36,6 +35,7 @@ internal static class RuntimeTests
         runner.Add("manager synchronous wait does not capture caller context", SynchronousWaitDoesNotDeadlock);
         runner.Add("compiled catalog defensively copies inputs", CatalogImmutability);
         runner.Add("compiled catalog validates sorted canonical data", CatalogValidation);
+        runner.Add("runtime and external packs share structural BCP 47 validation", LocaleTagValidation);
         runner.Add("compiled catalog validates fallback graph", FallbackValidation);
         runner.Add("snapshot resolves fallback values", SnapshotFallback);
         runner.Add("snapshot lookup validates complete O(1) key identity", SnapshotKeyIdentity);
@@ -54,16 +54,6 @@ internal static class RuntimeTests
         runner.Add("snapshot resolves allowed extras only through dynamic keys", AllowedExtraDynamicLookup);
         runner.Add("compiled public memory cannot mutate snapshot state", PublicMemoryIsolation);
         runner.Add("provider abandons canceled blocked factory and retries independently", ProviderAbandonsCanceledFactory);
-        runner.Add("external snapshot factory null source uses compiled fallback", ExternalFactoryNullFallback);
-        runner.Add("external snapshot factory subset overlays per-key fallback", ExternalFactorySubsetOverlay);
-        runner.Add("external snapshot factory remaps name order to IDs and dynamic extra", ExternalFactoryExtraOrdering);
-        runner.Add("external snapshot factory rejects incompatible contracts before source", ExternalFactoryRejectsContractsBeforeSource);
-        runner.Add("external snapshot manager publishes verified data and preserves on tamper", ExternalFactoryManagerSafety);
-        runner.Add("external snapshot manager cancellation preserves current", ExternalFactoryManagerCancellation);
-        runner.Add("manager refresh composes new external bytes for the active locale", RefreshComposesNewExternalBytes);
-        runner.Add("manager refresh rejects tampered pack and preserves current", RefreshRejectsTamperedPack);
-        runner.Add("manager refresh coalesces concurrent callers onto one composition", RefreshCoalescesConcurrentCallers);
-        runner.Add("manager refresh resolves deterministically behind a pending switch", RefreshRacesPendingSwitchDeterministically);
         runner.Add("compiled catalog WithOptions captures immutable policies", CatalogWithOptions);
     }
 
@@ -379,6 +369,25 @@ internal static class RuntimeTests
             [new CompiledTranslationLocale("en", null, [])]), "does not define");
     }
 
+    private static void LocaleTagValidation()
+    {
+        const string fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+        const string markup = "{\"version\":1,\"contracts\":{},\"messages\":{}}";
+        string[] invalid = ["en-a", "en-a-b", "en-a-foo-a-bar", "en-US-Latn", "de-1901-1901"];
+        foreach (string locale in invalid)
+        {
+            Assert.Throws<ArgumentException>(() => _ = new CompiledTranslationLocale(locale, null, []));
+            Assert.Throws<ArgumentException>(() => _ = TranslationPackContract.CreateRmf2V5("app", locale, fingerprint, [], markup));
+        }
+
+        string[] valid = ["de-CH-1901", "en-a-foo-b-bar", "en-x-a", "en-9-foo", "zh-cmn-Hans-CN"];
+        foreach (string locale in valid)
+        {
+            Assert.Equal(locale, new CompiledTranslationLocale(locale, null, []).Locale);
+            Assert.Equal(locale, TranslationPackContract.CreateRmf2V5("app", locale, fingerprint, [], markup).Locale);
+        }
+    }
+
     private static void FallbackValidation()
     {
         CompiledTranslationDefinition[] definitions = [new("alpha.greeting", [])];
@@ -590,134 +599,6 @@ internal static class RuntimeTests
         factory.ReleaseFirst();
     }
 
-    private static async Task ExternalFactoryNullFallback()
-    {
-        CountingSource source = new(null);
-        CompiledTranslationCatalog catalog = CreateCatalog();
-        ExternalTranslationSnapshotFactory factory = CreateExternalFactory(source, locale => CreatePackContract(catalog, locale));
-        ITranslationSnapshot snapshot = await factory.CreateSnapshotAsync(catalog, "en-US", DefaultTextValueFormatter.Shared, default);
-        Assert.Equal("Hello", snapshot.Get(Key(0, "alpha.greeting")));
-        Assert.Equal("Total {count}", snapshot.Get(Key(1, "beta.count")));
-        Assert.Equal(1, source.Calls);
-    }
-
-    private static async Task ExternalFactorySubsetOverlay()
-    {
-        CompiledTranslationCatalog catalog = CreateCatalog();
-        string json = ExternalPackJson("en-US", "\"alpha.greeting\":{\"pattern\":\"External hello\",\"arguments\":[]}");
-        CountingSource source = new(new ExternalTranslationPack(Encoding.UTF8.GetBytes(json)));
-        CompiledTranslationProvider provider = new(catalog, snapshotFactory: CreateExternalFactory(source, locale => CreatePackContract(catalog, locale)));
-        ITranslationSnapshot snapshot = await provider.GetSnapshotAsync("en-US");
-        Assert.Equal("External hello", snapshot.Get(Key(0, "alpha.greeting")));
-        Assert.Equal("Total {count}", snapshot.Get(Key(1, "beta.count")));
-    }
-
-    private static async Task ExternalFactoryExtraOrdering()
-    {
-        CompiledTranslationCatalog catalog = new(
-            "app", "en",
-            [
-                new CompiledTranslationDefinition("Zulu.Key", []),
-                new CompiledTranslationDefinition("Alpha.Extra", [], isCanonical: false),
-            ],
-            [
-                new CompiledTranslationLocale("de", "en", [new(1, "compiled extra")]),
-                new CompiledTranslationLocale("en", null, [new(0, "compiled canonical")]),
-            ]);
-        TranslationPackContract Contract(string locale) => new("app", locale, ExternalFingerprint,
-            [
-                new TranslationPackMessageContract(new TranslationKey("app", 1, "Alpha.Extra")),
-                new TranslationPackMessageContract(new TranslationKey("app", 0, "Zulu.Key")),
-            ]);
-        string messages =
-            "\"Zulu.Key\":{\"pattern\":\"external canonical\",\"arguments\":[]}," +
-            "\"Alpha.Extra\":{\"pattern\":\"external extra\",\"arguments\":[]}";
-        CountingSource source = new(new ExternalTranslationPack(Encoding.UTF8.GetBytes(ExternalPackJson("de", messages))));
-        ITranslationSnapshot snapshot = await new CompiledTranslationProvider(
-            catalog, snapshotFactory: CreateExternalFactory(source, Contract)).GetSnapshotAsync("de");
-        Assert.Equal("external canonical", snapshot.Get(new TranslationKey("app", 0, "Zulu.Key")));
-        Assert.Equal("external extra", snapshot.Get(new TranslationKey("app", CompiledTranslationCatalog.DynamicKeyId, "Alpha.Extra")));
-    }
-
-    private static async Task ExternalFactoryRejectsContractsBeforeSource()
-    {
-        CompiledTranslationCatalog catalog = CreateCatalog();
-        TranslationPackMessageContract Alpha(string catalogName = "app", int id = 0, string name = "alpha.greeting") =>
-            new(new TranslationKey(catalogName, id, name));
-        TranslationPackMessageContract Beta(TextArgumentFormat format = TextArgumentFormat.Grouped) =>
-            new(new TranslationKey("app", 1, "beta.count"),
-                [new TranslationPackArgumentContract("count", TextArgumentType.Int, format)]);
-        Func<string, TranslationPackContract>[] invalid =
-        [
-            locale => new TranslationPackContract("other", locale, ExternalFingerprint, [Alpha("other")]),
-            locale => new TranslationPackContract("app", "de-DE", ExternalFingerprint, [Alpha(), Beta()]),
-            locale => new TranslationPackContract("app", locale, "sha256:1111111111111111111111111111111111111111111111111111111111111111", [Alpha(), Beta()]),
-            locale => new TranslationPackContract("app", locale, ExternalFingerprint, [Alpha(id: 99)]),
-            locale => new TranslationPackContract("app", locale, ExternalFingerprint, [Alpha(name: "alpha.wrong"), Beta()]),
-            locale => new TranslationPackContract("app", locale, ExternalFingerprint, [Alpha(), Beta(TextArgumentFormat.Plain)]),
-            locale => new TranslationPackContract("app", locale, ExternalFingerprint, [Alpha()]),
-        ];
-
-        foreach (Func<string, TranslationPackContract> contractFactory in invalid)
-        {
-            CountingSource source = new(null);
-            ExternalTranslationSnapshotFactory factory = CreateExternalFactory(source, contractFactory);
-            await Assert.ThrowsAsync<TranslationPackException>(() => factory.CreateSnapshotAsync(
-                catalog, "en-US", DefaultTextValueFormatter.Shared, default).AsTask());
-            Assert.Equal(0, source.Calls, "Invalid generated contract reached the external source.");
-        }
-
-        CompiledTranslationCatalog extras = new(
-            "app", "en", [new CompiledTranslationDefinition("Alpha", []), new CompiledTranslationDefinition("Extra", [], false)],
-            [new CompiledTranslationLocale("de", "en", [new(1, "extra")]), new CompiledTranslationLocale("en", null, [new(0, "alpha")])]);
-        CountingSource extraSource = new(null);
-        TranslationPackContract extraContract = new("app", "en", ExternalFingerprint,
-            [new TranslationPackMessageContract(new TranslationKey("app", 0, "Alpha")),
-             new TranslationPackMessageContract(new TranslationKey("app", 1, "Extra"))]);
-        await Assert.ThrowsAsync<TranslationPackException>(() => CreateExternalFactory(extraSource, _ => extraContract)
-            .CreateSnapshotAsync(extras, "en", DefaultTextValueFormatter.Shared, default).AsTask());
-        Assert.Equal(0, extraSource.Calls);
-    }
-
-    private static async Task ExternalFactoryManagerSafety()
-    {
-        CompiledTranslationCatalog catalog = CreateCatalog();
-        MutableSource source = new();
-        ExternalTranslationSnapshotFactory factory = CreateExternalFactory(source, locale => CreatePackContract(catalog, locale));
-        CompiledTranslationProvider provider = new(catalog, snapshotFactory: factory);
-        ITranslationSnapshot initial = await new CompiledTranslationProvider(catalog).GetSnapshotAsync("en");
-        TranslationManager manager = new(provider, initial);
-
-        source.Pack = new ExternalTranslationPack(Encoding.UTF8.GetBytes(
-            ExternalPackJson("de-DE", "\"alpha.greeting\":{\"pattern\":\"tampered\",\"arguments\":[]}")
-                .Replace(ExternalFingerprint, "sha256:1111111111111111111111111111111111111111111111111111111111111111", StringComparison.Ordinal)));
-        await Assert.ThrowsAsync<TranslationPackException>(() => manager.SetLocaleAsync("de-DE").AsTask());
-        Assert.Same(initial, manager.Current);
-
-        source.Pack = new ExternalTranslationPack(Encoding.UTF8.GetBytes(
-            ExternalPackJson("de-DE", "\"alpha.greeting\":{\"pattern\":\"verified\",\"arguments\":[]}")));
-        await manager.SetLocaleAsync("de-DE");
-        Assert.Equal("de-DE", manager.CurrentLocale);
-        Assert.Equal("verified", manager.Current.Get(Key(0, "alpha.greeting")));
-        Assert.Equal("Count {count}", manager.Current.Get(Key(1, "beta.count")));
-    }
-
-    private static async Task ExternalFactoryManagerCancellation()
-    {
-        CompiledTranslationCatalog catalog = CreateCatalog();
-        CancelingSource source = new();
-        ExternalTranslationSnapshotFactory factory = CreateExternalFactory(source, locale => CreatePackContract(catalog, locale));
-        CompiledTranslationProvider provider = new(catalog, snapshotFactory: factory);
-        ITranslationSnapshot initial = await new CompiledTranslationProvider(catalog).GetSnapshotAsync("en");
-        TranslationManager manager = new(provider, initial);
-        using CancellationTokenSource cancellation = new();
-        Task change = manager.SetLocaleAsync("de-DE", cancellation.Token).AsTask();
-        await source.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        cancellation.Cancel();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => change);
-        Assert.Same(initial, manager.Current);
-    }
-
     private static async Task CatalogWithOptions()
     {
         CompiledTranslationCatalog original = CreateCatalog();
@@ -747,136 +628,6 @@ internal static class RuntimeTests
         options.MissingKey = (MissingTranslationPolicy)999;
         Assert.Throws<ArgumentException>(() => original.WithOptions(options));
     }
-
-    private static async Task RefreshComposesNewExternalBytes()
-    {
-        CompiledTranslationCatalog catalog = CreateCatalog();
-        MutableSource source = new();
-        ExternalTranslationSnapshotFactory factory = CreateExternalFactory(source, locale => CreatePackContract(catalog, locale));
-        CompiledTranslationProvider provider = new(catalog, snapshotFactory: factory);
-        ITranslationSnapshot initial = await new CompiledTranslationProvider(catalog).GetSnapshotAsync("en-US");
-        TranslationManager manager = new(provider, initial);
-        int events = 0;
-        manager.LocaleChanged += (_, _) => events++;
-
-        Assert.Equal("Hello", manager.Current.Get(Key(0, "alpha.greeting")));
-        ITranslationSnapshot memoized = await provider.GetSnapshotAsync("en-US");
-        Assert.Same(memoized, await provider.GetSnapshotAsync("EN-US"), "The provider stopped memoizing successful snapshots.");
-
-        source.Pack = new ExternalTranslationPack(Encoding.UTF8.GetBytes(
-            ExternalPackJson("en-US", "\"alpha.greeting\":{\"pattern\":\"Refreshed hello\",\"arguments\":[]}")));
-        await manager.RefreshAsync();
-
-        Assert.Equal(0, events);
-        Assert.False(ReferenceEquals(initial, manager.Current), "Refresh reused the memoized pre-refresh snapshot.");
-        Assert.False(ReferenceEquals(memoized, manager.Current), "Refresh reused the memoized pre-refresh snapshot.");
-        Assert.Equal("Refreshed hello", manager.Current.Get(Key(0, "alpha.greeting")));
-        Assert.Equal("Total {count}", manager.Current.Get(Key(1, "beta.count")));
-        Assert.Equal("en-US", manager.CurrentLocale);
-        ITranslationSnapshot recomposed = await provider.GetSnapshotAsync("en-US");
-        Assert.Same(manager.Current, recomposed, "Refresh did not repopulate the provider cache.");
-    }
-
-    private static async Task RefreshRejectsTamperedPack()
-    {
-        CompiledTranslationCatalog catalog = CreateCatalog();
-        MutableSource source = new();
-        ExternalTranslationSnapshotFactory factory = CreateExternalFactory(source, locale => CreatePackContract(catalog, locale));
-        CompiledTranslationProvider provider = new(catalog, snapshotFactory: factory);
-        ITranslationSnapshot initial = await new CompiledTranslationProvider(catalog).GetSnapshotAsync("en-US");
-        TranslationManager manager = new(provider, initial);
-        int events = 0;
-        manager.LocaleChanged += (_, _) => events++;
-
-        source.Pack = new ExternalTranslationPack(Encoding.UTF8.GetBytes(
-            ExternalPackJson("en-US", "\"alpha.greeting\":{\"pattern\":\"Verified hello\",\"arguments\":[]}")));
-        await manager.RefreshAsync();
-        ITranslationSnapshot current = manager.Current;
-
-        source.Pack = new ExternalTranslationPack(Encoding.UTF8.GetBytes(
-            ExternalPackJson("en-US", "\"alpha.greeting\":{\"pattern\":\"tampered\",\"arguments\":[]}")
-                .Replace(ExternalFingerprint, "sha256:1111111111111111111111111111111111111111111111111111111111111111", StringComparison.Ordinal)));
-        TranslationPackException failure = await Assert.ThrowsAsync<TranslationPackException>(() => manager.RefreshAsync().AsTask());
-
-        Assert.Equal(TranslationPackFailureReason.ContractFingerprintMismatch, TranslationPackFailure.GetReason(failure));
-        Assert.Equal("RTR0023/contract-fingerprint-mismatch", TranslationPackFailure.GetRejectionId(failure));
-        Assert.Same(current, manager.Current);
-        Assert.Equal("Verified hello", manager.Current.Get(Key(0, "alpha.greeting")));
-        Assert.Equal(0, events);
-    }
-
-    private static async Task RefreshCoalescesConcurrentCallers()
-    {
-        CompiledTranslationCatalog catalog = CreateCatalog();
-        GatedSource source = new();
-        ExternalTranslationSnapshotFactory factory = CreateExternalFactory(source, locale => CreatePackContract(catalog, locale));
-        CompiledTranslationProvider provider = new(catalog, snapshotFactory: factory);
-        ITranslationSnapshot initial = await new CompiledTranslationProvider(catalog).GetSnapshotAsync("en-US");
-        TranslationManager manager = new(provider, initial);
-        int events = 0;
-        manager.LocaleChanged += (_, _) => events++;
-
-        source.Pack = new ExternalTranslationPack(Encoding.UTF8.GetBytes(
-            ExternalPackJson("en-US", "\"alpha.greeting\":{\"pattern\":\"Coalesced hello\",\"arguments\":[]}")));
-        Task first = manager.RefreshAsync().AsTask();
-        Task second = manager.RefreshAsync().AsTask();
-        Task third = manager.RefreshAsync().AsTask();
-        await source.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-
-        source.Release.TrySetResult(true);
-        await Task.WhenAll(first, second, third).WaitAsync(TimeSpan.FromSeconds(5));
-
-        Assert.Equal(1, source.Calls);
-        Assert.Equal("Coalesced hello", manager.Current.Get(Key(0, "alpha.greeting")));
-        Assert.Equal("en-US", manager.CurrentLocale);
-        Assert.Equal(0, events);
-    }
-
-    private static async Task RefreshRacesPendingSwitchDeterministically()
-    {
-        CompiledTranslationCatalog catalog = CreateCatalog();
-        GatedSource source = new();
-        ExternalTranslationSnapshotFactory factory = CreateExternalFactory(source, locale => CreatePackContract(catalog, locale));
-        CompiledTranslationProvider provider = new(catalog, snapshotFactory: factory);
-        ITranslationSnapshot initial = await new CompiledTranslationProvider(catalog).GetSnapshotAsync("en-US");
-        TranslationManager manager = new(provider, initial);
-        List<ITranslationSnapshot> published = [];
-        manager.LocaleChanged += (_, args) => published.Add(args.NewSnapshot);
-
-        source.Pack = new ExternalTranslationPack(Encoding.UTF8.GetBytes(
-            ExternalPackJson("de-DE", "\"alpha.greeting\":{\"pattern\":\"Switched hello\",\"arguments\":[]}")));
-        Task switchToDe = manager.SetLocaleAsync("de-DE").AsTask();
-        await source.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Task refresh = manager.RefreshAsync().AsTask();
-
-        source.Release.TrySetResult(true);
-        await Task.WhenAll(switchToDe, refresh).WaitAsync(TimeSpan.FromSeconds(5));
-
-        Assert.Equal(1, published.Count);
-        Assert.Equal("de-DE", manager.CurrentLocale);
-        Assert.Equal("Switched hello", published[0].Get(Key(0, "alpha.greeting")));
-        Assert.False(ReferenceEquals(published[0], manager.Current), "Refresh did not recompose the freshly activated locale.");
-        Assert.Equal(2, source.Calls);
-        Assert.Equal("Switched hello", manager.Current.Get(Key(0, "alpha.greeting")));
-    }
-
-    private const string ExternalFingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-
-    private static ExternalTranslationSnapshotFactory CreateExternalFactory(
-        IExternalTranslationSource source, Func<string, TranslationPackContract> contractFactory) =>
-        new(source, "app", ExternalFingerprint, contractFactory);
-
-    private static TranslationPackContract CreatePackContract(CompiledTranslationCatalog catalog, string locale) => new(
-        "app", locale, ExternalFingerprint,
-        [
-            new TranslationPackMessageContract(new TranslationKey("app", 0, "alpha.greeting")),
-            new TranslationPackMessageContract(new TranslationKey("app", 1, "beta.count"),
-                [new TranslationPackArgumentContract("count", TextArgumentType.Int, TextArgumentFormat.Grouped)]),
-        ]);
-
-    private static string ExternalPackJson(string locale, string messages) =>
-        "{\"artifactVersion\":1,\"messageGrammarVersion\":1,\"catalog\":\"app\",\"locale\":\"" + locale +
-        "\",\"contractFingerprint\":\"" + ExternalFingerprint + "\",\"messages\":{" + messages + "}}";
 
     private static TranslationKey Key(int id, string name) => new("app", id, name);
 
@@ -1109,53 +860,4 @@ internal static class RuntimeTests
         internal void ReleaseFirst() => _firstRelease.TrySetResult(true);
     }
 
-    private sealed class CountingSource : IExternalTranslationSource
-    {
-        private readonly ExternalTranslationPack? _pack;
-        internal CountingSource(ExternalTranslationPack? pack) => _pack = pack;
-        internal int Calls;
-        public ValueTask<ExternalTranslationPack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            Interlocked.Increment(ref Calls);
-            return ValueTask.FromResult(_pack);
-        }
-    }
-
-    private sealed class MutableSource : IExternalTranslationSource
-    {
-        internal ExternalTranslationPack? Pack;
-        public ValueTask<ExternalTranslationPack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return ValueTask.FromResult(Pack);
-        }
-    }
-
-    private sealed class CancelingSource : IExternalTranslationSource
-    {
-        internal TaskCompletionSource<bool> Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public async ValueTask<ExternalTranslationPack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken)
-        {
-            Started.TrySetResult(true);
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
-            return null;
-        }
-    }
-
-    private sealed class GatedSource : IExternalTranslationSource
-    {
-        internal ExternalTranslationPack? Pack;
-        internal TaskCompletionSource<bool> Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal TaskCompletionSource<bool> Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal int Calls;
-
-        public async ValueTask<ExternalTranslationPack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken)
-        {
-            Interlocked.Increment(ref Calls);
-            Started.TrySetResult(true);
-            await Release.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-            return Pack;
-        }
-    }
 }

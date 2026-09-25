@@ -41,8 +41,8 @@ internal sealed class Rmf2ProjectMarkupV5
         }
         Contracts = new ReadOnlyDictionary<string, Rmf2MarkupContractV5>(contracts);
         // The v1 schema uses string defaults even for numeric/boolean options.
-        // Validate JSON shapes here; the shared v4 reader intentionally retains
-        // its historical coercions and output bytes.
+        // Validate JSON shapes here while preserving the project's compatibility
+        // bytes; the canonical v5 path uses the typed values above.
         if (config.Property("markup")?.Value.Property("contracts")?.Value is { Kind: JsonKind.Array } declarations)
             foreach (var declaration in declarations.Items.Where(item => item.Kind == JsonKind.Object))
             {

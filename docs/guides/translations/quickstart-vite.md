@@ -24,8 +24,8 @@ translations/
 ```
 
 Declare the catalog, C# names, and base locale once in `translations/runic.json`.
-Set `sourceLayout` to `"rmf2-v1"`; locale tags come from the RMF2 filenames.
-Group messages directly, for example:
+Locale tags come from the RMF2 filenames; grouped `.rmf2` resources are
+recognized directly. Group messages, for example:
 
 ```rmf2
 application {

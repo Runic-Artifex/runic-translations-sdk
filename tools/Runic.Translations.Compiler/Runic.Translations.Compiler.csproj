@@ -15,8 +15,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Generation/Rmf2InlineRuntime.js" />
-    <EmbeddedResource Include="Generation/Rmf2InlineRuntime.d.ts" />
     <EmbeddedResource Include="Generation/Rmf2EsmRuntimeV5.js" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />

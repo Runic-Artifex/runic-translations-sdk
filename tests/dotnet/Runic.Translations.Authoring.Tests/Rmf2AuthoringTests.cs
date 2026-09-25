@@ -22,10 +22,11 @@ internal static class Rmf2AuthoringTests
         runner.Add("RMF2 local rename changes semantic references without touching literal text", LocalRename);
         runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
         runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
-        runner.Add("RMF2 execution-v2 locale plans preserve mounted projects and commit atomically", ExecutionV2Locales);
+        runner.Add("RMF2 locale plans preserve mounted projects and commit atomically", ExecutionV2Locales);
+        runner.Add("Direct MF2 workspaces expose semantic authoring and filename transactions", DirectSources);
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
-    private static TranslationSource Project(string layout = "rmf2-v1") => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"sourceLayout\":\"" + layout + "\"}");
+    private static TranslationSource Project() => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}");
     private static void SyntaxCache()
     {
         var cache = new Rmf2WorkspaceCache(1);
@@ -37,6 +38,70 @@ internal static class Rmf2AuthoringTests
         cache.Create(Path.GetTempPath(), Project(), [Source("de.rmf2", "x = Zwei\n")]);
         Assert.True(!ReferenceEquals(changed, cache.Create(Path.GetTempPath(), Project(), [Source("en.rmf2", "x = Two\n")]).Documents[0]), "Syntax cache exceeded its capacity.");
     }
+    private static void DirectSources()
+    {
+        const string english = ".input {$name :string}\n{{Hello {$name}}}\n";
+        const string german = ".input {$name :string}\n{{Hallo {$name}}}\n";
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [
+            Source("en/hello.mf2", english),
+            Source("de/hello.mf2", german),
+        ]);
+        Assert.Equal(2, workspace.Documents.Count);
+        Assert.Equal("en", workspace.Locale("en/hello.mf2"));
+        Assert.Equal("hello", string.Join('.', workspace.LogicalPath("en/hello.mf2", workspace.Documents.Single(document => document.Source.Path == "en/hello.mf2").Nodes.Single())));
+        TranslationWorkspaceTransactionPlan input = workspace.RenameInput("en/hello.mf2", "hello", "name", "person");
+        Assert.Equal(2, input.Edits.Count);
+        Assert.True(input.IsValid && input.Edits.All(edit => Encoding.UTF8.GetString(edit.GetUtf8Bytes()!).Contains("$person", StringComparison.Ordinal)),
+            "Direct input rename did not cover each locale.");
+
+        TranslationWorkspaceTransactionPlan renamed = workspace.Rename(["hello"], "greeting");
+        Assert.True(renamed.IsValid, "Direct filename rename did not validate.");
+        Assert.True(renamed.Edits.Any(edit => edit.RelativePath == "en/hello.mf2" && edit.Kind == TranslationWorkspaceEditKind.Delete) &&
+            renamed.Edits.Any(edit => edit.RelativePath == "de/greeting.mf2" && edit.Kind == TranslationWorkspaceEditKind.Create),
+            "Direct filename rename did not create and delete every locale path.");
+
+        TranslationWorkspaceTransactionPlan created = workspace.CreateResource("en/hello.mf2", ["new_message"], "New message\n");
+        Assert.True(created.IsValid && created.Edits.Select(edit => edit.RelativePath).Order(StringComparer.Ordinal)
+            .SequenceEqual(["de/new_message.mf2", "en/new_message.mf2"]), "Direct message creation did not cover every locale.");
+        Assert.True(workspace.Format("en/hello.mf2").IsValid, "Direct formatting validation failed.");
+
+        const string mountedConfig = "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}";
+        var mounted = new Rmf2Workspace(Path.GetTempPath(), Source("translations/runic.json", mountedConfig), [
+            Source("feature/en/greeting.mf2", english),
+            Source("feature/de/greeting.mf2", german),
+        ]);
+        Rmf2ResourceNode mountedEnglish = mounted.Documents.Single(document => document.Source.Path == "feature/en/greeting.mf2").Nodes.Single();
+        Assert.Equal("shop.greeting", string.Join('.', mounted.LogicalPath("feature/en/greeting.mf2", mountedEnglish)));
+        Assert.Equal("greeting", string.Join('.', mounted.LocalPath("feature/en/greeting.mf2", ["shop", "greeting"])));
+
+        TranslationWorkspaceTransactionPlan mountedCreated = mounted.CreateResource(
+            "feature/en/greeting.mf2", ["shop", "new_message"], "New message\n");
+        Assert.True(mountedCreated.IsValid && mountedCreated.Edits.Select(edit => edit.RelativePath).Order(StringComparer.Ordinal)
+            .SequenceEqual(["feature/de/new_message.mf2", "feature/en/new_message.mf2"]),
+            "Mounted direct creation lost the source-root namespace or locale directories.");
+
+        TranslationWorkspaceTransactionPlan mountedRenamed = mounted.MutateResource(
+            ["shop", "greeting"], ["shop", "salutation"]);
+        Assert.True(mountedRenamed.IsValid && mountedRenamed.Edits.Any(edit =>
+            edit.RelativePath == "feature/de/salutation.mf2" && edit.Kind == TranslationWorkspaceEditKind.Create),
+            "Mounted direct mutation did not preserve the source-root namespace.");
+        Assert.Throws<TranslationAuthoringException>(() => mounted.MutateResource(
+            ["shop", "greeting"], ["account", "salutation"]), "namespace");
+
+        const string overlappingConfig = "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"sourceRoots\":[{\"path\":\"../a-broad\",\"namespace\":[\"shop\"]},{\"path\":\"../z-specific\",\"namespace\":[\"shop\",\"sale\"]}]}";
+        var overlapping = new Rmf2Workspace(Path.GetTempPath(), Source("translations/runic.json", overlappingConfig), [
+            Source("a-broad/en/title.mf2", "Broad\n"),
+            Source("z-specific/en/title.mf2", "Specific\n"),
+        ]);
+        string selected = overlapping.Documents.Select(document => document.Source.Path).Order(StringComparer.Ordinal).First(path => {
+            try { overlapping.LocalPath(path, ["shop", "sale", "new_message"]); return true; }
+            catch (TranslationAuthoringException) { return false; }
+        });
+        Assert.Equal("z-specific/en/title.mf2", selected);
+        Assert.True(overlapping.CreateResource(selected, ["shop", "sale", "new_message"], "New message\n").Edits
+            .Single().RelativePath == "z-specific/en/new_message.mf2",
+            "Direct creation selected a broader namespace mount instead of the exact source-root namespace.");
+    }
     private static void Locales()
     {
         var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [Source("shop/en.rmf2", "title = Shop\n")]);
@@ -45,7 +110,7 @@ internal static class Rmf2AuthoringTests
         var config = new TranslationSource("runic.json", add.Edits.Single(edit => edit.RelativePath == "runic.json").GetUtf8Bytes()!);
         var sources = new[] { Source("shop/en.rmf2", "title = Shop\n"), new TranslationSource("shop/de.rmf2", add.Edits.Single(edit => edit.RelativePath == "shop/de.rmf2").GetUtf8Bytes()!) };
         var updated = new Rmf2Workspace(Path.GetTempPath(), config, sources);
-        Assert.True(updated.SetFallback("de", "en").Compilation.Success, "Valid fallback rejected.");
+        Assert.True(updated.SetFallback("de", "en").IsValid, "Valid fallback rejected.");
         Assert.True(updated.RemoveLocale("de").Edits.Any(edit => edit.RelativePath == "shop/de.rmf2" && edit.Kind == TranslationWorkspaceEditKind.Delete), "Locale removal missed a physical file.");
         Assert.Throws<TranslationAuthoringException>(() => updated.RemoveLocale("en"), "fallback");
         Assert.Throws<TranslationAuthoringException>(() => updated.SetFallback("de", "de"), "fallback");
@@ -55,10 +120,10 @@ internal static class Rmf2AuthoringTests
         string config = Encoding.UTF8.GetString(Project().GetUtf8Bytes()).TrimEnd('}') + ",\"markup\":{\"slots\":{\"shop_payment\":{\"retry\":{\"min\":0,\"max\":1}}}}}";
         const string message = "shop {\n  payment =\n    .input {$state :string}\n    .match $state\n    yes {{{#action ref=retry}Retry{/action}}}\n    * {{Ready}}\n}\n";
         var workspace = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", config), [Source("en.rmf2", message)]);
-        Assert.True(workspace.RenameSlot("en.rmf2", "shop_payment", "retry", "again").Compilation.Success, "Slot rename lost its conditional bounds.");
-        Assert.True(workspace.Rename(["shop"], "cart").Compilation.Success, "Group rename lost a conditional slot contract.");
-        Assert.True(workspace.MutateResource(["shop", "payment"], ["checkout"], true).Compilation.Success, "Duplicate lost a conditional slot contract.");
-        Assert.True(workspace.MutateResource(["shop", "payment"], ["checkout"]).Compilation.Success, "Move lost a conditional slot contract.");
+        Assert.True(workspace.RenameSlot("en.rmf2", "shop_payment", "retry", "again").IsValid, "Slot rename lost its conditional bounds.");
+        Assert.True(workspace.Rename(["shop"], "cart").IsValid, "Group rename lost a conditional slot contract.");
+        Assert.True(workspace.MutateResource(["shop", "payment"], ["checkout"], true).IsValid, "Duplicate lost a conditional slot contract.");
+        Assert.True(workspace.MutateResource(["shop", "payment"], ["checkout"]).IsValid, "Move lost a conditional slot contract.");
     }
     private static void InputRename()
     {
@@ -83,10 +148,10 @@ internal static class Rmf2AuthoringTests
             Assert.Equal("Greeting", added.Comments[0]);
             Assert.Equal("param $name - Person", added.Properties[0]);
             Assert.Equal(duplicate, document.Nodes.Any(n => n.Key == "shop_title"));
-            Assert.True(plan.Compilation.Success, "Message move or duplicate failed validation.");
+            Assert.True(plan.IsValid, "Message move or duplicate failed validation.");
         }
-        Assert.True(workspace.MutateResource(["shop", "title"], null).Compilation.Success, "Message deletion failed.");
-        Assert.True(workspace.CreateResource("en.rmf2", ["new", "message"], "New").Compilation.Success, "Message creation failed.");
+        Assert.True(workspace.MutateResource(["shop", "title"], null).IsValid, "Message deletion failed.");
+        Assert.True(workspace.CreateResource("en.rmf2", ["new", "message"], "New").IsValid, "Message creation failed.");
 
         var localized = new Rmf2Workspace(Path.GetTempPath(), Project(), [
             Source("en.rmf2", "existing = English\n"),
@@ -94,7 +159,7 @@ internal static class Rmf2AuthoringTests
         ]);
         TranslationWorkspaceTransactionPlan created = localized.CreateResource("en.rmf2", ["new", "message"], "New");
         Assert.Equal(2, created.Edits.Count);
-        Assert.True(created.Compilation.Success, "RMF2 message creation did not update every locale.");
+        Assert.True(created.IsValid, "RMF2 message creation did not update every locale.");
         Assert.True(created.Edits.All(edit => Encoding.UTF8.GetString(edit.GetUtf8Bytes()!).Contains("new {", StringComparison.Ordinal)),
             "RMF2 message creation missed a locale document.");
     }
@@ -106,7 +171,7 @@ internal static class Rmf2AuthoringTests
         Assert.Equal(1, plan.Edits.Count);
         Assert.Equal("runic.json", plan.Edits[0].RelativePath);
         Assert.Equal(config.Replace("\"shop\"", "\"store\"", StringComparison.Ordinal), Encoding.UTF8.GetString(plan.Edits[0].GetUtf8Bytes()!));
-        Assert.True(plan.Compilation.Success, "Mounted namespace rename failed validation.");
+        Assert.True(plan.IsValid, "Mounted namespace rename failed validation.");
         var directory = workspace.Rename(["shop", "cart"], "basket");
         Assert.True(directory.Edits.Any(e => e.RelativePath == "base/basket/en.rmf2") && directory.Edits.Any(e => e.RelativePath == "localized/basket/de.rmf2"), "Mounted directory rename moved the wrong roots.");
     }
@@ -163,7 +228,7 @@ internal static class Rmf2AuthoringTests
             File.WriteAllBytes(Path.Combine(root, "runic.json"), project.GetUtf8Bytes()); File.WriteAllBytes(Path.Combine(root, "en.rmf2"), source.GetUtf8Bytes());
             var workspace = new Rmf2Workspace(root, project, [source]);
             var rename = workspace.Rename(["shop", "title"], "label");
-            Assert.True(rename.Compilation.Success && Encoding.UTF8.GetString(rename.Edits[0].GetUtf8Bytes()!).Contains("# Keep this", StringComparison.Ordinal), "Rename lost metadata.");
+            Assert.True(rename.IsValid && Encoding.UTF8.GetString(rename.Edits[0].GetUtf8Bytes()!).Contains("# Keep this", StringComparison.Ordinal), "Rename lost metadata.");
             string revision = workspace.Revision("en.rmf2"); workspace.Update("en.rmf2", source.GetUtf8Bytes(), revision);
             Assert.Throws<TranslationAuthoringException>(() => workspace.Update("en.rmf2", [], "stale"), "revision");
             var extract = workspace.Extract("en.rmf2", ["shop"]); TranslationWorkspaceTransaction.Commit(extract);
@@ -171,7 +236,7 @@ internal static class Rmf2AuthoringTests
             Assert.True(File.Exists(Path.Combine(root, "shop/en.rmf2")), "Extract did not create feature source.");
             var split = new Rmf2Workspace(root, project, [new TranslationSource("en.rmf2", File.ReadAllBytes(Path.Combine(root, "en.rmf2"))), new TranslationSource("shop/en.rmf2", File.ReadAllBytes(Path.Combine(root, "shop/en.rmf2")))]);
             var inline = split.Inline("shop/en.rmf2", "en.rmf2"); TranslationWorkspaceTransaction.Commit(inline);
-            Assert.Equal(workspace.Validate().Catalogs[0].Fingerprint, inline.Compilation.Catalogs[0].Fingerprint);
+            Assert.True(inline.IsValid, "Inline plan did not validate.");
             Assert.True(File.ReadAllText(Path.Combine(root, "en.rmf2")).Contains("# Keep this", StringComparison.Ordinal), "Inline lost comment.");
         }
         finally { Directory.Delete(root, true); }
@@ -182,8 +247,7 @@ internal static class Rmf2AuthoringTests
         Assert.True(planType.GetNestedType("ValidationReceipt", System.Reflection.BindingFlags.NonPublic)?.IsNestedPrivate == true,
             "The selected-profile validation receipt is not private to the transaction plan.");
         Assert.True(planType.GetConstructors(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-            .All(constructor => constructor.GetParameters()[^1].ParameterType == typeof(TranslationCompilation) ||
-                constructor.GetParameters()[^1].ParameterType.Name == "TranslationProfileCompilation"),
+            .All(constructor => constructor.GetParameters()[^1].ParameterType.Name == "Rmf2ProjectCompilationV5"),
             "A transaction-plan constructor accepts a detached validation receipt.");
         string root = Path.Combine(Path.GetTempPath(), "runic-rmf2-v2-authoring-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "translations"));
@@ -197,8 +261,6 @@ internal static class Rmf2AuthoringTests
                   "catalog": "app",
                   "code": { "namespace": "Example", "className": "AppText" },
                   "baseLocale": "en",
-                  "sourceLayout": "rmf2-v1",
-                  "executionProfile": "rmf2-execution-v2",
                   "sourceRoots": [
                     { "path": "../base", "namespace": [] },
                     { "path": "../feature", "namespace": ["shop"] }
@@ -244,16 +306,10 @@ internal static class Rmf2AuthoringTests
             JsonObject Config() => JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "translations/runic.json")))!.AsObject();
 
             Dictionary<string, byte[]> beforeAdd = Snapshot();
-            TranslationCompilation v4Boundary = Open().Validate();
-            Assert.True(!v4Boundary.Success && v4Boundary.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0065"),
-                "Public Validate() no longer exposes the explicit v4 boundary.");
             TranslationWorkspaceTransactionPlan add = Open().AddLocale("it", fallback: "de", copyFrom: "en");
             Assert.Equal("app", add.CatalogId);
-            Assert.Throws<InvalidOperationException>(() => _ = add.Compilation, "unavailable");
+            Assert.True(add.IsValid, "The RMF2 transaction did not validate.");
             AssertSnapshot(beforeAdd, Snapshot(), "Execution-v2 locale planning changed disk before commit");
-            var invalidGuard = new TranslationWorkspaceTransactionPlan(root, add.CatalogId, add.Edits, v4Boundary);
-            Assert.Throws<TranslationAuthoringException>(() => TranslationWorkspaceTransaction.Commit(invalidGuard), "compiler-invalid");
-            AssertSnapshot(beforeAdd, Snapshot(), "Invalid validation receipt changed disk");
 
             try { TranslationWorkspaceTransaction.CommitForTesting(add, 1); }
             catch (Exception) { }
@@ -276,7 +332,6 @@ internal static class Rmf2AuthoringTests
             AssertSnapshot(beforeFallback, Snapshot(), "Execution-v2 fallback planning changed disk before commit");
             TranslationWorkspaceTransaction.Commit(fallback);
             JsonObject configured = Config();
-            Assert.Equal("rmf2-execution-v2", configured["executionProfile"]!.GetValue<string>());
             Assert.Equal(2, configured["sourceRoots"]!.AsArray().Count, "Locale mutation lost mounted source roots.");
             Assert.Equal("en", configured["locales"]!.AsArray().Select(node => node!.AsObject()).Single(locale => locale["tag"]!.GetValue<string>() == "fr")["fallback"]!.GetValue<string>());
 
@@ -289,7 +344,6 @@ internal static class Rmf2AuthoringTests
             JsonObject[] locales = configured["locales"]!.AsArray().Select(node => node!.AsObject()).ToArray();
             Assert.True(locales.All(locale => locale["tag"]!.GetValue<string>() != "de"), "Removed locale remained declared.");
             Assert.Equal("en", locales.Single(locale => locale["tag"]!.GetValue<string>() == "it")["fallback"]!.GetValue<string>(), "Dependent fallback was not redirected.");
-            Assert.Equal("rmf2-execution-v2", configured["executionProfile"]!.GetValue<string>());
             Assert.True(TranslationWorkspaceTransaction.GetPending(root) is null, "Successful execution-v2 removal retained a transaction journal.");
         }
         finally { Directory.Delete(root, true); }

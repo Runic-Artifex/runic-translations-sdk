@@ -70,13 +70,17 @@ export function buildRows(
   const mf2Manifest = snapshot.documents.find((document) => document.isManifest && document.path.endsWith("runic.json"));
   return [...keys].sort().map((key) => {
     const source = sourceEntries.get(key);
+    const sourceDocument = documentsByLocale.get(snapshot.catalog!.defaultLocale)?.get(key);
+    const existingDocument = sourceDocument ?? snapshot.catalog!.locales
+      .map((locale) => documentsByLocale.get(locale.tag)?.get(key))
+      .find((document) => document !== undefined);
     const cells: Record<string, TranslationCell> = {};
     for (const locale of snapshot.catalog!.locales) {
       const entry = entriesByLocale.get(locale.tag)?.get(key);
       cells[locale.tag] = {
         document: documentsByLocale.get(locale.tag)?.get(key) ??
           (mf2Manifest !== undefined
-            ? missingMessageDocument(mf2Manifest, locale.tag, key, primaryDocument(byLocale.get(locale.tag) ?? []), documentsByLocale.get(snapshot.catalog!.defaultLocale)?.get(key), byLocale.get(locale.tag) ?? [])
+            ? missingMessageDocument(mf2Manifest, locale.tag, key, existingDocument, sourceDocument, byLocale.get(locale.tag) ?? [])
             : primaryDocument(byLocale.get(locale.tag) ?? [])),
         entry,
         inheritedFrom: entry === undefined ? fallbackWithValue(snapshot, entriesByLocale, locale.tag, key) : undefined,
@@ -103,15 +107,20 @@ function missingMessageDocument(
   if (manifest === undefined) return undefined;
   const separator = manifest.path.lastIndexOf("/");
   const directory = separator < 0 ? "" : manifest.path.slice(0, separator + 1);
-  let rmf2 = false;
-  try { rmf2 = JSON.parse(manifest.content).sourceLayout === "rmf2-v1"; } catch { /* Invalid manifest is diagnosed by the compiler. */ }
-  const rmf2Path = source?.path.endsWith(".rmf2") ? `${source.path.slice(0, source.path.lastIndexOf("/") + 1)}${locale}.rmf2` : `${directory}${locale}.rmf2`;
+  const template = source ?? existing;
+  const templateIsRmf2 = template?.path.toLowerCase().endsWith(".rmf2") === true;
+  const rmf2 = templateIsRmf2 || localeDocuments.some(document => document.path.toLowerCase().endsWith(".rmf2"));
+  const rmf2Path = templateIsRmf2 ? `${template.path.slice(0, template.path.lastIndexOf("/") + 1)}${locale}.rmf2` : `${directory}${locale}.rmf2`;
   if (rmf2) {
-    const target = localeDocuments.find(document => document.path === rmf2Path);
+    const normalizedRmf2Path = rmf2Path.toLowerCase();
+    const target = localeDocuments.find(document => document.path.toLowerCase() === normalizedRmf2Path);
     if (target !== undefined) return target;
   }
+  const directPath = template?.path.toLowerCase().endsWith(".mf2") === true
+    ? directLocalePath(template.path, locale)
+    : undefined;
   return {
-    path: rmf2 ? rmf2Path : `${directory}${locale}/${key}.mf2`,
+    path: rmf2 ? rmf2Path : directPath ?? `${directory}${locale}/${key}.mf2`,
     content: "",
     revision: newMf2DocumentRevision,
     isManifest: false,
@@ -155,8 +164,19 @@ function flattenDocument(content: string, path: string, entries?: EditorMessageE
     structured: /^\s*\.(?:input|local|match)\b/m.test(entry.content) || entry.content.includes("{#"),
   }));
   if (!path.toLowerCase().endsWith(".mf2")) return [];
-  const key = path.slice(path.lastIndexOf("/") + 1, -".mf2".length);
+  const key = entries?.length === 1
+    ? entries[0].key
+    : path.slice(path.lastIndexOf("/") + 1, -".mf2".length);
   return [{ key, value: content, tags: [], structured: /^\s*\.(?:input|local|match)\b/m.test(content) || content.includes("{#") }];
+}
+
+function directLocalePath(path: string, locale: string): string | undefined {
+  const filenameSeparator = path.lastIndexOf("/");
+  if (filenameSeparator < 0) return undefined;
+  const localeDirectory = path.slice(0, filenameSeparator);
+  const localeSeparator = localeDirectory.lastIndexOf("/");
+  const sourceRoot = localeSeparator < 0 ? "" : localeDirectory.slice(0, localeSeparator + 1);
+  return `${sourceRoot}${locale}/${path.slice(filenameSeparator + 1)}`;
 }
 
 function primaryDocument(documents: EditorDocument[]): EditorDocument | undefined {

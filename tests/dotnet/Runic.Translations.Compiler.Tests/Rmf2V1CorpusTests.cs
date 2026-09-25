@@ -29,9 +29,6 @@ internal static class Rmf2V1CorpusTests
         JsonElement contracts = index.RootElement.GetProperty("contracts");
         Assert.Equal(1, index.RootElement.GetProperty("corpusVersion").GetInt32());
         Assert.Equal("runic-rmf2-v1-conformance", index.RootElement.GetProperty("identity").GetString());
-        using JsonDocument manifestContract = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(Root, "runic.json")));
-        Assert.Equal(contracts.GetProperty("sourceSyntax").GetString(), manifestContract.RootElement.GetProperty("sourceLayout").GetString());
-        Assert.Equal(contracts.GetProperty("executionProfile").GetString(), manifestContract.RootElement.GetProperty("executionProfile").GetString());
         Assert.Equal("rmf2-execution-v2", Rmf2ProjectV5.Profile);
         Assert.Equal(contracts.GetProperty("messageAstVersion").GetInt32(), Rmf2ProjectV5.MessageGrammarVersion);
         Assert.Equal(contracts.GetProperty("localeArtifactVersion").GetInt32(), Rmf2LocaleArtifactV5.ArtifactVersion);
@@ -152,7 +149,7 @@ internal static class Rmf2V1CorpusTests
             string config = layout.TryGetProperty("mountPath", out JsonElement mount)
                 ? ",\"sourceRoots\":[{\"path\":" + JsonSerializer.Serialize(mount.GetString()) + ",\"namespace\":" + layout.GetProperty("namespace").GetRawText() + "}]"
                 : string.Empty;
-            string manifest = "{\"schemaVersion\":1,\"catalog\":\"layout\",\"code\":{\"namespace\":\"Corpus\",\"className\":\"LayoutText\"},\"baseLocale\":\"en\",\"locales\":[\"en\"],\"sourceLayout\":\"rmf2-v1\"" + config + "}";
+            string manifest = "{\"schemaVersion\":1,\"catalog\":\"layout\",\"code\":{\"namespace\":\"Corpus\",\"className\":\"LayoutText\"},\"baseLocale\":\"en\",\"locales\":[\"en\"]" + config + "}";
             TranslationSource project = new("translations/runic.json", Encoding.UTF8.GetBytes(manifest));
             string text = File.ReadAllText(Path.Combine(Root, layout.GetProperty("source").GetString()!));
             if (layout.TryGetProperty("newline", out JsonElement newline) && newline.GetString() == "crlf")
@@ -461,10 +458,10 @@ internal static class Rmf2V1CorpusTests
         const missingMarkupOption=structuredClone(raw);const markupWithOptions=missingMarkupOption.messages.core_rich.ast.variants[0].nodes.find(item=>item.kind==="markup"&&item.options.length);delete markupWithOptions.options[0].value;reject(missingMarkupOption,"argument-contract-mismatch","missing-markup-option-member");
         const missingMarkupAnnotation=structuredClone(raw);missingMarkupAnnotation.messages.core_rich.ast.variants[0].nodes.find(item=>item.kind==="markup").annotations.push({value:{kind:"string-literal",value:"x"}});reject(missingMarkupAnnotation,"argument-contract-mismatch","missing-markup-annotation-member");
         const missingMarkupNodeMember=structuredClone(raw);delete missingMarkupNodeMember.messages.core_rich.ast.variants[0].nodes.find(item=>item.kind==="markup").annotations;reject(missingMarkupNodeMember,"argument-contract-mismatch","missing-markup-node-member");
-        const undefinedFunction=structuredClone(raw);undefinedFunction.messages.core_total.ast.declarations.map(item=>item.expression).find(item=>item.function===undefined).function=undefined;reject(undefinedFunction,"malformed-pattern","own-undefined-function");
-        const undefinedAnnotation=structuredClone(raw);undefinedAnnotation.messages.core_rich.ast.variants[0].nodes.find(item=>item.kind==="markup").annotations.push({name:"future",value:undefined});reject(undefinedAnnotation,"argument-contract-mismatch","own-undefined-annotation-value");
-        const undefinedCanonical=structuredClone(raw);undefinedCanonical.messages.core_rank.ast.variants.flatMap(item=>item.keys).find(item=>item.kind==="literal"&&!Object.hasOwn(item,"canonical")).canonical=undefined;reject(undefinedCanonical,"malformed-pattern","own-undefined-key-canonical");
-        let reads=0;const stable=raw.messages.core_direct;const changed=structuredClone(stable);changed.ast.variants[0].nodes=[{kind:"text",value:"changed"}];const wrapper={contentLocale:stable.contentLocale};Object.defineProperty(wrapper,"ast",{enumerable:true,get(){return ++reads===1?stable.ast:changed.ast;}});raw.messages.core_direct=wrapper;const getter=decodeLocaleArtifact(raw);if(!getter.ok||reads!==1||formatDynamicMessage(getter.value,"core_direct",Object.create(null))!=="English")throw new Error("single-read-getter");
+        const undefinedFunction=structuredClone(raw);undefinedFunction.messages.core_total.ast.declarations.map(item=>item.expression).find(item=>item.function===undefined).function=undefined;reject(undefinedFunction,"malformed","own-undefined-function");
+        const undefinedAnnotation=structuredClone(raw);undefinedAnnotation.messages.core_rich.ast.variants[0].nodes.find(item=>item.kind==="markup").annotations.push({name:"future",value:undefined});reject(undefinedAnnotation,"malformed","own-undefined-annotation-value");
+        const undefinedCanonical=structuredClone(raw);undefinedCanonical.messages.core_rank.ast.variants.flatMap(item=>item.keys).find(item=>item.kind==="literal"&&!Object.hasOwn(item,"canonical")).canonical=undefined;reject(undefinedCanonical,"malformed","own-undefined-key-canonical");
+        let reads=0;const stable=raw.messages.core_direct;const wrapper={contentLocale:stable.contentLocale};Object.defineProperty(wrapper,"ast",{enumerable:true,get(){reads++;return stable.ast;}});raw.messages.core_direct=wrapper;const getter=decodeLocaleArtifact(raw);if(getter.ok||getter.reason!=="RTR0023/malformed"||reads!==0)throw new Error("accessor-boundary");
         """;
 
     private const string EsmInvalidScript = """

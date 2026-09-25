@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations\Runic.Translations.csproj" />
     <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" />
+    <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations.Tooling\Runic.Translations.Tooling.csproj" />
     <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations.Generator\Runic.Translations.Generator.csproj"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>

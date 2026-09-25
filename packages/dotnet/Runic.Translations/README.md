@@ -36,10 +36,10 @@ Choose `Runic.Translations` for application runtime behavior: generated catalog 
 
 External packs are untrusted until their artifact version, catalog, locale, contract fingerprint, keys, argument contracts, and limits have been verified. Applications that require authenticity must also supply an integrity verifier; schema validation alone does not establish provenance.
 
-Generated RMF2 execution-v2 catalogs use explicit v5 pack factories and strict
-version/profile dispatch. A matching fingerprint demonstrates generated-contract
-compatibility; it is not a signature or authenticity proof. Projects that omit
-the explicit execution profile retain v4 generation and loading.
+Generated RMF2 catalogs use v5 pack factories and strict version/profile
+dispatch. A matching fingerprint demonstrates generated-contract compatibility;
+it is not a signature or authenticity proof. Unsupported artifact, grammar,
+profile, and ABI versions fail explicitly.
 
 ## Compatibility and status
 

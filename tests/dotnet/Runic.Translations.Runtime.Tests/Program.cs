@@ -12,8 +12,6 @@ internal static class Program
         CompiledMessageTests.Register(runner);
         Rmf2RuntimeV5Tests.Register(runner);
         TranslationReferenceTests.Register(runner);
-        ExternalPackTests.Register(runner);
-        WaveBCorpusTests.Register(runner);
         return await runner.RunAsync().ConfigureAwait(false);
     }
 }

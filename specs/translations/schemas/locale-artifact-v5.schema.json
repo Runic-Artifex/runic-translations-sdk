@@ -61,7 +61,142 @@
       }
     },
     "markupContract": {
-      "$ref": "locale-artifact-v4.schema.json#/properties/markupContract"
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "contracts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "paired",
+                  "standalone"
+                ]
+              },
+              "interactive": {
+                "type": "boolean"
+              },
+              "plainText": {
+                "enum": [
+                  "children",
+                  "lineBreak",
+                  "alternateText",
+                  "explicit",
+                  "omit"
+                ]
+              },
+              "options": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "enum"
+                      ]
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "default": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "literalOnly": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "values",
+                    "default",
+                    "literalOnly"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "kind",
+              "interactive",
+              "plainText",
+              "options"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "messages": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "slots": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "runic:link",
+                        "runic:action",
+                        "runic:icon"
+                      ]
+                    },
+                    "min": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "max": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4096
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "min",
+                    "max"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "structured": {
+                "type": "boolean"
+              },
+              "contentLocales": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "slots",
+              "structured",
+              "contentLocales"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "version",
+        "contracts",
+        "messages"
+      ],
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

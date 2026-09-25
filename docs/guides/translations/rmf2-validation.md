@@ -2,13 +2,12 @@
 
 The maintained payment fixture is `specs/translations/examples/rmf2`. Compiler,
 external-pack and generated .NET/ESM checks exercise its contracts, conditional
-slots and locale variants. Projects that omit `executionProfile` retain the
-bounded `rmf2-execution-v1` profile; explicit `rmf2-execution-v2` projects use
-the typed v5 path. Neither profile promises every Unicode function or draft
+slots and locale variants. Projects use the bounded typed
+`rmf2-execution-v2` path. It does not promise every Unicode function or draft
 feature merely because its syntax is accepted.
 
 The version-explicit [`rmf2-v1` corpus](../../../specs/translations/corpus/rmf2-v1/README.md)
-is the common release oracle for the explicit v2 profile. It supplies the same
+is the common release oracle for the supported v5 contract. It supplies the same
 typed execution and rejection expectations to the compiler, generated C#,
 .NET artifact-v5 loader, generated ESM, and ESM dynamic-pack loader. The payment
 fixture remains the maintained end-to-end example; neither fixture turns the
@@ -75,7 +74,7 @@ Installation and native host checks passed on Windows 11 build 26200,
 Visual Studio Community 2026 18.8.2, on 2026-09-11 in an isolated `RunicRmf2`
 profile, using the then-current default-profile fixture. The maintained
 [native interaction test](../../../tools/visualstudio-runic-translations/test/native-host.ps1)
-now selects `rmf2-execution-v2` and checks registered commands, inert rich
+checks registered commands, inert rich
 content, invalid-number recovery, locale selection and unsaved text after server
 restart. That updated execution-v2 script still requires an interactive Windows
 rerun. The VSIX declares
@@ -84,7 +83,7 @@ in the 18.x line. This range declaration is not a claim that every host is
 validated: native evidence currently covers only Visual Studio Community 2026
 18.8.2; the Visual Studio 2022 17.14 host remains platform-only validation.
 
-The focused RMF2 CLI/LSP suite includes explicit execution-v2 preview and
+The focused RMF2 CLI/LSP suite includes v5 preview and
 resource-only refactor coverage, plus mounted multi-project discovery and
 diagnostic isolation. See the [Windows integration procedure](../../../tools/visualstudio-runic-translations/README.md)
 for build, installation and interactive-session execution.
@@ -99,15 +98,15 @@ dotnet run -c Release --project tests/dotnet/Runic.Translations.Compiler.Tests -
 
 On this Linux development machine, 2026-09-11, .NET runtime 10.0.11 and Bun 1.4.2:
 
-| Operation | Mean µs/op | .NET allocated bytes/op |
-| --- | ---: | ---: |
-| Plain .NET message | 0.51 | approximately 0 |
-| Rich .NET content | 2.14 | 2,080 |
-| Linked .NET rich rendering | 2.78 | 3,576 |
-| Parse a resource with 1,000 messages | 3,725 | 3,937,249 |
-| Plain ESM message | 0.34 | not measured |
-| Rich ESM content | 2.63 | not measured |
-| Linked ESM rich rendering | 2.54 | not measured |
+| Operation                            | Mean µs/op | .NET allocated bytes/op |
+| ------------------------------------ | ---------: | ----------------------: |
+| Plain .NET message                   |       0.51 |         approximately 0 |
+| Rich .NET content                    |       2.14 |                   2,080 |
+| Linked .NET rich rendering           |       2.78 |                   3,576 |
+| Parse a resource with 1,000 messages |      3,725 |               3,937,249 |
+| Plain ESM message                    |       0.34 |            not measured |
+| Rich ESM content                     |       2.63 |            not measured |
+| Linked ESM rich rendering            |       2.54 |            not measured |
 
 These are observations, not latency guarantees or a cross-runtime ranking.
 Formatting/rendering uses 10,000 iterations; parsing uses 30. Registry linking
@@ -125,7 +124,7 @@ pass/fail limits checked into
 dotnet run -c Release --project tests/dotnet/Runic.Translations.Build.Tests -- --rmf2-lsp-benchmark
 ```
 
-It measures an explicitly activated v2 2,000-message catalog and a ranged
+It measures a v5 2,000-message catalog and a ranged
 incremental edit through the real child-process stdio entry point (three samples,
 reporting medians). Queued cancellation uses the same framed protocol over
 in-process streams with internal worker and cancellation-observed hooks, so the
@@ -146,9 +145,9 @@ for translation. The import side refuses those structured units rather than
 flattening them; an approved review stamp uses the closed-text-profile
 fingerprint, while source freshness remains a separate conflict check.
 
-The editor smoke fixture selects `rmf2-execution-v2` and covers mounted
+The editor smoke fixture covers mounted
 resource mutations, locale/fallback transactions, save/reload, deterministic
-plain XLIFF export/import, and the rule that an import never creates legacy
-`.mf2` files. Focused interchange tests cover approved-review fingerprints and
+plain XLIFF export/import, and the rule that an import never converts an RMF2
+project into direct `.mf2` files. Focused interchange tests cover approved-review fingerprints and
 structured loss/refusal. Structured preview tests route AST 5 through the
 verified .NET runtime with inert link, action, and custom-markup runs.

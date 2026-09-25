@@ -44,7 +44,7 @@ public static class TranslationPackFailure
     /// <summary>The reserved diagnostic identity for external pack incompatibility or rejection.</summary>
     public const string DiagnosticId = "RTR0023";
 
-    /// <summary>The stable prefix used by .NET and generated ESM locale-pack-v2 decoders.</summary>
+    /// <summary>The stable prefix used by RMF2 v5 external-pack consumers.</summary>
     public const string RejectionIdPrefix = "RTR0023/";
 
     private static readonly ConditionalWeakTable<TranslationPackException, FailureReasonHolder> Reasons = new();
@@ -71,7 +71,7 @@ public static class TranslationPackFailure
         return DiagnosticId;
     }
 
-    /// <summary>Returns the normalized, location-free locale-pack rejection ID.</summary>
+    /// <summary>Returns the normalized, location-free external-pack rejection ID.</summary>
     public static string GetRejectionId(TranslationPackException exception)
     {
         ArgumentNullException.ThrowIfNull(exception);

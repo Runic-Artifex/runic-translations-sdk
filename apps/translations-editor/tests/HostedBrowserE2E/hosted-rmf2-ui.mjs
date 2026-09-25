@@ -14,8 +14,8 @@ if (urlOrPrepare === "--prepare") {
   await mkdir(workspace, { recursive: false });
   await writeFile(join(workspace, ".hosted-rmf2-ui-fixture"), fixtureMarker);
   await writeFile(join(workspace, "runic.json"), JSON.stringify({
-    schemaVersion: 1, catalog: "runic-hosted-e2e", sourceLayout: "rmf2-v1",
-    executionProfile: "rmf2-execution-v2",
+    schemaVersion: 1,
+    catalog: "runic-hosted-e2e",
     code: { namespace: "Runic.HostedBrowserProof", className: "Messages" },
     baseLocale: "de", locales: ["de", "en", "fr"],
   }, null, 2) + "\n");
@@ -25,7 +25,12 @@ if (urlOrPrepare === "--prepare") {
   process.exit(0);
 }
 
-assert.equal(await readFile(join(workspace, ".hosted-rmf2-ui-fixture"), "utf8"), fixtureMarker);
+assert.equal(await readFile(join(workspace, ".hosted-rmf2-ui-fixture"), "utf8"), fixtureMarker,
+  "External-write checks require the test-owned prepared workspace.");
+const config = JSON.parse(await readFile(join(workspace, "runic.json"), "utf8"));
+assert.equal(config.catalog, "runic-hosted-e2e");
+assert.ok(!Object.hasOwn(config, "sourceLayout"));
+assert.ok(!Object.hasOwn(config, "executionProfile"));
 const diskPath = join(workspace, "de.rmf2");
 assert.ok((await lstat(diskPath)).isFile() && !(await lstat(diskPath)).isSymbolicLink());
 const executablePath = process.env.WEBUI_BROWSER_PATH;
