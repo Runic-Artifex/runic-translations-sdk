@@ -329,18 +329,21 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         AppLocator.CurrentMutable.RegisterConstant(new NullLogger(), typeof(ILogger));
         AppLocator.CurrentMutable.RegisterConstant(new DefaultLogManager(AppLocator.Current), typeof(ILogManager));
         var services = new ServiceCollection();
+        services.AddScoped<IRunicModelContext, RunicModelContext>();
         services.AddScoped(_ => new EditorSession(workspacePath));
-        services.AddScoped(provider => new EditorViewModel(provider.GetRequiredService<EditorSession>()));
-        services.AddScoped<IRunicViewLocator>(_ => new ReactiveRunicViewLocator(
-            new DefaultViewLocator()
-                .Map<EditorWorkspaceViewModel, EditorWorkspaceView>(() => new EditorWorkspaceView())
-                .Map<EditorDocumentToolsViewModel, EditorDocumentToolsView>(() => new EditorDocumentToolsView())
-                .Map<EditorReviewViewModel, EditorReviewView>(() => new EditorReviewView())
-                .Map<EditorInterchangeViewModel, EditorInterchangeView>(() => new EditorInterchangeView())
-                .Map<EditorDiagnosticsViewModel, EditorDiagnosticsView>(() => new EditorDiagnosticsView())
-                .Map<EditorLocalStateViewModel, EditorLocalStateView>(() => new EditorLocalStateView())
-                .Map<EditorProjectViewModel, EditorProjectView>(() => new EditorProjectView())
-                .Map<EditorDocumentViewModel, EditorDocumentView>(() => new EditorDocumentView())));
+        services.AddScoped(provider => new EditorViewModel(provider.GetRequiredService<EditorSession>(),
+            provider.GetRequiredService<IRunicModelContext>()));
+        var locator = new DefaultViewLocator();
+        locator.CreateMappingBuilder()
+            .Map<EditorWorkspaceViewModel>(() => new EditorWorkspaceView())
+            .Map<EditorDocumentToolsViewModel>(() => new EditorDocumentToolsView())
+            .Map<EditorReviewViewModel>(() => new EditorReviewView())
+            .Map<EditorInterchangeViewModel>(() => new EditorInterchangeView())
+            .Map<EditorDiagnosticsViewModel>(() => new EditorDiagnosticsView())
+            .Map<EditorLocalStateViewModel>(() => new EditorLocalStateView())
+            .Map<EditorProjectViewModel>(() => new EditorProjectView())
+            .Map<EditorDocumentViewModel>(() => new EditorDocumentView());
+        services.AddScoped<IRunicViewLocator>(_ => new ReactiveRunicViewLocator(locator));
         services.AddRunicBridges();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }

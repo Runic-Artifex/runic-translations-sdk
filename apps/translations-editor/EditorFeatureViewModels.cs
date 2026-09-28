@@ -1,6 +1,8 @@
 using System.Text.Json;
 using ReactiveUI;
 using ReactiveUI.Primitives;
+using ReactiveUI.Primitives.Concurrency;
+using Runic.Application.Views;
 
 namespace Runic.Translations.Editor;
 
@@ -11,10 +13,15 @@ public abstract class EditorFeatureViewModel : ReactiveObject, IDisposable
     private readonly List<ReactiveCommand<string, RxVoid>> _commands = [];
     private readonly List<IDisposable> _errors = [];
 
-    internal EditorFeatureViewModel(EditorSession session, EditorViewModel owner)
+    private readonly ISequencer _scheduler;
+    private readonly IRunicModelContext _modelContext;
+
+    internal EditorFeatureViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler)
     {
         Session = session;
         _owner = owner;
+        _scheduler = scheduler;
+        _modelContext = owner.ModelContext;
     }
 
     private protected EditorSession Session { get; }
@@ -29,12 +36,15 @@ public abstract class EditorFeatureViewModel : ReactiveObject, IDisposable
             JsonElement root = parsed.RootElement;
             string requestId = Required(root, "requestId");
             TResult result = await operation(root.GetProperty("argument")).ConfigureAwait(false);
-            if (result is WorkspaceSnapshot snapshot) _owner.SyncDocuments(snapshot);
-            else if (result is EditorOperationResult { Snapshot: { } changed }) _owner.SyncDocuments(changed);
             string json = JsonSerializer.Serialize(result, result.GetType(), EditorJsonContext.Default);
-            publish(result, "{\"requestId\":" + JsonSerializer.Serialize(requestId, EditorJsonContext.Default.String)
-                + ",\"result\":" + json + "}");
-        });
+            await _modelContext.InvokeAsync(() =>
+            {
+                if (result is WorkspaceSnapshot snapshot) _owner.SyncDocuments(snapshot);
+                else if (result is EditorOperationResult { Snapshot: { } changed }) _owner.SyncDocuments(changed);
+                publish(result, "{\"requestId\":" + JsonSerializer.Serialize(requestId, EditorJsonContext.Default.String)
+                    + ",\"result\":" + json + "}");
+            }).ConfigureAwait(false);
+        }, _scheduler);
         _commands.Add(command);
         _errors.Add(command.ThrownExceptions.Subscribe(_ => { }));
         return command;
@@ -79,7 +89,7 @@ public sealed class EditorWorkspaceViewModel : EditorFeatureViewModel
     private string _redoResultJson = "null";
     private EditorOperationResult? _lastRedo;
 
-    internal EditorWorkspaceViewModel(EditorSession session, EditorViewModel owner) : base(session, owner)
+    internal EditorWorkspaceViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
         LoadCommand = CreateCommand(async argument => await Session.LoadAsync(), (result, value) => { LastLoad = result; LoadResultJson = value; });
         CheckExternalChangesCommand = CreateCommand(async argument => await Session.CheckExternalChangesAsync(), (result, value) => { LastCheckExternalChanges = result; CheckExternalChangesResultJson = value; });
@@ -126,7 +136,7 @@ public sealed class EditorDocumentToolsViewModel : EditorFeatureViewModel
     private string _previewMessageResultJson = "null";
     private EditorMessagePreview? _lastPreviewMessage;
 
-    internal EditorDocumentToolsViewModel(EditorSession session, EditorViewModel owner) : base(session, owner)
+    internal EditorDocumentToolsViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
         TransformDocumentCommand = CreateCommand(async argument => await Session.TransformDocumentAsync(Required(argument, "path"), Required(argument, "content"), Optional(argument, "key"), Optional(argument, "value")), (result, value) => { LastTransformDocument = result; TransformDocumentResultJson = value; });
         PreviewMessageCommand = CreateCommand(async argument => await Session.PreviewMessageAsync(Required(argument, "path"), Required(argument, "content"), Required(argument, "locale"), Required(argument, "key"), Optional(argument, "samplesJson")), (result, value) => { LastPreviewMessage = result; PreviewMessageResultJson = value; });
@@ -147,7 +157,7 @@ public sealed class EditorReviewViewModel : EditorFeatureViewModel
     private string _saveReviewResultJson = "null";
     private EditorReviewOperationResult? _lastSaveReview;
 
-    internal EditorReviewViewModel(EditorSession session, EditorViewModel owner) : base(session, owner)
+    internal EditorReviewViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
         SaveReviewCommand = CreateCommand(async argument => await Session.SaveReviewAsync(Parse<EditorReviewSaveRequest>(argument)), (result, value) => { LastSaveReview = result; SaveReviewResultJson = value; });
     }
@@ -174,7 +184,7 @@ public sealed class EditorInterchangeViewModel : EditorFeatureViewModel
     private string _applyReviewJsonImportResultJson = "null";
     private EditorReviewOperationResult? _lastApplyReviewJsonImport;
 
-    internal EditorInterchangeViewModel(EditorSession session, EditorViewModel owner) : base(session, owner)
+    internal EditorInterchangeViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
         ExportXliffCommand = CreateCommand(async argument => await Session.ExportXliffAsync(Optional(argument, "directory")), (result, value) => { LastExportXliff = result; ExportXliffResultJson = value; });
         PreviewXliffImportCommand = CreateCommand(async argument => await Session.PreviewXliffImportAsync(Required(argument, "path")), (result, value) => { LastPreviewXliffImport = result; PreviewXliffImportResultJson = value; });
@@ -217,7 +227,7 @@ public sealed class EditorDiagnosticsViewModel : EditorFeatureViewModel
     private string _deleteDiagnosticBundleResultJson = "null";
     private EditorDiagnosticBundleActionResult? _lastDeleteDiagnosticBundle;
 
-    internal EditorDiagnosticsViewModel(EditorSession session, EditorViewModel owner) : base(session, owner)
+    internal EditorDiagnosticsViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
         AboutCommand = CreateCommand(argument => Task.FromResult(EditorDiagnostics.About()), (result, value) => { LastAbout = result; AboutResultJson = value; });
         CreateDiagnosticBundleCommand = CreateCommand(async argument => await Session.CreateDiagnosticBundleAsync(), (result, value) => { LastCreateDiagnosticBundle = result; CreateDiagnosticBundleResultJson = value; });
@@ -250,7 +260,7 @@ public sealed class EditorLocalStateViewModel : EditorFeatureViewModel
     private string _clearLocalStateResultJson = "null";
     private EditorLocalStateClearResult? _lastClearLocalState;
 
-    internal EditorLocalStateViewModel(EditorSession session, EditorViewModel owner) : base(session, owner)
+    internal EditorLocalStateViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
         LoadLocalStateCommand = CreateCommand(argument => Task.FromResult(Session.LoadLocalState()), (result, value) => { LastLoadLocalState = result; LoadLocalStateResultJson = value; });
         SaveLocalStateCommand = CreateCommand(argument => Task.FromResult(Session.SaveLocalState(Parse<EditorLocalStateEntry[]>(argument))), (result, value) => { LastSaveLocalState = result; SaveLocalStateResultJson = value; });
@@ -279,7 +289,7 @@ public sealed class EditorProjectViewModel : EditorFeatureViewModel
     private string _openWorkspaceResultJson = "null";
     private EditorOperationResult? _lastOpenWorkspace;
 
-    internal EditorProjectViewModel(EditorSession session, EditorViewModel owner) : base(session, owner)
+    internal EditorProjectViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
         PreviewProjectCommand = CreateCommand(argument => Task.FromResult(EditorSession.PreviewProject(Parse<EditorProjectCreationRequest>(argument))), (result, value) => { LastPreviewProject = result; PreviewProjectResultJson = value; });
         CreateProjectCommand = CreateCommand(async argument => await Session.CreateProjectAsync(Parse<EditorProjectCreationRequest>(argument)), (result, value) => { LastCreateProject = result; CreateProjectResultJson = value; });

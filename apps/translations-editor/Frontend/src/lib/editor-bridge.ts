@@ -16,6 +16,7 @@ import type {
   EditorMessagePreview,
   EditorMutationPreview,
   EditorMutationRequest,
+  EditorNotice,
   EditorOperationResult,
   EditorOpenWorkspaceRequest,
   EditorProjectCreationRequest,
@@ -72,6 +73,12 @@ function disconnectOnFailure(error: unknown, root?: EditorView): void {
 interface RoutedReference<View> { connect(): Promise<View> }
 interface DisposableRoute { dispose(): void }
 
+interface EditorDocumentSaveResult {
+  readonly ok: boolean;
+  readonly kind: string;
+  readonly message?: EditorNotice;
+}
+
 async function invokeRouted<View extends DisposableRoute, State>(
   operation: string,
   select: (root: EditorView) => RoutedReference<View>,
@@ -113,12 +120,21 @@ async function invokeDocument<T>(path: string, command: "validate" | "save", req
       root = await rootView();
       view = await reference.connect();
       if (view.snapshot.path !== path) throw new Error("The selected document route changed.");
-      const requestId = globalThis.crypto.randomUUID();
-      const state = await view[command](JSON.stringify({ requestId, ...request }));
-      const envelope = JSON.parse(command === "validate" ? state.validationResultJson : state.saveResultJson) as { requestId: string; result: T };
-      if (envelope.requestId !== requestId) throw new Error("The document response did not match its request.");
-      if (command === "save") rememberDocuments(envelope.result, root);
-      return envelope.result;
+      const operation = command === "validate"
+        ? await view.startValidate({ content: (request as { content: string }).content })
+        : await view.startSave({
+            content: (request as { content: string }).content,
+            revision: (request as { revision: string }).revision,
+          });
+      const terminal = await operation.completion;
+      if (terminal.kind !== "succeeded")
+        throw new BridgeError(terminal.kind === "cancelled" ? "cancelled" : "failed",
+          terminal.error?.message ?? "The document operation did not complete.");
+      if (terminal.delivery !== undefined)
+        throw new BridgeError("failed", terminal.delivery.message);
+      if (terminal.result === undefined)
+        throw new BridgeError("failed", "The document operation completed without its typed result.");
+      return terminal.result as T;
     } catch (error) {
       disconnectOnFailure(error, root);
       throw error;
@@ -158,7 +174,7 @@ export interface EditorBridge {
   applyReviewJsonImport(confirmationToken: string): Promise<EditorReviewOperationResult>;
   openDocument(path: string): Promise<EditorDocumentState | undefined>;
   validate(path: string, content: string): Promise<ValidationResult>;
-  save(path: string, content: string, revision: string): Promise<EditorOperationResult>;
+  save(path: string, content: string, revision: string): Promise<EditorDocumentSaveResult>;
 }
 
 export function createEditorBridge(): EditorBridge {
@@ -202,6 +218,6 @@ export function createEditorBridge(): EditorBridge {
       }
     },
     validate: (path, content) => invokeDocument<ValidationResult>(path, "validate", { content }),
-    save: (path, content, revision) => invokeDocument<EditorOperationResult>(path, "save", { content, revision }),
+    save: (path, content, revision) => invokeDocument<EditorDocumentSaveResult>(path, "save", { content, revision }),
   };
 }

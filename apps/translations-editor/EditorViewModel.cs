@@ -1,4 +1,5 @@
 using ReactiveUI;
+using ReactiveUI.Primitives.Concurrency;
 using Runic.Application.Views;
 using Runic.Application.Views.ReactiveUI;
 
@@ -8,19 +9,27 @@ namespace Runic.Translations.Editor;
 public sealed class EditorViewModel : ReactiveObject, IDisposable
 {
     private readonly EditorSession _session;
+    private readonly IRunicModelContext _modelContext;
+    private readonly IRunicModelContextLease _modelContextLease;
+    private readonly ISequencer _scheduler;
+    private readonly Dictionary<string, IRunicModelContextLease> _documentContextLeases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EditorDocumentViewModel> _documents = new(StringComparer.Ordinal);
     private IReadOnlyList<EditorDocumentViewModel> _documentViews = [];
 
-    internal EditorViewModel(EditorSession session)
+    internal EditorViewModel(EditorSession session, IRunicModelContext modelContext)
     {
         _session = session;
-        Workspace = new EditorWorkspaceViewModel(session, this);
-        DocumentTools = new EditorDocumentToolsViewModel(session, this);
-        Review = new EditorReviewViewModel(session, this);
-        Interchange = new EditorInterchangeViewModel(session, this);
-        Diagnostics = new EditorDiagnosticsViewModel(session, this);
-        LocalState = new EditorLocalStateViewModel(session, this);
-        Project = new EditorProjectViewModel(session, this);
+        _modelContext = modelContext;
+        _scheduler = new RunicReactiveSchedulerProvider().For(modelContext);
+        Workspace = new EditorWorkspaceViewModel(session, this, _scheduler);
+        DocumentTools = new EditorDocumentToolsViewModel(session, this, _scheduler);
+        Review = new EditorReviewViewModel(session, this, _scheduler);
+        Interchange = new EditorInterchangeViewModel(session, this, _scheduler);
+        Diagnostics = new EditorDiagnosticsViewModel(session, this, _scheduler);
+        LocalState = new EditorLocalStateViewModel(session, this, _scheduler);
+        Project = new EditorProjectViewModel(session, this, _scheduler);
+        _modelContextLease = RunicModelContextRegistry.Shared.Bind(modelContext, this, Workspace,
+            DocumentTools, Review, Interchange, Diagnostics, LocalState, Project);
     }
 
     public EditorWorkspaceViewModel Workspace { get; }
@@ -31,6 +40,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     public EditorLocalStateViewModel LocalState { get; }
     public EditorProjectViewModel Project { get; }
     public IReadOnlyList<EditorDocumentViewModel> Documents => _documentViews;
+    internal IRunicModelContext ModelContext => _modelContext;
 
     internal void SyncDocuments(WorkspaceSnapshot snapshot)
     {
@@ -40,7 +50,11 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
         {
             current.Add(document.Path);
             if (!_documents.TryGetValue(document.Path, out var view))
-                _documents.Add(document.Path, view = new EditorDocumentViewModel(_session, this, document));
+            {
+                _documents.Add(document.Path, view = new EditorDocumentViewModel(_session, this, document, _scheduler, _modelContext));
+                _documentContextLeases.Add(document.Path,
+                    RunicModelContextRegistry.Shared.Bind(_modelContextLease.Context, view));
+            }
             else view.Update(document);
             ordered.Add(view);
         }
@@ -48,6 +62,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
         {
             if (current.Contains(path)) continue;
             _documents.Remove(path);
+            if (_documentContextLeases.Remove(path, out var lease)) lease.Dispose();
             view.Dispose();
         }
         _documentViews = ordered;
@@ -65,6 +80,9 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
         Project.Dispose();
         foreach (var document in _documents.Values) document.Dispose();
         _documents.Clear();
+        foreach (var lease in _documentContextLeases.Values) lease.Dispose();
+        _documentContextLeases.Clear();
+        _modelContextLease.Dispose();
         _session.Dispose();
     }
 }

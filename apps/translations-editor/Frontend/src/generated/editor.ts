@@ -8,6 +8,27 @@ import { pageEditorLocalState, type EditorLocalStatePageReference } from "./edit
 import { pageEditorProject, type EditorProjectPageReference } from "./editorProject.js";
 import { pageEditorDocument, type EditorDocumentPageReference } from "./editorDocument.js";
 
+const bridgeWire = {
+  boolean(value: unknown): boolean { if (typeof value !== "boolean") throw new TypeError("Expected a boolean."); return value; },
+  integer(value: unknown, minimum: number, maximum: number): number { if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum || value > maximum) throw new RangeError("Expected a bounded integer."); return value; },
+  finiteNumber(value: unknown): number { if (typeof value !== "number" || !Number.isFinite(value)) throw new RangeError("Expected a finite number."); return value; },
+  string(value: unknown): string { if (typeof value !== "string") throw new TypeError("Expected a string."); return value; },
+  bigint(value: unknown, minimum?: string, maximum?: string): bigint { if (typeof value !== "string" || !/^-?(0|[1-9][0-9]*)$/.test(value)) throw new TypeError("Expected an integer string."); const result = BigInt(value); if (minimum !== undefined && result < BigInt(minimum)) throw new RangeError("Integer is below range."); if (maximum !== undefined && result > BigInt(maximum)) throw new RangeError("Integer is above range."); return result; },
+  int64String(value: unknown): string { this.bigint(value, "-9223372036854775808", "9223372036854775807"); return value as string; },
+  decimal(value: unknown): string { if (typeof value !== "string" || !/^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)) throw new TypeError("Expected a decimal string."); return value; },
+  guid(value: unknown): string { const text = this.string(value); if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) throw new TypeError("Expected a GUID."); return text.toLowerCase(); },
+  dateOnly(value: unknown): string { const text = this.string(value); if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new TypeError("Expected an ISO date."); return text; },
+  timeOnly(value: unknown): string { const text = this.string(value); if (!/^\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?$/.test(text)) throw new TypeError("Expected an ISO time."); return text; },
+  dateTime(value: unknown): string { const text = this.string(value); if (!/^\d{4}-\d{2}-\d{2}T/.test(text)) throw new TypeError("Expected an ISO date-time."); return text; },
+  dateTimeOffset(value: unknown): string { const text = this.dateTime(value); if (!/(Z|[+-]\d{2}:\d{2})$/.test(text)) throw new TypeError("Expected an ISO offset date-time."); return text; },
+  enumName(value: unknown, names?: readonly string[]): string { const text = this.string(value); if (names !== undefined && !names.includes(text)) throw new RangeError("Unknown enum name."); return text; },
+  array<T>(value: unknown, decode: (item: unknown) => T): readonly T[] { if (!Array.isArray(value)) throw new TypeError("Expected an array."); return value.map(decode); },
+  stringRecord<T>(value: unknown, decode: (item: unknown) => T): Readonly<Record<string, T>> { const object = this.object(value, item => item); const result: Record<string, T> = {}; for (const [key, item] of Object.entries(object)) result[key] = decode(item); return result; },
+  object<T>(value: unknown, decode: (item: Record<string, unknown>) => T): T { if (value === null || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Expected an object."); return decode(value as Record<string, unknown>); },
+  union(value: unknown): any { const object = this.object(value, item => item); if (typeof object.$case !== "string") throw new TypeError("Expected a union discriminator."); return object; },
+  encodeUnion(value: unknown): Record<string, unknown> { const object = this.object(value, item => item); if (typeof object.$case !== "string") throw new TypeError("Expected a union discriminator."); return object; },
+};
+
 export interface EditorState {
   readonly revision: number;
   readonly workspace: EditorWorkspacePageReference;
@@ -49,12 +70,13 @@ export class BridgeError extends Error {
   constructor(readonly kind: BridgeErrorKind, message: string) { super(message); this.name = "BridgeError"; }
 }
 export type BridgeOperationStatusKind = "running" | "succeeded" | "failed" | "cancelled" | "expired" | "unknown";
-export interface BridgeOperationStatus { readonly contract: string; readonly requestId: string; readonly kind: BridgeOperationStatusKind; readonly error?: { readonly kind: "failed"; readonly message: string }; }
+export type BridgeOperationDeliveryKind = "result-too-large" | "result-encoding-failed" | "stream-overflow";
+export interface BridgeOperationStatus<TResult = never> { readonly contract: string; readonly requestId: string; readonly kind: BridgeOperationStatusKind; readonly error?: { readonly kind: "failed"; readonly message: string }; readonly result?: TResult; readonly delivery?: { readonly kind: BridgeOperationDeliveryKind; readonly message: string }; readonly stream?: true; }
 export type BridgeOperationCancelKind = "cancellation-requested" | "not-running" | "unknown" | "expired";
 export interface BridgeOperationCancelResult { readonly contract: string; readonly requestId: string; readonly kind: BridgeOperationCancelKind; }
-export class BridgeOperationUncertainError extends Error {
-  constructor(readonly contract: string, readonly requestId: string, message: string) { super(message); this.name = "BridgeOperationUncertainError"; }
-}
+export interface BridgeOperationStreamItem<TResult> { readonly sequence: number; readonly value: TResult; }
+export interface BridgeOperationStreamPage<TResult> { readonly contract: string; readonly requestId: string; readonly kind: BridgeOperationStatusKind; readonly cursor?: number; readonly completed?: boolean; readonly items?: readonly BridgeOperationStreamItem<TResult>[]; readonly delivery?: { readonly kind: BridgeOperationDeliveryKind; readonly message: string }; }
+export class BridgeOperationUncertainError extends Error { constructor(readonly contract: string, readonly requestId: string, message: string) { super(message); this.name = "BridgeOperationUncertainError"; } }
 type WireState = Omit<EditorState, "workspace" | "documentTools" | "review" | "interchange" | "diagnostics" | "localState" | "project" | "documents"> & {
   readonly workspace: { readonly kind: "editorWorkspace"; readonly id: string };
   readonly documentTools: { readonly kind: "editorDocumentTools"; readonly id: string };
@@ -188,9 +210,9 @@ function sharedRouteFor(runtime: SharedRuntime, bridge: RunicBridgeClient, route
   callbacks[callbackName] = sharedRoute.callback;
   return sharedRoute;
 }
-const bridgeContract = "Runic.Translations.Editor.EditorViewModel:536E8D73F400A98F1C36B5D41B28EAC58437FF84641649C42910D0A1F6F9DD80";
+const bridgeContract = "Runic.Translations.Editor.EditorViewModel:A479BC6B0EA5B013FA17A1E99D47E8F916A2E8EE0B5ED16F3DC478820BE50595";
 
-export function connectEditor(): Promise<EditorView> { return connectEditorAt("editor"); }
+export function connectEditor(): Promise<EditorView> { return connectEditorAt("editor", false); }
 async function connectEditorAt(route: string, needsMount = false): Promise<EditorView> {
   const bridge = await waitForBridge();
   const runtime = sharedRuntimeFor(bridge);
@@ -256,43 +278,20 @@ async function connectEditorAt(route: string, needsMount = false): Promise<Edito
     if (lease.disposed || !isLive()) throw new BridgeError("disconnected", "This view was disposed. Reconnect for the current state.");
     return unpack(reply);
   }
-  function operationKey(requestId: string): string { return `${contractId.length}:${contractId}${requestId.length}:${requestId}`; }
-  function reserveOperation(key: string): void {
-    const maximumRetainedOperations = 128;
-    while (runtime.operations.size >= maximumRetainedOperations) {
-      const candidate = [...runtime.operations.entries()].find(([, operation]) => operation.state === "accepted");
-      if (!candidate)
-        throw new BridgeOperationUncertainError(contractId, key, "Pending operation identities are at capacity. Reconcile them before starting another operation.");
-      runtime.operations.delete(candidate[0]);
-    }
+  function parseOperationStatus<TResult>(json: string, requestId: string, decode: (value: unknown) => TResult): BridgeOperationStatus<TResult> {
+    let status: BridgeOperationStatus<TResult>; try { status = JSON.parse(json) as BridgeOperationStatus<TResult>; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); }
+    if (status.contract !== contractId || status.requestId !== requestId || !(["running", "succeeded", "failed", "cancelled", "expired", "unknown"] as const).includes(status.kind)) throw new BridgeError("failed", "The operation service returned a mismatched status.");
+    if (status.result !== undefined) status = { ...status, result: decode(status.result) }; return status;
   }
-  function parseOperationStatus(json: string, requestId: string): BridgeOperationStatus {
-    let status: BridgeOperationStatus;
-    try { status = JSON.parse(json) as BridgeOperationStatus; }
-    catch { throw new BridgeError("failed", "The operation service returned an invalid response."); }
-    if (status.contract !== contractId || status.requestId !== requestId) throw new BridgeError("failed", "The operation service returned a mismatched identity.");
-    if (!(["running", "succeeded", "failed", "cancelled", "expired", "unknown"] as const).includes(status.kind)) throw new BridgeError("failed", "The operation service returned an unknown status.");
-    return status;
+  async function operationStatus<TResult>(requestId: string, wait: boolean, decode: (value: unknown) => TResult): Promise<BridgeOperationStatus<TResult>> {
+    const identity = JSON.stringify({ contract: contractId, requestId }); let reply: string;
+    try { reply = await bridge.call(wait ? "__runicOperationWait" : "__runicOperationStatus", identity); } catch { throw new BridgeOperationUncertainError(contractId, requestId, "The operation status could not be observed."); }
+    return parseOperationStatus(reply, requestId, decode);
   }
-  function operationFromInline(value: unknown, requestId: string): BridgeOperationStatus | undefined {
-    if (value === null || typeof value !== "object") return undefined;
-    const status = value as BridgeOperationStatus;
-    if (status.contract !== contractId || status.requestId !== requestId) throw new BridgeError("failed", "The operation admission returned a mismatched terminal identity.");
-    if (!(["succeeded", "failed", "cancelled"] as const).includes(status.kind as "succeeded" | "failed" | "cancelled")) throw new BridgeError("failed", "The operation admission returned an invalid terminal result.");
-    return status;
-  }
-  async function operationStatus(requestId: string, wait: boolean): Promise<BridgeOperationStatus> {
-    const identity = JSON.stringify({ contract: contractId, requestId });
-    let reply: string;
-    try { reply = await bridge.call(wait ? "__runicOperationWait" : "__runicOperationStatus", identity); }
-    catch { throw new BridgeOperationUncertainError(contractId, requestId, "The operation status could not be observed."); }
-    return parseOperationStatus(reply, requestId);
-  }
-  async function recoverAdmission(requestId: string): Promise<BridgeOperationStatus> {
-    const status = await operationStatus(requestId, false);
-    if (status.kind === "unknown" || status.kind === "expired")
-      throw new BridgeOperationUncertainError(contractId, requestId, "The admission reply was lost. Do not start the operation again automatically.");
-    return status;
+  async function operationCancel(requestId: string): Promise<BridgeOperationCancelResult> {
+    let reply: string; try { reply = await bridge.call("__runicOperationCancel", JSON.stringify({ contract: contractId, requestId })); } catch { throw new BridgeOperationUncertainError(contractId, requestId, "The cancellation request could not be observed."); }
+    let result: BridgeOperationCancelResult; try { result = JSON.parse(reply) as BridgeOperationCancelResult; } catch { throw new BridgeError("failed", "The cancellation service returned invalid JSON."); }
+    if (result.contract !== contractId || result.requestId !== requestId) throw new BridgeError("failed", "The cancellation service returned a mismatched result."); return result;
   }
   function dispose(): void {
     if (lease.disposed) return;

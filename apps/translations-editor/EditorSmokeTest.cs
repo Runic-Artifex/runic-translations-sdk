@@ -3,6 +3,7 @@ using ReactiveUI;
 using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Signals;
 using System.Text.Json;
+using Runic.Application.Views;
 using System.Xml.Linq;
 
 namespace Runic.Translations.Editor;
@@ -41,7 +42,8 @@ internal static class EditorSmokeTest
 
             // Exercise each generated feature owner with a real compiler-backed
             // session. The hosted browser test covers routed document editing.
-            using (var editor = new EditorViewModel(new EditorSession(project)))
+            await using var editorContext = new RunicModelContext();
+            using (var editor = new EditorViewModel(new EditorSession(project), editorContext))
             {
                 await ExecuteRouteAsync(editor.Workspace.LoadCommand, () => editor.Workspace.LoadResultJson, "{}");
                 WorkspaceSnapshot loaded = editor.Workspace.LastLoad

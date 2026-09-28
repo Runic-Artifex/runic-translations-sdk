@@ -1152,28 +1152,10 @@
       if (!checked.success) return;
       const result = await bridge.save(document.path, content, document.revision);
       if (!result.ok) {
-        if (result.validation !== undefined) validation = result.validation;
         clientError = result.message ?? notice("ui_feedback_save_failed", { kind: result.kind });
         return;
       }
-      if (result.snapshot === undefined) {
-        await reloadAfterSave(document.path, content, generation, result.message ?? notice("app_saved"));
-        return;
-      }
-      const key = selectedKey;
-      const locale = selectedLocale;
-      installSnapshot(result.snapshot, false);
-      if (!hasNewerDraft(document.path, content, generation)) {
-        delete drafts[document.path];
-        delete draftGenerations[document.path];
-        persistDrafts();
-      }
-      selectedKey = key;
-      selectedLocale = locale;
-      configureEditor();
-      operationMessage = hasNewerDraft(document.path, content, generation)
-        ? notice("ui_feedback_newer_draft")
-        : notice("app_saved");
+      await reloadAfterSave(document.path, content, generation, result.message ?? notice("app_saved"));
     } catch (error) {
       clientError = errorNotice(error);
     } finally {
