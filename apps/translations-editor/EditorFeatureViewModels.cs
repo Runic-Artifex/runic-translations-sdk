@@ -39,6 +39,11 @@ public abstract class EditorFeatureViewModel : ReactiveObject, IDisposable
             string json = JsonSerializer.Serialize(result, result.GetType(), EditorJsonContext.Default);
             await _modelContext.InvokeAsync(() =>
             {
+                // Await the filesystem/compiler work first. This scope covers
+                // only the synchronous projection of its resulting workspace
+                // into bridge-visible ViewModels.
+                using var ownerBatch = BridgeSnapshotBatch.Begin(_owner);
+                using var featureBatch = BridgeSnapshotBatch.Begin(this);
                 if (result is WorkspaceSnapshot snapshot) _owner.SyncDocuments(snapshot);
                 else if (result is EditorOperationResult { Snapshot: { } changed }) _owner.SyncDocuments(changed);
                 publish(result, "{\"requestId\":" + JsonSerializer.Serialize(requestId, EditorJsonContext.Default.String)

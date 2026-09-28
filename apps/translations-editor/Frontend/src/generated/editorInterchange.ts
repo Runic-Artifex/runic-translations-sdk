@@ -274,7 +274,7 @@ function sharedRouteFor(runtime: SharedRuntime, bridge: RunicBridgeClient, route
   callbacks[callbackName] = sharedRoute.callback;
   return sharedRoute;
 }
-const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:A479BC6B0EA5B013FA17A1E99D47E8F916A2E8EE0B5ED16F3DC478820BE50595";
+const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:FBAB3637A08FD096C77ECD5FBF4685EC47DD38AB4E5DDFA30093AB70A1071EB8";
 
 export function connectEditorInterchange(): Promise<EditorInterchangeView> { return connectEditorInterchangeAt("editorInterchange", false); }
 async function connectEditorInterchangeAt(route: string, needsMount = false): Promise<EditorInterchangeView> {

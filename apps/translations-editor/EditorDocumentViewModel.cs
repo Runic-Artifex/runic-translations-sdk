@@ -102,6 +102,10 @@ public sealed class EditorDocumentViewModel : ReactiveObject, IDisposable
         EditorOperationResult result = await _session.SaveAsync(Path, request.Content, request.Revision).ConfigureAwait(false);
         await _modelContext.InvokeAsync(() =>
         {
+            // Saving has already completed. Batch only the synchronous model
+            // projection so a multi-document refresh captures final state.
+            using var ownerBatch = BridgeSnapshotBatch.Begin(_owner);
+            using var documentBatch = BridgeSnapshotBatch.Begin(this);
             if (result.Snapshot is { } snapshot) _owner.SyncDocuments(snapshot);
             LastSave = result;
         }).ConfigureAwait(false);

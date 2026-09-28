@@ -44,29 +44,57 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
 
     internal void SyncDocuments(WorkspaceSnapshot snapshot)
     {
-        var current = new HashSet<string>(StringComparer.Ordinal);
-        var ordered = new List<EditorDocumentViewModel>(snapshot.Documents.Count);
-        foreach (var document in snapshot.Documents)
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        // Loading, importing, and workspace mutations can replace dozens of
+        // document values in one synchronous model-context turn. Batch each
+        // already exposed model before raising those notifications so the
+        // browser receives the final workspace and document snapshots instead
+        // of capturing every intermediate document state.
+        using var workspaceBatch = BridgeSnapshotBatch.Begin(this);
+        IDisposable[] documentBatches = _documents.Values
+            .Select(static document => BridgeSnapshotBatch.Begin(document))
+            .ToArray();
+        try
         {
-            current.Add(document.Path);
-            if (!_documents.TryGetValue(document.Path, out var view))
+            var current = new HashSet<string>(StringComparer.Ordinal);
+            var ordered = new List<EditorDocumentViewModel>(snapshot.Documents.Count);
+            foreach (var document in snapshot.Documents)
             {
-                _documents.Add(document.Path, view = new EditorDocumentViewModel(_session, this, document, _scheduler, _modelContext));
-                _documentContextLeases.Add(document.Path,
-                    RunicModelContextRegistry.Shared.Bind(_modelContextLease.Context, view));
+                current.Add(document.Path);
+                if (!_documents.TryGetValue(document.Path, out var view))
+                {
+                    _documents.Add(document.Path, view = new EditorDocumentViewModel(_session, this, document, _scheduler, _modelContext));
+                    _documentContextLeases.Add(document.Path,
+                        RunicModelContextRegistry.Shared.Bind(_modelContextLease.Context, view));
+                }
+                else view.Update(document);
+                ordered.Add(view);
             }
-            else view.Update(document);
-            ordered.Add(view);
+            foreach (var (path, view) in _documents.ToArray())
+            {
+                if (current.Contains(path)) continue;
+                _documents.Remove(path);
+                if (_documentContextLeases.Remove(path, out var lease)) lease.Dispose();
+                view.Dispose();
+            }
+            _documentViews = ordered;
+            this.RaisePropertyChanged(nameof(Documents));
         }
-        foreach (var (path, view) in _documents.ToArray())
+        finally
         {
-            if (current.Contains(path)) continue;
-            _documents.Remove(path);
-            if (_documentContextLeases.Remove(path, out var lease)) lease.Dispose();
-            view.Dispose();
+            // Individual document batches must close before the workspace
+            // batch, so routed document state is captured before the root
+            // document list is captured.
+            Exception? failure = null;
+            for (var index = documentBatches.Length - 1; index >= 0; index--)
+            {
+                try { documentBatches[index].Dispose(); }
+                catch (Exception error) { failure ??= error; }
+            }
+            if (failure is not null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
         }
-        _documentViews = ordered;
-        this.RaisePropertyChanged(nameof(Documents));
     }
 
     public void Dispose()
