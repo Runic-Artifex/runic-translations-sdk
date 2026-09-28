@@ -16,11 +16,11 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     private readonly Dictionary<string, EditorDocumentViewModel> _documents = new(StringComparer.Ordinal);
     private IReadOnlyList<EditorDocumentViewModel> _documentViews = [];
 
-    internal EditorViewModel(EditorSession session, IRunicModelContext modelContext)
+    internal EditorViewModel(EditorSession session, IRunicModelContext modelContext, ISequencer scheduler)
     {
         _session = session;
         _modelContext = modelContext;
-        _scheduler = new RunicReactiveSchedulerProvider().For(modelContext);
+        _scheduler = scheduler;
         Workspace = new EditorWorkspaceViewModel(session, this, _scheduler);
         DocumentTools = new EditorDocumentToolsViewModel(session, this, _scheduler);
         Review = new EditorReviewViewModel(session, this, _scheduler);

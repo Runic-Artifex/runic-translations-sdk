@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CsWebUi;
 using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
+using ReactiveUI.Primitives.Concurrency;
 using Runic.Application.Views;
 using Runic.Application.Views.CsWebUi;
 using Runic.Application.Views.ReactiveUI;
@@ -329,10 +330,10 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         AppLocator.CurrentMutable.RegisterConstant(new NullLogger(), typeof(ILogger));
         AppLocator.CurrentMutable.RegisterConstant(new DefaultLogManager(AppLocator.Current), typeof(ILogManager));
         var services = new ServiceCollection();
-        services.AddScoped<IRunicModelContext, RunicModelContext>();
+        services.AddRunicReactiveModelContext();
         services.AddScoped(_ => new EditorSession(workspacePath));
         services.AddScoped(provider => new EditorViewModel(provider.GetRequiredService<EditorSession>(),
-            provider.GetRequiredService<IRunicModelContext>()));
+            provider.GetRequiredService<IRunicModelContext>(), provider.GetRequiredService<ISequencer>()));
         var locator = new DefaultViewLocator();
         locator.CreateMappingBuilder()
             .Map<EditorWorkspaceViewModel>(() => new EditorWorkspaceView())

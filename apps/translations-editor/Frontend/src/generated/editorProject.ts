@@ -12,9 +12,10 @@ const bridgeWire = {
   timeOnly(value: unknown): string { const text = this.string(value); if (!/^\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?$/.test(text)) throw new TypeError("Expected an ISO time."); return text; },
   dateTime(value: unknown): string { const text = this.string(value); if (!/^\d{4}-\d{2}-\d{2}T/.test(text)) throw new TypeError("Expected an ISO date-time."); return text; },
   dateTimeOffset(value: unknown): string { const text = this.dateTime(value); if (!/(Z|[+-]\d{2}:\d{2})$/.test(text)) throw new TypeError("Expected an ISO offset date-time."); return text; },
+  duration(value: unknown): string { const text = this.string(value); const match = /^(-)?(?:(\d+)\.)?(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,7}))?$/.exec(text); if (!match) throw new TypeError("Expected an invariant time span."); const days = BigInt(match[2] ?? "0"); const hours = BigInt(match[3]); const minutes = BigInt(match[4]); const seconds = BigInt(match[5]); if (hours > 23n || minutes > 59n || seconds > 59n) throw new RangeError("Time span component is out of range."); const fraction = BigInt((match[6] ?? "").padEnd(7, "0") || "0"); const ticks = (((days * 24n + hours) * 60n + minutes) * 60n + seconds) * 10000000n + fraction; const signed = match[1] ? -ticks : ticks; if (signed < -9223372036854775808n || signed > 9223372036854775807n) throw new RangeError("Time span is out of range."); return text; },
   enumName(value: unknown, names?: readonly string[]): string { const text = this.string(value); if (names !== undefined && !names.includes(text)) throw new RangeError("Unknown enum name."); return text; },
   array<T>(value: unknown, decode: (item: unknown) => T): readonly T[] { if (!Array.isArray(value)) throw new TypeError("Expected an array."); return value.map(decode); },
-  stringRecord<T>(value: unknown, decode: (item: unknown) => T): Readonly<Record<string, T>> { const object = this.object(value, item => item); const result: Record<string, T> = {}; for (const [key, item] of Object.entries(object)) result[key] = decode(item); return result; },
+  stringRecord<T>(value: unknown, decode: (item: unknown) => T): Readonly<Record<string, T>> { const object = this.object(value, item => item); const result = Object.create(null) as Record<string, T>; for (const [key, item] of Object.entries(object)) result[key] = decode(item); return result; },
   object<T>(value: unknown, decode: (item: Record<string, unknown>) => T): T { if (value === null || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Expected an object."); return decode(value as Record<string, unknown>); },
   union(value: unknown): any { const object = this.object(value, item => item); if (typeof object.$case !== "string") throw new TypeError("Expected a union discriminator."); return object; },
   encodeUnion(value: unknown): Record<string, unknown> { const object = this.object(value, item => item); if (typeof object.$case !== "string") throw new TypeError("Expected a union discriminator."); return object; },
@@ -74,7 +75,7 @@ export class BridgeError extends Error {
   constructor(readonly kind: BridgeErrorKind, message: string) { super(message); this.name = "BridgeError"; }
 }
 export type BridgeOperationStatusKind = "running" | "succeeded" | "failed" | "cancelled" | "expired" | "unknown";
-export type BridgeOperationDeliveryKind = "result-too-large" | "result-encoding-failed" | "stream-overflow";
+export type BridgeOperationDeliveryKind = "result-too-large" | "result-encoding-failed" | "stream-overflow" | "stream-retention-too-large";
 export interface BridgeOperationStatus<TResult = never> { readonly contract: string; readonly requestId: string; readonly kind: BridgeOperationStatusKind; readonly error?: { readonly kind: "failed"; readonly message: string }; readonly result?: TResult; readonly delivery?: { readonly kind: BridgeOperationDeliveryKind; readonly message: string }; readonly stream?: true; }
 export type BridgeOperationCancelKind = "cancellation-requested" | "not-running" | "unknown" | "expired";
 export interface BridgeOperationCancelResult { readonly contract: string; readonly requestId: string; readonly kind: BridgeOperationCancelKind; }
@@ -102,8 +103,19 @@ export interface EditorProjectOpenWorkspaceOperation {
   wait(): Promise<BridgeOperationStatus<never>>;
   cancel(): Promise<BridgeOperationCancelResult>;
 }
-type WireState = EditorProjectState;
-function hydrate(wire: WireState): EditorProjectState { return wire; }
+type WireState = Omit<EditorProjectState, "previewProjectResultJson" | "createProjectResultJson" | "openWorkspaceResultJson"> & {
+  readonly previewProjectResultJson: unknown;
+  readonly createProjectResultJson: unknown;
+  readonly openWorkspaceResultJson: unknown;
+};
+function hydrate(wire: WireState): EditorProjectState {
+  return {
+    ...wire,
+    previewProjectResultJson: bridgeWire.string(wire.previewProjectResultJson),
+    createProjectResultJson: bridgeWire.string(wire.createProjectResultJson),
+    openWorkspaceResultJson: bridgeWire.string(wire.openWorkspaceResultJson),
+  };
+}
 interface BridgeReply { readonly ok: boolean; readonly state: WireState | null; readonly error: { readonly kind: BridgeErrorKind; readonly message: string } | null; }
 interface RunicBridgeClient {
   isConnected(): boolean;
@@ -287,46 +299,52 @@ async function connectEditorProjectAt(route: string, needsMount = false): Promis
     if (status.contract !== contractId || status.requestId !== requestId || !(["running", "succeeded", "failed", "cancelled", "expired", "unknown"] as const).includes(status.kind)) throw new BridgeError("failed", "The operation service returned a mismatched status.");
     if (status.result !== undefined) status = { ...status, result: decode(status.result) }; return status;
   }
-  async function operationStatus<TResult>(requestId: string, wait: boolean, decode: (value: unknown) => TResult): Promise<BridgeOperationStatus<TResult>> {
-    const identity = JSON.stringify({ contract: contractId, requestId }); let reply: string;
+  async function operationStatus<TResult>(member: string, requestId: string, wait: boolean, decode: (value: unknown) => TResult): Promise<BridgeOperationStatus<TResult>> {
+    const identity = JSON.stringify({ contract: contractId, member, requestId }); let reply: string;
     try { reply = await bridge.call(wait ? "__runicOperationWait" : "__runicOperationStatus", identity); } catch { throw new BridgeOperationUncertainError(contractId, requestId, "The operation status could not be observed."); }
     return parseOperationStatus(reply, requestId, decode);
   }
-  async function operationCancel(requestId: string): Promise<BridgeOperationCancelResult> {
-    let reply: string; try { reply = await bridge.call("__runicOperationCancel", JSON.stringify({ contract: contractId, requestId })); } catch { throw new BridgeOperationUncertainError(contractId, requestId, "The cancellation request could not be observed."); }
+  async function operationCancel(member: string, requestId: string): Promise<BridgeOperationCancelResult> {
+    let reply: string; try { reply = await bridge.call("__runicOperationCancel", JSON.stringify({ contract: contractId, member, requestId })); } catch { throw new BridgeOperationUncertainError(contractId, requestId, "The cancellation request could not be observed."); }
     let result: BridgeOperationCancelResult; try { result = JSON.parse(reply) as BridgeOperationCancelResult; } catch { throw new BridgeError("failed", "The cancellation service returned invalid JSON."); }
     if (result.contract !== contractId || result.requestId !== requestId) throw new BridgeError("failed", "The cancellation service returned a mismatched result."); return result;
   }
   function previewProjectOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorProjectPreviewProjectOperation {
-    const completion: Promise<BridgeOperationStatus<never>> = terminal === undefined ? operationStatus(requestId, true, value => undefined as never) : Promise.resolve(terminal);
-    return { requestId, status: () => terminal === undefined ? operationStatus(requestId, false, value => undefined as never) : Promise.resolve(terminal), completion, wait: () => completion, cancel: () => operationCancel(requestId), };
+    let completion: Promise<BridgeOperationStatus<never>> | undefined;
+    const wait = () => completion ??= terminal === undefined ? operationStatus("PreviewProject", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    return { requestId, status: () => terminal === undefined ? operationStatus("PreviewProject", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("PreviewProject", requestId), };
   }
   async function startPreviewProjectWithRequestId(requestId: string, input: string): Promise<EditorProjectPreviewProjectOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
-    let reply: string; try { reply = await bridge.call(`${route}StartPreviewProject`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus(requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return previewProjectOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
+    await awaitInteractionCapabilities();
+    let reply: string; try { reply = await bridge.call(`${route}StartPreviewProject`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("PreviewProject", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return previewProjectOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
     const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return previewProjectOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
-  async function recoverPreviewProjectWithRequestId(requestId: string): Promise<EditorProjectPreviewProjectOperation> { const status = await operationStatus(requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return previewProjectOperation(requestId, status.kind === "running" ? undefined : status); }
+  async function recoverPreviewProjectWithRequestId(requestId: string): Promise<EditorProjectPreviewProjectOperation> { const status = await operationStatus("PreviewProject", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return previewProjectOperation(requestId, status.kind === "running" ? undefined : status); }
   function createProjectOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorProjectCreateProjectOperation {
-    const completion: Promise<BridgeOperationStatus<never>> = terminal === undefined ? operationStatus(requestId, true, value => undefined as never) : Promise.resolve(terminal);
-    return { requestId, status: () => terminal === undefined ? operationStatus(requestId, false, value => undefined as never) : Promise.resolve(terminal), completion, wait: () => completion, cancel: () => operationCancel(requestId), };
+    let completion: Promise<BridgeOperationStatus<never>> | undefined;
+    const wait = () => completion ??= terminal === undefined ? operationStatus("CreateProject", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    return { requestId, status: () => terminal === undefined ? operationStatus("CreateProject", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("CreateProject", requestId), };
   }
   async function startCreateProjectWithRequestId(requestId: string, input: string): Promise<EditorProjectCreateProjectOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
-    let reply: string; try { reply = await bridge.call(`${route}StartCreateProject`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus(requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return createProjectOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
+    await awaitInteractionCapabilities();
+    let reply: string; try { reply = await bridge.call(`${route}StartCreateProject`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("CreateProject", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return createProjectOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
     const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return createProjectOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
-  async function recoverCreateProjectWithRequestId(requestId: string): Promise<EditorProjectCreateProjectOperation> { const status = await operationStatus(requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return createProjectOperation(requestId, status.kind === "running" ? undefined : status); }
+  async function recoverCreateProjectWithRequestId(requestId: string): Promise<EditorProjectCreateProjectOperation> { const status = await operationStatus("CreateProject", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return createProjectOperation(requestId, status.kind === "running" ? undefined : status); }
   function openWorkspaceOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorProjectOpenWorkspaceOperation {
-    const completion: Promise<BridgeOperationStatus<never>> = terminal === undefined ? operationStatus(requestId, true, value => undefined as never) : Promise.resolve(terminal);
-    return { requestId, status: () => terminal === undefined ? operationStatus(requestId, false, value => undefined as never) : Promise.resolve(terminal), completion, wait: () => completion, cancel: () => operationCancel(requestId), };
+    let completion: Promise<BridgeOperationStatus<never>> | undefined;
+    const wait = () => completion ??= terminal === undefined ? operationStatus("OpenWorkspace", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    return { requestId, status: () => terminal === undefined ? operationStatus("OpenWorkspace", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("OpenWorkspace", requestId), };
   }
   async function startOpenWorkspaceWithRequestId(requestId: string, input: string): Promise<EditorProjectOpenWorkspaceOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
-    let reply: string; try { reply = await bridge.call(`${route}StartOpenWorkspace`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus(requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return openWorkspaceOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
+    await awaitInteractionCapabilities();
+    let reply: string; try { reply = await bridge.call(`${route}StartOpenWorkspace`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("OpenWorkspace", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return openWorkspaceOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
     const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return openWorkspaceOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
-  async function recoverOpenWorkspaceWithRequestId(requestId: string): Promise<EditorProjectOpenWorkspaceOperation> { const status = await operationStatus(requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return openWorkspaceOperation(requestId, status.kind === "running" ? undefined : status); }
+  async function recoverOpenWorkspaceWithRequestId(requestId: string): Promise<EditorProjectOpenWorkspaceOperation> { const status = await operationStatus("OpenWorkspace", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return openWorkspaceOperation(requestId, status.kind === "running" ? undefined : status); }
   function dispose(): void {
     if (lease.disposed) return;
     lease.disposed = true;
@@ -357,6 +375,7 @@ async function connectEditorProjectAt(route: string, needsMount = false): Promis
     }
   }
   if (!isLive()) { dispose(); throw new BridgeError("disconnected", "The Bridge session changed during connection."); }
+  async function awaitInteractionCapabilities(): Promise<void> { }
   return {
     get snapshot() {
       if (lease.disposed || !isLive() || lease.current === undefined) throw new BridgeError("disconnected", "ViewModel is not connected.");
@@ -371,6 +390,7 @@ async function connectEditorProjectAt(route: string, needsMount = false): Promis
     },
     dispose,
     async previewProject(argument) {
+      await awaitInteractionCapabilities();
       return invoke(`${route}PreviewProject`, JSON.stringify(argument));
     },
     async canPreviewProject(argument) {
@@ -383,6 +403,7 @@ async function connectEditorProjectAt(route: string, needsMount = false): Promis
       throw new BridgeError("failed", "The command availability query returned an invalid response.");
     },
     async createProject(argument) {
+      await awaitInteractionCapabilities();
       return invoke(`${route}CreateProject`, JSON.stringify(argument));
     },
     async canCreateProject(argument) {
@@ -395,6 +416,7 @@ async function connectEditorProjectAt(route: string, needsMount = false): Promis
       throw new BridgeError("failed", "The command availability query returned an invalid response.");
     },
     async openWorkspace(argument) {
+      await awaitInteractionCapabilities();
       return invoke(`${route}OpenWorkspace`, JSON.stringify(argument));
     },
     async canOpenWorkspace(argument) {
