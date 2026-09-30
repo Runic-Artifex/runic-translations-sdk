@@ -1727,13 +1727,8 @@
         repairMessage = result.message ?? notice("ui_feedback_repair_failed");
         return;
       }
-      if (result.snapshot === undefined) {
-        await reloadAfterSave(document.path, repairText, draftGenerations[document.path] ?? 0, result.message ?? notice("app_saved"));
-        repairDocument = undefined;
-        return;
-      }
+      await reloadAfterSave(document.path, repairText, draftGenerations[document.path] ?? 0, result.message ?? notice("app_saved"));
       repairDocument = undefined;
-      installSnapshot(result.snapshot, false);
     } catch (error) {
       repairMessage = errorNotice(error);
     } finally {

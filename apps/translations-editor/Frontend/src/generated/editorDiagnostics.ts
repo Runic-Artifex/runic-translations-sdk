@@ -17,8 +17,8 @@ const bridgeWire = {
   array<T>(value: unknown, decode: (item: unknown) => T): readonly T[] { if (!Array.isArray(value)) throw new TypeError("Expected an array."); return value.map(decode); },
   stringRecord<T>(value: unknown, decode: (item: unknown) => T): Readonly<Record<string, T>> { const object = this.object(value, item => item); const result = Object.create(null) as Record<string, T>; for (const [key, item] of Object.entries(object)) result[key] = decode(item); return result; },
   object<T>(value: unknown, decode: (item: Record<string, unknown>) => T): T { if (value === null || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Expected an object."); return decode(value as Record<string, unknown>); },
-  union(value: unknown): any { const object = this.object(value, item => item); if (typeof object.$case !== "string") throw new TypeError("Expected a union discriminator."); return object; },
-  encodeUnion(value: unknown): Record<string, unknown> { const object = this.object(value, item => item); if (typeof object.$case !== "string") throw new TypeError("Expected a union discriminator."); return object; },
+  union(value: unknown): any { const object = this.object(value, item => item); if (typeof object["$case"] !== "string") throw new TypeError("Expected a union discriminator."); return object; },
+  encodeUnion(value: unknown): Record<string, unknown> { const object = this.object(value, item => item); if (typeof object["$case"] !== "string") throw new TypeError("Expected a union discriminator."); return object; },
 };
 
 export interface EditorDiagnosticsState {
