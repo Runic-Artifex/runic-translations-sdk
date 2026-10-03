@@ -125,7 +125,14 @@
           Condition="'$(RunicEditorUsePackedViews)' == 'true'" />
     <WriteLinesToFile File="Frontend/.runic-translations-manifest-path"
                       Lines="$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json"
-                      Overwrite="true" />
+                      Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <!-- The frontend build also consumes generated translations and built
+         workspace packages, which live outside Frontend. -->
+    <ItemGroup>
+      <RunicBridgeFrontendInput Include="$(TranslationsOutputPath)/editor.esm-v5/**/*" />
+      <RunicBridgeFrontendInput Include="../../packages/web/svelte/dist/**/*;../../packages/web/sveltekit/dist/**/*" />
+      <RunicBridgeFrontendInput Include="../../packages/web/vite-plugin-runic-translations/index.js;../../packages/web/vite-plugin-runic-translations/dist/**/*" />
+    </ItemGroup>
   </Target>
 
   <Target Name="CopyTranslationsEditorFrontend" AfterTargets="Build"
