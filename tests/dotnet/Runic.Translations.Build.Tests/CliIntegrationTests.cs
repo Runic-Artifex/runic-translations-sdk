@@ -16,6 +16,34 @@ internal static class CliIntegrationTests
         runner.Add("CLI init supports an empty RMF2 project", InitWithoutStarterIsValid);
         runner.Add("CLI project mode validates and generates direct MF2", ProjectModeValidatesAndGenerates);
         runner.Add("CLI schema writes exact bundled versioned schemas", SchemaWritesExactSchemas);
+        runner.Add("CLI response files keep backslashes unless they precede a quote", ResponseFilesUseMsvcrtBackslashRules);
+    }
+
+    private static void ResponseFilesUseMsvcrtBackslashRules()
+    {
+        using TemporaryDirectory temporary = new();
+        string responseFile = temporary.Resolve("arguments.rsp");
+        File.WriteAllText(responseFile, string.Join('\n',
+            "# comment",
+            "\"\\\\server\\share\\translations\\runic.json\"",
+            "C:\\work\\obj\\",
+            "\"a\\\\\\\"b\"",
+            "\"trailing\\\\\"",
+            "plain\\\"quote",
+            "\"two words\""), new UTF8Encoding(false));
+
+        var expanded = Runic.Translations.Tool.CommandLine.ExpandResponseFiles(["@" + responseFile]);
+
+        string[] expected =
+        [
+            @"\\server\share\translations\runic.json",
+            @"C:\work\obj\",
+            "a\\\"b",
+            "trailing\\",
+            "plain\"quote",
+            "two words",
+        ];
+        Assert.Equal(string.Join('|', expected), string.Join('|', expanded));
     }
 
     private static void ProjectModeValidatesAndGenerates()

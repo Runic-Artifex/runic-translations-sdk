@@ -132,9 +132,26 @@ internal static class CommandLine
                 continue;
             }
 
-            if (value == '\\' && inQuotes && index + 1 < content.Length && content[index + 1] is '"' or '\\')
+            // MSVCRT rules: backslashes are literal unless they precede a quote, so UNC paths
+            // (\\server\share) survive. 2n backslashes and a quote yield n backslashes and a
+            // delimiter; 2n+1 yield n backslashes and a literal quote.
+            if (value == '\\')
             {
-                token.Append(content[++index]);
+                int count = 0;
+                while (index + count < content.Length && content[index + count] == '\\')
+                {
+                    count++;
+                }
+
+                bool beforeQuote = index + count < content.Length && content[index + count] == '"';
+                token.Append('\\', beforeQuote ? count / 2 : count);
+                index += count - 1;
+                if (beforeQuote && count % 2 == 1)
+                {
+                    token.Append('"');
+                    index++;
+                }
+
                 hasToken = true;
                 atLineStart = false;
                 continue;
