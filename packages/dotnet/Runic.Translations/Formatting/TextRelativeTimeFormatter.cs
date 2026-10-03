@@ -15,7 +15,7 @@ public static class TextRelativeTimeFormatter
         if (unit is not ("second" or "minute" or "hour" or "day" or "week" or "month" or "year"))
             throw new ArgumentOutOfRangeException(nameof(unit));
         if (numeric is not ("always" or "auto")) throw new ArgumentOutOfRangeException(nameof(numeric));
-        string language = locale.Split('-')[0].ToLowerInvariant();
+        string language = GeneratedLocaleData.Language(locale);
         GeneratedRelativeTimeLocale data = GeneratedLocaleData.FindRelativeTime(language) ?? throw Unsupported(locale);
         if (numeric == "auto" && unit == "day" && value is >= -1 and <= 1 && decimal.Truncate(value) == value)
         {

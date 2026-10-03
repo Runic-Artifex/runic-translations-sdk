@@ -7,7 +7,7 @@ namespace Runic.Translations.Compiler;
 
 internal static partial class Mf2MessageParser
 {
-    // RMF2 lowers the shared data model. Direct MF2 uses the compatibility parser.
+    // Lowers the validated RMF2 data model into the compact message pattern.
     private static Mf2ParsedMessage? LowerRmf2(Mf2SyntaxDocument syntax, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
         if (diagnostics.Items.Any(d => d.Severity == TranslationDiagnosticSeverity.Error)) return null;
@@ -100,7 +100,7 @@ internal static partial class Mf2MessageParser
                 else if (expression.Operand is { Kind: not Mf2OperandKind.Variable } literal) current.Add(new CompiledMessageText(literal.Value));
                 else
                 {
-                    var node = ParseExpression("$" + expression.Operand!.Value + (expression.Function is null ? "" : " " + FunctionTail(expression)), declarations, used, syntax.Source, diagnostics, resolveAliases: true);
+                    var node = ParseExpression("$" + expression.Operand!.Value + (expression.Function is null ? "" : " " + FunctionTail(expression)), declarations, used, syntax.Source, diagnostics);
                     if (node is not null) current.Add(node);
                 }
             }

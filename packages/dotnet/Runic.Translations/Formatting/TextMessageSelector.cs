@@ -10,7 +10,7 @@ public static class TextMessageSelector
     public static string SelectPlural(decimal value, string locale, bool ordinal)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(locale);
-        string language = locale.Split('-')[0].ToLowerInvariant();
+        string language = GeneratedLocaleData.Language(locale);
         decimal absolute = Math.Abs(value);
         GeneratedPluralLocale? localeRules = GeneratedLocaleData.FindPlural(language);
         if (localeRules is null) return "other";

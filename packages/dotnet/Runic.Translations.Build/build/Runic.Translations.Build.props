@@ -15,8 +15,17 @@
     <RunicTranslationsBuildPropsImported>true</RunicTranslationsBuildPropsImported>
   </PropertyGroup>
 
-  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\.config\dotnet-tools.json')">
-    <TranslationsToolInput Include="$(MSBuildProjectDirectory)\.config\dotnet-tools.json" />
+  <!-- dotnet tool run resolves manifests from the project directory upward, usually at the repository root. -->
+  <PropertyGroup>
+    <_TranslationsToolManifestDirectory>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', '.config/dotnet-tools.json'))</_TranslationsToolManifestDirectory>
+    <_TranslationsBareToolManifestDirectory>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildProjectDirectory)', 'dotnet-tools.json'))</_TranslationsBareToolManifestDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <TranslationsToolInput Include="$(_TranslationsToolManifestDirectory)\.config\dotnet-tools.json"
+                           Condition="'$(_TranslationsToolManifestDirectory)' != ''" />
+    <TranslationsToolInput Include="$(_TranslationsBareToolManifestDirectory)\dotnet-tools.json"
+                           Condition="'$(_TranslationsBareToolManifestDirectory)' != ''" />
   </ItemGroup>
 
   <ItemGroup>

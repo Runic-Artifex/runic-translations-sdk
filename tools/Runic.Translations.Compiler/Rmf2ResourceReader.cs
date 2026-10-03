@@ -57,7 +57,7 @@ public static class Rmf2ResourceReader
         {
             if (node.Message is null || node.MessageByteMap.Count == 0) continue;
             var messageDiagnostics = new DiagnosticBag();
-            Mf2MessageParser.Parse(new TranslationSource(source.Path, Encoding.UTF8.GetBytes(node.Message)), messageDiagnostics, options, cancellationToken, rmf2: true, sourceSyntax: node.MessageSyntax);
+            Mf2MessageParser.Parse(new TranslationSource(source.Path, Encoding.UTF8.GetBytes(node.Message)), messageDiagnostics, options, cancellationToken, sourceSyntax: node.MessageSyntax);
             foreach (var item in messageDiagnostics.Items)
             {
                 int from = node.MessageByteMap[Math.Min(item.Location.StartByte, node.MessageByteMap.Count - 1)];

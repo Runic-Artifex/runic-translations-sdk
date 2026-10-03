@@ -30,7 +30,7 @@ internal static partial class Mf2MessageParser
         TranslationSource source,
         DiagnosticBag diagnostics,
         TranslationCompilerOptions options,
-        CancellationToken cancellationToken, bool rmf2 = false, Mf2SyntaxDocument? sourceSyntax = null)
+        CancellationToken cancellationToken, Mf2SyntaxDocument? sourceSyntax = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (source.Bytes.Length > options.MaximumDocumentBytes)
@@ -54,85 +54,17 @@ internal static partial class Mf2MessageParser
         if (StrictJsonParser.StrictUtf8.GetByteCount(text) > options.MaximumValueBytes)
             Error(diagnostics, source, "RTR0022", "MF2 message value exceeds the configured byte limit.");
 
-        if (rmf2)
-        {
-            var syntax = sourceSyntax ?? Mf2SyntaxReader.Read(source, options, cancellationToken);
-            foreach (var diagnostic in syntax.Diagnostics) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
-            if (!syntax.Success) return null;
-            var model = Mf2SyntaxReader.ValidateDataModel(syntax);
-            foreach (var diagnostic in model) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
-            if (model.Count > 0) return null;
-            var profile = Mf2SyntaxReader.ValidateInlineProfile(syntax);
-            foreach (var diagnostic in profile) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
-            if (profile.Count > 0) return null;
-            ValidateRmf2Capabilities(syntax, source, diagnostics);
-            return LowerRmf2(syntax, diagnostics, options);
-        }
-        var declarations = new Dictionary<string, Declaration>(StringComparer.Ordinal);
-        int offset = 0;
-        while (TryReadLine(text, offset, out string line, out int next))
-        {
-            string trimmed = line.Trim();
-            if (trimmed.Length == 0 || (!rmf2 && trimmed.StartsWith("//", StringComparison.Ordinal)))
-            {
-                offset = next;
-                continue;
-            }
-            if (trimmed.StartsWith(".input", StringComparison.Ordinal))
-            {
-                ReadInput(trimmed, declarations, source, diagnostics);
-                offset = next;
-                continue;
-            }
-            if (trimmed.StartsWith(".local", StringComparison.Ordinal))
-            {
-                ReadLocal(trimmed, declarations, source, diagnostics, rmf2);
-                offset = next;
-                continue;
-            }
-            break;
-        }
-
-        string body = text.Substring(Math.Min(offset, text.Length));
-        if (!rmf2) body = body.Trim();
-        if (body.Length == 0)
-        {
-            Error(diagnostics, source, "RTR0041", "MF2 message has no body.");
-            return null;
-        }
-
-        if (rmf2)
-            foreach (Declaration declaration in declarations.Values)
-                if (declaration.Selector is null && declaration.Type is TranslationArgumentType.Int or TranslationArgumentType.Number)
-                    declaration.Selector = "plural";
-        var usedInputs = new HashSet<string>(StringComparer.Ordinal);
-        CompiledMessagePattern? message;
-        if (body.StartsWith(".match", StringComparison.Ordinal))
-            message = ParseMatch(body, declarations, usedInputs, source, diagnostics, cancellationToken);
-        else
-        {
-            string pattern = UnquotePattern(body, source, diagnostics);
-            IReadOnlyList<CompiledMessageNode>? nodes = ParsePattern(pattern, declarations, usedInputs, source, diagnostics);
-            message = nodes is null ? null : new CompiledMessagePattern(nodes);
-        }
-        if (message is null) return null;
-
-        foreach (string name in usedInputs)
-            if (!HasInputDeclaration(declarations, name))
-                declarations.Add(name, Declaration.CreateInput(name, name, TranslationArgumentType.String, "none", null));
-
-        var placeholders = new List<PlaceholderModel>();
-        var included = new HashSet<string>(StringComparer.Ordinal);
-        foreach (Declaration declaration in declarations.Values)
-        {
-            if (declaration.Constant is not null || (!rmf2 && !usedInputs.Contains(declaration.Input)) || !included.Add(declaration.Input)) continue;
-            placeholders.Add(new PlaceholderModel(declaration.Input, declaration.Type, declaration.Format));
-        }
-        placeholders.Sort((left, right) => StringComparer.Ordinal.Compare(left.Name, right.Name));
-        if (placeholders.Count > options.MaximumPlaceholdersPerValue)
-            Error(diagnostics, source, "RTR0022", "MF2 input count exceeds the configured limit.");
-
-        return new Mf2ParsedMessage(text, message, placeholders.ToArray());
+        var syntax = sourceSyntax ?? Mf2SyntaxReader.Read(source, options, cancellationToken);
+        foreach (var diagnostic in syntax.Diagnostics) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+        if (!syntax.Success) return null;
+        var model = Mf2SyntaxReader.ValidateDataModel(syntax);
+        foreach (var diagnostic in model) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+        if (model.Count > 0) return null;
+        var profile = Mf2SyntaxReader.ValidateInlineProfile(syntax);
+        foreach (var diagnostic in profile) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+        if (profile.Count > 0) return null;
+        ValidateRmf2Capabilities(syntax, source, diagnostics);
+        return LowerRmf2(syntax, diagnostics, options);
     }
 
     // RMF2 has its own explicit execution profile. Never accept an option and silently
@@ -191,199 +123,12 @@ internal static partial class Mf2MessageParser
         "date" or "time" or "datetime" or "runic:uuid" => "style", "runic:boolean" => "select", "runic:relative-time" => "unit numeric", _ => "",
     };
 
-    private static CompiledMessagePattern? ParseMatch(
-        string body,
-        Dictionary<string, Declaration> declarations,
-        HashSet<string> usedInputs,
-        TranslationSource source,
-        DiagnosticBag diagnostics,
-        CancellationToken cancellationToken)
-    {
-        int lineEnd = body.IndexOf('\n');
-        string matchLine = lineEnd < 0 ? body : body.Substring(0, lineEnd);
-        string[] selectorTokens = matchLine.Substring(".match".Length).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (selectorTokens.Length == 0)
-        {
-            Error(diagnostics, source, "RTR0041", "MF2 .match requires at least one selector.");
-            return null;
-        }
-        var selectors = new List<CompiledMessageSelector>(selectorTokens.Length);
-        for (int index = 0; index < selectorTokens.Length; index++)
-        {
-            string name = selectorTokens[index].TrimStart('$');
-            if (!Variable.IsMatch(name))
-            {
-                Error(diagnostics, source, "RTR0041", "MF2 selector names must be variables.");
-                return null;
-            }
-            if (!selectorTokens[index].StartsWith('$') || selectors.Exists(s => s.Name == name))
-            { Error(diagnostics, source, "RTR0041", "MF2 selectors must be distinct variables."); return null; }
-            Declaration declaration = ResolveDeclaration(name, declarations);
-            if (declaration.Constant is not null) { Error(diagnostics, source, "RTR0065", "Constant local selectors are not executable in this backend profile."); return null; }
-            usedInputs.Add(declaration.Input);
-            selectors.Add(new CompiledMessageSelector(name, declaration.Input, declaration.Selector ?? "exact"));
-        }
-
-        string variantsText = lineEnd < 0 ? string.Empty : body.Substring(lineEnd + 1);
-        int position = 0;
-        var variants = new List<CompiledMessageVariant>();
-        while (position < variantsText.Length)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            SkipWhitespace(variantsText, ref position);
-            if (position == variantsText.Length) break;
-            int open = variantsText.IndexOf("{{", position, StringComparison.Ordinal);
-            if (open < 0)
-            {
-                Error(diagnostics, source, "RTR0041", "MF2 variant is missing a quoted pattern.");
-                return null;
-            }
-            string[] keys = variantsText.Substring(position, open - position).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            if (keys.Length != selectors.Count)
-            {
-                Error(diagnostics, source, "RTR0041", "MF2 variant key count must match the selector count.");
-                return null;
-            }
-            int close = FindQuotedPatternEnd(variantsText, open + 2);
-            if (close < 0)
-            {
-                Error(diagnostics, source, "RTR0041", "MF2 variant contains an unterminated quoted pattern.");
-                return null;
-            }
-            string pattern = variantsText.Substring(open + 2, close - open - 2);
-            IReadOnlyList<CompiledMessageNode>? nodes = ParsePattern(pattern, declarations, usedInputs, source, diagnostics);
-            if (nodes is null) return null;
-            var matches = new Dictionary<string, string>(StringComparer.Ordinal);
-            for (int index = 0; index < keys.Length; index++)
-                matches.Add(selectors[index].Name, UnquoteLiteral(keys[index]));
-            variants.Add(new CompiledMessageVariant(matches, new CompiledMessagePattern(nodes)));
-            position = close + 2;
-        }
-        if (variants.Count == 0)
-        {
-            Error(diagnostics, source, "RTR0041", "MF2 .match requires at least one variant.");
-            return null;
-        }
-        bool hasFallback = false;
-        for (int index = 0; index < variants.Count; index++)
-        {
-            bool fallback = true;
-            foreach (string value in variants[index].Matches.Values) fallback &= value == "*";
-            hasFallback |= fallback;
-        }
-        if (!hasFallback)
-            Error(diagnostics, source, "RTR0041", "MF2 .match requires a catch-all '*' variant.");
-        return new CompiledMessagePattern(Array.Empty<CompiledMessageNode>(), selectors.ToArray(), variants.ToArray());
-    }
-
-    private static CompiledMessageNode[]? ParsePattern(
-        string pattern,
-        Dictionary<string, Declaration> declarations,
-        HashSet<string> usedInputs,
-        TranslationSource source,
-        DiagnosticBag diagnostics)
-    {
-        int position = 0;
-        return ParseNodes(pattern, ref position, null, declarations, usedInputs, source, diagnostics);
-    }
-
-    private static CompiledMessageNode[]? ParseNodes(
-        string pattern,
-        ref int position,
-        string? closingMarkup,
-        Dictionary<string, Declaration> declarations,
-        HashSet<string> usedInputs,
-        TranslationSource source,
-        DiagnosticBag diagnostics, int depth = 0)
-    {
-        if (depth > 64) { Error(diagnostics, source, "RTR0022", "MF2 markup depth exceeds 64 levels."); return null; }
-        var nodes = new List<CompiledMessageNode>();
-        var text = new StringBuilder();
-        while (position < pattern.Length)
-        {
-            char value = pattern[position];
-            if (value == '\\' && position + 1 < pattern.Length && pattern[position + 1] is '{' or '}' or '\\')
-            {
-                text.Append(pattern[position + 1]);
-                position += 2;
-                continue;
-            }
-            if (value != '{')
-            {
-                text.Append(value);
-                position++;
-                continue;
-            }
-
-            int close = FindExpressionEnd(pattern, position + 1);
-            if (close < 0)
-            {
-                string original = StrictJsonParser.StrictUtf8.GetString(source.Bytes);
-                int start = Math.Max(0, original.IndexOf(pattern, StringComparison.Ordinal)) + position;
-                diagnostics.Add("RTR0041", TranslationDiagnosticSeverity.Error, "MF2 pattern contains an unterminated expression.", source,
-                    new ByteSpan(StrictJsonParser.StrictUtf8.GetByteCount(original.AsSpan(0, start)), StrictJsonParser.StrictUtf8.GetByteCount(pattern.AsSpan(position))));
-                return null;
-            }
-            Flush(nodes, text);
-            string expression = pattern.Substring(position + 1, close - position - 1).Trim();
-            position = close + 1;
-            if (expression.StartsWith('/'))
-            {
-                string name = expression.Substring(1).Trim();
-                if (!string.Equals(name, closingMarkup, StringComparison.Ordinal))
-                {
-                    Error(diagnostics, source, "RTR0041", "MF2 markup contains a mismatched closing tag.");
-                    return null;
-                }
-                return nodes.ToArray();
-            }
-            if (expression.StartsWith('#'))
-            {
-                bool standalone = expression.EndsWith('/');
-                string declaration = expression.Substring(1, expression.Length - 1 - (standalone ? 1 : 0)).Trim();
-                int space = declaration.IndexOf(' ');
-                int tab = declaration.IndexOf('\t');
-                int separator = space < 0 ? tab : tab < 0 ? space : Math.Min(space, tab);
-                string name = separator < 0 ? declaration : declaration.Substring(0, separator);
-                if (!Rmf2MarkupRegistry.Name.IsMatch(name))
-                {
-                    Error(diagnostics, source, "RTR0041", "MF2 markup names must be identifiers.");
-                    return null;
-                }
-                var attributes = new SortedDictionary<string, string>(StringComparer.Ordinal);
-                var annotations = new SortedDictionary<string, string>(StringComparer.Ordinal);
-                var variableOptions = new HashSet<string>(StringComparer.Ordinal);
-                string properties = separator < 0 ? string.Empty : declaration.Substring(separator + 1);
-                if (!ReadMarkupProperties(properties, attributes, annotations, variableOptions, usedInputs, declarations, source, diagnostics)) return null;
-                CompiledMessageNode[] children = Array.Empty<CompiledMessageNode>();
-                if (!standalone)
-                {
-                    children = ParseNodes(pattern, ref position, name, declarations, usedInputs, source, diagnostics, depth + 1)!;
-                    if (children is null) return null;
-                }
-                nodes.Add(new CompiledMessageMarkup(name, attributes, children) { Standalone = standalone, Annotations = annotations, VariableOptions = variableOptions });
-                continue;
-            }
-            CompiledMessageNode? node = ParseExpression(expression, declarations, usedInputs, source, diagnostics);
-            if (node is null) return null;
-            nodes.Add(node);
-        }
-        if (closingMarkup is not null)
-        {
-            Error(diagnostics, source, "RTR0041", "MF2 markup tag '" + closingMarkup + "' is not closed.");
-            return null;
-        }
-        Flush(nodes, text);
-        return nodes.ToArray();
-    }
-
     private static CompiledMessageNode? ParseExpression(
         string expression,
         Dictionary<string, Declaration> declarations,
         HashSet<string> usedInputs,
         TranslationSource source,
-        DiagnosticBag diagnostics,
-        bool resolveAliases = false)
+        DiagnosticBag diagnostics)
     {
         if (!expression.StartsWith('$'))
         {
@@ -410,7 +155,7 @@ internal static partial class Mf2MessageParser
         }
         if (tail.StartsWith(':'))
         {
-            declaration = ParseFunction(name, resolveAliases ? ResolveDeclaration(name, declarations).Input : name, tail, source, diagnostics);
+            declaration = ParseFunction(name, ResolveDeclaration(name, declarations).Input, tail, source, diagnostics);
             if (declarations.TryGetValue(name, out Declaration? existing) &&
                 (existing.Type != declaration.Type || existing.Format != declaration.Format))
                 Error(diagnostics, source, "RTR0041", "MF2 variable '" + name + "' has conflicting format declarations.");
@@ -421,66 +166,6 @@ internal static partial class Mf2MessageParser
         if (declaration.Function == "string" && declaration.Format == "none")
             return new CompiledMessageInput(declaration.Input);
         return new CompiledMessageFormat(declaration.Input, declaration.Function, declaration.Format, declaration.Unit, declaration.Numeric);
-    }
-
-    private static void ReadInput(string line, Dictionary<string, Declaration> declarations, TranslationSource source, DiagnosticBag diagnostics)
-    {
-        int open = line.IndexOf('{');
-        int close = line.LastIndexOf('}');
-        if (open < 0 || close <= open)
-        {
-            Error(diagnostics, source, "RTR0041", "Invalid MF2 .input declaration.");
-            return;
-        }
-        string expression = line.Substring(open + 1, close - open - 1).Trim();
-        if (!TrySplitVariable(expression, out string name, out string tail))
-        {
-            Error(diagnostics, source, "RTR0041", "Invalid MF2 .input variable.");
-            return;
-        }
-        Declaration declaration = tail.Length == 0
-            ? Declaration.CreateInput(name, name, TranslationArgumentType.String, "none", null)
-            : ParseFunction(name, name, tail, source, diagnostics);
-        if (!declarations.TryAdd(name, declaration))
-            Error(diagnostics, source, "RTR0041", "Duplicate MF2 declaration for '" + name + "'.");
-    }
-
-    private static void ReadLocal(string line, Dictionary<string, Declaration> declarations, TranslationSource source, DiagnosticBag diagnostics, bool rmf2)
-    {
-        int equals = line.IndexOf('=');
-        int open = line.IndexOf('{', equals + 1);
-        int close = line.LastIndexOf('}');
-        string left = equals < 0 ? string.Empty : line.Substring(".local".Length, equals - ".local".Length).Trim().TrimStart('$');
-        if (rmf2 && Variable.IsMatch(left) && open >= 0 && close > open)
-        {
-            var literalSyntax = Mf2SyntaxReader.Read(new TranslationSource(source.Path, Encoding.UTF8.GetBytes(line.Substring(open, close - open + 1))));
-            var expression = literalSyntax.Expressions.Count == 1 ? literalSyntax.Expressions[0] : null;
-            if (literalSyntax.Success && expression?.Operand is { Kind: not Mf2OperandKind.Variable } operandSyntax)
-            {
-                if (expression.Function is not null || expression.Attributes.Count != 0)
-                { Error(diagnostics, source, "RTR0065", "Formatted or attributed literal locals require an unsupported backend capability."); return; }
-                if (!declarations.TryAdd(left, new Declaration(left, left, TranslationArgumentType.String, "none", "string", null, null, null) { Constant = operandSyntax.Value }))
-                    Error(diagnostics, source, "RTR0041", "Duplicate MF2 declaration for '" + left + "'.");
-                return;
-            }
-        }
-        if (!Variable.IsMatch(left) || open < 0 || close <= open ||
-            !TrySplitVariable(line.Substring(open + 1, close - open - 1).Trim(), out string input, out string tail))
-        {
-            Error(diagnostics, source, "RTR0041", "Invalid MF2 .local declaration.");
-            return;
-        }
-        Declaration operand = ResolveDeclaration(input, declarations);
-        if (rmf2 && operand.Constant is not null && tail.Length != 0)
-        {
-            Error(diagnostics, source, "RTR0065", "Formatted or attributed constant aliases require an unsupported backend capability.");
-            return;
-        }
-        Declaration declaration = tail.Length == 0
-            ? new Declaration(left, operand.Input, operand.Type, operand.Format, operand.Function, operand.Selector, operand.Unit, operand.Numeric) { Constant = operand.Constant }
-            : ParseFunction(left, operand.Input, tail, source, diagnostics);
-        if (!declarations.TryAdd(left, declaration))
-            Error(diagnostics, source, "RTR0041", "Duplicate MF2 declaration for '" + left + "'.");
     }
 
     private static Declaration ParseFunction(string name, string input, string tail, TranslationSource source, DiagnosticBag diagnostics)
@@ -536,18 +221,6 @@ internal static partial class Mf2MessageParser
         return new Declaration(name, input, type, format, normalizedFunction, selector, unit, numeric);
     }
 
-    private static bool TrySplitVariable(string expression, out string name, out string tail)
-    {
-        name = string.Empty;
-        tail = string.Empty;
-        if (!expression.StartsWith('$')) return false;
-        int end = 1;
-        while (end < expression.Length && (char.IsAsciiLetterOrDigit(expression[end]) || expression[end] == '_')) end++;
-        name = expression.Substring(1, end - 1);
-        tail = expression.Substring(end).Trim();
-        return Variable.IsMatch(name) && (tail.Length == 0 || tail.StartsWith(':'));
-    }
-
     private static Declaration ResolveDeclaration(string name, Dictionary<string, Declaration> declarations) =>
         declarations.TryGetValue(name, out Declaration? declaration)
             ? declaration
@@ -558,99 +231,6 @@ internal static partial class Mf2MessageParser
         foreach (Declaration declaration in declarations.Values)
             if (string.Equals(declaration.Input, input, StringComparison.Ordinal)) return true;
         return false;
-    }
-
-    private static string UnquotePattern(string body, TranslationSource source, DiagnosticBag diagnostics)
-    {
-        if (!body.StartsWith("{{", StringComparison.Ordinal)) return body;
-        int close = FindQuotedPatternEnd(body, 2);
-        if (close < 0 || body.Substring(close + 2).Trim().Length != 0)
-        {
-            Error(diagnostics, source, "RTR0041", "MF2 quoted pattern is not terminated correctly.");
-            return string.Empty;
-        }
-        return body.Substring(2, close - 2);
-    }
-
-    private static int FindQuotedPatternEnd(string value, int start)
-    {
-        int expressionDepth = 0;
-        bool quoted = false;
-        for (int index = start; index < value.Length - 1; index++)
-        {
-            if (value[index] == '|') quoted = !quoted;
-            if (quoted || (index > start && value[index - 1] == '\\')) continue;
-            if (value[index] == '{') expressionDepth++;
-            else if (value[index] == '}')
-            {
-                if (expressionDepth > 0) expressionDepth--;
-                else if (value[index + 1] == '}') return index;
-            }
-        }
-        return -1;
-    }
-
-    private static int FindExpressionEnd(string value, int start)
-    {
-        bool quoted = false;
-        for (int index = start; index < value.Length; index++)
-        {
-            if (value[index] == '|' && (index == start || value[index - 1] != '\\')) quoted = !quoted;
-            else if (!quoted && value[index] == '}') return index;
-        }
-        return -1;
-    }
-
-    private static bool ReadMarkupProperties(string value, SortedDictionary<string, string> options,
-        SortedDictionary<string, string> annotations, HashSet<string> variableOptions, HashSet<string> inputs,
-        Dictionary<string, Declaration> declarations, TranslationSource source, DiagnosticBag diagnostics)
-    {
-        int at = 0;
-        while (at < value.Length)
-        {
-            SkipWhitespace(value, ref at); if (at == value.Length) break;
-            bool annotation = value[at] == '@'; if (annotation) at++;
-            int start = at;
-            while (at < value.Length && (char.IsAsciiLetterOrDigit(value[at]) || value[at] is '_' or '-')) at++;
-            string key = value.Substring(start, at - start);
-            if (key.Length == 0) return Invalid();
-            SkipWhitespace(value, ref at);
-            string item = ""; bool variable = false;
-            if (at < value.Length && value[at] == '=')
-            {
-                at++; SkipWhitespace(value, ref at); if (at == value.Length) return Invalid();
-                if (value[at] == '|')
-                {
-                    at++; var literal = new StringBuilder(); bool closed = false;
-                    while (at < value.Length)
-                    {
-                        char ch = value[at++];
-                        if (ch == '|') { closed = true; break; }
-                        if (ch == '\\' && at < value.Length) ch = value[at++];
-                        literal.Append(ch);
-                    }
-                    if (!closed) return Invalid();
-                    item = literal.ToString();
-                }
-                else
-                {
-                    start = at; while (at < value.Length && !char.IsWhiteSpace(value[at])) at++;
-                    item = value.Substring(start, at - start);
-                    variable = item.StartsWith('$');
-                    if (variable) { item = item.Substring(1); if (!Variable.IsMatch(item) || annotation) return Invalid(); }
-                }
-            }
-            else if (!annotation) return Invalid();
-            if (!(annotation ? annotations : options).TryAdd(key, item)) return Invalid();
-            if (variable)
-            {
-                Declaration input = ResolveDeclaration(item, declarations);
-                if (input.Constant is not null) options[key] = input.Constant;
-                else { options[key] = input.Input; variableOptions.Add(key); inputs.Add(input.Input); }
-            }
-        }
-        return true;
-        bool Invalid() { Error(diagnostics, source, "RTR0041", "Invalid or duplicate MF2 markup option/attribute."); return false; }
     }
 
     private static string? OptionValue(Dictionary<string, string> options, string name) =>
@@ -664,40 +244,6 @@ internal static partial class Mf2MessageParser
         if (value.Length >= 2 && value[0] == '|' && value[value.Length - 1] == '|')
             return value.Substring(1, value.Length - 2).Replace("\\|", "|", StringComparison.Ordinal);
         return value;
-    }
-
-    private static bool TryReadLine(string value, int offset, out string line, out int next)
-    {
-        if (offset >= value.Length)
-        {
-            line = string.Empty;
-            next = value.Length;
-            return false;
-        }
-        int end = value.IndexOf('\n', offset);
-        if (end < 0)
-        {
-            line = value.Substring(offset);
-            next = value.Length;
-        }
-        else
-        {
-            line = value.Substring(offset, end - offset);
-            next = end + 1;
-        }
-        return true;
-    }
-
-    private static void SkipWhitespace(string value, ref int position)
-    {
-        while (position < value.Length && char.IsWhiteSpace(value[position])) position++;
-    }
-
-    private static void Flush(List<CompiledMessageNode> nodes, StringBuilder text)
-    {
-        if (text.Length == 0) return;
-        nodes.Add(new CompiledMessageText(text.ToString()));
-        text.Clear();
     }
 
     private static void Error(DiagnosticBag diagnostics, TranslationSource source, string id, string message) =>

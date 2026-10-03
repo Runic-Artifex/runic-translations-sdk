@@ -34,10 +34,10 @@ public sealed class Rmf2SourceDiscovery : ITask
                             !mount.TryGetProperty("path", out JsonElement path) || path.ValueKind != JsonValueKind.String ||
                             string.IsNullOrWhiteSpace(path.GetString()))
                             throw new InvalidOperationException("Each source root must declare a non-empty path.");
-                        Discover(Path.GetFullPath(path.GetString()!, root), files);
+                        Discover(Path.GetFullPath(path.GetString()!, root), root, files);
                     }
                 }
-                else Discover(root, files);
+                else Discover(root, root, files);
             }
             Sources = new List<string>(files).ToArray(); return true;
         }
@@ -46,9 +46,9 @@ public sealed class Rmf2SourceDiscovery : ITask
             BuildEngine.LogErrorEvent(new BuildErrorEventArgs("translations", "RTR0052", "", 0, 0, 0, 0, exception.Message, "", nameof(Rmf2SourceDiscovery))); return false;
         }
     }
-    private static void Discover(string root, SortedSet<string> files)
+    private static void Discover(string root, string projectRoot, SortedSet<string> files)
     {
-        ValidateNoReparseAncestors(root);
+        ValidateNoReparseAncestors(root, projectRoot);
         var directories = new Stack<string>(); directories.Push(root); int visited = 0;
         while (directories.Count > 0)
         {
@@ -66,15 +66,30 @@ public sealed class Rmf2SourceDiscovery : ITask
         }
     }
 
-    private static void ValidateNoReparseAncestors(string path)
+    // Checks the ancestors of a source root below the deepest directory it shares with the project.
+    // Components above that belong to the environment: macOS /tmp and /var, or a symlinked home or
+    // checkout, are links a project cannot avoid. The traversal checks the root and its contents.
+    private static void ValidateNoReparseAncestors(string path, string projectRoot)
     {
-        string? current = Path.GetFullPath(path);
-        while (current is not null)
+        string fullPath = Path.GetFullPath(path);
+        string? boundary = Path.GetFullPath(projectRoot);
+        while (boundary is not null && !IsWithin(boundary, fullPath)) boundary = Path.GetDirectoryName(boundary);
+        string? current = Path.GetDirectoryName(fullPath);
+        while (current is not null && boundary is not null && IsWithin(boundary, current) &&
+               Path.GetRelativePath(boundary, current) != ".")
         {
             if ((File.Exists(current) || Directory.Exists(current)) &&
                 (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Translation source roots must not traverse symbolic links.");
             current = Path.GetDirectoryName(current);
         }
+    }
+
+    private static bool IsWithin(string root, string path)
+    {
+        string relative = Path.GetRelativePath(root, path);
+        return !Path.IsPathRooted(relative) && relative != ".." &&
+            !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+            !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
 }

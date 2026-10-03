@@ -93,7 +93,19 @@
       "relativeTime": true
     },
     {
+      "tag": "nb",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false
+    },
+    {
       "tag": "nl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false
+    },
+    {
+      "tag": "nn",
       "cardinal": true,
       "ordinal": true,
       "relativeTime": false
