@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@runic-artifex/svelte": "workspace:*",
+    "@runic-artifex/views": "workspace:*",
     "svelte": "5.57.0"
   },
   "devDependencies": {

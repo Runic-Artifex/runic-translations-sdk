@@ -1,5 +1,6 @@
 import { mockExecute } from "./mock-bridge";
-import { BridgeError, connectEditor, type EditorView } from "../generated/editor";
+import { BridgeError } from "@runic-artifex/views";
+import { connectEditor, type EditorClient } from "../generated/editor";
 import type { EditorDocumentPageReference, EditorDocumentState } from "../generated/editorDocument";
 import type {
   EditorAbout,
@@ -30,11 +31,11 @@ import type {
   WorkspaceSnapshot,
 } from "./contracts";
 
-let connection: Promise<EditorView> | undefined;
+let connection: Promise<EditorClient> | undefined;
 let tail: Promise<void> = Promise.resolve();
 const documentRefs = new Map<string, EditorDocumentPageReference>();
 
-function rememberDocuments(result: unknown, view: EditorView): void {
+function rememberDocuments(result: unknown, view: EditorClient): void {
   if (typeof result !== "object" || result === null) return;
   const value = result as { documents?: EditorDocument[]; snapshot?: WorkspaceSnapshot };
   const documents = value.documents ?? value.snapshot?.documents;
@@ -43,7 +44,7 @@ function rememberDocuments(result: unknown, view: EditorView): void {
   documents.forEach((document, index) => documentRefs.set(document.path, view.snapshot.documents[index]));
 }
 
-async function rootView(): Promise<EditorView> {
+async function rootView(): Promise<EditorClient> {
   return await (connection ??= connectEditor().catch(error => {
     connection = undefined;
     throw error;
@@ -62,7 +63,7 @@ async function serialized<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-function disconnectOnFailure(error: unknown, root?: EditorView): void {
+function disconnectOnFailure(error: unknown, root?: EditorClient): void {
   if (error instanceof BridgeError && error.kind === "disconnected") {
     root?.dispose();
     connection = undefined;
@@ -81,14 +82,14 @@ interface EditorDocumentSaveResult {
 
 async function invokeRouted<View extends DisposableRoute, State>(
   operation: string,
-  select: (root: EditorView) => RoutedReference<View>,
+  select: (root: EditorClient) => RoutedReference<View>,
   execute: (view: View, request: string) => Promise<State>,
   resultJson: (state: State) => string,
   argument: unknown,
 ): Promise<unknown> {
   if (import.meta.env.MODE === "mock") return await mockExecute(operation, argument);
   return serialized(async () => {
-    let root: EditorView | undefined;
+    let root: EditorClient | undefined;
     let route: View | undefined;
     try {
       root = await rootView();
@@ -114,7 +115,7 @@ async function invokeDocument<T>(path: string, command: "validate" | "save", req
   return serialized(async () => {
     const reference = documentRefs.get(path);
     if (!reference) throw new Error("The selected document route is unavailable. Reload the workspace.");
-    let root: EditorView | undefined;
+    let root: EditorClient | undefined;
     let view: Awaited<ReturnType<EditorDocumentPageReference["connect"]>> | undefined;
     try {
       root = await rootView();
