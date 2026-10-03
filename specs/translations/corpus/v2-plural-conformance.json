@@ -39,6 +39,12 @@
     { "locale": "sv", "ordinal": true, "value": "2", "expected": "one" },
     { "locale": "sv", "ordinal": true, "value": "11", "expected": "other" },
     { "locale": "sv", "ordinal": true, "value": "21", "expected": "one" },
-    { "locale": "sv", "ordinal": true, "value": "22", "expected": "one" }
+    { "locale": "sv", "ordinal": true, "value": "22", "expected": "one" },
+    { "locale": "nb", "ordinal": false, "value": "1", "expected": "one" },
+    { "locale": "nb-NO", "ordinal": false, "value": "2", "expected": "other" },
+    { "locale": "nn", "ordinal": false, "value": "1", "expected": "one" },
+    { "locale": "nn", "ordinal": false, "value": "1.5", "expected": "other" },
+    { "locale": "en_US", "ordinal": false, "value": "1", "expected": "one" },
+    { "locale": "en_US", "ordinal": true, "value": "2", "expected": "two" }
   ]
 }

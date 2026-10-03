@@ -17,7 +17,9 @@ internal static class GeneratedLocaleData
         new("es", "one-and-million", "other"),
         new("fr", "french", "one"),
         new("it", "one-and-million", "italian"),
+        new("nb", "one", "other"),
         new("nl", "integer-one", "other"),
+        new("nn", "one", "other"),
         new("no", "one", "other"),
         new("sv", "integer-one", "swedish"),
     ];
@@ -29,6 +31,9 @@ internal static class GeneratedLocaleData
         new("fr", ["hier", "aujourd’hui", "demain"], "il y a {0} {unit}", "dans {0} {unit}", [new("second", "seconde", "secondes"), new("minute", "minute", "minutes"), new("hour", "heure", "heures"), new("day", "jour", "jours"), new("week", "semaine", "semaines"), new("month", "mois", "mois"), new("year", "an", "ans")]),
         new("it", ["ieri", "oggi", "domani"], "{0} {unit} fa", "tra {0} {unit}", [new("second", "secondo", "secondi"), new("minute", "minuto", "minuti"), new("hour", "ora", "ore"), new("day", "giorno", "giorni"), new("week", "settimana", "settimane"), new("month", "mese", "mesi"), new("year", "anno", "anni")]),
     ];
+
+    // POSIX-style tags such as en_US select the same language family as en-US.
+    internal static string Language(string locale) => locale.Split('-', '_')[0].ToLowerInvariant();
 
     internal static GeneratedPluralLocale? FindPlural(string language)
     {

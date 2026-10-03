@@ -102,7 +102,7 @@ internal static class TranslationCapabilityRegistry
     internal static bool SupportsCardinal(string locale) => Contains(CardinalLanguages, Language(locale));
     internal static bool SupportsOrdinal(string locale) => Contains(OrdinalLanguages, Language(locale));
     internal static bool SupportsRelativeTime(string locale) => Contains(RelativeTimeLanguages, Language(locale));
-    private static string Language(string locale) => locale.Split('-')[0].ToLowerInvariant();
+    private static string Language(string locale) => locale.Split('-', '_')[0].ToLowerInvariant();
     private static bool Contains(string[] values, string value) => Array.BinarySearch(values, value, StringComparer.Ordinal) >= 0;
 }
 `;
@@ -159,6 +159,9 @@ ${pluralRows}
     [
 ${relativeRows}
     ];
+
+    // POSIX-style tags such as en_US select the same language family as en-US.
+    internal static string Language(string locale) => locale.Split('-', '_')[0].ToLowerInvariant();
 
     internal static GeneratedPluralLocale? FindPlural(string language)
     {

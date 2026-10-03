@@ -28,7 +28,9 @@
       "autoDay": ["ieri", "oggi", "domani"], "past": "{0} {unit} fa", "future": "tra {0} {unit}",
       "units": { "second": ["secondo", "secondi"], "minute": ["minuto", "minuti"], "hour": ["ora", "ore"], "day": ["giorno", "giorni"], "week": ["settimana", "settimane"], "month": ["mese", "mesi"], "year": ["anno", "anni"] }
     } },
+    { "tag": "nb", "cardinalRule": "one", "ordinalRule": "other" },
     { "tag": "nl", "cardinalRule": "integer-one", "ordinalRule": "other" },
+    { "tag": "nn", "cardinalRule": "one", "ordinalRule": "other" },
     { "tag": "no", "cardinalRule": "one", "ordinalRule": "other" },
     { "tag": "sv", "cardinalRule": "integer-one", "ordinalRule": "swedish" }
   ]

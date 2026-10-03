@@ -17,7 +17,9 @@ Conforming backends: **dotnet, esm**
 | `es`          |      yes |     yes |           yes |
 | `fr`          |      yes |     yes |           yes |
 | `it`          |      yes |     yes |           yes |
+| `nb`          |      yes |     yes |             — |
 | `nl`          |      yes |     yes |             — |
+| `nn`          |      yes |     yes |             — |
 | `no`          |      yes |     yes |             — |
 | `sv`          |      yes |     yes |             — |
 

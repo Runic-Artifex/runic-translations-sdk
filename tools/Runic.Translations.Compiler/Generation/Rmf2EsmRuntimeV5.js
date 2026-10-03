@@ -239,7 +239,7 @@ function numberSymbols(locale) {
 function groupInteger(value, locale) { return new Intl.NumberFormat(locale, { useGrouping: true, maximumFractionDigits: 0 }).format(value); }
 
 function selectPlural(value, locale, ordinal) {
-  const decimalValue = decimalAbsolute(value); const language = locale.toLowerCase().split("-")[0]; const rules = generatedLocaleData.plural[language];
+  const decimalValue = decimalAbsolute(value); const language = locale.toLowerCase().split(/[-_]/)[0]; const rules = generatedLocaleData.plural[language];
   if (!rules) throw new RangeError(`Plural selection is not supported for locale '${locale}'.`);
   const rule = rules[ordinal ? 1 : 0], integral = decimalIntegral(decimalValue), integer = decimalIntegerPart(decimalValue);
   const equals = expected => decimalValue.scale === 0 && decimalValue.coefficient === BigInt(expected);
@@ -255,7 +255,7 @@ function selectPlural(value, locale, ordinal) {
 }
 
 function formatRelative(value, unit, numeric, locale) {
-  const language = locale.toLowerCase().split("-")[0], data = generatedLocaleData.relativeTime[language];
+  const language = locale.toLowerCase().split(/[-_]/)[0], data = generatedLocaleData.relativeTime[language];
   if (!data) throw new RangeError(`Relative-time formatting is not supported for locale '${locale}'.`);
   const signed = value.negative ? -value.coefficient : value.coefficient;
   if (numeric === "auto" && unit === "day" && value.scale === 0 && signed >= -1n && signed <= 1n) return data.autoDay[Number(signed + 1n)];
