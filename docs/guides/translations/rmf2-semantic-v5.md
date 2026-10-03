@@ -40,8 +40,8 @@ exact values, including exponent notation and negative zero, within a bounded
 The normative [execution specification](../../../specs/translations/rmf2-execution-v2.md)
 and [machine-readable option table](../../../specs/translations/rmf2-execution-v2.json)
 describe these rules and the integration boundary. Public schema mirrors are
-[message AST v5](/schemas/translations/message-ast-v5.schema.json) and
-[locale artifact v5](/schemas/translations/locale-artifact-v5.schema.json).
+[message AST v5](https://runic-artifex.eu/schemas/translations/message-ast-v5.schema.json) and
+[locale artifact v5](https://runic-artifex.eu/schemas/translations/locale-artifact-v5.schema.json).
 The CLI `schema` command also exports both v5 schemas for offline validation;
 schema distribution alone does not change a project's source representation.
 Resource syntax and markup contracts remain version 1.

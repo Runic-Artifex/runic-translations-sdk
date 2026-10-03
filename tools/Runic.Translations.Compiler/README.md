@@ -54,7 +54,7 @@ The public result exposes deterministic catalog, locale, caller-contract, and
 source-freshness metadata. `Runic.Translations.Tooling` accepts that same typed
 result for XLIFF export; the normalized executable graph remains an internal
 implementation detail. Shipping hosts use the typed `Rmf2ExecutionV2` project carrier. See the
-[v5 project-linking contract](../../specs/translations/rmf2-project-v5.md) for
+[v5 project-linking contract](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/rmf2-project-v5.md) for
 cross-locale contracts, fingerprint/freshness separation and generated names.
 
 ## Compatibility and status
