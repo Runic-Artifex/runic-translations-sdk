@@ -9,7 +9,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-    <TranslationsPackageVersion Condition="'$(TranslationsPackageVersion)' == ''">0.5.0-preview.2</TranslationsPackageVersion>
+    <TranslationsPackageVersion Condition="'$(TranslationsPackageVersion)' == ''">$(RunicSdkVersion)</TranslationsPackageVersion>
     <RestoreAdditionalProjectSources Condition="'$(TranslationsPackageFeed)' != ''">$(TranslationsPackageFeed);$(RunicCommandLinePackageFeed)</RestoreAdditionalProjectSources>
     <!-- Packages under test change on every source commit. -->
     <IsPackable>false</IsPackable>
@@ -18,6 +18,7 @@
   <ItemGroup>
     <PackageReference Include="Runic.Translations" Version="$(TranslationsPackageVersion)" />
     <PackageReference Include="Runic.Translations.Build" Version="$(TranslationsPackageVersion)" PrivateAssets="all" />
+    <AssemblyMetadata Include="RunicPackageVersion" Value="$(TranslationsPackageVersion)" />
   </ItemGroup>
 
   <Import Project="../../../eng/build/translations.targets" />

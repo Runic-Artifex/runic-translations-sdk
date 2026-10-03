@@ -21,7 +21,10 @@ internal static class Program
     private const string RepositoryUrl = "https://github.com/Runic-Artifex/runic-sdk";
     private static readonly Guid SourceLinkKind = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
     private static readonly string PackageVersion =
-        Environment.GetEnvironmentVariable("RUNIC_PACKAGE_VERSION") ?? "0.5.0-preview.2";
+        Environment.GetEnvironmentVariable("RUNIC_PACKAGE_VERSION") ??
+        typeof(Program).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .Cast<System.Reflection.AssemblyMetadataAttribute>()
+            .Single(attribute => attribute.Key == "RunicPackageVersion").Value!;
     private static int _passed;
 
     public static async Task<int> Main(string[] args)
