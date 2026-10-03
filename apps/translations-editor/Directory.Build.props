@@ -1,30 +1,4 @@
 <Project>
   <Import Project="../../Directory.Build.props" />
-  <PropertyGroup>
-    <RunicTranslationsBuildMode Condition="'$(RunicTranslationsBuildMode)' == '' and '$(CI)' == 'true'">Verification</RunicTranslationsBuildMode>
-    <RunicTranslationsBuildMode Condition="'$(RunicTranslationsBuildMode)' == ''">Development</RunicTranslationsBuildMode>
-    <RunicTranslationsVerificationBuild Condition="'$(RunicTranslationsBuildMode)' == 'Verification'">true</RunicTranslationsVerificationBuild>
-    <RunicTranslationsVerificationBuild Condition="'$(RunicTranslationsVerificationBuild)' == ''">false</RunicTranslationsVerificationBuild>
-    <LangVersion>14.0</LangVersion>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <TreatWarningsAsErrors Condition="'$(RunicTranslationsVerificationBuild)' == 'true'">true</TreatWarningsAsErrors>
-    <TreatWarningsAsErrors Condition="'$(TreatWarningsAsErrors)' == ''">false</TreatWarningsAsErrors>
-    <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
-    <DebugType>embedded</DebugType>
-    <RepositoryType>git</RepositoryType>
-    <Authors>RunicArtifex</Authors>
-    <Company>RunicArtifex</Company>
-    <Copyright>Copyright (c) 2026 Viktor Jannicke</Copyright>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <NuGetAudit Condition="'$(RunicTranslationsVerificationBuild)' == 'true'">true</NuGetAudit>
-    <NuGetAudit Condition="'$(NuGetAudit)' == ''">false</NuGetAudit>
-    <VersionPrefix Condition="'$(VersionPrefix)' == ''">1.0.0</VersionPrefix>
-  </PropertyGroup>
+  <Import Project="../../eng/build/translations.props" />
 </Project>
