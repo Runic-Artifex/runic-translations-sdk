@@ -25,6 +25,7 @@ export function runicTranslations(options = {}) {
   if (options.typeDeclarations !== undefined && options.typeDeclarations !== false &&
       (typeof options.typeDeclarations !== "string" || options.typeDeclarations.length === 0))
     throw new TypeError("typeDeclarations must be a non-empty path or false.");
+  const typeDeclarationsBase = project?.cwd ?? dirname(manifestPath);
   const typeDeclarationsPath = options.typeDeclarations === false ? undefined : resolve(
     project?.cwd ?? process.cwd(),
     options.typeDeclarations ?? (compiler ? join(compiler.output, "virtual.d.ts") : join(dirname(manifestPath), "virtual.d.ts")),
@@ -147,7 +148,7 @@ export function runicTranslations(options = {}) {
       dynamic: assets.get(document.entrypoints.dynamic),
     });
     if (typeDeclarationsPath) {
-      const safeDeclarationsPath = await safeTypeDeclarationsPath(typeDeclarationsPath, nextManifestPath, assets);
+      const safeDeclarationsPath = await safeTypeDeclarationsPath(typeDeclarationsPath, nextManifestPath, assets, typeDeclarationsBase);
       await writeTypeDeclarations(safeDeclarationsPath, document.catalog, root, assets, requiredEntrypoints);
     }
     manifestPath = nextManifestPath;
@@ -354,27 +355,20 @@ async function writeTypeDeclarations(path, catalog, root, assets, entrypoints) {
   }
 }
 
-async function safeTypeDeclarationsPath(path, manifestPath, assets) {
-  let current = dirname(path);
-  while (true) {
+async function safeTypeDeclarationsPath(path, manifestPath, assets, base) {
+  const ancestors = ancestorsBelowCommonRoot(path, base);
+  for (const current of ancestors) {
     try {
       if (lstatSync(current).isSymbolicLink())
         throw new Error(`Generated Runic type declaration paths must not traverse symbolic links: '${path}'.`);
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
   }
   await mkdir(dirname(path), { recursive: true });
-  current = dirname(path);
-  while (true) {
+  for (const current of ancestors) {
     if (lstatSync(current).isSymbolicLink())
       throw new Error(`Generated Runic type declaration paths must not traverse symbolic links: '${path}'.`);
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
   }
   try {
     if (lstatSync(path).isSymbolicLink())
@@ -409,7 +403,7 @@ function readProject(config, output) {
   const project = dirname(config);
   const sourceFiles = [config];
   function discover(directory) {
-    ensureNoSymlinkAncestors(directory);
+    ensureNoSymlinkAncestors(directory, project);
     if (lstatSync(directory).isSymbolicLink()) throw new Error("Translation source roots must not be symbolic links.");
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name);
@@ -432,14 +426,26 @@ function readProject(config, output) {
   };
 }
 
-function ensureNoSymlinkAncestors(path) {
-  let current = resolve(path);
-  while (true) {
-    if (lstatSync(current).isSymbolicLink()) throw new Error("Translation source roots must not traverse symbolic links.");
-    const parent = dirname(current);
-    if (parent === current) return;
-    current = parent;
+function ensureNoSymlinkAncestors(path, project) {
+  for (const ancestor of ancestorsBelowCommonRoot(path, project))
+    if (lstatSync(ancestor).isSymbolicLink()) throw new Error("Translation source roots must not traverse symbolic links.");
+}
+
+// Returns the ancestors of path below the deepest directory it shares with base. Components above
+// that belong to the environment: macOS /tmp and /var, or a symlinked home or checkout, are links a
+// project cannot avoid. Callers check the path itself.
+function ancestorsBelowCommonRoot(path, base) {
+  const target = resolve(path);
+  let boundary = resolve(base);
+  while (!isWithin(boundary, target)) {
+    const parent = dirname(boundary);
+    if (parent === boundary) return [];
+    boundary = parent;
   }
+  const ancestors = [];
+  for (let current = dirname(target); current !== boundary && isWithin(boundary, current); current = dirname(current))
+    ancestors.push(current);
+  return ancestors;
 }
 
 function isWithin(root, path) {

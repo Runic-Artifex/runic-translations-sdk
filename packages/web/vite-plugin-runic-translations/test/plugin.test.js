@@ -288,6 +288,32 @@ test("project mode compiles and watches canonical RMF2 v3 output", async () => {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("project mode accepts symlinked environment ancestors but rejects links below the project", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-linked-home-"));
+  try {
+    // Like macOS /tmp or a symlinked home: every path below reaches the project through `home`.
+    const real = join(root, "real"); await mkdir(real);
+    const home = join(root, "home"); await symlink(real, home);
+    const project = join(home, "app", "translations"), feature = join(home, "app", "feature"), output = join(home, "app", "generated");
+    await mkdir(project, { recursive: true }); await mkdir(feature);
+    await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app", sourceRoots: [{ path: "../feature", namespace: ["shop"] }] }));
+    await writeFile(join(feature, "en.rmf2"), "title = Shop\n");
+    await writeV3Fixture(join(output, "app.esm-v5"));
+    const compiler = join(root, "compiler.mjs"); await writeFile(compiler, "");
+    const plugin = runicTranslations({ project, output, cwd: join(home, "app"), command: process.execPath, commandArguments: [compiler] });
+    await plugin.buildStart.call({ addWatchFile() {} });
+    plugin.closeBundle?.();
+
+    const shared = join(root, "shared"); await mkdir(join(shared, "nested"), { recursive: true });
+    await symlink(shared, join(home, "app", "linked"));
+    await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app", sourceRoots: [{ path: "../linked/nested", namespace: ["shop"] }] }));
+    assert.throws(
+      () => runicTranslations({ project, output, cwd: join(home, "app"), command: process.execPath, commandArguments: [compiler] }),
+      /must not traverse symbolic links/,
+    );
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("project mode discovers and watches direct MF2 sources in sourceRoots", async () => {
   const root = await mkdtemp(join(tmpdir(), "runic-vite-direct-mf2-"));
   try {

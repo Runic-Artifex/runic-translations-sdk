@@ -43,7 +43,7 @@ internal static class InputFiles
         }
         else roots.Add(root);
         foreach (string sourceRoot in roots)
-        foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, projectPath))
+        foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, root, projectPath))
             if (string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(Path.GetExtension(candidate), ".rmf2", StringComparison.OrdinalIgnoreCase))
                 messages.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
@@ -60,9 +60,9 @@ internal static class InputFiles
         return new TranslationSource(displayPath, bytes);
     }
 
-    private static IEnumerable<string> EnumerateFilesWithoutReparsePoints(string root, string suppliedPath)
+    private static IEnumerable<string> EnumerateFilesWithoutReparsePoints(string root, string projectRoot, string suppliedPath)
     {
-        ValidateNoReparseAncestors(root, suppliedPath);
+        ValidateNoReparseAncestors(root, projectRoot, suppliedPath);
         var pending = new SortedSet<string>(StringComparer.Ordinal) { Path.GetFullPath(root) };
         while (pending.Count != 0)
         {
@@ -81,16 +81,31 @@ internal static class InputFiles
         }
     }
 
-    private static void ValidateNoReparseAncestors(string path, string suppliedPath)
+    // Checks the ancestors of a source root below the deepest directory it shares with the project.
+    // Components above that belong to the environment: macOS /tmp and /var, or a symlinked home or
+    // checkout, are links a project cannot avoid. The enumeration checks the root and its contents.
+    private static void ValidateNoReparseAncestors(string path, string projectRoot, string suppliedPath)
     {
-        string? current = Path.GetFullPath(path);
-        while (current is not null)
+        string fullPath = Path.GetFullPath(path);
+        string? boundary = Path.GetFullPath(projectRoot);
+        while (boundary is not null && !IsWithin(boundary, fullPath)) boundary = Path.GetDirectoryName(boundary);
+        string? current = Path.GetDirectoryName(fullPath);
+        while (current is not null && boundary is not null && IsWithin(boundary, current) &&
+               Path.GetRelativePath(boundary, current) != ".")
         {
             if ((File.Exists(current) || Directory.Exists(current)) &&
                 (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                 throw new ToolUsageException($"translation project '{NormalizePath(suppliedPath)}' traverses a symbolic link or reparse point.");
             current = Path.GetDirectoryName(current);
         }
+    }
+
+    private static bool IsWithin(string root, string path)
+    {
+        string relative = Path.GetRelativePath(root, path);
+        return !Path.IsPathRooted(relative) && relative != ".." &&
+            !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+            !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     private static ToolDiagnosticException TooLarge(string displayPath) => new(

@@ -17,6 +17,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 payment fixture generates and verifies all supported outputs", PaymentExample);
         runner.Add("RMF2 --emit-cpp fails before creating output", CppEmissionIsUnsupported);
         runner.Add("RMF2 CLI discovers feature mounts and produces cohesive packs", MountedCli);
+        runner.Add("RMF2 CLI accepts symlinked ancestors but rejects links below the project", LinkedAncestorCli);
         runner.Add("RMF2 CLI emits and verifies the cohesive contract", ActivatedV5Cli);
         runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
         runner.Add("RMF2 CLI re-discovers mounted add, change, rename, and delete", MountedCliMembership);
@@ -62,6 +63,27 @@ internal static class Rmf2IntegrationTests
         string json = File.ReadAllText(temporary.Resolve("out/app.en.locale-v5.json"));
         Assert.Contains("shop_title", json); Assert.Contains("runic:strong", json);
         Assert.False(json.Contains("stray", StringComparison.Ordinal), "CLI discovery included a project-directory source outside explicit sourceRoots.");
+    }
+    private static void LinkedAncestorCli()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        using TemporaryDirectory temporary = new();
+        // Like macOS /tmp or a symlinked home: the project and its mounts are reached through `home`.
+        Directory.CreateDirectory(temporary.Resolve("real/translations")); Directory.CreateDirectory(temporary.Resolve("real/feature"));
+        Directory.CreateSymbolicLink(temporary.Resolve("home"), temporary.Resolve("real"));
+        File.WriteAllText(temporary.Resolve("home/translations/runic.json"), Project[..^1] + ",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}");
+        File.WriteAllText(temporary.Resolve("home/feature/en.rmf2"), "title = Shop\n");
+        var generated = TestFixture.RunTool(temporary, "generate", "--project", "home/translations", "--output", "out", "--emit-json");
+        Assert.Equal(0, generated.ExitCode, generated.Combined);
+        Assert.Contains("shop_title", File.ReadAllText(temporary.Resolve("out/app.en.locale-v5.json")));
+
+        Directory.CreateDirectory(temporary.Resolve("shared/nested"));
+        File.WriteAllText(temporary.Resolve("shared/nested/en.rmf2"), "title = Shared\n");
+        Directory.CreateSymbolicLink(temporary.Resolve("real/linked"), temporary.Resolve("shared"));
+        File.WriteAllText(temporary.Resolve("home/translations/runic.json"), Project[..^1] + ",\"sourceRoots\":[{\"path\":\"../linked/nested\",\"namespace\":[\"shop\"]}]}");
+        var rejected = TestFixture.RunTool(temporary, "generate", "--project", "home/translations", "--output", "out", "--emit-json");
+        Assert.False(rejected.ExitCode == 0, rejected.Combined);
+        Assert.Contains("symbolic link", rejected.Combined);
     }
     private static void ActivatedV5Cli()
     {
