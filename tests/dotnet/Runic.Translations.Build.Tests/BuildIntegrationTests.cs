@@ -10,6 +10,7 @@ internal static class BuildIntegrationTests
     public static void Register(TestRunner runner)
     {
         runner.Add("build props and targets expose stable import sentinels", ImportsExposeSentinels);
+        runner.Add("build tracks the nearest tool manifest above the project", RepositoryToolManifestIsTracked);
         runner.Add("build discovers direct MF2 sources and generates semantic artifacts", DirectMf2GenerationIsIncremental);
         runner.Add("build discovers mounted grouped RMF2 sources and membership changes", MountedRmf2MembershipIsIncremental);
         runner.Add("build emit properties select v5 groups and reject retired outputs", EmitFlagsAreExact);
@@ -23,6 +24,18 @@ internal static class BuildIntegrationTests
         Assert.Equal(0, result.ExitCode, result.Combined);
         string dump = File.ReadAllText(temporary.Resolve("dump.txt"), Encoding.UTF8).Replace('\\', '/');
         Assert.Contains("PropsImported=true", dump); Assert.Contains("TargetsImported=true", dump); Assert.Contains("Hello|Mf2", dump);
+    }
+
+    private static void RepositoryToolManifestIsTracked()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve(".config")); Directory.CreateDirectory(temporary.Resolve("src", "App"));
+        File.WriteAllText(temporary.Resolve(".config", "dotnet-tools.json"), "{\"version\":1,\"isRoot\":true,\"tools\":{}}\n", new UTF8Encoding(false));
+        string props = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.props"));
+        File.WriteAllText(temporary.Resolve("src", "App", "Probe.proj"), $"""<Project><Import Project="{props}" /></Project>""", new UTF8Encoding(false));
+        ProcessResult result = Processes.DotNet(temporary.Resolve("src", "App"), "msbuild", "Probe.proj", "/nologo", "-getItem:TranslationsToolInput");
+        Assert.Equal(0, result.ExitCode, result.Combined);
+        Assert.Contains(temporary.Path.Replace('\\', '/') + "/.config/dotnet-tools.json", result.StandardOutput.Replace("\\\\", "/").Replace('\\', '/'));
     }
 
     private static void DirectMf2GenerationIsIncremental()
