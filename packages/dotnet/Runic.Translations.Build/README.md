@@ -80,4 +80,4 @@ Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob
 The bundled .NET MSBuild task discovers recursive `{locale}.rmf2` files,
 direct `.mf2` messages, and explicit `sourceRoots`, including membership changes.
 It uses the host Microsoft.Build.Framework assembly. Source-checkout imports
-require building this package first. See the [RMF2 guide](../../../docs/guides/translations/rmf2.md).
+require building this package first. See the [RMF2 guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md).
