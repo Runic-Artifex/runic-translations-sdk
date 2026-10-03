@@ -221,6 +221,10 @@ function sharedRuntimeFor(bridge: RunicBridgeClient): SharedRuntime {
   runtime.mountSession = globalThis.crypto.randomUUID();
   return runtime;
 }
+function reportBridgeError(error: unknown): void {
+  const report = (globalThis as { reportError?: (error: unknown) => void }).reportError;
+  if (typeof report === "function") report(error); else console.error(error);
+}
 function sharedRouteFor(runtime: SharedRuntime, bridge: RunicBridgeClient, route: string): SharedRoute {
   const callbackName = `__${route}Changed`;
   const callbacks = window as unknown as Record<string, unknown>;
@@ -234,7 +238,10 @@ function sharedRouteFor(runtime: SharedRuntime, bridge: RunicBridgeClient, route
     route, callbackName, bridge, generation: runtime.generation, entries: new Map(), previousCallback: callbacks[callbackName], active: true,
     callback(state) {
       let accepted: unknown;
-      for (const entry of sharedRoute.entries.values()) accepted = entry.accept(state);
+      for (const entry of sharedRoute.entries.values()) {
+        try { accepted = entry.accept(state); }
+        catch (error) { reportBridgeError(error); }
+      }
       return accepted;
     },
   };
@@ -261,12 +268,17 @@ async function connectEditorDiagnosticsAt(route: string, needsMount = false): Pr
         const next = wire as WireState;
         if (!created.active || !routeEntry.active) return created.current ?? created.hydrate(next);
         if (created.current === undefined || created.revision === undefined || next.revision >= created.revision) {
+          // Decode first: a state that fails validation must not advance the revision.
+          const current = created.hydrate(next);
           created.revision = next.revision;
           created.wire = next;
-          created.current = created.hydrate(next);
+          created.current = current;
           for (const lease of created.leases) if (!lease.disposed) {
-            lease.current = created.current;
-            for (const listener of lease.listeners) listener(created.current);
+            lease.current = current;
+            for (const listener of lease.listeners) {
+              try { listener(current); }
+              catch (error) { reportBridgeError(error); }
+            }
           }
         }
         return created.current;
@@ -297,7 +309,10 @@ async function connectEditorDiagnosticsAt(route: string, needsMount = false): Pr
     let reply: BridgeReply;
     try { reply = JSON.parse(json) as BridgeReply; }
     catch { throw new BridgeError("failed", "The Bridge returned an invalid response."); }
-    const state = reply.state === null ? undefined : target.accept(reply.state);
+    if (reply === null || typeof reply !== "object") throw new BridgeError("failed", "The Bridge returned an invalid response.");
+    let state: unknown;
+    try { state = reply.state === null ? undefined : target.accept(reply.state); }
+    catch { throw new BridgeError("failed", "The Bridge returned an invalid state."); }
     if (!reply.ok) throw new BridgeError(reply.error?.kind ?? "failed", reply.error?.message ?? "The call failed.");
     if (state === undefined) throw new BridgeError("failed", "The Bridge returned no state.");
     return state as EditorDiagnosticsState;
@@ -327,50 +342,50 @@ async function connectEditorDiagnosticsAt(route: string, needsMount = false): Pr
   }
   function aboutOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorDiagnosticsAboutOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("About", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("About", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("About", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("About", requestId), };
   }
   async function startAboutWithRequestId(requestId: string, input: string): Promise<EditorDiagnosticsAboutOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartAbout`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("About", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return aboutOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return aboutOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return aboutOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverAboutWithRequestId(requestId: string): Promise<EditorDiagnosticsAboutOperation> { const status = await operationStatus("About", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return aboutOperation(requestId, status.kind === "running" ? undefined : status); }
   function createDiagnosticBundleOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorDiagnosticsCreateDiagnosticBundleOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("CreateDiagnosticBundle", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("CreateDiagnosticBundle", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("CreateDiagnosticBundle", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("CreateDiagnosticBundle", requestId), };
   }
   async function startCreateDiagnosticBundleWithRequestId(requestId: string, input: string): Promise<EditorDiagnosticsCreateDiagnosticBundleOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartCreateDiagnosticBundle`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("CreateDiagnosticBundle", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return createDiagnosticBundleOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return createDiagnosticBundleOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return createDiagnosticBundleOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverCreateDiagnosticBundleWithRequestId(requestId: string): Promise<EditorDiagnosticsCreateDiagnosticBundleOperation> { const status = await operationStatus("CreateDiagnosticBundle", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return createDiagnosticBundleOperation(requestId, status.kind === "running" ? undefined : status); }
   function revealDiagnosticBundleOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorDiagnosticsRevealDiagnosticBundleOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("RevealDiagnosticBundle", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("RevealDiagnosticBundle", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("RevealDiagnosticBundle", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("RevealDiagnosticBundle", requestId), };
   }
   async function startRevealDiagnosticBundleWithRequestId(requestId: string, input: string): Promise<EditorDiagnosticsRevealDiagnosticBundleOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartRevealDiagnosticBundle`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("RevealDiagnosticBundle", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return revealDiagnosticBundleOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return revealDiagnosticBundleOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return revealDiagnosticBundleOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverRevealDiagnosticBundleWithRequestId(requestId: string): Promise<EditorDiagnosticsRevealDiagnosticBundleOperation> { const status = await operationStatus("RevealDiagnosticBundle", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return revealDiagnosticBundleOperation(requestId, status.kind === "running" ? undefined : status); }
   function deleteDiagnosticBundleOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorDiagnosticsDeleteDiagnosticBundleOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("DeleteDiagnosticBundle", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("DeleteDiagnosticBundle", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("DeleteDiagnosticBundle", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("DeleteDiagnosticBundle", requestId), };
   }
   async function startDeleteDiagnosticBundleWithRequestId(requestId: string, input: string): Promise<EditorDiagnosticsDeleteDiagnosticBundleOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartDeleteDiagnosticBundle`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("DeleteDiagnosticBundle", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return deleteDiagnosticBundleOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return deleteDiagnosticBundleOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return deleteDiagnosticBundleOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverDeleteDiagnosticBundleWithRequestId(requestId: string): Promise<EditorDiagnosticsDeleteDiagnosticBundleOperation> { const status = await operationStatus("DeleteDiagnosticBundle", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return deleteDiagnosticBundleOperation(requestId, status.kind === "running" ? undefined : status); }
   function dispose(): void {
@@ -413,7 +428,9 @@ async function connectEditorDiagnosticsAt(route: string, needsMount = false): Pr
       if (lease.disposed || !isLive() || lease.current === undefined) throw new BridgeError("disconnected", "ViewModel is not connected.");
       const typed = listener as (state: unknown) => void;
       lease.listeners.add(typed);
-      typed(lease.current);
+      // The caller sees a failing initial delivery and gets no unsubscribe, so do not retain it.
+      try { typed(lease.current); }
+      catch (error) { lease.listeners.delete(typed); throw error; }
       return () => lease.listeners.delete(typed);
     },
     dispose,

@@ -285,6 +285,10 @@ function sharedRuntimeFor(bridge: RunicBridgeClient): SharedRuntime {
   runtime.mountSession = globalThis.crypto.randomUUID();
   return runtime;
 }
+function reportBridgeError(error: unknown): void {
+  const report = (globalThis as { reportError?: (error: unknown) => void }).reportError;
+  if (typeof report === "function") report(error); else console.error(error);
+}
 function sharedRouteFor(runtime: SharedRuntime, bridge: RunicBridgeClient, route: string): SharedRoute {
   const callbackName = `__${route}Changed`;
   const callbacks = window as unknown as Record<string, unknown>;
@@ -298,7 +302,10 @@ function sharedRouteFor(runtime: SharedRuntime, bridge: RunicBridgeClient, route
     route, callbackName, bridge, generation: runtime.generation, entries: new Map(), previousCallback: callbacks[callbackName], active: true,
     callback(state) {
       let accepted: unknown;
-      for (const entry of sharedRoute.entries.values()) accepted = entry.accept(state);
+      for (const entry of sharedRoute.entries.values()) {
+        try { accepted = entry.accept(state); }
+        catch (error) { reportBridgeError(error); }
+      }
       return accepted;
     },
   };
@@ -325,12 +332,17 @@ async function connectEditorWorkspaceAt(route: string, needsMount = false): Prom
         const next = wire as WireState;
         if (!created.active || !routeEntry.active) return created.current ?? created.hydrate(next);
         if (created.current === undefined || created.revision === undefined || next.revision >= created.revision) {
+          // Decode first: a state that fails validation must not advance the revision.
+          const current = created.hydrate(next);
           created.revision = next.revision;
           created.wire = next;
-          created.current = created.hydrate(next);
+          created.current = current;
           for (const lease of created.leases) if (!lease.disposed) {
-            lease.current = created.current;
-            for (const listener of lease.listeners) listener(created.current);
+            lease.current = current;
+            for (const listener of lease.listeners) {
+              try { listener(current); }
+              catch (error) { reportBridgeError(error); }
+            }
           }
         }
         return created.current;
@@ -361,7 +373,10 @@ async function connectEditorWorkspaceAt(route: string, needsMount = false): Prom
     let reply: BridgeReply;
     try { reply = JSON.parse(json) as BridgeReply; }
     catch { throw new BridgeError("failed", "The Bridge returned an invalid response."); }
-    const state = reply.state === null ? undefined : target.accept(reply.state);
+    if (reply === null || typeof reply !== "object") throw new BridgeError("failed", "The Bridge returned an invalid response.");
+    let state: unknown;
+    try { state = reply.state === null ? undefined : target.accept(reply.state); }
+    catch { throw new BridgeError("failed", "The Bridge returned an invalid state."); }
     if (!reply.ok) throw new BridgeError(reply.error?.kind ?? "failed", reply.error?.message ?? "The call failed.");
     if (state === undefined) throw new BridgeError("failed", "The Bridge returned no state.");
     return state as EditorWorkspaceState;
@@ -391,98 +406,98 @@ async function connectEditorWorkspaceAt(route: string, needsMount = false): Prom
   }
   function loadOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorWorkspaceLoadOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("Load", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("Load", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("Load", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("Load", requestId), };
   }
   async function startLoadWithRequestId(requestId: string, input: string): Promise<EditorWorkspaceLoadOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartLoad`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("Load", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return loadOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return loadOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return loadOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverLoadWithRequestId(requestId: string): Promise<EditorWorkspaceLoadOperation> { const status = await operationStatus("Load", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return loadOperation(requestId, status.kind === "running" ? undefined : status); }
   function checkExternalChangesOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorWorkspaceCheckExternalChangesOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("CheckExternalChanges", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("CheckExternalChanges", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("CheckExternalChanges", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("CheckExternalChanges", requestId), };
   }
   async function startCheckExternalChangesWithRequestId(requestId: string, input: string): Promise<EditorWorkspaceCheckExternalChangesOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartCheckExternalChanges`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("CheckExternalChanges", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return checkExternalChangesOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return checkExternalChangesOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return checkExternalChangesOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverCheckExternalChangesWithRequestId(requestId: string): Promise<EditorWorkspaceCheckExternalChangesOperation> { const status = await operationStatus("CheckExternalChanges", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return checkExternalChangesOperation(requestId, status.kind === "running" ? undefined : status); }
   function pickWorkspaceOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorWorkspacePickWorkspaceOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("PickWorkspace", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("PickWorkspace", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("PickWorkspace", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("PickWorkspace", requestId), };
   }
   async function startPickWorkspaceWithRequestId(requestId: string, input: string): Promise<EditorWorkspacePickWorkspaceOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartPickWorkspace`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("PickWorkspace", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return pickWorkspaceOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return pickWorkspaceOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return pickWorkspaceOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverPickWorkspaceWithRequestId(requestId: string): Promise<EditorWorkspacePickWorkspaceOperation> { const status = await operationStatus("PickWorkspace", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return pickWorkspaceOperation(requestId, status.kind === "running" ? undefined : status); }
   function previewMutationOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorWorkspacePreviewMutationOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("PreviewMutation", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("PreviewMutation", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("PreviewMutation", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("PreviewMutation", requestId), };
   }
   async function startPreviewMutationWithRequestId(requestId: string, input: string): Promise<EditorWorkspacePreviewMutationOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartPreviewMutation`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("PreviewMutation", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return previewMutationOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return previewMutationOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return previewMutationOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverPreviewMutationWithRequestId(requestId: string): Promise<EditorWorkspacePreviewMutationOperation> { const status = await operationStatus("PreviewMutation", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return previewMutationOperation(requestId, status.kind === "running" ? undefined : status); }
   function applyMutationOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorWorkspaceApplyMutationOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("ApplyMutation", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("ApplyMutation", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("ApplyMutation", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("ApplyMutation", requestId), };
   }
   async function startApplyMutationWithRequestId(requestId: string, input: string): Promise<EditorWorkspaceApplyMutationOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartApplyMutation`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("ApplyMutation", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return applyMutationOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return applyMutationOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return applyMutationOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverApplyMutationWithRequestId(requestId: string): Promise<EditorWorkspaceApplyMutationOperation> { const status = await operationStatus("ApplyMutation", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return applyMutationOperation(requestId, status.kind === "running" ? undefined : status); }
   function recoverTransactionOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorWorkspaceRecoverTransactionOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("RecoverTransaction", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("RecoverTransaction", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("RecoverTransaction", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("RecoverTransaction", requestId), };
   }
   async function startRecoverTransactionWithRequestId(requestId: string, input: string): Promise<EditorWorkspaceRecoverTransactionOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartRecoverTransaction`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("RecoverTransaction", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return recoverTransactionOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return recoverTransactionOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return recoverTransactionOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverRecoverTransactionWithRequestId(requestId: string): Promise<EditorWorkspaceRecoverTransactionOperation> { const status = await operationStatus("RecoverTransaction", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return recoverTransactionOperation(requestId, status.kind === "running" ? undefined : status); }
   function undoOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorWorkspaceUndoOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("Undo", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("Undo", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("Undo", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("Undo", requestId), };
   }
   async function startUndoWithRequestId(requestId: string, input: string): Promise<EditorWorkspaceUndoOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartUndo`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("Undo", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return undoOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return undoOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return undoOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverUndoWithRequestId(requestId: string): Promise<EditorWorkspaceUndoOperation> { const status = await operationStatus("Undo", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return undoOperation(requestId, status.kind === "running" ? undefined : status); }
   function redoOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorWorkspaceRedoOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("Redo", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("Redo", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("Redo", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("Redo", requestId), };
   }
   async function startRedoWithRequestId(requestId: string, input: string): Promise<EditorWorkspaceRedoOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartRedo`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("Redo", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return redoOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return redoOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return redoOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverRedoWithRequestId(requestId: string): Promise<EditorWorkspaceRedoOperation> { const status = await operationStatus("Redo", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return redoOperation(requestId, status.kind === "running" ? undefined : status); }
   function dispose(): void {
@@ -525,7 +540,9 @@ async function connectEditorWorkspaceAt(route: string, needsMount = false): Prom
       if (lease.disposed || !isLive() || lease.current === undefined) throw new BridgeError("disconnected", "ViewModel is not connected.");
       const typed = listener as (state: unknown) => void;
       lease.listeners.add(typed);
-      typed(lease.current);
+      // The caller sees a failing initial delivery and gets no unsubscribe, so do not retain it.
+      try { typed(lease.current); }
+      catch (error) { lease.listeners.delete(typed); throw error; }
       return () => lease.listeners.delete(typed);
     },
     dispose,

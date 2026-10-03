@@ -205,6 +205,10 @@ function sharedRuntimeFor(bridge: RunicBridgeClient): SharedRuntime {
   runtime.mountSession = globalThis.crypto.randomUUID();
   return runtime;
 }
+function reportBridgeError(error: unknown): void {
+  const report = (globalThis as { reportError?: (error: unknown) => void }).reportError;
+  if (typeof report === "function") report(error); else console.error(error);
+}
 function sharedRouteFor(runtime: SharedRuntime, bridge: RunicBridgeClient, route: string): SharedRoute {
   const callbackName = `__${route}Changed`;
   const callbacks = window as unknown as Record<string, unknown>;
@@ -218,7 +222,10 @@ function sharedRouteFor(runtime: SharedRuntime, bridge: RunicBridgeClient, route
     route, callbackName, bridge, generation: runtime.generation, entries: new Map(), previousCallback: callbacks[callbackName], active: true,
     callback(state) {
       let accepted: unknown;
-      for (const entry of sharedRoute.entries.values()) accepted = entry.accept(state);
+      for (const entry of sharedRoute.entries.values()) {
+        try { accepted = entry.accept(state); }
+        catch (error) { reportBridgeError(error); }
+      }
       return accepted;
     },
   };
@@ -245,12 +252,17 @@ async function connectEditorLocalStateAt(route: string, needsMount = false): Pro
         const next = wire as WireState;
         if (!created.active || !routeEntry.active) return created.current ?? created.hydrate(next);
         if (created.current === undefined || created.revision === undefined || next.revision >= created.revision) {
+          // Decode first: a state that fails validation must not advance the revision.
+          const current = created.hydrate(next);
           created.revision = next.revision;
           created.wire = next;
-          created.current = created.hydrate(next);
+          created.current = current;
           for (const lease of created.leases) if (!lease.disposed) {
-            lease.current = created.current;
-            for (const listener of lease.listeners) listener(created.current);
+            lease.current = current;
+            for (const listener of lease.listeners) {
+              try { listener(current); }
+              catch (error) { reportBridgeError(error); }
+            }
           }
         }
         return created.current;
@@ -281,7 +293,10 @@ async function connectEditorLocalStateAt(route: string, needsMount = false): Pro
     let reply: BridgeReply;
     try { reply = JSON.parse(json) as BridgeReply; }
     catch { throw new BridgeError("failed", "The Bridge returned an invalid response."); }
-    const state = reply.state === null ? undefined : target.accept(reply.state);
+    if (reply === null || typeof reply !== "object") throw new BridgeError("failed", "The Bridge returned an invalid response.");
+    let state: unknown;
+    try { state = reply.state === null ? undefined : target.accept(reply.state); }
+    catch { throw new BridgeError("failed", "The Bridge returned an invalid state."); }
     if (!reply.ok) throw new BridgeError(reply.error?.kind ?? "failed", reply.error?.message ?? "The call failed.");
     if (state === undefined) throw new BridgeError("failed", "The Bridge returned no state.");
     return state as EditorLocalStateState;
@@ -311,38 +326,38 @@ async function connectEditorLocalStateAt(route: string, needsMount = false): Pro
   }
   function loadLocalStateOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorLocalStateLoadLocalStateOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("LoadLocalState", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("LoadLocalState", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("LoadLocalState", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("LoadLocalState", requestId), };
   }
   async function startLoadLocalStateWithRequestId(requestId: string, input: string): Promise<EditorLocalStateLoadLocalStateOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartLoadLocalState`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("LoadLocalState", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return loadLocalStateOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return loadLocalStateOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return loadLocalStateOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverLoadLocalStateWithRequestId(requestId: string): Promise<EditorLocalStateLoadLocalStateOperation> { const status = await operationStatus("LoadLocalState", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return loadLocalStateOperation(requestId, status.kind === "running" ? undefined : status); }
   function saveLocalStateOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorLocalStateSaveLocalStateOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("SaveLocalState", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("SaveLocalState", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("SaveLocalState", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("SaveLocalState", requestId), };
   }
   async function startSaveLocalStateWithRequestId(requestId: string, input: string): Promise<EditorLocalStateSaveLocalStateOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartSaveLocalState`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("SaveLocalState", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return saveLocalStateOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return saveLocalStateOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return saveLocalStateOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverSaveLocalStateWithRequestId(requestId: string): Promise<EditorLocalStateSaveLocalStateOperation> { const status = await operationStatus("SaveLocalState", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return saveLocalStateOperation(requestId, status.kind === "running" ? undefined : status); }
   function clearLocalStateOperation(requestId: string, terminal?: BridgeOperationStatus<never>): EditorLocalStateClearLocalStateOperation {
     let completion: Promise<BridgeOperationStatus<never>> | undefined;
-    const wait = () => completion ??= terminal === undefined ? operationStatus("ClearLocalState", requestId, true, value => undefined as never) : Promise.resolve(terminal);
+    const wait = () => completion ??= (terminal === undefined ? operationStatus("ClearLocalState", requestId, true, value => undefined as never) : Promise.resolve(terminal)).catch(error => { completion = undefined; throw error; });
     return { requestId, status: () => terminal === undefined ? operationStatus("ClearLocalState", requestId, false, value => undefined as never) : Promise.resolve(terminal), get completion() { return wait(); }, wait, cancel: () => operationCancel("ClearLocalState", requestId), };
   }
   async function startClearLocalStateWithRequestId(requestId: string, input: string): Promise<EditorLocalStateClearLocalStateOperation> {
     if (requestId.length === 0) throw new RangeError("Operation requestId is required."); if (lease.disposed || !isLive() || !bridge.isConnected()) throw new BridgeError("disconnected", "The Bridge is disconnected.");
     await awaitInteractionCapabilities();
     let reply: string; try { reply = await bridge.call(`${route}StartClearLocalState`, JSON.stringify({ requestId, input: input })); } catch { const recovered = await operationStatus("ClearLocalState", requestId, false, value => undefined as never); if (recovered.kind === "unknown" || recovered.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return clearLocalStateOperation(requestId, recovered.kind === "running" ? undefined : recovered); }
-    const admission = JSON.parse(reply) as { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return clearLocalStateOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
+    let admission: { readonly kind?: string; readonly reason?: string; readonly terminal?: unknown }; try { admission = JSON.parse(reply) as typeof admission; } catch { throw new BridgeError("failed", "The operation service returned invalid JSON."); } if (admission.kind === "accepted" || admission.kind === "duplicate") { const terminal = admission.terminal === null || admission.terminal === undefined ? undefined : parseOperationStatus(JSON.stringify(admission.terminal), requestId, value => undefined as never); return clearLocalStateOperation(requestId, terminal); } throw new BridgeError(admission.kind === "rejected" ? "rejected" : "failed", admission.reason ?? "The operation was not accepted.");
   }
   async function recoverClearLocalStateWithRequestId(requestId: string): Promise<EditorLocalStateClearLocalStateOperation> { const status = await operationStatus("ClearLocalState", requestId, false, value => undefined as never); if (status.kind === "unknown" || status.kind === "expired") throw new BridgeOperationUncertainError(contractId, requestId, "The operation admission could not be recovered."); return clearLocalStateOperation(requestId, status.kind === "running" ? undefined : status); }
   function dispose(): void {
@@ -385,7 +400,9 @@ async function connectEditorLocalStateAt(route: string, needsMount = false): Pro
       if (lease.disposed || !isLive() || lease.current === undefined) throw new BridgeError("disconnected", "ViewModel is not connected.");
       const typed = listener as (state: unknown) => void;
       lease.listeners.add(typed);
-      typed(lease.current);
+      // The caller sees a failing initial delivery and gets no unsubscribe, so do not retain it.
+      try { typed(lease.current); }
+      catch (error) { lease.listeners.delete(typed); throw error; }
       return () => lease.listeners.delete(typed);
     },
     dispose,
