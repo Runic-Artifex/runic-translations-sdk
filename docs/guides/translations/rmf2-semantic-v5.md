@@ -28,6 +28,10 @@ input binding's `$n`.
 Variant keys distinguish bare wildcard `*` from literal `|*|`.
 Selection compares per-selector ranks in order: numeric exact, plural/ordinal
 category, then wildcard. String and boolean exact matches outrank wildcard.
+Numeric exact keys and CLDR categories both use the visible decimal: the value
+after percent scaling, halfExpand rounding to `maximumFractionDigits` and padding
+to `minimumFractionDigits`, so `1` with `minimumFractionDigits=1` selects `other`
+in English.
 Unicode comparisons use NFC while keeping authored text.
 
 Dynamic function options require declared inputs of the option's type (or typed
