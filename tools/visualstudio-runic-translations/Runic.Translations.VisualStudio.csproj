@@ -19,7 +19,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="test/**/*.cs" />
-    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2142" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="18.9.820" PrivateAssets="all" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
     <PackageReference Include="Microsoft.VisualStudio.LanguageServer.Client" Version="17.14.60" />
     <PackageReference Include="Microsoft.VisualStudio.Shell.15.0" Version="17.14.40264" />
