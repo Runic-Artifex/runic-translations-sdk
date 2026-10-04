@@ -150,8 +150,10 @@ For number formatting, `0 <= minimum <= maximum <= 6` for decimal and
 `0 <= minimum <= maximum <= 4` for percent. Omitted bounds use the table defaults;
 implementations must not adjust another bound to make an invalid pair fit. The
 display rounding mode is halfExpand (nearest; halfway away from zero). Percent
-display multiplies by 100 without changing the typed value used for selection.
-Display rounding does not change the typed value or CLDR selection operands.
+display multiplies by 100. These options never change the typed value: a local
+or alias keeps the underlying number, and a later formatter starts from it. They
+do determine the numeric selection operand described under
+[Numeric selection operand](#numeric-selection-operand).
 
 A variable used as a dynamic option must refer to an explicitly declared input
 of the option's type, or to a previously declared local of that type whose
@@ -211,9 +213,6 @@ Nonmatching keys eliminate a variant. Compare remaining rank vectors
 lexicographically in authored selector order; an earlier selector wins before
 later selector ranks are considered. Equal rank vectors retain authored variant
 order. Source order never lets a category beat an exact number on that selector.
-The CLDR category uses the canonical unformatted numeric value and the pinned
-locale capabilities. Canonical `1`, `1.0`, and `1e0` share CLDR operands; display
-precision and percent style do not change them.
 
 Reject duplicate normalized key vectors, including canonically equivalent
 Unicode strings and equivalent numeric keys (`1`, `1.0`, `|1e0|`; `-0`, `0`).
@@ -221,6 +220,54 @@ Wildcard and literal-star keys remain distinct. Vector equality is structural,
 not delimiter concatenation. Every matcher requires an all-wildcard vector with
 exactly one key per selector. Selector identities must be unique, and only
 string, boolean, int64 and decimal values can select variants.
+
+### Numeric selection operand
+
+Following MF2 rule selection, which applies the rules to "the operand, as
+modified by function options", a decimal or int64 selector compares its
+**visible decimal**: the number its formatter displays, before localized
+punctuation. The selector's resolved formatter, including one inherited through
+a functionless alias, determines it:
+
+- `number`: multiply by 100 for `style=percent`, round halfExpand to
+  `maximumFractionDigits`, then remove trailing fraction zeros down to
+  `minimumFractionDigits` or pad with zeros up to it. Omitted options use the
+  table defaults, so a plain `:number` rounds to six fraction digits.
+- `integer`: the int64 value.
+- `runic:relative-time`: the canonical decimal value.
+
+The `select` option and the selection mode do not change this operand. The CLDR
+plural (`select=plural`) or ordinal (`select=ordinal`) category applies the pinned
+locale rules to the CLDR operands of the visible decimal: `n` is its absolute
+value, `i` its integer digits, `v` and `f` its visible fraction digit count and
+value, `w` and `t` the same without trailing zeros, and `e` is always 0 because no
+supported formatter uses compact notation. The caller's decimal scale is never
+significant: caller values `1` and `1.0` have the same visible decimal. Only the
+formatter options add visible fraction digits. For example, in English:
+
+| Expression | Value | Displays | Operands | Category |
+| --- | --- | --- | --- | --- |
+| `{$n :number}` | `1.0` | `1` | i=1, v=0 | `one` |
+| `{$n :number minimumFractionDigits=1}` | `1` | `1.0` | i=1, v=1 | `other` |
+| `{$n :number maximumFractionDigits=0}` | `1.4` | `1` | i=1, v=0 | `one` |
+| `{$n :number style=percent}` | `0.01` | `1%` | i=1, v=0 | `one` |
+| `{$n :number style=percent}` | `1` | `100%` | i=100, v=0 | `other` |
+
+In French (`one` is `i = 0,1`), `1` with `minimumFractionDigits=1` still selects
+`one`, and `1.5` with `maximumFractionDigits=0` displays `2` and selects `other`.
+In Czech, `2` selects `few` but `2.0` (`minimumFractionDigits=1`) selects `many`.
+
+Exact numeric keys compare the canonical value of the same visible decimal. MF2
+leaves the exact-match serialization implementation-defined once fraction digit
+options are set; Runic chooses the visible decimal so a key always agrees with
+the displayed number and with the category on that selector. Thus `1.4` with
+`maximumFractionDigits=0` matches key `1`, and a percent selector whose value is
+`1` matches key `100`, as in the MF2 `:percent` example. Padding does not
+distinguish keys: `1` with `minimumFractionDigits=2` displays `1.00` and matches
+key `1`, because the duplicate-key rule above already treats `1`, `1.0`, and
+`|1e0|` as the same number. A key whose value cannot be displayed, such as
+`0.5` for `maximumFractionDigits=0`, never matches. The [selection
+vectors](rmf2-execution-v2.json) record the cross-backend expectations.
 
 ## Portable exact decimal domain
 
@@ -260,8 +307,9 @@ fallback coverage, or caller and markup contracts.
 The compiler's internal `Rmf2SemanticCompilerV5.Compile` reads the existing
 lossless syntax, validates data-model/profile constraints and returns the v5 IR.
 `Rmf2MessageJsonV5.Serialize` emits only the normalized AST for that IR. The
-selection helper accepts already resolved typed selector values and an externally
-computed pinned CLDR category; it does not execute declarations or format text.
+selection helper accepts already resolved selector values (the visible decimal for
+numeric selectors) and an externally computed pinned CLDR category; it does not
+execute declarations or format text.
 Limits are 32 caller inputs (or a lower configured limit), 256 declarations,
 16 selectors, 256 variants, and 4096 nodes per pattern, plus existing source limits.
 
@@ -295,8 +343,9 @@ Invalid resolved options raise `TranslationFormatException`; they do
 not clamp or fall back. Constructors reject malformed normalized models with
 argument exceptions. Authored numeric spelling and canonical fields are checked
 exactly before parsing into decimal; no binary floating point is involved.
-Number display uses halfExpand rounding and the finite precision table. Platform
-globalization still controls localized punctuation and date/time names. Ungrouped
+Number display and numeric selection use the same halfExpand visible decimal and
+the finite precision table. Platform globalization still controls localized
+punctuation and date/time names. Ungrouped
 integer output is invariant, matching the pinned exact formatter capability.
 V5 uses the closed formatter table directly; a snapshot's optional legacy
 `ITextValueFormatter` does not override v5 function semantics.

@@ -5,8 +5,10 @@ using System.Text;
 
 namespace Runic.Translations.Compiler;
 
-// A pure rank model, shared by tests and the next generation/runtime slice. The
-// caller supplies the pinned CLDR category; this foundation does not format text.
+// A pure rank model, shared by tests and the next generation/runtime slice. For a
+// numeric selector the caller supplies the visible decimal (the value after the
+// formatter's percent and fraction digit options) and its pinned CLDR category;
+// this foundation does not format text.
 internal sealed record Rmf2SelectorValueV5(string Type, string Value, string? Category = null);
 internal static class Rmf2SelectionV5
 {

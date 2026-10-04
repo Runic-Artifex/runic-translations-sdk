@@ -7,31 +7,144 @@
     "license": "Unicode-3.0"
   },
   "locales": [
-    { "tag": "da", "cardinalRule": "danish", "ordinalRule": "other" },
-    { "tag": "de", "cardinalRule": "integer-one", "ordinalRule": "other", "relativeTime": {
-      "autoDay": ["gestern", "heute", "morgen"], "past": "vor {0} {unit}", "future": "in {0} {unit}",
-      "units": { "second": ["Sekunde", "Sekunden"], "minute": ["Minute", "Minuten"], "hour": ["Stunde", "Stunden"], "day": ["Tag", "Tagen"], "week": ["Woche", "Wochen"], "month": ["Monat", "Monaten"], "year": ["Jahr", "Jahren"] }
-    } },
-    { "tag": "en", "cardinalRule": "integer-one", "ordinalRule": "english", "relativeTime": {
-      "autoDay": ["yesterday", "today", "tomorrow"], "past": "{0} {unit} ago", "future": "in {0} {unit}",
-      "units": { "second": ["second", "seconds"], "minute": ["minute", "minutes"], "hour": ["hour", "hours"], "day": ["day", "days"], "week": ["week", "weeks"], "month": ["month", "months"], "year": ["year", "years"] }
-    } },
-    { "tag": "es", "cardinalRule": "one-and-million", "ordinalRule": "other", "relativeTime": {
-      "autoDay": ["ayer", "hoy", "mañana"], "past": "hace {0} {unit}", "future": "dentro de {0} {unit}",
-      "units": { "second": ["segundo", "segundos"], "minute": ["minuto", "minutos"], "hour": ["hora", "horas"], "day": ["día", "días"], "week": ["semana", "semanas"], "month": ["mes", "meses"], "year": ["año", "años"] }
-    } },
-    { "tag": "fr", "cardinalRule": "french", "ordinalRule": "one", "relativeTime": {
-      "autoDay": ["hier", "aujourd’hui", "demain"], "past": "il y a {0} {unit}", "future": "dans {0} {unit}",
-      "units": { "second": ["seconde", "secondes"], "minute": ["minute", "minutes"], "hour": ["heure", "heures"], "day": ["jour", "jours"], "week": ["semaine", "semaines"], "month": ["mois", "mois"], "year": ["an", "ans"] }
-    } },
-    { "tag": "it", "cardinalRule": "one-and-million", "ordinalRule": "italian", "relativeTime": {
-      "autoDay": ["ieri", "oggi", "domani"], "past": "{0} {unit} fa", "future": "tra {0} {unit}",
-      "units": { "second": ["secondo", "secondi"], "minute": ["minuto", "minuti"], "hour": ["ora", "ore"], "day": ["giorno", "giorni"], "week": ["settimana", "settimane"], "month": ["mese", "mesi"], "year": ["anno", "anni"] }
-    } },
-    { "tag": "nb", "cardinalRule": "one", "ordinalRule": "other" },
-    { "tag": "nl", "cardinalRule": "integer-one", "ordinalRule": "other" },
-    { "tag": "nn", "cardinalRule": "one", "ordinalRule": "other" },
-    { "tag": "no", "cardinalRule": "one", "ordinalRule": "other" },
-    { "tag": "sv", "cardinalRule": "integer-one", "ordinalRule": "swedish" }
+    { "tag": "cs",
+      "cardinal": {
+        "one": "i = 1 and v = 0 @integer 1",
+        "few": "i = 2..4 and v = 0 @integer 2~4",
+        "many": "v != 0   @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …",
+        "other": " @integer 0, 5~19, 100, 1000, 10000, 100000, 1000000, …"
+      },
+      "ordinal": {
+        "other": " @integer 0~15, 100, 1000, 10000, 100000, 1000000, …"
+      }
+    },
+    { "tag": "da",
+      "cardinal": {
+        "one": "n = 1 or t != 0 and i = 0,1 @integer 1 @decimal 0.1~1.6",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0, 2.0~3.4, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
+      },
+      "ordinal": {
+        "other": " @integer 0~15, 100, 1000, 10000, 100000, 1000000, …"
+      }
+    },
+    { "tag": "de",
+      "cardinal": {
+        "one": "i = 1 and v = 0 @integer 1",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
+      },
+      "ordinal": {
+        "other": " @integer 0~15, 100, 1000, 10000, 100000, 1000000, …"
+      },
+      "relativeTime": {
+        "autoDay": ["gestern", "heute", "morgen"], "past": "vor {0} {unit}", "future": "in {0} {unit}",
+        "units": { "second": ["Sekunde", "Sekunden"], "minute": ["Minute", "Minuten"], "hour": ["Stunde", "Stunden"], "day": ["Tag", "Tagen"], "week": ["Woche", "Wochen"], "month": ["Monat", "Monaten"], "year": ["Jahr", "Jahren"] }
+      }
+    },
+    { "tag": "en",
+      "cardinal": {
+        "one": "i = 1 and v = 0 @integer 1",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
+      },
+      "ordinal": {
+        "one": "n % 10 = 1 and n % 100 != 11 @integer 1, 21, 31, 41, 51, 61, 71, 81, 101, 1001, …",
+        "two": "n % 10 = 2 and n % 100 != 12 @integer 2, 22, 32, 42, 52, 62, 72, 82, 102, 1002, …",
+        "few": "n % 10 = 3 and n % 100 != 13 @integer 3, 23, 33, 43, 53, 63, 73, 83, 103, 1003, …",
+        "other": " @integer 0, 4~18, 100, 1000, 10000, 100000, 1000000, …"
+      },
+      "relativeTime": {
+        "autoDay": ["yesterday", "today", "tomorrow"], "past": "{0} {unit} ago", "future": "in {0} {unit}",
+        "units": { "second": ["second", "seconds"], "minute": ["minute", "minutes"], "hour": ["hour", "hours"], "day": ["day", "days"], "week": ["week", "weeks"], "month": ["month", "months"], "year": ["year", "years"] }
+      }
+    },
+    { "tag": "es",
+      "cardinal": {
+        "one": "n = 1 @integer 1 @decimal 1.0, 1.00, 1.000, 1.0000",
+        "many": "e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5 @integer 1000000, 1c6, 2c6, 3c6, 4c6, 5c6, 6c6, … @decimal 1.0000001c6, 1.1c6, 2.0000001c6, 2.1c6, 3.0000001c6, 3.1c6, …",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1c3, 2c3, 3c3, 4c3, 5c3, 6c3, … @decimal 0.0~0.9, 1.1~1.6, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, 1.0001c3, 1.1c3, 2.0001c3, 2.1c3, 3.0001c3, 3.1c3, …"
+      },
+      "ordinal": {
+        "other": " @integer 0~15, 100, 1000, 10000, 100000, 1000000, …"
+      },
+      "relativeTime": {
+        "autoDay": ["ayer", "hoy", "mañana"], "past": "hace {0} {unit}", "future": "dentro de {0} {unit}",
+        "units": { "second": ["segundo", "segundos"], "minute": ["minuto", "minutos"], "hour": ["hora", "horas"], "day": ["día", "días"], "week": ["semana", "semanas"], "month": ["mes", "meses"], "year": ["año", "años"] }
+      }
+    },
+    { "tag": "fr",
+      "cardinal": {
+        "one": "i = 0,1 @integer 0, 1 @decimal 0.0~1.5",
+        "many": "e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5 @integer 1000000, 1c6, 2c6, 3c6, 4c6, 5c6, 6c6, … @decimal 1.0000001c6, 1.1c6, 2.0000001c6, 2.1c6, 3.0000001c6, 3.1c6, …",
+        "other": " @integer 2~17, 100, 1000, 10000, 100000, 1c3, 2c3, 3c3, 4c3, 5c3, 6c3, … @decimal 2.0~3.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, 1.0001c3, 1.1c3, 2.0001c3, 2.1c3, 3.0001c3, 3.1c3, …"
+      },
+      "ordinal": {
+        "one": "n = 1 @integer 1",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, …"
+      },
+      "relativeTime": {
+        "autoDay": ["hier", "aujourd’hui", "demain"], "past": "il y a {0} {unit}", "future": "dans {0} {unit}",
+        "units": { "second": ["seconde", "secondes"], "minute": ["minute", "minutes"], "hour": ["heure", "heures"], "day": ["jour", "jours"], "week": ["semaine", "semaines"], "month": ["mois", "mois"], "year": ["an", "ans"] }
+      }
+    },
+    { "tag": "it",
+      "cardinal": {
+        "one": "i = 1 and v = 0 @integer 1",
+        "many": "e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5 @integer 1000000, 1c6, 2c6, 3c6, 4c6, 5c6, 6c6, … @decimal 1.0000001c6, 1.1c6, 2.0000001c6, 2.1c6, 3.0000001c6, 3.1c6, …",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1c3, 2c3, 3c3, 4c3, 5c3, 6c3, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, 1.0001c3, 1.1c3, 2.0001c3, 2.1c3, 3.0001c3, 3.1c3, …"
+      },
+      "ordinal": {
+        "many": "n = 11,8,80,800 @integer 8, 11, 80, 800",
+        "other": " @integer 0~7, 9, 10, 12~17, 100, 1000, 10000, 100000, 1000000, …"
+      },
+      "relativeTime": {
+        "autoDay": ["ieri", "oggi", "domani"], "past": "{0} {unit} fa", "future": "tra {0} {unit}",
+        "units": { "second": ["secondo", "secondi"], "minute": ["minuto", "minuti"], "hour": ["ora", "ore"], "day": ["giorno", "giorni"], "week": ["settimana", "settimane"], "month": ["mese", "mesi"], "year": ["anno", "anni"] }
+      }
+    },
+    { "tag": "nb",
+      "cardinal": {
+        "one": "n = 1 @integer 1 @decimal 1.0, 1.00, 1.000, 1.0000",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~0.9, 1.1~1.6, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
+      },
+      "ordinal": {
+        "other": " @integer 0~15, 100, 1000, 10000, 100000, 1000000, …"
+      }
+    },
+    { "tag": "nl",
+      "cardinal": {
+        "one": "i = 1 and v = 0 @integer 1",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
+      },
+      "ordinal": {
+        "other": " @integer 0~15, 100, 1000, 10000, 100000, 1000000, …"
+      }
+    },
+    { "tag": "nn",
+      "cardinal": {
+        "one": "n = 1 @integer 1 @decimal 1.0, 1.00, 1.000, 1.0000",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~0.9, 1.1~1.6, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
+      },
+      "ordinal": {
+        "other": ""
+      }
+    },
+    { "tag": "no",
+      "cardinal": {
+        "one": "n = 1 @integer 1 @decimal 1.0, 1.00, 1.000, 1.0000",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~0.9, 1.1~1.6, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
+      },
+      "ordinal": {
+        "other": " @integer 0~15, 100, 1000, 10000, 100000, 1000000, …"
+      }
+    },
+    { "tag": "sv",
+      "cardinal": {
+        "one": "i = 1 and v = 0 @integer 1",
+        "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
+      },
+      "ordinal": {
+        "one": "n % 10 = 1,2 and n % 100 != 11,12 @integer 1, 2, 21, 22, 31, 32, 41, 42, 51, 52, 61, 62, 71, 72, 81, 82, 101, 1001, …",
+        "other": " @integer 0, 3~17, 100, 1000, 10000, 100000, 1000000, …"
+      }
+    }
   ]
 }

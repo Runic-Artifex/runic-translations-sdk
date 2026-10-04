@@ -98,9 +98,6 @@ function decimalCanonical(value) {
 
 function decimalEquals(left, right) { return left.coefficient === right.coefficient && left.scale === right.scale && left.negative === right.negative; }
 function decimalAbsolute(value) { return value.negative ? Object.freeze({ coefficient: value.coefficient, scale: value.scale, negative: false }) : value; }
-function decimalIntegral(value) { return value.scale === 0; }
-function decimalIntegerPart(value) { return value.scale === 0 ? value.coefficient : value.coefficient / (10n ** BigInt(value.scale)); }
-function decimalModulo(value, divisor) { if (value.scale !== 0) return null; return value.coefficient % BigInt(divisor); }
 
 function coerceInput(value, type, name) {
   switch (type) {
@@ -217,19 +214,26 @@ function formatResolved(value, locale) {
 
 function decimalFromInteger(value) { return Object.freeze({ coefficient: value < 0n ? -value : value, scale: 0, negative: value < 0n }); }
 
-function formatDecimal(value, locale, options) {
+// The digits :number displays before localization: percent multiplies by 100,
+// halfExpand rounds to the maximum and trailing zeros stay down to the minimum.
+// Plural, ordinal and exact selection use this same visible decimal.
+function visibleNumber(value, options) {
   const percent = (options.style ?? "decimal") === "percent";
   const minimum = Number(options.minimumFractionDigits ?? 0n), maximum = Number(options.maximumFractionDigits ?? (percent ? 4n : 6n));
   let coefficient = value.coefficient, scale = value.scale - (percent ? 2 : 0);
   if (scale < 0) { coefficient *= 10n ** BigInt(-scale); scale = 0; }
   if (scale > maximum) { const divisor = 10n ** BigInt(scale - maximum); const quotient = coefficient / divisor, remainder = coefficient % divisor; coefficient = quotient + (remainder * 2n >= divisor ? 1n : 0n); scale = maximum; }
-  let digits = coefficient.toString();
-  let whole = scale === 0 ? digits : scale >= digits.length ? "0" : digits.slice(0, digits.length - scale);
-  let fraction = scale === 0 ? "" : (scale >= digits.length ? "0".repeat(scale - digits.length) + digits : digits.slice(digits.length - scale));
-  while (fraction.length > minimum && fraction.endsWith("0")) fraction = fraction.slice(0, -1);
-  while (fraction.length < minimum) fraction += "0";
+  while (scale > minimum && coefficient % 10n === 0n) { coefficient /= 10n; scale--; }
+  while (scale < minimum) { coefficient *= 10n; scale++; }
+  return Object.freeze({ coefficient, scale, negative: value.negative && coefficient !== 0n });
+}
+
+function formatDecimal(value, locale, options) {
+  const visible = visibleNumber(value, options), percent = (options.style ?? "decimal") === "percent";
+  const digits = visible.coefficient.toString().padStart(visible.scale + 1, "0");
+  const whole = digits.slice(0, digits.length - visible.scale), fraction = digits.slice(digits.length - visible.scale);
   const { decimal: separator } = numberSymbols(locale);
-  return `${value.negative && coefficient !== 0n ? "-" : ""}${whole}${fraction ? separator + fraction : ""}${percent ? "%" : ""}`;
+  return `${visible.negative ? "-" : ""}${whole}${fraction ? separator + fraction : ""}${percent ? "%" : ""}`;
 }
 
 function numberSymbols(locale) {
@@ -238,20 +242,27 @@ function numberSymbols(locale) {
 }
 function groupInteger(value, locale) { return new Intl.NumberFormat(locale, { useGrouping: true, maximumFractionDigits: 0 }).format(value); }
 
+// The number selection compares: :number uses its displayed digits; :integer and
+// relative time use the canonical typed value. The carrier itself never changes.
+function selectionOperand(resolved) {
+  const value = resolved.type === "int64" ? decimalFromInteger(resolved.carrier) : resolved.carrier;
+  return resolved.format.function === "number" ? visibleNumber(value, resolved.format.options) : value;
+}
+
+function visibleCanonical(value) {
+  let coefficient = value.coefficient, scale = value.scale;
+  while (scale > 0 && coefficient % 10n === 0n) { coefficient /= 10n; scale--; }
+  return decimalCanonical({ coefficient, scale, negative: value.negative && coefficient !== 0n });
+}
+
+// Applies the pinned CLDR rules to the operands of a visible decimal (sign ignored).
 function selectPlural(value, locale, ordinal) {
-  const decimalValue = decimalAbsolute(value); const language = locale.toLowerCase().split(/[-_]/)[0]; const rules = generatedLocaleData.plural[language];
+  const language = locale.toLowerCase().split(/[-_]/)[0]; const rules = Object.hasOwn(generatedPluralRules, language) ? generatedPluralRules[language] : undefined;
   if (!rules) throw new RangeError(`Plural selection is not supported for locale '${locale}'.`);
-  const rule = rules[ordinal ? 1 : 0], integral = decimalIntegral(decimalValue), integer = decimalIntegerPart(decimalValue);
-  const equals = expected => decimalValue.scale === 0 && decimalValue.coefficient === BigInt(expected);
-  const modulo = divisor => decimalModulo(decimalValue, divisor);
-  if (rule === "english" && integral) { const mod100 = modulo(100), mod10 = modulo(10); if (mod10 === 1n && mod100 !== 11n) return "one"; if (mod10 === 2n && mod100 !== 12n) return "two"; if (mod10 === 3n && mod100 !== 13n) return "few"; }
-  else if (rule === "italian") return [8,11,80,800].some(equals) ? "many" : "other";
-  else if (rule === "swedish") { const mod100 = modulo(100), mod10 = modulo(10); return (mod10 === 1n || mod10 === 2n) && mod100 !== 11n && mod100 !== 12n ? "one" : "other"; }
-  else if (rule === "one" || rule === "integer-one") return equals(1) ? "one" : "other";
-  else if (rule === "danish") return equals(1) || (!integral && (integer === 0n || integer === 1n)) ? "one" : "other";
-  else if (rule === "one-and-million") { if (equals(1)) return "one"; return integral && !equals(0) && modulo(1000000) === 0n ? "many" : "other"; }
-  else if (rule === "french") { if (integral && !equals(0) && modulo(1000000) === 0n) return "many"; return integer === 0n || integer === 1n ? "one" : "other"; }
-  return "other";
+  const divisor = 10n ** BigInt(value.scale), f = value.coefficient % divisor;
+  let t = f, w = BigInt(value.scale);
+  while (w > 0n && t % 10n === 0n) { t /= 10n; w--; }
+  return rules[ordinal ? 1 : 0](Object.freeze({ i: value.coefficient / divisor, v: BigInt(value.scale), w, f, t, e: 0n }));
 }
 
 function formatRelative(value, unit, numeric, locale) {
@@ -276,8 +287,11 @@ export function formatCompiledMessage(key, wrapper, inputs, requestedLocale) {
   if (!validatedMessages.has(wrapper)) throw new TypeError("A validated v5 message is required.");
   const context = contextFor(wrapper, inputs, contract), locale = wrapper.contentLocale;
   const selections = wrapper.ast.selectors.map(selector => {
-    const resolved = context.resolve(selector.value, selector.type); const canonical = canonicalCarrier(resolved.carrier, selector.type);
-    return { resolved, canonical, category: selector.function === "exact" ? null : selectPlural(selector.type === "int64" ? decimalFromInteger(resolved.carrier) : resolved.carrier, locale, selector.function === "ordinal") };
+    const resolved = context.resolve(selector.value, selector.type);
+    if (!["int64", "decimal"].includes(selector.type)) return { resolved, canonical: canonicalCarrier(resolved.carrier, selector.type), category: null };
+    // Exact keys and CLDR categories compare the same visible decimal.
+    const operand = selectionOperand(resolved);
+    return { resolved, canonical: visibleCanonical(operand), category: selector.function === "exact" ? null : selectPlural(operand, locale, selector.function === "ordinal") };
   });
   let selected = null, selectedRanks = null, selectedIndex = -1;
   for (let variantIndex = 0; variantIndex < wrapper.ast.variants.length; variantIndex++) {

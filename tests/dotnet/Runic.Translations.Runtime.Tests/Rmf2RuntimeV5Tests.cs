@@ -109,7 +109,9 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("fallback", message.Format([new("n", 2m)], "en"));
         var percent = new CompiledRmf2Message([new("n", TextArgumentType.Number)], [new("input", "n", Expr(Input("n"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Text("percent"))))], [new(Input("n"), TextArgumentType.Number, "plural")],
             [new([new("one")], [Output(Input("n"), TextArgumentType.Number)]), new([new()], [new("other")])]);
-        Assert.Equal("100%", percent.Format([new("n", 1m)], "en"));
+        // Percent selection uses the displayed value multiplied by 100.
+        Assert.Equal("1%", percent.Format([new("n", 0.01m)], "en"));
+        Assert.Equal("other", percent.Format([new("n", 1m)], "en"));
     }
     private static void LexicographicRanking()
     {
@@ -127,7 +129,9 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("exact", message.Format([new("n", 9007199254740993m)], "en"));
         Assert.Equal("other", message.Format([new("n", 9007199254740992m)], "en"));
         Assert.Equal("one", message.Format([new("n", 1.000m)], "en"));
-        Assert.Equal("other", message.Format([new("n", 1.0000000000000000000000000001m)], "en"));
+        // The default :number display rounds to six fraction digits, so this selects like the displayed "1".
+        Assert.Equal("one", message.Format([new("n", 1.0000000000000000000000000001m)], "en"));
+        Assert.Equal("other", message.Format([new("n", 1.000001m)], "en"));
         var ordinal = new CompiledRmf2Message([new("n", TextArgumentType.Int)], [new("input", "n", Expr(Input("n"), TextArgumentType.Int, "integer", new CompiledRmf2Option("select", Text("ordinal"))))], [new(Input("n"), TextArgumentType.Int, "ordinal")], [new([new("few")], [new("rd")]), new([new()], [new("th")])]);
         Assert.Equal("rd", ordinal.Format([new("n", 23L)], "en"));
         Assert.Equal("th", ordinal.Format([new("n", 13L)], "en"));

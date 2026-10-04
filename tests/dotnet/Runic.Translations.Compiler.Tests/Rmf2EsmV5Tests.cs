@@ -130,8 +130,12 @@ internal static class Rmf2EsmV5Tests
                 import { m } from "./app.esm-v5/messages.js";
                 import { decimal } from "./app.esm-v5/runtime.js";
                 import { decodeLocaleArtifact } from "./app.esm-v5/dynamic.js";
-                const exact=m.sample({count:decimal("1.0"),digits:2n,style:"percent"});
-                if(exact.kind!=="localized-content"||exact.nodes.map(node=>node.value).join("")!=="exact 100.00% 4200%")throw new Error(`alias/dynamic/exact mismatch: ${JSON.stringify(exact)}`);
+                const text=content=>content.nodes.map(node=>node.value??"").join("");
+                // Percent selection compares the displayed 1.00, which exactly matches key 1.0.
+                const exact=m.sample({count:decimal("0.01"),digits:2n,style:"percent"});
+                if(exact.kind!=="localized-content"||text(exact)!=="exact 1.00% 4200%")throw new Error(`alias/dynamic/exact mismatch: ${text(exact)}`);
+                const hundred=m.sample({count:decimal("1.0"),digits:2n,style:"percent"});
+                if(hundred.nodes[0].value!=="other ")throw new Error(`displayed 100.00% matched a key for 1: ${text(hundred)}`);
                 if(m.huge({n:decimal("9007199254740993")})!=="exact")throw new Error("binary64-unsafe exact selector failed");
                 let rejected=false;try{m.sample({count:decimal("1"),digits:2n,style:"bogus"});}catch{rejected=true;}if(!rejected)throw new Error("invalid dynamic enum accepted");
                 const other=m.sample({count:decimal("2"),digits:0n,style:"decimal"});
@@ -303,7 +307,7 @@ internal static class Rmf2EsmV5Tests
         finally { Directory.Delete(extraDirectory, true); }
     }
 
-    private static Rmf2ProjectV5 CompileProject(string id, string baseLocale, IReadOnlyList<string> locales,
+    internal static Rmf2ProjectV5 CompileProject(string id, string baseLocale, IReadOnlyList<string> locales,
         bool allowExtras, params (string Locale, string Source)[] sources)
     {
         string json = JsonSerializer.Serialize(new
@@ -332,7 +336,7 @@ internal static class Rmf2EsmV5Tests
         return result.Project!;
     }
 
-    private static string Write(IReadOnlyList<TranslationGeneratedOutput> outputs)
+    internal static string Write(IReadOnlyList<TranslationGeneratedOutput> outputs)
     {
         string directory = Path.Combine(Path.GetTempPath(), "runic-rmf2-esm-v5-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
         foreach (TranslationGeneratedOutput output in outputs) { string path = Path.Combine(directory, output.RelativePath.Replace('/', Path.DirectorySeparatorChar)); Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllBytes(path, output.GetUtf8Bytes()); }
@@ -340,7 +344,7 @@ internal static class Rmf2EsmV5Tests
     }
 
     private static string JsonString(string value) => System.Text.Json.JsonSerializer.Serialize(value);
-    private static void Run(string file, IReadOnlyList<string> arguments, string directory)
+    internal static void Run(string file, IReadOnlyList<string> arguments, string directory)
     {
         var start = new ProcessStartInfo(file) { WorkingDirectory = directory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (string argument in arguments) start.ArgumentList.Add(argument);

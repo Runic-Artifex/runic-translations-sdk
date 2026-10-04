@@ -23,7 +23,8 @@ public static class TextRelativeTimeFormatter
         }
         decimal absolute = Math.Abs(value);
         string number = absolute.ToString(CultureInfo.InvariantCulture);
-        bool one = TextMessageSelector.SelectPlural(absolute, locale, false) == "one";
+        // The noun agrees with the number as displayed, including visible trailing zeros.
+        bool one = TextMessageSelector.Select(VisibleDecimal.Displayed(absolute), locale, false) == "one";
         GeneratedRelativeTimeUnit? unitData = null;
         for (int index = 0; index < data.Units.Length; index++)
         {

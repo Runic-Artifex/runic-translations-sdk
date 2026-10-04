@@ -93,6 +93,15 @@ selectors default to cardinal selection; explicit `select=ordinal` and
 `select=exact` remain available. Numeric exact keys are tested before a variant
 fails its match.
 
+As in Unicode MessageFormat 2, numeric selection uses the number as it is
+displayed. Percent style multiplies by 100, `maximumFractionDigits` rounds and
+`minimumFractionDigits` adds visible zeros before the CLDR rules apply. In
+English, `{$n :number minimumFractionDigits=1}` displays `1.0` for 1 and selects
+`other`, and `{$rate :number style=percent}` selects `one` for 0.01 (`1%`). Exact
+keys compare the same displayed value: 1 as a percent matches key `100`. The
+typed value is unchanged, so another expression over the same variable starts
+from the original number.
+
 Fallback remains per message. The resolved source locale accompanies content and
 controls formatting and accessible icon names. Terms and group-atomic fallback
 remain deferred.
@@ -269,8 +278,8 @@ payloads never register UI implementations.
 
 The named MF2 baseline is LDML **48.2**; the implemented execution subset is
 explicit in [the RMF2 option table](../../../specs/translations/rmf2-execution-v2.json).
-The existing nine-family locale matrix still applies. Unsupported function
-options produce `RTR0065` rather than being silently ignored or clamped.
+The pinned [locale capability matrix](capabilities.md) still applies. Unsupported
+function options produce `RTR0065` rather than being silently ignored or clamped.
 
 `Rmf2ResourceNode.MessageSyntax` exposes the shared `Mf2SyntaxDocument`: original
 tokens, expression operands, options, attributes, declarations, selectors and
