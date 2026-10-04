@@ -90,7 +90,7 @@ type sealed class Runic.Translations.Tooling.TranslationXliffImportResult
   property System.String SourceLocale { get; }
   property System.String TargetLocale { get; }
 
-type sealed class Runic.Translations.Tooling.TranslationsToolCommandJsonContext : System.Text.Json.Serialization.JsonSerializerContext, System.Text.Json.Serialization.Metadata.IBuiltInJsonTypeInfoResolver, System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Text.Json.SourceGeneration", "10.0.14.37416"), System.Text.Json.Serialization.JsonSerializableAttribute(typeof(Runic.Translations.Tooling.TranslationsToolCommandResult))]
+type sealed class Runic.Translations.Tooling.TranslationsToolCommandJsonContext : System.Text.Json.Serialization.JsonSerializerContext, System.Text.Json.Serialization.Metadata.IBuiltInJsonTypeInfoResolver, System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver [System.Text.Json.Serialization.JsonSerializableAttribute(typeof(Runic.Translations.Tooling.TranslationsToolCommandResult))]
   ctor Runic.Translations.Tooling.TranslationsToolCommandJsonContext()
   ctor Runic.Translations.Tooling.TranslationsToolCommandJsonContext(System.Text.Json.JsonSerializerOptions options)
   method System.Text.Json.Serialization.Metadata.JsonTypeInfo GetTypeInfo(System.Type type)

@@ -419,6 +419,7 @@ internal sealed class ApiManifest
     }
 
     private static bool IgnoredAttribute(string? fullName) => fullName is
+        "System.CodeDom.Compiler.GeneratedCodeAttribute" or
         "System.ParamArrayAttribute" or
         "System.Runtime.InteropServices.InAttribute" or
         "System.Runtime.InteropServices.OptionalAttribute" or
