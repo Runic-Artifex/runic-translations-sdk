@@ -20,8 +20,11 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("12.35% / 0.123456 / 100", message.Format([new("n", .123456m), new("digits", 2L)], "en"));
         var integer = Compile(".input {$n :integer}\n.local $a = {$n :number style=percent}\n.local $b = {$a}\n{{{$b :integer}}}");
         Assert.Equal("42", integer.Format([new("n", 42L)], "en"));
-        var selection = Compile(".local $n = {42 :number style=percent}\n.local $a = {$n}\n.match $a\nother {{category}}\n42 {{exact}}\n* {{fallback}}");
+        // As with MF2 :percent, selection compares the displayed value multiplied by 100.
+        var selection = Compile(".local $n = {42 :number style=percent}\n.local $a = {$n}\n.match $a\nother {{category}}\n4200 {{exact}}\n* {{fallback}}");
         Assert.Equal("exact", selection.Format([], "en"));
+        var unscaled = Compile(".local $n = {42 :number style=percent}\n.local $a = {$n}\n.match $a\n42 {{exact}}\n* {{fallback}}");
+        Assert.Equal("fallback", unscaled.Format([], "en"));
     }
     private static void CallerContracts()
     {

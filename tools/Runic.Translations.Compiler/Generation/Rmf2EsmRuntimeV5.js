@@ -214,19 +214,26 @@ function formatResolved(value, locale) {
 
 function decimalFromInteger(value) { return Object.freeze({ coefficient: value < 0n ? -value : value, scale: 0, negative: value < 0n }); }
 
-function formatDecimal(value, locale, options) {
+// The digits :number displays before localization: percent multiplies by 100,
+// halfExpand rounds to the maximum and trailing zeros stay down to the minimum.
+// Plural, ordinal and exact selection use this same visible decimal.
+function visibleNumber(value, options) {
   const percent = (options.style ?? "decimal") === "percent";
   const minimum = Number(options.minimumFractionDigits ?? 0n), maximum = Number(options.maximumFractionDigits ?? (percent ? 4n : 6n));
   let coefficient = value.coefficient, scale = value.scale - (percent ? 2 : 0);
   if (scale < 0) { coefficient *= 10n ** BigInt(-scale); scale = 0; }
   if (scale > maximum) { const divisor = 10n ** BigInt(scale - maximum); const quotient = coefficient / divisor, remainder = coefficient % divisor; coefficient = quotient + (remainder * 2n >= divisor ? 1n : 0n); scale = maximum; }
-  let digits = coefficient.toString();
-  let whole = scale === 0 ? digits : scale >= digits.length ? "0" : digits.slice(0, digits.length - scale);
-  let fraction = scale === 0 ? "" : (scale >= digits.length ? "0".repeat(scale - digits.length) + digits : digits.slice(digits.length - scale));
-  while (fraction.length > minimum && fraction.endsWith("0")) fraction = fraction.slice(0, -1);
-  while (fraction.length < minimum) fraction += "0";
+  while (scale > minimum && coefficient % 10n === 0n) { coefficient /= 10n; scale--; }
+  while (scale < minimum) { coefficient *= 10n; scale++; }
+  return Object.freeze({ coefficient, scale, negative: value.negative && coefficient !== 0n });
+}
+
+function formatDecimal(value, locale, options) {
+  const visible = visibleNumber(value, options), percent = (options.style ?? "decimal") === "percent";
+  const digits = visible.coefficient.toString().padStart(visible.scale + 1, "0");
+  const whole = digits.slice(0, digits.length - visible.scale), fraction = digits.slice(digits.length - visible.scale);
   const { decimal: separator } = numberSymbols(locale);
-  return `${value.negative && coefficient !== 0n ? "-" : ""}${whole}${fraction ? separator + fraction : ""}${percent ? "%" : ""}`;
+  return `${visible.negative ? "-" : ""}${whole}${fraction ? separator + fraction : ""}${percent ? "%" : ""}`;
 }
 
 function numberSymbols(locale) {
@@ -234,6 +241,19 @@ function numberSymbols(locale) {
   return { decimal: parts.find(part => part.type === "decimal")?.value ?? "." };
 }
 function groupInteger(value, locale) { return new Intl.NumberFormat(locale, { useGrouping: true, maximumFractionDigits: 0 }).format(value); }
+
+// The number selection compares: :number uses its displayed digits; :integer and
+// relative time use the canonical typed value. The carrier itself never changes.
+function selectionOperand(resolved) {
+  const value = resolved.type === "int64" ? decimalFromInteger(resolved.carrier) : resolved.carrier;
+  return resolved.format.function === "number" ? visibleNumber(value, resolved.format.options) : value;
+}
+
+function visibleCanonical(value) {
+  let coefficient = value.coefficient, scale = value.scale;
+  while (scale > 0 && coefficient % 10n === 0n) { coefficient /= 10n; scale--; }
+  return decimalCanonical({ coefficient, scale, negative: value.negative && coefficient !== 0n });
+}
 
 // Applies the pinned CLDR rules to the operands of a visible decimal (sign ignored).
 function selectPlural(value, locale, ordinal) {
@@ -267,8 +287,11 @@ export function formatCompiledMessage(key, wrapper, inputs, requestedLocale) {
   if (!validatedMessages.has(wrapper)) throw new TypeError("A validated v5 message is required.");
   const context = contextFor(wrapper, inputs, contract), locale = wrapper.contentLocale;
   const selections = wrapper.ast.selectors.map(selector => {
-    const resolved = context.resolve(selector.value, selector.type); const canonical = canonicalCarrier(resolved.carrier, selector.type);
-    return { resolved, canonical, category: selector.function === "exact" ? null : selectPlural(selector.type === "int64" ? decimalFromInteger(resolved.carrier) : resolved.carrier, locale, selector.function === "ordinal") };
+    const resolved = context.resolve(selector.value, selector.type);
+    if (!["int64", "decimal"].includes(selector.type)) return { resolved, canonical: canonicalCarrier(resolved.carrier, selector.type), category: null };
+    // Exact keys and CLDR categories compare the same visible decimal.
+    const operand = selectionOperand(resolved);
+    return { resolved, canonical: visibleCanonical(operand), category: selector.function === "exact" ? null : selectPlural(operand, locale, selector.function === "ordinal") };
   });
   let selected = null, selectedRanks = null, selectedIndex = -1;
   for (let variantIndex = 0; variantIndex < wrapper.ast.variants.length; variantIndex++) {

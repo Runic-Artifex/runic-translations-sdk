@@ -233,7 +233,8 @@
   "numberConstraints": {
     "fractionDigits": "0 <= minimum <= maximum <= 6 (decimal) or 4 (percent)",
     "rounding": "halfExpand",
-    "selectionUses": "unformatted-canonical-value"
+    "selectionUses": "visible-decimal",
+    "visibleDecimal": "number functions multiply percent by 100, round halfExpand to maximumFractionDigits, then keep or pad trailing zeros to minimumFractionDigits; integer and relative-time use the canonical value"
   },
   "decimal": {
     "coefficientMaximum": "79228162514264337593543950335",
@@ -260,8 +261,45 @@
     "tie": "first authored variant",
     "comparisonNormalization": "NFC",
     "duplicateVectors": "reject after NFC and selector-specific decimal canonicalization",
-    "fallback": "required all-wildcard vector"
+    "fallback": "required all-wildcard vector",
+    "categoryOperands": "CLDR n, i, v, w, f, t of the visible decimal; e = 0",
+    "exactNumericKeys": "canonical value of the visible decimal"
   },
+  "selectionVectors": [
+    { "id": "en-default-one", "locale": "en", "message": ".input {$n :number}\n.match $n\none {{{$n} file}}\n* {{{$n} files}}", "arguments": { "n": { "type": "decimal", "value": "1.0" } }, "expected": "1 file" },
+    { "id": "en-minimum-fraction-digits-other", "locale": "en", "message": ".input {$n :number minimumFractionDigits=1}\n.match $n\none {{{$n} file}}\n* {{{$n} files}}", "arguments": { "n": { "type": "decimal", "value": "1" } }, "expected": "1.0 files" },
+    { "id": "en-maximum-fraction-digits-one", "locale": "en", "message": ".input {$n :number maximumFractionDigits=0}\n.match $n\none {{{$n} file}}\n* {{{$n} files}}", "arguments": { "n": { "type": "decimal", "value": "1.4" } }, "expected": "1 file" },
+    { "id": "en-half-expand-into-one", "locale": "en", "message": ".input {$n :number maximumFractionDigits=0}\n.match $n\none {{{$n} file}}\n* {{{$n} files}}", "arguments": { "n": { "type": "decimal", "value": "0.5" } }, "expected": "1 file" },
+    { "id": "en-negative-one", "locale": "en", "message": ".input {$n :number}\n.match $n\none {{{$n} degree}}\n* {{{$n} degrees}}", "arguments": { "n": { "type": "decimal", "value": "-1" } }, "expected": "-1 degree" },
+    { "id": "en-percent-one", "locale": "en", "message": ".input {$rate :number style=percent}\n.match $rate\none {{one: {$rate}}}\n* {{other: {$rate}}}", "arguments": { "rate": { "type": "decimal", "value": "0.01" } }, "expected": "one: 1%" },
+    { "id": "en-percent-hundred-other", "locale": "en", "message": ".input {$rate :number style=percent}\n.match $rate\none {{one: {$rate}}}\n* {{other: {$rate}}}", "arguments": { "rate": { "type": "decimal", "value": "1" } }, "expected": "other: 100%" },
+    { "id": "en-percent-minimum-fraction-digits-other", "locale": "en", "message": ".input {$rate :number style=percent minimumFractionDigits=1}\n.match $rate\none {{one: {$rate}}}\n* {{other: {$rate}}}", "arguments": { "rate": { "type": "decimal", "value": "0.01" } }, "expected": "other: 1.0%" },
+    { "id": "en-percent-exact-key", "locale": "en", "message": ".input {$rate :number style=percent}\n.match $rate\n100 {{complete}}\n1 {{one percent}}\n* {{{$rate}}}", "arguments": { "rate": { "type": "decimal", "value": "1" } }, "expected": "complete" },
+    { "id": "en-exact-key-after-rounding", "locale": "en", "message": ".input {$n :number maximumFractionDigits=0}\n.match $n\n1 {{exactly {$n}}}\none {{one {$n}}}\n* {{other {$n}}}", "arguments": { "n": { "type": "decimal", "value": "1.4" } }, "expected": "exactly 1" },
+    { "id": "en-exact-key-ignores-padding", "locale": "en", "message": ".input {$n :number minimumFractionDigits=2}\n.match $n\n1 {{exactly {$n}}}\n* {{other {$n}}}", "arguments": { "n": { "type": "decimal", "value": "1" } }, "expected": "exactly 1.00" },
+    { "id": "en-select-exact-after-rounding", "locale": "en", "message": ".input {$n :number select=exact maximumFractionDigits=0}\n.match $n\n2 {{two}}\n* {{other {$n}}}", "arguments": { "n": { "type": "decimal", "value": "1.5" } }, "expected": "two" },
+    { "id": "en-ordinal-rounded", "locale": "en", "message": ".input {$n :number select=ordinal maximumFractionDigits=0}\n.match $n\none {{{$n}st}}\ntwo {{{$n}nd}}\nfew {{{$n}rd}}\n* {{{$n}th}}", "arguments": { "n": { "type": "decimal", "value": "21.6" } }, "expected": "22nd" },
+    { "id": "en-ordinal-n-ignores-visible-zero", "locale": "en", "message": ".input {$n :number select=ordinal minimumFractionDigits=1}\n.match $n\none {{{$n}st}}\ntwo {{{$n}nd}}\nfew {{{$n}rd}}\n* {{{$n}th}}", "arguments": { "n": { "type": "decimal", "value": "21" } }, "expected": "21.0st" },
+    { "id": "en-ordinal-integer", "locale": "en", "message": ".input {$n :integer select=ordinal}\n.match $n\none {{{$n}st}}\ntwo {{{$n}nd}}\nfew {{{$n}rd}}\n* {{{$n}th}}", "arguments": { "n": { "type": "int64", "value": "23" } }, "expected": "23rd" },
+    { "id": "en-integer-one", "locale": "en", "message": ".input {$n :integer}\n.match $n\none {{{$n} file}}\n* {{{$n} files}}", "arguments": { "n": { "type": "int64", "value": "1" } }, "expected": "1 file" },
+    { "id": "en-integer-local-keeps-typed-value", "locale": "en", "message": ".input {$n :integer}\n.local $shown = {$n :number minimumFractionDigits=2}\n.match $shown\none {{{$shown} file ({$n})}}\n* {{{$shown} files ({$n})}}", "arguments": { "n": { "type": "int64", "value": "1" } }, "expected": "1.00 files (1)" },
+    { "id": "en-integer-percent-exact-key", "locale": "en", "message": ".input {$n :integer}\n.local $share = {$n :number style=percent}\n.match $share\n100 {{all}}\n* {{{$share}}}", "arguments": { "n": { "type": "int64", "value": "1" } }, "expected": "all" },
+    { "id": "fr-minimum-fraction-digits-one", "locale": "fr", "message": ".input {$n :number minimumFractionDigits=1}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1" } }, "expected": "1,0 fichier" },
+    { "id": "fr-rounding-into-other", "locale": "fr", "message": ".input {$n :number maximumFractionDigits=0}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1.5" } }, "expected": "2 fichiers" },
+    { "id": "fr-rounding-into-one", "locale": "fr", "message": ".input {$n :number maximumFractionDigits=0}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "0.4" } }, "expected": "0 fichier" },
+    { "id": "fr-million-many", "locale": "fr", "message": ".input {$n :number}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1000000" } }, "expected": "1000000 de fichiers" },
+    { "id": "fr-million-visible-fraction-other", "locale": "fr", "message": ".input {$n :number minimumFractionDigits=1}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1000000" } }, "expected": "1000000,0 fichiers" },
+    { "id": "fr-ordinal-rounded", "locale": "fr", "message": ".input {$n :number select=ordinal maximumFractionDigits=0}\n.match $n\none {{{$n}er}}\n* {{{$n}e}}", "arguments": { "n": { "type": "decimal", "value": "1.2" } }, "expected": "1er" },
+    { "id": "cs-one", "locale": "cs", "message": ".input {$n :number}\n.match $n\none {{{$n} den}}\nfew {{{$n} dny}}\nmany {{{$n} dne}}\n* {{{$n} dní}}", "arguments": { "n": { "type": "decimal", "value": "1" } }, "expected": "1 den" },
+    { "id": "cs-few", "locale": "cs", "message": ".input {$n :number}\n.match $n\none {{{$n} den}}\nfew {{{$n} dny}}\nmany {{{$n} dne}}\n* {{{$n} dní}}", "arguments": { "n": { "type": "decimal", "value": "2" } }, "expected": "2 dny" },
+    { "id": "cs-many-decimal", "locale": "cs", "message": ".input {$n :number}\n.match $n\none {{{$n} den}}\nfew {{{$n} dny}}\nmany {{{$n} dne}}\n* {{{$n} dní}}", "arguments": { "n": { "type": "decimal", "value": "2.4" } }, "expected": "2,4 dne" },
+    { "id": "cs-many-minimum-fraction-digits", "locale": "cs", "message": ".input {$n :number minimumFractionDigits=1}\n.match $n\none {{{$n} den}}\nfew {{{$n} dny}}\nmany {{{$n} dne}}\n* {{{$n} dní}}", "arguments": { "n": { "type": "decimal", "value": "2" } }, "expected": "2,0 dne" },
+    { "id": "cs-few-after-rounding", "locale": "cs", "message": ".input {$n :number maximumFractionDigits=0}\n.match $n\none {{{$n} den}}\nfew {{{$n} dny}}\nmany {{{$n} dne}}\n* {{{$n} dní}}", "arguments": { "n": { "type": "decimal", "value": "2.4" } }, "expected": "2 dny" },
+    { "id": "cs-integer-other", "locale": "cs", "message": ".input {$n :integer}\n.match $n\none {{{$n} den}}\nfew {{{$n} dny}}\nmany {{{$n} dne}}\n* {{{$n} dní}}", "arguments": { "n": { "type": "int64", "value": "5" } }, "expected": "5 dní" },
+    { "id": "da-fraction-one", "locale": "da", "message": ".input {$n :number}\n.match $n\none {{{$n} fil}}\n* {{{$n} filer}}", "arguments": { "n": { "type": "decimal", "value": "0.5" } }, "expected": "0,5 fil" },
+    { "id": "da-rounded-fraction-other", "locale": "da", "message": ".input {$n :number maximumFractionDigits=1}\n.match $n\none {{{$n} fil}}\n* {{{$n} filer}}", "arguments": { "n": { "type": "decimal", "value": "0.04" } }, "expected": "0 filer" },
+    { "id": "es-n-one-with-visible-zero", "locale": "es", "message": ".input {$n :number minimumFractionDigits=1}\n.match $n\none {{{$n} archivo}}\nmany {{{$n} de archivos}}\n* {{{$n} archivos}}", "arguments": { "n": { "type": "decimal", "value": "1" } }, "expected": "1,0 archivo" }
+  ],
   "annotations": {
     "ordered": true,
     "values": [

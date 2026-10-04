@@ -30,6 +30,7 @@ Cardinal selector equivalence: **exact**.
 Ordinal selector equivalence: **exact**.
 Relative-time equivalence: **semantic**.
 Plural selection and relative-time language patterns are generated from the pinned CLDR subset; the ESM backend does not delegate them to host `Intl` data.
+Cardinal and ordinal rules use all CLDR operands of the displayed number, after percent scaling, rounding and minimum fraction digits.
 
 ## Formatter equivalence
 

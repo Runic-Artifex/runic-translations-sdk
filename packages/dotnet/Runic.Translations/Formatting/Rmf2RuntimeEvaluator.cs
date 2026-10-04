@@ -71,6 +71,14 @@ internal sealed class Rmf2ResolvedFormat
             default: throw new TranslationFormatException("Unknown v5 formatter.");
         }
     }
+    /// <summary>
+    /// The number that plural, ordinal and exact selection compare. <c>:number</c>
+    /// selects on its displayed digits; <c>:integer</c> and relative time display
+    /// the canonical typed value. The typed value itself is never changed.
+    /// </summary>
+    internal VisibleDecimal SelectionOperand(TextArgument value) => Function == "number"
+        ? VisibleDecimal.FromNumber(Number(value), String("style", "decimal") == "percent", MinimumDigits, MaximumDigits)
+        : value.Type == TextArgumentType.Int ? VisibleDecimal.FromInteger(Get<long>(value)) : VisibleDecimal.Canonical(Get<decimal>(value));
     internal static T Get<T>(TextArgument value) => value.TryGetValue(out T? result) ? result! : throw new TranslationFormatException("Argument does not contain its declared carrier.");
     internal static decimal Number(TextArgument value) => value.Type == TextArgumentType.Int ? Get<long>(value) : Get<decimal>(value);
     internal static string Canonical(TextArgument value) => value.Type switch
@@ -175,13 +183,19 @@ internal static class Rmf2RuntimeEvaluator
     private static CompiledRmf2Variant Select(CompiledRmf2Message message, Context context, string locale)
     {
         var values = new TextArgument[message.SelectorArray.Length];
+        // Numeric selectors compare exact keys and CLDR categories with the same
+        // visible decimal; string and boolean selectors compare the canonical value.
+        var canonical = new string[values.Length];
         var categories = new string?[values.Length];
         for (int index = 0; index < values.Length; index++)
         {
-            var selector = message.SelectorArray[index]; values[index] = context.Resolve(selector.Value, selector.Type).Carrier;
+            var selector = message.SelectorArray[index]; Value value = context.Resolve(selector.Value, selector.Type); values[index] = value.Carrier;
+            if (values[index].Type is not (TextArgumentType.Int or TextArgumentType.Number)) { canonical[index] = Rmf2ResolvedFormat.Canonical(values[index]).Normalize(NormalizationForm.FormC); continue; }
+            VisibleDecimal operand = value.Format.SelectionOperand(value.Carrier);
+            canonical[index] = operand.ToCanonicalString();
             if (selector.Function != "exact")
             {
-                PluralOperands operands = VisibleDecimal.Canonical(Rmf2ResolvedFormat.Number(values[index])).Operands;
+                PluralOperands operands = operand.Operands;
                 categories[index] = GeneratedLocaleData.SelectPlural(GeneratedLocaleData.Language(locale), selector.Function == "ordinal", in operands)
                     ?? throw new TranslationFormatException("V5 plural selection is not supported for locale '" + locale + "'.");
             }
@@ -195,8 +209,8 @@ internal static class Rmf2RuntimeEvaluator
                 var key = variant.KeyArray[index];
                 if (key.Value is null) ranks[index] = 0;
                 else if (values[index].Type is TextArgumentType.Int or TextArgumentType.Number)
-                    ranks[index] = key.Canonical is not null ? key.Canonical == Rmf2ResolvedFormat.Canonical(values[index]) ? 2 : -1 : key.Value == categories[index] ? 1 : -1;
-                else ranks[index] = string.Equals(key.Value.Normalize(NormalizationForm.FormC), Rmf2ResolvedFormat.Canonical(values[index]).Normalize(NormalizationForm.FormC), StringComparison.Ordinal) ? 1 : -1;
+                    ranks[index] = key.Canonical is not null ? key.Canonical == canonical[index] ? 2 : -1 : key.Value == categories[index] ? 1 : -1;
+                else ranks[index] = string.Equals(key.Value.Normalize(NormalizationForm.FormC), canonical[index], StringComparison.Ordinal) ? 1 : -1;
                 if (ranks[index] < 0) { matches = false; break; }
             }
             if (matches && (bestRanks is null || Compare(ranks, bestRanks) > 0)) { best = variant; bestRanks = ranks; }
