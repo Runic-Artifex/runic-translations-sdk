@@ -11,6 +11,7 @@ Conforming backends: **dotnet, esm**
 
 | Locale family | Cardinal | Ordinal | Relative time |
 | ------------- | -------: | ------: | ------------: |
+| `cs`          |      yes |     yes |             — |
 | `da`          |      yes |     yes |             — |
 | `de`          |      yes |     yes |           yes |
 | `en`          |      yes |     yes |           yes |

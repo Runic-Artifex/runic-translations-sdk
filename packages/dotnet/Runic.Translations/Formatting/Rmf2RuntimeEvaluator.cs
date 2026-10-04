@@ -181,8 +181,9 @@ internal static class Rmf2RuntimeEvaluator
             var selector = message.SelectorArray[index]; values[index] = context.Resolve(selector.Value, selector.Type).Carrier;
             if (selector.Function != "exact")
             {
-                if (GeneratedLocaleData.FindPlural(GeneratedLocaleData.Language(locale)) is null) throw new TranslationFormatException("V5 plural selection is not supported for locale '" + locale + "'.");
-                categories[index] = TextMessageSelector.SelectPlural(Rmf2ResolvedFormat.Number(values[index]), locale, selector.Function == "ordinal");
+                PluralOperands operands = VisibleDecimal.Canonical(Rmf2ResolvedFormat.Number(values[index])).Operands;
+                categories[index] = GeneratedLocaleData.SelectPlural(GeneratedLocaleData.Language(locale), selector.Function == "ordinal", in operands)
+                    ?? throw new TranslationFormatException("V5 plural selection is not supported for locale '" + locale + "'.");
             }
         }
         CompiledRmf2Variant? best = null; int[]? bestRanks = null;

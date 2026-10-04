@@ -57,6 +57,12 @@
   },
   "locales": [
     {
+      "tag": "cs",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false
+    },
+    {
       "tag": "da",
       "cardinal": true,
       "ordinal": true,

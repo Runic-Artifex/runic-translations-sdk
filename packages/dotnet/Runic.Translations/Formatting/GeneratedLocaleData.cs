@@ -2,27 +2,12 @@
 #nullable enable
 namespace Runic.Translations;
 
-internal sealed record GeneratedPluralLocale(string Language, string CardinalRule, string OrdinalRule);
 internal sealed record GeneratedRelativeTimeUnit(string Name, string One, string Other);
 internal sealed record GeneratedRelativeTimeLocale(string Language, string[] AutoDay, string Past, string Future, GeneratedRelativeTimeUnit[] Units);
 
 internal static class GeneratedLocaleData
 {
     internal const string CldrVersion = "48.2";
-    internal static readonly GeneratedPluralLocale[] PluralLocales =
-    [
-        new("da", "danish", "other"),
-        new("de", "integer-one", "other"),
-        new("en", "integer-one", "english"),
-        new("es", "one-and-million", "other"),
-        new("fr", "french", "one"),
-        new("it", "one-and-million", "italian"),
-        new("nb", "one", "other"),
-        new("nl", "integer-one", "other"),
-        new("nn", "one", "other"),
-        new("no", "one", "other"),
-        new("sv", "integer-one", "swedish"),
-    ];
     internal static readonly GeneratedRelativeTimeLocale[] RelativeTimeLocales =
     [
         new("de", ["gestern", "heute", "morgen"], "vor {0} {unit}", "in {0} {unit}", [new("second", "Sekunde", "Sekunden"), new("minute", "Minute", "Minuten"), new("hour", "Stunde", "Stunden"), new("day", "Tag", "Tagen"), new("week", "Woche", "Wochen"), new("month", "Monat", "Monaten"), new("year", "Jahr", "Jahren")]),
@@ -35,17 +20,106 @@ internal static class GeneratedLocaleData
     // POSIX-style tags such as en_US select the same language family as en-US.
     internal static string Language(string locale) => locale.Split('-', '_')[0].ToLowerInvariant();
 
-    internal static GeneratedPluralLocale? FindPlural(string language)
+    /// <summary>Applies the pinned CLDR rules to the operands of a visible decimal, or returns null for an unsupported language.</summary>
+    internal static string? SelectPlural(string language, bool ordinal, in PluralOperands operands) => language switch
     {
-        for (int index = 0; index < PluralLocales.Length; index++)
-            if (PluralLocales[index].Language == language) return PluralLocales[index];
-        return null;
-    }
+        "cs" => ordinal ? AlwaysOther(in operands) : CardinalCs(in operands),
+        "da" => ordinal ? AlwaysOther(in operands) : CardinalDa(in operands),
+        "de" => ordinal ? AlwaysOther(in operands) : CardinalDe(in operands),
+        "en" => ordinal ? OrdinalEn(in operands) : CardinalDe(in operands),
+        "es" => ordinal ? AlwaysOther(in operands) : CardinalEs(in operands),
+        "fr" => ordinal ? OrdinalFr(in operands) : CardinalFr(in operands),
+        "it" => ordinal ? OrdinalIt(in operands) : CardinalIt(in operands),
+        "nb" => ordinal ? AlwaysOther(in operands) : CardinalNb(in operands),
+        "nl" => ordinal ? AlwaysOther(in operands) : CardinalDe(in operands),
+        "nn" => ordinal ? AlwaysOther(in operands) : CardinalNb(in operands),
+        "no" => ordinal ? AlwaysOther(in operands) : CardinalNb(in operands),
+        "sv" => ordinal ? OrdinalSv(in operands) : CardinalDe(in operands),
+        _ => null,
+    };
 
     internal static GeneratedRelativeTimeLocale? FindRelativeTime(string language)
     {
         for (int index = 0; index < RelativeTimeLocales.Length; index++)
             if (RelativeTimeLocales[index].Language == language) return RelativeTimeLocales[index];
         return null;
+    }
+
+    private static string CardinalCs(in PluralOperands o)
+    {
+        if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
+        if (o.I >= 2UL && o.I <= 4UL && o.V == 0) return "few"; // i = 2..4 and v = 0
+        if (o.V != 0) return "many"; // v != 0
+        return "other";
+    }
+
+    private static string AlwaysOther(in PluralOperands o)
+    {
+        return "other";
+    }
+
+    private static string CardinalDa(in PluralOperands o)
+    {
+        if ((o.T == 0UL && o.I == 1UL) || (o.T != 0UL && (o.I == 0UL || o.I == 1UL))) return "one"; // n = 1 or t != 0 and i = 0,1
+        return "other";
+    }
+
+    private static string CardinalDe(in PluralOperands o)
+    {
+        if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
+        return "other";
+    }
+
+    private static string OrdinalEn(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I % 10UL) == 1UL && !(o.T == 0UL && (o.I % 100UL) == 11UL)) return "one"; // n % 10 = 1 and n % 100 != 11
+        if (o.T == 0UL && (o.I % 10UL) == 2UL && !(o.T == 0UL && (o.I % 100UL) == 12UL)) return "two"; // n % 10 = 2 and n % 100 != 12
+        if (o.T == 0UL && (o.I % 10UL) == 3UL && !(o.T == 0UL && (o.I % 100UL) == 13UL)) return "few"; // n % 10 = 3 and n % 100 != 13
+        return "other";
+    }
+
+    private static string CardinalEs(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
+        return "other";
+    }
+
+    private static string CardinalFr(in PluralOperands o)
+    {
+        if ((o.I == 0UL || o.I == 1UL)) return "one"; // i = 0,1
+        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
+        return "other";
+    }
+
+    private static string OrdinalFr(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        return "other";
+    }
+
+    private static string CardinalIt(in PluralOperands o)
+    {
+        if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
+        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
+        return "other";
+    }
+
+    private static string OrdinalIt(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I == 11UL || o.I == 8UL || o.I == 80UL || o.I == 800UL)) return "many"; // n = 11,8,80,800
+        return "other";
+    }
+
+    private static string CardinalNb(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        return "other";
+    }
+
+    private static string OrdinalSv(in PluralOperands o)
+    {
+        if (o.T == 0UL && ((o.I % 10UL) == 1UL || (o.I % 10UL) == 2UL) && !(o.T == 0UL && ((o.I % 100UL) == 11UL || (o.I % 100UL) == 12UL))) return "one"; // n % 10 = 1,2 and n % 100 != 11,12
+        return "other";
     }
 }

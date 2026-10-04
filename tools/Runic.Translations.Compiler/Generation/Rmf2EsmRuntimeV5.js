@@ -98,9 +98,6 @@ function decimalCanonical(value) {
 
 function decimalEquals(left, right) { return left.coefficient === right.coefficient && left.scale === right.scale && left.negative === right.negative; }
 function decimalAbsolute(value) { return value.negative ? Object.freeze({ coefficient: value.coefficient, scale: value.scale, negative: false }) : value; }
-function decimalIntegral(value) { return value.scale === 0; }
-function decimalIntegerPart(value) { return value.scale === 0 ? value.coefficient : value.coefficient / (10n ** BigInt(value.scale)); }
-function decimalModulo(value, divisor) { if (value.scale !== 0) return null; return value.coefficient % BigInt(divisor); }
 
 function coerceInput(value, type, name) {
   switch (type) {
@@ -238,20 +235,14 @@ function numberSymbols(locale) {
 }
 function groupInteger(value, locale) { return new Intl.NumberFormat(locale, { useGrouping: true, maximumFractionDigits: 0 }).format(value); }
 
+// Applies the pinned CLDR rules to the operands of a visible decimal (sign ignored).
 function selectPlural(value, locale, ordinal) {
-  const decimalValue = decimalAbsolute(value); const language = locale.toLowerCase().split(/[-_]/)[0]; const rules = generatedLocaleData.plural[language];
+  const language = locale.toLowerCase().split(/[-_]/)[0]; const rules = Object.hasOwn(generatedPluralRules, language) ? generatedPluralRules[language] : undefined;
   if (!rules) throw new RangeError(`Plural selection is not supported for locale '${locale}'.`);
-  const rule = rules[ordinal ? 1 : 0], integral = decimalIntegral(decimalValue), integer = decimalIntegerPart(decimalValue);
-  const equals = expected => decimalValue.scale === 0 && decimalValue.coefficient === BigInt(expected);
-  const modulo = divisor => decimalModulo(decimalValue, divisor);
-  if (rule === "english" && integral) { const mod100 = modulo(100), mod10 = modulo(10); if (mod10 === 1n && mod100 !== 11n) return "one"; if (mod10 === 2n && mod100 !== 12n) return "two"; if (mod10 === 3n && mod100 !== 13n) return "few"; }
-  else if (rule === "italian") return [8,11,80,800].some(equals) ? "many" : "other";
-  else if (rule === "swedish") { const mod100 = modulo(100), mod10 = modulo(10); return (mod10 === 1n || mod10 === 2n) && mod100 !== 11n && mod100 !== 12n ? "one" : "other"; }
-  else if (rule === "one" || rule === "integer-one") return equals(1) ? "one" : "other";
-  else if (rule === "danish") return equals(1) || (!integral && (integer === 0n || integer === 1n)) ? "one" : "other";
-  else if (rule === "one-and-million") { if (equals(1)) return "one"; return integral && !equals(0) && modulo(1000000) === 0n ? "many" : "other"; }
-  else if (rule === "french") { if (integral && !equals(0) && modulo(1000000) === 0n) return "many"; return integer === 0n || integer === 1n ? "one" : "other"; }
-  return "other";
+  const divisor = 10n ** BigInt(value.scale), f = value.coefficient % divisor;
+  let t = f, w = BigInt(value.scale);
+  while (w > 0n && t % 10n === 0n) { t /= 10n; w--; }
+  return rules[ordinal ? 1 : 0](Object.freeze({ i: value.coefficient / divisor, v: BigInt(value.scale), w, f, t, e: 0n }));
 }
 
 function formatRelative(value, unit, numeric, locale) {

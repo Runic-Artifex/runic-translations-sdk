@@ -55,6 +55,7 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
         writer.Line("const generatedLocaleData = " + TranslationCapabilityRegistry.EsmLocaleDataJson + ";");
+        writer.Line(TranslationCapabilityRegistry.EsmPluralRulesSource);
         writer.Line("export const rmf2Contract = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(project.MarkupContract) + "));");
         writer.Line("export const messageContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(ContractsJson(project, includeExtras: true)) + "));");
         using Stream stream = typeof(Rmf2EsmOutputRendererV5).Assembly.GetManifestResourceStream("Runic.Translations.Compiler.Generation.Rmf2EsmRuntimeV5.js")!;

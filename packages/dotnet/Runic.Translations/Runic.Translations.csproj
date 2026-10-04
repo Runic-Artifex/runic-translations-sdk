@@ -12,6 +12,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Checks the generated CLDR selectors against every pinned rule sample. -->
+    <InternalsVisibleTo Include="Runic.Translations.Runtime.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
     <None Include="..\..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />
