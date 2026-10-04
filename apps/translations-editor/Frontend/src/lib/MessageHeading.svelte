@@ -2,9 +2,9 @@
   import CopyIcon from "@lucide/svelte/icons/copy";
   import PencilIcon from "@lucide/svelte/icons/pencil";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { getUiText } from "$lib/ui-text";
+  import { Badge } from "#lib/components/ui/badge/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   let {
     messageKey,

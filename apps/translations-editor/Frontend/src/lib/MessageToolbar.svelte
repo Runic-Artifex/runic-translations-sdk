@@ -6,11 +6,11 @@
 <script lang="ts">
   import ListFilterIcon from "@lucide/svelte/icons/list-filter";
   import SearchIcon from "@lucide/svelte/icons/search";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import { buttonVariants } from "$lib/components/ui/button/index.js";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
-  import * as InputGroup from "$lib/components/ui/input-group/index.js";
-  import { getUiText } from "$lib/ui-text";
+  import { Badge } from "#lib/components/ui/badge/index.js";
+  import { buttonVariants } from "#lib/components/ui/button/index.js";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+  import * as InputGroup from "#lib/components/ui/input-group/index.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   let {
     query = $bindable(),

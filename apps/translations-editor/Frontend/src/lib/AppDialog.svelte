@@ -1,6 +1,6 @@
 <script lang="ts">
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import { cn } from "$lib/utils.js";
+  import * as Dialog from "#lib/components/ui/dialog/index.js";
+  import { cn } from "#lib/utils.js";
   import type { Snippet } from "svelte";
 
   let {

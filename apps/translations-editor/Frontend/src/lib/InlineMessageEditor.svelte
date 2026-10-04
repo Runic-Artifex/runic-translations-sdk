@@ -6,20 +6,20 @@
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import XIcon from "@lucide/svelte/icons/x";
   import VariableIcon from "@lucide/svelte/icons/variable";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
-  import * as Field from "$lib/components/ui/field/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import * as Select from "$lib/components/ui/select/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+  import * as Field from "#lib/components/ui/field/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import * as Select from "#lib/components/ui/select/index.js";
   import {
     inputTypes,
     nextIdentifier,
     type InputType,
     type MessageInput,
-  } from "$lib/message-composer";
+  } from "#lib/message-composer.js";
   import { tick } from "svelte";
-  import { localeDirection } from "$lib/locale-text";
-  import { getUiText } from "$lib/ui-text";
+  import { localeDirection } from "#lib/locale-text.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   interface EditorSlot {
     text: string;

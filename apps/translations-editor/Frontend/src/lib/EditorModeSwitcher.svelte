@@ -3,8 +3,8 @@
 </script>
 
 <script lang="ts">
-  import * as ToggleGroup from "$lib/components/ui/toggle-group/index.js";
-  import { getUiText } from "$lib/ui-text";
+  import * as ToggleGroup from "#lib/components/ui/toggle-group/index.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   let {
     mode,

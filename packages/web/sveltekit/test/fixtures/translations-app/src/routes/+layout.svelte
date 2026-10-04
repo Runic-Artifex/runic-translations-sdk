@@ -3,9 +3,9 @@
     createLocaleNavigation,
     synchronizeLocaleWithNavigation,
   } from "@runic-artifex/sveltekit/translations/navigation";
-  import { routing } from "$lib/i18n.js";
-  import { localeContext } from "$lib/locale-context.js";
-  import { createFixtureLocaleSource } from "$lib/locale-source.js";
+  import { routing } from "../lib/i18n.js";
+  import { localeContext } from "../lib/locale-context.js";
+  import { createFixtureLocaleSource } from "../lib/locale-source.js";
   import type { LayoutProps } from "./$types.js";
 
   let { data, children }: LayoutProps = $props();

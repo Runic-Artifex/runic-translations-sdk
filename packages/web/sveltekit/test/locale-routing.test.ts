@@ -1,4 +1,5 @@
-import type { Cookies, Handle, RequestEvent } from "@sveltejs/kit";
+import type { Cookies, RequestEvent } from "@sveltejs/kit";
+import type { Handle } from "@sveltejs/kit/hooks";
 import { describe, expect, test, vi } from "vitest";
 import {
   createRunicLocaleHandle,

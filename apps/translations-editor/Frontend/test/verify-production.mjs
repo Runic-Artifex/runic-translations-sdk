@@ -3,7 +3,7 @@ import { extname } from "node:path";
 
 const build = new URL("../build/", import.meta.url);
 const generated = await readFile(new URL("../src/generated/editor.ts", import.meta.url), "utf8");
-if (!generated.includes("export interface EditorView") || !generated.includes("readonly workspace: EditorWorkspacePageReference;") || !generated.includes("readonly interchange: EditorInterchangePageReference;"))
+if (!generated.includes("export interface EditorState") || !generated.includes("readonly workspace: EditorWorkspacePageReference;") || !generated.includes("readonly interchange: EditorInterchangePageReference;"))
   throw new Error("The generated Views Editor client is missing its routed feature contracts.");
 const generatedDocument = await readFile(new URL("../src/generated/editorDocument.ts", import.meta.url), "utf8");
 const saveArgument = '{ readonly ["content"]: string; readonly ["revision"]: string }';

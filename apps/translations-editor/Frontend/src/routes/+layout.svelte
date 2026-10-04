@@ -1,7 +1,7 @@
 <script lang="ts">
 	import './layout.css';
 	import { onMount } from 'svelte';
-	import { observeDesktopAppearance } from '$lib/appearance';
+	import { observeDesktopAppearance } from '#lib/appearance.js';
 	onMount(observeDesktopAppearance);
 
 	const { children } = $props();

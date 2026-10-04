@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { readFileSync, readdirSync, writeFileSync, copyFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 const visited = new Set();
 const notices = ['# Bundled third-party licenses\n\nGenerated from the locked runtime dependency graph.\n'];
@@ -20,5 +20,3 @@ function visit(name, from = import.meta.dirname) {
 }
 visit('vscode-languageclient');
 writeFileSync(join(import.meta.dirname, 'THIRD-PARTY-NOTICES.md'), notices.join('').trimEnd() + '\n');
-// vscode-languageclient uses this asset when a POSIX server does not shut down gracefully.
-copyFileSync(join(dirname(require.resolve('vscode-languageclient/package.json')), 'lib/node/terminateProcess.sh'), join(import.meta.dirname, 'dist/terminateProcess.sh'));

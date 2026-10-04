@@ -7,12 +7,12 @@
   import Settings2Icon from "@lucide/svelte/icons/settings-2";
   import SunIcon from "@lucide/svelte/icons/sun";
   import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
-  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-  import type { ThemeMode, ThemePalette } from "$lib/appearance";
-  import type { UiDirection } from "$lib/simulation";
-  import { getUiText } from "$lib/ui-text";
+  import { Badge } from "#lib/components/ui/badge/index.js";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+  import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+  import type { ThemeMode, ThemePalette } from "#lib/appearance.js";
+  import type { UiDirection } from "#lib/simulation.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   let {
     locale,

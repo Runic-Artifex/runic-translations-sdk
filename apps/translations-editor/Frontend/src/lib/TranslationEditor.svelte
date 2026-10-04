@@ -1,13 +1,13 @@
 <script lang="ts">
   import WandSparklesIcon from "@lucide/svelte/icons/wand-sparkles";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import * as Field from "$lib/components/ui/field/index.js";
-  import { Textarea } from "$lib/components/ui/textarea/index.js";
-  import MessageComposer from "$lib/MessageComposer.svelte";
-  import type { EditorMode } from "$lib/EditorModeSwitcher.svelte";
-  import type { ResourceValue } from "$lib/resource-model";
-  import { localeDirection } from "$lib/locale-text";
-  import { getUiText } from "$lib/ui-text";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import * as Field from "#lib/components/ui/field/index.js";
+  import { Textarea } from "#lib/components/ui/textarea/index.js";
+  import MessageComposer from "#lib/MessageComposer.svelte";
+  import type { EditorMode } from "#lib/EditorModeSwitcher.svelte";
+  import type { ResourceValue } from "#lib/resource-model.js";
+  import { localeDirection } from "#lib/locale-text.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   interface Props {
     mode: EditorMode;

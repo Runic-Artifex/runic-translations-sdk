@@ -1,5 +1,5 @@
 <script lang="ts">
-  import InlinePreview from "$lib/InlinePreview.svelte";
+  import InlinePreview from "#lib/InlinePreview.svelte";
   import { onMount } from "svelte";
   import { m } from "virtual:runic-translations/editor";
 
@@ -21,51 +21,51 @@
     EditorXliffImportPreview,
     ValidationResult,
     WorkspaceSnapshot,
-  } from "$lib/contracts";
+  } from "#lib/contracts.js";
   import {
     applyAppearance,
     readAppearance,
     saveAppearance,
     type ThemeMode,
     type ThemePalette,
-  } from "$lib/appearance";
-  import AppDialog from "$lib/AppDialog.svelte";
-  import ArtifactPreviewPanel from "$lib/ArtifactPreviewPanel.svelte";
-  import CommandPalette from "$lib/CommandPalette.svelte";
-  import { buildEditorCommandPalette } from "$lib/command-palette";
-  import { createEditorBridge } from "$lib/editor-bridge";
+  } from "#lib/appearance.js";
+  import AppDialog from "#lib/AppDialog.svelte";
+  import ArtifactPreviewPanel from "#lib/ArtifactPreviewPanel.svelte";
+  import CommandPalette from "#lib/CommandPalette.svelte";
+  import { buildEditorCommandPalette } from "#lib/command-palette.js";
+  import { createEditorBridge } from "#lib/editor-bridge.js";
   import type { EditorDocumentState } from "../generated/editorDocument";
-  import { createUiText, setUiText, notice, displayNotice, UiNoticeError, type UiMessage } from "$lib/ui-text";
-  import { editorShortcut } from "$lib/editor-keyboard";
-  import EditorModeSwitcher, { type EditorMode } from "$lib/EditorModeSwitcher.svelte";
-  import InterchangeDialog from "$lib/InterchangeDialog.svelte";
-  import EditorSettingsFooter from "$lib/EditorSettingsFooter.svelte";
-  import EditorSidebarHeader from "$lib/EditorSidebarHeader.svelte";
-  import EditorToolbar from "$lib/EditorToolbar.svelte";
-  import LocaleSwitcher from "$lib/LocaleSwitcher.svelte";
-  import MessageHeading from "$lib/MessageHeading.svelte";
-  import MessageList, { type MessageListItem } from "$lib/MessageList.svelte";
-  import MessageToolbar, { type MessageFilter } from "$lib/MessageToolbar.svelte";
-  import ReviewWorkflow from "$lib/ReviewWorkflow.svelte";
-  import SidebarSectionPanels from "$lib/SidebarSectionPanels.svelte";
-  import TranslationEditor from "$lib/TranslationEditor.svelte";
-  import ValidationPanel from "$lib/ValidationPanel.svelte";
-  import WorkspacePanel from "$lib/WorkspacePanel.svelte";
+  import { createUiText, setUiText, notice, displayNotice, UiNoticeError, type UiMessage } from "#lib/ui-text.js";
+  import { editorShortcut } from "#lib/editor-keyboard.js";
+  import EditorModeSwitcher, { type EditorMode } from "#lib/EditorModeSwitcher.svelte";
+  import InterchangeDialog from "#lib/InterchangeDialog.svelte";
+  import EditorSettingsFooter from "#lib/EditorSettingsFooter.svelte";
+  import EditorSidebarHeader from "#lib/EditorSidebarHeader.svelte";
+  import EditorToolbar from "#lib/EditorToolbar.svelte";
+  import LocaleSwitcher from "#lib/LocaleSwitcher.svelte";
+  import MessageHeading from "#lib/MessageHeading.svelte";
+  import MessageList, { type MessageListItem } from "#lib/MessageList.svelte";
+  import MessageToolbar, { type MessageFilter } from "#lib/MessageToolbar.svelte";
+  import ReviewWorkflow from "#lib/ReviewWorkflow.svelte";
+  import SidebarSectionPanels from "#lib/SidebarSectionPanels.svelte";
+  import TranslationEditor from "#lib/TranslationEditor.svelte";
+  import ValidationPanel from "#lib/ValidationPanel.svelte";
+  import WorkspacePanel from "#lib/WorkspacePanel.svelte";
   import MessageSquareTextIcon from "@lucide/svelte/icons/message-square-text";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import * as Alert from "$lib/components/ui/alert/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Checkbox } from "$lib/components/ui/checkbox/index.js";
-  import * as Empty from "$lib/components/ui/empty/index.js";
-  import * as Field from "$lib/components/ui/field/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import * as Select from "$lib/components/ui/select/index.js";
-  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-  import { Spinner } from "$lib/components/ui/spinner/index.js";
-  import { Textarea } from "$lib/components/ui/textarea/index.js";
-  import type { MessageArtifact, MessagePreviewResult, PreviewNode } from "$lib/message-composer";
+  import * as Alert from "#lib/components/ui/alert/index.js";
+  import { Badge } from "#lib/components/ui/badge/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.js";
+  import * as Empty from "#lib/components/ui/empty/index.js";
+  import * as Field from "#lib/components/ui/field/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import * as Select from "#lib/components/ui/select/index.js";
+  import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+  import { Spinner } from "#lib/components/ui/spinner/index.js";
+  import { Textarea } from "#lib/components/ui/textarea/index.js";
+  import type { MessageArtifact, MessagePreviewResult, PreviewNode } from "#lib/message-composer.js";
   import {
     createMessagePreviewRequest,
     createMessagePreviewOwnership,
@@ -75,7 +75,7 @@
     previewSampleOr,
     routeMessagePreview,
     withPreviewSample,
-  } from "$lib/message-preview.js";
+  } from "#lib/message-preview.js";
   import {
     clearLocalEditorState,
     configureLocalEditorState,
@@ -85,7 +85,7 @@
     removeLocalEditorState,
     setLocalEditorState,
     type LocalStateSummary,
-  } from "$lib/local-state";
+  } from "#lib/local-state.js";
   import {
     buildRows,
     coverage,
@@ -93,8 +93,8 @@
     preview,
     type ResourceValue,
     type TranslationRow,
-  } from "$lib/resource-model";
-  import { createMessageSearchIndex } from "$lib/message-search";
+  } from "#lib/resource-model.js";
+  import { createMessageSearchIndex } from "#lib/message-search.js";
   import {
     effectiveReviewState,
     bidiIssues,
@@ -105,13 +105,13 @@
     reviewMap,
     sourceFingerprint,
     translationSuggestions,
-  } from "$lib/review-model";
+  } from "#lib/review-model.js";
   import {
     readUiSimulation,
     saveUiSimulation,
     simulatePreviewResult,
     type UiDirection,
-  } from "$lib/simulation";
+  } from "#lib/simulation.js";
 
   type ProjectLocaleDraft = { id: number; tag: string; fallback: string };
   type StoredDraft = { content: string; baseRevision: string };
@@ -128,7 +128,7 @@
   configureLocalEditorState(bridge);
   let snapshot = $state.raw<WorkspaceSnapshot>();
   let drafts = $state<Record<string, string>>({});
-  let parsedDrafts = $state<Record<string, { content: string; entries: import("$lib/contracts").EditorMessageEntry[] }>>({});
+  let parsedDrafts = $state<Record<string, { content: string; entries: import("#lib/contracts.js").EditorMessageEntry[] }>>({});
   const transformQueues = new Map<string, Promise<void>>();
   const transformVersions = new Map<string, number>();
   let workspaceGeneration = 0;

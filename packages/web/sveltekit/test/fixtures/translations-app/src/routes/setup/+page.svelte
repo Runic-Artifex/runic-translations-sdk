@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from "$app/paths";
-  import { routing } from "$lib/i18n.js";
-  import { localeContext } from "$lib/locale-context.js";
+  import { routing } from "../../lib/i18n.js";
+  import { localeContext } from "../../lib/locale-context.js";
 
   const locale = localeContext.use();
   const message = (options: Readonly<{ locale: "en" | "de" }>) =>

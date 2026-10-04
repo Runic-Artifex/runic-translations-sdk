@@ -4,15 +4,15 @@
     EditorReviewImportPreview,
     EditorXliffExportResult,
     EditorXliffImportPreview,
-  } from "$lib/contracts";
-  import AppDialog from "$lib/AppDialog.svelte";
-  import * as Alert from "$lib/components/ui/alert/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import * as Field from "$lib/components/ui/field/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Spinner } from "$lib/components/ui/spinner/index.js";
-  import { getUiText, displayNotice } from "$lib/ui-text";
+  } from "#lib/contracts.js";
+  import AppDialog from "#lib/AppDialog.svelte";
+  import * as Alert from "#lib/components/ui/alert/index.js";
+  import { Badge } from "#lib/components/ui/badge/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import * as Field from "#lib/components/ui/field/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { Spinner } from "#lib/components/ui/spinner/index.js";
+  import { getUiText, displayNotice } from "#lib/ui-text.js";
 
   let {
     open = $bindable(false),

@@ -7,7 +7,7 @@ import { ForwardedWatchers } from "./watchers.js";
 interface MessageInfo { key: string; localKey: string; isGroup: boolean; path: string[]; logicalPath: string[]; locale: string; locales: string[]; inputs: string[]; slots: string[] }
 const clients = new Map<string, Promise<LanguageClient>>();
 const watchers = new Map<string, ForwardedWatchers<vscode.Uri>>();
-let output: vscode.OutputChannel;
+let output: vscode.LogOutputChannel;
 
 async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
   if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before running its local language server.");
@@ -74,7 +74,7 @@ async function renamePart(part: "Input" | "Slot") {
   await apply(client, `runic.rename${part}`, [editor.document.uri.toString(), info.localKey, oldName, name]);
 }
 export function activate(context: vscode.ExtensionContext) {
-  output = vscode.window.createOutputChannel("Runic Translations"); context.subscriptions.push(output);
+  output = vscode.window.createOutputChannel("Runic Translations", { log: true }); context.subscriptions.push(output);
   const register = (name: string, action: () => Promise<unknown>) => context.subscriptions.push(vscode.commands.registerCommand(`runicTranslations.${name}`, async () => { try { return await action(); } catch (error) { output.appendLine(String(error)); await vscode.window.showErrorMessage(String(error)); } }));
   const start = (document: vscode.TextDocument) => { if (document.languageId === "rmf2" && document.uri.scheme === "file") void clientFor(document.uri).catch(error => output.appendLine(String(error))); };
   context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(start), vscode.workspace.onDidGrantWorkspaceTrust(() => vscode.workspace.textDocuments.forEach(start)));

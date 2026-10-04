@@ -1,10 +1,10 @@
 <script lang="ts">
   import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
   import WrenchIcon from "@lucide/svelte/icons/wrench";
-  import * as Alert from "$lib/components/ui/alert/index.js";
-  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-  import type { EditorDocument } from "$lib/contracts";
-  import { getUiText } from "$lib/ui-text";
+  import * as Alert from "#lib/components/ui/alert/index.js";
+  import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+  import type { EditorDocument } from "#lib/contracts.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   let {
     malformedDocuments,

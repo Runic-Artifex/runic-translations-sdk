@@ -1,14 +1,14 @@
 <script lang="ts">
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import Settings2Icon from "@lucide/svelte/icons/settings-2";
-	import { Badge } from "$lib/components/ui/badge/index.js";
-	import * as Collapsible from "$lib/components/ui/collapsible/index.js";
-	import * as Item from "$lib/components/ui/item/index.js";
-	import * as ScrollArea from "$lib/components/ui/scroll-area/index.js";
-	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
+	import { Badge } from "#lib/components/ui/badge/index.js";
+	import * as Collapsible from "#lib/components/ui/collapsible/index.js";
+	import * as Item from "#lib/components/ui/item/index.js";
+	import * as ScrollArea from "#lib/components/ui/scroll-area/index.js";
+	import * as Sidebar from "#lib/components/ui/sidebar/index.js";
 	import { onMount } from "svelte";
 	import { getLocalEditorState, setLocalEditorState, subscribeLocalEditorState } from "./local-state";
-	import { getUiText } from "$lib/ui-text";
+	import { getUiText } from "#lib/ui-text.js";
 
 	export interface LocaleSummary {
 		tag: string;
