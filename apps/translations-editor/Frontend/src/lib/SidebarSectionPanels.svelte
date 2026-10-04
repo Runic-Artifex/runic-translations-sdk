@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, type Snippet } from "svelte";
 	import { getLocalEditorState, setLocalEditorState, subscribeLocalEditorState } from "./local-state";
-	import { getUiText } from "$lib/ui-text";
+	import { getUiText } from "#lib/ui-text.js";
 
 	const storageKey = "runic.sidebar.languages-share";
 	const defaultShare = 0.5;

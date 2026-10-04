@@ -2,12 +2,12 @@
   import AlertCircleIcon from "@lucide/svelte/icons/circle-alert";
   import CheckCircle2Icon from "@lucide/svelte/icons/circle-check-big";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
-  import * as Alert from "$lib/components/ui/alert/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Spinner } from "$lib/components/ui/spinner/index.js";
-  import type { EditorDiagnostic } from "$lib/contracts";
-  import { getUiText, displayNotice } from "$lib/ui-text";
+  import * as Alert from "#lib/components/ui/alert/index.js";
+  import { Badge } from "#lib/components/ui/badge/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import { Spinner } from "#lib/components/ui/spinner/index.js";
+  import type { EditorDiagnostic } from "#lib/contracts.js";
+  import { getUiText, displayNotice } from "#lib/ui-text.js";
 
   interface Props {
     busy: boolean;

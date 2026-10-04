@@ -1,15 +1,15 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import * as Dialog from "$lib/components/ui/dialog/index.js";
-  import * as Kbd from "$lib/components/ui/kbd/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { getUiText } from "$lib/ui-text";
+  import * as Dialog from "#lib/components/ui/dialog/index.js";
+  import * as Kbd from "#lib/components/ui/kbd/index.js";
+  import { Input } from "#lib/components/ui/input/index.js";
+  import { getUiText } from "#lib/ui-text.js";
   import {
     filterCommands,
     groupCommands,
     movePaletteSelection,
     type PaletteCommand,
-  } from "$lib/command-palette";
+  } from "#lib/command-palette.js";
 
   let {
     open,

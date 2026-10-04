@@ -3,11 +3,11 @@
   import SaveIcon from "@lucide/svelte/icons/save";
   import Undo2Icon from "@lucide/svelte/icons/undo-2";
   import Redo2Icon from "@lucide/svelte/icons/redo-2";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import * as Kbd from "$lib/components/ui/kbd/index.js";
-  import { Spinner } from "$lib/components/ui/spinner/index.js";
-  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-  import { getUiText } from "$lib/ui-text";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import * as Kbd from "#lib/components/ui/kbd/index.js";
+  import { Spinner } from "#lib/components/ui/spinner/index.js";
+  import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   let {
     reviewDirty,

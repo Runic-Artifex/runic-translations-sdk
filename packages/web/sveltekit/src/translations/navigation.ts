@@ -30,7 +30,7 @@ export function createLocaleNavigation<Locale extends string>(
   options: Readonly<{ goto?: typeof goto; getUrl?: () => URL }> = {},
 ): (locale: Locale) => Promise<void> {
   const navigate = options.goto ?? goto;
-  const getUrl = options.getUrl ?? (() => page.url);
+  const getUrl = options.getUrl ?? (() => new URL(page.url.href));
   return (locale) => navigate(routing.canonicalUrl(getUrl(), locale));
 }
 
@@ -39,5 +39,5 @@ export function gotoLocale<Locale extends string>(
   routing: RunicLocaleRouting<Locale>,
   options?: GotoOptions,
 ): Promise<void> {
-  return goto(routing.canonicalUrl(page.url, locale), options);
+  return goto(routing.canonicalUrl(new URL(page.url.href), locale), options);
 }

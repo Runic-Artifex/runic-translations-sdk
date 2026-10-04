@@ -6,7 +6,7 @@
     type MessageInput,
     type MessagePatternNode,
   } from "./message-composer";
-  import { getUiText } from "$lib/ui-text";
+  import { getUiText } from "#lib/ui-text.js";
 
   interface Props {
     nodes: MessagePatternNode[];

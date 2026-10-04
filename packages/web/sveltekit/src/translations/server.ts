@@ -1,8 +1,10 @@
-import type { CookieSerializeOptions } from "cookie";
-import type { Handle, RequestEvent, Reroute } from "@sveltejs/kit";
+import type { Cookies, RequestEvent } from "@sveltejs/kit";
+import type { Handle, Reroute } from "@sveltejs/kit/hooks";
 import type { RunicLocaleRouting } from "./routing.js";
 
-export interface RunicLocaleCookieOptions extends CookieSerializeOptions {
+type CookieSetOptions = NonNullable<Parameters<Cookies["set"]>[2]>;
+
+export interface RunicLocaleCookieOptions extends CookieSetOptions {
   readonly name?: string;
   readonly path?: string;
 }

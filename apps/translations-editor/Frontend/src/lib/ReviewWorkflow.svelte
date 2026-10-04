@@ -6,16 +6,16 @@
   import ListChecksIcon from "@lucide/svelte/icons/list-checks";
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import * as Card from "$lib/components/ui/card/index.js";
-  import * as Collapsible from "$lib/components/ui/collapsible/index.js";
-  import * as Field from "$lib/components/ui/field/index.js";
-  import * as Select from "$lib/components/ui/select/index.js";
-  import { Textarea } from "$lib/components/ui/textarea/index.js";
-  import type { EditorReviewState } from "$lib/contracts";
-  import type { QualityIssue, TranslationSuggestion } from "$lib/review-model";
-  import { getUiText } from "$lib/ui-text";
+  import { Badge } from "#lib/components/ui/badge/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import * as Card from "#lib/components/ui/card/index.js";
+  import * as Collapsible from "#lib/components/ui/collapsible/index.js";
+  import * as Field from "#lib/components/ui/field/index.js";
+  import * as Select from "#lib/components/ui/select/index.js";
+  import { Textarea } from "#lib/components/ui/textarea/index.js";
+  import type { EditorReviewState } from "#lib/contracts.js";
+  import type { QualityIssue, TranslationSuggestion } from "#lib/review-model.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   const ui = getUiText();
 

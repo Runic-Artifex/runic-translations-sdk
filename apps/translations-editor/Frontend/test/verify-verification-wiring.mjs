@@ -2,11 +2,10 @@ import assert from "node:assert/strict";
 import { readToolchain } from "../../../../eng/toolchain.mjs";
 import { readFile } from "node:fs/promises";
 
-const [packageJson, fullVerification, viteConfig, svelteConfig] = await Promise.all([
+const [packageJson, fullVerification, viteConfig] = await Promise.all([
   readFile(new URL("../package.json", import.meta.url), "utf8"),
   readFile(new URL("../../../../.github/workflows/ci.yml", import.meta.url), "utf8"),
   readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
-  readFile(new URL("../svelte.config.js", import.meta.url), "utf8"),
 ]);
 const frontend = JSON.parse(packageJson);
 const expandScript = (name, visited = new Set()) => {
@@ -35,9 +34,9 @@ assert.ok(editorJob.steps.some(step => step.env?.RUNIC_TRANSLATIONS_MANIFEST?.in
   "The SDK verifier must supply the generated translation manifest.");
 assert.doesNotMatch(viteConfig, /desktop:\s*true/,
   "The Vite plugin must not duplicate SvelteKit Desktop output ownership.");
-assert.match(svelteConfig, /runicToolkitAdapter\(\{[^}]*mode:\s*["']spa["'][^}]*desktop:\s*false[^}]*\}\)/s,
+assert.match(viteConfig, /runicToolkitAdapter\(\{[^}]*mode:\s*["']spa["'][^}]*desktop:\s*false[^}]*\}\)/s,
   "The Runic SvelteKit adapter must emit the Views host SPA output.");
-assert.match(svelteConfig, /router:\s*\{\s*type:\s*["']hash["']\s*\}/,
+assert.match(viteConfig, /router:\s*\{\s*type:\s*["']hash["']\s*\}/,
   "The Desktop SPA must retain hash routing under generated surface paths.");
 
 console.log("PASS: full editor verification delegates to the complete frontend verification suite.");

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SimulationPreviewNode } from "$lib/simulation";
+  import type { SimulationPreviewNode } from "#lib/simulation.js";
   let { nodes }: { nodes: SimulationPreviewNode[] } = $props();
 </script>
 

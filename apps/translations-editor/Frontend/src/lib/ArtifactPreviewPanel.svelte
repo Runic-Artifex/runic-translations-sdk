@@ -1,8 +1,8 @@
 <script lang="ts">
-  import InlinePreview from "$lib/InlinePreview.svelte";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import type { SimulationPreviewNode, UiDirection } from "$lib/simulation";
-  import { getUiText } from "$lib/ui-text";
+  import InlinePreview from "#lib/InlinePreview.svelte";
+  import { Badge } from "#lib/components/ui/badge/index.js";
+  import type { SimulationPreviewNode, UiDirection } from "#lib/simulation.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   let {
     open,

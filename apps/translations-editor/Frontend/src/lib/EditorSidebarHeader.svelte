@@ -13,10 +13,10 @@
   import LanguagesIcon from "@lucide/svelte/icons/languages";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu/index.js";
-  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-  import { getUiText } from "$lib/ui-text";
+  import { Badge } from "#lib/components/ui/badge/index.js";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
+  import * as Sidebar from "#lib/components/ui/sidebar/index.js";
+  import { getUiText } from "#lib/ui-text.js";
 
   let {
     catalogId,

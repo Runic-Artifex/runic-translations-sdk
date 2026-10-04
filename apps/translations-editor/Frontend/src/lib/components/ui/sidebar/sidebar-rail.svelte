@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { getUiText } from "$lib/ui-text.js";
+	import { getUiText } from "#lib/ui-text.js";
 	const ui = getUiText();
-	import { cn, type WithElementRef } from "$lib/utils.js";
+	import { cn, type WithElementRef } from "#lib/utils.js";
 	import { useSidebar } from "./context.svelte.js";
 	import type { HTMLAttributes } from "svelte/elements";
 
