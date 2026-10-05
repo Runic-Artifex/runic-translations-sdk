@@ -155,7 +155,7 @@ internal static class Program
         DirectoryInfo? directory = new(start);
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "RunicSdk.Core.slnx")))
+            if (File.Exists(Path.Combine(directory.FullName, "Runic.Translations.slnx")))
             {
                 return directory.FullName;
             }

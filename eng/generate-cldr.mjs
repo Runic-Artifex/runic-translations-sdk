@@ -24,8 +24,8 @@ const matrixPath = resolve(root, "specs/translations/capabilities-v1.json");
 // The matrix describes the SDK release built from this checkout.
 const releaseTarget = (
   await readFile(resolve(root, "eng/Versions.props"), "utf8")
-).match(/<RunicSdkVersion>([^<]+)<\/RunicSdkVersion>/)?.[1];
-if (!releaseTarget) throw new Error("eng/Versions.props has no RunicSdkVersion.");
+).match(/<RunicTranslationsVersion>([^<]+)<\/RunicTranslationsVersion>/)?.[1];
+if (!releaseTarget) throw new Error("eng/Versions.props has no RunicTranslationsVersion.");
 const check = process.argv.slice(2).includes("--check");
 
 if (process.argv.length > (check ? 3 : 2))

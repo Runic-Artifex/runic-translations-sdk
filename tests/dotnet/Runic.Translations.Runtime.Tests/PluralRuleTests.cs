@@ -134,7 +134,7 @@ internal static class PluralRuleTests
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "RunicSdk.Core.slnx"))) return directory.FullName;
+            if (File.Exists(Path.Combine(directory.FullName, "Runic.Translations.slnx"))) return directory.FullName;
             directory = directory.Parent;
         }
         throw new InvalidOperationException("Could not locate repository root.");
