@@ -9,7 +9,7 @@ import {
   localizationStressCases,
   pluralStressCounts,
   visualAccessibilityStressScenarios,
-} from "@runic-artifex/svelte/translations/testing";
+} from "@runic-artifex/translations-svelte/translations/testing";
 
 const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
 const editor = await readFile(new URL("../src/lib/TranslationEditor.svelte", import.meta.url), "utf8");

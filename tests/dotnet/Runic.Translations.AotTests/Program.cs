@@ -45,7 +45,7 @@ internal static class Program
             await Task.WhenAll(swaps).ConfigureAwait(false);
             Require(manager.CurrentLocale == "de", "concurrent swap");
             Require(manager.Current.Get(title) == "Application", "fallback");
-            Require(manager.Current.Format(greeting, [new TextArgument("name", "Ada")]) == "Extern Ada",
+            Require(manager.Current.Format(greeting, [new TextArgument("name", "Ada")]) == "Extern",
                 "external pack composition");
 
             Console.WriteLine("PASS: Native-AOT compiled snapshot/format/fallback/swap/external-pack/transport smoke");
@@ -64,22 +64,22 @@ internal static class Program
         return ValueTask.FromResult(content.Length > 0);
     }
 
-    private static TranslationPackContract CreatePackContract(string locale) => new(
-        "app",
-        locale,
-        Fingerprint,
+    private const string MarkupContract = "{\"version\":1,\"contracts\":{},\"messages\":{\"greeting\":{\"slots\":{},\"contentLocales\":{\"de\":\"de\"}}}}";
+
+    private static TranslationPackContract CreatePackContract(string locale) => TranslationPackContract.CreateRmf2V5(
+        "app", locale, Fingerprint,
         [
             new TranslationPackMessageContract(
                 new TranslationKey("app", 0, "greeting"),
                 [new TranslationPackArgumentContract("name", TextArgumentType.String, TextArgumentFormat.None)]),
-            new TranslationPackMessageContract(
-                new TranslationKey("app", 1, "title")),
-        ]);
+            new TranslationPackMessageContract(new TranslationKey("app", 1, "title")),
+        ], MarkupContract);
 
     private static byte[] CreatePackBytes() => Encoding.UTF8.GetBytes(
-        "{\"artifactVersion\":1,\"messageGrammarVersion\":1,\"catalog\":\"app\",\"locale\":\"de\"," +
-        "\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"greeting\":{" +
-        "\"pattern\":\"Extern {name}\",\"arguments\":[{\"name\":\"name\",\"type\":\"string\",\"format\":\"none\"}]}}}");
+        "{\"artifactVersion\":5,\"messageGrammarVersion\":5,\"profile\":\"rmf2-execution-v2\",\"catalog\":\"app\",\"locale\":\"de\"," +
+        "\"contractFingerprint\":\"" + Fingerprint + "\",\"messages\":{\"greeting\":{\"contentLocale\":\"de\",\"ast\":{" +
+        "\"astVersion\":5,\"profile\":\"rmf2-execution-v2\",\"inputs\":[{\"name\":\"name\",\"type\":\"string\"}],\"declarations\":[],\"selectors\":[]," +
+        "\"variants\":[{\"keys\":[],\"nodes\":[{\"kind\":\"text\",\"value\":\"Extern\"}]}]}}},\"markupContract\":" + MarkupContract + "}");
 
     private static CompiledTranslationCatalog CreateCatalog() => new(
         "app",

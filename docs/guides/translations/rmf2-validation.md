@@ -22,7 +22,7 @@ dotnet run --project tests/dotnet/Runic.Translations.Compiler.Tests
 dotnet run --project tests/dotnet/Runic.Translations.Authoring.Tests
 dotnet run --project tests/dotnet/Runic.Translations.Build.Tests -- rmf2
 dotnet run --project apps/translations-editor -- --smoke-test
-cd packages/web/svelte
+cd packages/web/translations-svelte
 bun run check
 bun run test
 bun run test:inline-browser

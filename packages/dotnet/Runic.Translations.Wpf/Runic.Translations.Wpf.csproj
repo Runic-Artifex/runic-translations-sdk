@@ -10,6 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="../Runic.Translations/Runic.Translations.csproj" />
     <None Update="README.md" Pack="true" PackagePath="/" />
+    <None Include="../../../specs/translations/THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
+    <None Include="../../../specs/translations/cldr/LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

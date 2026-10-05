@@ -27,6 +27,7 @@
     "@internationalized/date": "^3.12.4",
     "@lucide/svelte": "^1.52.0",
     "@runic-artifex/sveltekit": "0.6.0-preview.1",
+    "@runic-artifex/translations-svelte": "workspace:*",
     "@runic-artifex/vite-plugin-runic-translations": "workspace:*",
     "@sveltejs/adapter-static": "4.0.0",
     "@sveltejs/kit": "3.0.0",

@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { root, workspace } from "../run.mjs";
 
-const infrastructure = new Set(["_rels/.rels", "[Content_Types].xml"]);
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 function packageFiles(version) {
@@ -20,7 +19,8 @@ function packageFiles(version) {
 
 function zipContent(path) {
   const names = execFileSync("unzip", ["-Z1", path], { encoding: "utf8" }).split("\n").filter(Boolean)
-    .filter(name => !infrastructure.has(name) && !name.startsWith("package/services/metadata/core-properties/"));
+    .filter(name => name !== ".signature.p7s");
+  assert.equal(new Set(names).size, names.length, `Archive contains duplicate entries: ${path}`);
   return Object.fromEntries(names.sort().map(name => [name, sha256(execFileSync("unzip", ["-p", path, name]))]));
 }
 
@@ -57,9 +57,28 @@ async function publishedMatches(candidate, version) {
   }
 }
 
-function run(command, args) {
-  console.log(`> ${command} ${args.join(" ")}`);
+function run(command, args, { redact = [] } = {}) {
+  console.log(`> ${command} ${args.map(value => redact.includes(value) ? "[redacted]" : value).join(" ")}`);
   execFileSync(command, args, { cwd: root, stdio: "inherit" });
+}
+
+async function publish(candidate, version) {
+  try {
+    if (candidate.registry === "npm")
+      run("npm", ["publish", candidate.file, "--tag", "preview", "--access", "public", "--provenance", "--registry", "https://registry.npmjs.org"]);
+    else {
+      const apiKey = process.env.NUGET_API_KEY ?? "";
+      run("dotnet", ["nuget", "push", candidate.file, "--source", "https://api.nuget.org/v3/index.json", "--api-key", apiKey], { redact: [apiKey] });
+    }
+  } catch (error) {
+    // A concurrent publisher can make a missing version appear between the
+    // preflight lookup and upload. Re-read once and accept only identical bits.
+    if (await publishedMatches(candidate, version)) {
+      console.log(`Published concurrently with matching contents: ${candidate.name}@${version}`);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function main() {
@@ -73,14 +92,13 @@ async function main() {
       console.log(`Already published with matching contents: ${candidate.name}@${version}`);
       continue;
     }
-    if (candidate.registry === "npm")
-      run("npm", ["publish", candidate.file, "--tag", "preview", "--access", "public", "--provenance", "--registry", "https://registry.npmjs.org"]);
-    else
-      run("dotnet", ["nuget", "push", candidate.file, "--source", "https://api.nuget.org/v3/index.json", "--api-key", process.env.NUGET_API_KEY ?? ""]);
+    await publish(candidate, version);
   }
 }
 
 main().catch(error => {
-  console.error(error.stack ?? error.message);
+  const secret = process.env.NUGET_API_KEY;
+  const message = String(error.stack ?? error.message);
+  console.error(secret ? message.replaceAll(secret, "[redacted]") : message);
   process.exitCode = 1;
 });

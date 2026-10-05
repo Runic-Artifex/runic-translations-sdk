@@ -71,6 +71,7 @@ internal static class Program
         string runtime = RequireSingle(feed, $"Runic.Translations.{PackageVersion}.nupkg");
         string tooling = RequireSingle(feed, $"Runic.Translations.Tooling.{PackageVersion}.nupkg");
         string build = RequireSingle(feed, $"Runic.Translations.Build.{PackageVersion}.nupkg");
+        string wpf = RequireSingle(feed, $"Runic.Translations.Wpf.{PackageVersion}.nupkg");
         string tool = RequireSingle(feed, $"dotnet-runic-translations.{PackageVersion}.nupkg");
         string templates = RequireSingle(feed, $"Runic.Translations.Templates.{PackageVersion}.nupkg");
 
@@ -103,6 +104,13 @@ internal static class Program
             "analyzers/dotnet/cs/Runic.Translations.Generator.dll",
             "analyzers/dotnet/cs/Runic.Translations.Compiler.dll",
             "tools/net10.0/Runic.Translations.Build.dll");
+        AssertPackageShape(wpf,
+            "Runic.Translations.Wpf.nuspec",
+            "README.md",
+            "THIRD-PARTY-NOTICES.md",
+            "licenses/LICENSE",
+            "lib/net10.0-windows7.0/Runic.Translations.Wpf.dll",
+            "lib/net10.0-windows7.0/Runic.Translations.Wpf.xml");
         AssertPackageShape(tool,
             "dotnet-runic-translations.nuspec",
             "README.md",
@@ -140,18 +148,21 @@ internal static class Program
         AssertDependencies(runtime, Array.Empty<string>());
         AssertDependencies(tooling, ["Runic.CommandLine"]);
         AssertDependencies(build, Array.Empty<string>());
+        AssertDependencies(wpf, ["Runic.Translations"]);
         AssertDependencies(tool, Array.Empty<string>());
         AssertDependencies(templates, Array.Empty<string>());
 
         AssertLicense(runtime);
         AssertLicense(tooling);
         AssertLicense(build);
+        AssertLicense(wpf);
         AssertLicense(tool);
         AssertLicense(templates);
 
         AssertRepositoryMetadata(runtime);
         AssertRepositoryMetadata(tooling);
         AssertRepositoryMetadata(build);
+        AssertRepositoryMetadata(wpf);
         AssertRepositoryMetadata(tool);
         AssertRepositoryMetadata(templates);
 
@@ -162,6 +173,7 @@ internal static class Program
         AssertToolingSchemaClosure(tooling);
         AssertEmbeddedSourceLink(build, "analyzers/dotnet/cs/Runic.Translations.Generator.dll");
         AssertEmbeddedSourceLink(build, "tools/net10.0/Runic.Translations.Build.dll");
+        AssertEmbeddedSourceLink(wpf, "lib/net10.0-windows7.0/Runic.Translations.Wpf.dll");
         AssertEmbeddedSourceLink(tool, "tools/net10.0/any/dotnet-runic-translations.dll");
     }
 
@@ -237,6 +249,7 @@ internal static class Program
             $"Runic.Translations.Tooling.{PackageVersion}.nupkg",
             $"Runic.Translations.{PackageVersion}.nupkg",
             $"Runic.Translations.Build.{PackageVersion}.nupkg",
+            $"Runic.Translations.Wpf.{PackageVersion}.nupkg",
             $"Runic.Translations.Templates.{PackageVersion}.nupkg",
             $"dotnet-runic-translations.{PackageVersion}.nupkg",
         ];

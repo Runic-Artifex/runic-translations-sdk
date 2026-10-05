@@ -79,9 +79,29 @@ function testManaged() {
     "tests/dotnet/Runic.Translations.Generator.Tests/Runic.Translations.Generator.Tests.csproj",
     "tests/dotnet/Runic.Translations.Runtime.Tests/Runic.Translations.Runtime.Tests.csproj",
     "tests/dotnet/Runic.Translations.Tooling.Tests/Runic.Translations.Tooling.Tests.csproj",
+    "tests/dotnet/Runic.Translations.Rmf2AotTests/Runic.Translations.Rmf2AotTests.csproj",
   ];
   for (const project of projects)
-    run("dotnet", ["run", "--project", project, "--configuration", configuration, "--no-build"]);
+    run("dotnet", ["run", "--project", project, "--configuration", configuration,
+      ...(project.includes("Rmf2AotTests") ? [] : ["--no-build"])]);
+}
+
+function testPackagedManaged(version = workspace.version) {
+  const feed = resolve(root, "artifacts/packages/nuget");
+  const cache = resolve(root, ".cache/packaged-test-packages");
+  rmSync(cache, { recursive: true, force: true });
+  const environment = { NUGET_PACKAGES: cache };
+  const packageArguments = [`-p:TranslationsPackageVersion=${version}`, `-p:TranslationsPackageFeed=${feed}`];
+  run("dotnet", ["run", "--project", "tests/dotnet/Runic.Translations.AotTests/Runic.Translations.AotTests.csproj", "--configuration", configuration, ...packageArguments], root, environment);
+  run("dotnet", ["run", "--project", "tests/dotnet/Runic.Translations.PackageTests/Runic.Translations.PackageTests.csproj", "--configuration", configuration, ...packageArguments, "--", "--feed", feed], root, environment);
+}
+
+function testNativeAot() {
+  const output = resolve(root, "artifacts/rmf2-native-aot");
+  rmSync(output, { recursive: true, force: true });
+  run("dotnet", ["publish", "tests/dotnet/Runic.Translations.Rmf2AotTests/Runic.Translations.Rmf2AotTests.csproj", "--configuration", configuration,
+    "--runtime", "linux-x64", "--self-contained", "true", "-p:PublishAot=true", "-p:IlcTreatWarningsAsErrors=true", "--output", output]);
+  run(resolve(output, "Runic.Translations.Rmf2AotTests"), []);
 }
 
 function testWeb() {
@@ -106,6 +126,8 @@ export function test() {
   testManaged();
   testWeb();
   verifyEditorIntegrations();
+  pack(workspace.version, { built: true });
+  testPackagedManaged();
 }
 
 function packNpm(directory, destination, version, source) {
@@ -157,8 +179,9 @@ async function main() {
       await (await import("./verify-packages.mjs")).verifyPackages(version ?? workspace.version);
       break;
     case "verify-editor": verifyEditorIntegrations(); break;
+    case "native-aot": testNativeAot(); break;
     default:
-      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify-packages [version], or verify-editor.");
+      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify-packages [version], verify-editor, or native-aot.");
   }
 }
 

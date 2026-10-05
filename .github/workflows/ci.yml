@@ -22,7 +22,6 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bun eng/run.mjs test
-      - run: bun eng/run.mjs pack
       - run: bun eng/verify-packages.mjs
       - uses: actions/upload-artifact@v4
         if: always()
@@ -30,3 +29,28 @@ jobs:
           name: runic-translations-packages
           path: artifacts/packages
           if-no-files-found: ignore
+  rmf2-native-aot:
+    name: RMF2 NativeAOT / linux-x64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Install NativeAOT toolchain
+        run: sudo apt-get update && sudo apt-get install --yes clang zlib1g-dev
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun eng/run.mjs native-aot
+  wpf:
+    name: WPF / Windows
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - run: dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests/Runic.Translations.Wpf.Tests.csproj --configuration Release
