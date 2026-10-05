@@ -21,11 +21,7 @@
   </Target>
   <ItemGroup>
     <InternalsVisibleTo Include="Runic.Translations.Editor" />
-    <ProjectReference Include="../Runic.CommandLine/Runic.CommandLine.csproj" />
-    <ProjectReference Include="../Runic.CommandLine.Generators/Runic.CommandLine.Generators.csproj"
-                      PrivateAssets="all"
-                      ReferenceOutputAssembly="false"
-                      OutputItemType="Analyzer" />
+    <PackageReference Include="Runic.CommandLine" />
     <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" PrivateAssets="all" />
     <None Include="..\..\..\specs\translations\schemas\project-v1.schema.json" Pack="true" PackagePath="schemas" />

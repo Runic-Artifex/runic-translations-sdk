@@ -1,0 +1,12 @@
+**/node_modules/
+**/bin/
+**/obj/
+**/dist/
+**/.svelte-kit/
+/artifacts/
+/.cache/
+/.direnv/
+**/Frontend/build/
+*.binlog
+*.nupkg
+*.snupkg

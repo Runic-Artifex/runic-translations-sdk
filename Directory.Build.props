@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="eng/Versions.props" />
+  <PropertyGroup>
+    <RunicTranslationsRoot>$(MSBuildThisFileDirectory)</RunicTranslationsRoot>
+    <RepositoryUrl>https://github.com/Runic-Artifex/runic-translations-sdk</RepositoryUrl>
+    <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
+    <RunicBridgeInstallFrontend>false</RunicBridgeInstallFrontend>
+  </PropertyGroup>
+</Project>

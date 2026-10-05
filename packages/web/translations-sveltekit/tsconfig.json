@@ -1,0 +1,10 @@
+{
+  "extends": "../../../eng/typescript/svelte.json",
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/*.ts"
+  ]
+}
