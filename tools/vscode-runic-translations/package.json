@@ -62,6 +62,14 @@
         "title": "Runic: Preview Message"
       },
       {
+        "command": "runicTranslations.previewSamples",
+        "title": "Runic: Change Preview Samples"
+      },
+      {
+        "command": "runicTranslations.previewLocale",
+        "title": "Runic: Change Preview Locale"
+      },
+      {
         "command": "runicTranslations.renameInput",
         "title": "Runic: Rename Input in Resource Sources"
       },

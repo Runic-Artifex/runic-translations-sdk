@@ -7,6 +7,8 @@ internal static class Program
     public static int Main(string[] args)
     {
         TestRunner runner = new();
+        Rmf2DiagnosticActionTests.Register(runner);
+        Rmf2AuthoringTests.Register(runner);
         Rmf2SemanticV5Tests.Register(runner);
         Rmf2SemanticV5SchemaTests.Register(runner);
         Rmf2RuntimeV5Tests.Register(runner);

@@ -29,6 +29,27 @@ jobs:
           name: runic-translations-packages
           path: artifacts/packages
           if-no-files-found: ignore
+  inline-browser:
+    name: Svelte inline SSR and browser hydration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Install the locked Chromium browser
+        working-directory: packages/web/translations-svelte
+        run: |
+          bun node_modules/playwright-core/cli.js install --with-deps chromium
+          bun -e 'import { chromium } from "playwright-core"; console.log("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
+      - name: Verify inline SSR identity and real browser hydration
+        working-directory: packages/web/translations-svelte
+        run: bun run --bun test:inline-browser
   rmf2-native-aot:
     name: RMF2 NativeAOT / linux-x64
     runs-on: ubuntu-24.04

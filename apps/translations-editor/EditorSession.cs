@@ -155,6 +155,14 @@ internal sealed class EditorSession : IDisposable
         }
     }
 
+    public Task<EditorDocumentDraft> ApplyAuthoringOperationAsync(string relativePath, string content, string key,
+        string expectedRevision, EditorMessageOperation operation, CancellationToken cancellationToken = default) =>
+        WithWorkspaceAsync((workspace, token) => workspace.ApplyAuthoringOperationAsync(relativePath, content, key, expectedRevision, operation, token), cancellationToken);
+
+    public Task<EditorDocumentDraft> ApplyDiagnosticFixAsync(string relativePath, string content,
+        Runic.Translations.Compiler.Rmf2DiagnosticQuickFix fix, CancellationToken cancellationToken = default) =>
+        WithWorkspaceAsync((workspace, token) => workspace.ApplyDiagnosticFixAsync(relativePath, content, fix, token), cancellationToken);
+
     public Task<EditorDocumentDraft> TransformDocumentAsync(string relativePath, string content,
         string? key, string? value, CancellationToken cancellationToken = default) =>
         WithWorkspaceAsync((workspace, token) => workspace.TransformDocumentAsync(relativePath, content, key, value, token), cancellationToken);

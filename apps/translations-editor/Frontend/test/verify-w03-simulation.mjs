@@ -12,18 +12,26 @@ globalThis.localStorage = {
   clear: () => stored.clear(),
 };
 
-async function importTs(path) {
+async function tsModuleUrl(path, imports = {}) {
   const sourceUrl = new URL(path, import.meta.url);
-  const source = await readFile(sourceUrl, "utf8");
+  let source = await readFile(sourceUrl, "utf8");
+  for (const [specifier, url] of Object.entries(imports)) {
+    source = source.replaceAll(JSON.stringify(specifier), JSON.stringify(url));
+  }
   const transpiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
     fileName: sourceUrl.pathname,
   });
-  return import(`data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`);
+  return `data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`;
+}
+
+async function importTs(path, imports = {}) {
+  return import(await tsModuleUrl(path, imports));
 }
 
 const simulation = await importTs("../src/lib/simulation.ts");
-const reviewModel = await importTs("../src/lib/review-model.ts");
+const semanticReviewUrl = await tsModuleUrl("../src/lib/semantic-review.ts");
+const reviewModel = await importTs("../src/lib/review-model.ts", { "./semantic-review": semanticReviewUrl });
 const paletteModule = await importTs("../src/lib/command-palette.ts");
 
 // --- Pseudo-localization transform: determinism and shape ---

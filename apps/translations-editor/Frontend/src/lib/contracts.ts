@@ -38,6 +38,9 @@ export interface EditorMessageEntry {
   content: string;
   valueStartByte: number;
   valueLengthBytes: number;
+  authoring?: EditorMessageProjection;
+  context?: EditorMessageContext;
+  semantic?: EditorMessageSemantic;
 }
 
 export interface EditorDocumentDraft {
@@ -68,6 +71,9 @@ export interface EditorDiagnostic {
   endLine: number;
   endColumn: number;
   notice?: EditorNotice;
+  span?: EditorDiagnosticSpan;
+  sourceRevision?: string;
+  quickFixes?: EditorDiagnosticQuickFix[];
 }
 
 export interface WorkspaceSnapshot {
@@ -355,3 +361,21 @@ export interface EditorReviewImportPreview {
   changesOverflowed: boolean;
   refusals: EditorInterchangeRefusal[];
 }
+
+export interface EditorMessageInput { name: string; type: string; function?: string; declared: boolean; }
+export interface EditorMessageVariant { id: string; keys: string[]; pattern: string; startByte: number; lengthBytes: number; }
+export interface EditorMessageProjection {
+  revision: string; supported: boolean; reason?: string;
+  inputs: EditorMessageInput[]; selectors: string[]; selectorFunctions: string[]; variants: EditorMessageVariant[];
+  pluralCategories: string[]; selectorPluralCategories: string[][]; cldrVersion: string;
+}
+export interface EditorMessageOperation {
+  kind: "set-pattern" | "rename-input" | "add-input" | "remove-input" | "set-input" | "set-selectors" | "add-variant" | "remove-variant";
+  variantId?: string; pattern?: string; name?: string; newName?: string; function?: string;
+  keys?: string[]; selectors?: string[];
+}
+export interface EditorMessageContext { comments: string[]; tags: string[]; examples: Record<string, string>[]; }
+export interface EditorMessageSemantic { text: string[]; placeholders: string[]; slots: string[]; supported: boolean; hasBoundaryWhitespace: boolean; }
+
+export interface EditorDiagnosticSpan { startByte: number; lengthBytes: number; startUtf16: number; lengthUtf16: number; startLine: number; startCharacter: number; endLine: number; endCharacter: number; }
+export interface EditorDiagnosticQuickFix { id: string; title: string; diagnosticId: string; location: { path: string; startByte: number; lengthBytes: number; line: number; column: number; endLine: number; endColumn: number }; expectedRevision: string; startByte: number; lengthBytes: number; newText: string; }

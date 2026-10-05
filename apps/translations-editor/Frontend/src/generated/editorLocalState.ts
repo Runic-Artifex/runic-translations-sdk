@@ -57,7 +57,7 @@ function hydrate(wire: WireState): EditorLocalStateState {
     clearLocalStateResultJson: bridgeWire.string(wire.clearLocalStateResultJson),
   };
 }
-const bridgeContract = "Runic.Translations.Editor.EditorLocalStateViewModel:FBAB3637A08FD096C77ECD5FBF4685EC47DD38AB4E5DDFA30093AB70A1071EB8";
+const bridgeContract = "Runic.Translations.Editor.EditorLocalStateViewModel:8BA3CDF910F3158FF0A1991D25277C9A92F97A304CB55AC459A8282FD11E9339";
 
 export function connectEditorLocalState(): Promise<EditorLocalStateClient> { return connectEditorLocalStateAt("editorLocalState", false); }
 async function connectEditorLocalStateAt(route: string, mount = false): Promise<EditorLocalStateClient> {

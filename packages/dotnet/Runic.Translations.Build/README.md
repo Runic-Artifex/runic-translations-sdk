@@ -8,7 +8,7 @@ pinned local tool to produce locale-v5 JSON or the ESM ABI-4 package.
 
 ```bash
 dotnet add package Runic.Translations.Build --version <VERSION>
-dotnet new tool-manifest
+dotnet new tool-manifest --output .config
 dotnet tool install dotnet-runic-translations --version <VERSION>
 ```
 

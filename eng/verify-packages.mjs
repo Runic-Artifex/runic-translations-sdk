@@ -68,9 +68,10 @@ export async function verifyPackages(version = workspace.version) {
     }
 
     const templateHome = join(directory, "template-home");
-    run("dotnet", ["new", "install", "Runic.Translations.Templates", "--nuget-source", nuget, "--force"], directory,
+    run("dotnet", ["new", "install", `Runic.Translations.Templates@${version}`, "--nuget-source", nuget, "--force"], directory,
       { ...environment, DOTNET_CLI_HOME: templateHome });
-    run("dotnet", ["new", "runic-translations-project", "--name", "GeneratedTranslations"], directory,
+    run("dotnet", ["new", "runic-translations-project", "--name", "GeneratedTranslations",
+      "--catalog", "app", "--namespace", "GeneratedTranslations", "--className", "AppText"], directory,
       { ...environment, DOTNET_CLI_HOME: templateHome });
     const generatedProject = join(directory, "GeneratedTranslations", "GeneratedTranslations.csproj");
     assert.ok(existsSync(generatedProject), "Template did not create its project");
@@ -82,6 +83,21 @@ export async function verifyPackages(version = workspace.version) {
     run("dotnet", ["restore", generatedProject, "--configfile", join(directory, "NuGet.config")], directory, environment);
     run("dotnet", ["tool", "restore", "--configfile", join(directory, "NuGet.config")], join(directory, "GeneratedTranslations"), environment);
     run("dotnet", ["build", generatedProject, "--configuration", "Release", "--no-restore"], directory, environment);
+    assertNoSourceReferences(join(directory, "GeneratedTranslations"));
+
+    // Exercise the documented typed API from an application's own library
+    // reference. Runic dependencies must still come entirely from the feed.
+    const consoleApp = join(directory, "console-app");
+    mkdirSync(consoleApp);
+    writeFileSync(join(consoleApp, "Consumer.csproj"), `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings></PropertyGroup><ItemGroup><ProjectReference Include="../GeneratedTranslations/GeneratedTranslations.csproj"/></ItemGroup></Project>`);
+    writeFileSync(join(consoleApp, "Program.cs"), `using GeneratedTranslations;
+using Runic.Translations;
+ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
+var text = new AppText(manager);
+if (text.r_6170706c69636174696f6e_r_7469746c65 != "AppText") throw new Exception("Template message did not render.");
+Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
+`);
+    run("dotnet", ["run", "--project", "Consumer.csproj", "--configuration", "Release"], consoleApp, environment);
 
     const tools = join(directory, "tools");
     run("dotnet", ["tool", "install", "dotnet-runic-translations", "--version", version, "--configfile", join(directory, "NuGet.config"), "--tool-path", tools], directory, environment);
@@ -93,6 +109,7 @@ export async function verifyPackages(version = workspace.version) {
     mkdirSync(frontend);
     writeFileSync(join(frontend, "package.json"), JSON.stringify({
       name: "runic-translations-package-consumer", private: true, type: "module",
+      scripts: { build: "vite build" },
       dependencies: {
         ...Object.fromEntries(npmArchives.map(([name, archive]) => [name, `file:${archive}`])),
         svelte: "5.57.1", "@sveltejs/kit": "3.0.0", vite: "8.3.2"
@@ -114,6 +131,50 @@ assert.ok(Object.keys(svelte).length > 0);
 assert.ok(Object.keys(sveltekit).length > 0);
 console.log("Packaged npm imports passed.");`);
     run("bun", ["consumer.mjs"], frontend);
+
+    // Fresh-checkout Vite owns ignored .runic output. Validate authoring first,
+    // then build: byte verification cannot precede generation of ignored files.
+    run("dotnet", ["new", "tool-manifest", "--output", ".config"], frontend, environment);
+    run("dotnet", ["tool", "install", "dotnet-runic-translations", "--version", version,
+      "--configfile", join(directory, "NuGet.config")], frontend, environment);
+    mkdirSync(join(frontend, "translations"));
+    writeFileSync(join(frontend, "translations", "runic.json"), JSON.stringify({
+      schemaVersion: 1, catalog: "app", code: { namespace: "Example", className: "AppText" },
+      baseLocale: "en", locales: ["en", "de"],
+    }, null, 2));
+    writeFileSync(join(frontend, "translations", "en.rmf2"), "application {\n  title = Runic application\n}\n");
+    writeFileSync(join(frontend, "translations", "de.rmf2"), "application {\n  title = Runic-Anwendung\n}\n");
+    writeFileSync(join(frontend, "index.html"), '<!doctype html><html lang="en"><meta charset="utf-8"><div id="app"></div><script type="module" src="/main.js"></script></html>\n');
+    writeFileSync(join(frontend, "main.js"), `import { m } from 'virtual:runic-translations/app';\ndocument.querySelector('#app').textContent = m.application_title();\n`);
+    writeFileSync(join(frontend, "vite.config.js"), `import { defineConfig } from 'vite';
+import { runicTranslations } from '@runic-artifex/vite-plugin-runic-translations';
+export default defineConfig({ plugins: [runicTranslations()] });
+`);
+    assert.ok(!existsSync(join(frontend, ".runic")), "Fresh Vite consumer already has generated output");
+    run("dotnet", ["tool", "run", "runic-translations", "--", "validate", "--project", "translations"], frontend, environment);
+    run("bun", ["run", "build"], frontend, environment);
+    assert.ok(existsSync(join(frontend, ".runic", "translations", "app.esm-v5", "web-module-manifest-v3.json")));
+    assert.ok(existsSync(join(frontend, ".runic", "translations", "virtual.d.ts")));
+    assert.ok(existsSync(join(frontend, "dist", "index.html")));
+    const bundles = readdirSync(join(frontend, "dist", "assets")).filter(name => name.endsWith(".js"));
+    assert.ok(bundles.some(name => readFileSync(join(frontend, "dist", "assets", name), "utf8").includes("Runic application")),
+      "Vite production bundle did not contain the template message");
+
+    // Retained artifacts are a separate, compiler-owned tree. Vite's ambient
+    // declarations stay outside it so extra-file verification remains useful.
+    const compilerArguments = ["--project", "translations", "--output", "generated/translations", "--emit-esm"];
+    run("dotnet", ["tool", "run", "runic-translations", "--", "generate", ...compilerArguments], frontend, environment);
+    writeFileSync(join(frontend, "vite.config.js"), `import { defineConfig } from 'vite';
+import { runicTranslations } from '@runic-artifex/vite-plugin-runic-translations';
+export default defineConfig({ plugins: [runicTranslations({
+  manifest: 'generated/translations/app.esm-v5/web-module-manifest-v3.json',
+  typeDeclarations: '.runic/translations/virtual.d.ts',
+  sourceFiles: ['translations/runic.json', 'translations/en.rmf2', 'translations/de.rmf2'],
+})] });
+`);
+    run("dotnet", ["tool", "run", "runic-translations", "--", "verify", ...compilerArguments], frontend, environment);
+    run("bun", ["run", "build"], frontend, environment);
+    run("dotnet", ["tool", "run", "runic-translations", "--", "verify", ...compilerArguments], frontend, environment);
     console.log("All six NuGet and three npm package consumers passed.");
   } finally {
     rmSync(directory, { recursive: true, force: true });

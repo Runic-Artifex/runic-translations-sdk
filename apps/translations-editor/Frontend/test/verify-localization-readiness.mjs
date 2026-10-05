@@ -68,6 +68,7 @@ for (locale of ["en", "de"]) {
       assert.ok(value.length > 0 && !value.includes("[[") && !value.includes("undefined") && !value.includes("{$"), `${locale}/${key}/${count}: unresolved message`);
     }
   }
+  assert.equal(ui.text("ui_preview_example", { number: "2" }), locale === "en" ? "Example 2" : "Beispiel 2");
   assert.equal(ui.text("ui_a11y_toggle_sidebar"), locale === "en" ? "Toggle sidebar" : "Seitenleiste umschalten");
   assert.equal(ui.text("ui_loading"), locale === "en" ? "Loading" : "Wird geladen");
 }

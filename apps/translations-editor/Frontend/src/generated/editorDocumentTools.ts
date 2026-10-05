@@ -2,21 +2,37 @@
 import { connectView, viewReferences, bridgeWire, type ViewClient, type BridgeOperation } from "@runic-artifex/views";
 
 export interface EditorDocumentToolsState {
+  readonly applyAuthoringOperationResultJson: string;
+  readonly applyDiagnosticFixResultJson: string;
   readonly transformDocumentResultJson: string;
   readonly previewMessageResultJson: string;
+  readonly isApplyAuthoringOperationExecuting: boolean;
+  readonly isApplyDiagnosticFixExecuting: boolean;
   readonly isTransformDocumentExecuting: boolean;
   readonly isPreviewMessageExecuting: boolean;
 }
 
+export interface EditorDocumentToolsApplyAuthoringOperationOperation extends BridgeOperation<never> {}
+export interface EditorDocumentToolsApplyDiagnosticFixOperation extends BridgeOperation<never> {}
 export interface EditorDocumentToolsTransformDocumentOperation extends BridgeOperation<never> {}
 export interface EditorDocumentToolsPreviewMessageOperation extends BridgeOperation<never> {}
 
 /** A connected EditorDocumentTools ViewModel. Dispose it when its presentation ends. */
 export interface EditorDocumentToolsClient extends ViewClient<EditorDocumentToolsState> {
+  applyAuthoringOperation(argument: string): Promise<EditorDocumentToolsState>;
+  canApplyAuthoringOperation(argument: string): Promise<boolean>;
+  applyDiagnosticFix(argument: string): Promise<EditorDocumentToolsState>;
+  canApplyDiagnosticFix(argument: string): Promise<boolean>;
   transformDocument(argument: string): Promise<EditorDocumentToolsState>;
   canTransformDocument(argument: string): Promise<boolean>;
   previewMessage(argument: string): Promise<EditorDocumentToolsState>;
   canPreviewMessage(argument: string): Promise<boolean>;
+  startApplyAuthoringOperation(argument: string): Promise<EditorDocumentToolsApplyAuthoringOperationOperation>;
+  startApplyAuthoringOperationWithRequestId(requestId: string, argument: string): Promise<EditorDocumentToolsApplyAuthoringOperationOperation>;
+  recoverApplyAuthoringOperationWithRequestId(requestId: string): Promise<EditorDocumentToolsApplyAuthoringOperationOperation>;
+  startApplyDiagnosticFix(argument: string): Promise<EditorDocumentToolsApplyDiagnosticFixOperation>;
+  startApplyDiagnosticFixWithRequestId(requestId: string, argument: string): Promise<EditorDocumentToolsApplyDiagnosticFixOperation>;
+  recoverApplyDiagnosticFixWithRequestId(requestId: string): Promise<EditorDocumentToolsApplyDiagnosticFixOperation>;
   startTransformDocument(argument: string): Promise<EditorDocumentToolsTransformDocumentOperation>;
   startTransformDocumentWithRequestId(requestId: string, argument: string): Promise<EditorDocumentToolsTransformDocumentOperation>;
   recoverTransformDocumentWithRequestId(requestId: string): Promise<EditorDocumentToolsTransformDocumentOperation>;
@@ -34,8 +50,10 @@ export interface EditorDocumentToolsPageReference {
 const pageEditorDocumentToolsReferences = viewReferences<EditorDocumentToolsPageReference>(id => ({ kind: "editorDocumentTools", connect: () => connectEditorDocumentToolsAt(`content${id}`, true) }));
 export function pageEditorDocumentTools(id: string): EditorDocumentToolsPageReference { return pageEditorDocumentToolsReferences(id); }
 
-type WireState = Omit<EditorDocumentToolsState, "transformDocumentResultJson" | "previewMessageResultJson"> & {
+type WireState = Omit<EditorDocumentToolsState, "applyAuthoringOperationResultJson" | "applyDiagnosticFixResultJson" | "transformDocumentResultJson" | "previewMessageResultJson"> & {
   readonly revision: number;
+  readonly applyAuthoringOperationResultJson: unknown;
+  readonly applyDiagnosticFixResultJson: unknown;
   readonly transformDocumentResultJson: unknown;
   readonly previewMessageResultJson: unknown;
 };
@@ -43,25 +61,39 @@ function hydrate(wire: WireState): EditorDocumentToolsState {
   const { revision: _revision, ...state } = wire;
   return {
     ...state,
+    applyAuthoringOperationResultJson: bridgeWire.string(wire.applyAuthoringOperationResultJson),
+    applyDiagnosticFixResultJson: bridgeWire.string(wire.applyDiagnosticFixResultJson),
     transformDocumentResultJson: bridgeWire.string(wire.transformDocumentResultJson),
     previewMessageResultJson: bridgeWire.string(wire.previewMessageResultJson),
   };
 }
-const bridgeContract = "Runic.Translations.Editor.EditorDocumentToolsViewModel:FBAB3637A08FD096C77ECD5FBF4685EC47DD38AB4E5DDFA30093AB70A1071EB8";
+const bridgeContract = "Runic.Translations.Editor.EditorDocumentToolsViewModel:8BA3CDF910F3158FF0A1991D25277C9A92F97A304CB55AC459A8282FD11E9339";
 
 export function connectEditorDocumentTools(): Promise<EditorDocumentToolsClient> { return connectEditorDocumentToolsAt("editorDocumentTools", false); }
 async function connectEditorDocumentToolsAt(route: string, mount = false): Promise<EditorDocumentToolsClient> {
   const view = await connectView({ contract: bridgeContract, route, mount, hydrate });
+  const startApplyAuthoringOperationOperation = (requestId: string, input: string) => view.startOperation<never>("ApplyAuthoringOperation", requestId, () => JSON.stringify({ requestId, input: input }), value => undefined as never);
+  const startApplyDiagnosticFixOperation = (requestId: string, input: string) => view.startOperation<never>("ApplyDiagnosticFix", requestId, () => JSON.stringify({ requestId, input: input }), value => undefined as never);
   const startTransformDocumentOperation = (requestId: string, input: string) => view.startOperation<never>("TransformDocument", requestId, () => JSON.stringify({ requestId, input: input }), value => undefined as never);
   const startPreviewMessageOperation = (requestId: string, input: string) => view.startOperation<never>("PreviewMessage", requestId, () => JSON.stringify({ requestId, input: input }), value => undefined as never);
   return {
     get snapshot() { return view.snapshot; },
     subscribe: view.subscribe,
     dispose: view.dispose,
+    async applyAuthoringOperation(argument) { return view.command(`${route}ApplyAuthoringOperation`, JSON.stringify(argument)); },
+    async canApplyAuthoringOperation(argument) { return view.query(`${route}CanApplyAuthoringOperation`, JSON.stringify(argument)); },
+    async applyDiagnosticFix(argument) { return view.command(`${route}ApplyDiagnosticFix`, JSON.stringify(argument)); },
+    async canApplyDiagnosticFix(argument) { return view.query(`${route}CanApplyDiagnosticFix`, JSON.stringify(argument)); },
     async transformDocument(argument) { return view.command(`${route}TransformDocument`, JSON.stringify(argument)); },
     async canTransformDocument(argument) { return view.query(`${route}CanTransformDocument`, JSON.stringify(argument)); },
     async previewMessage(argument) { return view.command(`${route}PreviewMessage`, JSON.stringify(argument)); },
     async canPreviewMessage(argument) { return view.query(`${route}CanPreviewMessage`, JSON.stringify(argument)); },
+    startApplyAuthoringOperation(input: string) { return startApplyAuthoringOperationOperation(globalThis.crypto.randomUUID(), input); },
+    startApplyAuthoringOperationWithRequestId(requestId: string, input: string) { return startApplyAuthoringOperationOperation(requestId, input); },
+    recoverApplyAuthoringOperationWithRequestId(requestId: string) { return view.recoverOperation<never>("ApplyAuthoringOperation", requestId, value => undefined as never); },
+    startApplyDiagnosticFix(input: string) { return startApplyDiagnosticFixOperation(globalThis.crypto.randomUUID(), input); },
+    startApplyDiagnosticFixWithRequestId(requestId: string, input: string) { return startApplyDiagnosticFixOperation(requestId, input); },
+    recoverApplyDiagnosticFixWithRequestId(requestId: string) { return view.recoverOperation<never>("ApplyDiagnosticFix", requestId, value => undefined as never); },
     startTransformDocument(input: string) { return startTransformDocumentOperation(globalThis.crypto.randomUUID(), input); },
     startTransformDocumentWithRequestId(requestId: string, input: string) { return startTransformDocumentOperation(requestId, input); },
     recoverTransformDocumentWithRequestId(requestId: string) { return view.recoverOperation<never>("TransformDocument", requestId, value => undefined as never); },

@@ -107,7 +107,7 @@ function hydrate(wire: WireState): EditorWorkspaceState {
     redoResultJson: bridgeWire.string(wire.redoResultJson),
   };
 }
-const bridgeContract = "Runic.Translations.Editor.EditorWorkspaceViewModel:FBAB3637A08FD096C77ECD5FBF4685EC47DD38AB4E5DDFA30093AB70A1071EB8";
+const bridgeContract = "Runic.Translations.Editor.EditorWorkspaceViewModel:8BA3CDF910F3158FF0A1991D25277C9A92F97A304CB55AC459A8282FD11E9339";
 
 export function connectEditorWorkspace(): Promise<EditorWorkspaceClient> { return connectEditorWorkspaceAt("editorWorkspace", false); }
 async function connectEditorWorkspaceAt(route: string, mount = false): Promise<EditorWorkspaceClient> {

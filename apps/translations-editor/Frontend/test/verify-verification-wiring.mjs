@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { readToolchain } from "../../../../eng/toolchain.mjs";
 import { readFile } from "node:fs/promises";
 
-const [packageJson, fullVerification, viteConfig] = await Promise.all([
+const [packageJson, fullVerification, viteConfig, rootPackageJson, runner] = await Promise.all([
   readFile(new URL("../package.json", import.meta.url), "utf8"),
   readFile(new URL("../../../../.github/workflows/ci.yml", import.meta.url), "utf8"),
   readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
+  readFile(new URL("../../../../package.json", import.meta.url), "utf8"),
+  readFile(new URL("../../../../eng/run.mjs", import.meta.url), "utf8"),
 ]);
 const frontend = JSON.parse(packageJson);
 const expandScript = (name, visited = new Set()) => {
@@ -21,17 +22,21 @@ const command = frontend.scripts?.verify;
 const expandedCommand = expandScript("verify");
 
 assert.equal(typeof command, "string", "Frontend has no verify script.");
-const toolchain = readToolchain();
-assert.equal(frontend.packageManager, `bun@${toolchain.bun}`, "Frontend must use the authority-pinned Bun release.");
+assert.equal(frontend.packageManager, JSON.parse(rootPackageJson).packageManager, "Frontend must use the repository-pinned Bun release.");
 for (const test of ["verify-ui-catalog.mjs", "verify-keyboard-a11y.mjs", "verify-command-palette.mjs", "verify-w03-simulation.mjs", "verify-local-state.mjs"]) {
   assert.match(expandedCommand, new RegExp(test.replace(".", "\\.")), `Frontend verification omits ${test}.`);
 }
-const editorJob = Bun.YAML.parse(fullVerification).jobs.editor;
-assert.ok(editorJob.steps.some(step => step["working-directory"] === "apps/translations-editor/Frontend"
-  && step.run === "bun run --bun verify:built"),
-  "The SDK verifier bypasses the frontend verification source of truth.");
-assert.ok(editorJob.steps.some(step => step.env?.RUNIC_TRANSLATIONS_MANIFEST?.includes("web-module-manifest-v3.json")),
-  "The SDK verifier must supply the generated translation manifest.");
+const verifyJob = Bun.YAML.parse(fullVerification).jobs.verify;
+assert.ok(verifyJob.steps.some(step => step.run === "bun eng/run.mjs test"),
+  "CI must invoke the standalone repository verification runner.");
+assert.match(runner, /run\("bun", \["run", "--bun", "verify:built"\]/,
+  "The repository runner bypasses complete frontend verification.");
+assert.match(runner, /RUNIC_TRANSLATIONS_MANIFEST:.*resolve\(editorDirectory,[^\n]*web-module-manifest-v3\.json/,
+  "The repository runner must supply the generated translation manifest.");
+assert.match(runner, /build\(\);\s*verifyEditorFrontend\(\);/,
+  "Frontend verification must consume the current build outputs.");
+assert.match(runner, /"--smoke-test"/,
+  "Repository verification omits the compiler-backed Editor smoke journey.");
 assert.doesNotMatch(viteConfig, /desktop:\s*true/,
   "The Vite plugin must not duplicate SvelteKit Desktop output ownership.");
 assert.match(viteConfig, /runicToolkitAdapter\(\{[^}]*mode:\s*["']spa["'][^}]*desktop:\s*false[^}]*\}\)/s,

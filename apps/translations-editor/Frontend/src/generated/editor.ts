@@ -58,7 +58,7 @@ function hydrate(wire: WireState): EditorState {
     documents: wire.documents.map(item => item.kind === "editorDocument" ? pageEditorDocument(item.id) : (() => { throw new BridgeError("failed", "Unknown documents kind."); })()),
   };
 }
-const bridgeContract = "Runic.Translations.Editor.EditorViewModel:FBAB3637A08FD096C77ECD5FBF4685EC47DD38AB4E5DDFA30093AB70A1071EB8";
+const bridgeContract = "Runic.Translations.Editor.EditorViewModel:8BA3CDF910F3158FF0A1991D25277C9A92F97A304CB55AC459A8282FD11E9339";
 
 export function connectEditor(): Promise<EditorClient> { return connectEditorAt("editor", false); }
 async function connectEditorAt(route: string, mount = false): Promise<EditorClient> {

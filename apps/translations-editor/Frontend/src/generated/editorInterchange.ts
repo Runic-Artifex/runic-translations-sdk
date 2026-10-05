@@ -87,7 +87,7 @@ function hydrate(wire: WireState): EditorInterchangeState {
     applyReviewJsonImportResultJson: bridgeWire.string(wire.applyReviewJsonImportResultJson),
   };
 }
-const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:FBAB3637A08FD096C77ECD5FBF4685EC47DD38AB4E5DDFA30093AB70A1071EB8";
+const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:8BA3CDF910F3158FF0A1991D25277C9A92F97A304CB55AC459A8282FD11E9339";
 
 export function connectEditorInterchange(): Promise<EditorInterchangeClient> { return connectEditorInterchangeAt("editorInterchange", false); }
 async function connectEditorInterchangeAt(route: string, mount = false): Promise<EditorInterchangeClient> {

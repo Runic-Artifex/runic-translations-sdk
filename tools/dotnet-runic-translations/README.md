@@ -5,7 +5,7 @@ Create, validate, generate, and verify Runic Translations MF2 projects from a pr
 ## Install locally
 
 ```bash
-dotnet new tool-manifest
+dotnet new tool-manifest --output .config
 dotnet tool install dotnet-runic-translations --version <VERSION>
 ```
 

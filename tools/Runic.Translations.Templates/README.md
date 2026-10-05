@@ -5,7 +5,7 @@ Start a compiler-valid Runic Translations RMF2 project or a complete .NET 10 loc
 ## Install
 
 ```bash
-dotnet new install Runic.Translations.Templates::<VERSION>
+dotnet new install Runic.Translations.Templates@<VERSION>
 ```
 
 Replace `<VERSION>` with the preview version shown on NuGet. The standalone project targets .NET 10 and pins the Runic Translations runtime, build package, and local tool to that exact release.
@@ -36,8 +36,14 @@ using Runic.Translations;
 ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
 var text = new AppText(manager);
 
-Console.WriteLine(text.application_title);
+Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
 ```
+
+This C# v5 accessor represents `application.title`: each source path segment
+uses a collision-safe `r_` plus UTF-8 hexadecimal encoding. ESM exposes the
+same message through `m.application_title()`. Follow the
+[.NET consumer quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md)
+to run the generated library from a console application and restore it on CI.
 
 ## Add catalog files to an existing project
 

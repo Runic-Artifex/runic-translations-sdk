@@ -189,12 +189,65 @@ internal sealed class EditorWorkspace : IDisposable
                 else throw new EditorUserException(EditorNotice.Create("ui_backend_not_message_document"));
             }
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            return new EditorDocumentDraft(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state.Compilation));
+            return new EditorDocumentDraft(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state, cancellationToken));
         }
         catch (Exception exception) when (exception is ArgumentException or TranslationAuthoringException)
         {
             return new EditorDocumentDraft(false, content, [],
                 [new EditorDiagnostic("EDITOR-TRANSFORM", "error", string.Empty, relativePath, 1, 1, 1, 1, EditorNotice.FromException(exception))]);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<EditorDocumentDraft> ApplyAuthoringOperationAsync(string relativePath, string content,
+        string key, string expectedRevision, EditorMessageOperation operation, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            string path = NormalizeKnownPath(relativePath);
+            var source = Source(path, content);
+            if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+            {
+                var workspace = Rmf2Catalog();
+                var node = Rmf2ResourceReader.Read(source, cancellationToken: cancellationToken).Nodes.SingleOrDefault(node => !node.IsGroup && string.Join('_', workspace.LogicalPath(path, node)) == key)
+                    ?? throw new ArgumentException("The selected message no longer exists.");
+                var changed = Rmf2AuthoringService.Apply(Source(path, node.Message!), expectedRevision, Operation(operation));
+                content = operation.Kind == "rename-input"
+                    ? StrictUtf8.GetString(Rmf2ResourceWriter.RenameInput(source, node.Key, operation.Name!, operation.NewName!))
+                    : StrictUtf8.GetString(Rmf2ResourceWriter.SetMessage(source, node.Key, StrictUtf8.GetString(changed.Bytes)));
+            }
+            else if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
+                content = StrictUtf8.GetString(Rmf2AuthoringService.Apply(source, expectedRevision, Operation(operation)).Bytes);
+            else throw new ArgumentException("Choose an MF2 message document.");
+            WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
+            return new(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state, cancellationToken));
+        }
+        catch (Exception exception) when (exception is ArgumentException or TranslationAuthoringException)
+        {
+            return new(false, content, [], [new EditorDiagnostic("EDITOR-AUTHORING", "error", exception.Message, relativePath, 1, 1, 1, 1)]);
+        }
+        finally { _gate.Release(); }
+        static Rmf2AuthoringOperation Operation(EditorMessageOperation operation) => new(operation.Kind, operation.VariantId, operation.Pattern,
+            operation.Name, operation.NewName, operation.Function, operation.Keys, operation.Selectors);
+    }
+
+    public async Task<EditorDocumentDraft> ApplyDiagnosticFixAsync(string relativePath, string content,
+        Rmf2DiagnosticQuickFix fix, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            string path = NormalizeKnownPath(relativePath);
+            content = StrictUtf8.GetString(Rmf2DiagnosticActions.ApplyQuickFix(Source(path, content), fix).Bytes);
+            WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
+            return new(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state, cancellationToken));
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            return new(false, content, [], [new EditorDiagnostic("EDITOR-FIX", "error", exception.Message, relativePath, 1, 1, 1, 1)]);
         }
         finally { _gate.Release(); }
     }
@@ -210,7 +263,7 @@ internal sealed class EditorWorkspace : IDisposable
             ThrowIfDisposed();
             string path = NormalizeKnownPath(relativePath);
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            return new ValidationResult(state.Compilation.Success, Diagnostics(state.Compilation));
+            return new ValidationResult(state.Compilation.Success, Diagnostics(state, cancellationToken));
         }
         finally
         {
@@ -232,7 +285,7 @@ internal sealed class EditorWorkspace : IDisposable
             ThrowIfDisposed();
             string path = NormalizeKnownPath(relativePath);
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            EditorDiagnostic[] diagnostics = Diagnostics(state.Compilation);
+            EditorDiagnostic[] diagnostics = Diagnostics(state, cancellationToken);
             if (!state.Compilation.Success)
                 return new EditorMessagePreview(false, null, null, null, diagnostics);
 
@@ -301,7 +354,7 @@ internal sealed class EditorWorkspace : IDisposable
                     "validation",
                     EditorNotice.Create("ui_backend_draft_validation"),
                     null,
-                    new ValidationResult(false, Diagnostics(state.Compilation)));
+                    new ValidationResult(false, Diagnostics(state, cancellationToken)));
             }
 
             byte[] bytes;
@@ -1341,7 +1394,7 @@ internal sealed class EditorWorkspace : IDisposable
         EditorReviewSnapshot? review = _catalogId is null
             ? null
             : Review(TranslationEditorStateStore.Load(_root, _catalogId));
-        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state.Compilation), state.Compilation.Success, null, review, null);
+        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state), state.Compilation.Success, null, review, null);
     }
 
     private static EditorReviewSnapshot Review(TranslationEditorStateLoadResult result) => new(
@@ -1353,13 +1406,36 @@ internal sealed class EditorWorkspace : IDisposable
         result.State.Terminology.Select(static term => new EditorTerminologyEntry(
             term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
 
-    private static EditorDiagnostic[] Diagnostics(Rmf2ProjectCompilationV5 compilation)
+    private static EditorDiagnostic[] Diagnostics(WorkspaceState state, CancellationToken cancellationToken = default)
     {
+        var compilation = state.Compilation;
+        var sources = state.Files.ToDictionary(file => file.Path, file => Source(file.Path, file.Content), StringComparer.Ordinal);
+        var sourceFixes = new Dictionary<string, IReadOnlyList<Rmf2DiagnosticQuickFix>>(StringComparer.Ordinal);
+        var sourceRevisions = new Dictionary<string, string>(StringComparer.Ordinal);
         var result = new EditorDiagnostic[compilation.Diagnostics.Count];
         for (int index = 0; index < result.Length; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             TranslationDiagnostic diagnostic = compilation.Diagnostics[index];
             TextSourceLocation location = diagnostic.Location;
+            sources.TryGetValue(location.Path, out TranslationSource? source);
+            Rmf2DiagnosticSpan? span = null;
+            IReadOnlyList<Rmf2DiagnosticQuickFix> fixes = [];
+            if (source is not null)
+            {
+                try
+                {
+                    span = Rmf2DiagnosticActions.GetSpan(source, location);
+                    if (!sourceRevisions.ContainsKey(source.Path)) sourceRevisions[source.Path] = Rmf2DiagnosticActions.Revision(source);
+                    if (diagnostic.Id == "RTR0050" && source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!sourceFixes.TryGetValue(source.Path, out var available))
+                            sourceFixes[source.Path] = available = Rmf2DiagnosticActions.GetQuickFixes(Rmf2ResourceReader.Analyze(source, cancellationToken: cancellationToken), cancellationToken);
+                        fixes = available.Where(fix => fix.DiagnosticId == diagnostic.Id && fix.Location.Path == location.Path && fix.Location.StartByte == location.StartByte && fix.Location.LengthBytes == location.LengthBytes).ToArray();
+                    }
+                }
+                catch (ArgumentException) { /* Project-level diagnostics may not address a complete physical slice. */ }
+            }
             result[index] = new EditorDiagnostic(
                 diagnostic.Id,
                 diagnostic.Severity == TranslationDiagnosticSeverity.Error ? "error" : "warning",
@@ -1368,7 +1444,7 @@ internal sealed class EditorWorkspace : IDisposable
                 location.Line,
                 location.Column,
                 location.EndLine,
-                location.EndColumn);
+                location.EndColumn, null, span, source is null ? null : sourceRevisions.GetValueOrDefault(source.Path), fixes);
         }
         return result;
     }
@@ -1603,19 +1679,47 @@ internal sealed class EditorWorkspace : IDisposable
 
     private EditorMessageEntry[] ReadEntries(string path, string content, Rmf2ProjectCompilationV5 compilation)
     {
+        var resources = compilation.Project?.Locales.SelectMany(locale => locale.DirectResources).ToArray() ?? [];
+        EditorMessageEntry Entry(string key, string message, int start, int length, Rmf2ResourceNode? node)
+        {
+            var linked = resources.FirstOrDefault(resource => resource.Key == key && resource.SourceLocation.Path == path);
+            var source = Source(path, message);
+            string locale = linked?.ContentLocale ?? Rmf2Catalog().Locale(path);
+            var projection = Rmf2AuthoringService.Project(source, locale, linked?.Message);
+            var semantic = Rmf2AuthoringService.Semantic(source, linked?.Message);
+            var examples = new List<IReadOnlyDictionary<string, string>>();
+            foreach (string property in node?.Properties ?? [])
+            {
+                if (!property.StartsWith("example ", StringComparison.Ordinal)) continue;
+                try
+                {
+                    using var json = JsonDocument.Parse(property[8..]);
+                    if (json.RootElement.ValueKind == JsonValueKind.Object)
+                        examples.Add(json.RootElement.EnumerateObject().ToDictionary(item => item.Name,
+                            item => item.Value.ValueKind == JsonValueKind.String ? item.Value.GetString()! : item.Value.GetRawText(), StringComparer.Ordinal));
+                }
+                catch (JsonException) { /* Compiler diagnostics retain invalid metadata; no invented sample is emitted. */ }
+            }
+            var context = new EditorMessageContext(node?.Comments ?? [],
+                (node?.Properties ?? []).Where(property => property.StartsWith("tag ", StringComparison.Ordinal) || property.StartsWith("tags ", StringComparison.Ordinal))
+                    .SelectMany(property => property[(property.IndexOf(' ') + 1)..].Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)).Distinct(StringComparer.Ordinal).ToArray(), examples);
+            return new(key, message, start, length,
+                new EditorMessageProjection(projection.Revision, projection.Supported, projection.Reason,
+                    projection.Inputs.Select(input => new EditorMessageInput(input.Name, input.Type, input.Function, input.Declared)).ToArray(),
+                    projection.Selectors, projection.SelectorFunctions, projection.Variants.Select(variant => new EditorMessageVariant(variant.Id, variant.Keys, variant.Pattern, variant.StartByte, variant.LengthBytes)).ToArray(),
+                    projection.PluralCategories, projection.SelectorPluralCategories, projection.CldrVersion), context,
+                new EditorMessageSemantic(semantic.Text, semantic.Placeholders, semantic.Slots, semantic.Supported, semantic.HasBoundaryWhitespace));
+        }
         if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
         {
             var workspace = Rmf2Catalog();
             return Rmf2ResourceReader.Read(Source(path, content)).Nodes.Where(node => !node.IsGroup)
-                .Select(node => new EditorMessageEntry(string.Join('_', workspace.LogicalPath(path, node)), node.Message!, node.MessageByteMap[0], node.MessageByteMap[^1] - node.MessageByteMap[0])).ToArray();
+                .Select(node => Entry(string.Join('_', workspace.LogicalPath(path, node)), node.Message!, node.MessageByteMap[0], node.MessageByteMap[^1] - node.MessageByteMap[0], node)).ToArray();
         }
         if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
         {
-            string key = compilation.Project?.Locales
-                .SelectMany(static locale => locale.DirectResources)
-                .FirstOrDefault(resource => string.Equals(resource.SourceLocation.Path, path, StringComparison.Ordinal))?.Key
-                ?? Path.GetFileNameWithoutExtension(path);
-            return [new EditorMessageEntry(key, content, 0, StrictUtf8.GetByteCount(content))];
+            string key = resources.FirstOrDefault(resource => resource.SourceLocation.Path == path)?.Key ?? Path.GetFileNameWithoutExtension(path);
+            return [Entry(key, content, 0, StrictUtf8.GetByteCount(content), null)];
         }
         return [];
     }

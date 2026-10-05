@@ -20,7 +20,7 @@ if (urlOrPrepare === "--prepare") {
     baseLocale: "de", locales: ["de", "en", "fr"],
   }, null, 2) + "\n");
   for (const [locale, cancel, save] of [["de", "Abbrechen", "Speichern"], ["en", "Cancel", "Save"], ["fr", "Annuler", "Enregistrer"]])
-    await writeFile(join(workspace, `${locale}.rmf2`), `${preservedComment}common {\n  cancel = ${cancel}\n  save = ${save}\n}\n`);
+    await writeFile(join(workspace, `${locale}.rmf2`), `${preservedComment}common {\n  cancel = ${cancel}\n  save = ${save}\n}\nfiles {\n  # Context for a selected-file count.\n  @tags files selection\n  @example {"count":1}\n  @example {"count":2}\n  selected =\n    .input {$count :integer}\n    .match $count\n    one {{One file selected}}\n    * {{{$count} files selected}}\n}\n`);
   console.log(`prepared real-host RMF2 fixture: ${workspace}`);
   process.exit(0);
 }
@@ -47,6 +47,7 @@ process.once("SIGTERM", () => { void browser.close().finally(() => process.exit(
 let stage = "boot";
 let page;
 const pageErrors = [];
+const consoleErrors = [];
 const waitFor = async (predicate, label) => {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
@@ -59,9 +60,27 @@ try {
   page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   page.setDefaultTimeout(20_000);
   page.on("pageerror", error => pageErrors.push(error.stack ?? error.message));
+  page.on("console", message => { if (message.type() === "error") { consoleErrors.push(message.text()); console.error(message.text()); } });
   page.on("dialog", dialog => void dialog.accept());
   await page.goto(new URL("/", urlOrPrepare).href, { waitUntil: "domcontentloaded" });
   const select = async key => {
+    await page.evaluate(() => {
+      const bridge = window.__runicBridge;
+      if (bridge.__authoringObserved) return;
+      bridge.__authoringObserved = true;
+      const call = bridge.call.bind(bridge);
+      window.__runicEditorDocumentCalls = [];
+      bridge.call = async (name, ...args) => {
+        try {
+          const response = await call(name, ...args);
+          window.__runicEditorDocumentCalls.push({ name, args: /PreviewMessage|ApplyAuthoring|Snapshot/.test(name) ? args : undefined, response: /PreviewMessage|ApplyAuthoring|Mount|Snapshot/.test(name) ? response : undefined });
+          return response;
+        } catch (error) {
+          window.__runicEditorDocumentCalls.push({ name, error: String(error) });
+          throw error;
+        }
+      };
+    });
     await page.getByRole("button", { name: new RegExp(`^${key}:`) }).click();
     await page.locator('textarea[spellcheck="true"]').first().waitFor();
   };
@@ -106,9 +125,38 @@ try {
   await select("common_cancel");
   assert.equal(await editor().inputValue(), "Queued cancel from the real editor");
 
+  stage = "plural-edit-preview-persistence";
+  await select("files_selected");
+  const branchEditor = () => page.getByRole("textbox", { name: /Translation for count: one/ }).first();
+  await branchEditor().fill("One edited file selected");
+  const previewCanvas = page.locator(".preview-canvas");
+  await waitFor(async () => (await previewCanvas.textContent()).includes("One edited file selected"), "edited singular compiler preview");
+  const countSample = page.locator(".sample-inputs label").filter({ hasText: "count" }).locator("input");
+  await countSample.fill("2");
+  await waitFor(async () => (await previewCanvas.textContent()).includes("2 files selected"), "plural compiler preview for 2");
+  await page.getByRole("button", { name: "Example 1", exact: true }).click();
+  await waitFor(async () => (await previewCanvas.textContent()).includes("One edited file selected"), "context singular example");
+  await page.getByRole("button", { name: "Example 2", exact: true }).click();
+  await waitFor(async () => (await previewCanvas.textContent()).includes("2 files selected"), "context plural example");
+  await page.keyboard.press("Control+s");
+  await waitFor(async () => (await readFile(diskPath, "utf8")).includes("one {{One edited file selected}}"), "saved plural MF2 source");
+  const pluralSaved = await readFile(diskPath, "utf8");
+  assert.ok(pluralSaved.startsWith(preservedComment));
+  assert.ok(pluralSaved.includes('@example {"count":2}'));
+  assert.ok(pluralSaved.includes("* {{{$count} files selected}}"));
+  assert.ok(!pluralSaved.includes('"variants"'), "Structural editing must never serialize legacy JSON.");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await select("files_selected");
+  assert.equal(await branchEditor().inputValue(), "One edited file selected");
+  await waitFor(async () => (await previewCanvas.textContent()).includes("One edited file selected"), "reloaded singular compiler preview");
+  await countSample.fill("2");
+  await waitFor(async () => (await previewCanvas.textContent()).includes("2 files selected"), "reloaded plural compiler preview");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "plural-saved-en.png"), fullPage: true });
+  await select("common_cancel");
+
   stage = "external-file-conflict";
   await editor().fill("Unsaved conflicting editor draft");
-  const externalBytes = `${savedBytes}# External edit must win the revision conflict.\n`;
+  const externalBytes = `${pluralSaved}# External edit must win the revision conflict.\n`;
   await writeFile(diskPath, externalBytes);
   await page.keyboard.press("Control+s");
   await waitFor(async () => (await page.getByText(/de\.rmf2.*changed on disk/i).count()) > 0, "external conflict notice");
@@ -131,6 +179,24 @@ try {
   await waitFor(async () => (await readFile(diskPath, "utf8")) === repairedText, "repaired source save");
   await repair.waitFor({ state: "hidden" });
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "repaired-en.png"), fullPage: true });
+  stage = "diagnostic-span-and-shared-fix";
+  const invalidBytes = "# 🦊 Unicode before the diagnostic\n" + repairedText.replace("cancel = Queued cancel from the real editor", "cancel = ");
+  await writeFile(diskPath, invalidBytes);
+  await reloadFiles();
+  await page.getByRole("button", { name: "Repair de.rmf2", exact: true }).click();
+  const diagnosticDialog = page.getByRole("dialog");
+  const diagnosticInput = diagnosticDialog.getByRole("textbox", { name: "Malformed source document", exact: true });
+  await diagnosticDialog.getByRole("button", { name: /RTR0050.*assignment without a body/i }).click();
+  const nameOffset = invalidBytes.indexOf("cancel = ");
+  // The compiler points at the complete incomplete assignment, including its
+  // equals sign and trailing space. UTF-16 selection must retain that span.
+  await waitFor(async () => (await diagnosticInput.evaluate(input => [input.selectionStart, input.selectionEnd])).join(":") === `${nameOffset}:${nameOffset + "cancel = ".length}`, "physical Unicode diagnostic span selection");
+  await diagnosticDialog.getByRole("button", { name: "Make message explicitly empty", exact: true }).click();
+  await waitFor(async () => (await diagnosticInput.inputValue()).includes("cancel = {{}}"), "compiler-owned explicit-empty quick fix");
+  await diagnosticDialog.getByRole("button", { name: "Validate and save", exact: true }).click();
+  await diagnosticDialog.waitFor({ state: "hidden" });
+  assert.ok((await readFile(diskPath, "utf8")).includes("cancel = {{}}"));
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "diagnostic-fixed-en.png"), fullPage: true });
   assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors.");
   console.log("hosted-rmf2-ui-ok (real packaged frontend + Views host + editor session)");
 } catch (error) {
@@ -140,7 +206,7 @@ try {
       page.screenshot({ path: join(reportDirectory, "failure.png"), fullPage: true }),
       page.content().then(html => writeFile(join(reportDirectory, "failure.html"), html)),
       page.evaluate(() => window.__runicEditorDocumentCalls ?? []).then(calls =>
-        writeFile(join(reportDirectory, "failure.json"), JSON.stringify({ stage, pageErrors, calls }, null, 2) + "\n")),
+        writeFile(join(reportDirectory, "failure.json"), JSON.stringify({ stage, pageErrors, consoleErrors, calls }, null, 2) + "\n")),
     ]);
   }
   throw error;

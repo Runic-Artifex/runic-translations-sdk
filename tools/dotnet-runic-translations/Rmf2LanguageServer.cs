@@ -75,7 +75,7 @@ internal sealed class Rmf2LanguageServer
                         // this same gate. Cancellation after that commit point
                         // is completion, not a cancelled partial transaction.
                         if (method != "initialize") _requestCancellation.ThrowIfCancellationRequested();
-                        if (id is not null && (request["params"]?["textDocument"] is not null || method == "workspace/executeCommand") && item.Revision != _latestRevision) throw new ContentModifiedException();
+                        if (id is not null && (request["params"]?["textDocument"] is not null || method is "workspace/executeCommand" or "codeAction/resolve") && item.Revision != _latestRevision) throw new ContentModifiedException();
                         if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result });
                     }
                 }
@@ -142,12 +142,29 @@ internal sealed class Rmf2LanguageServer
                 ["semanticTokensProvider"] = new JsonObject { ["legend"] = new JsonObject { ["tokenTypes"] = new JsonArray("namespace", "property", "variable", "function", "keyword", "string", "comment", "type"), ["tokenModifiers"] = new JsonArray() }, ["full"] = true },
                 ["referencesProvider"] = true, ["foldingRangeProvider"] = true, ["hoverProvider"] = true, ["definitionProvider"] = true,
                 ["documentFormattingProvider"] = true, ["renameProvider"] = true,
+                ["codeActionProvider"] = new JsonObject { ["codeActionKinds"] = new JsonArray("quickfix"), ["resolveProvider"] = true },
                 ["executeCommandProvider"] = new JsonObject { ["commands"] = new JsonArray("runic.extractGroup", "runic.inlineResource", "runic.preview", "runic.renameInput", "runic.renameSlot", "runic.renameResource", "runic.renderPreview") },
                 ["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("$", ":", "#", "/", "=") },
             }, ["serverInfo"] = new JsonObject { ["name"] = "Runic RMF2", ["version"] = "1" } };
         }
         if (method == "shutdown") { _shutdown = true; return null; }
         if (method is "initialized" or "$/cancelRequest") return null;
+        if (method == "codeAction/resolve")
+        {
+            JsonNode data = args["data"] ?? throw new ArgumentException("Missing quick-fix revision evidence.");
+            string actionUri = data["uri"]?.GetValue<string>() ?? throw new ArgumentException("Missing quick-fix document URI.");
+            int actionVersion = data["version"]?.GetValue<int>() ?? throw new ArgumentException("Missing quick-fix document version.");
+            string actionRevision = data["revision"]?.GetValue<string>() ?? throw new ArgumentException("Missing quick-fix source revision.");
+            string fixId = data["fixId"]?.GetValue<string>() ?? throw new ArgumentException("Missing quick-fix ID.");
+            if (!_buffers.TryGetValue(actionUri, out Buffer? actionBuffer)) throw new ContentModifiedException();
+            var source = new TranslationSource(LocalPath(actionUri), Utf8.GetBytes(actionBuffer.Text));
+            if (actionBuffer.Version != actionVersion || Rmf2DiagnosticActions.Revision(source) != actionRevision)
+                throw new ContentModifiedException();
+            Rmf2DiagnosticQuickFix? fix = Rmf2DiagnosticActions.GetQuickFixes(actionBuffer.Syntax, _requestCancellation)
+                .FirstOrDefault(candidate => candidate.Id == fixId);
+            if (fix is null) throw new ContentModifiedException();
+            return QuickFixAction(actionUri, actionBuffer, fix);
+        }
         if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration")
         {
             // File watchers and configuration synchronization are notifications,
@@ -241,6 +258,17 @@ internal sealed class Rmf2LanguageServer
             return null;
         }
         if (Path.GetFileName(LocalPath(uri)) == "runic.json") return null;
+        if (method == "textDocument/codeAction")
+        {
+            if (args["context"]?["only"] is JsonArray only && !only.Any(kind => kind?.GetValue<string>() is "" or "quickfix")) return new JsonArray();
+            JsonObject requestedRange = args["range"]?.AsObject() ?? throw new ArgumentException("Missing code-action range.");
+            int from = Utf8.GetByteCount(buffer.Text.AsSpan(0, Offset(buffer.Text, requestedRange["start"]!)));
+            int to = Utf8.GetByteCount(buffer.Text.AsSpan(0, Offset(buffer.Text, requestedRange["end"]!)));
+            if (to < from) throw new ArgumentException("Invalid code-action range.");
+            return new JsonArray(Rmf2DiagnosticActions.GetQuickFixes(buffer.Syntax, _requestCancellation).Where(fix => fix.Location.StartByte <= to &&
+                from <= fix.Location.StartByte + fix.Location.LengthBytes)
+                .Select(fix => (JsonNode)QuickFixAction(uri, buffer, fix)).ToArray());
+        }
         if (method == "textDocument/semanticTokens/full") return SemanticTokens(buffer);
         if (method == "textDocument/documentSymbol")
             return new JsonArray(buffer.Syntax.Nodes.Select(node => (JsonNode)new JsonObject {
@@ -808,9 +836,21 @@ internal sealed class Rmf2LanguageServer
     }
     private JsonObject Range(Buffer buffer, TextSourceLocation location)
     {
-        byte[] bytes = Utf8.GetBytes(buffer.Text);
-        int from = Utf8.GetCharCount(bytes.AsSpan(0, location.StartByte)), to = Utf8.GetCharCount(bytes.AsSpan(0, location.StartByte + location.LengthBytes));
-        return new JsonObject { ["start"] = Position(buffer.Text, from), ["end"] = Position(buffer.Text, to) };
+        Rmf2DiagnosticSpan span = Rmf2DiagnosticActions.GetSpan(new TranslationSource(buffer.Syntax.Source.Path, Utf8.GetBytes(buffer.Text)), location);
+        return new JsonObject { ["start"] = Position(buffer.Text, span.StartUtf16), ["end"] = Position(buffer.Text, span.StartUtf16 + span.LengthUtf16) };
+    }
+    private JsonObject QuickFixAction(string uri, Buffer buffer, Rmf2DiagnosticQuickFix fix)
+    {
+        // Repairs were authorized by the shared compiler against this immutable buffer syntax.
+        var editLocation = new TextSourceLocation(buffer.Syntax.Source.Path, fix.StartByte, fix.LengthBytes, 0, 0, 0, 0);
+        return new JsonObject {
+            ["title"] = fix.Title, ["kind"] = "quickfix", ["isPreferred"] = true,
+            ["data"] = new JsonObject { ["uri"] = uri, ["version"] = buffer.Version, ["revision"] = fix.ExpectedRevision, ["fixId"] = fix.Id },
+            ["edit"] = new JsonObject { ["documentChanges"] = new JsonArray(new JsonObject {
+                ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = buffer.Version },
+                ["edits"] = new JsonArray(new JsonObject { ["range"] = Range(buffer, editLocation), ["newText"] = fix.NewText }),
+            }) },
+        };
     }
     private JsonObject Position(string text, int offset)
     {
