@@ -102,6 +102,9 @@ when running from source, pass those arguments after the `--` above.
 Translations dependencies resolve from source in this repository. Runic Command
 Line, Application, Platform, and the editor's Application web adapters resolve
 from independently pinned published packages. No sibling SDK checkout is needed.
+The native transport is pinned to published `CsWebUi` and `CsWebUi.Native`
+`2.5.0-beta.4.6`, including the UTF-8 response fix and refreshed official native
+libraries. These resolve through the repository's ordinary NuGet.org configuration.
 `bun run test` checks the frontend, generated Views client, editor save/recovery smoke and example workspace.
 `bun run verify-packages` checks the SDK's isolated package consumers. See the
 [contributor guide](../../CONTRIBUTING.md) for the complete verification sequence.
