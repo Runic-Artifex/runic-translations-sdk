@@ -393,7 +393,7 @@ internal static class Program
             .Single(information => reader.GetGuid(information.Kind) == SourceLinkKind);
         string documentMap = Encoding.UTF8.GetString(reader.GetBlobBytes(sourceLink.Value));
         Assert(
-            documentMap.Contains("raw.githubusercontent.com/Runic-Artifex/runic-sdk/", StringComparison.Ordinal),
+            documentMap.Contains("raw.githubusercontent.com/Runic-Artifex/runic-translations-sdk/", StringComparison.Ordinal),
             $"{Path.GetFileName(package)} embeds Source Link metadata for the organization repository");
     }
 
