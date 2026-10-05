@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "version": "0.6.0-preview.2",
+  "nuget": [
+    {
+      "name": "Runic.Translations",
+      "project": "packages/dotnet/Runic.Translations/Runic.Translations.csproj"
+    },
+    {
+      "name": "Runic.Translations.Build",
+      "project": "packages/dotnet/Runic.Translations.Build/Runic.Translations.Build.csproj"
+    },
+    {
+      "name": "Runic.Translations.Tooling",
+      "project": "packages/dotnet/Runic.Translations.Tooling/Runic.Translations.Tooling.csproj"
+    },
+    {
+      "name": "Runic.Translations.Wpf",
+      "project": "packages/dotnet/Runic.Translations.Wpf/Runic.Translations.Wpf.csproj"
+    },
+    {
+      "name": "Runic.Translations.Templates",
+      "project": "tools/Runic.Translations.Templates/Runic.Translations.Templates.csproj",
+      "kind": "template"
+    },
+    {
+      "name": "dotnet-runic-translations",
+      "project": "tools/dotnet-runic-translations/dotnet-runic-translations.csproj",
+      "kind": "tool"
+    }
+  ],
+  "npm": [
+    {
+      "name": "@runic-artifex/vite-plugin-runic-translations",
+      "path": "packages/web/vite-plugin-runic-translations"
+    },
+    {
+      "name": "@runic-artifex/translations-svelte",
+      "path": "packages/web/translations-svelte"
+    },
+    {
+      "name": "@runic-artifex/translations-sveltekit",
+      "path": "packages/web/translations-sveltekit"
+    }
+  ],
+  "editor": {
+    "project": "apps/translations-editor/Runic.Translations.Editor.csproj",
+    "vscode": "tools/vscode-runic-translations",
+    "visualStudioVerification": "tools/visualstudio-runic-translations/package.py"
+  }
+}

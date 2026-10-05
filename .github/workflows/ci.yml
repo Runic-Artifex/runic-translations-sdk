@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun eng/run.mjs test
+      - run: bun eng/run.mjs pack
+      - run: bun eng/verify-packages.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runic-translations-packages
+          path: artifacts/packages
+          if-no-files-found: ignore
