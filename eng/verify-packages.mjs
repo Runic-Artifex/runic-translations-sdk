@@ -72,7 +72,16 @@ export async function verifyPackages(version = workspace.version) {
       { ...environment, DOTNET_CLI_HOME: templateHome });
     run("dotnet", ["new", "runic-translations-project", "--name", "GeneratedTranslations"], directory,
       { ...environment, DOTNET_CLI_HOME: templateHome });
-    assert.ok(existsSync(join(directory, "GeneratedTranslations", "GeneratedTranslations.csproj")), "Template did not create its project");
+    const generatedProject = join(directory, "GeneratedTranslations", "GeneratedTranslations.csproj");
+    assert.ok(existsSync(generatedProject), "Template did not create its project");
+    const generatedProjectText = readFileSync(generatedProject, "utf8");
+    assert.ok(!generatedProjectText.includes("__PACKAGE_VERSION__"), "Template package version was not stamped");
+    assert.ok(generatedProjectText.includes(`Version="${version}"`), "Template does not reference the candidate package version");
+    // Restore only Translations identities from the local candidate feed, then
+    // build the generated project so its packaged MSBuild analyzer is exercised.
+    run("dotnet", ["restore", generatedProject, "--configfile", join(directory, "NuGet.config")], directory, environment);
+    run("dotnet", ["tool", "restore", "--configfile", join(directory, "NuGet.config")], join(directory, "GeneratedTranslations"), environment);
+    run("dotnet", ["build", generatedProject, "--configuration", "Release", "--no-restore"], directory, environment);
 
     const tools = join(directory, "tools");
     run("dotnet", ["tool", "install", "dotnet-runic-translations", "--version", version, "--configfile", join(directory, "NuGet.config"), "--tool-path", tools], directory, environment);
