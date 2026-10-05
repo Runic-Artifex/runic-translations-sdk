@@ -141,3 +141,43 @@ function renameLocalInNodes(nodes: MessagePatternNode[], previous: string, nextN
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+/** Presentation slots retain the original MF2 expression bytes; the compiler owns semantics. */
+export interface Mf2EditorSlot { text: string; token?: string; syntax?: string }
+
+export function mf2VariableSyntax(name: string): string { return `{$${name}}`; }
+
+export function parseMf2Slots(source: string): Mf2EditorSlot[] {
+  const slots: Mf2EditorSlot[] = [{ text: "" }];
+  for (let index = 0; index < source.length;) {
+    const current = slots[slots.length - 1];
+    if (source[index] === "\\" && index + 1 < source.length) {
+      current.text += source.slice(index, index + 2);
+      index += 2;
+      continue;
+    }
+    if (source[index] !== "{") { current.text += source[index++]; continue; }
+    let end = index + 1;
+    let quoted = false;
+    for (; end < source.length; end += 1) {
+      if (source[end] === "\\") { end += 1; continue; }
+      if (source[end] === "|") quoted = !quoted;
+      if (!quoted && source[end] === "}") break;
+    }
+    if (end === source.length) { current.text += source.slice(index); break; }
+    const syntax = source.slice(index, end + 1);
+    const match = /^\{\s*\$([\p{L}_][\p{L}\p{N}_-]*)\s*\}$/u.exec(syntax);
+    if (match === null) current.text += syntax;
+    else {
+      current.token = match[1];
+      current.syntax = syntax;
+      slots.push({ text: "" });
+    }
+    index = end + 1;
+  }
+  return slots;
+}
+
+export function serializeMf2Slots(slots: Mf2EditorSlot[]): string {
+  return slots.map(slot => slot.text + (slot.token === undefined ? "" : slot.syntax ?? mf2VariableSyntax(slot.token))).join("");
+}

@@ -3980,3 +3980,16 @@ ui {
     review_notes_unavailable = Review notes unavailable
   }
 }
+
+ui {
+  composer_source_only = Visual editing is unavailable for this message. Edit its MF2 source below.
+}
+ui {
+  composer_pending = Applying compiler edit…
+}
+ui {
+  preview_examples = Example samples
+}
+ui {
+  preview_example = Example {$number}
+}

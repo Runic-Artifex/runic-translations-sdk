@@ -136,6 +136,8 @@ public sealed class EditorWorkspaceViewModel : EditorFeatureViewModel
 /// <summary>DocumentTools operations exposed as individual generated View commands.</summary>
 public sealed class EditorDocumentToolsViewModel : EditorFeatureViewModel
 {
+    private string _applyAuthoringOperationResultJson = "null";
+    private string _applyDiagnosticFixResultJson = "null";
     private string _transformDocumentResultJson = "null";
     private EditorDocumentDraft? _lastTransformDocument;
     private string _previewMessageResultJson = "null";
@@ -143,9 +145,16 @@ public sealed class EditorDocumentToolsViewModel : EditorFeatureViewModel
 
     internal EditorDocumentToolsViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
+        ApplyAuthoringOperationCommand = CreateCommand(async argument => await Session.ApplyAuthoringOperationAsync(Required(argument, "path"), Required(argument, "content"), Required(argument, "key"), Required(argument, "expectedRevision"), Parse<EditorMessageOperation>(argument.GetProperty("operation"))), (_, value) => ApplyAuthoringOperationResultJson = value);
+        ApplyDiagnosticFixCommand = CreateCommand(async argument => await Session.ApplyDiagnosticFixAsync(Required(argument, "path"), Required(argument, "content"), Parse<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix>(argument.GetProperty("fix"))), (_, value) => ApplyDiagnosticFixResultJson = value);
         TransformDocumentCommand = CreateCommand(async argument => await Session.TransformDocumentAsync(Required(argument, "path"), Required(argument, "content"), Optional(argument, "key"), Optional(argument, "value")), (result, value) => { LastTransformDocument = result; TransformDocumentResultJson = value; });
         PreviewMessageCommand = CreateCommand(async argument => await Session.PreviewMessageAsync(Required(argument, "path"), Required(argument, "content"), Required(argument, "locale"), Required(argument, "key"), Optional(argument, "samplesJson")), (result, value) => { LastPreviewMessage = result; PreviewMessageResultJson = value; });
     }
+
+    public string ApplyAuthoringOperationResultJson { get => _applyAuthoringOperationResultJson; private set => this.RaiseAndSetIfChanged(ref _applyAuthoringOperationResultJson, value); }
+    public string ApplyDiagnosticFixResultJson { get => _applyDiagnosticFixResultJson; private set => this.RaiseAndSetIfChanged(ref _applyDiagnosticFixResultJson, value); }
+    public ReactiveCommand<string, RxVoid> ApplyAuthoringOperationCommand { get; }
+    public ReactiveCommand<string, RxVoid> ApplyDiagnosticFixCommand { get; }
 
     public string TransformDocumentResultJson { get => _transformDocumentResultJson; private set => this.RaiseAndSetIfChanged(ref _transformDocumentResultJson, value); }
     internal EditorDocumentDraft? LastTransformDocument { get => _lastTransformDocument; private set => this.RaiseAndSetIfChanged(ref _lastTransformDocument, value); }

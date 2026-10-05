@@ -1,13 +1,15 @@
 <script lang="ts">
   import InlinePreview from "#lib/InlinePreview.svelte";
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { m } from "virtual:runic-translations/editor";
 
   import type {
     EditorAbout,
     EditorDiagnostic,
+    EditorDiagnosticQuickFix,
     EditorDocument,
     EditorExternalFileChange,
+    EditorMessageOperation,
     EditorMutationPreview,
     EditorMutationRequest,
     EditorProjectCreationRequest,
@@ -141,6 +143,9 @@
   let query = $state("");
   let mode = $state<EditorMode>("translation");
   let editorText = $state("");
+  let sourceSelection = $state.raw<{ start: number; end: number; token: number }>();
+  let selectionToken = 0;
+  let authoringPending = $state(0);
   let uiLocale = $state("en");
   const ui = createUiText(() => uiLocale);
   setUiText(ui);
@@ -175,6 +180,8 @@
   let commandPaletteOpen = $state(false);
   let repairDocument = $state.raw<EditorDocument>();
   let repairText = $state("");
+  let repairInput = $state<HTMLTextAreaElement | null>(null);
+  let repairValidation = $state.raw<ValidationResult>();
   let repairBusy = $state(false);
   let repairMessage = $state<UiMessage>();
   let externalChanges = $state<string[]>([]);
@@ -333,6 +340,8 @@
   }));
   let selectedRow = $derived.by(() => rows.find((row) => row.key === selectedKey));
   let currentCell = $derived(selectedRow?.cells[selectedLocale]);
+  let sourceContext = $derived(selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.context);
+  let currentExamples = $derived(currentCell?.entry?.context?.examples.length ? currentCell.entry.context.examples : sourceContext?.examples ?? []);
   let currentSourceValue = $derived(
     selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value,
   );
@@ -616,6 +625,7 @@
   }
 
   function configureEditor(preferredMode?: EditorMode, key = selectedKey, locale = selectedLocale): void {
+    sourceSelection = undefined;
     const row = buildRows(snapshot, drafts, parsedDrafts).find((candidate) => candidate.key === key);
     const cell = row?.cells[locale];
     const document = cell?.document;
@@ -632,7 +642,9 @@
       }).catch((error) => { if (selectedDocumentPath === path) clientError = errorNotice(error); });
     }
     const sourceEntry = row?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry;
-    previewSamples = createPreviewSamples(reviewIndex.get(reviewIdentity(key, locale))?.samples);
+    const savedSamples = reviewIndex.get(reviewIdentity(key, locale))?.samples;
+    previewSamples = createPreviewSamples(savedSamples !== undefined && Object.keys(savedSamples).length > 0
+      ? savedSamples : cell?.entry?.context?.examples[0] ?? sourceEntry?.context?.examples[0]);
     const nextMode = preferredMode ?? "translation";
     mode = nextMode;
     if (nextMode === "raw") {
@@ -679,7 +691,8 @@
 
   function editResourceValue(resourceValue: ResourceValue): void {
     if (editorMutationBlocked) return;
-    editorText = typeof resourceValue === "string" ? resourceValue : JSON.stringify(resourceValue, null, 2);
+    if (typeof resourceValue !== "string") return;
+    editorText = resourceValue;
     clientError = undefined;
     operationMessage = undefined;
     const document = currentDocument;
@@ -687,7 +700,6 @@
       clientError = notice("ui_feedback_no_resource");
       return;
     }
-    if (typeof resourceValue !== "string") return;
     const path = document.path;
     const key = selectedKey;
     const locale = selectedLocale;
@@ -719,6 +731,60 @@
     }).catch((error) => { clientError = errorNotice(error); });
     transformQueues.set(path, pending);
     void pending.finally(() => { if (transformQueues.get(path) === pending) transformQueues.delete(path); });
+  }
+
+  function applyAuthoringOperation(operation: EditorMessageOperation): Promise<void> {
+    if (editorMutationBlocked || currentDocument === undefined) return Promise.resolve();
+    clientError = undefined;
+    operationMessage = undefined;
+    const document = currentDocument;
+    const path = document.path;
+    const key = selectedKey;
+    const locale = selectedLocale;
+    const workspaceVersion = workspaceGeneration;
+    const workspaceRoot = snapshot?.root;
+    const identity = `${path}\u0000${key}\u0000${operation.variantId ?? operation.kind}`;
+    const version = (transformVersions.get(identity) ?? 0) + 1;
+    transformVersions.set(identity, version);
+    authoringPending += 1;
+    const pending = (transformQueues.get(path) ?? Promise.resolve()).then(async () => {
+      if (workspaceGeneration !== workspaceVersion || snapshot?.root !== workspaceRoot) return;
+      if (operation.kind === "set-pattern") {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
+        if (transformVersions.get(identity) !== version) return;
+      }
+      const original = drafts[path] ?? document.content;
+      const generation = draftGenerations[path] ?? 0;
+      const entry = buildRows(snapshot, drafts, parsedDrafts).find((row) => row.key === key)?.cells[locale]?.entry;
+      if (entry?.authoring?.supported !== true) return;
+      const result = await bridge.applyAuthoringOperation(path, original, key, entry.authoring.revision, operation);
+      if (workspaceGeneration !== workspaceVersion || snapshot?.root !== workspaceRoot || (draftGenerations[path] ?? 0) !== generation) return;
+      if (result.diagnostics.some(diagnostic => diagnostic.id === "EDITOR-AUTHORING")) {
+        clientError = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-AUTHORING")?.message;
+        validation = result;
+        return;
+      }
+      parsedDrafts[path] = { content: result.content, entries: result.entries };
+      setDraft(path, result.content);
+      persistDrafts();
+      validation = result;
+      if (selectedDocumentPath === path && selectedKey === key && selectedLocale === locale) {
+        editorText = result.entries.find((candidate) => candidate.key === key)?.content ?? editorText;
+        schedulePreview(path, result.content, key, locale);
+      }
+    }).catch((error) => { clientError = errorNotice(error); }).finally(() => { authoringPending -= 1; });
+    transformQueues.set(path, pending);
+    void pending.finally(() => { if (transformQueues.get(path) === pending) transformQueues.delete(path); });
+    return pending;
+  }
+
+  function selectPreviewExample(index: number): void {
+    const sample = currentExamples[index];
+    if (sample === undefined) return;
+    previewSamples = createPreviewSamples(sample);
+    if (currentDocument !== undefined && currentContent !== undefined) {
+      schedulePreview(currentDocument.path, currentContent, selectedKey, selectedLocale);
+    }
   }
 
   function schedulePreview(path: string, content: string, key: string, locale: string): void {
@@ -1244,14 +1310,79 @@
       (target instanceof HTMLElement && target.isContentEditable);
   }
 
-  function selectDiagnostic(diagnostic: EditorDiagnostic): void {
+  async function selectDiagnostic(diagnostic: EditorDiagnostic): Promise<void> {
     const document = snapshot?.documents.find((candidate) => candidate.path === diagnostic.path);
-    if (document?.locale !== undefined) selectedLocale = document.locale;
-    if (document !== undefined) {
-      selectedDocumentPath = document.path;
-      mode = "raw";
-      editorText = drafts[document.path] ?? document.content;
+    if (document === undefined) return;
+    const workspaceVersion = workspaceGeneration;
+    const content = repairDocument?.path === document.path ? repairText : drafts[document.path] ?? document.content;
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
+    const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+    let current = diagnostic;
+    if (diagnostic.sourceRevision !== revision) {
+      const result = await bridge.transformDocument(document.path, content);
+      if (workspaceGeneration !== workspaceVersion) return;
+      current = result.diagnostics.find(candidate => candidate.id === diagnostic.id && candidate.message === diagnostic.message) ?? diagnostic;
+      // A removed diagnostic cannot navigate with stale source coordinates.
+      if (current.sourceRevision !== revision) return;
+      const latestContent = repairDocument?.path === document.path ? repairText : drafts[document.path] ?? document.content;
+      if (latestContent !== content) return;
+      validation = result;
     }
+    if (workspaceGeneration !== workspaceVersion || current.span === undefined) return;
+    const liveContent = repairDocument?.path === document.path ? repairText : drafts[document.path] ?? document.content;
+    if (liveContent !== content) return;
+    if (document.locale !== undefined) selectedLocale = document.locale;
+    selectedDocumentPath = document.path;
+    selectedDocumentViewState = undefined;
+    if (document.isMalformed) {
+      if (repairDocument?.path !== document.path) beginRepair(document);
+      await tick();
+      if (repairInput !== null && repairText === content) {
+        repairInput.focus();
+        repairInput.setSelectionRange(current.span.startUtf16, current.span.startUtf16 + current.span.lengthUtf16);
+      }
+    } else {
+      mode = "raw";
+      editorText = content;
+      sourceSelection = { start: current.span.startUtf16, end: current.span.startUtf16 + current.span.lengthUtf16, token: ++selectionToken };
+    }
+  }
+
+  async function applyDiagnosticFix(diagnostic: EditorDiagnostic, fix: EditorDiagnosticQuickFix): Promise<void> {
+    const document = snapshot?.documents.find(candidate => candidate.path === diagnostic.path);
+    if (document === undefined || editorMutationBlocked) return;
+    const path = document.path;
+    const workspaceVersion = workspaceGeneration;
+    const repair = repairDocument?.path === path;
+    const pending = (transformQueues.get(path) ?? Promise.resolve()).then(async () => {
+      if (workspaceGeneration !== workspaceVersion) return;
+      const content = repair ? repairText : drafts[path] ?? document.content;
+      const generation = draftGenerations[path] ?? 0;
+      const result = await bridge.applyDiagnosticFix(path, content, fix);
+      if (workspaceGeneration !== workspaceVersion || (draftGenerations[path] ?? 0) !== generation || (repair && repairText !== content)) return;
+      if (result.diagnostics.some(diagnostic => diagnostic.id === "EDITOR-FIX")) {
+        const message = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-FIX")?.message;
+        if (repair) repairMessage = message;
+        else clientError = message;
+        return;
+      }
+      if (repair) {
+        repairText = result.content;
+        repairValidation = result;
+      } else {
+        parsedDrafts[path] = { content: result.content, entries: result.entries };
+        setDraft(path, result.content);
+        persistDrafts();
+        validation = result;
+        if (selectedDocumentPath === path) {
+          editorText = mode === "raw" ? result.content : result.entries.find(entry => entry.key === selectedKey)?.content ?? editorText;
+          if (mode === "translation") schedulePreview(path, result.content, selectedKey, selectedLocale);
+        }
+      }
+    }).catch(error => { if (repair) repairMessage = errorNotice(error); else clientError = errorNotice(error); });
+    transformQueues.set(path, pending);
+    await pending;
+    if (transformQueues.get(path) === pending) transformQueues.delete(path);
   }
 
   function protectDraft(event: BeforeUnloadEvent): void {
@@ -1709,6 +1840,11 @@
     repairDocument = document;
     repairText = document.content;
     repairMessage = undefined;
+    repairValidation = undefined;
+    const content = repairText;
+    void bridge.validate(document.path, content).then(result => {
+      if (repairDocument?.path === document.path && repairText === content) repairValidation = result;
+    }).catch(error => { repairMessage = errorNotice(error); });
   }
 
   async function saveRepair(): Promise<void> {
@@ -2134,11 +2270,16 @@
           />
 
           <TranslationEditor
+            identity={`${selectedDocumentPath}\u0000${selectedKey}\u0000${selectedLocale}`}
             {mode}
             locale={selectedLocale}
             label={mode === "translation" ? localeName(selectedLocale) : currentDocument?.path ?? ui.text("ui_page_resource_document")}
             value={editorText}
             resourceValue={currentCell?.entry?.value ?? selectedRow.cells[snapshot.catalog.defaultLocale]?.entry?.value}
+            authoring={currentCell?.entry?.authoring}
+            authoringBusy={authoringPending > 0}
+            onoperation={applyAuthoringOperation}
+            {sourceSelection}
             missing={currentCell?.entry === undefined}
             invalid={clientError !== undefined || validation?.success === false}
             disabled={editorMutationBlocked}
@@ -2153,6 +2294,14 @@
                 <div><strong>{ui.text("ui_page_preview_title")}</strong><span>{ui.text("ui_page_preview_description")}</span></div>
                 <span class="preview-state">{previewBusy ? ui.text("ui_page_preview_compiling") : previewAst === undefined ? ui.text("ui_page_preview_unavailable") : selectedLocale}</span>
               </header>
+              {#if currentExamples.length > 0}
+                <div class="flex flex-wrap items-center gap-2 px-4 py-3" aria-label={ui.text("ui_preview_examples")}>
+                  <span class="text-xs text-muted-foreground">{ui.text("ui_preview_examples")}</span>
+                  {#each currentExamples as example, index (index)}
+                    <Button variant="outline" size="xs" onclick={() => selectPreviewExample(index)}>{ui.text("ui_preview_example", { number: String(index + 1) })}</Button>
+                  {/each}
+                </div>
+              {/if}
               {#if previewAst !== undefined && previewInputEntries(previewAst).length > 0}
                 <div class="sample-inputs">
                   {#each previewInputEntries(previewAst) as [name, descriptor] (name)}
@@ -2197,7 +2346,8 @@
             invalidLabel={labels.invalid}
             diagnosticsLabel={labels.diagnostics}
             schemaVersion={snapshot.catalog.schemaVersion}
-            onselect={selectDiagnostic}
+            onselect={(diagnostic) => void selectDiagnostic(diagnostic)}
+            onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)}
           />
         </div>
       {/if}
@@ -2353,7 +2503,16 @@
     showCloseButton={!repairBusy}
     onopenchange={(open) => { if (!open && !repairBusy) closeRepair(); }}
   >
-    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("ui_page_repair_document_aria_label")} bind:value={repairText} spellcheck={false} disabled={repairBusy || editorMutationBlocked} />
+    <Textarea bind:ref={repairInput} class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("ui_page_repair_document_aria_label")} bind:value={repairText} spellcheck={false} disabled={repairBusy || editorMutationBlocked} />
+    {#if repairValidation !== undefined}
+      <ValidationPanel busy={repairBusy} diagnostics={repairValidation.diagnostics} clientError={undefined}
+        errorCount={repairValidation.diagnostics.filter(item => item.severity === "error").length}
+        warningCount={repairValidation.diagnostics.filter(item => item.severity === "warning").length}
+        validLabel={labels.valid} invalidLabel={labels.invalid} diagnosticsLabel={labels.diagnostics}
+        schemaVersion={snapshot?.catalog?.schemaVersion ?? 1}
+        onselect={(diagnostic) => void selectDiagnostic(diagnostic)}
+        onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)} />
+    {/if}
     {#if repairMessage}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("ui_page_repair_failed")}</Alert.Title><Alert.Description>{displayNotice(repairMessage, ui)}</Alert.Description></Alert.Root>{/if}
     {#snippet footer()}
       <Button variant="outline" disabled={repairBusy} onclick={closeRepair}>{ui.text("ui_page_cancel")}</Button>

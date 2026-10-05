@@ -94,3 +94,30 @@ assert.equal(extraRows[0].cells.de.document.path, "feature/de/extra.mf2",
   "A mounted extra key must use its existing non-default document as the physical template.");
 
 console.log("PASS: mounted direct, extra-key, and uppercase grouped RMF2 rows synthesize or reuse canonical locale documents.");
+
+const compilerMetadata = {
+  authoring: { revision: "projection", supported: true, inputs: [], selectors: [], selectorFunctions: [], selectorPluralCategories: [], variants: [{ id: "0", keys: [], pattern: "Hello", startByte: 0, lengthBytes: 5 }], pluralCategories: ["one", "other"], cldrVersion: "48.2" },
+  context: { comments: ["Shown in the shop"], tags: ["checkout"], examples: [{ count: "2" }] },
+  semantic: { text: ["Hello"], placeholders: [], slots: [], supported: true, hasBoundaryWhitespace: false },
+};
+const withMetadata = structuredClone(snapshot);
+Object.assign(withMetadata.documents[1].entries[0], compilerMetadata);
+const metadataRow = model.buildRows(withMetadata, {})[0];
+assert.deepEqual(metadataRow.cells.en.entry.authoring, compilerMetadata.authoring);
+assert.deepEqual(metadataRow.cells.en.entry.semantic, compilerMetadata.semantic);
+assert.deepEqual(metadataRow.cells.en.entry.context, compilerMetadata.context);
+assert.equal(metadataRow.description, "Shown in the shop");
+assert.deepEqual(metadataRow.tags, ["checkout"]);
+const editedContent = "Edited\n";
+const staleRow = model.buildRows(withMetadata, { "feature/en/greeting.mf2": editedContent })[0];
+assert.equal(staleRow.cells.en.entry.authoring, undefined, "A stale projection cannot authorize editing the new source.");
+assert.equal(staleRow.cells.en.entry.semantic, undefined, "QA must not consume stale compiler semantics.");
+const freshMetadata = { ...compilerMetadata, semantic: { ...compilerMetadata.semantic, text: ["Edited"] } };
+const parsedRow = model.buildRows(withMetadata, { "feature/en/greeting.mf2": editedContent }, {
+  "feature/en/greeting.mf2": { content: editedContent, entries: [{ ...withMetadata.documents[1].entries[0], content: editedContent, ...freshMetadata }] },
+})[0];
+assert.deepEqual(parsedRow.cells.en.entry.semantic.text, ["Edited"]);
+const groupedMetadata = structuredClone(uppercaseGrouped);
+Object.assign(groupedMetadata.documents[1].entries[0], compilerMetadata);
+assert.deepEqual(model.buildRows(groupedMetadata, {})[0].cells.en.entry.context, compilerMetadata.context);
+console.log("PASS: compiler authoring, semantic and translator context survive direct/grouped rows and reject stale drafts.");

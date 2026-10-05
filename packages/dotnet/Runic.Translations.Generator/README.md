@@ -19,7 +19,8 @@ The easiest setup is to install `Runic.Translations.Build`, which maps its item 
 </ItemGroup>
 ```
 
-For a catalog with `code.namespace` set to `Example.Translations` and `code.className` set to `AppText`:
+For a catalog with `code.namespace` set to `Example.Translations`,
+`code.className` set to `AppText`, and a grouped `application.title` resource:
 
 ```csharp
 using Example.Translations;
@@ -28,8 +29,13 @@ using Runic.Translations;
 ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
 var text = new AppText(manager);
 
-Console.WriteLine(text.Application.Name);
+Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
 ```
+
+The C# v5 generator encodes each path segment as `r_` plus UTF-8 hexadecimal
+bytes. Use IDE completion and the generated resource-path documentation to
+find accessors. See the [.NET consumer quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md)
+for a complete template and console application workflow.
 
 The generator reports compiler diagnostics at source locations and writes no
 files. Typed C# becomes part of the current compilation. Locale-v5 JSON and the

@@ -4,6 +4,8 @@ import { connectEditor, type EditorClient } from "../generated/editor";
 import type { EditorDocumentPageReference, EditorDocumentState } from "../generated/editorDocument";
 import type {
   EditorAbout,
+  EditorMessageOperation,
+  EditorDiagnosticQuickFix,
   EditorDiagnosticBundleActionResult,
   EditorDiagnosticBundleResult,
   EditorDocument,
@@ -154,6 +156,8 @@ export interface EditorBridge {
   recoverTransaction(mode: "complete" | "rollback"): Promise<EditorOperationResult>;
   undo(): Promise<EditorOperationResult>;
   redo(): Promise<EditorOperationResult>;
+  applyAuthoringOperation(path: string, content: string, key: string, expectedRevision: string, operation: EditorMessageOperation): Promise<EditorDocumentDraft>;
+  applyDiagnosticFix(path: string, content: string, fix: EditorDiagnosticQuickFix): Promise<EditorDocumentDraft>;
   transformDocument(path: string, content: string, key?: string, value?: string): Promise<EditorDocumentDraft>;
   previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string): Promise<EditorMessagePreview>;
   saveReview(request: EditorReviewSaveRequest): Promise<EditorReviewOperationResult>;
@@ -188,6 +192,8 @@ export function createEditorBridge(): EditorBridge {
     recoverTransaction: (mode) => invokeRouted("RecoverTransaction", root => root.snapshot.workspace, (view, request) => view.recoverTransaction(request), state => state.recoverTransactionResultJson, { mode }) as Promise<EditorOperationResult>,
     undo: () => invokeRouted("Undo", root => root.snapshot.workspace, (view, request) => view.undo(request), state => state.undoResultJson, {}) as Promise<EditorOperationResult>,
     redo: () => invokeRouted("Redo", root => root.snapshot.workspace, (view, request) => view.redo(request), state => state.redoResultJson, {}) as Promise<EditorOperationResult>,
+    applyAuthoringOperation: (path, content, key, expectedRevision, operation) => invokeRouted("ApplyAuthoringOperation", root => root.snapshot.documentTools, (view, request) => view.applyAuthoringOperation(request), state => state.applyAuthoringOperationResultJson, { path, content, key, expectedRevision, operation }) as Promise<EditorDocumentDraft>,
+    applyDiagnosticFix: (path, content, fix) => invokeRouted("ApplyDiagnosticFix", root => root.snapshot.documentTools, (view, request) => view.applyDiagnosticFix(request), state => state.applyDiagnosticFixResultJson, { path, content, fix }) as Promise<EditorDocumentDraft>,
     transformDocument: (path, content, key, value) => invokeRouted("TransformDocument", root => root.snapshot.documentTools, (view, request) => view.transformDocument(request), state => state.transformDocumentResultJson, { path, content, key, value }) as Promise<EditorDocumentDraft>,
     previewMessage: (path, content, locale, key, samplesJson) => invokeRouted("PreviewMessage", root => root.snapshot.documentTools, (view, request) => view.previewMessage(request), state => state.previewMessageResultJson, { path, content, locale, key, samplesJson }) as Promise<EditorMessagePreview>,
     saveReview: (request) => invokeRouted("SaveReview", root => root.snapshot.review, (view, request) => view.saveReview(request), state => state.saveReviewResultJson, request) as Promise<EditorReviewOperationResult>,

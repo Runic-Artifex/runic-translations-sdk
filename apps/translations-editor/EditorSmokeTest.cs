@@ -1,4 +1,5 @@
 using Runic.Translations.Authoring;
+using Runic.Translations.Compiler;
 using ReactiveUI;
 using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Signals;
@@ -11,11 +12,84 @@ namespace Runic.Translations.Editor;
 
 internal static class EditorSmokeTest
 {
+    private static async Task AuthoringJourneyAsync(string project)
+    {
+        TranslationProjectWriter.Create(TranslationProjectScaffolder.Render(
+            new TranslationProjectCreationRequest(project, "authoring-smoke", "en", "Smoke.Translations", "SmokeText",
+                [new TranslationProjectLocale("de", "en")])));
+        const string source = "# Cart count context 🦊\n@tag checkout\n@example {\"count\":1}\n@example {\"count\":2}\ncart =\n  .input {$count :integer}\n  .match $count\n  one {{One item}}\n  * {{Many items}}\n";
+        const string target = "# Warenkorbkontext\n@tag checkout\n@example {\"count\":1}\n@example {\"count\":2}\ncart =\n  .input {$count :integer}\n  .match $count\n  one {{Ein Artikel}}\n  * {{Viele Artikel}}\n";
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), source).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), target).ConfigureAwait(false);
+        using var session = new EditorSession(project);
+        var snapshot = await session.LoadAsync().ConfigureAwait(false);
+        Require(snapshot.Success, "Authoring fixture did not compile.");
+        var document = snapshot.Documents.Single(document => document.Path == "de.rmf2");
+        var entry = document.Entries!.Single(entry => entry.Key == "cart");
+        Require(entry.Authoring?.Supported == true && entry.Authoring.Variants.Count == 2, "Existing plural wasn't projected.");
+        Require(entry.Context?.Comments.Count == 1 && entry.Context.Comments[0] == "Warenkorbkontext" && entry.Context.Tags.Contains("checkout") && entry.Context.Examples.Count == 2,
+            "Context/tags/examples were dropped.");
+        Require(entry.Semantic?.Text.Count == 2 && entry.Semantic.Text[0] == "Ein Artikel" && entry.Semantic.Text[1] == "Viele Artikel" && entry.Semantic.Placeholders.Count == 1 && entry.Semantic.Placeholders[0] == "count:int64", "Semantic QA projection wasn't typed branch text.");
+        var draft = await session.ApplyAuthoringOperationAsync(document.Path, document.Content, entry.Key,
+            entry.Authoring!.Revision, new EditorMessageOperation("set-pattern", "0", "Genau ein Artikel")).ConfigureAwait(false);
+        Require(draft.Success, "Branch edit didn't compile.");
+        Require(draft.Content.StartsWith("# Warenkorbkontext\n@tag checkout\n@example {\"count\":1}\n@example {\"count\":2}\n", StringComparison.Ordinal), "Untouched metadata wasn't retained byte-for-byte.");
+        var changed = draft.Entries.Single();
+        Require(changed.Context?.Examples.Count == 2, "Draft examples were dropped.");
+        var one = await session.PreviewMessageAsync(document.Path, draft.Content, "de", "cart", JsonSerializer.Serialize(changed.Context!.Examples[0])).ConfigureAwait(false);
+        var many = await session.PreviewMessageAsync(document.Path, draft.Content, "de", "cart", JsonSerializer.Serialize(changed.Context.Examples[1])).ConfigureAwait(false);
+        Require(one.RenderedJson?.Contains("Genau ein Artikel", StringComparison.Ordinal) == true && many.RenderedJson?.Contains("Viele Artikel", StringComparison.Ordinal) == true,
+            "Selected canonical examples didn't choose the expected plural branches.");
+        var stale = await session.ApplyAuthoringOperationAsync(document.Path, draft.Content, "cart", entry.Authoring.Revision,
+            new EditorMessageOperation("set-pattern", "0", "Stale")).ConfigureAwait(false);
+        Require(!stale.Success && stale.Content == draft.Content && stale.Diagnostics.Any(diagnostic => diagnostic.Id == "EDITOR-AUTHORING"), "Stale authoring edit was accepted.");
+        Require((await session.SaveAsync(document.Path, draft.Content, document.Revision).ConfigureAwait(false)).Ok, "Authoring source wasn't saved.");
+        var reloaded = (await session.LoadAsync().ConfigureAwait(false)).Documents.Single(document => document.Path == "de.rmf2");
+        Require(reloaded.Entries!.Single().Authoring?.Variants[0].Pattern == "Genau ein Artikel", "Branch edit didn't survive save/reload.");
+        // Input renames update attached caller examples and @param metadata.
+        var rename = await session.ApplyAuthoringOperationAsync("en.rmf2", source, "cart", snapshot.Documents.Single(document => document.Path == "en.rmf2").Entries!.Single().Authoring!.Revision,
+            new EditorMessageOperation("rename-input", Name: "count", NewName: "amount")).ConfigureAwait(false);
+        Require(rename.Content.Contains("\"amount\":1", StringComparison.Ordinal) && !rename.Content.Contains("\"count\":1", StringComparison.Ordinal), "Input rename didn't update example contracts.");
+        const string broken = "# 🦊 incomplete\nempty =\n";
+        var validation = await session.ValidateAsync("de.rmf2", broken).ConfigureAwait(false);
+        var diagnostic = validation.Diagnostics.Single(diagnostic => diagnostic.QuickFixes?.Count == 1);
+        Require(diagnostic.Span?.StartUtf16 == broken.IndexOf("empty", StringComparison.Ordinal), "Diagnostic selection wasn't physical UTF16.");
+        var fix = diagnostic.QuickFixes!.Single();
+        var repaired = await session.ApplyDiagnosticFixAsync("de.rmf2", broken, fix).ConfigureAwait(false);
+        Require(repaired.Content == "# 🦊 incomplete\nempty = {{}}\n" && !repaired.Diagnostics.Any(diagnostic => diagnostic.Id == "EDITOR-FIX"), "Safe repair didn't preserve unrelated content.");
+        var staleFix = await session.ApplyDiagnosticFixAsync("de.rmf2", broken + "other = New\n", fix).ConfigureAwait(false);
+        Require(staleFix.Diagnostics.Any(diagnostic => diagnostic.Id == "EDITOR-FIX"), "Stale repair wasn't refused as an operation result.");
+    }
+
+    private static async Task MountedContextJourneyAsync(string root)
+    {
+        string project = Path.Combine(root, "translations"), feature = Path.Combine(root, "feature");
+        Directory.CreateDirectory(project); Directory.CreateDirectory(feature);
+        await File.WriteAllTextAsync(Path.Combine(project, "runic.json"),
+            "{\"schemaVersion\":1,\"catalog\":\"context\",\"code\":{\"namespace\":\"Smoke.Translations\",\"className\":\"SmokeText\"},\"baseLocale\":\"en\",\"locales\":[\"en\"],\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}\n").ConfigureAwait(false);
+        const string text = "# Checkout context 🦊\n@tag checkout\n@example {\"count\":1}\ncart =\n  .input {$count :integer}\n  .match $count\n  one {{One item}}\n  * {{Many items}}\n";
+        await File.WriteAllTextAsync(Path.Combine(feature, "en.rmf2"), text).ConfigureAwait(false);
+        using var session = new EditorSession(root);
+        var loaded = await session.LoadAsync().ConfigureAwait(false);
+        var document = loaded.Documents.Single(document => document.Path == "feature/en.rmf2");
+        var entry = document.Entries!.Single();
+        Require(loaded.Success && entry.Key == "shop_cart" && entry.Context?.Comments.Single() == "Checkout context 🦊" && entry.Context.Examples.Single()["count"] == "1", "Mounted context/examples weren't exposed under compiler identity.");
+        var draft = await session.ApplyAuthoringOperationAsync(document.Path, document.Content, entry.Key,
+            entry.Authoring!.Revision, new("set-pattern", "0", "Exactly one item")).ConfigureAwait(false);
+        var changed = draft.Entries.Single();
+        Require(changed.Context?.Tags.Single() == "checkout" && changed.Context.Examples.Single()["count"] == "1", "Unsaved mounted context/examples weren't retained.");
+        var preview = await session.PreviewMessageAsync(document.Path, draft.Content, "en", entry.Key,
+            JsonSerializer.Serialize(changed.Context!.Examples.Single())).ConfigureAwait(false);
+        Require(preview.RenderedJson?.Contains("Exactly one item", StringComparison.Ordinal) == true, "Mounted selected example wasn't previewed canonically.");
+    }
+
     public static async Task<int> RunAsync(string workspacePath)
     {
         string container = Path.Combine(Path.GetTempPath(), $"runic-editor-smoke-{Guid.NewGuid():N}");
         try
         {
+            await AuthoringJourneyAsync(Path.Combine(container, "authoring")).ConfigureAwait(false);
+            await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
             string project = Path.Combine(container, "translations");
             // Smoke tests exercise an intentionally minimal workspace. They must
             // never mutate the packaged example or a caller-provided directory.
@@ -149,7 +223,7 @@ internal static class EditorSmokeTest
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine($"FAIL: {exception.Message}");
+            Console.Error.WriteLine($"FAIL: {exception}");
             return 1;
         }
         finally

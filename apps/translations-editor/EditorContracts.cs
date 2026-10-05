@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Runic.Translations.Authoring;
+using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Editor;
 
@@ -35,7 +36,20 @@ internal sealed record EditorDocument(
     IReadOnlyList<EditorMessageEntry>? Entries = null);
 
 // Logical messages share their containing document's physical path and revision.
-internal sealed record EditorMessageEntry(string Key, string Content, int ValueStartByte, int ValueLengthBytes);
+internal sealed record EditorMessageEntry(string Key, string Content, int ValueStartByte, int ValueLengthBytes,
+    EditorMessageProjection? Authoring = null, EditorMessageContext? Context = null, EditorMessageSemantic? Semantic = null);
+internal sealed record EditorMessageInput(string Name, string Type, string? Function, bool Declared);
+internal sealed record EditorMessageVariant(string Id, IReadOnlyList<string> Keys, string Pattern, int StartByte, int LengthBytes);
+internal sealed record EditorMessageProjection(string Revision, bool Supported, string? Reason,
+    IReadOnlyList<EditorMessageInput> Inputs, IReadOnlyList<string> Selectors, IReadOnlyList<string> SelectorFunctions, IReadOnlyList<EditorMessageVariant> Variants,
+    IReadOnlyList<string> PluralCategories, IReadOnlyList<IReadOnlyList<string>> SelectorPluralCategories, string CldrVersion);
+internal sealed record EditorMessageOperation(string Kind, string? VariantId = null, string? Pattern = null,
+    string? Name = null, string? NewName = null, string? Function = null,
+    IReadOnlyList<string>? Keys = null, IReadOnlyList<string>? Selectors = null);
+internal sealed record EditorMessageContext(IReadOnlyList<string> Comments, IReadOnlyList<string> Tags,
+    IReadOnlyList<IReadOnlyDictionary<string, string>> Examples);
+internal sealed record EditorMessageSemantic(IReadOnlyList<string> Text, IReadOnlyList<string> Placeholders,
+    IReadOnlyList<string> Slots, bool Supported, bool HasBoundaryWhitespace);
 
 internal sealed record EditorDocumentDraft(bool Success, string Content,
     IReadOnlyList<EditorMessageEntry> Entries, IReadOnlyList<EditorDiagnostic> Diagnostics);
@@ -49,7 +63,8 @@ internal sealed record EditorDiagnostic(
     int Column,
     int EndLine,
     int EndColumn,
-    EditorNotice? Notice = null);
+    EditorNotice? Notice = null,
+    Rmf2DiagnosticSpan? Span = null, string? SourceRevision = null, IReadOnlyList<Rmf2DiagnosticQuickFix>? QuickFixes = null);
 
 internal sealed record WorkspaceSnapshot(
     string Root,
@@ -320,6 +335,8 @@ internal sealed record PreparedInterchangeDocument(
 [JsonSerializable(typeof(EditorReviewChange))]
 [JsonSerializable(typeof(EditorLocalStateEntry[]))]
 [JsonSerializable(typeof(EditorDocumentDraft))]
+[JsonSerializable(typeof(EditorMessageOperation))]
+[JsonSerializable(typeof(Rmf2DiagnosticQuickFix))]
 [JsonSerializable(typeof(EditorLocalStateSnapshot))]
 [JsonSerializable(typeof(EditorLocalStateClearResult))]
 [JsonSerializable(typeof(string))]

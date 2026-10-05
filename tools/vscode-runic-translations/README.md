@@ -27,6 +27,15 @@ inert, icons are placeholders and custom markup is labeled; no application
 callbacks or application startup are involved. Custom renderer code is never
 loaded by the extension.
 
+**Preview Message** offers every `@example` sample set plus custom values. The
+selected locale and values are remembered per message during the extension
+session; reopening a preview reuses them. **Change Preview Samples** lets you
+choose another example or edit custom values. **Change Preview Locale** switches
+the open panel's language. Samples for the
+128 most recently previewed message/locale combinations are retained. The panel refreshes from
+the latest unsaved resource/configuration buffers and watched source changes.
+Out-of-order requests and cancelled selections cannot replace a newer preview.
+
 The LSP owns direct and grouped MF2 plus configuration synchronization. Existing C#, TypeScript,
 Svelte language services retain their files. Resource-source edits are not
 application-call-site refactors. Standard resource F2 refuses workspaces

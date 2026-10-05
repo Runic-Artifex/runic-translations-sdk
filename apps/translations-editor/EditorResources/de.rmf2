@@ -3980,3 +3980,16 @@ ui {
     review_notes_unavailable = Prüfanmerkungen nicht verfügbar
   }
 }
+
+ui {
+  composer_source_only = Visuelle Bearbeitung ist für diese Nachricht nicht verfügbar. Bearbeite unten ihren MF2-Quelltext.
+}
+ui {
+  composer_pending = Compiler-Änderung wird angewendet…
+}
+ui {
+  preview_examples = Beispielwerte
+}
+ui {
+  preview_example = Beispiel {$number}
+}

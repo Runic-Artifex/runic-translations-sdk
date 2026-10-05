@@ -18,7 +18,9 @@ public sealed record EditorDocumentValidationDiagnostic(
     int Line,
     int Column,
     int EndLine,
-    int EndColumn);
+    int EndColumn,
+    Runic.Translations.Compiler.Rmf2DiagnosticSpan? Span = null, string? SourceRevision = null,
+    IReadOnlyList<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix>? QuickFixes = null);
 
 /// <summary>Typed validation result retained by the bridge operation.</summary>
 public sealed record EditorDocumentValidationResult(
@@ -93,7 +95,7 @@ public sealed class EditorDocumentViewModel : ReactiveObject, IDisposable
         await _modelContext.InvokeAsync(() => LastValidation = result).ConfigureAwait(false);
         return new EditorDocumentValidationResult(result.Success, result.Diagnostics.Select(diagnostic =>
             new EditorDocumentValidationDiagnostic(diagnostic.Id, diagnostic.Severity, diagnostic.Message,
-                diagnostic.Path, diagnostic.Line, diagnostic.Column, diagnostic.EndLine, diagnostic.EndColumn)).ToArray());
+                diagnostic.Path, diagnostic.Line, diagnostic.Column, diagnostic.EndLine, diagnostic.EndColumn, diagnostic.Span, diagnostic.SourceRevision, diagnostic.QuickFixes)).ToArray());
     }
 
     private async Task<EditorDocumentSaveResult> SaveAsync(EditorDocumentSaveRequest request)

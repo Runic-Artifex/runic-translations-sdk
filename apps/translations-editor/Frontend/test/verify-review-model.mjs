@@ -3,7 +3,15 @@ import { performance } from "node:perf_hooks";
 import ts from "typescript";
 
 const sourceUrl = new URL("../src/lib/review-model.ts", import.meta.url);
-const source = await readFile(sourceUrl, "utf8");
+const semanticUrl = new URL("../src/lib/semantic-review.ts", import.meta.url);
+const semanticSource = await readFile(semanticUrl, "utf8");
+const semanticTranspiled = ts.transpileModule(semanticSource, {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  fileName: semanticUrl.pathname,
+});
+const semanticModuleUrl = `data:text/javascript;base64,${Buffer.from(semanticTranspiled.outputText).toString("base64")}`;
+const semanticModel = await import(semanticModuleUrl);
+const source = (await readFile(sourceUrl, "utf8")).replace('"./semantic-review"', JSON.stringify(semanticModuleUrl));
 const transpiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   fileName: sourceUrl.pathname,
@@ -30,6 +38,69 @@ assert(issues.map((issue) => `${issue.key}:${issue.kind}`).join("|") ===
   "Quality findings were incomplete or non-deterministically ordered.");
 assert(model.qualityReportCsv(issues).startsWith('"key","locale","kind","message"\n'),
   "The quality report is not a deterministic quoted CSV document.");
+
+// Compiler projections paired with real direct MF2 and RMF2 message bodies.
+// Literal text retains quoted whitespace, and excludes storage/declarations.
+const semanticFixture = [
+  semanticRow("Direct.Storage", "Hello\n", "Hallo\n", ["Hello"], ["Hallo"]),
+  semanticRow("Direct.Quoted", "{{ Hello }}\n", "{{ Hallo }}\n", [" Hello "], [" Hallo "], [], [], true),
+  semanticRow("Direct.VariableBoundary", "Hello {$name}\n", "Hallo {$name}\n", ["Hello "], ["Hallo "], ["name:string"]),
+  semanticRow("Resource.Declaration", ".input {$Save :string}\n{{Continue {$Save}}}",
+    ".input {$Save :string}\n{{Weiter {$Save}}}", ["Continue "], ["Weiter "], ["Save:string"]),
+  semanticRow("Resource.Branches", ".input {$count :number}\n.match $count\none {{Save one item}}\n* {{Save items}}",
+    ".input {$count :number}\n.match $count\none {{Ein Element}}\n* {{Elemente}}",
+    ["Save one item", "Save items"], ["Ein Element", "Elemente"], ["count:decimal"]),
+  semanticRow("Direct.SemanticIdentical", "{{Continue}}\n", "Continue\n", ["Continue"], ["Continue"]),
+];
+const semanticIssues = model.qualityIssues(semanticFixture, "en", "de", [], terms);
+assert(semanticIssues.map((issue) => `${issue.key}:${issue.kind}`).join("|") ===
+  "Direct.Quoted:whitespace|Direct.SemanticIdentical:identical|Resource.Branches:terminology",
+  "Semantic QA included storage newlines/declarations or lost quoted whitespace/branch terminology.");
+
+const suggestionRows = [
+  semanticRow("Current", "{{Save {$count :number}}}", undefined, ["Save "], [], ["count:decimal"]),
+  semanticRow("Compatible", "{{Save all {$count :number}}}", "{{Alle {$count :number} speichern}}",
+    ["Save all "], ["Alle  speichern"], ["count:decimal"]),
+  semanticRow("WrongName", "{{Save {$total :number}}}", "{{{$total :number} speichern}}",
+    ["Save "], [" speichern"], ["total:decimal"]),
+  semanticRow("WrongType", "{{Save {$count :string}}}", "{{{$count :string} speichern}}",
+    ["Save "], [" speichern"], ["count:string"]),
+  semanticRow("WrongSlot", "{{{#strong}Save{/strong} {$count :number}}}",
+    "{{{#strong}{$count :number} speichern{/strong}}}", ["Save "], [" speichern"],
+    ["count:decimal"], ["open:strong", "close:strong"]),
+  semanticRow("TranslationMismatch", "{{Save {$count :number}}}", "{{Speichern {$total :number}}}",
+    ["Save "], ["Speichern "], ["count:decimal"]),
+  semanticRow("SyntaxOnlyMatch", ".local $label = {|Save|}\n.input {$count :number}\n{{Remove everything {$count}}}",
+    ".local $label = {|Save|}\n.input {$count :number}\n{{Alles entfernen {$count}}}",
+    ["Remove everything "], ["Alles entfernen "], ["count:decimal"]),
+];
+suggestionRows.find(item => item.key === "TranslationMismatch").cells.de.entry.semantic.placeholders = ["total:decimal"];
+const semanticSuggestions = model.translationSuggestions(suggestionRows, "en", "de", "Current");
+assert(semanticSuggestions.map(item => item.key).join("|") === "Compatible",
+  "Translation memory admitted incompatible placeholder names/types/markup or used declaration syntax for similarity.");
+assert(semanticSuggestions[0].translation === "{{Alle {$count :number} speichern}}",
+  "Translation memory altered the compiler-compatible insertion source.");
+
+const markedCurrent = semanticRow("Markup.Current", "{{{#strong}Save{/strong}}}", undefined,
+  ["Save"], [], [], ["open:strong", "close:strong"]);
+const markedCompatible = semanticRow("Markup.Compatible", "{{{#strong}Save now{/strong}}}",
+  "{{{#strong}Jetzt speichern{/strong}}}", ["Save now"], ["Jetzt speichern"], [], ["close:strong", "open:strong"]);
+assert(model.translationSuggestions([markedCurrent, markedCompatible], "en", "de", "Markup.Current").length === 1,
+  "Compatible markup contracts depended on projection array order.");
+
+const unsupported = row("Unsupported", ".input {$name :custom}\n{{Hello {$name}}}", "{{Hallo {$name}}}");
+assert(!semanticModel.semanticReviewState(unsupported.cells.en.entry).supported &&
+  semanticModel.semanticReviewState(unsupported.cells.en.entry).reason === "compiler-required",
+  "Structured source without compiler metadata was interpreted by a fallback parser.");
+unsupported.cells.en.entry.semantic = { ...semantics(["Hello"], [], []), supported: false };
+assert(semanticModel.semanticReviewState(unsupported.cells.en.entry).reason === "compiler-unavailable",
+  "Failed compiler semantics were silently treated as plain text.");
+assert(model.translationSuggestions([unsupported, row("Other", "Hello", "Hallo")], "en", "de", "Unsupported").length === 0,
+  "Unsupported semantics produced an unchecked translation suggestion.");
+assert(model.qualityIssues([row("Plain.Storage", "Hello\n", "Hallo\n")], "en", "de", [], []).length === 0,
+  "The plain-text compatibility path still flags the normal terminal storage newline.");
+assert(model.qualityIssues([row("Plain.Intentional", "Hello\n", "Hallo \n")], "en", "de", [], [])
+  .some(issue => issue.kind === "whitespace"), "Removing a storage newline also removed intentional spaces.");
 
 if (typeof globalThis.gc !== "function") {
   throw new Error("Run this deterministic heap check with node --expose-gc.");
@@ -71,6 +142,17 @@ function row(key, source, target) {
       de: target === undefined ? {} : { entry: { key, value: target, tags: [], structured: false } },
     },
   };
+}
+
+function semanticRow(key, source, target, sourceText, targetText, placeholders = [], slots = [], boundary = false) {
+  const result = row(key, source, target);
+  result.cells.en.entry.semantic = semantics(sourceText, placeholders, slots, boundary);
+  if (result.cells.de.entry) result.cells.de.entry.semantic = semantics(targetText, placeholders, slots, boundary);
+  return result;
+}
+
+function semantics(text, placeholders = [], slots = [], hasBoundaryWhitespace = false) {
+  return { text, placeholders, slots, hasBoundaryWhitespace, supported: true };
 }
 
 function assert(condition, message) {

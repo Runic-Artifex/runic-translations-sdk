@@ -6,7 +6,7 @@
   import { Badge } from "#lib/components/ui/badge/index.js";
   import { Button } from "#lib/components/ui/button/index.js";
   import { Spinner } from "#lib/components/ui/spinner/index.js";
-  import type { EditorDiagnostic } from "#lib/contracts.js";
+  import type { EditorDiagnostic, EditorDiagnosticQuickFix } from "#lib/contracts.js";
   import { getUiText, displayNotice } from "#lib/ui-text.js";
 
   interface Props {
@@ -20,6 +20,7 @@
     diagnosticsLabel: string;
     schemaVersion: number;
     onselect: (diagnostic: EditorDiagnostic) => void;
+    onfix?: (diagnostic: EditorDiagnostic, fix: EditorDiagnosticQuickFix) => void;
   }
 
   let {
@@ -33,6 +34,7 @@
     diagnosticsLabel,
     schemaVersion,
     onselect,
+    onfix,
   }: Props = $props();
 
   const ui = getUiText();
@@ -108,6 +110,13 @@
             {diagnostic.path}:{diagnostic.line}:{diagnostic.column}
           </code>
         </Button>
+        {#if onfix !== undefined && diagnostic.quickFixes !== undefined}
+          <div class="flex flex-wrap gap-2 px-4 pb-3">
+            {#each diagnostic.quickFixes as fix (fix.id)}
+              <Button variant="outline" size="xs" disabled={busy} onclick={() => onfix?.(diagnostic, fix)}>{fix.title}</Button>
+            {/each}
+          </div>
+        {/if}
       {/each}
     </div>
   {/if}

@@ -5,6 +5,13 @@ import type {
   EditorTerminologyEntry,
 } from "./contracts";
 import type { ResourceValue, TranslationRow } from "./resource-model";
+import {
+  compatibleSemantics,
+  containsSemanticTerm,
+  identicalSemanticText,
+  reviewSemantics,
+  semanticTokens,
+} from "./semantic-review";
 
 export interface QualityIssue {
   kind: "missing" | "identical" | "whitespace" | "terminology" | "stale" | "bidi";
@@ -64,23 +71,28 @@ export function qualityIssues(
   const reviews = reviewMap(reviewEntries);
   const result: QualityIssue[] = [];
   for (const row of rows) {
-    const source = row.cells[sourceLocale]?.entry?.value;
-    const target = row.cells[locale]?.entry?.value;
+    const sourceEntry = row.cells[sourceLocale]?.entry;
+    const targetEntry = row.cells[locale]?.entry;
+    const source = sourceEntry?.value;
+    const target = targetEntry?.value;
     if (target === undefined) {
       result.push({ kind: "missing", key: row.key, locale, message: (ui?.text("ui_quality_missing") ?? "Translation is missing.") });
       continue;
     }
-    if (typeof source === "string" && typeof target === "string") {
-      if (locale !== sourceLocale && source.trim().length > 0 && target === source) {
+    const sourceSemantic = reviewSemantics(sourceEntry);
+    const targetSemantic = reviewSemantics(targetEntry);
+    if (sourceSemantic !== undefined && targetSemantic !== undefined) {
+      if (locale !== sourceLocale && sourceSemantic.text.some((text) => text.trim().length > 0) &&
+          identicalSemanticText(sourceSemantic, targetSemantic)) {
         result.push({ kind: "identical", key: row.key, locale, message: (ui?.text("ui_quality_identical") ?? "Translation is identical to the source.") });
       }
-      if (target !== target.trim()) {
+      if (targetSemantic.hasBoundaryWhitespace) {
         result.push({ kind: "whitespace", key: row.key, locale, message: (ui?.text("ui_quality_whitespace") ?? "Translation has leading or trailing whitespace.") });
       }
       for (const term of terminology) {
         if (term.locale !== undefined && term.locale !== locale) continue;
-        if (source.toLocaleLowerCase().includes(term.source.toLocaleLowerCase()) &&
-            !target.toLocaleLowerCase().includes(term.preferred.toLocaleLowerCase())) {
+        if (containsSemanticTerm(sourceSemantic, term.source) &&
+            !containsSemanticTerm(targetSemantic, term.preferred)) {
           result.push({
             kind: "terminology", key: row.key, locale,
             message: ui?.text("ui_quality_terminology", { term: term.preferred }) ?? "Preferred term '" + term.preferred + "' is missing.",
@@ -133,15 +145,22 @@ export function translationSuggestions(
   targetLocale: string,
   key: string,
 ): TranslationSuggestion[] {
-  const current = rows.find((row) => row.key === key)?.cells[sourceLocale]?.entry?.value;
-  if (typeof current !== "string" || current.trim() === "") return [];
-  const currentTokens = tokens(current);
+  const current = reviewSemantics(rows.find((row) => row.key === key)?.cells[sourceLocale]?.entry);
+  if (current === undefined) return [];
+  const currentTokens = semanticTokens(current);
+  if (currentTokens.size === 0) return [];
   return rows.flatMap((row): TranslationSuggestion[] => {
     if (row.key === key) return [];
-    const source = row.cells[sourceLocale]?.entry?.value;
-    const translation = row.cells[targetLocale]?.entry?.value;
+    const sourceEntry = row.cells[sourceLocale]?.entry;
+    const targetEntry = row.cells[targetLocale]?.entry;
+    const source = sourceEntry?.value;
+    const translation = targetEntry?.value;
     if (typeof source !== "string" || typeof translation !== "string") return [];
-    const score = similarity(currentTokens, tokens(source));
+    const sourceSemantic = reviewSemantics(sourceEntry);
+    const targetSemantic = reviewSemantics(targetEntry);
+    if (sourceSemantic === undefined || targetSemantic === undefined ||
+        !compatibleSemantics(current, sourceSemantic) || !compatibleSemantics(current, targetSemantic)) return [];
+    const score = similarity(currentTokens, semanticTokens(sourceSemantic));
     return score < .2 ? [] : [{ key: row.key, source, translation, score }];
   }).sort((left, right) => right.score - left.score || left.key.localeCompare(right.key)).slice(0, 5);
 }
@@ -161,10 +180,6 @@ function stableJson(value: unknown): string {
       .map(([name, child]) => JSON.stringify(name) + ":" + stableJson(child)).join(",") + "}";
   }
   return JSON.stringify(value);
-}
-
-function tokens(value: string): Set<string> {
-  return new Set(value.toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter((item) => item.length > 1));
 }
 
 function similarity(left: Set<string>, right: Set<string>): number {

@@ -697,6 +697,13 @@ export async function mockExecute(operation: string, argument: unknown): Promise
     case "Undo": return undo();
     case "Redo": return redo();
     case "ValidateDocument": return validate(value.path as string, value.content as string);
+    case "ApplyAuthoringOperation":
+    case "ApplyDiagnosticFix":
+      return { success: false, content: value.content as string, entries: [], diagnostics: [{
+        id: operation === "ApplyAuthoringOperation" ? "EDITOR-AUTHORING" : "EDITOR-FIX",
+        severity: "error", message: "Compiler-backed source operations require a hosted Editor session. Use the source editor in mock mode.",
+        path: value.path as string, line: 1, column: 1, endLine: 1, endColumn: 1,
+      }] };
     case "TransformDocument": {
       const content = value.value === undefined ? value.content as string
         : (value.value as string).endsWith("\n") ? value.value as string : `${value.value}\n`;

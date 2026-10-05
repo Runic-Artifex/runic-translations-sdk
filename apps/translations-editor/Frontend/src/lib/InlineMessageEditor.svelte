@@ -14,6 +14,10 @@
   import {
     inputTypes,
     nextIdentifier,
+    parseMf2Slots,
+    serializeMf2Slots,
+    mf2VariableSyntax,
+    type Mf2EditorSlot,
     type InputType,
     type MessageInput,
   } from "#lib/message-composer.js";
@@ -21,10 +25,7 @@
   import { localeDirection } from "#lib/locale-text.js";
   import { getUiText } from "#lib/ui-text.js";
 
-  interface EditorSlot {
-    text: string;
-    token?: string;
-  }
+  type EditorSlot = Mf2EditorSlot;
 
   let {
     value,
@@ -40,8 +41,8 @@
     inputs: Record<string, MessageInput>;
     label: string;
     onchange: (value: string) => void;
-    onensureinput: (name: string, type: InputType) => void;
-    onupdateformat: (name: string, format: string) => void;
+    onensureinput?: (name: string, type: InputType) => void;
+    onupdateformat?: (name: string, format: string) => void;
   } = $props();
 
   const ui = getUiText();
@@ -53,42 +54,27 @@
   let activeSlot = 0;
   let caret = 0;
   let textareas: HTMLTextAreaElement[] = [];
-  let slots = $derived(parseSlots(value));
+  let slots = $derived(parseMf2Slots(value));
   let inputNames = $derived(Object.keys(inputs));
 
-  function parseSlots(source: string): EditorSlot[] {
-    const result: EditorSlot[] = [{ text: "" }];
-    for (let index = 0; index < source.length;) {
-      if (source.startsWith("{{", index) || source.startsWith("}}", index)) {
-        result[result.length - 1].text += source.slice(index, index + 2);
-        index += 2;
-        continue;
-      }
-      if (source[index] === "{") {
-        const end = source.indexOf("}", index + 1);
-        const name = end < 0 ? "" : source.slice(index + 1, end);
-        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-          result[result.length - 1].token = name;
-          result.push({ text: "" });
-          index = end + 1;
-          continue;
-        }
-      }
-      result[result.length - 1].text += source[index];
-      index += 1;
-    }
-    return result;
+  function emitChange(next: string): void {
+    onchange(next);
   }
 
   function serialize(next: EditorSlot[]): string {
-    return next.map((slot) => `${slot.text}${slot.token === undefined ? "" : `{${slot.token}}`}`).join("");
+    return serializeMf2Slots(next);
+  }
+
+  function tokenSyntax(index: number): string {
+    const slot = slots[index];
+    return slot?.token === undefined ? "" : slot.syntax ?? mf2VariableSyntax(slot.token);
   }
 
   function slotStart(index: number): number {
     let position = 0;
     for (let slotIndex = 0; slotIndex < index; slotIndex += 1) {
       const slot = slots[slotIndex];
-      position += slot.text.length + (slot.token === undefined ? 0 : slot.token.length + 2);
+      position += slot.text.length + (slot.token === undefined ? 0 : (slot.syntax ?? mf2VariableSyntax(slot.token)).length);
     }
     return position;
   }
@@ -101,19 +87,19 @@
     const source = serialize(slots);
     const name = slots[sourceSlot]?.token;
     if (name === undefined) return;
-    const syntax = `{${name}}`;
+    const syntax = tokenSyntax(sourceSlot);
     const sourceStart = tokenStart(sourceSlot);
     const sourceEnd = sourceStart + syntax.length;
     if (targetPosition >= sourceStart && targetPosition <= sourceEnd) return;
     const withoutToken = source.slice(0, sourceStart) + source.slice(sourceEnd);
     const adjustedTarget = targetPosition > sourceEnd ? targetPosition - syntax.length : targetPosition;
-    onchange(withoutToken.slice(0, adjustedTarget) + syntax + withoutToken.slice(adjustedTarget));
+    emitChange(withoutToken.slice(0, adjustedTarget) + syntax + withoutToken.slice(adjustedTarget));
     selectedToken = undefined;
   }
 
   function startVariableDrag(event: DragEvent, name: string, sourceSlot: number): void {
     event.dataTransfer?.setData("application/x-runic-variable", JSON.stringify({ name, sourceSlot }));
-    event.dataTransfer?.setData("text/plain", `{${name}}`);
+    event.dataTransfer?.setData("text/plain", mf2VariableSyntax(name));
     if (event.dataTransfer !== null) event.dataTransfer.effectAllowed = "move";
   }
 
@@ -161,7 +147,7 @@
   function moveSelected(direction: "earlier" | "later"): void {
     if (selectedToken === undefined) return;
     const sourceSlot = selectedToken.slot;
-    const sourceEnd = tokenStart(sourceSlot) + selectedToken.name.length + 2;
+    const sourceEnd = tokenStart(sourceSlot) + tokenSyntax(selectedToken.slot).length;
     if (direction === "earlier") {
       const target = slots[sourceSlot].text.length > 0
         ? slotStart(sourceSlot)
@@ -172,14 +158,14 @@
     const following = slots[sourceSlot + 1];
     const target = following === undefined
       ? sourceEnd
-      : sourceEnd + following.text.length + (following.text.length === 0 && following.token !== undefined ? following.token.length + 2 : 0);
+      : sourceEnd + following.text.length + (following.text.length === 0 && following.token !== undefined ? (following.syntax ?? mf2VariableSyntax(following.token)).length : 0);
     moveToken(sourceSlot, target);
   }
 
   function canMoveSelected(direction: "earlier" | "later"): boolean {
     if (selectedToken === undefined) return false;
     if (direction === "earlier") return tokenStart(selectedToken.slot) > 0;
-    return tokenStart(selectedToken.slot) + selectedToken.name.length + 2 < serialize(slots).length;
+    return tokenStart(selectedToken.slot) + tokenSyntax(selectedToken.slot).length < serialize(slots).length;
   }
 
   function updateText(index: number, text: string, selection: number | null): void {
@@ -187,8 +173,8 @@
     caret = selection ?? text.length;
     const next = structuredClone(slots);
     next[index].text = text;
-    const insertedToken = /\{[A-Za-z_][A-Za-z0-9_]*\}/.test(text);
-    onchange(serialize(next));
+    const insertedToken = parseMf2Slots(text).some((slot) => slot.token !== undefined);
+    emitChange(serialize(next));
     if (insertedToken) void focusSlot(index + 1, 0);
   }
 
@@ -216,10 +202,12 @@
     const insertionPosition = Math.min(position, slot.text.length);
     const trailingText = slot.text.slice(insertionPosition);
     const previousToken = slot.token;
+    const previousSyntax = slot.syntax;
     slot.text = slot.text.slice(0, insertionPosition);
     slot.token = name;
-    next.splice(index + 1, 0, { text: trailingText, token: previousToken });
-    onchange(serialize(next));
+    slot.syntax = mf2VariableSyntax(name);
+    next.splice(index + 1, 0, { text: trailingText, token: previousToken, syntax: previousSyntax });
+    emitChange(serialize(next));
     selectedToken = { name, slot: index };
     editingSlot = undefined;
   }
@@ -240,9 +228,10 @@
     const following = next[selectedToken.slot + 1];
     if (slot === undefined || slot.token === undefined) return;
     slot.token = following?.token;
+    slot.syntax = following?.syntax;
     slot.text += following?.text ?? "";
     if (following !== undefined) next.splice(selectedToken.slot + 1, 1);
-    onchange(serialize(next));
+    emitChange(serialize(next));
     selectedToken = undefined;
     void focusSlot(Math.min(activeSlot, next.length - 1), slot.text.length);
   }
@@ -365,7 +354,7 @@
           onclick={() => inspectToken(slot.token, index)}
         >
           <GripVerticalIcon data-icon="inline-start" aria-hidden="true" />
-          {slot.token}
+          {mf2VariableSyntax(slot.token)}
         </Button>
         {@render insertionPoint(index + 1, 0, ui.text("ui_inline_after_variable_name", { name: slot.token }))}
       {/if}
@@ -374,6 +363,7 @@
 
   {#if selectedToken !== undefined}
     <div class="grid gap-3 border-t bg-muted/30 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto_auto_auto] sm:items-end">
+      {#if onensureinput !== undefined}
       <Field.Field class="gap-1">
         <Field.Label for={`inline-token-type-${selectedToken.name}`}>
           <span class="font-mono">{selectedToken.name}</span> {ui.text("ui_inline_type")}
@@ -381,7 +371,7 @@
         <Select.Root
           type="single"
           value={inputs[selectedToken.name]?.type ?? "string"}
-          onValueChange={(type) => onensureinput(selectedToken!.name, type as InputType)}
+          onValueChange={(type) => onensureinput?.(selectedToken!.name, type as InputType)}
         >
           <Select.Trigger id={`inline-token-type-${selectedToken.name}`} class="w-full">
             {inputs[selectedToken.name]?.type ?? "string"}
@@ -395,15 +385,18 @@
           </Select.Content>
         </Select.Root>
       </Field.Field>
+      {/if}
+      {#if onupdateformat !== undefined}
       <Field.Field class="gap-1">
         <Field.Label for={`inline-token-format-${selectedToken.name}`}>{ui.text("ui_inline_default_format")}</Field.Label>
         <Input
           id={`inline-token-format-${selectedToken.name}`}
           value={inputs[selectedToken.name]?.format ?? ""}
           placeholder={ui.text("ui_inline_compiler_default")}
-          oninput={(event) => onupdateformat(selectedToken!.name, event.currentTarget.value)}
+          oninput={(event) => onupdateformat?.(selectedToken!.name, event.currentTarget.value)}
         />
       </Field.Field>
+      {/if}
       <Button variant="ghost" size="icon" disabled={!canMoveSelected("earlier")} aria-label={ui.text("ui_inline_move_name_earlier", { name: selectedToken.name })} title={ui.text("ui_inline_move_variable_earlier")} onclick={() => moveSelected("earlier")}>
         <ArrowLeftIcon />
       </Button>

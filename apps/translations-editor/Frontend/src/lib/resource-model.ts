@@ -10,6 +10,9 @@ export interface ResourceEntry {
   tags: string[];
   placeholders?: Record<string, unknown>;
   structured: boolean;
+  authoring?: EditorMessageEntry["authoring"];
+  context?: EditorMessageEntry["context"];
+  semantic?: EditorMessageEntry["semantic"];
 }
 
 export interface TranslationCell {
@@ -55,8 +58,12 @@ export function buildRows(
     for (const document of [...(byLocale.get(locale.tag) ?? [])].reverse()) {
       const content = drafts[document.path] ?? document.content;
       const parsed = parsedDrafts[document.path];
+      const compilerEntriesCurrent = parsed?.content === content || content === document.content;
       const messageEntries = parsed?.content === content ? parsed.entries : document.entries;
-      for (const entry of flattenDocument(content, document.path, messageEntries)) {
+      const safeEntries = compilerEntriesCurrent ? messageEntries : messageEntries?.map(entry => ({
+        key: entry.key, content: entry.content, valueStartByte: entry.valueStartByte, valueLengthBytes: entry.valueLengthBytes,
+      }));
+      for (const entry of flattenDocument(content, document.path, safeEntries)) {
         entries.set(entry.key, entry);
         entryDocuments.set(entry.key, document);
       }
@@ -159,15 +166,25 @@ export function coverage(rows: TranslationRow[], locale: string): { translated: 
 }
 
 function flattenDocument(content: string, path: string, entries?: EditorMessageEntry[]): ResourceEntry[] {
-  if (path.toLowerCase().endsWith(".rmf2")) return (entries ?? []).map((entry) => ({
-    key: entry.key, value: entry.content, tags: [],
-    structured: /^\s*\.(?:input|local|match)\b/m.test(entry.content) || entry.content.includes("{#"),
-  }));
+  if (path.toLowerCase().endsWith(".rmf2")) return (entries ?? []).map(entry => resourceEntry(entry.key, entry.content, entry));
   if (!path.toLowerCase().endsWith(".mf2")) return [];
-  const key = entries?.length === 1
-    ? entries[0].key
-    : path.slice(path.lastIndexOf("/") + 1, -".mf2".length);
-  return [{ key, value: content, tags: [], structured: /^\s*\.(?:input|local|match)\b/m.test(content) || content.includes("{#") }];
+  const compilerEntry = entries?.length === 1 ? entries[0] : undefined;
+  const key = compilerEntry?.key ?? path.slice(path.lastIndexOf("/") + 1, -".mf2".length);
+  return [resourceEntry(key, content, compilerEntry)];
+}
+
+function resourceEntry(key: string, value: string, entry?: EditorMessageEntry): ResourceEntry {
+  return {
+    key, value,
+    description: entry?.context?.comments.join("\n") || undefined,
+    tags: entry?.context?.tags ?? [],
+    authoring: entry?.authoring,
+    context: entry?.context,
+    semantic: entry?.semantic,
+    structured: entry?.authoring?.supported === true
+      ? entry.authoring.selectors.length > 0 || entry.authoring.inputs.some(input => input.declared) || (entry.semantic?.slots.length ?? 0) > 0
+      : /^\s*\.(?:input|local|match)\b/m.test(value) || value.includes("{#"),
+  };
 }
 
 function directLocalePath(path: string, locale: string): string | undefined {

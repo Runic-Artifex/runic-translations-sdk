@@ -1,634 +1,185 @@
 <script lang="ts">
-  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
-  import ArrowUpIcon from "@lucide/svelte/icons/arrow-up";
-  import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import CirclePlusIcon from "@lucide/svelte/icons/circle-plus";
   import CodeXmlIcon from "@lucide/svelte/icons/code-xml";
-  import Settings2Icon from "@lucide/svelte/icons/settings-2";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import AppDialog from "#lib/AppDialog.svelte";
   import { Badge } from "#lib/components/ui/badge/index.js";
-  import { Button, buttonVariants } from "#lib/components/ui/button/index.js";
+  import { Button } from "#lib/components/ui/button/index.js";
   import * as Card from "#lib/components/ui/card/index.js";
-  import * as Collapsible from "#lib/components/ui/collapsible/index.js";
-  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
   import * as Field from "#lib/components/ui/field/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
-  import * as Popover from "#lib/components/ui/popover/index.js";
-  import * as Select from "#lib/components/ui/select/index.js";
-  import { Separator } from "#lib/components/ui/separator/index.js";
   import { Textarea } from "#lib/components/ui/textarea/index.js";
   import PatternEditor from "./PatternEditor.svelte";
-  import InlineMessageEditor from "./InlineMessageEditor.svelte";
-  import {
-    formatFunctions,
-    inputTypes,
-    nextIdentifier,
-    patternNodes,
-    patternText,
-    relativeTimeUnits,
-    renameDeclaration,
-    renameInput,
-    renameSelector,
-    selectorFunctions,
-    synchronizeMatches,
-    toStructuredMessage,
-    type FormatFunction,
-    type InputType,
-    type MessageFormat,
-    type MessagePatternNode,
-    type MessageSelector,
-    type StructuredMessage,
-  } from "./message-composer";
+  import { nextIdentifier, type InputType, type MessageInput } from "./message-composer";
+  import type { EditorMessageOperation, EditorMessageProjection } from "./contracts";
   import type { ResourceValue } from "./resource-model";
+  import { localeDirection } from "#lib/locale-text.js";
   import { getUiText } from "#lib/ui-text.js";
 
   interface Props {
     value: ResourceValue | undefined;
     locale: string;
+    authoring?: EditorMessageProjection;
+    authoringBusy?: boolean;
     onchange: (value: ResourceValue) => void;
+    onoperation?: (operation: EditorMessageOperation) => void | Promise<void>;
   }
 
-  let { value, locale, onchange }: Props = $props();
+  let { value, locale, authoring, authoringBusy = false, onchange, onoperation }: Props = $props();
   const ui = getUiText();
   let rawMode = $state(false);
-  let rawText = $state("");
-  let rawError = $state<string>();
-  let structureOpen = $state(false);
-  let exactCaseOpen = $state(false);
   let exactCaseValue = $state("");
-  let message = $derived(toStructuredMessage(value));
-  let inputNames = $derived(Object.keys(message.inputs));
-  let effectiveInputs = $derived.by(() => {
-    const names = new Set(Object.keys(message.inputs));
-    for (const variant of message.variants) collectInputNames(patternNodes(variant.value), names);
-    return Object.fromEntries([...names].map((name) => [name, message.inputs[name] ?? { type: "string" as const }]));
+  let selectorInput = $state("");
+  const inputFunctions = ["string", "integer", "number", "date", "time", "datetime", "uuid"];
+  let pendingSource = $state<string>();
+  let source = $derived(pendingSource ?? (typeof value === "string" ? value : ""));
+  $effect(() => {
+    if (pendingSource !== undefined && pendingSource === value) pendingSource = undefined;
   });
-  let declarationNames = $derived((message.declarations ?? []).map((item) => item.name));
-  let primarySelector = $derived(message.selectors[0]);
-  let exactCaseMatch = $derived.by(() => {
-    const normalized = exactCaseValue.trim().replace(/^=/, "");
-    if (normalized === "") return "";
-    return primarySelector?.function === "literal" ? normalized : `=${normalized}`;
-  });
-  let exactCaseDuplicate = $derived(
-    exactCaseMatch !== "" && primarySelector !== undefined && message.variants.some((variant) => variant.match[primarySelector.name] === exactCaseMatch),
-  );
-  let availableCaseMatches = $derived.by(() => {
-    const selector = message.selectors[0];
-    if (selector === undefined || selector.function === "literal") return [];
-    const used = new Set(message.variants.map((variant) => variant.match[selector.name]));
-    return localePluralCategories(locale, selector.function === "ordinal")
-      .filter((category) => category !== "other" && !used.has(category));
-  });
+  function changeSource(next: string): void {
+    pendingSource = next;
+    onchange(next);
+  }
+  let canAuthor = $derived(authoring?.supported === true && onoperation !== undefined && typeof value === "string");
+  let inputs = $derived.by(() => Object.fromEntries((authoring?.inputs ?? []).map(input => [input.name, {
+    type: inputType(input.type, input.function),
+  } satisfies MessageInput])));
+  let primarySelector = $derived(authoring?.selectors[0]);
+  let primaryIsNumeric = $derived(["plural", "ordinal"].includes(authoring?.selectorFunctions[0] ?? ""));
+  let availableCases = $derived(primaryIsNumeric ? (authoring?.selectorPluralCategories?.[0] ?? authoring?.pluralCategories ?? []).filter(category => category !== "other" && !authoring?.variants.some(variant => variant.keys[0] === category)) : []);
+  let exactCaseDuplicate = $derived(authoring?.variants.some(variant => variant.keys[0] === exactCaseValue.trim() && variant.keys.slice(1).every(key => key === "*")) ?? false);
 
-  function commit(action: (next: StructuredMessage) => void): void {
-    const next = structuredClone(message);
-    action(next);
-    onchange(synchronizeMatches(next));
+  function inputType(type: string, fn?: string): InputType {
+    if (fn === "integer") return "int64";
+    if (fn === "number") return "decimal";
+    if (fn === "datetime") return "instant";
+    return ["string", "bool", "int64", "decimal", "date", "time", "instant", "uuid"].includes(type) ? type as InputType : "string";
   }
 
-  function addInput(type: InputType = "string", preferredName = "value"): void {
-    commit((next) => {
-      const name = nextIdentifier(preferredName, Object.keys(next.inputs));
-      next.inputs[name] = { type };
-    });
+  function operation(next: EditorMessageOperation): void | Promise<void> {
+    if (canAuthor) return onoperation?.(next);
   }
 
-  function ensureInput(name: string, type: InputType): void {
-    commit((next) => {
-      next.inputs[name] ??= { type };
-      next.inputs[name].type = type;
-    });
+  async function enablePluralForms(): Promise<void> {
+    let name = authoring?.inputs.find(input => ["integer", "number"].includes(input.function ?? ""))?.name;
+    if (name === undefined) {
+      name = nextIdentifier("count", authoring?.inputs.map(input => input.name) ?? []);
+      await operation({ kind: "add-input", name, function: "integer" });
+    }
+    await operation({ kind: "set-selectors", selectors: [name] });
   }
 
-  function updateInputFormat(name: string, format: string): void {
-    commit((next) => {
-      next.inputs[name] ??= { type: "string" };
-      if (format === "") delete next.inputs[name].format;
-      else next.inputs[name].format = format;
-    });
-  }
-
-  function removeInput(name: string): void {
-    commit((next) => {
-      delete next.inputs[name];
-      next.declarations = next.declarations?.filter((item) => item.input !== name);
-      next.selectors = next.selectors.filter((item) => item.input !== name);
-      scrubNodes(next, (node) =>
-        ("input" in node && node.input === name) ||
-        ("format" in node && node.format.input === name),
-      );
-    });
-  }
-
-  function addDeclaration(): void {
-    commit((next) => {
-      const name = nextIdentifier("formattedValue", (next.declarations ?? []).map((item) => item.name));
-      const input = Object.keys(next.inputs).find((candidate) => next.inputs[candidate].type !== "bool") ?? "value";
-      next.declarations ??= [];
-      next.declarations.push({
-        name,
-        input,
-        function: functionFor(next.inputs[input]?.type),
-      });
-    });
-  }
-
-  function functionFor(type: InputType | undefined): FormatFunction {
-    return ({ int64: "integer", decimal: "number", date: "date", time: "time", instant: "datetime", uuid: "uuid" } as Partial<Record<InputType, FormatFunction>>)[type ?? "string"] ?? "string";
-  }
-
-  function updateDeclaration(index: number, property: keyof MessageFormat, value: string): void {
-    commit((next) => {
-      const declaration = next.declarations?.[index];
-      if (declaration === undefined) return;
-      if (property === "format" && value === "") delete declaration.format;
-      else (declaration as unknown as Record<string, string>)[property] = value;
-      if (property === "function" && value === "relativeTime") {
-        declaration.unit = "day";
-        declaration.numeric = "auto";
-        delete declaration.format;
-      } else if (property === "function") {
-        delete declaration.unit;
-        delete declaration.numeric;
-        declaration.format ??= "plain";
-      }
-    });
-  }
-
-  function addSelector(): void {
-    commit((next) => {
-      const name = nextIdentifier("choice", next.selectors.map((item) => item.name));
-      next.selectors.push({
-        name,
-        input: Object.keys(next.inputs)[0] ?? "value",
-        function: "literal",
-      });
-    });
-  }
-
-  function enablePluralForms(): void {
-    commit((next) => {
-      let input = Object.keys(next.inputs).find((name) => next.inputs[name].type === "int64" || next.inputs[name].type === "decimal");
-      if (input === undefined) {
-        input = nextIdentifier("count", Object.keys(next.inputs));
-        next.inputs[input] = { type: "int64" };
-      }
-      const name = nextIdentifier("quantity", next.selectors.map((item) => item.name));
-      next.selectors.push({ name, input, function: "plural" });
-      const original = structuredClone(next.variants[0]?.value ?? "");
-      next.variants = [
-        { match: { [name]: "one" }, value: original },
-        { match: { [name]: "*" }, value: structuredClone(original) },
-      ];
-    });
-  }
-
-  function addVariant(primaryMatch: string): void {
-    commit((next) => {
-      const matches = Object.fromEntries(next.selectors.map((selector) => [selector.name, "*"]));
-      const primarySelector = next.selectors[0];
-      if (primarySelector !== undefined) matches[primarySelector.name] = primaryMatch;
-      next.variants.splice(Math.max(0, next.variants.length - 1), 0, { match: matches, value: "" });
-    });
-  }
-
-  function addExactCase(): void {
-    if (exactCaseMatch === "" || exactCaseDuplicate) return;
-    addVariant(exactCaseMatch);
+  function addVariant(key: string): void {
+    if (!authoring || key.trim() === "") return;
+    const keys = authoring.selectors.map((_, index) => index === 0 ? key.trim() : "*");
+    void operation({ kind: "add-variant", keys, pattern: "" });
     exactCaseValue = "";
-    exactCaseOpen = false;
   }
 
-  function updateMatch(variantIndex: number, selectorName: string, match: string): void {
-    commit((next) => next.variants[variantIndex].match[selectorName] = match || "*");
-  }
-
-  function editableText(value: string | MessagePatternNode[]): string | undefined {
-    return typeof value === "string" ? value : patternText(value);
-  }
-
-  function openRaw(): void {
-    rawText = JSON.stringify(message, null, 2);
-    rawError = undefined;
-    rawMode = true;
-  }
-
-  function applyRaw(): void {
-    try {
-      const next = toStructuredMessage(JSON.parse(rawText) as ResourceValue);
-      onchange(synchronizeMatches(next));
-      rawMode = false;
-      rawError = undefined;
-    } catch (error) {
-      rawError = error instanceof Error ? error.message : String(error);
-    }
-  }
-
-  function variantTitle(index: number): string {
-    if (message.selectors.length === 0) return ui.text("ui_composer_default_translation");
-    const labels = message.selectors.map((selector) => matchLabel(selector, message.variants[index].match[selector.name] ?? "*"));
-    return labels.join(" + ");
-  }
-
-  function variantActionLabel(index: number): string {
-    const title = variantTitle(index);
-    return title.toLocaleLowerCase().endsWith(ui.text("ui_composer_translation").toLocaleLowerCase()) ? title : `${title} ${ui.text("ui_composer_translation")}`;
-  }
-
-  function matchLabel(selector: MessageSelector, match: string): string {
-    if (match === "*") return selector.function === "literal" ? ui.text("ui_composer_fallback") : ui.text("ui_composer_other");
-    if (match.startsWith("=")) return `${ui.text("ui_composer_exactly")} ${match.slice(1)}`;
-    return match.charAt(0).toLocaleUpperCase() + match.slice(1);
-  }
-
-  function conditionDescription(selector: MessageSelector, match: string): string {
-    if (match === "*") return `${ui.text("ui_composer_used_for_every")} ${selector.input} ${ui.text("ui_composer_value_without_specific")}`;
-    if (match.startsWith("=")) return `${ui.text("ui_composer_when")} ${selector.input} ${ui.text("ui_composer_equals_label")} ${match.slice(1)}`;
-    if (selector.function === "plural") return match === "one" ? `${ui.text("ui_composer_singular_form_of")} ${selector.input}` : `${ui.text("ui_composer_number_form_of")} ${selector.input}: ${match}`;
-    if (selector.function === "ordinal") return `${ui.text("ui_composer_ordinal_form_of")} ${selector.input}: ${match}`;
-    return `${ui.text("ui_composer_when")} ${selector.input} ${ui.text("ui_composer_is")} ${match}`;
-  }
-
-  function variantDescription(index: number): string {
-    if (message.selectors.length === 0) return ui.text("ui_composer_shown_whenever_used");
-    return message.selectors
-      .map((selector) => conditionDescription(selector, message.variants[index].match[selector.name] ?? "*"))
-      .join(" · ");
-  }
-
-  function updateVariantText(index: number, text: string): void {
-    if (value === undefined || typeof value === "string") {
-      onchange(text);
-      return;
-    }
-    commit((next) => {
-      next.variants[index].value = text;
-      for (const node of patternNodes(text)) {
-        if (typeof node !== "string" && "input" in node) next.inputs[node.input] ??= { type: "string" };
-      }
-    });
-  }
-
-  function collectInputNames(nodes: MessagePatternNode[], names: Set<string>): void {
-    for (const node of nodes) {
-      if (typeof node === "string") continue;
-      if ("input" in node) names.add(node.input);
-      else if ("format" in node) names.add(node.format.input);
-      else if ("markup" in node) collectInputNames(node.markup.children, names);
-    }
-  }
-
-  function isFallback(index: number): boolean {
-    return message.selectors.length > 0 && message.selectors.every((selector) => message.variants[index].match[selector.name] === "*");
-  }
-
-  function localePluralCategories(targetLocale: string, ordinal: boolean): string[] {
-    try {
-      return new Intl.PluralRules(targetLocale, ordinal ? { type: "ordinal" } : undefined).resolvedOptions().pluralCategories;
-    } catch {
-      return ["one", "other"];
-    }
-  }
-
-  function selectorMatches(selector: MessageSelector): string[] {
-    if (selector.function === "literal") return ["*"];
-    return ["*", ...localePluralCategories(locale, selector.function === "ordinal")];
-  }
-
-  function scrubNodes(
-    next: StructuredMessage,
-    predicate: (node: Exclude<MessagePatternNode, string>) => boolean,
-  ): void {
-    const scrub = (nodes: MessagePatternNode[]): MessagePatternNode[] => {
-      const result: MessagePatternNode[] = [];
-      for (const node of nodes) {
-        if (typeof node === "string") result.push(node);
-        else if (!predicate(node)) {
-          if ("markup" in node) node.markup.children = scrub(node.markup.children);
-          result.push(node);
-        }
-      }
-      return result;
-    };
-    for (const variant of next.variants) {
-      if (Array.isArray(variant.value)) variant.value = scrub(variant.value);
-    }
+  function title(keys: string[]): string {
+    if (keys.length === 0) return ui.text("ui_composer_default_translation");
+    return keys.map((key, index) => `${authoring?.selectors[index]}: ${key === "*" ? ui.text("ui_composer_fallback") : key}`).join(" · ");
   }
 </script>
 
 <div class="grid gap-4">
-  <header class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+  <header class="flex flex-wrap items-start justify-between gap-3">
     <div class="grid gap-1">
-      <div class="flex flex-wrap items-center gap-2">
-        <h3 class="text-sm font-semibold">{ui.text("ui_composer_translate_message")}</h3>
-        {#if message.selectors.some((selector) => selector.function === "plural")}
-          <Badge variant="secondary">{ui.text("ui_composer_plural_message")}</Badge>
-        {:else if message.selectors.length > 0}
-          <Badge variant="secondary">{ui.text("ui_count_cases", { count: message.variants.length })}</Badge>
-        {/if}
-      </div>
-      <p class="text-xs leading-relaxed text-muted-foreground">
-        {ui.text("ui_composer_write_naturally")} <code>{"{count}"}</code> {ui.text("ui_composer_variables_become_chips")}
-      </p>
+      <h3 class="text-sm font-semibold">{ui.text("ui_composer_translate_message")}</h3>
+      <p class="text-xs text-muted-foreground">{ui.text("ui_composer_write_naturally")} <code>{"{$count}"}</code> {ui.text("ui_composer_variables_become_chips")}</p>
     </div>
-    <Button variant="outline" size="sm" onclick={openRaw}>
-      <CodeXmlIcon data-icon="inline-start" />
-      {ui.text("ui_composer_message_source")}
-    </Button>
+    {#if canAuthor}
+      <Button variant="outline" size="sm" onclick={() => rawMode = !rawMode} aria-pressed={rawMode}>
+        <CodeXmlIcon data-icon="inline-start" />{ui.text("ui_composer_message_source")}
+      </Button>
+    {/if}
   </header>
 
-  {#if message.selectors.length === 0}
-    <Card.Root size="sm">
-      <Card.Header>
-        <Card.Title>{ui.text("ui_composer_one_translation")}</Card.Title>
-        <Card.Description>{ui.text("ui_composer_plural_forms_description")}</Card.Description>
-        <Card.Action>
-          <Button variant="outline" size="sm" onclick={enablePluralForms}>
-            <CirclePlusIcon data-icon="inline-start" />
-            {ui.text("ui_composer_add_plural_forms")}
-          </Button>
-        </Card.Action>
-      </Card.Header>
-    </Card.Root>
-  {/if}
+  {#if rawMode || !canAuthor}
+    {#if !canAuthor}
+      <p class="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground" role="status">
+        {ui.text("ui_composer_source_only")}
+        {#if authoring?.reason}<span class="mt-1 block text-xs">{authoring.reason}</span>{/if}
+      </p>
+    {/if}
+    <Textarea value={source} rows={12} class="font-mono text-sm" aria-label={ui.text("ui_composer_message_source")} lang={locale} dir={localeDirection(locale)} oninput={(event) => changeSource(event.currentTarget.value)} />
+  {:else if authoring}
+    {#if authoring.selectors.length === 0}
+      <Button variant="outline" class="justify-self-start" disabled={authoringBusy} onclick={enablePluralForms}>
+        <CirclePlusIcon data-icon="inline-start" />{ui.text("ui_composer_add_plural_forms")}
+      </Button>
+    {/if}
 
-  <div class="grid gap-3">
-    {#each message.variants as variant, variantIndex (variantIndex)}
+    {#each authoring.variants as variant (variant.id)}
+      {@const fallback = variant.keys.length > 0 && variant.keys.every(key => key === "*")}
       <Card.Root size="sm">
-        <Card.Header class="gap-2">
-          <div class="flex min-w-0 flex-wrap items-center gap-2">
-            <Card.Title class="font-serif text-lg">{variantTitle(variantIndex)}</Card.Title>
-            {#if isFallback(variantIndex)}<Badge variant="secondary">{ui.text("ui_composer_required_fallback")}</Badge>{/if}
-            {#each message.selectors as selector (selector.name)}
-              <Popover.Root>
-                <Popover.Trigger class={buttonVariants({ variant: "outline", size: "sm", class: "h-7 rounded-full px-2 text-xs" })}>
-                  {selector.input}: {message.variants[variantIndex].match[selector.name] ?? "*"}
-                </Popover.Trigger>
-                <Popover.Content align="start" class="w-[calc(100vw-2rem)] max-w-80">
-                  <Popover.Header>
-                    <Popover.Title>{ui.text("ui_composer_when_used")}</Popover.Title>
-                    <Popover.Description>{conditionDescription(selector, message.variants[variantIndex].match[selector.name] ?? "*")}</Popover.Description>
-                  </Popover.Header>
-                  {#if isFallback(variantIndex)}
-                    <p class="text-sm text-muted-foreground">{ui.text("ui_composer_required_fallback_description")}</p>
-                  {:else}
-                    {#if selector.function === "plural" || selector.function === "ordinal"}
-                      <Field.Field>
-                        <Field.Label for={`match-${variantIndex}-${selector.name}`}>{ui.text("ui_composer_number_form")}</Field.Label>
-                        <Select.Root
-                          type="single"
-                          value={message.variants[variantIndex].match[selector.name] ?? "*"}
-                          onValueChange={(match) => updateMatch(variantIndex, selector.name, match)}
-                        >
-                          <Select.Trigger id={`match-${variantIndex}-${selector.name}`} class="w-full">
-                            {matchLabel(selector, message.variants[variantIndex].match[selector.name] ?? "*")}
-                          </Select.Trigger>
-                          <Select.Content>
-                            <Select.Group>
-                              {#each selectorMatches(selector).filter((match) => match !== "*") as match (match)}
-                                <Select.Item value={match} label={match}>{match}</Select.Item>
-                              {/each}
-                            </Select.Group>
-                          </Select.Content>
-                        </Select.Root>
-                      </Field.Field>
-                    {/if}
-                    <Field.Field>
-                      <Field.Label for={`custom-match-${variantIndex}-${selector.name}`}>{ui.text("ui_composer_exact_or_custom_match")}</Field.Label>
-                      <Input
-                        id={`custom-match-${variantIndex}-${selector.name}`}
-                        value={message.variants[variantIndex].match[selector.name] ?? "*"}
-                        placeholder={selector.function === "literal" ? "premium" : "=0"}
-                        onblur={(event) => updateMatch(variantIndex, selector.name, event.currentTarget.value)}
-                      />
-                      <Field.Description>{ui.text("ui_composer_exact_number_hint")}</Field.Description>
-                    </Field.Field>
-                  {/if}
-                </Popover.Content>
-              </Popover.Root>
-            {/each}
+        <Card.Header>
+          <div class="flex flex-wrap items-center gap-2">
+            <Card.Title>{title(variant.keys)}</Card.Title>
+            {#if fallback}<Badge variant="secondary">{ui.text("ui_composer_required_fallback")}</Badge>{/if}
           </div>
-          <Card.Description>{variantDescription(variantIndex)}</Card.Description>
-          <Card.Action class="flex gap-1">
-            <Button variant="ghost" size="icon-sm" aria-label={`${ui.text("ui_composer_move")} ${variantActionLabel(variantIndex)} ${ui.text("ui_composer_up")}`} title={`${ui.text("ui_composer_move")} ${variantTitle(variantIndex)} ${ui.text("ui_composer_up")}`} disabled={variantIndex === 0 || isFallback(variantIndex)} onclick={() => commit((next) => next.variants.splice(variantIndex - 1, 0, next.variants.splice(variantIndex, 1)[0]))}>
-              <ArrowUpIcon />
-            </Button>
-            <Button variant="ghost" size="icon-sm" aria-label={`${ui.text("ui_composer_move")} ${variantActionLabel(variantIndex)} ${ui.text("ui_composer_down")}`} title={`${ui.text("ui_composer_move")} ${variantTitle(variantIndex)} ${ui.text("ui_composer_down")}`} disabled={variantIndex === message.variants.length - 1 || isFallback(variantIndex) || isFallback(variantIndex + 1)} onclick={() => commit((next) => next.variants.splice(variantIndex + 1, 0, next.variants.splice(variantIndex, 1)[0]))}>
-              <ArrowDownIcon />
-            </Button>
-            <Button variant="ghost" size="icon-sm" aria-label={`${ui.text("ui_composer_remove")} ${variantActionLabel(variantIndex)}`} title={isFallback(variantIndex) ? ui.text("ui_composer_required_fallback_title") : `${ui.text("ui_composer_remove")} ${variantTitle(variantIndex)}`} disabled={message.variants.length === 1 || isFallback(variantIndex)} onclick={() => commit((next) => next.variants.splice(variantIndex, 1))}>
-              <Trash2Icon />
-            </Button>
-          </Card.Action>
-        </Card.Header>
-        <Card.Content class="grid gap-3">
-          {#if editableText(variant.value) !== undefined}
-            <InlineMessageEditor
-              value={editableText(variant.value) ?? ""}
-              {locale}
-              inputs={effectiveInputs}
-              label={`${ui.text("ui_composer_translation_for")} ${variantTitle(variantIndex)}`}
-              onchange={(text) => updateVariantText(variantIndex, text)}
-              onensureinput={ensureInput}
-              onupdateformat={updateInputFormat}
-            />
-          {:else}
-            <p class="text-xs text-muted-foreground">{ui.text("ui_composer_structured_case_description")}</p>
-            <PatternEditor nodes={variant.value as MessagePatternNode[]} inputs={message.inputs} localNames={declarationNames} onchange={(nodes) => commit((next) => next.variants[variantIndex].value = nodes)} />
+          {#if variant.keys.length > 0}
+            <Card.Action><Button variant="ghost" size="icon-sm" disabled={fallback || authoringBusy} aria-label={`${ui.text("ui_composer_remove")} ${title(variant.keys)}`} onclick={() => operation({ kind: "remove-variant", variantId: variant.id })}><Trash2Icon /></Button></Card.Action>
           {/if}
+        </Card.Header>
+        <Card.Content>
+          <PatternEditor pattern={variant.pattern} {inputs} {locale} label={`${ui.text("ui_composer_translation_for")} ${title(variant.keys)}`} onchange={(pattern) => operation({ kind: "set-pattern", variantId: variant.id, pattern })} />
         </Card.Content>
       </Card.Root>
     {/each}
-  </div>
 
-  {#if message.selectors.length > 0}
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger>
-        {#snippet child({ props })}
-          <Button {...props} variant="outline" class="justify-self-start">
-            <CirclePlusIcon data-icon="inline-start" />
-            {ui.text("ui_composer_add_translation_case")}
-          </Button>
-        {/snippet}
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Content align="start" class="w-64">
-        <DropdownMenu.Label>{ui.text("ui_composer_choose_when_used")}</DropdownMenu.Label>
-        {#each availableCaseMatches as match (match)}
-          <DropdownMenu.Item onclick={() => addVariant(match)}>
-            {match.charAt(0).toLocaleUpperCase() + match.slice(1)} {primarySelector?.function === "ordinal" ? ui.text("ui_composer_ordinal") : ui.text("ui_composer_plural")} {ui.text("ui_composer_form")}
-          </DropdownMenu.Item>
+    {#if authoring.selectors.length > 0}
+      <div class="flex flex-wrap items-end gap-2">
+        {#each availableCases as category (category)}
+          <Button variant="outline" size="sm" disabled={authoringBusy} onclick={() => addVariant(category)}><CirclePlusIcon />{category}</Button>
         {/each}
-        <DropdownMenu.Item onclick={() => exactCaseOpen = true}>
-          {primarySelector?.function === "literal" ? ui.text("ui_composer_custom_value") : ui.text("ui_composer_exact_number")}
-        </DropdownMenu.Item>
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+        <Field.Field class="max-w-64">
+          <Field.Label for="mf2-exact-case">{ui.text("ui_composer_exact_or_custom_match")}</Field.Label>
+          <Input id="mf2-exact-case" bind:value={exactCaseValue} placeholder={primaryIsNumeric ? "0" : "premium"} />
+        </Field.Field>
+        <Button variant="outline" disabled={authoringBusy || exactCaseValue.trim() === "" || exactCaseDuplicate} onclick={() => addVariant(exactCaseValue)}>{ui.text("ui_composer_add_translation_case")}</Button>
+      </div>
+    {/if}
+
+    <details class="rounded-xl border bg-card p-4">
+      <summary class="cursor-pointer text-sm font-semibold">{ui.text("ui_composer_advanced_structure")}</summary>
+      <div class="mt-4 grid gap-4">
+        <h4 class="text-sm font-medium">{ui.text("ui_composer_inputs")}</h4>
+        {#each authoring.inputs as input (input.name)}
+          <div class="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
+            <Field.Field>
+              <Field.Label for={`mf2-name-${input.name}`}>{ui.text("ui_common_name")}</Field.Label>
+              <Input id={`mf2-name-${input.name}`} value={input.name} disabled={authoringBusy} onblur={(event) => { const newName = event.currentTarget.value.trim(); if (newName !== input.name) void operation({ kind: "rename-input", name: input.name, newName }); }} />
+            </Field.Field>
+            <label class="grid gap-2 text-sm" for={`mf2-function-${input.name}`}>{ui.text("ui_composer_formatter")}
+              <select id={`mf2-function-${input.name}`} class="h-9 rounded-md border bg-background px-3 text-sm" value={input.function ?? "string"} disabled={authoringBusy} onchange={(event) => operation({ kind: "set-input", name: input.name, function: event.currentTarget.value })}>
+                {#if input.function && !inputFunctions.includes(input.function)}<option value={input.function}>{input.function}</option>{/if}
+                {#each inputFunctions as fn (fn)}<option value={fn}>{fn}</option>{/each}
+              </select>
+            </label>
+            <Button variant="ghost" size="icon" disabled={authoringBusy || !input.declared} aria-label={`${ui.text("ui_composer_remove_input")} ${input.name}`} onclick={() => operation({ kind: "remove-input", name: input.name })}><Trash2Icon /></Button>
+          </div>
+        {/each}
+        <Button variant="outline" class="justify-self-start" disabled={authoringBusy} onclick={() => operation({ kind: "add-input", name: nextIdentifier("value", authoring?.inputs.map(input => input.name) ?? []), function: "string" })}><CirclePlusIcon />{ui.text("ui_composer_add_input")}</Button>
+        <h4 class="text-sm font-medium">{ui.text("ui_composer_selection_rules")}</h4>
+        {#each authoring.selectors as name, selectorIndex (name)}
+          <div class="flex items-center justify-between gap-2 rounded-md bg-muted p-2">
+            <select class="h-9 min-w-0 rounded-md border bg-background px-3 font-mono text-sm" value={name} aria-label={`${ui.text("ui_composer_uses_input")} ${name}`} disabled={authoringBusy} onchange={(event) => operation({ kind: "set-selectors", selectors: authoring?.selectors.map((selector, index) => index === selectorIndex ? event.currentTarget.value : selector) })}>
+              {#if !authoring.inputs.some(input => input.name === name)}<option value={name}>{`$${name}`}</option>{/if}
+              {#each authoring.inputs as input (input.name)}<option value={input.name}>{`$${input.name}`}</option>{/each}
+            </select>
+            <Button variant="ghost" size="icon-sm" disabled={authoringBusy} aria-label={`${ui.text("ui_composer_remove_selector")} ${name}`} onclick={() => operation({ kind: "set-selectors", selectors: authoring?.selectors.filter(selector => selector !== name) })}><Trash2Icon /></Button>
+          </div>
+        {/each}
+        <div class="flex flex-wrap items-end gap-2">
+          <label class="grid gap-2 text-sm" for="mf2-add-selector">{ui.text("ui_composer_uses_input")}
+            <select id="mf2-add-selector" class="h-9 rounded-md border bg-background px-3 text-sm" bind:value={selectorInput} disabled={authoringBusy}>
+              <option value="">{ui.text("ui_composer_uses_input")}</option>
+              {#each authoring.inputs.filter(input => !authoring?.selectors.includes(input.name)) as input (input.name)}<option value={input.name}>{input.name}</option>{/each}
+            </select>
+          </label>
+          <Button variant="outline" disabled={authoringBusy || selectorInput === "" || authoring.selectors.includes(selectorInput)} onclick={() => { void operation({ kind: "set-selectors", selectors: [...(authoring?.selectors ?? []), selectorInput] }); selectorInput = ""; }}><CirclePlusIcon />{ui.text("ui_composer_add_selection_rule")}</Button>
+        </div>
+      </div>
+    </details>
   {/if}
-
-  <Separator />
-
-  <Collapsible.Root bind:open={structureOpen} class="group/structure rounded-3xl bg-card shadow-sm ring-1 ring-foreground/5 dark:ring-foreground/10">
-    <div class="flex items-center justify-between gap-3 px-4 py-3">
-      <div class="grid gap-0.5">
-        <strong class="text-sm">{ui.text("ui_composer_advanced_structure")}</strong>
-        <span class="text-xs text-muted-foreground">{ui.text("ui_composer_advanced_structure_description")}</span>
-      </div>
-      <Collapsible.Trigger class={buttonVariants({ variant: "ghost", size: "icon-sm" })} aria-label={ui.text("ui_composer_toggle_advanced_structure")}>
-        <ChevronDownIcon class="transition-transform group-data-[state=open]/structure:rotate-180" />
-      </Collapsible.Trigger>
-    </div>
-    <Collapsible.Content>
-      <Separator />
-      <div class="grid gap-6 px-4 py-5">
-        <Field.Set>
-          <Field.Legend variant="label">{ui.text("ui_composer_inputs")}</Field.Legend>
-          <Field.Description>{ui.text("ui_composer_inputs_description")} <code>{"{name}"}</code>.</Field.Description>
-          <Field.Group class="gap-3">
-            {#each Object.entries(message.inputs) as [name, descriptor] (name)}
-              <div class="grid gap-3 rounded-2xl bg-muted/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.25fr)_auto] sm:items-end">
-                <Field.Field>
-                  <Field.Label for={`input-name-${name}`}>{ui.text("ui_common_name")}</Field.Label>
-                  <Input id={`input-name-${name}`} pattern="[A-Za-z_][A-Za-z0-9_]*" value={name} onblur={(event) => onchange(renameInput(message, name, event.currentTarget.value))} />
-                </Field.Field>
-                <Field.Field>
-                  <Field.Label for={`input-type-${name}`}>{ui.text("ui_common_type")}</Field.Label>
-                  <Select.Root type="single" value={descriptor.type} onValueChange={(type) => ensureInput(name, type as InputType)}>
-                    <Select.Trigger id={`input-type-${name}`} class="w-full">{descriptor.type}</Select.Trigger>
-                    <Select.Content><Select.Group>{#each inputTypes as type (type)}<Select.Item value={type} label={type}>{type}</Select.Item>{/each}</Select.Group></Select.Content>
-                  </Select.Root>
-                </Field.Field>
-                <Field.Field>
-                  <Field.Label for={`input-format-${name}`}>{ui.text("ui_composer_default_format")}</Field.Label>
-                  <Input id={`input-format-${name}`} value={descriptor.format ?? ""} placeholder={ui.text("ui_composer_compiler_default")} oninput={(event) => updateInputFormat(name, event.currentTarget.value)} />
-                </Field.Field>
-                <Button variant="ghost" size="icon" aria-label={`${ui.text("ui_composer_remove_input")} ${name}`} onclick={() => removeInput(name)}><Trash2Icon /></Button>
-              </div>
-            {/each}
-          </Field.Group>
-          <Button variant="outline" class="justify-self-start" onclick={() => addInput()}><CirclePlusIcon data-icon="inline-start" />{ui.text("ui_composer_add_input")}</Button>
-        </Field.Set>
-
-        <Field.Set>
-          <Field.Legend variant="label">{ui.text("ui_composer_selection_rules")}</Field.Legend>
-          <Field.Description>{ui.text("ui_composer_selection_rules_description")}</Field.Description>
-          <Field.Group class="gap-3">
-            {#each message.selectors as selector, index (selector.name)}
-              <div class="grid gap-3 rounded-2xl bg-muted/50 p-3 sm:grid-cols-3 sm:items-end">
-                <Field.Field><Field.Label for={`selector-name-${selector.name}`}>{ui.text("ui_composer_rule_name")}</Field.Label><Input id={`selector-name-${selector.name}`} value={selector.name} onblur={(event) => onchange(renameSelector(message, selector.name, event.currentTarget.value))} /></Field.Field>
-                <Field.Field>
-                  <Field.Label for={`selector-input-${selector.name}`}>{ui.text("ui_composer_uses_input")}</Field.Label>
-                  <Select.Root type="single" value={selector.input} onValueChange={(input) => commit((next) => next.selectors[index].input = input)}>
-                    <Select.Trigger id={`selector-input-${selector.name}`} class="w-full">{selector.input}</Select.Trigger>
-                    <Select.Content><Select.Group>{#each inputNames as name (name)}<Select.Item value={name} label={name}>{name}</Select.Item>{/each}</Select.Group></Select.Content>
-                  </Select.Root>
-                </Field.Field>
-                <div class="flex items-end gap-2">
-                  <Field.Field>
-                    <Field.Label for={`selector-function-${selector.name}`}>{ui.text("ui_composer_chooses_by")}</Field.Label>
-                    <Select.Root type="single" value={selector.function} onValueChange={(fn) => commit((next) => next.selectors[index].function = fn as MessageSelector["function"])}>
-                      <Select.Trigger id={`selector-function-${selector.name}`} class="w-full">{selector.function}</Select.Trigger>
-                      <Select.Content><Select.Group>{#each selectorFunctions as fn (fn)}<Select.Item value={fn} label={fn}>{fn}</Select.Item>{/each}</Select.Group></Select.Content>
-                    </Select.Root>
-                  </Field.Field>
-                  <Button variant="ghost" size="icon" aria-label={`${ui.text("ui_composer_remove_selector")} ${selector.name}`} onclick={() => commit((next) => next.selectors.splice(index, 1))}><Trash2Icon /></Button>
-                </div>
-              </div>
-            {/each}
-          </Field.Group>
-          <Button variant="outline" class="justify-self-start" disabled={inputNames.length === 0} onclick={addSelector}><CirclePlusIcon data-icon="inline-start" />{ui.text("ui_composer_add_selection_rule")}</Button>
-        </Field.Set>
-
-        <Field.Set>
-          <Field.Legend variant="label">{ui.text("ui_composer_reusable_formatters")}</Field.Legend>
-          <Field.Description>{ui.text("ui_composer_reusable_formatters_description")}</Field.Description>
-          <Field.Group class="gap-3">
-            {#each message.declarations ?? [] as declaration, index (declaration.name)}
-              <div class="grid gap-3 rounded-2xl bg-muted/50 p-3 sm:grid-cols-2 lg:grid-cols-4">
-                <Field.Field><Field.Label for={`declaration-name-${declaration.name}`}>{ui.text("ui_common_name")}</Field.Label><Input id={`declaration-name-${declaration.name}`} value={declaration.name} onblur={(event) => onchange(renameDeclaration(message, declaration.name, event.currentTarget.value))} /></Field.Field>
-                <Field.Field>
-                  <Field.Label for={`declaration-input-${declaration.name}`}>{ui.text("ui_composer_input")}</Field.Label>
-                  <Select.Root type="single" value={declaration.input} onValueChange={(input) => updateDeclaration(index, "input", input)}><Select.Trigger id={`declaration-input-${declaration.name}`} class="w-full">{declaration.input}</Select.Trigger><Select.Content><Select.Group>{#each inputNames as name (name)}<Select.Item value={name} label={name}>{name}</Select.Item>{/each}</Select.Group></Select.Content></Select.Root>
-                </Field.Field>
-                <Field.Field>
-                  <Field.Label for={`declaration-function-${declaration.name}`}>{ui.text("ui_composer_formatter")}</Field.Label>
-                  <Select.Root type="single" value={declaration.function} onValueChange={(fn) => updateDeclaration(index, "function", fn)}><Select.Trigger id={`declaration-function-${declaration.name}`} class="w-full">{declaration.function}</Select.Trigger><Select.Content><Select.Group>{#each formatFunctions as fn (fn)}<Select.Item value={fn} label={fn}>{fn}</Select.Item>{/each}</Select.Group></Select.Content></Select.Root>
-                </Field.Field>
-                <div class="flex items-end gap-2">
-                  {#if declaration.function === "relativeTime"}
-                    <Field.Field>
-                      <Field.Label for={`declaration-unit-${declaration.name}`}>{ui.text("ui_composer_unit")}</Field.Label>
-                      <Select.Root type="single" value={declaration.unit ?? "day"} onValueChange={(unit) => updateDeclaration(index, "unit", unit)}><Select.Trigger id={`declaration-unit-${declaration.name}`} class="w-full">{declaration.unit ?? "day"}</Select.Trigger><Select.Content><Select.Group>{#each relativeTimeUnits as unit (unit)}<Select.Item value={unit} label={unit}>{unit}</Select.Item>{/each}</Select.Group></Select.Content></Select.Root>
-                    </Field.Field>
-                    <Field.Field>
-                      <Field.Label for={`declaration-numeric-${declaration.name}`}>{ui.text("ui_composer_numeric")}</Field.Label>
-                      <Select.Root type="single" value={declaration.numeric ?? "auto"} onValueChange={(numeric) => updateDeclaration(index, "numeric", numeric)}><Select.Trigger id={`declaration-numeric-${declaration.name}`} class="w-full">{declaration.numeric ?? "auto"}</Select.Trigger><Select.Content><Select.Group><Select.Item value="auto" label="auto">auto</Select.Item><Select.Item value="always" label="always">always</Select.Item></Select.Group></Select.Content></Select.Root>
-                    </Field.Field>
-                  {:else}
-                    <Field.Field><Field.Label for={`declaration-format-${declaration.name}`}>{ui.text("ui_composer_format")}</Field.Label><Input id={`declaration-format-${declaration.name}`} value={declaration.format ?? ""} placeholder={ui.text("ui_composer_compiler_default")} oninput={(event) => updateDeclaration(index, "format", event.currentTarget.value)} /></Field.Field>
-                  {/if}
-                  <Button variant="ghost" size="icon" aria-label={`${ui.text("ui_composer_remove_formatter")} ${declaration.name}`} onclick={() => commit((next) => { next.declarations?.splice(index, 1); scrubNodes(next, (node) => "local" in node && node.local === declaration.name); })}><Trash2Icon /></Button>
-                </div>
-              </div>
-            {/each}
-          </Field.Group>
-          <Button variant="outline" class="justify-self-start" disabled={!inputNames.some((name) => message.inputs[name].type !== "bool")} onclick={addDeclaration}><CirclePlusIcon data-icon="inline-start" />{ui.text("ui_composer_add_formatter")}</Button>
-        </Field.Set>
-      </div>
-    </Collapsible.Content>
-  </Collapsible.Root>
 </div>
-
-<AppDialog
-  open={exactCaseOpen}
-  title={primarySelector?.function === "literal" ? ui.text("ui_composer_add_custom_case") : ui.text("ui_composer_add_exact_number_case")}
-  description={primarySelector?.function === "literal"
-    ? ui.text("ui_composer_custom_case_description")
-    : ui.text("ui_composer_exact_case_description")}
-  class="sm:max-w-md"
-  bodyClass="grid gap-3"
-  onopenchange={(open) => exactCaseOpen = open}
->
-  <Field.Field>
-    <Field.Label for="exact-case-value">{primarySelector?.function === "literal" ? ui.text("ui_composer_value") : ui.text("ui_composer_exact_number")}</Field.Label>
-    <Input
-      id="exact-case-value"
-      type={primarySelector?.function === "literal" ? "text" : "number"}
-      bind:value={exactCaseValue}
-      placeholder={primarySelector?.function === "literal" ? "premium" : "0"}
-      onkeydown={(event) => { if (event.key === "Enter") addExactCase(); }}
-    />
-    {#if exactCaseDuplicate}<Field.Error>{ui.text("ui_composer_case_already_exists")}</Field.Error>{/if}
-  </Field.Field>
-  {#snippet footer()}
-    <Button variant="outline" onclick={() => exactCaseOpen = false}>{ui.text("ui_common_cancel")}</Button>
-    <Button disabled={exactCaseMatch === "" || exactCaseDuplicate} onclick={addExactCase}>{ui.text("ui_composer_add_case")}</Button>
-  {/snippet}
-</AppDialog>
-
-<AppDialog
-  open={rawMode}
-  title={ui.text("ui_composer_structured_message_source")}
-  description={ui.text("ui_composer_structured_message_source_description")}
-  class="sm:max-w-3xl"
-  bodyClass="grid gap-3"
-  onopenchange={(open) => rawMode = open}
->
-  <Textarea class="field-sizing-fixed min-h-[55svh] resize-none font-mono text-xs leading-relaxed" bind:value={rawText} spellcheck={false} aria-label={ui.text("ui_composer_structured_message_source")} />
-  {#if rawError}<p class="text-sm text-destructive" aria-live="polite">{rawError}</p>{/if}
-  {#snippet footer()}
-    <Button variant="outline" onclick={() => rawMode = false}>{ui.text("ui_common_cancel")}</Button>
-    <Button onclick={applyRaw}><Settings2Icon data-icon="inline-start" />{ui.text("ui_composer_apply_source")}</Button>
-  {/snippet}
-</AppDialog>
-
-<style>
-  code {
-    border-radius: var(--radius-sm);
-    padding: 0.08rem 0.25rem;
-    color: color-mix(in oklab, var(--primary) 72%, var(--foreground));
-    background: var(--muted);
-    font: 0.67rem ui-monospace, monospace;
-  }
-</style>

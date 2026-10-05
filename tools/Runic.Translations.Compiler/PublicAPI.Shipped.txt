@@ -171,6 +171,51 @@ type sealed class Runic.Translations.Compiler.Rmf2Completion : System.IEquatable
   property System.String Detail { get; init; }
   property System.String Label { get; init; }
 
+type static class Runic.Translations.Compiler.Rmf2DiagnosticActions
+  method static Runic.Translations.Compiler.Rmf2DiagnosticSpan GetSpan(Runic.Translations.Compiler.TranslationSource source, Runic.Translations.Compiler.TextSourceLocation location)
+  method static Runic.Translations.Compiler.TranslationSource ApplyQuickFix(Runic.Translations.Compiler.TranslationSource source, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix fix)
+  method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix> GetQuickFixes(Runic.Translations.Compiler.Rmf2ResourceDocument document, System.Threading.CancellationToken cancellationToken = default)
+  method static System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix> GetQuickFixes(Runic.Translations.Compiler.TranslationSource source, Runic.Translations.Compiler.TranslationDiagnostic diagnostic)
+  method static System.String Revision(Runic.Translations.Compiler.TranslationSource source)
+
+type sealed class Runic.Translations.Compiler.Rmf2DiagnosticQuickFix : System.IEquatable<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix>
+  ctor Runic.Translations.Compiler.Rmf2DiagnosticQuickFix(System.String Id, System.String Title, System.String DiagnosticId, Runic.Translations.Compiler.TextSourceLocation Location, System.String ExpectedRevision, System.Int32 StartByte, System.Int32 LengthBytes, System.String NewText)
+  method Runic.Translations.Compiler.Rmf2DiagnosticQuickFix <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.String Id, out System.String Title, out System.String DiagnosticId, out Runic.Translations.Compiler.TextSourceLocation Location, out System.String ExpectedRevision, out System.Int32 StartByte, out System.Int32 LengthBytes, out System.String NewText)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix left, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix left, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix right)
+  property Runic.Translations.Compiler.TextSourceLocation Location { get; init; }
+  property System.Int32 LengthBytes { get; init; }
+  property System.Int32 StartByte { get; init; }
+  property System.String DiagnosticId { get; init; }
+  property System.String ExpectedRevision { get; init; }
+  property System.String Id { get; init; }
+  property System.String NewText { get; init; }
+  property System.String Title { get; init; }
+
+type sealed class Runic.Translations.Compiler.Rmf2DiagnosticSpan : System.IEquatable<Runic.Translations.Compiler.Rmf2DiagnosticSpan>
+  ctor Runic.Translations.Compiler.Rmf2DiagnosticSpan(System.Int32 StartByte, System.Int32 LengthBytes, System.Int32 StartUtf16, System.Int32 LengthUtf16, System.Int32 StartLine, System.Int32 StartCharacter, System.Int32 EndLine, System.Int32 EndCharacter)
+  method Runic.Translations.Compiler.Rmf2DiagnosticSpan <Clone>$()
+  method System.Boolean Equals(Runic.Translations.Compiler.Rmf2DiagnosticSpan other)
+  method System.Boolean Equals(System.Object obj)
+  method System.Int32 GetHashCode()
+  method System.String ToString()
+  method System.Void Deconstruct(out System.Int32 StartByte, out System.Int32 LengthBytes, out System.Int32 StartUtf16, out System.Int32 LengthUtf16, out System.Int32 StartLine, out System.Int32 StartCharacter, out System.Int32 EndLine, out System.Int32 EndCharacter)
+  method static System.Boolean op_Equality(Runic.Translations.Compiler.Rmf2DiagnosticSpan left, Runic.Translations.Compiler.Rmf2DiagnosticSpan right)
+  method static System.Boolean op_Inequality(Runic.Translations.Compiler.Rmf2DiagnosticSpan left, Runic.Translations.Compiler.Rmf2DiagnosticSpan right)
+  property System.Int32 EndCharacter { get; init; }
+  property System.Int32 EndLine { get; init; }
+  property System.Int32 LengthBytes { get; init; }
+  property System.Int32 LengthUtf16 { get; init; }
+  property System.Int32 StartByte { get; init; }
+  property System.Int32 StartCharacter { get; init; }
+  property System.Int32 StartLine { get; init; }
+  property System.Int32 StartUtf16 { get; init; }
+
 type sealed class Runic.Translations.Compiler.Rmf2LanguageService
   method System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2Completion> Complete(Runic.Translations.Compiler.Mf2SyntaxDocument syntax, System.Int32 byteOffset)
   method System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2Completion> Complete(Runic.Translations.Compiler.Mf2SyntaxDocument syntax, System.Int32 byteOffset, Runic.Translations.Compiler.Mf2SyntaxDocument baseSyntax)

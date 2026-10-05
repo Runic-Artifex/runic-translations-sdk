@@ -70,6 +70,15 @@ function buildEditor() {
   run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", "--nologo"]);
 }
 
+function verifyEditorFrontend() {
+  const editorDirectory = dirname(resolve(root, workspace.editor.project));
+  run("bun", ["run", "--bun", "verify:built"], resolve(editorDirectory, "Frontend"), {
+    RUNIC_TRANSLATIONS_MANIFEST: resolve(editorDirectory, "obj", configuration, "net10.0", "translations", "editor.esm-v5", "web-module-manifest-v3.json"),
+  });
+  run("dotnet", [resolve(editorDirectory, "bin", configuration, "net10.0", "Runic.Translations.Editor.dll"),
+    "--workspace", resolve(editorDirectory, "ExampleWorkspace"), "--smoke-test"]);
+}
+
 function testManaged() {
   const projects = [
     "tests/dotnet/Runic.Translations.ApiTests/Runic.Translations.ApiTests.csproj",
@@ -123,6 +132,7 @@ export function build() {
 
 export function test() {
   build();
+  verifyEditorFrontend();
   testManaged();
   testWeb();
   verifyEditorIntegrations();
