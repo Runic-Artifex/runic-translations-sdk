@@ -67,17 +67,17 @@ Choose this package for generated C# and whenever MSBuild owns input classificat
 
 This package is a public preview for .NET 10. Preview targets and properties may change with documented migrations. Use the same release across the package family and regenerate outputs when upgrading.
 
-- [Complete project template](https://github.com/Runic-Artifex/runic-sdk/tree/main/tools/Runic.Translations.Templates/templates/project)
-- [Vite quick start](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
-- [ESM backend](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/esm.md)
-- [RMF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md)
-- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
+- [Complete project template](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tools/Runic.Translations.Templates/templates/project)
+- [Vite quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
+- [ESM backend](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/esm.md)
+- [RMF2 project guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md)
+- [Issues and support](https://github.com/Runic-Artifex/runic-translations-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE).
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/LICENSE).
 
 ## RMF2
 
 The bundled .NET MSBuild task discovers recursive `{locale}.rmf2` files,
 direct `.mf2` messages, and explicit `sourceRoots`, including membership changes.
 It uses the host Microsoft.Build.Framework assembly. Source-checkout imports
-require building this package first. See the [RMF2 guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md).
+require building this package first. See the [RMF2 guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md).

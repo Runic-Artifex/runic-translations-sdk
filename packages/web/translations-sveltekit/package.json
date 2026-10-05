@@ -33,7 +33,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "clean": "bun -e \"import('node:fs').then(({rmSync}) => rmSync('dist', { recursive: true, force: true }))\"",
+    "build": "bun run --bun clean && tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "bun run --bun build && vitest run test/locale-routing.test.ts test/reference-app.test.ts",
     "pack:check": "bun pm pack --dry-run"

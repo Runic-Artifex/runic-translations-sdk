@@ -55,5 +55,5 @@ Use `Runic.Translations.Build` or `dotnet-runic-translations` for project
 emission. `Rmf2ResourceReader`, `Rmf2ResourceWriter` and `Rmf2Workspace` provide
 recoverable resources, explicit segment edits and revisioned transaction plans.
 The package includes the v5 artifact schema. See
-the [RMF2 guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md) for the supported
+the [RMF2 guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md) for the supported
 subset, the closed plain-text interchange boundary, and frozen exclusions.

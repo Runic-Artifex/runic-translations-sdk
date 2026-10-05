@@ -54,7 +54,7 @@ The public result exposes deterministic catalog, locale, caller-contract, and
 source-freshness metadata. `Runic.Translations.Tooling` accepts that same typed
 result for XLIFF export; the normalized executable graph remains an internal
 implementation detail. Shipping hosts use the typed `Rmf2ExecutionV2` project carrier. See the
-[v5 project-linking contract](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/rmf2-project-v5.md) for
+[v5 project-linking contract](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/specs/translations/rmf2-project-v5.md) for
 cross-locale contracts, fingerprint/freshness separation and generated names.
 
 ## Compatibility and status
@@ -67,9 +67,9 @@ The 0.4 preview intentionally replaces the former public
 hand-off cannot represent the selected semantic contract and are no longer a
 public compatibility surface.
 
-- [Compiler API example](https://github.com/Runic-Artifex/runic-sdk/blob/main/tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2ProjectV5Tests.cs)
-- [RMF2 project guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md)
-- [ESM backend](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/esm.md)
-- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
+- [Compiler API example](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2ProjectV5Tests.cs)
+- [RMF2 project guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md)
+- [ESM backend](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/esm.md)
+- [Issues and support](https://github.com/Runic-Artifex/runic-translations-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for bundled data attribution.
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for bundled data attribution.

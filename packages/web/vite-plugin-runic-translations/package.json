@@ -32,12 +32,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Runic-Artifex/runic-sdk.git",
+    "url": "git+https://github.com/Runic-Artifex/runic-translations-sdk.git",
     "directory": "packages/web/vite-plugin-runic-translations"
   },
-  "homepage": "https://github.com/Runic-Artifex/runic-sdk/tree/main/packages/web/vite-plugin-runic-translations#readme",
+  "homepage": "https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/vite-plugin-runic-translations#readme",
   "bugs": {
-    "url": "https://github.com/Runic-Artifex/runic-sdk/issues"
+    "url": "https://github.com/Runic-Artifex/runic-translations-sdk/issues"
   },
   "keywords": [
     "runic-artifex",

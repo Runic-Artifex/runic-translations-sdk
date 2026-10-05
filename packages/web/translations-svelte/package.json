@@ -44,7 +44,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "svelte-package -i src -o dist",
+    "clean": "bun -e \"import('node:fs').then(({rmSync}) => rmSync('dist', { recursive: true, force: true }))\"",
+    "build": "bun run --bun clean && svelte-package -i src -o dist",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "bun run --bun build && vitest run test/locale.svelte.test.ts test/locale-hydration.svelte.test.ts test/localization-stress.test.ts && node test/verify-inline-ssr.mjs",
     "pack:check": "bun pm pack --dry-run",

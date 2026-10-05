@@ -18,7 +18,7 @@ namespace Runic.Translations.PackageTests;
 internal static class Program
 {
     private const string Fingerprint = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    private const string RepositoryUrl = "https://github.com/Runic-Artifex/runic-sdk";
+    private const string RepositoryUrl = "https://github.com/Runic-Artifex/runic-translations-sdk";
     private static readonly Guid SourceLinkKind = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
     private static readonly string PackageVersion =
         Environment.GetEnvironmentVariable("RUNIC_PACKAGE_VERSION") ??

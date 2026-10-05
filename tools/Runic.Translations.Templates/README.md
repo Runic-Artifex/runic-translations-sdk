@@ -63,12 +63,12 @@ you need a more customized source layout.
 
 ## Compatibility and status
 
-Template output uses the package version embedded at packing time. If you pass `--packageVersion`, it must identify one matching release of the runtime, build package, and tool. Preview upgrades may change generated project files or source schemas; review the [RMF2 guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/rmf2.md) before updating an existing project.
+Template output uses the package version embedded at packing time. If you pass `--packageVersion`, it must identify one matching release of the runtime, build package, and tool. Preview upgrades may change generated project files or source schemas; review the [RMF2 guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md) before updating an existing project.
 
-- [Project template source](https://github.com/Runic-Artifex/runic-sdk/tree/main/tools/Runic.Translations.Templates/templates/project)
-- [Item template source](https://github.com/Runic-Artifex/runic-sdk/tree/main/tools/Runic.Translations.Templates/templates/item)
-- [.NET package guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/packages/dotnet/Runic.Translations/README.md)
-- [Vite quick start](https://github.com/Runic-Artifex/runic-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
-- [Issues and support](https://github.com/Runic-Artifex/runic-sdk/issues)
+- [Project template source](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tools/Runic.Translations.Templates/templates/project)
+- [Item template source](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tools/Runic.Translations.Templates/templates/item)
+- [.NET package guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations/README.md)
+- [Vite quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
+- [Issues and support](https://github.com/Runic-Artifex/runic-translations-sdk/issues)
 
-Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-sdk/blob/main/LICENSE).
+Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/LICENSE).
