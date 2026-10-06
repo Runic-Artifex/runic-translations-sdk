@@ -6,6 +6,7 @@ import { gunzipSync, gzipSync } from "node:zlib";
 // A candidate is built in a sibling directory on the same filesystem and
 // renamed over the target only after every package exists. An interrupted run
 // leaves the previous target untouched; the next run removes its leftovers.
+// Concurrent packs into one target are unsupported.
 const stagingPrefix = name => `.${name}-staging-`;
 const previousPrefix = name => `.${name}-previous-`;
 
@@ -39,7 +40,13 @@ export function promoteStaging(staging, target) {
     if (replacing) renameSync(previous, target);
     throw error;
   }
-  if (replacing) rmSync(previous, { recursive: true, force: true });
+  if (!replacing) return;
+  // The new set is already in place; a leftover previous set is removed by the next pack.
+  try {
+    rmSync(previous, { recursive: true, force: true, maxRetries: 5 });
+  } catch (error) {
+    console.warn(`warning: could not remove the previous set at ${previous}: ${error.message}`);
+  }
 }
 
 // Runs build(staging) and promotes its output, or removes it on failure.
