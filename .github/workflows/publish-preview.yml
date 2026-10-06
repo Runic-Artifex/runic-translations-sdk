@@ -26,6 +26,11 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+      # npm 11.21 or newer can move dist-tags through trusted publishing (OIDC).
+      - run: npm install --global npm@12.2.0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -53,3 +58,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create 'v${{ inputs.version }}' artifacts/packages/nuget/*.nupkg artifacts/packages/npm/*.tgz --prerelease --generate-notes
+      - name: Move npm latest to this preview
+        run: bun eng/release/publish.mjs tag-latest '${{ inputs.version }}'

@@ -81,10 +81,27 @@ async function publish(candidate, version) {
   }
 }
 
+// Until 1.0 every release is a preview, so npm latest follows the newest one.
+// Never move latest back to an older version, for example on a late rerun.
+export function needsLatest(current, version) {
+  return current === undefined || Bun.semver.order(current, version) < 0;
+}
+
+async function tagLatest(version) {
+  assert.ok(process.env.ACTIONS_ID_TOKEN_REQUEST_URL, "OIDC unavailable");
+  for (const entry of workspace.npm) {
+    const tags = await response(`https://registry.npmjs.org/-/package/${encodeURIComponent(entry.name)}/dist-tags`);
+    assert.ok(tags.ok, `npm dist-tag lookup failed for ${entry.name}: ${tags.status}`);
+    if (needsLatest((await tags.json()).latest, version))
+      run("npm", ["dist-tag", "add", `${entry.name}@${version}`, "latest", "--registry", "https://registry.npmjs.org"]);
+  }
+}
+
 async function main() {
   const [command, version] = process.argv.slice(2);
-  assert.equal(command, "publish", "Use: bun eng/release/publish.mjs publish <version>");
+  assert.ok(["publish", "tag-latest"].includes(command), "Use: bun eng/release/publish.mjs publish|tag-latest <version>");
   assert.match(version, /^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/);
+  if (command === "tag-latest") return tagLatest(version);
   const candidates = packageFiles(version);
   for (const candidate of candidates) assert.ok(readdirSync(resolve(candidate.file, "..")).includes(candidate.file.split("/").at(-1)), `Missing ${candidate.file}`);
   for (const candidate of candidates) {
@@ -96,7 +113,7 @@ async function main() {
   }
 }
 
-main().catch(error => {
+if (import.meta.main) main().catch(error => {
   const secret = process.env.NUGET_API_KEY;
   const message = String(error.stack ?? error.message);
   console.error(secret ? message.replaceAll(secret, "[redacted]") : message);
