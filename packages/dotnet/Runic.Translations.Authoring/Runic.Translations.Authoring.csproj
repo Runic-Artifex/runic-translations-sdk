@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Runic.Translations.Authoring</AssemblyName>
     <RootNamespace>Runic.Translations.Authoring</RootNamespace>
+    <!-- Packed under lib/ of Runic.Translations.Tooling; its public API is tracked in PublicAPI.*.txt. -->
+    <RunicTrackPublicApi>true</RunicTrackPublicApi>
     <Description>Shared project creation and workspace authoring for Runic Translations.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IsPackable>false</IsPackable>

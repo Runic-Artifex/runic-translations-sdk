@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -8,6 +9,7 @@ namespace Runic.Translations;
 /// <summary>Native-AOT-safe JSON metadata for the versioned text-reference wire contract.</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(TranslationReference))]
+[SuppressMessage("ApiDesign", "RS0041:Public members should not use oblivious types", Justification = "The System.Text.Json source generator emits nullable-oblivious JsonTypeInfo properties.")]
 public partial class TranslationReferenceJsonContext : JsonSerializerContext
 {
 }

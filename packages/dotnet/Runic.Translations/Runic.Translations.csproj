@@ -5,6 +5,8 @@
     <AssemblyName>Runic.Translations</AssemblyName>
     <RootNamespace>Runic.Translations</RootNamespace>
     <RunicTranslationsShippingProject>true</RunicTranslationsShippingProject>
+    <!-- Packed under lib/; its public API is tracked in PublicAPI.*.txt. -->
+    <RunicTrackPublicApi>true</RunicTrackPublicApi>
     <Description>Runtime contracts for compiled Runic Translations.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- These identifiers are fixed by the portable v1 source/runtime contract. -->

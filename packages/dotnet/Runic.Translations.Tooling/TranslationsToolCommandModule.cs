@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -210,4 +211,5 @@ public sealed record TranslationsToolCommandRequest(
 public sealed record TranslationsToolCommandResult(string Output, string Error) { public override string ToString() => Output; }
 
 [JsonSerializable(typeof(TranslationsToolCommandResult))]
+[SuppressMessage("ApiDesign", "RS0041:Public members should not use oblivious types", Justification = "The System.Text.Json source generator emits nullable-oblivious JsonTypeInfo properties.")]
 public sealed partial class TranslationsToolCommandJsonContext : JsonSerializerContext;

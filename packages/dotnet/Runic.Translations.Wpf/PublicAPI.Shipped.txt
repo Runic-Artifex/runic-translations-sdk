@@ -1,0 +1,7 @@
+#nullable enable
+Runic.Translations.Wpf.WpfInlineRenderer
+Runic.Translations.Wpf.WpfInlineRenderer.SetContent(System.Windows.Controls.TextBlock! target, string! key, Runic.Translations.LocalizedTextContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.InlineMarkupBinding!>! slots) -> void
+Runic.Translations.Wpf.WpfInlineRenderer.WpfInlineRenderer(string! contractJson, System.Action<System.Uri!>! navigate, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.Wpf.WpfMarkupFactory!>? custom = null, System.Action<string!, System.Windows.Documents.Inline!>? theme = null) -> void
+Runic.Translations.Wpf.WpfMarkupFactory
+static Runic.Translations.Wpf.WpfInlineRenderer.ClearContent(System.Windows.Controls.TextBlock! target) -> void
+virtual Runic.Translations.Wpf.WpfMarkupFactory.Invoke(Runic.Translations.InlineMarkupRun! run, System.Collections.Generic.IReadOnlyList<System.Windows.Documents.Inline!>! children) -> System.Windows.Documents.Inline!

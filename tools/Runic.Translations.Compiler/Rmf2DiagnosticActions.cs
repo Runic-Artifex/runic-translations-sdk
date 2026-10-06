@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -52,6 +53,7 @@ public static class Rmf2DiagnosticActions
     }
 
     /// <summary>Offers all authorized repairs from one immutable compiler analysis without reparsing each diagnostic.</summary>
+    [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The overloads take unrelated inputs; only the document overload has an optional cancellation token.")]
     public static IReadOnlyList<Rmf2DiagnosticQuickFix> GetQuickFixes(Rmf2ResourceDocument document, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace Runic.Translations.Build.Tests;
 
@@ -10,6 +11,9 @@ internal static class CliIntegrationTests
     public static void Register(TestRunner runner)
     {
         runner.Add("CLI help and invalid invocation use stable exit codes", HelpAndUsageExitCodes);
+        runner.Add("CLI help lists the command descriptions and required options", HelpListsCommandContract);
+        runner.Add("CLI JSON output carries the tool payload type", JsonOutputCarriesPayloadType);
+        runner.Add("CLI rejects a missing required option as a usage failure", MissingRequiredOptionIsUsageFailure);
         runner.Add("CLI init creates and validates a one-locale RMF2 project", InitCreatesOneLocaleProject);
         runner.Add("CLI init creates canonical locale files and explicit fallbacks", InitCreatesMultipleLocales);
         runner.Add("CLI init rejects conflicts without changing the target", InitConflictDoesNotWrite);
@@ -93,6 +97,62 @@ internal static class CliIntegrationTests
         ProcessResult invalid = TestFixture.RunTool(temporary, "unknown-command");
         Assert.Equal(2, invalid.ExitCode);
         Assert.Contains("unknown command", invalid.StandardError);
+    }
+
+    // The command attributes in TranslationsToolCommandModule are the CLI contract: descriptions,
+    // required options and the payload type.
+    private static void HelpListsCommandContract()
+    {
+        using TemporaryDirectory temporary = new();
+        ProcessResult help = TestFixture.RunTool(temporary, "--help");
+        Assert.Equal(0, help.ExitCode, help.Combined);
+        Assert.Contains("generate  Generate translation artifacts.", help.StandardOutput);
+        Assert.Contains("init  Create an RMF2 translation project and starter resources.", help.StandardOutput);
+        Assert.Contains("lsp  Run the RMF2 language server over standard input/output.", help.StandardOutput);
+
+        ProcessResult initHelp = TestFixture.RunTool(temporary, "help", "init");
+        Assert.Equal(0, initHelp.ExitCode, initHelp.Combined);
+        foreach (string option in new[] { "--directory <directory>", "--catalog <catalog>", "--default-locale <default-locale>", "--namespace <code-namespace>", "--class <class-name>" })
+        {
+            string? line = initHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith(option, StringComparison.Ordinal));
+            Assert.True(line?.Contains("[required]", StringComparison.Ordinal) == true, $"init help does not mark {option} as required.");
+        }
+        string? locale = initHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith("--locale", StringComparison.Ordinal));
+        Assert.True(locale is not null && !locale.Contains("[required]", StringComparison.Ordinal), "init help must list --locale as optional.");
+    }
+
+    private static void JsonOutputCarriesPayloadType()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations", "en"));
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), """
+            { "schemaVersion": 1, "catalog": "app", "code": { "namespace": "Example", "className": "AppText" }, "baseLocale": "en" }
+            """, new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "en", "application_title.mf2"), "Runic application\n", new UTF8Encoding(false));
+
+        ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "translations", "--runic-output", "json");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+        using JsonDocument envelope = JsonDocument.Parse(validate.StandardOutput);
+        JsonElement root = envelope.RootElement;
+        Assert.Equal("validate", root.GetProperty("command").GetString());
+        Assert.True(root.GetProperty("success").GetBoolean(), validate.StandardOutput);
+        Assert.Equal("runic.translations.tool/1", root.GetProperty("payloadType").GetString());
+        Assert.Contains("1 source document(s)", root.GetProperty("payload").GetProperty("Output").GetString() ?? string.Empty);
+    }
+
+    private static void MissingRequiredOptionIsUsageFailure()
+    {
+        using TemporaryDirectory temporary = new();
+        AssertUsageFailure(temporary, "generate requires --output <directory>.", "generate", "--project", "translations");
+
+        ProcessResult json = TestFixture.RunTool(temporary, "init", "--directory", "target", "--runic-output", "json");
+        Assert.Equal(2, json.ExitCode, json.Combined);
+        using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
+        JsonElement diagnostic = envelope.RootElement.GetProperty("diagnostics")[0];
+        Assert.Equal("RCLI1012", diagnostic.GetProperty("code").GetString());
+        Assert.Equal("missing-required-option", diagnostic.GetProperty("kind").GetString());
+        Assert.Equal("--catalog", diagnostic.GetProperty("arguments")[0].GetString());
+        Assert.False(Directory.Exists(temporary.Resolve("target")), "A rejected init created its target directory.");
     }
 
     private static void AssertUsageFailure(TemporaryDirectory temporary, string message, params string[] arguments)

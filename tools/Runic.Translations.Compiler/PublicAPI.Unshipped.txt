@@ -1,0 +1,59 @@
+#nullable enable
+Runic.Translations.Compiler.Rmf2DiagnosticActions
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.<Clone>$() -> Runic.Translations.Compiler.Rmf2DiagnosticQuickFix!
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Deconstruct(out string! Id, out string! Title, out string! DiagnosticId, out Runic.Translations.Compiler.TextSourceLocation! Location, out string! ExpectedRevision, out int StartByte, out int LengthBytes, out string! NewText) -> void
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.DiagnosticId.get -> string!
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.DiagnosticId.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Equals(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? other) -> bool
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.ExpectedRevision.get -> string!
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.ExpectedRevision.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Id.get -> string!
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Id.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.LengthBytes.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.LengthBytes.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Location.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.NewText.get -> string!
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.NewText.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Rmf2DiagnosticQuickFix(string! Id, string! Title, string! DiagnosticId, Runic.Translations.Compiler.TextSourceLocation! Location, string! ExpectedRevision, int StartByte, int LengthBytes, string! NewText) -> void
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.StartByte.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.StartByte.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Title.get -> string!
+Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Title.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.<Clone>$() -> Runic.Translations.Compiler.Rmf2DiagnosticSpan!
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.Deconstruct(out int StartByte, out int LengthBytes, out int StartUtf16, out int LengthUtf16, out int StartLine, out int StartCharacter, out int EndLine, out int EndCharacter) -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.EndCharacter.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.EndCharacter.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.EndLine.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.EndLine.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.Equals(Runic.Translations.Compiler.Rmf2DiagnosticSpan? other) -> bool
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.LengthBytes.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.LengthBytes.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.LengthUtf16.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.LengthUtf16.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.Rmf2DiagnosticSpan(int StartByte, int LengthBytes, int StartUtf16, int LengthUtf16, int StartLine, int StartCharacter, int EndLine, int EndCharacter) -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartByte.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartByte.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartCharacter.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartCharacter.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartLine.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartLine.init -> void
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartUtf16.get -> int
+Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartUtf16.init -> void
+override Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Equals(object? obj) -> bool
+override Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.GetHashCode() -> int
+override Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.ToString() -> string!
+override Runic.Translations.Compiler.Rmf2DiagnosticSpan.Equals(object? obj) -> bool
+override Runic.Translations.Compiler.Rmf2DiagnosticSpan.GetHashCode() -> int
+override Runic.Translations.Compiler.Rmf2DiagnosticSpan.ToString() -> string!
+static Runic.Translations.Compiler.Rmf2DiagnosticActions.ApplyQuickFix(Runic.Translations.Compiler.TranslationSource! source, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix! fix) -> Runic.Translations.Compiler.TranslationSource!
+static Runic.Translations.Compiler.Rmf2DiagnosticActions.GetQuickFixes(Runic.Translations.Compiler.Rmf2ResourceDocument! document, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix!>!
+static Runic.Translations.Compiler.Rmf2DiagnosticActions.GetQuickFixes(Runic.Translations.Compiler.TranslationSource! source, Runic.Translations.Compiler.TranslationDiagnostic! diagnostic) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix!>!
+static Runic.Translations.Compiler.Rmf2DiagnosticActions.GetSpan(Runic.Translations.Compiler.TranslationSource! source, Runic.Translations.Compiler.TextSourceLocation! location) -> Runic.Translations.Compiler.Rmf2DiagnosticSpan!
+static Runic.Translations.Compiler.Rmf2DiagnosticActions.Revision(Runic.Translations.Compiler.TranslationSource! source) -> string!
+static Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.operator !=(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? left, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? right) -> bool
+static Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.operator ==(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? left, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? right) -> bool
+static Runic.Translations.Compiler.Rmf2DiagnosticSpan.operator !=(Runic.Translations.Compiler.Rmf2DiagnosticSpan? left, Runic.Translations.Compiler.Rmf2DiagnosticSpan? right) -> bool
+static Runic.Translations.Compiler.Rmf2DiagnosticSpan.operator ==(Runic.Translations.Compiler.Rmf2DiagnosticSpan? left, Runic.Translations.Compiler.Rmf2DiagnosticSpan? right) -> bool
