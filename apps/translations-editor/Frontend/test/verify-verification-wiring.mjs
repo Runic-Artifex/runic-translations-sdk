@@ -26,7 +26,7 @@ assert.equal(frontend.packageManager, JSON.parse(rootPackageJson).packageManager
 for (const test of ["verify-ui-catalog.mjs", "verify-keyboard-a11y.mjs", "verify-command-palette.mjs", "verify-w03-simulation.mjs", "verify-local-state.mjs"]) {
   assert.match(expandedCommand, new RegExp(test.replace(".", "\\.")), `Frontend verification omits ${test}.`);
 }
-const verifyJob = Bun.YAML.parse(fullVerification).jobs.verify;
+const verifyJob = Bun.YAML.parse(fullVerification).jobs["build-and-test"];
 assert.ok(verifyJob.steps.some(step => step.run === "bun eng/run.mjs test"),
   "CI must invoke the standalone repository verification runner.");
 assert.match(runner, /run\("bun", \["run", "--bun", "verify:built"\]/,

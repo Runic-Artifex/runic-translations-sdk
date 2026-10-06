@@ -21,17 +21,22 @@ jobs:
     if: github.repository == 'Runic-Artifex/runic-translations-sdk' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment: preview
+    env:
+      # Pass the dispatch input through the environment, never into script text.
+      VERSION: ${{ inputs.version }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
       # npm 11.21 or newer can move dist-tags through trusted publishing (OIDC).
       - run: npm install --global npm@12.2.0
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
@@ -39,24 +44,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version='${{ inputs.version }}'
+          version="$VERSION"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
           test "$version" = "$(jq -r .version eng/workspace.json)"
           test "$version" = "$(sed -n 's:.*<RunicTranslationsVersion>\(.*\)</RunicTranslationsVersion>.*:\1:p' eng/Versions.props)"
       - run: bun eng/run.mjs test
-      - run: bun eng/run.mjs pack '${{ inputs.version }}'
-      - run: bun eng/verify-packages.mjs '${{ inputs.version }}'
+      - run: bun eng/run.mjs pack "$VERSION"
+      - run: bun eng/verify-packages.mjs "$VERSION"
       - id: nuget-login
-        uses: NuGet/login@v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         with:
           user: ${{ vars.NUGET_USER }}
       - name: Publish missing packages or verify prior publication
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-        run: bun eng/release/publish.mjs publish '${{ inputs.version }}'
+        run: bun eng/release/publish.mjs publish "$VERSION"
       - name: Create GitHub prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create 'v${{ inputs.version }}' artifacts/packages/nuget/*.nupkg artifacts/packages/npm/*.tgz --prerelease --generate-notes
+        run: gh release create "v$VERSION" artifacts/packages/nuget/*.nupkg artifacts/packages/npm/*.tgz --prerelease --generate-notes
       - name: Move npm latest to this preview
-        run: bun eng/release/publish.mjs tag-latest '${{ inputs.version }}'
+        run: bun eng/release/publish.mjs tag-latest "$VERSION"
