@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stageAndPromote, stampNpmManifest } from "./release/candidate.mjs";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const workspace = JSON.parse(readFileSync(resolve(root, "eng/workspace.json"), "utf8"));
@@ -206,36 +207,44 @@ export function test() {
   testPackagedManaged();
 }
 
+export const packages = resolve(root, "artifacts/packages");
+
+const npmArchiveName = (name, version) => `${name.replace("@", "").replace("/", "-")}-${version}.tgz`;
+
+// Bun resolves workspace: ranges from the checkout, so pack in place, then stamp
+// the candidate version and gitHead into the archive.
 function packNpm(directory, destination, version, source) {
-  const manifest = resolve(directory, "package.json");
-  const original = readFileSync(manifest);
-  try {
-    writeFileSync(manifest, `${JSON.stringify({ ...JSON.parse(original), version, gitHead: source }, null, 2)}\n`);
-    run("bun", ["pm", "pack", "--destination", destination], directory);
-  } finally {
-    writeFileSync(manifest, original);
-  }
+  const manifest = packageManifest(directory);
+  const packed = resolve(destination, npmArchiveName(manifest.name, manifest.version));
+  const archive = resolve(destination, npmArchiveName(manifest.name, version));
+  // Bun's summary would report the integrity of the unstamped archive.
+  run("bun", ["pm", "pack", "--quiet", "--destination", destination], directory);
+  stampNpmManifest(packed, { version, gitHead: source });
+  if (packed !== archive) renameSync(packed, archive);
+  console.log(`Packed ${archive}`);
 }
 
+// Builds the complete candidate in a sibling directory and replaces
+// artifacts/packages only after every package exists.
 export function pack(version = workspace.version, { built = false } = {}) {
   ensureVersion(version);
   if (!built) build();
-  const nuget = resolve(root, "artifacts/packages/nuget");
-  const npm = resolve(root, "artifacts/packages/npm");
-  rmSync(resolve(root, "artifacts/packages"), { recursive: true, force: true });
-  mkdirSync(nuget, { recursive: true });
-  mkdirSync(npm, { recursive: true });
   const source = commandOutput("git", ["rev-parse", "HEAD"]);
-  for (const entry of workspace.nuget) {
-    run("dotnet", ["pack", entry.project, "--configuration", configuration, "--no-build", "--output", nuget,
-      `-p:PackageVersion=${version}`, `-p:RepositoryCommit=${source}`]);
-    assert.ok(existsSync(resolve(nuget, `${entry.name}.${version}.nupkg`)), `Missing ${entry.name} package`);
-  }
-  for (const entry of orderedNpmPackages()) {
-    packNpm(resolve(root, entry.path), npm, version, source);
-    const archive = `${entry.name.replace("@", "").replace("/", "-")}-${version}.tgz`;
-    assert.ok(existsSync(resolve(npm, archive)), `Missing ${entry.name} package`);
-  }
+  stageAndPromote(packages, staging => {
+    const nuget = resolve(staging, "nuget");
+    const npm = resolve(staging, "npm");
+    mkdirSync(nuget);
+    mkdirSync(npm);
+    for (const entry of workspace.nuget) {
+      run("dotnet", ["pack", entry.project, "--configuration", configuration, "--no-build", "--output", nuget,
+        `-p:PackageVersion=${version}`, `-p:RepositoryCommit=${source}`]);
+      assert.ok(existsSync(resolve(nuget, `${entry.name}.${version}.nupkg`)), `Missing ${entry.name} package`);
+    }
+    for (const entry of orderedNpmPackages()) {
+      packNpm(resolve(root, entry.path), npm, version, source);
+      assert.ok(existsSync(resolve(npm, npmArchiveName(entry.name, version))), `Missing ${entry.name} package`);
+    }
+  });
 }
 
 async function main() {
@@ -250,6 +259,8 @@ async function main() {
     case "test": test(); break;
     case "pack": pack(version); break;
     case "pack-built": pack(version, { built: true }); break;
+    // Packs a fresh candidate and verifies its isolated consumers once.
+    case "verify:candidate":
     case "verify-packages":
       pack(version);
       await (await import("./verify-packages.mjs")).verifyPackages(version ?? workspace.version);
@@ -259,7 +270,7 @@ async function main() {
     case "native-aot": testNativeAot(); break;
     case "audit": auditDependencies(); break;
     default:
-      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify-packages [version], verify-editor, verify-editor-packed [version], native-aot, or audit.");
+      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor, verify-editor-packed [version], native-aot, or audit.");
   }
 }
 
