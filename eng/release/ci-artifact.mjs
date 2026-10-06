@@ -1,13 +1,14 @@
 // Reuse the package artifact of the successful CI push run for a release.
 //   find-ci                                        green ci.yml push run on main for GITHUB_SHA and its artifact
 //   prepare <packages> <version> <ci-run> <out>    check packages against version and commit; write an inventory
-//   verify <packages> <inventory>                  check packages against an inventory written by prepare
-//   release-check <version>                        the GitHub release must not exist; the tag must be absent or here
+//   verify <packages> <inventory> <version> <run>  check packages against the inventory, version and CI run
+//   release-check <version>                        tag and any release must be absent or at this commit (read-only)
+//   release <version> <packages>                   create the prerelease, or finish one that exists for this commit
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { root, workspace } from "../run.mjs";
 
 export const REPOSITORY = "Runic-Artifex/runic-translations-sdk";
@@ -36,6 +37,7 @@ export function selectArtifact(artifacts, run) {
   if (artifact.expired) throw new Error(`The ${ARTIFACT} artifact of ${run.html_url} has expired. Rerun all jobs of that CI run to regenerate it, or prepare a new version.`);
   assert.equal(artifact.workflow_run?.id, run.id, "Artifact belongs to a different run");
   assert.equal(artifact.workflow_run?.head_sha, run.head_sha, "Artifact belongs to a different commit");
+  assert.ok(Number.isSafeInteger(artifact.id) && artifact.id > 0, "Artifact has no id");
   return artifact;
 }
 
@@ -50,7 +52,9 @@ export async function findCiPackages({ repository, sha, token, fetchImpl = fetch
   const query = new URLSearchParams({ head_sha: sha, event: "push", branch: "main", per_page: "100" });
   const run = selectCiRun((await api(`actions/workflows/ci.yml/runs?${query}`)).workflow_runs, { repository, sha });
   const artifact = selectArtifact((await api(`actions/runs/${run.id}/artifacts?name=${ARTIFACT}`)).artifacts, run);
-  return { runId: String(run.id), runUrl: run.html_url, artifact: artifact.name };
+  // Download by id: re-uploading under the same name creates a new id, so the
+  // bytes downloaded later are exactly the artifact selected here.
+  return { runId: String(run.id), runUrl: run.html_url, artifact: artifact.name, artifactId: String(artifact.id) };
 }
 
 const nuspec = path => {
@@ -98,20 +102,49 @@ export function prepare(directory, version, source, ciRunId, inventory = workspa
   return { schema: SCHEMA, repository: REPOSITORY, version, source, ciRunId, packages: scan(directory, version, source, inventory) };
 }
 
-export function verify(directory, manifest, source, inventory = workspace) {
+export function verify(directory, manifest, source, version, ciRunId, inventory = workspace) {
   assert.equal(manifest.schema, SCHEMA, "Not a Translations release inventory");
   assert.equal(manifest.repository, REPOSITORY, "Not a Translations release inventory");
   assert.equal(manifest.source, source, `Inventory is for ${manifest.source}, not ${source}`);
+  assert.equal(manifest.version, version, `Inventory is for version ${manifest.version}, not ${version}`);
+  assert.equal(manifest.ciRunId, ciRunId, `Inventory is for CI run ${manifest.ciRunId}, not ${ciRunId}`);
   assert.deepEqual(scan(directory, manifest.version, source, inventory), manifest.packages, "Packages differ from the candidate inventory");
 }
 
-export function releaseCheck(version, source, spawn = spawnSync) {
+// The published release of this exact tag and commit, undefined if absent; fails for any other release or tag.
+function existingRelease(version, source, spawn) {
   const tag = `v${version}`;
-  const release = spawn("gh", ["release", "view", tag, "--repo", REPOSITORY, "--json", "url"], { encoding: "utf8" });
-  if (release.status === 0) throw new Error(`GitHub release ${tag} already exists (${JSON.parse(release.stdout).url}); publish a new version.`);
+  const release = spawn("gh", ["release", "view", tag, "--repo", REPOSITORY, "--json", "isDraft,url,assets"], { encoding: "utf8" });
   const tagged = spawn("gh", ["api", `repos/${REPOSITORY}/commits/${tag}`, "--jq", ".sha"], { encoding: "utf8" });
   if (tagged.status === 0 && tagged.stdout.trim() !== source) throw new Error(`Tag ${tag} belongs to ${tagged.stdout.trim()}, not ${source}.`);
-  return `Would create the prerelease ${tag} at ${source}.`;
+  if (release.status !== 0) return undefined;
+  const found = JSON.parse(release.stdout);
+  if (found.isDraft || tagged.status !== 0) throw new Error(`GitHub release ${tag} (${found.url}) is a draft or has no tag; publish or delete it first.`);
+  return found;
+}
+
+export function releaseCheck(version, source, spawn = spawnSync) {
+  const found = existingRelease(version, source, spawn);
+  return found ? `GitHub release v${version} already exists for ${source} (${found.url}); a rerun keeps it.`
+    : `Would create the prerelease v${version} at ${source}.`;
+}
+
+// A rerun after a partial publication keeps a release of this exact tag and commit
+// and only uploads assets it is missing, so tag-latest can still run.
+export function createRelease(version, source, files, spawn = spawnSync) {
+  const tag = `v${version}`;
+  const found = existingRelease(version, source, spawn);
+  let args;
+  if (!found) args = ["release", "create", tag, ...files, "--repo", REPOSITORY, "--target", source, "--prerelease", "--generate-notes"];
+  else {
+    const present = new Set((found.assets ?? []).map(asset => asset.name));
+    const missing = files.filter(file => !present.has(basename(file)));
+    if (!missing.length) return `GitHub release ${tag} already exists for ${source} with every asset.`;
+    args = ["release", "upload", tag, ...missing, "--repo", REPOSITORY];
+  }
+  const result = spawn("gh", args, { stdio: "inherit" });
+  if (result.status !== 0) throw new Error(`Could not ${found ? "complete" : "create"} GitHub release ${tag}.`);
+  return `${found ? "Completed" : "Created"} GitHub release ${tag} at ${source}.`;
 }
 
 const head = () => execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
@@ -121,18 +154,23 @@ async function main([command, ...args]) {
     const { GITHUB_REPOSITORY: repository, GITHUB_SHA: sha, GH_TOKEN: token, GITHUB_OUTPUT: output } = process.env;
     assert.ok(repository && sha && token && output, "Run in GitHub Actions with GH_TOKEN");
     const found = await findCiPackages({ repository, sha, token });
-    appendFileSync(output, `run-id=${found.runId}\nartifact=${found.artifact}\n`);
-    console.log(`Reusing ${found.artifact} from ${found.runUrl}`);
+    appendFileSync(output, `run-id=${found.runId}\nartifact-id=${found.artifactId}\n`);
+    console.log(`Reusing ${found.artifact} (artifact ${found.artifactId}) from ${found.runUrl}`);
   } else if (command === "prepare" && args.length === 4) {
     const [directory, version, ciRunId, output] = args;
     const manifest = prepare(directory, version, head(), ciRunId);
     writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n`);
     console.log(`Verified ${manifest.packages.length} packages for ${version} at ${manifest.source}`);
-  } else if (command === "verify" && args.length === 2) {
-    verify(args[0], JSON.parse(readFileSync(args[1], "utf8")), head());
+  } else if (command === "verify" && args.length === 4) {
+    const [directory, inventory, version, ciRunId] = args;
+    verify(directory, JSON.parse(readFileSync(inventory, "utf8")), head(), version, ciRunId);
   } else if (command === "release-check" && args.length === 1) {
     console.log(releaseCheck(args[0], head()));
-  } else throw new Error("Use find-ci, prepare <packages> <version> <ci-run-id> <inventory>, verify <packages> <inventory>, or release-check <version>");
+  } else if (command === "release" && args.length === 2) {
+    const [version, directory] = args;
+    const files = ["nuget", "npm"].flatMap(registry => readdirSync(join(directory, registry)).sort().map(file => join(directory, registry, file)));
+    console.log(createRelease(version, head(), files));
+  } else throw new Error("Use find-ci, prepare <packages> <version> <ci-run-id> <inventory>, verify <packages> <inventory> <version> <ci-run-id>, release-check <version>, or release <version> <packages>");
 }
 
 if (import.meta.main) main(process.argv.slice(2)).catch(error => {

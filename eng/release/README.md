@@ -20,13 +20,15 @@ environment) runs `eng/release/ci-artifact.mjs`:
   dispatched commit and its `runic-translations-packages` artifact. It fails clearly
   when there is no such run, the run is still in progress or failed, or the artifact
   expired (CI keeps it 30 days; rerun all jobs of that CI run to upload it again).
-- `actions/download-artifact` downloads it with `run-id` and `github-token`.
+- `actions/download-artifact` downloads it by id (`artifact-ids`, `run-id`,
+  `github-token`); a re-upload under the same name gets a new id, so it cannot swap the bytes.
 - `prepare` requires exactly the `eng/workspace.json` packages at the requested
   version, packed from the dispatched commit for this repository, and records their
   hashes in the `release-candidate-<run id>` artifact.
 - `publish.mjs publish --dry-run` reports which versions are missing and fails if a
-  published version has different contents; `release-check` fails if the GitHub
-  release exists or the tag points at another commit; `publish.mjs tag-latest
+  published version has different contents; `release-check` fails if the tag or an
+  existing GitHub release points at another commit, or the release is a draft (a
+  release of this exact tag and commit is kept); `publish.mjs tag-latest
   --dry-run` reports where npm `latest` would move.
 
 A dry run ends there, without OIDC, a registry write, a tag or a release. It
@@ -34,10 +36,13 @@ cannot detect missing trusted-publisher configuration, such as the first
 publication of a new npm package name (W120-023). Otherwise the `publish` job, the
 only one in the `preview` environment and the only one with `id-token: write` and
 `contents: write`, downloads the same artifact, checks it against the candidate
-inventory (`ci-artifact.mjs verify`), publishes missing package versions, creates
-the GitHub prerelease at the dispatched commit from those same files, and then,
+inventory, requested version and CI run (`ci-artifact.mjs verify`), publishes missing
+package versions, creates the GitHub prerelease at the dispatched commit from those
+same files (`ci-artifact.mjs release`; a rerun after a partial publication keeps a
+release of this tag and commit and uploads only missing assets), and then,
 because every release is a preview until 1.0, moves npm `latest` to it, never to
-an older version. `eng/release/ci-artifact.test.mjs` pins this contract.
+an older version, waiting while npm still answers 401 or 404 for a just-published
+name. `eng/release/ci-artifact.test.mjs` pins this contract.
 
 After publication, update the documentation catalog in `runic-site` (see
 "Release catalogs" in its `docs/README.md`). The workflow does not push to other

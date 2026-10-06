@@ -30,6 +30,20 @@ async function response(url) {
   return value;
 }
 
+// Waits for a just-published npm name: npm answers 401 for a scoped name it does
+// not know yet, and 404, 429 or 503 while it catches up. Bounded to about three minutes.
+export async function availableResponse(url, { fetchImpl = fetch, sleep = ms => new Promise(done => setTimeout(done, ms)), attempts = 12 } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    const value = await fetchImpl(url, { signal: AbortSignal.timeout(30_000) });
+    if (value.ok || ![401, 404, 429, 503].includes(value.status) || attempt === attempts) {
+      assert.ok(value.ok, `Registry lookup failed: ${value.status} ${url}`);
+      return value;
+    }
+    await value.body?.cancel();
+    await sleep(Math.min(15_000, 1000 * 2 ** attempt));
+  }
+}
+
 async function publishedMatches(candidate, version) {
   if (candidate.registry === "npm") {
     const metadata = await response(`https://registry.npmjs.org/${encodeURIComponent(candidate.name)}/${version}`);
@@ -95,7 +109,8 @@ async function npmLatest(name, dryRun) {
     await document.body?.cancel();
     if (document.status === 404) return undefined;
   }
-  const tags = await response(`https://registry.npmjs.org/-/package/${encodeURIComponent(name)}/dist-tags`);
+  const url = `https://registry.npmjs.org/-/package/${encodeURIComponent(name)}/dist-tags`;
+  const tags = dryRun ? await response(url) : await availableResponse(url);
   assert.ok(tags.ok, `npm dist-tag lookup failed for ${name}: ${tags.status}`);
   return (await tags.json()).latest;
 }

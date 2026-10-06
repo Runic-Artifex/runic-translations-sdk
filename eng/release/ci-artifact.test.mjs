@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ARTIFACT, CI_WORKFLOW, REPOSITORY, findCiPackages, prepare, releaseCheck, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
+import { ARTIFACT, CI_WORKFLOW, REPOSITORY, createRelease, findCiPackages, prepare, releaseCheck, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
 
 const sha = "a".repeat(40);
 const run = (id, extra = {}) => ({ id, head_sha: sha, event: "push", head_branch: "main", path: CI_WORKFLOW,
@@ -22,21 +22,22 @@ test("fails clearly when CI for the commit is missing, running or failed, or its
   expect(() => selectCiRun([], { repository: REPOSITORY, sha })).toThrow(`No push run of ${CI_WORKFLOW} on main exists for ${sha}`);
   expect(() => selectCiRun([run(4, { status: "in_progress", conclusion: null })], { repository: REPOSITORY, sha })).toThrow("still in_progress");
   expect(() => selectCiRun([run(5, { conclusion: "failure" })], { repository: REPOSITORY, sha })).toThrow("concluded failure");
-  const artifact = { name: ARTIFACT, expired: false, workflow_run: { id: 7, head_sha: sha } };
+  const artifact = { id: 70, name: ARTIFACT, expired: false, workflow_run: { id: 7, head_sha: sha } };
   expect(selectArtifact([artifact, { ...artifact, name: "rmf2-vscode-vsix" }], run(7))).toBe(artifact);
   expect(() => selectArtifact([], run(7))).toThrow("no single");
   expect(() => selectArtifact([{ ...artifact, expired: true }], run(7))).toThrow("expired");
   expect(() => selectArtifact([{ ...artifact, workflow_run: { id: 7, head_sha: "c".repeat(40) } }], run(7))).toThrow();
+  expect(() => selectArtifact([{ ...artifact, id: undefined }], run(7))).toThrow("no id");
 });
 
 test("queries GitHub for push runs of the commit", async () => {
   const urls = [];
   const fetchImpl = async url => {
     urls.push(new URL(url));
-    return Response.json(url.includes("/artifacts") ? { artifacts: [{ name: ARTIFACT, expired: false, workflow_run: { id: 8, head_sha: sha } }] }
+    return Response.json(url.includes("/artifacts") ? { artifacts: [{ id: 80, name: ARTIFACT, expired: false, workflow_run: { id: 8, head_sha: sha } }] }
       : { workflow_runs: [run(8)] });
   };
-  expect(await findCiPackages({ repository: REPOSITORY, sha, token: "t", fetchImpl })).toEqual({ runId: "8", runUrl: run(8).html_url, artifact: ARTIFACT });
+  expect(await findCiPackages({ repository: REPOSITORY, sha, token: "t", fetchImpl })).toEqual({ runId: "8", runUrl: run(8).html_url, artifact: ARTIFACT, artifactId: "80" });
   expect(urls[0].pathname).toBe(`/repos/${REPOSITORY}/actions/workflows/ci.yml/runs`);
   expect(Object.fromEntries(urls[0].searchParams)).toMatchObject({ head_sha: sha, event: "push", branch: "main" });
   await expect(findCiPackages({ repository: REPOSITORY, sha, token: "t", fetchImpl: async () => new Response("", { status: 403 }) })).rejects.toThrow("failed: 403");
@@ -60,12 +61,14 @@ with tarfile.open(d+'/npm/runic-artifex-translations-svelte-'+v+'.tgz','w:gz') a
     pack();
     const manifest = prepare(directory, version, sha, "42", inventory);
     expect(manifest.packages.map(p => p.name)).toEqual(["Runic.Translations", "@runic-artifex/translations-svelte"]);
-    verify(directory, manifest, sha, inventory);
-    expect(() => verify(directory, manifest, "b".repeat(40), inventory)).toThrow("Inventory is for");
+    verify(directory, manifest, sha, version, "42", inventory);
+    expect(() => verify(directory, manifest, "b".repeat(40), version, "42", inventory)).toThrow("Inventory is for");
+    expect(() => verify(directory, manifest, sha, "1.2.3-preview.2", "42", inventory)).toThrow("version");
+    expect(() => verify(directory, manifest, sha, version, "43", inventory)).toThrow("CI run");
     expect(() => prepare(directory, "1.2.3-preview.2", sha, "42", inventory)).toThrow("exactly");
     pack("1.2.3-preview.2");
     expect(() => prepare(directory, version, sha, "42", inventory)).toThrow("declares version");
-    expect(() => verify(directory, manifest, sha, inventory)).toThrow();
+    expect(() => verify(directory, manifest, sha, version, "42", inventory)).toThrow();
     pack(version, "b".repeat(40));
     expect(() => prepare(directory, version, sha, "42", inventory)).toThrow("packed from");
     pack();
@@ -74,22 +77,45 @@ with tarfile.open(d+'/npm/runic-artifex-translations-svelte-'+v+'.tgz','w:gz') a
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("the release check only reads and refuses an existing release or a foreign tag", () => {
-  const fake = ({ release = false, tag } = {}) => {
-    const calls = [];
-    const spawn = (command, args) => {
-      calls.push([command, ...args]);
-      if (args[0] === "release") return { status: release ? 0 : 1, stdout: JSON.stringify({ url: "u" }) };
-      return { status: tag ? 0 : 1, stdout: `${tag}\n` };
-    };
-    return { spawn, calls };
+const fakeGh = ({ release = false, tag, draft = false, assets = [] } = {}) => {
+  const calls = [];
+  const spawn = (command, args) => {
+    calls.push([command, ...args]);
+    if (args[0] === "release" && args[1] === "view") return { status: release ? 0 : 1, stdout: JSON.stringify({ url: "u", isDraft: draft, assets: assets.map(name => ({ name })) }) };
+    if (args[0] === "api") return { status: tag ? 0 : 1, stdout: `${tag}\n` };
+    return { status: 0 };
   };
-  const { spawn, calls } = fake();
+  return { spawn, calls };
+};
+
+test("the release check only reads and accepts only a release of this exact commit", () => {
+  const { spawn, calls } = fakeGh();
   expect(releaseCheck("1.2.3", sha, spawn)).toContain("Would create");
   expect(calls.map(c => c.slice(0, 3))).toEqual([["gh", "release", "view"], ["gh", "api", `repos/${REPOSITORY}/commits/v1.2.3`]]);
-  expect(releaseCheck("1.2.3", sha, fake({ tag: sha }).spawn)).toContain("Would create");
-  expect(() => releaseCheck("1.2.3", sha, fake({ release: true }).spawn)).toThrow("already exists");
-  expect(() => releaseCheck("1.2.3", sha, fake({ tag: "b".repeat(40) }).spawn)).toThrow("belongs to");
+  expect(releaseCheck("1.2.3", sha, fakeGh({ tag: sha }).spawn)).toContain("Would create");
+  expect(releaseCheck("1.2.3", sha, fakeGh({ release: true, tag: sha }).spawn)).toContain("already exists for");
+  expect(() => releaseCheck("1.2.3", sha, fakeGh({ release: true, tag: "b".repeat(40) }).spawn)).toThrow("belongs to");
+  expect(() => releaseCheck("1.2.3", sha, fakeGh({ tag: "b".repeat(40) }).spawn)).toThrow("belongs to");
+  expect(() => releaseCheck("1.2.3", sha, fakeGh({ release: true, tag: sha, draft: true }).spawn)).toThrow("draft");
+  expect(() => releaseCheck("1.2.3", sha, fakeGh({ release: true }).spawn)).toThrow("no tag");
+});
+
+test("a rerun keeps a release of this commit and uploads only missing assets", () => {
+  const files = ["p/nuget/A.nupkg", "p/npm/b.tgz"];
+  let { spawn, calls } = fakeGh();
+  expect(createRelease("1.2.3", sha, files, spawn)).toContain("Created");
+  const create = calls.at(-1);
+  expect(create.slice(0, 3)).toEqual(["gh", "release", "create"]);
+  expect(create[create.indexOf("--target") + 1]).toBe(sha);
+  ({ spawn, calls } = fakeGh({ release: true, tag: sha, assets: ["A.nupkg"] }));
+  expect(createRelease("1.2.3", sha, files, spawn)).toContain("Completed");
+  expect(calls.at(-1).slice(0, 5)).toEqual(["gh", "release", "upload", "v1.2.3", "p/npm/b.tgz"]);
+  ({ spawn, calls } = fakeGh({ release: true, tag: sha, assets: ["A.nupkg", "b.tgz"] }));
+  expect(createRelease("1.2.3", sha, files, spawn)).toContain("every asset");
+  expect(calls.some(c => ["create", "upload"].includes(c[2]))).toBe(false);
+  ({ spawn, calls } = fakeGh({ release: true, tag: "b".repeat(40) }));
+  expect(() => createRelease("1.2.3", sha, files, spawn)).toThrow("belongs to");
+  expect(calls.some(c => ["create", "upload"].includes(c[2]))).toBe(false);
 });
 
 test("publication reuses the CI artifact and never reruns tests or packing", () => {
@@ -100,8 +126,9 @@ test("publication reuses the CI artifact and never reruns tests or packing", () 
   for (const [name, source] of [["candidate", "steps.ci"], ["publish", "needs.candidate"]]) {
     const job = release.jobs[name];
     expect(job.steps.filter(s => s.run).map(s => s.run).join("\n")).not.toMatch(/run\.mjs (test|pack|verify)|verify-packages|verify:candidate/);
+    // By id, so a re-upload under the same name cannot change what is published.
     expect(job.steps.find(s => s.uses?.startsWith("actions/download-artifact@")).with).toEqual({
-      name: `\${{ ${source}.outputs.artifact }}`, path: "artifacts/packages",
+      "artifact-ids": `\${{ ${source}.outputs.artifact-id }}`, path: "artifacts/packages",
       "run-id": `\${{ ${source}.outputs.${source === "steps.ci" ? "run-id" : "ci-run-id"} }}`, "github-token": "${{ github.token }}" });
     expect(job.permissions.actions).toBe("read");
   }
@@ -114,7 +141,7 @@ test("a dry run performs every read-only check and never reaches OIDC, publicati
   const { candidate, publish } = release.jobs;
   expect(candidate.environment).toBeUndefined();
   expect(candidate.permissions).toEqual({ contents: "read", actions: "read" });
-  expect(candidate.steps.some(s => s.uses?.startsWith("NuGet/login") || s.run?.includes("gh release create"))).toBe(false);
+  expect(candidate.steps.some(s => s.uses?.startsWith("NuGet/login") || /gh release create|ci-artifact\.mjs release /.test(s.run ?? ""))).toBe(false);
   const checks = candidate.steps.filter(s => /publish\.mjs|release-check/.test(s.run ?? "")).map(s => s.run);
   expect(checks).toEqual(['bun eng/release/publish.mjs publish "$VERSION" --dry-run', 'bun eng/release/ci-artifact.mjs release-check "$VERSION"',
     'bun eng/release/publish.mjs tag-latest "$VERSION" --dry-run']);
@@ -124,7 +151,8 @@ test("a dry run performs every read-only check and never reaches OIDC, publicati
   const runs = publish.steps.filter(s => s.run).map(s => s.run);
   expect(runs.join("\n")).not.toContain("--dry-run");
   const index = text => runs.findIndex(r => r.includes(text));
+  expect(runs[index("ci-artifact.mjs verify")]).toBe('bun eng/release/ci-artifact.mjs verify artifacts/packages artifacts/release/packages.json "$VERSION" "$CI_RUN_ID"');
   expect(index("ci-artifact.mjs verify")).toBeLessThan(index("publish.mjs publish"));
-  expect(index("publish.mjs publish")).toBeLessThan(index("gh release create"));
-  expect(runs[index("gh release create")]).toContain('--target "$GITHUB_SHA"');
+  expect(index("publish.mjs publish")).toBeLessThan(index("ci-artifact.mjs release "));
+  expect(index("ci-artifact.mjs release ")).toBeLessThan(index("publish.mjs tag-latest"));
 });
