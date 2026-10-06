@@ -133,7 +133,7 @@
     <ItemGroup>
       <RunicBridgeFrontendInput Include="$(TranslationsOutputPath)/editor.esm-v5/**/*" />
       <RunicBridgeFrontendInput Include="../../packages/web/translations-svelte/dist/**/*;../../packages/web/translations-sveltekit/dist/**/*" />
-      <RunicBridgeFrontendInput Include="../../packages/web/vite-plugin-runic-translations/index.js;../../packages/web/vite-plugin-runic-translations/dist/**/*" />
+      <RunicBridgeFrontendInput Include="../../packages/web/vite-plugin-runic-translations/package.json;../../packages/web/vite-plugin-runic-translations/dist/**/*" />
     </ItemGroup>
   </Target>
 

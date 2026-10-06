@@ -75,6 +75,9 @@ The plugin discovers `translations/runic.json`, runs the pinned local tool befor
 Vite loads generated modules, and watches the config and locale `.rmf2` files,
 including file additions and removals. A
 watched authoring change is compiled before the virtual modules are invalidated.
+During `vite dev` the plugin keeps one `runic-translations serve` compiler
+running, so a save recompiles only the edited files instead of starting .NET
+again; production builds run the tool once.
 
 ## 4. Render a message
 

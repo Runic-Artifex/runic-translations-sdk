@@ -31,6 +31,20 @@ frontend/backend layout, use `runicTranslations({ project: "../translations" })`
 When another build owns generation, pass its generated `manifest` and optional
 `sourceFiles` instead.
 
+## Development server
+
+In project mode, `vite dev` starts one `runic-translations serve` process and
+sends it every regeneration, so a save does not pay for starting .NET and
+unchanged sources are not recompiled. The process restarts after a crash and
+stops with the dev server. When the installed tool has no `serve` command, or the
+process crashes three times in a row, the plugin logs a warning and runs
+`runic-translations generate` for each change instead. Set
+`persistentCompiler: false` to always run one-shot generation. `vite build`
+always runs the tool once.
+
+A change is compiled once and then invalidated in every Vite environment
+(client, SSR) through the `hotUpdate` hook.
+
 Manifest mode treats the supplied generated directory as externally owned.
 Changes to `sourceFiles` trigger a Vite refresh, but the plugin cannot recompile
 the project or recompute `sourceHash` without a compiler command. The owning
