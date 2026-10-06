@@ -1,19 +1,26 @@
 // Reuse the package artifact of the successful CI push run for a release.
-//   find-ci                                        green ci.yml push run on main for GITHUB_SHA and its artifact
-//   prepare <packages> <version> <ci-run> <out>    check packages against version and commit; write an inventory
-//   verify <packages> <inventory> <version> <run>  check packages against the inventory, version and CI run
-//   release-check <version>                        tag and any release must be absent or at this commit (read-only)
-//   release <version> <packages>                   create the prerelease, or finish one that exists for this commit
+//   find-ci                                              green ci.yml push run on main for GITHUB_SHA and its artifacts
+//   prepare <packages> <version> <ci-run> <out> <vsix>   check packages and VSIX files; write an inventory
+//   verify <packages> <inventory> <version> <run> <vsix> check them against the inventory, version and CI run
+//   describe <packages> <vsix> <version> <out>           write the CycloneDX SBOM of the release (local, deterministic)
+//   release-check <version>                              tag and any release must be absent or at this commit (read-only)
+//   release <version> <packages> <vsix> <sbom>           create the prerelease, or finish one that exists for this commit
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { root, workspace } from "../run.mjs";
 
 export const REPOSITORY = "Runic-Artifex/runic-translations-sdk";
 export const CI_WORKFLOW = ".github/workflows/ci.yml";
 export const ARTIFACT = "runic-translations-packages";
+// The IDE extensions CI builds for this commit; released as GitHub release assets.
+export const VSIX = [
+  { artifact: "rmf2-vscode-vsix", file: "runic-translations.vsix", id: "runic-translations" },
+  { artifact: "rmf2-visualstudio-vsix", file: "runic-translations-visualstudio.vsix", id: "Runic.Artifex.Translations.Rmf2" },
+];
 const SCHEMA = "runic.translations.preview/1";
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 const npmArchiveName = (name, version) => `${name.replace("@", "").replace("/", "-")}-${version}.tgz`;
@@ -30,11 +37,11 @@ export function selectCiRun(runs, { repository, sha }) {
   throw new Error(`CI for ${sha} concluded ${latest.conclusion} (${latest.html_url}). Rerun its failed jobs; publish needs a successful run.`);
 }
 
-export function selectArtifact(artifacts, run) {
-  const found = artifacts.filter(artifact => artifact.name === ARTIFACT);
-  if (found.length !== 1) throw new Error(`CI run ${run.html_url} has no single ${ARTIFACT} artifact.`);
+export function selectArtifact(artifacts, run, name = ARTIFACT) {
+  const found = artifacts.filter(artifact => artifact.name === name);
+  if (found.length !== 1) throw new Error(`CI run ${run.html_url} has no single ${name} artifact.`);
   const [artifact] = found;
-  if (artifact.expired) throw new Error(`The ${ARTIFACT} artifact of ${run.html_url} has expired. Rerun all jobs of that CI run to regenerate it, or prepare a new version.`);
+  if (artifact.expired) throw new Error(`The ${name} artifact of ${run.html_url} has expired. Rerun all jobs of that CI run to regenerate it, or prepare a new version.`);
   assert.equal(artifact.workflow_run?.id, run.id, "Artifact belongs to a different run");
   assert.equal(artifact.workflow_run?.head_sha, run.head_sha, "Artifact belongs to a different commit");
   assert.ok(Number.isSafeInteger(artifact.id) && artifact.id > 0, "Artifact has no id");
@@ -51,10 +58,13 @@ export async function findCiPackages({ repository, sha, token, fetchImpl = fetch
   };
   const query = new URLSearchParams({ head_sha: sha, event: "push", branch: "main", per_page: "100" });
   const run = selectCiRun((await api(`actions/workflows/ci.yml/runs?${query}`)).workflow_runs, { repository, sha });
-  const artifact = selectArtifact((await api(`actions/runs/${run.id}/artifacts?name=${ARTIFACT}`)).artifacts, run);
+  const artifacts = (await api(`actions/runs/${run.id}/artifacts?per_page=100`)).artifacts;
+  const artifact = selectArtifact(artifacts, run);
+  const vsix = VSIX.map(entry => selectArtifact(artifacts, run, entry.artifact));
   // Download by id: re-uploading under the same name creates a new id, so the
-  // bytes downloaded later are exactly the artifact selected here.
-  return { runId: String(run.id), runUrl: run.html_url, artifact: artifact.name, artifactId: String(artifact.id) };
+  // bytes downloaded later are exactly the artifacts selected here.
+  return { runId: String(run.id), runUrl: run.html_url, artifact: artifact.name, artifactId: String(artifact.id),
+    vsixArtifactIds: vsix.map(entry => entry.id).join(",") };
 }
 
 const nuspec = path => {
@@ -97,18 +107,54 @@ export function scan(directory, version, source, inventory = workspace) {
   return packages;
 }
 
-export function prepare(directory, version, source, ciRunId, inventory = workspace) {
-  assert.match(ciRunId ?? "", /^[1-9][0-9]*$/, "Expected a CI run id");
-  return { schema: SCHEMA, repository: REPOSITORY, version, source, ciRunId, packages: scan(directory, version, source, inventory) };
+const vsixIdentity = path => JSON.parse(execFileSync("python3", ["-c",
+  "import json,sys,zipfile,xml.etree.ElementTree as E\nz=zipfile.ZipFile(sys.argv[1])\nassert z.testzip() is None,'corrupt VSIX'\n"
+  + "i=[e for e in E.fromstring(z.read('extension.vsixmanifest')).iter() if e.tag.rsplit('}',1)[-1]=='Identity']\nassert len(i)==1,'one VSIX identity'\n"
+  + "print(json.dumps({k.lower():i[0].get(k) for k in ('Id','Version','Publisher')}))", path], { encoding: "utf8" }));
+
+// Exactly the two IDE extensions, one per CI artifact directory, with their expected identities.
+export function scanVsix(directory) {
+  assert.deepEqual(readdirSync(directory).sort(), VSIX.map(entry => entry.artifact).sort(), "VSIX directory must contain exactly the IDE extension artifacts");
+  return VSIX.map(({ artifact, file, id }) => {
+    assert.deepEqual(readdirSync(join(directory, artifact)), [file], `${artifact} must contain only ${file}`);
+    const path = resolve(directory, artifact, file);
+    assert.ok(lstatSync(path).isFile(), `${file} must be a regular file`);
+    const identity = vsixIdentity(path);
+    assert.equal(identity.id, id, `${file} declares extension ${identity.id}`);
+    return { name: artifact, file: `${artifact}/${file}`, sha256: sha256(readFileSync(path)), identity };
+  });
 }
 
-export function verify(directory, manifest, source, version, ciRunId, inventory = workspace) {
+export function prepare(directory, version, source, ciRunId, inventory = workspace, vsixDirectory) {
+  assert.match(ciRunId ?? "", /^[1-9][0-9]*$/, "Expected a CI run id");
+  assert.ok(vsixDirectory, "Expected the VSIX directory");
+  return { schema: SCHEMA, repository: REPOSITORY, version, source, ciRunId, packages: scan(directory, version, source, inventory),
+    vsix: scanVsix(vsixDirectory) };
+}
+
+export function verify(directory, manifest, source, version, ciRunId, inventory = workspace, vsixDirectory) {
   assert.equal(manifest.schema, SCHEMA, "Not a Translations release inventory");
   assert.equal(manifest.repository, REPOSITORY, "Not a Translations release inventory");
   assert.equal(manifest.source, source, `Inventory is for ${manifest.source}, not ${source}`);
   assert.equal(manifest.version, version, `Inventory is for version ${manifest.version}, not ${version}`);
   assert.equal(manifest.ciRunId, ciRunId, `Inventory is for CI run ${manifest.ciRunId}, not ${ciRunId}`);
   assert.deepEqual(scan(directory, manifest.version, source, inventory), manifest.packages, "Packages differ from the candidate inventory");
+  assert.ok(vsixDirectory, "Expected the VSIX directory");
+  assert.deepEqual(scanVsix(vsixDirectory), manifest.vsix, "VSIX files differ from the candidate inventory");
+}
+
+const releaseFiles = (packages, vsixDirectory) => [
+  ...["nuget", "npm"].flatMap(registry => readdirSync(join(packages, registry)).sort().map(file => join(packages, registry, file))),
+  ...VSIX.map(entry => join(vsixDirectory, entry.artifact, entry.file))];
+export const sbomName = version => `${REPOSITORY.split("/")[1]}-${version}.cdx.json`;
+
+// Writes the SBOM of the release files; the same files and commit always give the same bytes.
+export function describe(packages, vsixDirectory, version, source, output, epoch) {
+  mkdirSync(output, { recursive: true });
+  const path = join(output, sbomName(version));
+  execFileSync("python3", [fileURLToPath(new URL("./sbom.py", import.meta.url)), "--repository", REPOSITORY, "--version", version,
+    "--source", source, "--epoch", String(epoch), "--output", path, ...releaseFiles(packages, vsixDirectory)], { stdio: "inherit" });
+  return path;
 }
 
 const ghFailure = (what, result) => new Error(`${what} failed: ${(result.stderr ?? "").trim() || `exit ${result.status ?? "unavailable"}`}`);
@@ -190,23 +236,30 @@ async function main([command, ...args]) {
     const { GITHUB_REPOSITORY: repository, GITHUB_SHA: sha, GH_TOKEN: token, GITHUB_OUTPUT: output } = process.env;
     assert.ok(repository && sha && token && output, "Run in GitHub Actions with GH_TOKEN");
     const found = await findCiPackages({ repository, sha, token });
-    appendFileSync(output, `run-id=${found.runId}\nartifact-id=${found.artifactId}\n`);
-    console.log(`Reusing ${found.artifact} (artifact ${found.artifactId}) from ${found.runUrl}`);
-  } else if (command === "prepare" && args.length === 4) {
-    const [directory, version, ciRunId, output] = args;
-    const manifest = prepare(directory, version, head(), ciRunId);
+    appendFileSync(output, `run-id=${found.runId}\nartifact-id=${found.artifactId}\nvsix-artifact-ids=${found.vsixArtifactIds}\n`);
+    console.log(`Reusing ${found.artifact} (artifact ${found.artifactId}) and VSIX artifacts ${found.vsixArtifactIds} from ${found.runUrl}`);
+  } else if (command === "prepare" && args.length === 5) {
+    const [directory, version, ciRunId, output, vsixDirectory] = args;
+    const manifest = prepare(directory, version, head(), ciRunId, workspace, vsixDirectory);
     writeFileSync(output, `${JSON.stringify(manifest, null, 2)}\n`);
-    console.log(`Verified ${manifest.packages.length} packages for ${version} at ${manifest.source}`);
-  } else if (command === "verify" && args.length === 4) {
-    const [directory, inventory, version, ciRunId] = args;
-    verify(directory, JSON.parse(readFileSync(inventory, "utf8")), head(), version, ciRunId);
+    console.log(`Verified ${manifest.packages.length} packages and ${manifest.vsix.length} VSIX files for ${version} at ${manifest.source}`);
+  } else if (command === "verify" && args.length === 5) {
+    const [directory, inventory, version, ciRunId, vsixDirectory] = args;
+    verify(directory, JSON.parse(readFileSync(inventory, "utf8")), head(), version, ciRunId, workspace, vsixDirectory);
+  } else if (command === "describe" && args.length === 4) {
+    const [directory, vsixDirectory, version, output] = args;
+    const source = head();
+    const epoch = Number(execFileSync("git", ["show", "-s", "--format=%ct", source], { cwd: root, encoding: "utf8" }).trim());
+    const path = describe(directory, vsixDirectory, version, source, output, epoch);
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `sbom=${basename(path)}\n`);
   } else if (command === "release-check" && args.length === 1) {
     console.log(releaseCheck(args[0], head()));
-  } else if (command === "release" && args.length === 2) {
-    const [version, directory] = args;
-    const files = ["nuget", "npm"].flatMap(registry => readdirSync(join(directory, registry)).sort().map(file => join(directory, registry, file)));
+  } else if (command === "release" && args.length === 4) {
+    const [version, directory, vsixDirectory, sbom] = args;
+    const files = [...releaseFiles(directory, vsixDirectory), sbom];
+    for (const file of files) assert.ok(existsSync(file), `Missing release asset ${file}`);
     console.log(createRelease(version, head(), files));
-  } else throw new Error("Use find-ci, prepare <packages> <version> <ci-run-id> <inventory>, verify <packages> <inventory> <version> <ci-run-id>, release-check <version>, or release <version> <packages>");
+  } else throw new Error("Use find-ci, prepare <packages> <version> <ci-run-id> <inventory> <vsix>, verify <packages> <inventory> <version> <ci-run-id> <vsix>, describe <packages> <vsix> <version> <output>, release-check <version>, or release <version> <packages> <vsix> <sbom>");
 }
 
 if (import.meta.main) main(process.argv.slice(2)).catch(error => {

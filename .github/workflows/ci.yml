@@ -209,7 +209,8 @@ jobs:
           name: rmf2-vscode-vsix
           path: tools/vscode-runic-translations/artifacts/runic-translations.vsix
           if-no-files-found: error
-          retention-days: 14
+          # Kept as long as the package artifact: Publish preview releases it.
+          retention-days: 30
   vsix:
     name: IDE / Windows VSIX package
     runs-on: windows-2025
@@ -233,7 +234,8 @@ jobs:
           name: rmf2-visualstudio-vsix
           path: tools/visualstudio-runic-translations/artifacts/runic-translations-visualstudio.vsix
           if-no-files-found: error
-          retention-days: 14
+          # Kept as long as the package artifact: Publish preview releases it.
+          retention-days: 30
   verify:
     name: verify
     if: always()
