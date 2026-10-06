@@ -1,0 +1,18 @@
+<Project>
+  <!--
+    Libraries whose assemblies a package exposes under lib/ set RunicTrackPublicApi and
+    track their public API with PublicApiAnalyzers. Packable ones also validate their
+    package against the last published release. The Build package, the generator,
+    the tool and the template package expose no referenceable assemblies, so they are
+    not tracked.
+  -->
+  <PropertyGroup Condition="'$(RunicTrackPublicApi)' == 'true' and '$(IsPackable)' != 'false'">
+    <EnablePackageValidation>true</EnablePackageValidation>
+    <PackageValidationBaselineVersion Condition="'$(PackageValidationBaselineVersion)' == ''">$(RunicPackageValidationBaselineVersion)</PackageValidationBaselineVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(RunicTrackPublicApi)' == 'true'">
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt;PublicAPI.Unshipped.txt" Pack="false" />
+  </ItemGroup>
+</Project>

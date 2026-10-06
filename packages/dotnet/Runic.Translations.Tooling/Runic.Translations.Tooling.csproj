@@ -5,6 +5,8 @@
     <AssemblyName>Runic.Translations.Tooling</AssemblyName>
     <RootNamespace>Runic.Translations.Tooling</RootNamespace>
     <PackageId>Runic.Translations.Tooling</PackageId>
+    <!-- Packed under lib/; its public API is tracked in PublicAPI.*.txt. -->
+    <RunicTrackPublicApi>true</RunicTrackPublicApi>
     <Description>MF2 compiler, interchange, and transactional authoring facade for Runic Translations.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IsPackable>true</IsPackable>

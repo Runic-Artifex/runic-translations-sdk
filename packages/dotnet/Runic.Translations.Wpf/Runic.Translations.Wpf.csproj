@@ -4,6 +4,8 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- Packed under lib/; its public API is tracked in PublicAPI.*.txt. -->
+    <RunicTrackPublicApi>true</RunicTrackPublicApi>
     <Description>WPF inline rendering for compiled RMF2 messages.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>

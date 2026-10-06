@@ -125,7 +125,6 @@ function verifyEditorPacked(version = `${workspace.version}.editor-packed`) {
 
 function testManaged() {
   const projects = [
-    "tests/dotnet/Runic.Translations.ApiTests/Runic.Translations.ApiTests.csproj",
     "tests/dotnet/Runic.Translations.Authoring.Tests/Runic.Translations.Authoring.Tests.csproj",
     "tests/dotnet/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj",
     "tests/dotnet/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj",

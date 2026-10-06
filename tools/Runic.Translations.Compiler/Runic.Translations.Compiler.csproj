@@ -4,6 +4,8 @@
     <TargetFramework>$(RunicTranslationsGeneratorTargetFramework)</TargetFramework>
     <AssemblyName>Runic.Translations.Compiler</AssemblyName>
     <RootNamespace>Runic.Translations.Compiler</RootNamespace>
+    <!-- Packed under lib/ of Runic.Translations.Tooling; its public API is tracked in PublicAPI.*.txt. -->
+    <RunicTrackPublicApi>true</RunicTrackPublicApi>
     <Description>Pure deterministic compiler kernel for Runic Translations.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IsPackable>false</IsPackable>

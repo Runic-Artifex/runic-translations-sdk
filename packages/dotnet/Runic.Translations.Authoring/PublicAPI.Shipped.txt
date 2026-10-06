@@ -1,0 +1,316 @@
+#nullable enable
+Runic.Translations.Authoring.Rmf2ResourceWriter
+Runic.Translations.Authoring.Rmf2VariableReference
+Runic.Translations.Authoring.Rmf2VariableReference.<Clone>$() -> Runic.Translations.Authoring.Rmf2VariableReference!
+Runic.Translations.Authoring.Rmf2VariableReference.Deconstruct(out Runic.Translations.Compiler.Rmf2ResourceDocument! Document, out Runic.Translations.Compiler.Rmf2ResourceNode! Resource, out Runic.Translations.Compiler.TextSourceLocation! Location, out bool IsDeclaration) -> void
+Runic.Translations.Authoring.Rmf2VariableReference.Document.get -> Runic.Translations.Compiler.Rmf2ResourceDocument!
+Runic.Translations.Authoring.Rmf2VariableReference.Document.init -> void
+Runic.Translations.Authoring.Rmf2VariableReference.Equals(Runic.Translations.Authoring.Rmf2VariableReference? other) -> bool
+Runic.Translations.Authoring.Rmf2VariableReference.IsDeclaration.get -> bool
+Runic.Translations.Authoring.Rmf2VariableReference.IsDeclaration.init -> void
+Runic.Translations.Authoring.Rmf2VariableReference.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+Runic.Translations.Authoring.Rmf2VariableReference.Location.init -> void
+Runic.Translations.Authoring.Rmf2VariableReference.Resource.get -> Runic.Translations.Compiler.Rmf2ResourceNode!
+Runic.Translations.Authoring.Rmf2VariableReference.Resource.init -> void
+Runic.Translations.Authoring.Rmf2VariableReference.Rmf2VariableReference(Runic.Translations.Compiler.Rmf2ResourceDocument! Document, Runic.Translations.Compiler.Rmf2ResourceNode! Resource, Runic.Translations.Compiler.TextSourceLocation! Location, bool IsDeclaration) -> void
+Runic.Translations.Authoring.Rmf2Workspace
+Runic.Translations.Authoring.Rmf2Workspace.AddLocale(string! locale, string? fallback = null, string? copyFrom = null) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.BaseLocale.get -> string!
+Runic.Translations.Authoring.Rmf2Workspace.Complete(string! path, string! key, int byteOffset) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2Completion!>!
+Runic.Translations.Authoring.Rmf2Workspace.CreateResource(string! path, System.Collections.Generic.IReadOnlyList<string!>! logicalPath, string! message) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.Documents.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2ResourceDocument!>!
+Runic.Translations.Authoring.Rmf2Workspace.Extract(string! sourcePath, System.Collections.Generic.IReadOnlyList<string!>! localGroup) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.Format(string! path) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.Inline(string! sourcePath, string! destinationPath) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.LanguageService.get -> Runic.Translations.Compiler.Rmf2LanguageService!
+Runic.Translations.Authoring.Rmf2Workspace.LocalPath(string! path, System.Collections.Generic.IReadOnlyList<string!>! logicalPath) -> System.Collections.Generic.IReadOnlyList<string!>!
+Runic.Translations.Authoring.Rmf2Workspace.Locale(string! path) -> string!
+Runic.Translations.Authoring.Rmf2Workspace.LogicalPath(string! path, Runic.Translations.Compiler.Rmf2ResourceNode! node) -> System.Collections.Generic.IReadOnlyList<string!>!
+Runic.Translations.Authoring.Rmf2Workspace.MutateResource(System.Collections.Generic.IReadOnlyList<string!>! logicalPath, System.Collections.Generic.IReadOnlyList<string!>? targetPath, bool duplicate = false) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.RemoveLocale(string! locale, string? replacementFallback = null) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.Rename(System.Collections.Generic.IReadOnlyList<string!>! logicalPath, string! newName) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.RenameInput(string! path, string! key, string! name, string! newName) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.RenameLocal(string! path, string! key, string! name, string! newName) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.RenameSlot(string! path, string! key, string! name, string! newName) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.Revision(string! path) -> string!
+Runic.Translations.Authoring.Rmf2Workspace.Rmf2Workspace(string! root, Runic.Translations.Compiler.TranslationSource! project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource!>! sources) -> void
+Runic.Translations.Authoring.Rmf2Workspace.Rmf2Workspace(string! root, Runic.Translations.Compiler.TranslationSource! project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource!>! sources, System.Threading.CancellationToken cancellationToken) -> void
+Runic.Translations.Authoring.Rmf2Workspace.SetFallback(string! locale, string? fallback = null) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+Runic.Translations.Authoring.Rmf2Workspace.Update(string! path, byte[]! content, string! expectedRevision) -> void
+Runic.Translations.Authoring.Rmf2Workspace.VariableReferences(string! path, string! key, string! name) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.Rmf2VariableReference!>!
+Runic.Translations.Authoring.Rmf2WorkspaceCache
+Runic.Translations.Authoring.Rmf2WorkspaceCache.Create(string! root, Runic.Translations.Compiler.TranslationSource! project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource!>! sources, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Runic.Translations.Authoring.Rmf2Workspace!
+Runic.Translations.Authoring.Rmf2WorkspaceCache.Rmf2WorkspaceCache(int capacity = 256) -> void
+Runic.Translations.Authoring.TranslationAddLocaleRequest
+Runic.Translations.Authoring.TranslationAddLocaleRequest.<Clone>$() -> Runic.Translations.Authoring.TranslationAddLocaleRequest!
+Runic.Translations.Authoring.TranslationAddLocaleRequest.CatalogId.get -> string!
+Runic.Translations.Authoring.TranslationAddLocaleRequest.CatalogId.init -> void
+Runic.Translations.Authoring.TranslationAddLocaleRequest.CopyFromLocale.get -> string!
+Runic.Translations.Authoring.TranslationAddLocaleRequest.CopyFromLocale.init -> void
+Runic.Translations.Authoring.TranslationAddLocaleRequest.Deconstruct(out string! Root, out string! CatalogId, out string! Locale, out string? Fallback, out string! CopyFromLocale) -> void
+Runic.Translations.Authoring.TranslationAddLocaleRequest.Equals(Runic.Translations.Authoring.TranslationAddLocaleRequest? other) -> bool
+Runic.Translations.Authoring.TranslationAddLocaleRequest.Fallback.get -> string?
+Runic.Translations.Authoring.TranslationAddLocaleRequest.Fallback.init -> void
+Runic.Translations.Authoring.TranslationAddLocaleRequest.Locale.get -> string!
+Runic.Translations.Authoring.TranslationAddLocaleRequest.Locale.init -> void
+Runic.Translations.Authoring.TranslationAddLocaleRequest.Root.get -> string!
+Runic.Translations.Authoring.TranslationAddLocaleRequest.Root.init -> void
+Runic.Translations.Authoring.TranslationAddLocaleRequest.TranslationAddLocaleRequest(string! Root, string! CatalogId, string! Locale, string? Fallback, string! CopyFromLocale) -> void
+Runic.Translations.Authoring.TranslationAuthoringException
+Runic.Translations.Authoring.TranslationAuthoringException.TranslationAuthoringException(string! message) -> void
+Runic.Translations.Authoring.TranslationCreateKeyRequest
+Runic.Translations.Authoring.TranslationCreateKeyRequest.<Clone>$() -> Runic.Translations.Authoring.TranslationCreateKeyRequest!
+Runic.Translations.Authoring.TranslationCreateKeyRequest.CatalogId.get -> string!
+Runic.Translations.Authoring.TranslationCreateKeyRequest.CatalogId.init -> void
+Runic.Translations.Authoring.TranslationCreateKeyRequest.Deconstruct(out string! Root, out string! CatalogId, out string! Key, out string! InitialValue) -> void
+Runic.Translations.Authoring.TranslationCreateKeyRequest.Equals(Runic.Translations.Authoring.TranslationCreateKeyRequest? other) -> bool
+Runic.Translations.Authoring.TranslationCreateKeyRequest.InitialValue.get -> string!
+Runic.Translations.Authoring.TranslationCreateKeyRequest.InitialValue.init -> void
+Runic.Translations.Authoring.TranslationCreateKeyRequest.Key.get -> string!
+Runic.Translations.Authoring.TranslationCreateKeyRequest.Key.init -> void
+Runic.Translations.Authoring.TranslationCreateKeyRequest.Root.get -> string!
+Runic.Translations.Authoring.TranslationCreateKeyRequest.Root.init -> void
+Runic.Translations.Authoring.TranslationCreateKeyRequest.TranslationCreateKeyRequest(string! Root, string! CatalogId, string! Key, string! InitialValue) -> void
+Runic.Translations.Authoring.TranslationEditorState
+Runic.Translations.Authoring.TranslationEditorState.<Clone>$() -> Runic.Translations.Authoring.TranslationEditorState!
+Runic.Translations.Authoring.TranslationEditorState.CatalogId.get -> string!
+Runic.Translations.Authoring.TranslationEditorState.CatalogId.init -> void
+Runic.Translations.Authoring.TranslationEditorState.Deconstruct(out string! CatalogId, out System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationEditorStateEntry!>! Entries, out System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationTerminologyEntry!>! Terminology) -> void
+Runic.Translations.Authoring.TranslationEditorState.Entries.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationEditorStateEntry!>!
+Runic.Translations.Authoring.TranslationEditorState.Entries.init -> void
+Runic.Translations.Authoring.TranslationEditorState.Equals(Runic.Translations.Authoring.TranslationEditorState? other) -> bool
+Runic.Translations.Authoring.TranslationEditorState.Terminology.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationTerminologyEntry!>!
+Runic.Translations.Authoring.TranslationEditorState.Terminology.init -> void
+Runic.Translations.Authoring.TranslationEditorState.TranslationEditorState(string! CatalogId, System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationEditorStateEntry!>! Entries, System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationTerminologyEntry!>! Terminology) -> void
+Runic.Translations.Authoring.TranslationEditorStateEntry
+Runic.Translations.Authoring.TranslationEditorStateEntry.<Clone>$() -> Runic.Translations.Authoring.TranslationEditorStateEntry!
+Runic.Translations.Authoring.TranslationEditorStateEntry.Deconstruct(out string! Key, out string! Locale, out string! State, out string? Note, out string? SourceFingerprint, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Samples) -> void
+Runic.Translations.Authoring.TranslationEditorStateEntry.Equals(Runic.Translations.Authoring.TranslationEditorStateEntry? other) -> bool
+Runic.Translations.Authoring.TranslationEditorStateEntry.Key.get -> string!
+Runic.Translations.Authoring.TranslationEditorStateEntry.Key.init -> void
+Runic.Translations.Authoring.TranslationEditorStateEntry.Locale.get -> string!
+Runic.Translations.Authoring.TranslationEditorStateEntry.Locale.init -> void
+Runic.Translations.Authoring.TranslationEditorStateEntry.Note.get -> string?
+Runic.Translations.Authoring.TranslationEditorStateEntry.Note.init -> void
+Runic.Translations.Authoring.TranslationEditorStateEntry.Samples.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Runic.Translations.Authoring.TranslationEditorStateEntry.Samples.init -> void
+Runic.Translations.Authoring.TranslationEditorStateEntry.SourceFingerprint.get -> string?
+Runic.Translations.Authoring.TranslationEditorStateEntry.SourceFingerprint.init -> void
+Runic.Translations.Authoring.TranslationEditorStateEntry.State.get -> string!
+Runic.Translations.Authoring.TranslationEditorStateEntry.State.init -> void
+Runic.Translations.Authoring.TranslationEditorStateEntry.TranslationEditorStateEntry(string! Key, string! Locale, string! State, string? Note, string? SourceFingerprint, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Samples) -> void
+Runic.Translations.Authoring.TranslationEditorStateException
+Runic.Translations.Authoring.TranslationEditorStateException.TranslationEditorStateException(string! message) -> void
+Runic.Translations.Authoring.TranslationEditorStateLoadResult
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.<Clone>$() -> Runic.Translations.Authoring.TranslationEditorStateLoadResult!
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.Deconstruct(out string! Path, out string? Revision, out Runic.Translations.Authoring.TranslationEditorState! State, out string? Error) -> void
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.Equals(Runic.Translations.Authoring.TranslationEditorStateLoadResult? other) -> bool
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.Error.get -> string?
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.Error.init -> void
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.Path.get -> string!
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.Path.init -> void
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.Revision.get -> string?
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.Revision.init -> void
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.State.get -> Runic.Translations.Authoring.TranslationEditorState!
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.State.init -> void
+Runic.Translations.Authoring.TranslationEditorStateLoadResult.TranslationEditorStateLoadResult(string! Path, string? Revision, Runic.Translations.Authoring.TranslationEditorState! State, string? Error) -> void
+Runic.Translations.Authoring.TranslationEditorStateStore
+Runic.Translations.Authoring.TranslationKeyMutationKind
+Runic.Translations.Authoring.TranslationKeyMutationKind.Delete = 1 -> Runic.Translations.Authoring.TranslationKeyMutationKind
+Runic.Translations.Authoring.TranslationKeyMutationKind.Duplicate = 2 -> Runic.Translations.Authoring.TranslationKeyMutationKind
+Runic.Translations.Authoring.TranslationKeyMutationKind.RenameOrMove = 0 -> Runic.Translations.Authoring.TranslationKeyMutationKind
+Runic.Translations.Authoring.TranslationKeyMutationRequest
+Runic.Translations.Authoring.TranslationKeyMutationRequest.<Clone>$() -> Runic.Translations.Authoring.TranslationKeyMutationRequest!
+Runic.Translations.Authoring.TranslationKeyMutationRequest.CatalogId.get -> string!
+Runic.Translations.Authoring.TranslationKeyMutationRequest.CatalogId.init -> void
+Runic.Translations.Authoring.TranslationKeyMutationRequest.Deconstruct(out string! Root, out string! CatalogId, out Runic.Translations.Authoring.TranslationKeyMutationKind Kind, out string! SourceKey, out string? TargetKey) -> void
+Runic.Translations.Authoring.TranslationKeyMutationRequest.Equals(Runic.Translations.Authoring.TranslationKeyMutationRequest? other) -> bool
+Runic.Translations.Authoring.TranslationKeyMutationRequest.Kind.get -> Runic.Translations.Authoring.TranslationKeyMutationKind
+Runic.Translations.Authoring.TranslationKeyMutationRequest.Kind.init -> void
+Runic.Translations.Authoring.TranslationKeyMutationRequest.Root.get -> string!
+Runic.Translations.Authoring.TranslationKeyMutationRequest.Root.init -> void
+Runic.Translations.Authoring.TranslationKeyMutationRequest.SourceKey.get -> string!
+Runic.Translations.Authoring.TranslationKeyMutationRequest.SourceKey.init -> void
+Runic.Translations.Authoring.TranslationKeyMutationRequest.TargetKey.get -> string?
+Runic.Translations.Authoring.TranslationKeyMutationRequest.TargetKey.init -> void
+Runic.Translations.Authoring.TranslationKeyMutationRequest.TranslationKeyMutationRequest(string! Root, string! CatalogId, Runic.Translations.Authoring.TranslationKeyMutationKind Kind, string! SourceKey, string? TargetKey) -> void
+Runic.Translations.Authoring.TranslationPendingTransaction
+Runic.Translations.Authoring.TranslationPendingTransaction.<Clone>$() -> Runic.Translations.Authoring.TranslationPendingTransaction!
+Runic.Translations.Authoring.TranslationPendingTransaction.CatalogId.get -> string!
+Runic.Translations.Authoring.TranslationPendingTransaction.CatalogId.init -> void
+Runic.Translations.Authoring.TranslationPendingTransaction.Deconstruct(out string! Root, out string! CatalogId, out System.Collections.Generic.IReadOnlyList<string!>! Paths) -> void
+Runic.Translations.Authoring.TranslationPendingTransaction.Equals(Runic.Translations.Authoring.TranslationPendingTransaction? other) -> bool
+Runic.Translations.Authoring.TranslationPendingTransaction.Paths.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Runic.Translations.Authoring.TranslationPendingTransaction.Paths.init -> void
+Runic.Translations.Authoring.TranslationPendingTransaction.Root.get -> string!
+Runic.Translations.Authoring.TranslationPendingTransaction.Root.init -> void
+Runic.Translations.Authoring.TranslationPendingTransaction.TranslationPendingTransaction(string! Root, string! CatalogId, System.Collections.Generic.IReadOnlyList<string!>! Paths) -> void
+Runic.Translations.Authoring.TranslationProjectCreationRequest
+Runic.Translations.Authoring.TranslationProjectCreationRequest.AdditionalLocales.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationProjectLocale!>!
+Runic.Translations.Authoring.TranslationProjectCreationRequest.CatalogId.get -> string!
+Runic.Translations.Authoring.TranslationProjectCreationRequest.ClassName.get -> string!
+Runic.Translations.Authoring.TranslationProjectCreationRequest.CodeNamespace.get -> string!
+Runic.Translations.Authoring.TranslationProjectCreationRequest.DefaultLocale.get -> string!
+Runic.Translations.Authoring.TranslationProjectCreationRequest.Directory.get -> string!
+Runic.Translations.Authoring.TranslationProjectCreationRequest.IncludeStarterMessage.get -> bool
+Runic.Translations.Authoring.TranslationProjectCreationRequest.TranslationProjectCreationRequest(string! directory, string! catalogId, string! defaultLocale, string! codeNamespace, string! className, System.Collections.Generic.IEnumerable<Runic.Translations.Authoring.TranslationProjectLocale!>? additionalLocales = null, bool includeStarterMessage = true) -> void
+Runic.Translations.Authoring.TranslationProjectFile
+Runic.Translations.Authoring.TranslationProjectFile.GetUtf8Bytes() -> byte[]!
+Runic.Translations.Authoring.TranslationProjectFile.RelativePath.get -> string!
+Runic.Translations.Authoring.TranslationProjectLocale
+Runic.Translations.Authoring.TranslationProjectLocale.<Clone>$() -> Runic.Translations.Authoring.TranslationProjectLocale!
+Runic.Translations.Authoring.TranslationProjectLocale.Deconstruct(out string! Tag, out string? Fallback) -> void
+Runic.Translations.Authoring.TranslationProjectLocale.Equals(Runic.Translations.Authoring.TranslationProjectLocale? other) -> bool
+Runic.Translations.Authoring.TranslationProjectLocale.Fallback.get -> string?
+Runic.Translations.Authoring.TranslationProjectLocale.Fallback.init -> void
+Runic.Translations.Authoring.TranslationProjectLocale.Tag.get -> string!
+Runic.Translations.Authoring.TranslationProjectLocale.Tag.init -> void
+Runic.Translations.Authoring.TranslationProjectLocale.TranslationProjectLocale(string! Tag, string? Fallback = null) -> void
+Runic.Translations.Authoring.TranslationProjectPlan
+Runic.Translations.Authoring.TranslationProjectPlan.Files.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationProjectFile!>!
+Runic.Translations.Authoring.TranslationProjectPlan.IsValid.get -> bool
+Runic.Translations.Authoring.TranslationProjectPlan.Locales.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationProjectLocale!>!
+Runic.Translations.Authoring.TranslationProjectPlan.Request.get -> Runic.Translations.Authoring.TranslationProjectCreationRequest!
+Runic.Translations.Authoring.TranslationProjectScaffolder
+Runic.Translations.Authoring.TranslationProjectWriter
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.<Clone>$() -> Runic.Translations.Authoring.TranslationRemoveLocaleRequest!
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.CatalogId.get -> string!
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.CatalogId.init -> void
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.Deconstruct(out string! Root, out string! CatalogId, out string! Locale, out string? ReplacementFallback) -> void
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.Equals(Runic.Translations.Authoring.TranslationRemoveLocaleRequest? other) -> bool
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.Locale.get -> string!
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.Locale.init -> void
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.ReplacementFallback.get -> string?
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.ReplacementFallback.init -> void
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.Root.get -> string!
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.Root.init -> void
+Runic.Translations.Authoring.TranslationRemoveLocaleRequest.TranslationRemoveLocaleRequest(string! Root, string! CatalogId, string! Locale, string? ReplacementFallback) -> void
+Runic.Translations.Authoring.TranslationSetFallbackRequest
+Runic.Translations.Authoring.TranslationSetFallbackRequest.<Clone>$() -> Runic.Translations.Authoring.TranslationSetFallbackRequest!
+Runic.Translations.Authoring.TranslationSetFallbackRequest.CatalogId.get -> string!
+Runic.Translations.Authoring.TranslationSetFallbackRequest.CatalogId.init -> void
+Runic.Translations.Authoring.TranslationSetFallbackRequest.Deconstruct(out string! Root, out string! CatalogId, out string! Locale, out string? Fallback) -> void
+Runic.Translations.Authoring.TranslationSetFallbackRequest.Equals(Runic.Translations.Authoring.TranslationSetFallbackRequest? other) -> bool
+Runic.Translations.Authoring.TranslationSetFallbackRequest.Fallback.get -> string?
+Runic.Translations.Authoring.TranslationSetFallbackRequest.Fallback.init -> void
+Runic.Translations.Authoring.TranslationSetFallbackRequest.Locale.get -> string!
+Runic.Translations.Authoring.TranslationSetFallbackRequest.Locale.init -> void
+Runic.Translations.Authoring.TranslationSetFallbackRequest.Root.get -> string!
+Runic.Translations.Authoring.TranslationSetFallbackRequest.Root.init -> void
+Runic.Translations.Authoring.TranslationSetFallbackRequest.TranslationSetFallbackRequest(string! Root, string! CatalogId, string! Locale, string? Fallback) -> void
+Runic.Translations.Authoring.TranslationTerminologyEntry
+Runic.Translations.Authoring.TranslationTerminologyEntry.<Clone>$() -> Runic.Translations.Authoring.TranslationTerminologyEntry!
+Runic.Translations.Authoring.TranslationTerminologyEntry.Deconstruct(out string! Source, out string! Preferred, out string? Locale, out string? Note) -> void
+Runic.Translations.Authoring.TranslationTerminologyEntry.Equals(Runic.Translations.Authoring.TranslationTerminologyEntry? other) -> bool
+Runic.Translations.Authoring.TranslationTerminologyEntry.Locale.get -> string?
+Runic.Translations.Authoring.TranslationTerminologyEntry.Locale.init -> void
+Runic.Translations.Authoring.TranslationTerminologyEntry.Note.get -> string?
+Runic.Translations.Authoring.TranslationTerminologyEntry.Note.init -> void
+Runic.Translations.Authoring.TranslationTerminologyEntry.Preferred.get -> string!
+Runic.Translations.Authoring.TranslationTerminologyEntry.Preferred.init -> void
+Runic.Translations.Authoring.TranslationTerminologyEntry.Source.get -> string!
+Runic.Translations.Authoring.TranslationTerminologyEntry.Source.init -> void
+Runic.Translations.Authoring.TranslationTerminologyEntry.TranslationTerminologyEntry(string! Source, string! Preferred, string? Locale, string? Note) -> void
+Runic.Translations.Authoring.TranslationWorkspaceEdit
+Runic.Translations.Authoring.TranslationWorkspaceEdit.ExpectedRevision.get -> string?
+Runic.Translations.Authoring.TranslationWorkspaceEdit.GetUtf8Bytes() -> byte[]?
+Runic.Translations.Authoring.TranslationWorkspaceEdit.Kind.get -> Runic.Translations.Authoring.TranslationWorkspaceEditKind
+Runic.Translations.Authoring.TranslationWorkspaceEdit.RelativePath.get -> string!
+Runic.Translations.Authoring.TranslationWorkspaceEditKind
+Runic.Translations.Authoring.TranslationWorkspaceEditKind.Create = 0 -> Runic.Translations.Authoring.TranslationWorkspaceEditKind
+Runic.Translations.Authoring.TranslationWorkspaceEditKind.Delete = 2 -> Runic.Translations.Authoring.TranslationWorkspaceEditKind
+Runic.Translations.Authoring.TranslationWorkspaceEditKind.Replace = 1 -> Runic.Translations.Authoring.TranslationWorkspaceEditKind
+Runic.Translations.Authoring.TranslationWorkspaceMutation
+Runic.Translations.Authoring.TranslationWorkspaceRecoveryMode
+Runic.Translations.Authoring.TranslationWorkspaceRecoveryMode.Complete = 0 -> Runic.Translations.Authoring.TranslationWorkspaceRecoveryMode
+Runic.Translations.Authoring.TranslationWorkspaceRecoveryMode.Rollback = 1 -> Runic.Translations.Authoring.TranslationWorkspaceRecoveryMode
+Runic.Translations.Authoring.TranslationWorkspaceTransaction
+Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan
+Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan.CatalogId.get -> string!
+Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan.Edits.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Authoring.TranslationWorkspaceEdit!>!
+Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan.IsValid.get -> bool
+Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan.Root.get -> string!
+const Runic.Translations.Authoring.TranslationEditorStateStore.MaximumBytes = 8388608 -> int
+const Runic.Translations.Authoring.TranslationEditorStateStore.MaximumEntries = 50000 -> int
+const Runic.Translations.Authoring.TranslationEditorStateStore.MaximumTerms = 2000 -> int
+const Runic.Translations.Authoring.TranslationEditorStateStore.Schema = "runic.translations.editor-state/1" -> string!
+override Runic.Translations.Authoring.Rmf2VariableReference.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.Rmf2VariableReference.GetHashCode() -> int
+override Runic.Translations.Authoring.Rmf2VariableReference.ToString() -> string!
+override Runic.Translations.Authoring.TranslationAddLocaleRequest.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationAddLocaleRequest.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationAddLocaleRequest.ToString() -> string!
+override Runic.Translations.Authoring.TranslationCreateKeyRequest.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationCreateKeyRequest.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationCreateKeyRequest.ToString() -> string!
+override Runic.Translations.Authoring.TranslationEditorState.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationEditorState.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationEditorState.ToString() -> string!
+override Runic.Translations.Authoring.TranslationEditorStateEntry.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationEditorStateEntry.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationEditorStateEntry.ToString() -> string!
+override Runic.Translations.Authoring.TranslationEditorStateLoadResult.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationEditorStateLoadResult.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationEditorStateLoadResult.ToString() -> string!
+override Runic.Translations.Authoring.TranslationKeyMutationRequest.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationKeyMutationRequest.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationKeyMutationRequest.ToString() -> string!
+override Runic.Translations.Authoring.TranslationPendingTransaction.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationPendingTransaction.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationPendingTransaction.ToString() -> string!
+override Runic.Translations.Authoring.TranslationProjectLocale.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationProjectLocale.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationProjectLocale.ToString() -> string!
+override Runic.Translations.Authoring.TranslationRemoveLocaleRequest.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationRemoveLocaleRequest.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationRemoveLocaleRequest.ToString() -> string!
+override Runic.Translations.Authoring.TranslationSetFallbackRequest.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationSetFallbackRequest.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationSetFallbackRequest.ToString() -> string!
+override Runic.Translations.Authoring.TranslationTerminologyEntry.Equals(object? obj) -> bool
+override Runic.Translations.Authoring.TranslationTerminologyEntry.GetHashCode() -> int
+override Runic.Translations.Authoring.TranslationTerminologyEntry.ToString() -> string!
+static Runic.Translations.Authoring.Rmf2ResourceWriter.AddMessage(Runic.Translations.Compiler.TranslationSource! source, System.Collections.Generic.IReadOnlyList<string!>! path, string! message) -> byte[]!
+static Runic.Translations.Authoring.Rmf2ResourceWriter.Format(Runic.Translations.Compiler.TranslationSource! source) -> byte[]!
+static Runic.Translations.Authoring.Rmf2ResourceWriter.Rename(Runic.Translations.Compiler.TranslationSource! source, System.Collections.Generic.IReadOnlyList<string!>! path, string! name) -> byte[]!
+static Runic.Translations.Authoring.Rmf2ResourceWriter.RenameInput(Runic.Translations.Compiler.TranslationSource! source, string! key, string! name, string! newName) -> byte[]!
+static Runic.Translations.Authoring.Rmf2ResourceWriter.RenameLocal(Runic.Translations.Compiler.TranslationSource! source, string! key, string! name, string! newName) -> byte[]!
+static Runic.Translations.Authoring.Rmf2ResourceWriter.RenameSlot(Runic.Translations.Compiler.TranslationSource! source, string! key, string! name, string! newName, Runic.Translations.Compiler.TranslationSource? project = null) -> byte[]!
+static Runic.Translations.Authoring.Rmf2ResourceWriter.SetMessage(Runic.Translations.Compiler.TranslationSource! source, string! key, string! message) -> byte[]!
+static Runic.Translations.Authoring.Rmf2VariableReference.operator !=(Runic.Translations.Authoring.Rmf2VariableReference? left, Runic.Translations.Authoring.Rmf2VariableReference? right) -> bool
+static Runic.Translations.Authoring.Rmf2VariableReference.operator ==(Runic.Translations.Authoring.Rmf2VariableReference? left, Runic.Translations.Authoring.Rmf2VariableReference? right) -> bool
+static Runic.Translations.Authoring.TranslationAddLocaleRequest.operator !=(Runic.Translations.Authoring.TranslationAddLocaleRequest? left, Runic.Translations.Authoring.TranslationAddLocaleRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationAddLocaleRequest.operator ==(Runic.Translations.Authoring.TranslationAddLocaleRequest? left, Runic.Translations.Authoring.TranslationAddLocaleRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationCreateKeyRequest.operator !=(Runic.Translations.Authoring.TranslationCreateKeyRequest? left, Runic.Translations.Authoring.TranslationCreateKeyRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationCreateKeyRequest.operator ==(Runic.Translations.Authoring.TranslationCreateKeyRequest? left, Runic.Translations.Authoring.TranslationCreateKeyRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationEditorState.operator !=(Runic.Translations.Authoring.TranslationEditorState? left, Runic.Translations.Authoring.TranslationEditorState? right) -> bool
+static Runic.Translations.Authoring.TranslationEditorState.operator ==(Runic.Translations.Authoring.TranslationEditorState? left, Runic.Translations.Authoring.TranslationEditorState? right) -> bool
+static Runic.Translations.Authoring.TranslationEditorStateEntry.operator !=(Runic.Translations.Authoring.TranslationEditorStateEntry? left, Runic.Translations.Authoring.TranslationEditorStateEntry? right) -> bool
+static Runic.Translations.Authoring.TranslationEditorStateEntry.operator ==(Runic.Translations.Authoring.TranslationEditorStateEntry? left, Runic.Translations.Authoring.TranslationEditorStateEntry? right) -> bool
+static Runic.Translations.Authoring.TranslationEditorStateLoadResult.operator !=(Runic.Translations.Authoring.TranslationEditorStateLoadResult? left, Runic.Translations.Authoring.TranslationEditorStateLoadResult? right) -> bool
+static Runic.Translations.Authoring.TranslationEditorStateLoadResult.operator ==(Runic.Translations.Authoring.TranslationEditorStateLoadResult? left, Runic.Translations.Authoring.TranslationEditorStateLoadResult? right) -> bool
+static Runic.Translations.Authoring.TranslationEditorStateStore.Load(string! root, string! catalogId) -> Runic.Translations.Authoring.TranslationEditorStateLoadResult!
+static Runic.Translations.Authoring.TranslationEditorStateStore.Save(string! root, Runic.Translations.Authoring.TranslationEditorState! state, string? expectedRevision) -> Runic.Translations.Authoring.TranslationEditorStateLoadResult!
+static Runic.Translations.Authoring.TranslationKeyMutationRequest.operator !=(Runic.Translations.Authoring.TranslationKeyMutationRequest? left, Runic.Translations.Authoring.TranslationKeyMutationRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationKeyMutationRequest.operator ==(Runic.Translations.Authoring.TranslationKeyMutationRequest? left, Runic.Translations.Authoring.TranslationKeyMutationRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationPendingTransaction.operator !=(Runic.Translations.Authoring.TranslationPendingTransaction? left, Runic.Translations.Authoring.TranslationPendingTransaction? right) -> bool
+static Runic.Translations.Authoring.TranslationPendingTransaction.operator ==(Runic.Translations.Authoring.TranslationPendingTransaction? left, Runic.Translations.Authoring.TranslationPendingTransaction? right) -> bool
+static Runic.Translations.Authoring.TranslationProjectLocale.operator !=(Runic.Translations.Authoring.TranslationProjectLocale? left, Runic.Translations.Authoring.TranslationProjectLocale? right) -> bool
+static Runic.Translations.Authoring.TranslationProjectLocale.operator ==(Runic.Translations.Authoring.TranslationProjectLocale? left, Runic.Translations.Authoring.TranslationProjectLocale? right) -> bool
+static Runic.Translations.Authoring.TranslationProjectScaffolder.Render(Runic.Translations.Authoring.TranslationProjectCreationRequest! request) -> Runic.Translations.Authoring.TranslationProjectPlan!
+static Runic.Translations.Authoring.TranslationProjectWriter.Create(Runic.Translations.Authoring.TranslationProjectPlan! plan) -> string!
+static Runic.Translations.Authoring.TranslationRemoveLocaleRequest.operator !=(Runic.Translations.Authoring.TranslationRemoveLocaleRequest? left, Runic.Translations.Authoring.TranslationRemoveLocaleRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationRemoveLocaleRequest.operator ==(Runic.Translations.Authoring.TranslationRemoveLocaleRequest? left, Runic.Translations.Authoring.TranslationRemoveLocaleRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationSetFallbackRequest.operator !=(Runic.Translations.Authoring.TranslationSetFallbackRequest? left, Runic.Translations.Authoring.TranslationSetFallbackRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationSetFallbackRequest.operator ==(Runic.Translations.Authoring.TranslationSetFallbackRequest? left, Runic.Translations.Authoring.TranslationSetFallbackRequest? right) -> bool
+static Runic.Translations.Authoring.TranslationTerminologyEntry.operator !=(Runic.Translations.Authoring.TranslationTerminologyEntry? left, Runic.Translations.Authoring.TranslationTerminologyEntry? right) -> bool
+static Runic.Translations.Authoring.TranslationTerminologyEntry.operator ==(Runic.Translations.Authoring.TranslationTerminologyEntry? left, Runic.Translations.Authoring.TranslationTerminologyEntry? right) -> bool
+static Runic.Translations.Authoring.TranslationWorkspaceMutation.AddLocale(Runic.Translations.Authoring.TranslationAddLocaleRequest! request) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+static Runic.Translations.Authoring.TranslationWorkspaceMutation.CreateKey(Runic.Translations.Authoring.TranslationCreateKeyRequest! request) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+static Runic.Translations.Authoring.TranslationWorkspaceMutation.MutateKey(Runic.Translations.Authoring.TranslationKeyMutationRequest! request) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+static Runic.Translations.Authoring.TranslationWorkspaceMutation.RemoveLocale(Runic.Translations.Authoring.TranslationRemoveLocaleRequest! request) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+static Runic.Translations.Authoring.TranslationWorkspaceMutation.SetFallback(Runic.Translations.Authoring.TranslationSetFallbackRequest! request) -> Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan!
+static Runic.Translations.Authoring.TranslationWorkspaceTransaction.Commit(Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan! plan) -> void
+static Runic.Translations.Authoring.TranslationWorkspaceTransaction.GetPending(string! root) -> Runic.Translations.Authoring.TranslationPendingTransaction?
+static Runic.Translations.Authoring.TranslationWorkspaceTransaction.Recover(string! root, Runic.Translations.Authoring.TranslationWorkspaceRecoveryMode mode) -> void

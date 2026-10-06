@@ -21,6 +21,12 @@ When a `--check` command reports a stale file, run the same script without `--ch
 
 Packed mode is driven only by this script: it installs `dotnet-runic-translations` from the local feed into `artifacts/editor-packed/tool` and passes it as `TranslationsToolCommand`, so there is no `.config/dotnet-tools.json` and a plain `dotnet build -p:RunicEditorUsePackedTranslations=true` is not supported. Only the NuGet packages are tested in packed form. The editor frontend keeps consuming the npm Translations packages through `workspace:*` links.
 
+## Public API
+
+The libraries that NuGet packages expose under `lib/` set `RunicTrackPublicApi`: `Runic.Translations`, `Runic.Translations.Wpf`, and `Runic.Translations.Tooling` with its bundled `Runic.Translations.Authoring` and `Runic.Translations.Compiler`. [`eng/build/public-api.targets`](eng/build/public-api.targets) then references `Microsoft.CodeAnalysis.PublicApiAnalyzers`, which compares the compiled public surface with the project's `PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt`. These files are analyzer inputs and are not packed. A new or changed public member without a matching entry reports RS0016, a removed one RS0017; `Verification` builds treat both as errors. Add new API to `PublicAPI.Unshipped.txt` (the IDE code fix does this) and mark removals with `*REMOVED*` there. `PublicAPI.Shipped.txt` holds the API of the last published release.
+
+Packing `Runic.Translations`, `Runic.Translations.Tooling` and `Runic.Translations.Wpf` also runs package validation against `RunicTranslationsPackageValidationBaselineVersion` from `eng/Versions.props`, the last published release. It compares every assembly under `lib/`, including the bundled ones. Record an intentional binary break in the project's `CompatibilitySuppressions.xml`; regenerate it with `dotnet pack <project> -p:ApiCompatGenerateSuppressionFile=true`.
+
 ## Dependencies
 
 `bun run dependencies:audit` reports known vulnerabilities in every tracked `bun.lock` and in the NuGet graphs of the solution and the editor. It runs weekly in [Dependency audit](.github/workflows/dependency-audit.yml) and never upgrades packages. Pin GitHub Actions to a full commit SHA with a `# vX.Y.Z` comment.

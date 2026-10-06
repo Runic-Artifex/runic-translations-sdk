@@ -1,6 +1,8 @@
 <Project>
   <PropertyGroup>
     <RunicPolicyShippingProject>$(RunicTranslationsShippingProject)</RunicPolicyShippingProject>
+    <RunicPackageValidationBaselineVersion>$(RunicTranslationsPackageValidationBaselineVersion)</RunicPackageValidationBaselineVersion>
   </PropertyGroup>
   <Import Project="common.targets" />
+  <Import Project="public-api.targets" />
 </Project>
