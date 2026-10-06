@@ -48,12 +48,27 @@ Use `Runic.Translations.Build` for generated C# or when MSBuild should invoke th
 ```text
 runic-translations verify  --project <directory|runic.json> --output <directory>
 runic-translations schema  --output <directory>
+runic-translations serve
 ```
 
 - `verify` renders in isolation and byte-compares the selected expected output, including extra-file detection.
 - `schema` copies the bundled source, artifact, manifest, normalized-AST, editor-state, and capability schemas.
+- `serve` is a persistent compiler for development servers, used by `@runic-artifex/vite-plugin-runic-translations`. It keeps unchanged sources parsed and compiled between requests, so a request after an edit recompiles only the edited files. See [serve protocol](#serve-protocol).
+
+`generate` leaves output files whose bytes are unchanged untouched, so file watchers only see artifacts that changed.
 
 Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`. Exit code `0` means success, `1` means catalog or verification diagnostics, and `2` means invalid invocation or an operational failure.
+
+## Serve protocol
+
+`serve` speaks line-delimited JSON (`runic-translations-serve/1`) over standard input and output; diagnostics never go to standard output. It first writes `{"protocol":"runic-translations-serve/1","event":"ready","version":"..."}`. Each request is one line and gets exactly one response line with the same `id`, in order:
+
+```text
+{"id":1,"method":"generate","project":"translations","output":".runic/translations","emit":["esm"]}
+{"id":1,"ok":true,"exitCode":0,"output":"generated 12 artifact(s).","message":"","diagnostics":[],"elapsedMs":9}
+```
+
+Methods are `generate` (`project`, `output`, optional `emit` with `csharp`, `json`, `typescript`, `template-manifest`, `esm` or `cpp`), `validate` (`project`) and `shutdown`. `exitCode` and `diagnostics` match the one-shot command; `message` is the text it would print on failure. Paths resolve against the server's working directory. The server exits after `shutdown` or when standard input closes.
 
 ## Compatibility and status
 

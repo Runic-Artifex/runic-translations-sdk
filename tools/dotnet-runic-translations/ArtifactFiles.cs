@@ -47,6 +47,9 @@ internal static class ArtifactFiles
         }
 
         EnsureNoReparsePoint(outputRoot, NormalizePath(outputPath));
+        // Leave byte-identical files untouched, so file watchers and incremental consumers see only real changes.
+        normalizedArtifacts = WithoutUnchanged(outputRoot, normalizedArtifacts);
+        if (normalizedArtifacts.Count == 0) return;
         Directory.CreateDirectory(parent);
         string temporaryRoot = Path.Combine(parent, $".{Path.GetFileName(outputRoot)}.translations-{Guid.NewGuid():N}.tmp");
         var sourcePaths = new string[normalizedArtifacts.Count];
@@ -124,6 +127,17 @@ internal static class ArtifactFiles
                 Directory.Delete(temporaryRoot, true);
             }
         }
+    }
+
+    private static List<ToolArtifact> WithoutUnchanged(string outputRoot, IReadOnlyList<ToolArtifact> artifacts)
+    {
+        var changed = new List<ToolArtifact>(artifacts.Count);
+        foreach (ToolArtifact artifact in artifacts)
+        {
+            string destination = ResolveContainedPath(outputRoot, artifact.RelativePath);
+            if (!File.Exists(destination) || !FileEquals(destination, artifact.Content)) changed.Add(artifact);
+        }
+        return changed;
     }
 
     internal static IReadOnlyList<string> Verify(string outputPath, IReadOnlyList<ToolArtifact> artifacts)

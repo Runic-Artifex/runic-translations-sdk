@@ -1,1 +1,2 @@
 #nullable enable
+static Runic.Translations.Tooling.TranslationsToolCommandModule.Serve(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
