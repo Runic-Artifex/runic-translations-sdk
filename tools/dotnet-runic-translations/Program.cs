@@ -19,17 +19,19 @@ internal static class Program
     private const int Success = 0;
     private const int DiagnosticFailure = 1;
     private const int InvocationFailure = 2;
+    private const string ToolVersion = "0.2";
 
     public static int Main(string[] arguments)
     {
         try
         {
             if (arguments.Length == 1 && arguments[0] == "lsp") return new Rmf2LanguageServer(Console.OpenStandardInput(), Console.OpenStandardOutput()).Run();
+            if (arguments.Length == 1 && arguments[0] == "serve") return CompileServer.RunOnStandardStreams(ToolVersion);
             List<string> expanded = CommandLine.ExpandResponseFiles(arguments);
             return new CommandApp(TranslationsToolCommandModule.CreateCatalog())
             {
                 Name = "runic-translations",
-                Version = "0.2",
+                Version = ToolVersion,
                 Console = PresentationConsole,
                 ParseSettings = new ParseSettings(Environment.GetEnvironmentVariable(CommandOutputClassifier.EnvironmentVariableName), transportOutputOptionName: "--runic-output"),
                 ScopeFactory = ToolExecutionScopeFactory.Instance,
@@ -74,7 +76,7 @@ internal static class Program
 
             if (parsed.Kind == ParseOutcomeKind.Version)
             {
-                Present(parsed, "runic-translations", Success, new("runic-translations 0.2", string.Empty), null, []);
+                Present(parsed, "runic-translations", Success, new("runic-translations " + ToolVersion, string.Empty), null, []);
                 return Success;
             }
 
@@ -203,10 +205,10 @@ internal static class Program
     }
 
 
-    internal static ToolOperationResult Execute(ToolInvocation invocation)
+    internal static ToolOperationResult Execute(ToolInvocation invocation, SourceUnitCache? units = null)
     {
         var result = new ToolOperationResult();
-        try { result.ExitCode = Run(invocation, result); result.ExitCategory = result.ExitCode == Success ? CommandExitCategory.Success : CommandExitCategory.Validation; }
+        try { result.ExitCode = Run(invocation, result, units); result.ExitCategory = result.ExitCode == Success ? CommandExitCategory.Success : CommandExitCategory.Validation; }
         catch (ToolOutputException exception) { result.SetHumanOutput($"error {exception.Message}\n"); result.AddDiagnostic("RCLI9001", "tool-output", SafeDomainMessage(exception.Message, "The requested output could not be written."), CommandDiagnosticSeverity.Error); result.ExitCode = DiagnosticFailure; result.ExitCategory = CommandExitCategory.CommandFailure; }
         catch (ToolDiagnosticException exception) { result.SetHumanOutput(exception.Message + "\n"); result.AddDiagnostic("RCLI9002", "tool-diagnostic", SafeDomainMessage(exception.Message, "The translations operation reported diagnostics."), CommandDiagnosticSeverity.Error); result.ExitCode = DiagnosticFailure; result.ExitCategory = CommandExitCategory.CommandFailure; }
         catch (ToolUsageException exception) { result.SetHumanOutput($"runic-translations: {exception.Message}\n{UsageText()}\n"); result.AddDiagnostic("RCLI9003", "tool-usage", SafeDomainMessage(exception.Message, "The translations command arguments are invalid."), CommandDiagnosticSeverity.Error); result.ExitCode = InvocationFailure; result.ExitCategory = CommandExitCategory.Usage; }
@@ -324,7 +326,7 @@ internal static class Program
         return $" at {value.Substring(start, end - start)}";
     }
 
-    private static int Run(ToolInvocation invocation, ToolOperationResult result)
+    private static int Run(ToolInvocation invocation, ToolOperationResult result, SourceUnitCache? units)
     {
         if (invocation.Command == ToolCommand.Help)
         {
@@ -350,14 +352,16 @@ internal static class Program
 
         CompilerInputs inputs = InputFiles.ReadProject(invocation.ProjectPath!);
         if (invocation.Command is ToolCommand.Validate or ToolCommand.Generate or ToolCommand.Verify)
-            return RunSemanticV5(invocation, inputs, result);
+            return RunSemanticV5(invocation, inputs, result, units);
 
         throw new ToolUsageException("The translations command is not supported.");
     }
 
-    private static int RunSemanticV5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result)
+    private static int RunSemanticV5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result, SourceUnitCache? units)
     {
-        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages);
+        Rmf2ProjectCompilationV5 compilation = units is null
+            ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages)
+            : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options);
         WriteDiagnostics(compilation.Diagnostics, result);
         if (!compilation.Success || compilation.Project is null) return DiagnosticFailure;
         if (invocation.Command == ToolCommand.Validate)
@@ -426,6 +430,7 @@ internal static class Program
         writer.WriteLine("Usage:");
         writer.WriteLine("  runic-translations init --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [init-options]");
         writer.WriteLine("  runic-translations lsp");
+        writer.WriteLine("  runic-translations serve");
         writer.WriteLine("  runic-translations validate --project <translations-directory>");
         writer.WriteLine("  runic-translations generate --project <translations-directory> --output <directory> [emit-switches]");
         writer.WriteLine("  runic-translations verify --project <translations-directory> --output <directory> [emit-switches]");

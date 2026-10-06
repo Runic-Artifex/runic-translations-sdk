@@ -109,6 +109,7 @@ internal static class CliIntegrationTests
         Assert.Contains("generate  Generate translation artifacts.", help.StandardOutput);
         Assert.Contains("init  Create an RMF2 translation project and starter resources.", help.StandardOutput);
         Assert.Contains("lsp  Run the RMF2 language server over standard input/output.", help.StandardOutput);
+        Assert.Contains("serve  Run a persistent compiler for development servers over standard input/output.", help.StandardOutput);
 
         ProcessResult initHelp = TestFixture.RunTool(temporary, "help", "init");
         Assert.Equal(0, initHelp.ExitCode, initHelp.Combined);

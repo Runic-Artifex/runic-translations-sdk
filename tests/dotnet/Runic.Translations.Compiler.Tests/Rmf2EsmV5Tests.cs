@@ -222,7 +222,7 @@ internal static class Rmf2EsmV5Tests
         string directory = Write(outputs);
         try
         {
-            string plugin = RepositoryPaths.Resolve("packages", "web", "vite-plugin-runic-translations", "index.js");
+            string plugin = RepositoryPaths.Resolve("packages", "web", "vite-plugin-runic-translations", "dist", "index.js");
             string script = Path.Combine(directory, "vite-reject.mjs");
             string manifestPath = Path.Combine(directory, manifest.RelativePath);
             File.WriteAllText(script, "import { readFile, writeFile } from 'node:fs/promises';\nimport { runicTranslations } from " + JsonString(plugin) + ";\n" +

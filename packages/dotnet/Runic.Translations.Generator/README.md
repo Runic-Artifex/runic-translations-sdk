@@ -4,7 +4,9 @@ This internal analyzer turns a validated MF2 project into strongly typed C# keys
 
 ## Install
 
-Install `Runic.Translations.Build` at the same version as `Runic.Translations`. It requires a .NET 10 Roslyn host and is intended for C# projects.
+Install `Runic.Translations.Build` at the same version as `Runic.Translations`. It is intended for C# projects.
+
+The generator targets .NET 10 because it runs the .NET 10 translations compiler, so it needs a Roslyn host running on .NET 10: `dotnet build` and other builds that use the .NET 10 SDK's compiler, and IDE language servers running on .NET 10. A compiler host on .NET Framework or an older .NET cannot load it; the build then reports `CS8032` and generates no translation code.
 
 ## Add translation inputs
 
@@ -38,7 +40,11 @@ find accessors. See the [.NET consumer quick start](https://github.com/Runic-Art
 for a complete template and console application workflow.
 
 The generator reports compiler diagnostics at source locations and writes no
-files. Typed C# becomes part of the current compilation. Locale-v5 JSON and the
+files. Every `RTR` diagnostic links to its entry in the
+[diagnostics reference](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md).
+Each translation file is parsed in its own incremental step, so editing one
+file recompiles only that file before relinking the catalog, and C# edits do not
+rerun translation work. Typed C# becomes part of the current compilation. Locale-v5 JSON and the
 cohesive ESM-v5 package belong to the build or CLI surfaces. Standalone
 TypeScript, template-manifest, and C++ output groups are not part of the selected
 contract.

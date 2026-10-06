@@ -8,6 +8,8 @@ internal static class Program
     {
         var runner = new TestRunner();
         GeneratorTests.Register(runner);
+        GeneratorIncrementalityTests.Register(runner);
+        GeneratorDiagnosticsTests.Register(runner);
         return runner.Run();
     }
 }

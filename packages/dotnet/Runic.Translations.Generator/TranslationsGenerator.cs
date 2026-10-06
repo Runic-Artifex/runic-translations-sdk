@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Collections.Immutable;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Threading;
 using Microsoft.CodeAnalysis;
@@ -12,11 +13,23 @@ using Runic.Translations.Compiler.Generation;
 namespace Runic.Translations.Generator;
 
 /// <summary>Generates typed C# translation surfaces from explicitly marked additional files.</summary>
+/// <remarks>
+/// Each translation source is parsed in its own incremental step (<c>TranslationSourceUnits</c>), so an
+/// edit reparses only that file; its messages are lowered once and memoized on the cached unit. The
+/// catalog is then linked from all units. The runtime ABI is read from metadata once per reference
+/// (<c>TranslationRuntimeReferences</c>), not from symbols on every compilation, so C# edits never
+/// re-run translation work.
+/// </remarks>
 [Generator(LanguageNames.CSharp)]
 public sealed class TranslationsGenerator : IIncrementalGenerator
 {
     private const string KindMetadata = "build_metadata.AdditionalFiles.RunicTranslationKind";
     private const string ProjectDirectoryProperty = "build_property.ProjectDir";
+    private const string RuntimeAssemblyName = "Runic.Translations";
+    private const string CompatibilityNamespace = "Runic.Translations";
+    private const string CompatibilityType = "TranslationsCompatibility";
+    private static readonly TranslationCompilerOptions CompilerOptions = new();
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -27,58 +40,102 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             .Where(static input => input.Kind != InputKind.None)
             .WithTrackingName("TranslationInputs");
 
-        IncrementalValueProvider<RuntimeAbiState> runtimeAbi = context.CompilationProvider
-            .Select(static (compilation, _) => InspectRuntimeAbi(compilation))
+        IncrementalValuesProvider<SourceUnit> units = inputs
+            .Where(static input => input.Kind == InputKind.Mf2)
+            .Select(static (input, cancellationToken) => SourceUnit.Create(input, cancellationToken))
+            .WithTrackingName("TranslationSourceUnits");
+
+        IncrementalValueProvider<ImmutableArray<GeneratorInput>> projects = inputs
+            .Where(static input => input.Kind == InputKind.Project)
+            .Collect()
+            .WithTrackingName("TranslationProjects");
+
+        IncrementalValueProvider<RuntimeAbiState> runtimeAbi = context.MetadataReferencesProvider
+            .Select(static (reference, cancellationToken) => InspectRuntimeReference(reference, cancellationToken))
+            .WithTrackingName("TranslationRuntimeReferences")
+            .Collect()
+            .Select(static (references, _) => SelectRuntimeAbi(references))
             .WithTrackingName("TranslationRuntimeAbi");
 
         context.RegisterSourceOutput(
-            inputs.Collect().WithTrackingName("TranslationCompilation").Combine(runtimeAbi),
-            (productionContext, pair) =>
-            {
-                Generate(productionContext, pair.Left, pair.Right);
-            });
+            units.Collect().Combine(projects).WithTrackingName("TranslationCompilation").Combine(runtimeAbi),
+            static (productionContext, pair) => Generate(productionContext, pair.Left.Left, pair.Left.Right, pair.Right));
     }
 
-    private static RuntimeAbiState InspectRuntimeAbi(Compilation compilation)
+    // Reads the ABI markers of a referenced Runic.Translations assembly. Other references are
+    // rejected by their assembly name. Roslyn reruns this only for added or replaced references.
+    private static RuntimeReference InspectRuntimeReference(MetadataReference reference, CancellationToken cancellationToken)
     {
-        foreach (MetadataReference reference in compilation.References)
+        cancellationToken.ThrowIfCancellationRequested();
+        return reference switch
         {
-            if (!(compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly) ||
-                !string.Equals(assembly.Identity.Name, "Runic.Translations", StringComparison.Ordinal))
-                continue;
-
-            INamespaceSymbol? runicNamespace = NamespaceMember(assembly.GlobalNamespace, "Runic");
-            INamespaceSymbol? currentNamespace = runicNamespace is null
-                ? null
-                : NamespaceMember(runicNamespace, "Translations");
-            if (currentNamespace is null) return RuntimeAbiState.Missing;
-            INamedTypeSymbol? compatibility = null;
-            foreach (INamedTypeSymbol candidate in currentNamespace.GetTypeMembers("TranslationsCompatibility"))
-            {
-                compatibility = candidate;
-                break;
-            }
-            if (compatibility is null) return RuntimeAbiState.Missing;
-            int rmf2Version = -1;
-            foreach (ISymbol member in compatibility.GetMembers("Rmf2RuntimeAbiVersion"))
-                if (member is IFieldSymbol marker && marker.HasConstantValue && marker.ConstantValue is int rmf2) rmf2Version = rmf2;
-            foreach (ISymbol member in compatibility.GetMembers("RuntimeAbiVersion"))
-            {
-                if (member is IFieldSymbol field && field.HasConstantValue && field.ConstantValue is int version)
-                    return new RuntimeAbiState(version, rmf2Version);
-            }
-
-            return RuntimeAbiState.Missing;
-        }
-
-        return RuntimeAbiState.Missing;
+            PortableExecutableReference executable => InspectMetadata(executable),
+            CompilationReference compilation => InspectCompilation(compilation.Compilation),
+            _ => RuntimeReference.None,
+        };
     }
 
-    private static INamespaceSymbol? NamespaceMember(INamespaceSymbol parent, string name)
+    private static RuntimeReference InspectMetadata(PortableExecutableReference reference)
     {
-        foreach (INamespaceSymbol child in parent.GetNamespaceMembers())
-            if (string.Equals(child.Name, name, StringComparison.Ordinal)) return child;
-        return null;
+        Metadata metadata;
+        try { metadata = reference.GetMetadata(); }
+        catch (Exception exception) when (exception is BadImageFormatException or System.IO.IOException) { return RuntimeReference.None; }
+        ModuleMetadata? module = metadata switch
+        {
+            AssemblyMetadata assembly => assembly.GetModules() is { Length: > 0 } modules ? modules[0] : null,
+            ModuleMetadata single => single,
+            _ => null,
+        };
+        if (module is null) return RuntimeReference.None;
+        MetadataReader reader = module.GetMetadataReader();
+        if (!reader.IsAssembly || !reader.StringComparer.Equals(reader.GetAssemblyDefinition().Name, RuntimeAssemblyName))
+            return RuntimeReference.None;
+        foreach (TypeDefinitionHandle handle in reader.TypeDefinitions)
+        {
+            TypeDefinition type = reader.GetTypeDefinition(handle);
+            if (!reader.StringComparer.Equals(type.Name, CompatibilityType) ||
+                !reader.StringComparer.Equals(type.Namespace, CompatibilityNamespace) ||
+                !type.GetDeclaringType().IsNil)
+                continue;
+            int version = -1, rmf2Version = -1;
+            foreach (FieldDefinitionHandle fieldHandle in type.GetFields())
+            {
+                FieldDefinition field = reader.GetFieldDefinition(fieldHandle);
+                ConstantHandle constantHandle = field.GetDefaultValue();
+                if (constantHandle.IsNil) continue;
+                Constant constant = reader.GetConstant(constantHandle);
+                if (constant.TypeCode != ConstantTypeCode.Int32) continue;
+                int value = reader.GetBlobReader(constant.Value).ReadInt32();
+                if (reader.StringComparer.Equals(field.Name, "RuntimeAbiVersion")) version = value;
+                else if (reader.StringComparer.Equals(field.Name, "Rmf2RuntimeAbiVersion")) rmf2Version = value;
+            }
+            return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version));
+        }
+        return new RuntimeReference(true, RuntimeAbiState.Missing);
+    }
+
+    // A project reference in an IDE workspace: read the constants from its symbols.
+    private static RuntimeReference InspectCompilation(Compilation compilation)
+    {
+        if (!string.Equals(compilation.AssemblyName, RuntimeAssemblyName, StringComparison.Ordinal)) return RuntimeReference.None;
+        INamedTypeSymbol? compatibility = compilation.Assembly.GetTypeByMetadataName(CompatibilityNamespace + "." + CompatibilityType);
+        if (compatibility is null) return new RuntimeReference(true, RuntimeAbiState.Missing);
+        int version = Constant(compatibility, "RuntimeAbiVersion"), rmf2Version = Constant(compatibility, "Rmf2RuntimeAbiVersion");
+        return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version));
+
+        static int Constant(INamedTypeSymbol type, string name)
+        {
+            foreach (ISymbol member in type.GetMembers(name))
+                if (member is IFieldSymbol { HasConstantValue: true, ConstantValue: int value }) return value;
+            return -1;
+        }
+    }
+
+    private static RuntimeAbiState SelectRuntimeAbi(ImmutableArray<RuntimeReference> references)
+    {
+        foreach (RuntimeReference reference in references)
+            if (reference.IsRuntime) return reference.State;
+        return RuntimeAbiState.Missing;
     }
 
     private static Diagnostic CreateAbiDiagnostic(RuntimeAbiState state)
@@ -90,7 +147,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 : state.Rmf2Version < 0
                     ? "Referenced Runic.Translations RMF2 runtime ABI is missing; generated RMF2 code requires ABI version 2."
                     : "Referenced Runic.Translations RMF2 runtime ABI version " + state.Rmf2Version + " is incompatible with generated RMF2 ABI version 2.";
-        return Diagnostic.Create(Descriptor("RTR0024", DiagnosticSeverity.Error), Location.None, message);
+        return Diagnostic.Create(TranslationsDiagnostics.RuntimeAbi, Location.None, message);
     }
 
     private static GeneratorInput CreateInput(
@@ -130,45 +187,37 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         return normalized.Length == 0 ? "." : normalized;
     }
 
-    private static void Generate(SourceProductionContext context, IEnumerable<GeneratorInput> inputs,
-        RuntimeAbiState runtimeAbi)
+    private static void Generate(SourceProductionContext context, ImmutableArray<SourceUnit> units,
+        ImmutableArray<GeneratorInput> projectInputs, RuntimeAbiState runtimeAbi)
     {
-        var projects = new List<TranslationSource>();
-        var messages = new List<TranslationSource>();
+        var unreadable = new List<GeneratorInput>();
+        var projects = new List<GeneratorInput>();
+        var compiled = new List<Rmf2SourceUnitV5>(units.Length);
         var sourceTexts = new Dictionary<string, SourceText>(StringComparer.Ordinal);
+        foreach (GeneratorInput projectInput in projectInputs)
+        {
+            if (projectInput.Text is null) unreadable.Add(projectInput);
+            else projects.Add(projectInput);
+        }
+        foreach (SourceUnit unit in units)
+        {
+            if (unit.Compiled is null) { unreadable.Add(unit.Input); continue; }
+            compiled.Add(unit.Compiled);
+            sourceTexts[unit.Input.Path] = unit.Text!;
+        }
 
-        var materializedInputs = new List<GeneratorInput>();
-        foreach (GeneratorInput input in inputs) materializedInputs.Add(input);
-        GeneratorInput[] orderedInputs = materializedInputs.ToArray();
-        Array.Sort(orderedInputs, static (left, right) =>
+        unreadable.Sort(static (left, right) =>
         {
             int comparison = StringComparer.Ordinal.Compare(left.Path, right.Path);
             return comparison != 0 ? comparison : left.Kind.CompareTo(right.Kind);
         });
+        foreach (GeneratorInput input in unreadable)
+            context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.UnreadableSource, Location.Create(input.Path, default, default), "Source text could not be read."));
 
-        for (int i = 0; i < orderedInputs.Length; i++)
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
-            GeneratorInput input = orderedInputs[i];
-            if (input.Text is null)
-            {
-                context.ReportDiagnostic(CreateUnreadableDiagnostic(input.Path));
-                continue;
-            }
-
-            SourceText sourceText = SourceText.From(input.Text, new UTF8Encoding(false, true));
-            sourceTexts[input.Path] = sourceText;
-            var source = new TranslationSource(input.Path, new UTF8Encoding(false, true).GetBytes(input.Text));
-            if (input.Kind == InputKind.Project) projects.Add(source);
-            else messages.Add(source);
-        }
-
-        if (projects.Count == 0 && messages.Count == 0) return;
+        if (projects.Count == 0 && compiled.Count == 0) return;
         if (projects.Count != 1)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Descriptor("RTR0002", DiagnosticSeverity.Error),
-                Location.None,
+            context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.DuplicateInputs, Location.None,
                 "Exactly one Runic translation project must be supplied."));
             return;
         }
@@ -177,13 +226,17 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             context.ReportDiagnostic(CreateAbiDiagnostic(runtimeAbi));
             return;
         }
-        GenerateRmf2V5(context, projects[0], messages, sourceTexts);
+
+        GeneratorInput selected = projects[0];
+        sourceTexts[selected.Path] = SourceText.From(selected.Text!, StrictUtf8);
+        var project = new TranslationSource(selected.Path, StrictUtf8.GetBytes(selected.Text!));
+        GenerateRmf2V5(context, project, compiled, sourceTexts);
     }
 
     private static void GenerateRmf2V5(SourceProductionContext context, TranslationSource project,
-        IReadOnlyList<TranslationSource> messages, Dictionary<string, SourceText> sourceTexts)
+        IReadOnlyList<Rmf2SourceUnitV5> units, Dictionary<string, SourceText> sourceTexts)
     {
-        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, messages, null, context.CancellationToken);
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, units, CompilerOptions, context.CancellationToken);
         bool hasErrors = false;
         for (int index = 0; index < compilation.Diagnostics.Count; index++)
         {
@@ -196,7 +249,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         Rmf2ProjectV5 linked = compilation.Project;
         if (!Rmf2ProjectV5EmissionEligibility.CanEmit(linked))
         {
-            context.ReportDiagnostic(Diagnostic.Create(Descriptor(Rmf2ProjectV5EmissionEligibility.DiagnosticId, DiagnosticSeverity.Error), Location.None,
+            context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.Get(Rmf2ProjectV5EmissionEligibility.DiagnosticId), Location.None,
                 Rmf2ProjectV5EmissionEligibility.Message));
             return;
         }
@@ -213,20 +266,12 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             TranslationGeneratedOutput output = outputs[index];
             if (!emittedHints.Add(output.RelativePath))
             {
-                context.ReportDiagnostic(Diagnostic.Create(Descriptor("RTR0018", DiagnosticSeverity.Error), Location.None,
+                context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.NameCollision, Location.None,
                     "Generated hint name '" + output.RelativePath + "' collides across catalogs."));
                 continue;
             }
-            context.AddSource(output.RelativePath, SourceText.From(output.Text, new UTF8Encoding(false, true)));
+            context.AddSource(output.RelativePath, SourceText.From(output.Text, StrictUtf8));
         }
-    }
-
-    private static Diagnostic CreateUnreadableDiagnostic(string path)
-    {
-        return Diagnostic.Create(
-            Descriptor("RTR0001", DiagnosticSeverity.Error),
-            Location.Create(path, default, default),
-            "Source text could not be read.");
     }
 
     private static Diagnostic CreateDiagnostic(
@@ -254,19 +299,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         DiagnosticSeverity severity = diagnostic.Severity == TranslationDiagnosticSeverity.Warning
             ? DiagnosticSeverity.Warning
             : DiagnosticSeverity.Error;
-        return Diagnostic.Create(Descriptor(diagnostic.Id, severity), location, diagnostic.Message);
-    }
-
-    private static DiagnosticDescriptor Descriptor(string id, DiagnosticSeverity severity)
-    {
-        return new DiagnosticDescriptor(
-            id,
-            "Text resource compilation",
-            "{0}",
-            "Runic.Translations",
-            severity,
-            isEnabledByDefault: true,
-            helpLinkUri: "https://github.com/Runic-Artifex/runic-translations");
+        return Diagnostic.Create(TranslationsDiagnostics.Get(diagnostic.Id), location, severity,
+            additionalLocations: null, properties: null, diagnostic.Message);
     }
 
     private static int Clamp(int value, int minimum, int maximum)
@@ -275,14 +309,14 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         return value > maximum ? maximum : value;
     }
 
-    private enum InputKind
+    internal enum InputKind
     {
         None,
         Project,
         Mf2,
     }
 
-    private readonly struct GeneratorInput : IEquatable<GeneratorInput>
+    internal readonly struct GeneratorInput : IEquatable<GeneratorInput>
     {
         internal GeneratorInput(InputKind kind, string path, string? text)
         {
@@ -312,6 +346,54 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 return hash;
             }
         }
+    }
+
+    // One parsed translation source. Equality is the input's, so an unchanged file keeps its cached
+    // unit, including the memoized lowering of its messages, across generator runs.
+    internal sealed class SourceUnit : IEquatable<SourceUnit>
+    {
+        private SourceUnit(GeneratorInput input, SourceText? text, Rmf2SourceUnitV5? compiled)
+        {
+            Input = input;
+            Text = text;
+            Compiled = compiled;
+        }
+
+        internal GeneratorInput Input { get; }
+        internal SourceText? Text { get; }
+
+        /// <summary>The compiled unit, or null when the source text could not be read.</summary>
+        internal Rmf2SourceUnitV5? Compiled { get; }
+
+        internal static SourceUnit Create(GeneratorInput input, CancellationToken cancellationToken)
+        {
+            if (input.Text is null) return new SourceUnit(input, null, null);
+            var source = new TranslationSource(input.Path, StrictUtf8.GetBytes(input.Text));
+            return new SourceUnit(input, SourceText.From(input.Text, StrictUtf8),
+                Rmf2SourceUnitV5.Create(source, CompilerOptions, cancellationToken));
+        }
+
+        public bool Equals(SourceUnit? other) => other is not null && Input.Equals(other.Input);
+        public override bool Equals(object? obj) => Equals(obj as SourceUnit);
+        public override int GetHashCode() => Input.GetHashCode();
+    }
+
+    private readonly struct RuntimeReference : IEquatable<RuntimeReference>
+    {
+        internal static RuntimeReference None => default;
+
+        internal RuntimeReference(bool isRuntime, RuntimeAbiState state)
+        {
+            IsRuntime = isRuntime;
+            State = state;
+        }
+
+        internal bool IsRuntime { get; }
+        internal RuntimeAbiState State { get; }
+
+        public bool Equals(RuntimeReference other) => IsRuntime == other.IsRuntime && State.Equals(other.State);
+        public override bool Equals(object? obj) => obj is RuntimeReference other && Equals(other);
+        public override int GetHashCode() => HashCode.Combine(IsRuntime, State);
     }
 
     private readonly struct RuntimeAbiState : IEquatable<RuntimeAbiState>

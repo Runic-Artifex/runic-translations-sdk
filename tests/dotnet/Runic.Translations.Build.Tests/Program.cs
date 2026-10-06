@@ -8,7 +8,7 @@ internal static class Program
         TestRunner runner = new();
         Rmf2DiagnosticLspTests.Register(runner);
         Rmf2IntegrationTests.Register(runner);
-        if (args.Length == 0) { CliIntegrationTests.Register(runner); BuildIntegrationTests.Register(runner); }
+        if (args.Length == 0) { CliIntegrationTests.Register(runner); ServeModeTests.Register(runner); BuildIntegrationTests.Register(runner); }
         return runner.Run();
     }
 }

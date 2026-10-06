@@ -37,7 +37,7 @@ public static partial class TranslationCompiler
             CompileRmf2ProjectV5(project, messages, options, cancellationToken));
     }
 
-    private sealed record Rmf2ProjectSourceV5(string Key, string[] Path, string Locale, TranslationSource Source, Rmf2ResourceNode Node);
+    private sealed record Rmf2ProjectSourceV5(string Key, string[] Path, string Locale, TranslationSource Source, Rmf2ResourceNode Node, Rmf2SourceUnitV5? Unit);
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
     {
         internal Rmf2TranslationV5 Translation => new(Source.Key, Source.Locale, Linked.Message, Source.Node.NameLocation,
@@ -49,10 +49,36 @@ public static partial class TranslationCompiler
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(messages);
+        return CompileRmf2ProjectV5(project, Materialize(messages), null, options ?? new TranslationCompilerOptions(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Links a project from per-source units (<see cref="Rmf2SourceUnitV5"/>), reusing their parse and
+    /// lowering work. Units built with other options are recompiled, so the result is always identical
+    /// to compiling the units' sources directly.
+    /// </summary>
+    internal static Rmf2ProjectCompilationV5 CompileRmf2ProjectV5(TranslationSource project,
+        IEnumerable<Rmf2SourceUnitV5> units, TranslationCompilerOptions options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(units);
+        ArgumentNullException.ThrowIfNull(options);
+        var sources = new List<TranslationSource>();
+        var lookup = new Dictionary<TranslationSource, Rmf2SourceUnitV5>(ReferenceEqualityComparer.Instance);
+        foreach (Rmf2SourceUnitV5 unit in units)
+        {
+            if (unit is null) throw new ArgumentException("A source unit collection contains null.", nameof(units));
+            sources.Add(unit.Source);
+            if (ReferenceEquals(unit.Options, options)) lookup[unit.Source] = unit;
+        }
+        return CompileRmf2ProjectV5(project, Materialize(sources), lookup, options, cancellationToken);
+    }
+
+    private static Rmf2ProjectCompilationV5 CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
+        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
-        options ??= new TranslationCompilerOptions();
         var diagnostics = new DiagnosticBag();
-        TranslationSource[] sources = Materialize(messages);
         Rmf2ProjectCompilationV5 Result(Rmf2ProjectV5? value = null) => new(value, Array.AsReadOnly(diagnostics.ToSortedArray()));
         bool Failed() => diagnostics.Items.Any(d => d.Severity == TranslationDiagnosticSeverity.Error);
         if (RejectDuplicateSourcePaths(new[] { project }, sources, diagnostics)) return Result();
@@ -63,7 +89,7 @@ public static partial class TranslationCompiler
         var markup = new Rmf2ProjectMarkupV5(config, project, diagnostics);
         if (Failed()) return Result();
         var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var extracted = ReadRmf2ProjectSourcesV5(project, sources, config, discovered, diagnostics, options, cancellationToken);
+        var extracted = ReadRmf2ProjectSourcesV5(project, sources, units, config, discovered, diagnostics, options, cancellationToken);
         if (discovered.Count > options.MaximumLocalesPerCatalog)
             diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", project, manifest.DefaultLocaleSpan);
         if (manifest.Locales.Count == 0)
@@ -190,8 +216,13 @@ public static partial class TranslationCompiler
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var input = new TranslationSource(source.Source.Path, Encoding.UTF8.GetBytes(source.Node.Message!));
-            var result = callerInputs is null ? Rmf2SemanticCompilerV5.Compile(input, options, cancellationToken) : Rmf2SemanticCompilerV5.CompileWithCallerContract(input, callerInputs, options, cancellationToken);
+            Rmf2SemanticResultV5 result;
+            if (source.Unit is { } unit) result = unit.Lower(source.Node.Message!, callerInputs, cancellationToken);
+            else
+            {
+                var input = new TranslationSource(source.Source.Path, Encoding.UTF8.GetBytes(source.Node.Message!));
+                result = callerInputs is null ? Rmf2SemanticCompilerV5.Compile(input, options, cancellationToken) : Rmf2SemanticCompilerV5.CompileWithCallerContract(input, callerInputs, options, cancellationToken);
+            }
             foreach (var diagnostic in result.Diagnostics)
             {
                 int from = source.Node.MessageByteMap[Math.Min(diagnostic.Location.StartByte, source.Node.MessageByteMap.Count - 1)];
@@ -222,7 +253,7 @@ public static partial class TranslationCompiler
     }
 
     private static List<Rmf2ProjectSourceV5> ReadRmf2ProjectSourcesV5(TranslationSource project, TranslationSource[] sources,
-        JsonValue config, HashSet<string> locales, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken)
+        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, JsonValue config, HashSet<string> locales, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken)
     {
         string directory = ProjectDirectory(project.Path);
         var mounts = new List<(string Root, string[] Prefix)>();
@@ -288,22 +319,26 @@ public static partial class TranslationCompiler
             if (spellings.TryGetValue(locale, out string? existing) && existing != spelling) Error("Duplicate canonical locale spelling.", source, new(0, 0));
             spellings[locale] = spelling; locales.Add(locale);
             string[] mount = matches[0].Prefix.Concat(namespaceParts).ToArray();
+            Rmf2SourceUnitV5? unit = units is not null && units.TryGetValue(source, out var match) ? match : null;
             IReadOnlyList<Rmf2ResourceNode> nodes;
             if (grouped)
             {
-                var resource = Rmf2ResourceReader.Read(source, options, cancellationToken);
+                var resource = unit?.Resource ?? Rmf2ResourceReader.Read(source, options, cancellationToken);
                 foreach (var diagnostic in resource.Diagnostics) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
                 nodes = resource.Nodes;
             }
             else
             {
-                string message;
-                try { message = StrictJsonParser.StrictUtf8.GetString(source.Bytes); }
-                catch (DecoderFallbackException) { Error("MF2 requires valid UTF-8.", source, new(0, 0)); continue; }
+                string? message = unit?.DirectMessage;
+                if (message is null)
+                {
+                    try { message = StrictJsonParser.StrictUtf8.GetString(source.Bytes); }
+                    catch (DecoderFallbackException) { Error("MF2 requires valid UTF-8.", source, new(0, 0)); continue; }
+                }
                 var location = DiagnosticBag.Location(source, new(0, source.Bytes.Length));
                 var node = new Rmf2ResourceNode(directPath, message, Array.Empty<string>(), Array.Empty<string>(), location, location,
                     Enumerable.Range(0, source.Bytes.Length + 1).ToArray());
-                node.MessageSyntax = Mf2SyntaxReader.Read(source, options, cancellationToken);
+                node.MessageSyntax = unit?.DirectSyntax ?? Mf2SyntaxReader.Read(source, options, cancellationToken);
                 nodes = new[] { node };
             }
             for (int index = 1; index <= mount.Length; index++) Register(mount.Take(index).ToArray(), true, "", DiagnosticBag.Location(source, new(0, 0)));
@@ -315,7 +350,7 @@ public static partial class TranslationCompiler
                 string key = string.Join("_", path), logical = string.Join(".", path);
                 if (generated.TryGetValue(key, out string? previous) && previous != logical) diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Logical path '" + logical + "' collides with '" + previous + "' under canonical underscore keys.", node.NameLocation);
                 generated[key] = logical;
-                result.Add(new(key, path, locale, source, node));
+                result.Add(new(key, path, locale, source, node, unit));
             }
             void Register(string[] path, bool group, string metadata, TextSourceLocation location)
             {

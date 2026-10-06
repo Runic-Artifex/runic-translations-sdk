@@ -8,9 +8,15 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { build } from "vite";
-import { runicTranslations } from "../index.js";
+import { runicTranslations } from "../dist/index.js";
 
 const execFileAsync = promisify(execFile);
+let hotTimestamp = 0;
+
+// Calls Vite's hotUpdate hook as one environment would for a file change.
+function hot(plugin, file, moduleGraph, timestamp = ++hotTimestamp, type = "update") {
+  return plugin.hotUpdate.call({ environment: { moduleGraph } }, { type, file, timestamp, modules: [], read: async () => "" });
+}
 const fingerprint = `sha256:${"a".repeat(64)}`;
 const sourceHash = `sha256:${"b".repeat(64)}`;
 
@@ -191,14 +197,14 @@ test("failed manifest refresh keeps the last validated catalog, entries, and dec
       getModulesByFile: () => new Set(),
       invalidateModule: module => invalidated.push(module.id),
     } };
-    await assert.rejects(() => plugin.handleHotUpdate({ file: manifest, server }), /integrity/);
+    await assert.rejects(() => hot(plugin, manifest, server.moduleGraph), /integrity/);
     assert.equal(await plugin.resolveId("virtual:runic-translations/app"), "\0virtual:runic-translations/app/messages");
     assert.equal(await plugin.resolveId("virtual:runic-translations/renamed"), null);
     assert.equal(await readFile(declarationPath, "utf8"), beforeDeclarations);
     assert.deepEqual(invalidated, []);
 
     await writeV3Fixture(generated, { catalog: "renamed" });
-    const modules = await plugin.handleHotUpdate({ file: manifest, server });
+    const modules = await hot(plugin, manifest, server.moduleGraph);
     assert.ok(modules.some(module => module.id === "\0virtual:runic-translations/app/messages"));
     assert.ok(modules.some(module => module.id === "\0virtual:runic-translations/renamed/messages"));
     assert.equal(await plugin.resolveId("virtual:runic-translations/app"), null);
@@ -398,20 +404,20 @@ if ((await readFile(${JSON.stringify(english)}, "utf8")).includes("INVALID")) pr
     assert.ok(watched.includes(firstRoot)); assert.ok(watched.includes(english));
 
     await writeFile(english, "INVALID\n");
-    await assert.rejects(() => plugin.handleHotUpdate({ file: english, server }));
+    await assert.rejects(() => hot(plugin, english, server.moduleGraph));
     const changed = { schemaVersion: 1, catalog: "renamed", sourceRoots: [{ path: "../second", namespace: ["second"] }] };
     await writeFile(config, JSON.stringify(changed));
-    await assert.rejects(() => plugin.handleHotUpdate({ file: config, server }));
+    await assert.rejects(() => hot(plugin, config, server.moduleGraph));
     assert.equal(await plugin.resolveId("virtual:runic-translations/app"), "\0virtual:runic-translations/app/messages");
     assert.equal(await plugin.resolveId("virtual:runic-translations/renamed"), null);
     await writeFile(english, "title = Fixed\n");
-    await plugin.handleHotUpdate({ file: config, server });
+    await hot(plugin, config, server.moduleGraph);
 
     await writeFile(config, "{");
-    await assert.rejects(() => plugin.handleHotUpdate({ file: config, server }), /Could not read/);
+    await assert.rejects(() => hot(plugin, config, server.moduleGraph), /Could not read/);
     assert.equal(await plugin.resolveId("virtual:runic-translations/renamed"), "\0virtual:runic-translations/renamed/messages");
     await writeFile(config, JSON.stringify(changed));
-    await plugin.handleHotUpdate({ file: config, server });
+    await hot(plugin, config, server.moduleGraph);
     assert.ok(watched.includes(secondRoot)); assert.ok(watched.includes(german));
     assert.equal(await plugin.resolveId("virtual:runic-translations/renamed"), "\0virtual:runic-translations/renamed/messages");
     assert.ok(invalidated.includes("\0virtual:runic-translations/app/messages"));
@@ -425,7 +431,7 @@ if ((await readFile(${JSON.stringify(english)}, "utf8")).includes("INVALID")) pr
     watcher.emit("add", french);
     assert.equal((await reload).type, "full-reload");
     assert.ok(watched.includes(french));
-    assert.deepEqual(await plugin.handleHotUpdate({ file: join(output, "renamed.esm-v5", "messages.js"), server }), []);
+    assert.deepEqual(await hot(plugin, join(output, "renamed.esm-v5", "messages.js"), server.moduleGraph), []);
     plugin.closeBundle();
     assert.equal(watcher.listenerCount("add"), 0); assert.equal(watcher.listenerCount("unlink"), 0);
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -447,6 +453,234 @@ test("Vite production builds retain static v3 message re-exports", async () => {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+// A fake `runic-translations` that implements serve mode. It logs every process start and request
+// to `calls`, fails requests while `failMarker` exists, and crashes on the request numbers listed in
+// `crashOn` (counted across process starts). On request numbers in `hangOn` it starts a child process,
+// records its pid in `grandchild`, and never answers; on `unreadableOn` it answers like a request it
+// could not read (null id).
+async function writeServeCompiler(root, { crashOn = [], hangOn = [], unreadableOn = [] } = {}) {
+  const calls = join(root, "calls.txt"), failMarker = join(root, "fail"), counter = join(root, "count.txt");
+  const compiler = join(root, "serve-compiler.mjs");
+  const grandchild = join(root, "grandchild.pid");
+  await writeFile(compiler, `import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
+const calls = ${JSON.stringify(calls)};
+const args = process.argv.slice(2);
+if (args[0] !== "serve") { appendFileSync(calls, "one-shot " + args[0] + "\\n"); process.exit(0); }
+appendFileSync(calls, "serve-start\\n");
+process.stdout.write(JSON.stringify({ protocol: "runic-translations-serve/1", event: "ready", version: "test" }) + "\\n");
+const lines = createInterface({ input: process.stdin });
+let shuttingDown = false;
+lines.on("line", line => {
+  const request = JSON.parse(line);
+  if (request.method === "shutdown") {
+    appendFileSync(calls, "serve-shutdown\\n");
+    process.stdout.write(JSON.stringify({ id: request.id, ok: true, exitCode: 0 }) + "\\n");
+    // Exit only after the reply was read: a client that treats it as unknown would kill us first.
+    shuttingDown = true;
+    setTimeout(() => { appendFileSync(calls, "serve-shutdown-done\\n"); process.exit(0); }, 300);
+    return;
+  }
+  const count = (existsSync(${JSON.stringify(counter)}) ? Number(readFileSync(${JSON.stringify(counter)}, "utf8")) : 0) + 1;
+  writeFileSync(${JSON.stringify(counter)}, String(count));
+  appendFileSync(calls, "serve-" + request.method + " " + request.emit.join(",") + "\\n");
+  if (${JSON.stringify(crashOn)}.includes(count)) process.exit(3);
+  if (${JSON.stringify(hangOn)}.includes(count)) {
+    const sleeper = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { stdio: "ignore" });
+    writeFileSync(${JSON.stringify(grandchild)}, String(sleeper.pid));
+    return;
+  }
+  if (${JSON.stringify(unreadableOn)}.includes(count)) {
+    process.stdout.write(JSON.stringify({ id: null, ok: false, exitCode: 2, message: "The request exceeds the supported size.", diagnostics: [] }) + "\\n");
+    return;
+  }
+  const fail = existsSync(${JSON.stringify(failMarker)});
+  process.stdout.write(JSON.stringify({ id: request.id, ok: !fail, exitCode: fail ? 1 : 0,
+    message: fail ? "en.rmf2(1,1,1,1): error RTR0007: broken" : "", diagnostics: [], elapsedMs: 1 }) + "\\n");
+});
+lines.on("close", () => { if (shuttingDown) return; appendFileSync(calls, "serve-eof\\n"); process.exit(0); });
+`);
+  return { compiler, calls, failMarker, grandchild, log: async () => (await readFile(calls, "utf8")).trim().split("\n") };
+}
+
+async function servedProject(root, options = {}) {
+  const project = join(root, "translations"), output = join(root, "generated"), english = join(project, "en.rmf2");
+  await mkdir(project);
+  await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app" }));
+  await writeFile(english, "title = Shop\n");
+  await writeV3Fixture(join(output, "app.esm-v5"));
+  const fake = await writeServeCompiler(root, options);
+  const plugin = runicTranslations({ project, output, command: process.execPath, commandArguments: [fake.compiler], persistentCompilerTimeout: options.timeout });
+  const watcher = new EventEmitter(), warnings = [];
+  watcher.add = () => {};
+  const moduleGraph = { getModuleById: id => ({ id }), getModulesByFile: () => new Set(), invalidateModule() {} };
+  const server = {
+    watcher, httpServer: new EventEmitter(), ws: { send() {} }, moduleGraph,
+    config: { logger: { warn: message => warnings.push(message) } },
+  };
+  plugin.configureServer(server);
+  return { plugin, english, moduleGraph, warnings, ...fake };
+}
+
+test("dev server compiles every save through one persistent compiler and shuts it down", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-serve-"));
+  try {
+    const { plugin, english, moduleGraph, log, failMarker } = await servedProject(root);
+    await plugin.buildStart.call({ addWatchFile() {} });
+    await hot(plugin, english, moduleGraph);
+    await hot(plugin, english, moduleGraph);
+    assert.deepEqual(await log(), ["serve-start", "serve-generate esm", "serve-generate esm", "serve-generate esm"]);
+
+    await writeFile(failMarker, "");
+    await assert.rejects(() => hot(plugin, english, moduleGraph), error =>
+      error.name === "CompilerFailure" && error.stderr.includes("RTR0007") && error.exitCode === 1);
+    await rm(failMarker);
+    await hot(plugin, english, moduleGraph);
+    assert.equal((await log()).filter(line => line.startsWith("one-shot")).length, 0, "compiler diagnostics must not fall back to one-shot");
+
+    plugin.closeBundle();
+    for (let attempt = 0; attempt < 150 && !(await log()).includes("serve-shutdown-done"); attempt++)
+      await new Promise(resolveDelay => setTimeout(resolveDelay, 20));
+    assert.deepEqual((await log()).slice(-2), ["serve-shutdown", "serve-shutdown-done"], "the shutdown reply must not get the compiler killed");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("one change compiles once for every Vite environment", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-environments-"));
+  try {
+    const { plugin, english, log } = await servedProject(root);
+    await plugin.buildStart.call({ addWatchFile() {} });
+    const graph = name => ({
+      getModuleById: id => ({ id: `${name}:${id}` }), getModulesByFile: () => new Set(), invalidated: [],
+      invalidateModule(module) { this.invalidated.push(module.id); },
+    });
+    const client = graph("client"), ssr = graph("ssr");
+    const [clientModules, ssrModules] = await Promise.all([hot(plugin, english, client, 1000), hot(plugin, english, ssr, 1000)]);
+    assert.ok(clientModules.every(module => module.id.startsWith("client:")) && clientModules.length === 5);
+    assert.ok(ssrModules.every(module => module.id.startsWith("ssr:")) && ssrModules.length === 5);
+    assert.equal(ssr.invalidated.length, 5);
+    assert.equal((await log()).filter(line => line.startsWith("serve-generate")).length, 2, "build start plus one change");
+
+    const fail = join(root, "fail"); await writeFile(fail, "");
+    const results = await Promise.allSettled([hot(plugin, english, client, 2000), hot(plugin, english, ssr, 2000)]);
+    assert.deepEqual(results.map(result => result.status), ["rejected", "fulfilled"], "a failed change is reported once");
+    plugin.closeBundle();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a crashed persistent compiler falls back to one-shot generation, restarts, and is disabled after repeated crashes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-crash-"));
+  try {
+    const { plugin, english, moduleGraph, log, warnings } = await servedProject(root, { crashOn: [2, 4, 5, 6] });
+    await plugin.buildStart.call({ addWatchFile() {} });
+    await hot(plugin, english, moduleGraph);
+    // The second request crashes the compiler: that save falls back to one-shot generation.
+    assert.deepEqual(await log(), ["serve-start", "serve-generate esm", "serve-generate esm", "one-shot generate"]);
+    await hot(plugin, english, moduleGraph);
+    assert.deepEqual((await log()).slice(4), ["serve-start", "serve-generate esm"], "the next save restarts the compiler");
+    for (let save = 0; save < 4; save++) await hot(plugin, english, moduleGraph);
+    assert.deepEqual((await log()).slice(6), [
+      "serve-generate esm", "one-shot generate",
+      "serve-start", "serve-generate esm", "one-shot generate",
+      "serve-start", "serve-generate esm", "one-shot generate",
+      "one-shot generate",
+    ], "three crashes in a row disable the compiler");
+    assert.equal(warnings.length, 1, "disabling is reported once");
+    assert.match(warnings[0], /one-shot generation.*exited 3 times/);
+    plugin.closeBundle();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a hung request times out, stops the compiler with its children, and falls back", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-hang-"));
+  try {
+    const { plugin, english, moduleGraph, log, grandchild } = await servedProject(root, { hangOn: [2], timeout: 500 });
+    await plugin.buildStart.call({ addWatchFile() {} });
+    const started = Date.now();
+    await hot(plugin, english, moduleGraph);
+    assert.ok(Date.now() - started < 10_000, "the hung request blocked the change");
+    assert.deepEqual(await log(), ["serve-start", "serve-generate esm", "serve-generate esm", "one-shot generate"]);
+    const pid = Number(await readFile(grandchild, "utf8"));
+    const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    for (let attempt = 0; attempt < 100 && alive(); attempt++) await new Promise(resolveDelay => setTimeout(resolveDelay, 20));
+    if (process.platform !== "win32") assert.equal(alive(), false, "the compiler's child process survived the timeout");
+    await hot(plugin, english, moduleGraph);
+    assert.deepEqual((await log()).slice(4), ["serve-start", "serve-generate esm"], "the next change restarts the compiler");
+    plugin.closeBundle();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a request the compiler could not read falls back without restarting it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-unreadable-"));
+  try {
+    const { plugin, english, moduleGraph, log } = await servedProject(root, { unreadableOn: [2] });
+    await plugin.buildStart.call({ addWatchFile() {} });
+    await hot(plugin, english, moduleGraph);
+    await hot(plugin, english, moduleGraph);
+    assert.deepEqual(await log(), ["serve-start", "serve-generate esm", "serve-generate esm", "one-shot generate", "serve-generate esm"]);
+    assert.throws(() => runicTranslations({ persistentCompilerTimeout: 0 }), /persistentCompilerTimeout/);
+    plugin.closeBundle();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("tools without serve mode and persistentCompiler false use one-shot generation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-one-shot-"));
+  try {
+    const project = join(root, "translations"), output = join(root, "generated"), english = join(project, "en.rmf2");
+    await mkdir(project);
+    await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app" }));
+    await writeFile(english, "title = Shop\n");
+    await writeV3Fixture(join(output, "app.esm-v5"));
+    const calls = join(root, "calls.txt"), legacy = join(root, "legacy.mjs");
+    // Like a tool release before serve mode: an unknown command fails with a usage error.
+    await writeFile(legacy, `import { appendFileSync } from "node:fs";
+appendFileSync(${JSON.stringify(calls)}, process.argv[2] + "\\n");
+if (process.argv[2] === "serve") { process.stderr.write("runic-translations: unknown command 'serve'.\\n"); process.exit(2); }`);
+    const fake = await writeServeCompiler(root);
+    for (const [commandArguments, persistentCompiler, expected] of [
+      [[legacy], undefined, ["serve", "generate", "generate"]],
+      [[fake.compiler], false, ["one-shot generate", "one-shot generate"]],
+    ]) {
+      await rm(calls, { force: true });
+      const plugin = runicTranslations({ project, output, command: process.execPath, commandArguments, persistentCompiler });
+      const warnings = [], watcher = new EventEmitter(); watcher.add = () => {};
+      const moduleGraph = { getModuleById: () => undefined, getModulesByFile: () => new Set(), invalidateModule() {} };
+      plugin.configureServer({ watcher, httpServer: new EventEmitter(), ws: { send() {} }, moduleGraph, config: { logger: { warn: message => warnings.push(message) } } });
+      await plugin.buildStart.call({ addWatchFile() {} });
+      await hot(plugin, english, moduleGraph);
+      assert.deepEqual((await readFile(calls, "utf8")).trim().split("\n"), expected);
+      if (persistentCompiler === undefined) assert.match(warnings.join("\n"), /unknown command 'serve'/);
+      plugin.closeBundle();
+    }
+    assert.throws(() => runicTranslations({ project, output, persistentCompiler: "yes" }), /persistentCompiler must be a boolean/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("published declarations type-check a Vite configuration", async () => {
+  // Inside the package, so the import resolves through the package's own exports like a consumer's would.
+  const root = await mkdtemp(join(new URL("..", import.meta.url).pathname, ".declarations-"));
+  try {
+    const config = join(root, "vite.config.ts");
+    await writeFile(config, `import { defineConfig, type Plugin } from "vite";
+import { runicTranslations, type RunicTranslationsOptions } from "@runic-artifex/vite-plugin-runic-translations";
+const options: RunicTranslationsOptions = { project: "translations", persistentCompiler: false, typeDeclarations: false };
+const plugin: Plugin = runicTranslations(options);
+// @ts-expect-error persistentCompiler is a boolean.
+runicTranslations({ persistentCompiler: "yes" });
+// @ts-expect-error unknown options are rejected.
+runicTranslations({ projects: "translations" });
+export default defineConfig({ plugins: [plugin, runicTranslations({ manifest: "generated/web-module-manifest-v3.json" })] });
+`);
+    const tsconfig = join(root, "tsconfig.json");
+    await writeFile(tsconfig, JSON.stringify({
+      compilerOptions: { module: "NodeNext", moduleResolution: "NodeNext", target: "ES2022", strict: true, noEmit: true, skipLibCheck: false, types: ["node"] },
+      files: [config],
+    }));
+    await execFileAsync(process.execPath, ["x", "tsc", "-p", tsconfig, "--pretty", "false"], { cwd: new URL("..", import.meta.url) });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("published package inventory contains only declared runtime files", async () => {
   const packageRoot = new URL("..", import.meta.url), output = await mkdtemp(join(tmpdir(), "runic-vite-package-"));
   try {
@@ -454,6 +688,6 @@ test("published package inventory contains only declared runtime files", async (
     const archives = (await readdir(output)).filter(file => file.endsWith(".tgz")); assert.equal(archives.length, 1);
     const { stdout } = await execFileAsync("tar", ["-tzf", join(output, archives[0])]);
     const files = stdout.split("\n").filter(file => file.startsWith("package/") && !file.endsWith("/")).map(file => file.slice("package/".length)).sort();
-    assert.deepEqual(files, ["README.md", "dist/index.d.ts", "dist/index.js", "package.json"]);
+    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
   } finally { await rm(output, { recursive: true, force: true }); }
 });

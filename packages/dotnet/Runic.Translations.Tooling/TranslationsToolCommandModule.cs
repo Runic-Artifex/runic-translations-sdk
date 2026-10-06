@@ -74,6 +74,9 @@ public static class TranslationsToolCommandModule
     [Command("lsp", Description = "Run the RMF2 language server over standard input/output.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Lsp([FromServices] ITranslationsToolCommandOperations operations) => operations.Execute(new("lsp"));
 
+    [Command("serve", Description = "Run a persistent compiler for development servers over standard input/output.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    public static CommandOutcome<TranslationsToolCommandResult> Serve([FromServices] ITranslationsToolCommandOperations operations) => operations.Execute(new("serve"));
+
     [Command("validate", Description = "Validate catalogs and report translation diagnostics.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Validate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Required = true)] string project) => operations.Execute(new("validate", Project: project));
 
