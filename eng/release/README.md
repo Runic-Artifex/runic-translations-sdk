@@ -26,9 +26,10 @@ environment) runs `eng/release/ci-artifact.mjs`:
   version, packed from the dispatched commit for this repository, and records their
   hashes in the `release-candidate-<run id>` artifact.
 - `publish.mjs publish --dry-run` reports which versions are missing and fails if a
-  published version has different contents; `release-check` fails if the tag or an
-  existing GitHub release points at another commit, or the release is a draft (a
-  release of this exact tag and commit is kept); `publish.mjs tag-latest
+  published version has different contents; `release-check` fails if the tag (looked
+  up exactly, annotated tags followed) or an existing GitHub release points at
+  another commit, or a lookup fails for any reason other than not found (a release
+  or draft of this exact commit is kept); `publish.mjs tag-latest
   --dry-run` reports where npm `latest` would move.
 
 A dry run ends there, without OIDC, a registry write, a tag or a release. It
@@ -39,7 +40,7 @@ only one in the `preview` environment and the only one with `id-token: write` an
 inventory, requested version and CI run (`ci-artifact.mjs verify`), publishes missing
 package versions, creates the GitHub prerelease at the dispatched commit from those
 same files (`ci-artifact.mjs release`; a rerun after a partial publication keeps a
-release of this tag and commit and uploads only missing assets), and then,
+release of this tag and commit, uploads only missing assets and publishes a matching draft), and then,
 because every release is a preview until 1.0, moves npm `latest` to it, never to
 an older version, waiting while npm still answers 401 or 404 for a just-published
 name. `eng/release/ci-artifact.test.mjs` pins this contract.

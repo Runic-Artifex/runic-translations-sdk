@@ -111,39 +111,75 @@ export function verify(directory, manifest, source, version, ciRunId, inventory 
   assert.deepEqual(scan(directory, manifest.version, source, inventory), manifest.packages, "Packages differ from the candidate inventory");
 }
 
-// The published release of this exact tag and commit, undefined if absent; fails for any other release or tag.
+const ghFailure = (what, result) => new Error(`${what} failed: ${(result.stderr ?? "").trim() || `exit ${result.status ?? "unavailable"}`}`);
+
+// The commit a tag points at, or undefined only when GitHub answers 404 for the tag
+// ref. git/ref/tags/<tag> matches exactly that tag (commits/<ref> would also match a
+// branch); annotated tags are followed to their commit. Any other error fails.
+export function tagCommit(tag, spawn = spawnSync) {
+  let path = `repos/${REPOSITORY}/git/ref/tags/${tag}`;
+  for (let depth = 0; depth < 5; depth++) {
+    const result = spawn("gh", ["api", path, "--jq", '.object.type + " " + .object.sha'], { encoding: "utf8" });
+    if (result.status !== 0) {
+      if (depth === 0 && /HTTP 404/.test(result.stderr ?? "")) return undefined;
+      throw ghFailure(`Tag lookup for ${tag}`, result);
+    }
+    const [type, sha] = result.stdout.trim().split(" ");
+    assert.match(sha ?? "", /^[a-f0-9]{40}$/, `Tag ${tag} lookup returned no object`);
+    if (type === "commit") return sha;
+    assert.equal(type, "tag", `Tag ${tag} points at a ${type}, not a commit`);
+    path = `repos/${REPOSITORY}/git/tags/${sha}`;
+  }
+  throw new Error(`Tag ${tag} nests too many annotated tags`);
+}
+
+// The release for a tag (drafts included), or undefined only when gh reports it not found.
+function findRelease(tag, spawn) {
+  const result = spawn("gh", ["release", "view", tag, "--repo", REPOSITORY, "--json", "isDraft,url,assets,targetCommitish"], { encoding: "utf8" });
+  if (result.status === 0) return JSON.parse(result.stdout);
+  if (/release not found|HTTP 404/.test(result.stderr ?? "")) return undefined;
+  throw ghFailure(`Release lookup for ${tag}`, result);
+}
+
+// The release of this exact tag and commit (a draft targeting this commit included),
+// undefined if absent. Fails for a release or tag of any other commit and any lookup error.
 function existingRelease(version, source, spawn) {
   const tag = `v${version}`;
-  const release = spawn("gh", ["release", "view", tag, "--repo", REPOSITORY, "--json", "isDraft,url,assets"], { encoding: "utf8" });
-  const tagged = spawn("gh", ["api", `repos/${REPOSITORY}/commits/${tag}`, "--jq", ".sha"], { encoding: "utf8" });
-  if (tagged.status === 0 && tagged.stdout.trim() !== source) throw new Error(`Tag ${tag} belongs to ${tagged.stdout.trim()}, not ${source}.`);
-  if (release.status !== 0) return undefined;
-  const found = JSON.parse(release.stdout);
-  if (found.isDraft || tagged.status !== 0) throw new Error(`GitHub release ${tag} (${found.url}) is a draft or has no tag; publish or delete it first.`);
+  const found = findRelease(tag, spawn);
+  const tagged = tagCommit(tag, spawn);
+  if (tagged !== undefined && tagged !== source) throw new Error(`Tag ${tag} belongs to ${tagged}, not ${source}.`);
+  if (!found) return undefined;
+  if (found.isDraft) {
+    if (found.targetCommitish !== source) throw new Error(`Draft release ${tag} (${found.url}) targets ${found.targetCommitish}, not ${source}.`);
+    return found;
+  }
+  if (tagged === undefined) throw new Error(`GitHub release ${tag} (${found.url}) has no tag; delete it first.`);
   return found;
 }
 
 export function releaseCheck(version, source, spawn = spawnSync) {
   const found = existingRelease(version, source, spawn);
+  if (found?.isDraft) return `Would resume the draft release v${version} for ${source} (${found.url}).`;
   return found ? `GitHub release v${version} already exists for ${source} (${found.url}); a rerun keeps it.`
     : `Would create the prerelease v${version} at ${source}.`;
 }
 
 // A rerun after a partial publication keeps a release of this exact tag and commit
-// and only uploads assets it is missing, so tag-latest can still run.
+// uploads only assets it is missing and publishes a matching draft, so tag-latest can still run.
 export function createRelease(version, source, files, spawn = spawnSync) {
   const tag = `v${version}`;
   const found = existingRelease(version, source, spawn);
-  let args;
-  if (!found) args = ["release", "create", tag, ...files, "--repo", REPOSITORY, "--target", source, "--prerelease", "--generate-notes"];
+  const gh = (args, what) => {
+    if (spawn("gh", args, { stdio: "inherit" }).status !== 0) throw new Error(`Could not ${what} GitHub release ${tag}.`);
+  };
+  if (!found) gh(["release", "create", tag, ...files, "--repo", REPOSITORY, "--target", source, "--prerelease", "--generate-notes"], "create");
   else {
     const present = new Set((found.assets ?? []).map(asset => asset.name));
     const missing = files.filter(file => !present.has(basename(file)));
-    if (!missing.length) return `GitHub release ${tag} already exists for ${source} with every asset.`;
-    args = ["release", "upload", tag, ...missing, "--repo", REPOSITORY];
+    if (!missing.length && !found.isDraft) return `GitHub release ${tag} already exists for ${source} with every asset.`;
+    if (missing.length) gh(["release", "upload", tag, ...missing, "--repo", REPOSITORY], "complete");
+    if (found.isDraft) gh(["release", "edit", tag, "--repo", REPOSITORY, "--draft=false", "--prerelease"], "publish");
   }
-  const result = spawn("gh", args, { stdio: "inherit" });
-  if (result.status !== 0) throw new Error(`Could not ${found ? "complete" : "create"} GitHub release ${tag}.`);
   return `${found ? "Completed" : "Created"} GitHub release ${tag} at ${source}.`;
 }
 

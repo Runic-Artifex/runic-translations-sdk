@@ -77,30 +77,56 @@ with tarfile.open(d+'/npm/runic-artifex-translations-svelte-'+v+'.tgz','w:gz') a
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-const fakeGh = ({ release = false, tag, draft = false, assets = [] } = {}) => {
+const fakeGh = ({ release = false, tag, draft = false, assets = [], target = sha, annotated = false, tagError = false, releaseError = false } = {}) => {
   const calls = [];
   const spawn = (command, args) => {
     calls.push([command, ...args]);
-    if (args[0] === "release" && args[1] === "view") return { status: release ? 0 : 1, stdout: JSON.stringify({ url: "u", isDraft: draft, assets: assets.map(name => ({ name })) }) };
-    if (args[0] === "api") return { status: tag ? 0 : 1, stdout: `${tag}\n` };
+    if (args[0] === "release" && args[1] === "view") {
+      if (releaseError) return { status: 1, stdout: "", stderr: "HTTP 502: Bad Gateway" };
+      return release ? { status: 0, stdout: JSON.stringify({ url: "u", isDraft: draft, targetCommitish: target, assets: assets.map(name => ({ name })) }) }
+        : { status: 1, stdout: "", stderr: "release not found" };
+    }
+    if (args[0] === "api") {
+      if (tagError) return { status: 1, stdout: "", stderr: "gh: Server Error (HTTP 502)" };
+      if (!tag) return { status: 1, stdout: "", stderr: "gh: Not Found (HTTP 404)" };
+      if (annotated && args[1].includes("/git/ref/tags/")) return { status: 0, stdout: `tag ${"e".repeat(40)}\n` };
+      return { status: 0, stdout: `commit ${tag}\n` };
+    }
     return { status: 0 };
   };
   return { spawn, calls };
 };
+const writes = calls => calls.some(c => c[1] === "release" && ["create", "upload", "edit"].includes(c[2]));
 
 test("the release check only reads and accepts only a release of this exact commit", () => {
   const { spawn, calls } = fakeGh();
   expect(releaseCheck("1.2.3", sha, spawn)).toContain("Would create");
-  expect(calls.map(c => c.slice(0, 3))).toEqual([["gh", "release", "view"], ["gh", "api", `repos/${REPOSITORY}/commits/v1.2.3`]]);
+  expect(calls.map(c => c.slice(0, 3))).toEqual([["gh", "release", "view"], ["gh", "api", `repos/${REPOSITORY}/git/ref/tags/v1.2.3`]]);
   expect(releaseCheck("1.2.3", sha, fakeGh({ tag: sha }).spawn)).toContain("Would create");
   expect(releaseCheck("1.2.3", sha, fakeGh({ release: true, tag: sha }).spawn)).toContain("already exists for");
+  expect(releaseCheck("1.2.3", sha, fakeGh({ release: true, draft: true }).spawn)).toContain("resume the draft");
   expect(() => releaseCheck("1.2.3", sha, fakeGh({ release: true, tag: "b".repeat(40) }).spawn)).toThrow("belongs to");
   expect(() => releaseCheck("1.2.3", sha, fakeGh({ tag: "b".repeat(40) }).spawn)).toThrow("belongs to");
-  expect(() => releaseCheck("1.2.3", sha, fakeGh({ release: true, tag: sha, draft: true }).spawn)).toThrow("draft");
+  expect(() => releaseCheck("1.2.3", sha, fakeGh({ release: true, draft: true, target: "main" }).spawn)).toThrow("targets main");
   expect(() => releaseCheck("1.2.3", sha, fakeGh({ release: true }).spawn)).toThrow("no tag");
 });
 
-test("a rerun keeps a release of this commit and uploads only missing assets", () => {
+test("only a 404 means absent; other lookup errors stop before writing", () => {
+  for (const [options, message] of [[{ tagError: true }, "Tag lookup for v1.2.3 failed: gh: Server Error"], [{ releaseError: true }, "Release lookup for v1.2.3 failed"]]) {
+    const { spawn, calls } = fakeGh(options);
+    expect(() => releaseCheck("1.2.3", sha, spawn)).toThrow(message);
+    expect(() => createRelease("1.2.3", sha, ["p/nuget/A.nupkg"], spawn)).toThrow(message);
+    expect(writes(calls)).toBe(false);
+  }
+});
+
+test("an annotated tag resolves to its commit", () => {
+  const { spawn, calls } = fakeGh({ tag: sha, annotated: true });
+  expect(releaseCheck("1.2.3", sha, spawn)).toContain("Would create");
+  expect(calls.filter(c => c[1] === "api").map(c => c[2])).toEqual([`repos/${REPOSITORY}/git/ref/tags/v1.2.3`, `repos/${REPOSITORY}/git/tags/${"e".repeat(40)}`]);
+});
+
+test("a rerun keeps a release of this commit, uploads only missing assets and resumes a matching draft", () => {
   const files = ["p/nuget/A.nupkg", "p/npm/b.tgz"];
   let { spawn, calls } = fakeGh();
   expect(createRelease("1.2.3", sha, files, spawn)).toContain("Created");
@@ -112,10 +138,14 @@ test("a rerun keeps a release of this commit and uploads only missing assets", (
   expect(calls.at(-1).slice(0, 5)).toEqual(["gh", "release", "upload", "v1.2.3", "p/npm/b.tgz"]);
   ({ spawn, calls } = fakeGh({ release: true, tag: sha, assets: ["A.nupkg", "b.tgz"] }));
   expect(createRelease("1.2.3", sha, files, spawn)).toContain("every asset");
-  expect(calls.some(c => ["create", "upload"].includes(c[2]))).toBe(false);
+  expect(writes(calls)).toBe(false);
+  ({ spawn, calls } = fakeGh({ release: true, draft: true, assets: ["A.nupkg"] }));
+  expect(createRelease("1.2.3", sha, files, spawn)).toContain("Completed");
+  expect(calls.slice(-2).map(c => c.slice(0, 3))).toEqual([["gh", "release", "upload"], ["gh", "release", "edit"]]);
+  expect(calls.at(-1)).toContain("--draft=false");
   ({ spawn, calls } = fakeGh({ release: true, tag: "b".repeat(40) }));
   expect(() => createRelease("1.2.3", sha, files, spawn)).toThrow("belongs to");
-  expect(calls.some(c => ["create", "upload"].includes(c[2]))).toBe(false);
+  expect(writes(calls)).toBe(false);
 });
 
 test("publication reuses the CI artifact and never reruns tests or packing", () => {
