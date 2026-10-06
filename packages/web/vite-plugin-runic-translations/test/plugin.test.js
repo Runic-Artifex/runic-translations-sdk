@@ -455,11 +455,15 @@ test("Vite production builds retain static v3 message re-exports", async () => {
 
 // A fake `runic-translations` that implements serve mode. It logs every process start and request
 // to `calls`, fails requests while `failMarker` exists, and crashes on the request numbers listed in
-// `crashOn` (counted across process starts).
-async function writeServeCompiler(root, { crashOn = [] } = {}) {
+// `crashOn` (counted across process starts). On request numbers in `hangOn` it starts a child process,
+// records its pid in `grandchild`, and never answers; on `unreadableOn` it answers like a request it
+// could not read (null id).
+async function writeServeCompiler(root, { crashOn = [], hangOn = [], unreadableOn = [] } = {}) {
   const calls = join(root, "calls.txt"), failMarker = join(root, "fail"), counter = join(root, "count.txt");
   const compiler = join(root, "serve-compiler.mjs");
+  const grandchild = join(root, "grandchild.pid");
   await writeFile(compiler, `import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 const calls = ${JSON.stringify(calls)};
 const args = process.argv.slice(2);
@@ -467,24 +471,37 @@ if (args[0] !== "serve") { appendFileSync(calls, "one-shot " + args[0] + "\\n");
 appendFileSync(calls, "serve-start\\n");
 process.stdout.write(JSON.stringify({ protocol: "runic-translations-serve/1", event: "ready", version: "test" }) + "\\n");
 const lines = createInterface({ input: process.stdin });
+let shuttingDown = false;
 lines.on("line", line => {
   const request = JSON.parse(line);
   if (request.method === "shutdown") {
     appendFileSync(calls, "serve-shutdown\\n");
     process.stdout.write(JSON.stringify({ id: request.id, ok: true, exitCode: 0 }) + "\\n");
-    process.exit(0);
+    // Exit only after the reply was read: a client that treats it as unknown would kill us first.
+    shuttingDown = true;
+    setTimeout(() => { appendFileSync(calls, "serve-shutdown-done\\n"); process.exit(0); }, 300);
+    return;
   }
   const count = (existsSync(${JSON.stringify(counter)}) ? Number(readFileSync(${JSON.stringify(counter)}, "utf8")) : 0) + 1;
   writeFileSync(${JSON.stringify(counter)}, String(count));
   appendFileSync(calls, "serve-" + request.method + " " + request.emit.join(",") + "\\n");
   if (${JSON.stringify(crashOn)}.includes(count)) process.exit(3);
+  if (${JSON.stringify(hangOn)}.includes(count)) {
+    const sleeper = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { stdio: "ignore" });
+    writeFileSync(${JSON.stringify(grandchild)}, String(sleeper.pid));
+    return;
+  }
+  if (${JSON.stringify(unreadableOn)}.includes(count)) {
+    process.stdout.write(JSON.stringify({ id: null, ok: false, exitCode: 2, message: "The request exceeds the supported size.", diagnostics: [] }) + "\\n");
+    return;
+  }
   const fail = existsSync(${JSON.stringify(failMarker)});
   process.stdout.write(JSON.stringify({ id: request.id, ok: !fail, exitCode: fail ? 1 : 0,
     message: fail ? "en.rmf2(1,1,1,1): error RTR0007: broken" : "", diagnostics: [], elapsedMs: 1 }) + "\\n");
 });
-lines.on("close", () => { appendFileSync(calls, "serve-eof\\n"); process.exit(0); });
+lines.on("close", () => { if (shuttingDown) return; appendFileSync(calls, "serve-eof\\n"); process.exit(0); });
 `);
-  return { compiler, calls, failMarker, log: async () => (await readFile(calls, "utf8")).trim().split("\n") };
+  return { compiler, calls, failMarker, grandchild, log: async () => (await readFile(calls, "utf8")).trim().split("\n") };
 }
 
 async function servedProject(root, options = {}) {
@@ -494,7 +511,7 @@ async function servedProject(root, options = {}) {
   await writeFile(english, "title = Shop\n");
   await writeV3Fixture(join(output, "app.esm-v5"));
   const fake = await writeServeCompiler(root, options);
-  const plugin = runicTranslations({ project, output, command: process.execPath, commandArguments: [fake.compiler] });
+  const plugin = runicTranslations({ project, output, command: process.execPath, commandArguments: [fake.compiler], persistentCompilerTimeout: options.timeout });
   const watcher = new EventEmitter(), warnings = [];
   watcher.add = () => {};
   const moduleGraph = { getModuleById: id => ({ id }), getModulesByFile: () => new Set(), invalidateModule() {} };
@@ -523,9 +540,9 @@ test("dev server compiles every save through one persistent compiler and shuts i
     assert.equal((await log()).filter(line => line.startsWith("one-shot")).length, 0, "compiler diagnostics must not fall back to one-shot");
 
     plugin.closeBundle();
-    for (let attempt = 0; attempt < 100 && !(await log()).includes("serve-shutdown"); attempt++)
+    for (let attempt = 0; attempt < 150 && !(await log()).includes("serve-shutdown-done"); attempt++)
       await new Promise(resolveDelay => setTimeout(resolveDelay, 20));
-    assert.equal((await log()).at(-1), "serve-shutdown");
+    assert.deepEqual((await log()).slice(-2), ["serve-shutdown", "serve-shutdown-done"], "the shutdown reply must not get the compiler killed");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -571,6 +588,38 @@ test("a crashed persistent compiler falls back to one-shot generation, restarts,
     ], "three crashes in a row disable the compiler");
     assert.equal(warnings.length, 1, "disabling is reported once");
     assert.match(warnings[0], /one-shot generation.*exited 3 times/);
+    plugin.closeBundle();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a hung request times out, stops the compiler with its children, and falls back", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-hang-"));
+  try {
+    const { plugin, english, moduleGraph, log, grandchild } = await servedProject(root, { hangOn: [2], timeout: 500 });
+    await plugin.buildStart.call({ addWatchFile() {} });
+    const started = Date.now();
+    await hot(plugin, english, moduleGraph);
+    assert.ok(Date.now() - started < 10_000, "the hung request blocked the change");
+    assert.deepEqual(await log(), ["serve-start", "serve-generate esm", "serve-generate esm", "one-shot generate"]);
+    const pid = Number(await readFile(grandchild, "utf8"));
+    const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    for (let attempt = 0; attempt < 100 && alive(); attempt++) await new Promise(resolveDelay => setTimeout(resolveDelay, 20));
+    if (process.platform !== "win32") assert.equal(alive(), false, "the compiler's child process survived the timeout");
+    await hot(plugin, english, moduleGraph);
+    assert.deepEqual((await log()).slice(4), ["serve-start", "serve-generate esm"], "the next change restarts the compiler");
+    plugin.closeBundle();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a request the compiler could not read falls back without restarting it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-unreadable-"));
+  try {
+    const { plugin, english, moduleGraph, log } = await servedProject(root, { unreadableOn: [2] });
+    await plugin.buildStart.call({ addWatchFile() {} });
+    await hot(plugin, english, moduleGraph);
+    await hot(plugin, english, moduleGraph);
+    assert.deepEqual(await log(), ["serve-start", "serve-generate esm", "serve-generate esm", "one-shot generate", "serve-generate esm"]);
+    assert.throws(() => runicTranslations({ persistentCompilerTimeout: 0 }), /persistentCompilerTimeout/);
     plugin.closeBundle();
   } finally { await rm(root, { recursive: true, force: true }); }
 });

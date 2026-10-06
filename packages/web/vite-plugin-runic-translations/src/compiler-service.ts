@@ -49,10 +49,12 @@ export interface PersistentCompilerOptions {
   readonly onDisabled?: (reason: string) => void;
   /** Milliseconds to wait for the ready line. */
   readonly startTimeout?: number;
+  /** Milliseconds to wait for one request before stopping the process and falling back. */
+  readonly requestTimeout?: number;
 }
 
 interface ServeResponse {
-  readonly id: number;
+  readonly id: number | null;
   readonly ok: boolean;
   readonly exitCode: number;
   readonly message?: string;
@@ -65,6 +67,26 @@ interface Pending {
 }
 
 const maximumConsecutiveCrashes = 3;
+/** Default request timeout: generous, because a cold first compile of a large catalog can take seconds. */
+export const defaultRequestTimeout = 120_000;
+/** The id of the shutdown request; its reply is ignored. */
+const shutdownId = 0;
+
+// Stops the compiler and anything it started, such as the real tool behind `dotnet tool run`.
+function killTree(child: ChildProcessWithoutNullStreams): void {
+  if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) return;
+  if (process.platform === "win32") {
+    const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+    killer.on("error", () => child.kill());
+    return;
+  }
+  try {
+    // The compiler leads its own process group (spawned detached), so this reaches its children too.
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    child.kill("SIGKILL");
+  }
+}
 
 function setReferenced(child: ChildProcessWithoutNullStreams, referenced: boolean): void {
   for (const handle of [child, child.stdin, child.stdout, child.stderr] as unknown as { ref?: () => void; unref?: () => void }[])
@@ -114,13 +136,13 @@ export class PersistentCompiler {
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
     const exited = new Promise<void>(resolve => child.once("exit", () => resolve()));
     try {
-      child.stdin.end(`${JSON.stringify({ id: 0, method: "shutdown" })}\n`);
+      child.stdin.end(`${JSON.stringify({ id: shutdownId, method: "shutdown" })}\n`);
     } catch {
       // The process is already gone; the exit wait below resolves immediately.
     }
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<"timeout">(resolve => { timer = setTimeout(() => resolve("timeout"), gracePeriod); });
-    if (await Promise.race([exited, timeout]) === "timeout") child.kill();
+    if (await Promise.race([exited, timeout]) === "timeout") killTree(child);
     clearTimeout(timer);
   }
 
@@ -129,12 +151,23 @@ export class PersistentCompiler {
     if (this.#disabled) throw new CompilerUnavailable(this.#disabled);
     const child = await this.#start();
     const id = this.#nextId++;
+    const timeout = this.#options.requestTimeout ?? defaultRequestTimeout;
     return new Promise<ServeResponse>((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      // A hung compile must not block later changes: stop the process; the next request restarts it.
+      const timer = setTimeout(() => {
+        if (!this.#pending.delete(id)) return;
+        reject(new CompilerUnavailable(`The persistent compiler did not answer within ${timeout} ms.`));
+        if (this.#process === child) this.#process = undefined;
+        killTree(child);
+      }, timeout);
+      this.#pending.set(id, {
+        resolve: response => { clearTimeout(timer); resolve(response); },
+        reject: error => { clearTimeout(timer); reject(error); },
+      });
       setReferenced(child, true);
       child.stdin.write(`${JSON.stringify({ id, ...body })}\n`, error => {
-        if (!error) return;
-        this.#pending.delete(id);
+        if (!error || !this.#pending.delete(id)) return;
+        clearTimeout(timer);
         reject(new CompilerUnavailable(`Could not send a request to the persistent compiler: ${error.message}`));
       });
     });
@@ -159,13 +192,15 @@ export class PersistentCompiler {
     return new Promise((resolve, reject) => {
       let ready = false;
       let settled = false;
-      const child = spawn(command, [...commandArguments, "serve"], { cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+      const child = spawn(command, [...commandArguments, "serve"], {
+        cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true, detached: process.platform !== "win32",
+      });
       this.#stderr = "";
       const fail = (message: string) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        child.kill();
+        killTree(child);
         reject(new Error(message));
       };
       const timer = setTimeout(() => fail("The persistent compiler did not start in time."), this.#options.startTimeout ?? 60_000);
@@ -194,12 +229,18 @@ export class PersistentCompiler {
           resolve(child);
           return;
         }
-        const pending = typeof message.id === "number" ? this.#pending.get(message.id) : undefined;
+        // After close only the exit matters; the shutdown reply carries no result.
+        if (this.#closed || message.id === shutdownId) return;
+        // A null id answers a request the server could not read (for example an oversized one). Requests
+        // are answered in order, so it is the oldest outstanding request.
+        const id = message.id === null ? this.#pending.keys().next().value : message.id;
+        const pending = typeof id === "number" ? this.#pending.get(id) : undefined;
         if (!pending) return this.#protocolError(child, "The persistent compiler answered an unknown request.");
-        this.#pending.delete(message.id as number);
+        this.#pending.delete(id as number);
         this.#crashes = 0;
         if (this.#pending.size === 0) setReferenced(child, false);
-        pending.resolve(message as unknown as ServeResponse);
+        if (message.id === null) pending.reject(new CompilerUnavailable(`The persistent compiler rejected a request: ${String(message.message)}`));
+        else pending.resolve(message as unknown as ServeResponse);
       });
       child.on("exit", (code, signal) => {
         const detail = this.#stderr.trim();
@@ -216,7 +257,7 @@ export class PersistentCompiler {
   #protocolError(child: ChildProcessWithoutNullStreams, message: string): void {
     this.#rejectPending(new CompilerUnavailable(message));
     if (this.#process === child) this.#process = undefined;
-    child.kill();
+    killTree(child);
   }
 
   #rejectPending(error: Error): void {

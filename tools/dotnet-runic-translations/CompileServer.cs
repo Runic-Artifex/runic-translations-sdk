@@ -22,7 +22,10 @@ namespace Runic.Translations.Tool;
 /// receives exactly one response line with the same <c>id</c>:
 /// <c>{"id":1,"ok":true,"exitCode":0,"output":"...","message":"","diagnostics":[],"elapsedMs":12}</c>.
 /// <c>exitCode</c> and <c>diagnostics</c> match the one-shot command. The server exits when standard input
-/// closes or after answering <c>shutdown</c>.</para>
+/// closes or after answering <c>shutdown</c>. A request line over 1 MiB is dropped while it is read and answered with
+/// a null <c>id</c>.</para>
+/// <para>Trust: requests come only from the parent process through standard input, and may name any project and
+/// output directory this process can access, like the one-shot commands.</para>
 /// <para>Paths resolve against the server's working directory, like the one-shot commands. Unchanged
 /// sources keep their parsed and lowered form between requests, so a request after an edit
 /// recompiles only the edited files before relinking the catalog.</para>
@@ -59,12 +62,38 @@ internal sealed class CompileServer
             writer.WriteString("event", "ready");
             writer.WriteString("version", version);
         });
-        while (_input.ReadLine() is { } line)
+        while (ReadBoundedLine(out bool oversized) is { } line)
         {
+            if (oversized)
+            {
+                // The request was discarded unread, so its id is unknown: the reply has a null id and answers
+                // the oldest outstanding request, which is this one because requests are handled in order.
+                Respond(false, default, Usage($"The request exceeds the supported size of {MaximumRequestCharacters} characters."), 0);
+                continue;
+            }
             if (line.Length == 0) continue;
             if (!Handle(line)) break;
         }
         return 0;
+    }
+
+    // Reads one line without ever buffering more than MaximumRequestCharacters; the rest of an oversized
+    // line is consumed and dropped. Returns null at the end of input.
+    private string? ReadBoundedLine(out bool oversized)
+    {
+        oversized = false;
+        var line = new StringBuilder();
+        while (true)
+        {
+            int next = _input.Read();
+            if (next < 0) return line.Length == 0 && !oversized ? null : line.ToString();
+            if (next == '\n') break;
+            if (oversized) continue;
+            if (line.Length == MaximumRequestCharacters) { oversized = true; line.Clear(); continue; }
+            line.Append((char)next);
+        }
+        if (line.Length != 0 && line[^1] == '\r') line.Length--;
+        return line.ToString();
     }
 
     private bool Handle(string line)
@@ -76,7 +105,6 @@ internal sealed class CompileServer
         ToolEmission emission = ToolEmission.None;
         try
         {
-            if (line.Length > MaximumRequestCharacters) throw new FormatException("The request exceeds the supported size.");
             using JsonDocument document = JsonDocument.Parse(line);
             JsonElement root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object) throw new FormatException("A request must be a JSON object.");

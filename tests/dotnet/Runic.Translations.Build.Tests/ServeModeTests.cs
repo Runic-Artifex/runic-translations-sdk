@@ -65,6 +65,10 @@ internal static class ServeModeTests
         Assert.Equal(JsonValueKind.Null, malformed.GetProperty("id").ValueKind);
         Assert.Equal(2, malformed.GetProperty("exitCode").GetInt32());
 
+        JsonElement oversized = server.Send("{\"id\":7,\"method\":\"validate\",\"project\":\"" + new string('a', 1024 * 1024) + "\"}");
+        Assert.Equal(JsonValueKind.Null, oversized.GetProperty("id").ValueKind);
+        Assert.Contains("exceeds the supported size", oversized.GetProperty("message").GetString() ?? string.Empty);
+
         JsonElement unknown = server.Send("""{"id":"x","method":"compile"}""");
         Assert.Equal("x", unknown.GetProperty("id").GetString());
         Assert.Contains("unknown method 'compile'", unknown.GetProperty("message").GetString() ?? string.Empty);
@@ -195,8 +199,14 @@ internal static class ServeModeTests
     private sealed class BlockingLineReader : TextReader
     {
         private readonly System.Collections.Concurrent.BlockingCollection<string> _lines = new();
-        internal void Add(string line) => _lines.Add(line);
-        public override string? ReadLine() => _lines.Take();
+        private string _current = string.Empty;
+        private int _position;
+        internal void Add(string line) => _lines.Add(line + "\n");
+        public override int Read()
+        {
+            if (_position == _current.Length) { _current = _lines.Take(); _position = 0; }
+            return _current[_position++];
+        }
         protected override void Dispose(bool disposing)
         {
             if (disposing) _lines.Dispose();

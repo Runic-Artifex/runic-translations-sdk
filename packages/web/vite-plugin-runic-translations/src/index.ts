@@ -31,6 +31,12 @@ export interface RunicTranslationsOptions {
    * tool does not support serve mode or keeps crashing. Production builds always run one-shot.
    */
   readonly persistentCompiler?: boolean;
+  /**
+   * Milliseconds the persistent compiler may take for one regeneration. Defaults to 120000. When it
+   * does not answer in time, the plugin stops it, generates that change one-shot, and restarts it on
+   * the next change.
+   */
+  readonly persistentCompilerTimeout?: number;
 }
 
 type EntryKind = "messages" | "runtime" | "server" | "transport" | "dynamic";
@@ -98,6 +104,9 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     throw new TypeError("runicTranslations options must be an object.");
   if (options.persistentCompiler !== undefined && typeof options.persistentCompiler !== "boolean")
     throw new TypeError("persistentCompiler must be a boolean.");
+  if (options.persistentCompilerTimeout !== undefined &&
+      (typeof options.persistentCompilerTimeout !== "number" || !Number.isFinite(options.persistentCompilerTimeout) || options.persistentCompilerTimeout <= 0))
+    throw new TypeError("persistentCompilerTimeout must be a positive number of milliseconds.");
   const compiler = options.manifest === undefined ? projectOptions(options) : undefined;
   let manifestPath = compiler?.manifest ?? resolve(options.manifest!);
   if (options.typeDeclarations !== undefined && options.typeDeclarations !== false &&
@@ -307,6 +316,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
           command: compiler.command,
           commandArguments: compiler.commandArguments,
           cwd: compiler.cwd,
+          requestTimeout: options.persistentCompilerTimeout,
           onDisabled: reason => logger?.warn(`[runic-translations] Using one-shot generation: ${reason}`, { timestamp: true }),
         });
       }

@@ -39,7 +39,10 @@ unchanged sources are not recompiled. The process restarts after a crash and
 stops with the dev server. When the installed tool has no `serve` command, or the
 process crashes three times in a row, the plugin logs a warning and runs
 `runic-translations generate` for each change instead. Set
-`persistentCompiler: false` to always run one-shot generation. `vite build`
+`persistentCompiler: false` to always run one-shot generation. A regeneration
+that takes longer than `persistentCompilerTimeout` (default 120000 ms) stops the
+process and everything it started, generates that change one-shot, and restarts
+the compiler on the next change. `vite build`
 always runs the tool once.
 
 A change is compiled once and then invalidated in every Vite environment
