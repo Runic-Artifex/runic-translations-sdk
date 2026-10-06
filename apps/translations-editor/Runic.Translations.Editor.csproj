@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- RunicEditorUsePackedTranslations=true builds against locally packed Translations
-       packages instead of source projects (bun eng/run.mjs verify-editor-packed). -->
+       packages instead of source projects. Only bun eng/run.mjs verify-editor-packed sets it,
+       because it also supplies the packaged tool as TranslationsToolCommand. -->
   <Import Project="../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.props"
           Condition="'$(RunicEditorUsePackedTranslations)' != 'true'" />
 

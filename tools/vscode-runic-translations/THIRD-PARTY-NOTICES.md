@@ -76,7 +76,7 @@ will be liable to anyone for any damages related to this
 software or this license, under any kind of legal claim._**
 
 
-## brace-expansion 5.0.9
+## brace-expansion 5.0.12
 
 MIT License
 

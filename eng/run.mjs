@@ -89,30 +89,38 @@ function verifyEditorPacked(version = `${workspace.version}.editor-packed`) {
   pack(version, { built: true });
   const feed = resolve(root, "artifacts/packages/nuget");
   const cache = resolve(process.env.NUGET_PACKAGES);
-  for (const entry of workspace.nuget) rmSync(resolve(cache, entry.name.toLowerCase(), version), { recursive: true, force: true });
-  const toolPath = resolve(root, "artifacts/editor-packed/tool");
-  rmSync(toolPath, { recursive: true, force: true });
-  run("dotnet", ["tool", "install", "dotnet-runic-translations", "--version", version, "--add-source", feed, "--tool-path", toolPath]);
-  // Run the packaged tool through the muxer: its apphost cannot find a non-default .NET location.
-  const tool = resolve(toolPath, ".store/dotnet-runic-translations", version, "dotnet-runic-translations", version,
-    "tools/net10.0/any/dotnet-runic-translations.dll");
-  assert.ok(existsSync(tool), `Missing installed tool ${tool}`);
-  run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", "--nologo",
-    "-p:RunicEditorUsePackedTranslations=true", `-p:RunicEditorTranslationsPackageVersion=${version}`,
-    `-p:RestoreAdditionalProjectSources=${feed}`, `-p:TranslationsToolCommand=dotnet "${tool}"`]);
-  const editorDirectory = dirname(resolve(root, workspace.editor.project));
-  const assets = JSON.parse(readFileSync(resolve(editorDirectory, "obj/project.assets.json"), "utf8"));
-  const sourceProjects = Object.entries(assets.libraries)
-    .filter(([identity, library]) => identity.startsWith("Runic.Translations") && library.type !== "package");
-  assert.deepEqual(sourceProjects.map(([identity]) => identity), [], "The packed editor must not reference Translations source projects");
-  for (const id of ["Runic.Translations", "Runic.Translations.Tooling", "Runic.Translations.Build"]) {
-    const identity = `${id}/${version}`;
-    assert.equal(assets.libraries[identity]?.type, "package", `${identity} must be a package dependency of the editor`);
-    const metadata = JSON.parse(readFileSync(resolve(cache, id.toLowerCase(), version, ".nupkg.metadata"), "utf8"));
-    assert.equal(resolve(metadata.source), feed, `${identity} must come from the local package feed`);
+  const removeLocalPackages = () => {
+    for (const entry of workspace.nuget) rmSync(resolve(cache, entry.name.toLowerCase(), version), { recursive: true, force: true });
+  };
+  removeLocalPackages();
+  try {
+    const toolPath = resolve(root, "artifacts/editor-packed/tool");
+    rmSync(toolPath, { recursive: true, force: true });
+    run("dotnet", ["tool", "install", "dotnet-runic-translations", "--version", version, "--add-source", feed, "--tool-path", toolPath]);
+    // Run the packaged tool through the muxer: its apphost cannot find a non-default .NET location.
+    const tool = resolve(toolPath, ".store/dotnet-runic-translations", version, "dotnet-runic-translations", version,
+      "tools/net10.0/any/dotnet-runic-translations.dll");
+    assert.ok(existsSync(tool), `Missing installed tool ${tool}`);
+    run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", "--nologo",
+      "-p:RunicEditorUsePackedTranslations=true", `-p:RunicEditorTranslationsPackageVersion=${version}`,
+      `-p:RestoreAdditionalProjectSources=${feed}`, `-p:TranslationsToolCommand=dotnet "${tool}"`]);
+    const editorDirectory = dirname(resolve(root, workspace.editor.project));
+    const assets = JSON.parse(readFileSync(resolve(editorDirectory, "obj/project.assets.json"), "utf8"));
+    const sourceProjects = Object.entries(assets.libraries)
+      .filter(([identity, library]) => identity.startsWith("Runic.Translations") && library.type !== "package");
+    assert.deepEqual(sourceProjects.map(([identity]) => identity), [], "The packed editor must not reference Translations source projects");
+    for (const id of ["Runic.Translations", "Runic.Translations.Tooling", "Runic.Translations.Build"]) {
+      const identity = `${id}/${version}`;
+      assert.equal(assets.libraries[identity]?.type, "package", `${identity} must be a package dependency of the editor`);
+      const metadata = JSON.parse(readFileSync(resolve(cache, id.toLowerCase(), version, ".nupkg.metadata"), "utf8"));
+      assert.equal(resolve(metadata.source), feed, `${identity} must come from the local package feed`);
+    }
+    verifyEditorFrontend();
+    console.log("EDITOR_PACKED_TRANSLATIONS_OK");
+  } finally {
+    // The local-only version must not linger in a shared package cache.
+    removeLocalPackages();
   }
-  verifyEditorFrontend();
-  console.log("EDITOR_PACKED_TRANSLATIONS_OK");
 }
 
 function testManaged() {
