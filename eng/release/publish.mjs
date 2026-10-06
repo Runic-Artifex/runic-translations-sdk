@@ -87,26 +87,45 @@ export function needsLatest(current, version) {
   return current === undefined || Bun.semver.order(current, version) < 0;
 }
 
-async function tagLatest(version) {
-  assert.ok(process.env.ACTIONS_ID_TOKEN_REQUEST_URL, "OIDC unavailable");
+// npm answers the dist-tags of an unpublished scoped name with 401, so a dry run,
+// which precedes publication, first checks whether the package exists at all.
+async function npmLatest(name, dryRun) {
+  if (dryRun) {
+    const document = await response(`https://registry.npmjs.org/${encodeURIComponent(name)}`);
+    await document.body?.cancel();
+    if (document.status === 404) return undefined;
+  }
+  const tags = await response(`https://registry.npmjs.org/-/package/${encodeURIComponent(name)}/dist-tags`);
+  assert.ok(tags.ok, `npm dist-tag lookup failed for ${name}: ${tags.status}`);
+  return (await tags.json()).latest;
+}
+
+async function tagLatest(version, dryRun) {
+  if (!dryRun) assert.ok(process.env.ACTIONS_ID_TOKEN_REQUEST_URL, "OIDC unavailable");
   for (const entry of workspace.npm) {
-    const tags = await response(`https://registry.npmjs.org/-/package/${encodeURIComponent(entry.name)}/dist-tags`);
-    assert.ok(tags.ok, `npm dist-tag lookup failed for ${entry.name}: ${tags.status}`);
-    if (needsLatest((await tags.json()).latest, version))
-      run("npm", ["dist-tag", "add", `${entry.name}@${version}`, "latest", "--registry", "https://registry.npmjs.org"]);
+    const current = await npmLatest(entry.name, dryRun);
+    if (!needsLatest(current, version)) console.log(`Keeping ${entry.name} latest at ${current}`);
+    else if (dryRun) console.log(`Would move ${entry.name} latest from ${current ?? "(unpublished)"} to ${version}`);
+    else run("npm", ["dist-tag", "add", `${entry.name}@${version}`, "latest", "--registry", "https://registry.npmjs.org"]);
   }
 }
 
 async function main() {
-  const [command, version] = process.argv.slice(2);
-  assert.ok(["publish", "tag-latest"].includes(command), "Use: bun eng/release/publish.mjs publish|tag-latest <version>");
+  // --dry-run performs every registry read and reports the writes it would make.
+  const dryRun = process.argv.includes("--dry-run");
+  const [command, version, ...extra] = process.argv.slice(2).filter(argument => argument !== "--dry-run");
+  assert.ok(["publish", "tag-latest"].includes(command) && !extra.length, "Use: bun eng/release/publish.mjs publish|tag-latest <version> [--dry-run]");
   assert.match(version, /^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$/);
-  if (command === "tag-latest") return tagLatest(version);
+  if (command === "tag-latest") return tagLatest(version, dryRun);
   const candidates = packageFiles(version);
   for (const candidate of candidates) assert.ok(readdirSync(resolve(candidate.file, "..")).includes(candidate.file.split("/").at(-1)), `Missing ${candidate.file}`);
   for (const candidate of candidates) {
     if (await publishedMatches(candidate, version)) {
       console.log(`Already published with matching contents: ${candidate.name}@${version}`);
+      continue;
+    }
+    if (dryRun) {
+      console.log(`Would publish ${candidate.name}@${version}`);
       continue;
     }
     await publish(candidate, version);
