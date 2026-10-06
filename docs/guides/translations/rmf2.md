@@ -318,7 +318,8 @@ compatibility only: current writers emit the v5/RMF2 ABI-2 contract described
 above.
 
 See [validation and measurements](rmf2-validation.md) for reproducible checks
-and the recorded native Windows host results.
+and the recorded native Windows host results, and the
+[diagnostics reference](diagnostics.md) for every `RTR` diagnostic.
 
 The [semantic v5 contract](rmf2-semantic-v5.md) defines typed locals, literal
 formatting, dynamic options, and precise key selection.

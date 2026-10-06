@@ -40,7 +40,28 @@ internal static class GeneratorTestHost
             driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out Compilation updated, out ImmutableArray<Diagnostic> driverDiagnostics);
         GeneratorDriverRunResult result = driver.GetRunResult();
-        return new GeneratorRun(driver, result, compilation, updated, driverDiagnostics);
+        return new GeneratorRun(driver, result, compilation, updated, driverDiagnostics, additionalTexts);
+    }
+
+    /// <summary>Replaces one additional text, as an IDE does when a single file is edited, and reruns.</summary>
+    internal static GeneratorRun Edit(GeneratorRun run, string path, string text)
+    {
+        AdditionalText previous = run.AdditionalTexts.Single(item => item.Path == path);
+        AdditionalText next = new MemoryAdditionalText(path, text);
+        return Continue(run, run.Driver.ReplaceAdditionalText(previous, next), run.InputCompilation, run.AdditionalTexts.Replace(previous, next));
+    }
+
+    /// <summary>Reruns the same generator state against a changed compilation.</summary>
+    internal static GeneratorRun Recompile(GeneratorRun run, Func<Compilation, Compilation> change) =>
+        Continue(run, run.Driver, change(run.InputCompilation), run.AdditionalTexts);
+
+    internal static MetadataReference SyntheticRuntime(RuntimeReferenceMode mode) => SyntheticRuntimeReference(
+        (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? throw new InvalidOperationException("Trusted platform assemblies are unavailable."), mode);
+
+    private static GeneratorRun Continue(GeneratorRun run, GeneratorDriver driver, Compilation compilation, ImmutableArray<AdditionalText> texts)
+    {
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out Compilation updated, out ImmutableArray<Diagnostic> diagnostics);
+        return new GeneratorRun(driver, driver.GetRunResult(), compilation, updated, diagnostics, texts);
     }
 
     internal static GeneratorRunResult Rerun(GeneratorRun run, params TestInput[] inputs)
@@ -170,7 +191,8 @@ internal sealed record GeneratorRun(
     GeneratorDriverRunResult Result,
     Compilation InputCompilation,
     Compilation Compilation,
-    ImmutableArray<Diagnostic> DriverDiagnostics)
+    ImmutableArray<Diagnostic> DriverDiagnostics,
+    ImmutableArray<AdditionalText> AdditionalTexts)
 {
     internal GeneratorRunResult SingleResult => Result.Results.Single();
 }

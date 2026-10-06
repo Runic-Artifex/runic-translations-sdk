@@ -10,9 +10,19 @@
     <DevelopmentDependency>true</DevelopmentDependency>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <!-- The repository deliberately requires a .NET 10 compiler host for every artifact. -->
+    <!-- RS1041 warns that a net10.0 analyzer cannot load in a compiler host running on .NET Framework.
+         This generator links the net10.0 Runic.Translations.Compiler, which cannot target netstandard2.0,
+         so it requires a Roslyn host on .NET 10: the .NET 10 SDK's compiler (dotnet build and MSBuild
+         builds that use it) and IDE language servers on .NET 10. A host on .NET Framework, or on an older
+         .NET, cannot load it and reports CS8032 instead of generating code; see README. -->
     <NoWarn>$(NoWarn);RS1041</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Release tracking for the generator's diagnostic IDs (RS2000-RS2008). -->
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />

@@ -12,7 +12,7 @@ dotnet new tool-manifest --output .config
 dotnet tool install dotnet-runic-translations --version <VERSION>
 ```
 
-Replace `<VERSION>` with the current preview shown on NuGet. The package targets .NET 10, bundles the incremental source generator, and takes no `Microsoft.Build` package dependency. Keep it, `dotnet-runic-translations`, and `Runic.Translations` on the same exact version.
+Replace `<VERSION>` with the current preview shown on NuGet. The package targets .NET 10, bundles the incremental source generator, and takes no `Microsoft.Build` package dependency. The generator needs a Roslyn host on .NET 10, such as `dotnet build` with the .NET 10 SDK; see the [generator notes](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Generator/README.md#install). Keep it, `dotnet-runic-translations`, and `Runic.Translations` on the same exact version.
 
 ## Configure a project
 

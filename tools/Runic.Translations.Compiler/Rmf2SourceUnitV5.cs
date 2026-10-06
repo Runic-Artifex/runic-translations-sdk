@@ -22,6 +22,7 @@ internal sealed class Rmf2SourceUnitV5
     private readonly Dictionary<(string Message, string Contract), Rmf2SemanticResultV5> _lowered = new();
     private readonly object _gate = new();
     private readonly int _memoLimit;
+    private int _loweringCount;
 
     private Rmf2SourceUnitV5(TranslationSource source, TranslationCompilerOptions options,
         Rmf2ResourceDocument? resource, string? directMessage, Mf2SyntaxDocument? directSyntax)
@@ -43,6 +44,9 @@ internal sealed class Rmf2SourceUnitV5
     /// <summary>The decoded direct MF2 message, or null when the source is not direct MF2 or is not valid UTF-8.</summary>
     internal string? DirectMessage { get; }
     internal Mf2SyntaxDocument? DirectSyntax { get; }
+
+    /// <summary>How many messages this unit has lowered, as opposed to served from its memo.</summary>
+    internal int LoweringCount => Volatile.Read(ref _loweringCount);
 
     internal static Rmf2SourceUnitV5 Create(TranslationSource source, TranslationCompilerOptions options,
         CancellationToken cancellationToken = default)
@@ -75,6 +79,7 @@ internal sealed class Rmf2SourceUnitV5
             if (_lowered.TryGetValue(key, out Rmf2SemanticResultV5? cached)) return cached;
         }
 
+        Interlocked.Increment(ref _loweringCount);
         var input = new TranslationSource(Source.Path, Encoding.UTF8.GetBytes(message));
         Rmf2SemanticResultV5 result = callerInputs is null
             ? Rmf2SemanticCompilerV5.Compile(input, Options, cancellationToken)
