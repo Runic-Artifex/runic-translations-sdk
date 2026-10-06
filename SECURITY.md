@@ -23,6 +23,17 @@ You get an acknowledgement and status updates on the advisory thread. When a fix
 is released, the advisory is published with credit to the reporter unless you
 ask otherwise.
 
+## Verifying releases
+
+Every published NuGet package, npm package and GitHub release asset has a signed
+build-provenance attestation, and each release has a CycloneDX SBOM that is
+attached to the release and attested for its packages. The IDE extensions are not
+released yet. Verify a file with
+`gh attestation verify <file> -R Runic-Artifex/runic-translations-sdk`. Packages
+downloaded from NuGet.org carry NuGet.org's repository signature and therefore
+differ from the attested bytes; verify the copy attached to the GitHub release
+instead. See [verifying a release](eng/release/README.md#verifying-a-release).
+
 ## Dependency monitoring
 
 The weekly [dependency audit](.github/workflows/dependency-audit.yml) runs

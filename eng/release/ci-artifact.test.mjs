@@ -126,16 +126,17 @@ test("an annotated tag resolves to its commit", () => {
   expect(calls.filter(c => c[1] === "api").map(c => c[2])).toEqual([`repos/${REPOSITORY}/git/ref/tags/v1.2.3`, `repos/${REPOSITORY}/git/tags/${"e".repeat(40)}`]);
 });
 
-test("a rerun keeps a release of this commit, uploads only missing assets and resumes a matching draft", () => {
+test("a rerun keeps a release of this commit, never modifies a published one and resumes a matching draft", () => {
   const files = ["p/nuget/A.nupkg", "p/npm/b.tgz"];
   let { spawn, calls } = fakeGh();
   expect(createRelease("1.2.3", sha, files, spawn)).toContain("Created");
   const create = calls.at(-1);
   expect(create.slice(0, 3)).toEqual(["gh", "release", "create"]);
   expect(create[create.indexOf("--target") + 1]).toBe(sha);
+  // Immutable releases reject new assets: a published release missing one is kept with a warning.
   ({ spawn, calls } = fakeGh({ release: true, tag: sha, assets: ["A.nupkg"] }));
-  expect(createRelease("1.2.3", sha, files, spawn)).toContain("Completed");
-  expect(calls.at(-1).slice(0, 5)).toEqual(["gh", "release", "upload", "v1.2.3", "p/npm/b.tgz"]);
+  expect(createRelease("1.2.3", sha, files, spawn)).toContain("kept unchanged without b.tgz");
+  expect(writes(calls)).toBe(false);
   ({ spawn, calls } = fakeGh({ release: true, tag: sha, assets: ["A.nupkg", "b.tgz"] }));
   expect(createRelease("1.2.3", sha, files, spawn)).toContain("every asset");
   expect(writes(calls)).toBe(false);
@@ -177,12 +178,55 @@ test("a dry run performs every read-only check and never reaches OIDC, publicati
     'bun eng/release/publish.mjs tag-latest "$VERSION" --dry-run']);
   expect(publish.if).toBe("${{ !inputs.dry-run }}");
   expect(publish.environment).toBe("preview");
-  expect(publish.permissions).toEqual({ contents: "write", "id-token": "write", actions: "read" });
+  expect(publish.permissions).toEqual({ contents: "write", "id-token": "write", attestations: "write", actions: "read" });
+  for (const permission of ["id-token", "attestations", "contents"])
+    expect(Object.entries(release.jobs).filter(([, job]) => job.permissions?.[permission] === "write").map(([name]) => name)).toEqual(["publish"]);
+  expect(publish.steps.find(s => s.run?.startsWith("npm install --global")).run.trim()).toBe("npm install --global npm@12.2.0 --ignore-scripts");
   const runs = publish.steps.filter(s => s.run).map(s => s.run);
   expect(runs.join("\n")).not.toContain("--dry-run");
   const index = text => runs.findIndex(r => r.includes(text));
   expect(runs[index("ci-artifact.mjs verify")]).toBe('bun eng/release/ci-artifact.mjs verify artifacts/packages artifacts/release/packages.json "$VERSION" "$CI_RUN_ID"');
   expect(index("ci-artifact.mjs verify")).toBeLessThan(index("publish.mjs publish"));
+  expect(runs[index("ci-artifact.mjs release ")]).toBe('bun eng/release/ci-artifact.mjs release "$VERSION" artifacts/packages "artifacts/release/$SBOM"');
   expect(index("publish.mjs publish")).toBeLessThan(index("ci-artifact.mjs release "));
   expect(index("ci-artifact.mjs release ")).toBeLessThan(index("publish.mjs tag-latest"));
+});
+
+test("only the publish job attests, after verifying and before publishing, every package and release asset", () => {
+  const release = workflow("publish-preview.yml");
+  expect(Object.entries(release.jobs).filter(([, job]) => job.steps.some(s => s.uses?.startsWith("actions/attest"))).map(([name]) => name)).toEqual(["publish"]);
+  const steps = release.jobs.publish.steps;
+  const attest = steps.filter(s => s.uses?.startsWith("actions/attest"));
+  expect(attest.map(s => s.uses.split("@")[0])).toEqual(["actions/attest-build-provenance", "actions/attest"]);
+  for (const step of attest) expect(step.uses).toMatch(/@[0-9a-f]{40}$/);
+  const lines = step => step.with["subject-path"].trim().split("\n");
+  const files = ["artifacts/packages/nuget/*.nupkg", "artifacts/packages/npm/*.tgz"];
+  const sbom = "artifacts/release/${{ needs.candidate.outputs.sbom }}";
+  expect(lines(attest[0])).toEqual([...files, sbom]);
+  expect(lines(attest[1])).toEqual(files);
+  expect(attest[1].with["sbom-path"]).toBe(sbom);
+  // The IDE extensions are not released by this workflow.
+  expect(JSON.stringify(release.jobs)).not.toMatch(/vsix/i);
+  const index = predicate => steps.findIndex(predicate);
+  const first = index(s => s.uses?.startsWith("actions/attest"));
+  expect(index(s => s.run?.includes("sha256sum --check --strict"))).toBeLessThan(index(s => s.run?.includes("ci-artifact.mjs verify")));
+  expect(index(s => s.run?.includes("ci-artifact.mjs verify"))).toBeLessThan(first);
+  for (const write of ["publish.mjs publish", "ci-artifact.mjs release ", "publish.mjs tag-latest"]) expect(index(s => s.run?.includes(write))).toBeGreaterThan(first);
+  expect(index(s => s.uses?.startsWith("NuGet/login"))).toBeGreaterThan(first);
+});
+
+test("the read-only candidate describes the release and hands its files to publish by hash", () => {
+  const { candidate, publish } = workflow("publish-preview.yml").jobs;
+  const describe = candidate.steps.find(s => s.id === "describe");
+  expect(describe.run).toContain('bun eng/release/ci-artifact.mjs describe artifacts/packages "$VERSION" artifacts/release');
+  expect(describe.run).toContain("sha256sum -- *");
+  expect(candidate.outputs["release-sha256"]).toBe("${{ steps.describe.outputs.sha256 }}");
+  expect(candidate.outputs.sbom).toBe("${{ steps.describe.outputs.sbom }}");
+  const upload = candidate.steps.find(s => s.uses?.startsWith("actions/upload-artifact@"));
+  expect(candidate.steps.indexOf(upload)).toBeGreaterThan(candidate.steps.indexOf(describe));
+  expect(upload.with.path).toBe("artifacts/release");
+  const check = publish.steps.find(s => s.run?.includes("sha256sum --check --strict"));
+  expect(check["working-directory"]).toBe("artifacts/release");
+  expect(check.env.RELEASE_SHA256).toBe("${{ needs.candidate.outputs.release-sha256 }}");
+  expect(publish.steps.indexOf(check)).toBeGreaterThan(publish.steps.findIndex(s => s.with?.name === "release-candidate-${{ github.run_id }}"));
 });

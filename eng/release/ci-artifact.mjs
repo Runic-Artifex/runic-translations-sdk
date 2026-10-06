@@ -2,13 +2,15 @@
 //   find-ci                                        green ci.yml push run on main for GITHUB_SHA and its artifact
 //   prepare <packages> <version> <ci-run> <out>    check packages against version and commit; write an inventory
 //   verify <packages> <inventory> <version> <run>  check packages against the inventory, version and CI run
+//   describe <packages> <version> <out>            write the CycloneDX SBOM of the packages (local, deterministic)
 //   release-check <version>                        tag and any release must be absent or at this commit (read-only)
-//   release <version> <packages>                   create the prerelease, or finish one that exists for this commit
+//   release <version> <packages> <sbom>            create the prerelease, or finish one that exists for this commit
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { root, workspace } from "../run.mjs";
 
 export const REPOSITORY = "Runic-Artifex/runic-translations-sdk";
@@ -111,6 +113,19 @@ export function verify(directory, manifest, source, version, ciRunId, inventory 
   assert.deepEqual(scan(directory, manifest.version, source, inventory), manifest.packages, "Packages differ from the candidate inventory");
 }
 
+const packageFiles = directory => ["nuget", "npm"].flatMap(registry => readdirSync(join(directory, registry)).sort().map(file => join(directory, registry, file)));
+export const sbomName = version => `${REPOSITORY.split("/")[1]}-${version}.cdx.json`;
+
+// Writes the SBOM of exactly the release packages; the same packages and commit always give the same bytes.
+export function describe(directory, version, source, output, epoch, inventory = workspace) {
+  const files = scan(directory, version, source, inventory).map(p => resolve(directory, p.file));
+  mkdirSync(output, { recursive: true });
+  const path = join(output, sbomName(version));
+  execFileSync("python3", [fileURLToPath(new URL("./sbom.py", import.meta.url)), "--repository", REPOSITORY, "--version", version,
+    "--source", source, "--epoch", String(epoch), "--output", path, ...files], { stdio: "inherit" });
+  return path;
+}
+
 const ghFailure = (what, result) => new Error(`${what} failed: ${(result.stderr ?? "").trim() || `exit ${result.status ?? "unavailable"}`}`);
 
 // The commit a tag points at, or undefined only when GitHub answers 404 for the tag
@@ -164,8 +179,11 @@ export function releaseCheck(version, source, spawn = spawnSync) {
     : `Would create the prerelease v${version} at ${source}.`;
 }
 
-// A rerun after a partial publication keeps a release of this exact tag and commit
-// uploads only assets it is missing and publishes a matching draft, so tag-latest can still run.
+// A rerun after a partial publication keeps a release of this exact tag and commit,
+// uploads only assets a draft is missing and publishes it, so tag-latest can still run.
+// A published release is never changed: with immutable releases its assets cannot be
+// added, so a published release missing an asset (for example one created before the
+// SBOM existed) is kept as it is with a warning. The attestations still cover those files.
 export function createRelease(version, source, files, spawn = spawnSync) {
   const tag = `v${version}`;
   const found = existingRelease(version, source, spawn);
@@ -177,6 +195,11 @@ export function createRelease(version, source, files, spawn = spawnSync) {
     const present = new Set((found.assets ?? []).map(asset => asset.name));
     const missing = files.filter(file => !present.has(basename(file)));
     if (!missing.length && !found.isDraft) return `GitHub release ${tag} already exists for ${source} with every asset.`;
+    if (!found.isDraft) {
+      const names = missing.map(file => basename(file)).join(", ");
+      console.log(`::warning title=Published release kept unchanged::GitHub release ${tag} is published without ${names}; published releases are not modified, so these assets are not added.`);
+      return `GitHub release ${tag} already exists for ${source}; kept unchanged without ${names}.`;
+    }
     if (missing.length) gh(["release", "upload", tag, ...missing, "--repo", REPOSITORY], "complete");
     if (found.isDraft) gh(["release", "edit", tag, "--repo", REPOSITORY, "--draft=false", "--prerelease"], "publish");
   }
@@ -200,13 +223,19 @@ async function main([command, ...args]) {
   } else if (command === "verify" && args.length === 4) {
     const [directory, inventory, version, ciRunId] = args;
     verify(directory, JSON.parse(readFileSync(inventory, "utf8")), head(), version, ciRunId);
+  } else if (command === "describe" && args.length === 3) {
+    const [directory, version, output] = args;
+    const source = head();
+    const epoch = Number(execFileSync("git", ["show", "-s", "--format=%ct", source], { cwd: root, encoding: "utf8" }).trim());
+    const path = describe(directory, version, source, output, epoch);
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `sbom=${basename(path)}\n`);
   } else if (command === "release-check" && args.length === 1) {
     console.log(releaseCheck(args[0], head()));
-  } else if (command === "release" && args.length === 2) {
-    const [version, directory] = args;
-    const files = ["nuget", "npm"].flatMap(registry => readdirSync(join(directory, registry)).sort().map(file => join(directory, registry, file)));
-    console.log(createRelease(version, head(), files));
-  } else throw new Error("Use find-ci, prepare <packages> <version> <ci-run-id> <inventory>, verify <packages> <inventory> <version> <ci-run-id>, release-check <version>, or release <version> <packages>");
+  } else if (command === "release" && args.length === 3) {
+    const [version, directory, sbom] = args;
+    assert.ok(existsSync(sbom), `Missing release asset ${sbom}`);
+    console.log(createRelease(version, head(), [...packageFiles(directory), sbom]));
+  } else throw new Error("Use find-ci, prepare <packages> <version> <ci-run-id> <inventory>, verify <packages> <inventory> <version> <ci-run-id>, describe <packages> <version> <output>, release-check <version>, or release <version> <packages> <sbom>");
 }
 
 if (import.meta.main) main(process.argv.slice(2)).catch(error => {
