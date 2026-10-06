@@ -59,6 +59,8 @@ jobs:
           name: runic-translations-packages
           path: artifacts/packages
           if-no-files-found: ignore
+          # Publish preview reuses this artifact of a successful push run on main.
+          retention-days: 30
   inline-browser:
     name: Svelte inline SSR and browser hydration
     runs-on: ubuntu-24.04
