@@ -79,6 +79,42 @@ function verifyEditorFrontend() {
     "--workspace", resolve(editorDirectory, "ExampleWorkspace"), "--smoke-test"]);
 }
 
+// Builds the editor against freshly packed Translations packages instead of project
+// references, then proves NuGet resolved them from the local feed. The suffixed
+// version never exists on nuget.org, so restore cannot pick a published package.
+function verifyEditorPacked(version = `${workspace.version}.editor-packed`) {
+  ensureVersion(version);
+  buildManaged();
+  buildWeb();
+  pack(version, { built: true });
+  const feed = resolve(root, "artifacts/packages/nuget");
+  const cache = resolve(process.env.NUGET_PACKAGES);
+  for (const entry of workspace.nuget) rmSync(resolve(cache, entry.name.toLowerCase(), version), { recursive: true, force: true });
+  const toolPath = resolve(root, "artifacts/editor-packed/tool");
+  rmSync(toolPath, { recursive: true, force: true });
+  run("dotnet", ["tool", "install", "dotnet-runic-translations", "--version", version, "--add-source", feed, "--tool-path", toolPath]);
+  // Run the packaged tool through the muxer: its apphost cannot find a non-default .NET location.
+  const tool = resolve(toolPath, ".store/dotnet-runic-translations", version, "dotnet-runic-translations", version,
+    "tools/net10.0/any/dotnet-runic-translations.dll");
+  assert.ok(existsSync(tool), `Missing installed tool ${tool}`);
+  run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", "--nologo",
+    "-p:RunicEditorUsePackedTranslations=true", `-p:RunicEditorTranslationsPackageVersion=${version}`,
+    `-p:RestoreAdditionalProjectSources=${feed}`, `-p:TranslationsToolCommand=dotnet "${tool}"`]);
+  const editorDirectory = dirname(resolve(root, workspace.editor.project));
+  const assets = JSON.parse(readFileSync(resolve(editorDirectory, "obj/project.assets.json"), "utf8"));
+  const sourceProjects = Object.entries(assets.libraries)
+    .filter(([identity, library]) => identity.startsWith("Runic.Translations") && library.type !== "package");
+  assert.deepEqual(sourceProjects.map(([identity]) => identity), [], "The packed editor must not reference Translations source projects");
+  for (const id of ["Runic.Translations", "Runic.Translations.Tooling", "Runic.Translations.Build"]) {
+    const identity = `${id}/${version}`;
+    assert.equal(assets.libraries[identity]?.type, "package", `${identity} must be a package dependency of the editor`);
+    const metadata = JSON.parse(readFileSync(resolve(cache, id.toLowerCase(), version, ".nupkg.metadata"), "utf8"));
+    assert.equal(resolve(metadata.source), feed, `${identity} must come from the local package feed`);
+  }
+  verifyEditorFrontend();
+  console.log("EDITOR_PACKED_TRANSLATIONS_OK");
+}
+
 function testManaged() {
   const projects = [
     "tests/dotnet/Runic.Translations.ApiTests/Runic.Translations.ApiTests.csproj",
@@ -122,6 +158,29 @@ function verifyEditorIntegrations() {
   run("bun", ["run", "--bun", "check"], resolve(root, workspace.editor.vscode));
   run("bun", ["run", "--bun", "test"], resolve(root, workspace.editor.vscode));
   run("python3", [workspace.editor.visualStudioVerification, "--check-source"]);
+}
+
+// Read-only vulnerability audit of every lockfile and NuGet restore graph; it never
+// upgrades dependencies.
+function auditDependencies() {
+  const lockfiles = commandOutput("git", ["ls-files", "bun.lock", "**/bun.lock"]).split("\n").filter(Boolean);
+  const findings = [];
+  for (const lockfile of lockfiles) {
+    try { run("bun", ["audit"], dirname(resolve(root, lockfile))); }
+    catch { findings.push(`${lockfile}: bun audit reported vulnerabilities`); }
+  }
+  for (const project of ["Runic.Translations.slnx", workspace.editor.project]) {
+    run("dotnet", ["restore", project]);
+    const report = JSON.parse(commandOutput("dotnet", ["list", project, "package", "--vulnerable", "--include-transitive", "--format", "json"]));
+    assert.deepEqual(report.problems ?? [], [], `dotnet list package reported problems for ${project}`);
+    for (const entry of report.projects)
+      for (const framework of entry.frameworks ?? [])
+        for (const dependency of [...(framework.topLevelPackages ?? []), ...(framework.transitivePackages ?? [])])
+          for (const vulnerability of dependency.vulnerabilities ?? [])
+            findings.push(`${entry.path} (${framework.framework}): ${dependency.id} ${dependency.resolvedVersion} ${vulnerability.severity} ${vulnerability.advisoryurl}`);
+  }
+  assert.deepEqual(findings, [], `Vulnerable dependencies:\n${findings.join("\n")}`);
+  console.log("No vulnerable npm or NuGet packages found.");
 }
 
 export function build() {
@@ -189,9 +248,11 @@ async function main() {
       await (await import("./verify-packages.mjs")).verifyPackages(version ?? workspace.version);
       break;
     case "verify-editor": verifyEditorIntegrations(); break;
+    case "verify-editor-packed": verifyEditorPacked(version); break;
     case "native-aot": testNativeAot(); break;
+    case "audit": auditDependencies(); break;
     default:
-      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify-packages [version], verify-editor, or native-aot.");
+      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify-packages [version], verify-editor, verify-editor-packed [version], native-aot, or audit.");
   }
 }
 

@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <Import Project="../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.props" />
+  <!-- RunicEditorUsePackedTranslations=true builds against locally packed Translations
+       packages instead of source projects (bun eng/run.mjs verify-editor-packed). -->
+  <Import Project="../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.props"
+          Condition="'$(RunicEditorUsePackedTranslations)' != 'true'" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -18,7 +21,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TranslationsEmitEsm>true</TranslationsEmitEsm>
     <TranslationsToolCommand>dotnet tool run runic-translations --</TranslationsToolCommand>
-    <TranslationsToolCommand>dotnet run --project &quot;$(RunicTranslationsRoot)tools/dotnet-runic-translations/dotnet-runic-translations.csproj&quot; --configuration Release --</TranslationsToolCommand>
+    <TranslationsToolCommand Condition="'$(RunicEditorUsePackedTranslations)' != 'true'">dotnet run --project &quot;$(RunicTranslationsRoot)tools/dotnet-runic-translations/dotnet-runic-translations.csproj&quot; --configuration Release --</TranslationsToolCommand>
     <TranslationsRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TranslationsRuntimePath>
     <TranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' != 'true'">$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</TranslationsOutputPath>
     <TranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' == 'true'">obj/runic-bridge/bootstrap/obj/$(Configuration)/$(TargetFramework)/translations</TranslationsOutputPath>
@@ -54,6 +57,9 @@
     <PackageReference Include="Runic.Application.CsWebUi" GeneratePathProperty="true" />
     <PackageReference Include="Runic.Application.ReactiveUI" />
     <PackageReference Include="Runic.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RunicEditorUsePackedTranslations)' != 'true'">
     <ProjectReference Include="../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" />
     <ProjectReference Include="../../tools/Runic.Translations.Compiler/Runic.Translations.Compiler.csproj" />
     <ProjectReference Include="../../packages/dotnet/Runic.Translations.Authoring/Runic.Translations.Authoring.csproj" />
@@ -65,6 +71,17 @@
     <ProjectReference Include="../../packages/dotnet/Runic.Translations.Generator/Runic.Translations.Generator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(RunicEditorUsePackedTranslations)' == 'true'">
+    <RunicEditorTranslationsPackageVersion Condition="'$(RunicEditorTranslationsPackageVersion)' == ''">$(RunicTranslationsVersion)</RunicEditorTranslationsPackageVersion>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RunicEditorUsePackedTranslations)' == 'true'">
+    <!-- Runic.Translations.Tooling bundles the Authoring and Compiler assemblies;
+         Runic.Translations.Build brings the build props, targets and analyzers. -->
+    <PackageReference Include="Runic.Translations" VersionOverride="$(RunicEditorTranslationsPackageVersion)" />
+    <PackageReference Include="Runic.Translations.Tooling" VersionOverride="$(RunicEditorTranslationsPackageVersion)" />
+    <PackageReference Include="Runic.Translations.Build" VersionOverride="$(RunicEditorTranslationsPackageVersion)" PrivateAssets="all" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(RunicBridgeBootstrap)' == 'true'">
@@ -136,7 +153,8 @@
           SkipUnchangedFiles="true" />
   </Target>
 
-  <Import Project="../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets" />
+  <Import Project="../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets"
+          Condition="'$(RunicEditorUsePackedTranslations)' != 'true'" />
   <ItemGroup>
     <PackageReference Include="Runic.CommandLine.Spectre" />
   </ItemGroup>
