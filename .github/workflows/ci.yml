@@ -21,6 +21,7 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
+      - run: bun test eng/release
       - run: bun eng/run.mjs test
       - run: bun eng/verify-packages.mjs
       - uses: actions/upload-artifact@v4

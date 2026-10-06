@@ -11,9 +11,11 @@ Set the intended preview version in both `eng/Versions.props` and
 `eng/workspace.json`, then dispatch **Publish preview** from `main` with that
 exact version. The workflow creates candidates, verifies isolated consumers,
 publishes missing package versions, and creates a GitHub prerelease from those
-same package files.
+same package files. Until 1.0, every release is a preview, so the workflow then
+moves npm `latest` to it, never to an older version.
 
 Before the first standalone release, configure NuGet and npm trusted publishers
 for `Runic-Artifex/runic-translations-sdk`, `publish-preview.yml`, and the
-`preview` environment. New repository ownership does not inherit trusted
-publisher configuration from the former SDK repository.
+`preview` environment. Each npm trusted publisher also needs **Allow npm dist-tag**
+enabled. New repository ownership does not inherit trusted publisher
+configuration from the former SDK repository.
