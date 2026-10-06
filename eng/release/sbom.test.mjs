@@ -1,11 +1,11 @@
 import { test, expect } from 'bun:test';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { REPOSITORY, VSIX, describe } from './ci-artifact.mjs';
+import { REPOSITORY, describe } from './ci-artifact.mjs';
 const VERSION = '1.2.3-preview.1';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const python = process.platform === 'win32' ? 'python' : 'python3';
@@ -37,6 +37,7 @@ nupkg('dotnet-fixture', '<packageTypes><packageType name="DotnetTool" /></packag
 os.makedirs(f'{out}/npm', exist_ok=True)
 with tarfile.open(f'{out}/npm/runic-artifex-fixture-{version}.tgz', 'w:gz') as t:
     data = json.dumps({'name': '@runic-artifex/fixture', 'version': version, 'license': 'MIT', 'gitHead': source,
+                       'repository': {'type': 'git', 'url': 'git+https://github.com/Runic-Artifex/runic-translations-sdk.git'},
                        'dependencies': {'@runic-artifex/other': '^1.0.0'}, 'peerDependencies': {'svelte': '>=5 <6'}}).encode()
     info = tarfile.TarInfo('package/package.json'); info.size = len(data); t.addfile(info, io.BytesIO(data))
 os.makedirs(f'{out}/vsix', exist_ok=True)
@@ -105,24 +106,50 @@ test('the SBOM is deterministic and rejects artifacts of another version', () =>
   expect(result.stderr).toContain(`is version ${VERSION}, not 9.9.9-preview.9`);
 }));
 
-test('describe writes the same SBOM of every package and both VSIX files', () => withFixtures(directory => {
-  const packages = join(directory, 'packages'), vsix = join(directory, 'ide');
-  for (const {artifact, file, id} of VSIX) {
-    mkdirSync(join(vsix, artifact), {recursive: true});
-    execFileSync(python, ['-c', `import sys,zipfile\nwith zipfile.ZipFile(sys.argv[1],'w') as z: z.writestr('extension.vsixmanifest','<PackageManifest xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"><Metadata><Identity Id="${id}" Version="0.0.1" Publisher="runic-artifex" /></Metadata></PackageManifest>')`, join(vsix, artifact, file)]);
-  }
+test('describe writes the same SBOM of exactly the release packages', () => withFixtures(directory => {
+  const packages = join(directory, 'packages');
   rmSync(join(packages, 'vsix'), {recursive: true});
-  const first = describe(packages, vsix, VERSION, source, join(directory, 'first'), 1790000000);
-  const second = describe(packages, vsix, VERSION, source, join(directory, 'second'), 1790000000);
+  const inventory = {nuget: ['Runic.Fixture', 'Runic.Fixture.Core', 'dotnet-fixture'].map(name => ({name})), npm: [{name: '@runic-artifex/fixture'}]};
+  const first = describe(packages, VERSION, source, join(directory, 'first'), 1790000000, inventory);
+  const second = describe(packages, VERSION, source, join(directory, 'second'), 1790000000, inventory);
   expect(first).toEndWith(`runic-translations-sdk-${VERSION}.cdx.json`);
   expect(readFileSync(first, 'utf8')).toBe(readFileSync(second, 'utf8'));
-  const bom = JSON.parse(readFileSync(first, 'utf8'));
-  expect(bom.dependencies[0].dependsOn).toEqual(expect.arrayContaining(['vsix:runic-artifex/runic-translations@0.0.1',
-    'vsix:runic-artifex/Runic.Artifex.Translations.Rmf2@0.0.1']));
-  expect(bom.dependencies[0].dependsOn).toHaveLength(6);
-  const files = bom.components.flatMap(c => c.properties?.filter(p => p.name === 'runic:file').map(p => p.value) ?? []);
-  for (const {file} of VSIX) expect(files).toContain(file);
-  // Two artifacts with one identity are rejected rather than merged.
-  copyFileSync(join(vsix, VSIX[0].artifact, VSIX[0].file), join(vsix, VSIX[1].artifact, VSIX[1].file));
-  expect(() => describe(packages, vsix, VERSION, source, join(directory, 'third'), 1790000000)).toThrow();
+  expect(JSON.parse(readFileSync(first, 'utf8')).dependencies[0].dependsOn).toHaveLength(4);
+  expect(() => describe(packages, VERSION, source, join(directory, 'third'), 1790000000, {...inventory, npm: []})).toThrow('exactly');
 }));
+// Hostile or unusual metadata: oversized entries, document type declarations and versionless dependencies.
+const edgeFixtures = String.raw`
+import io, sys, tarfile, zipfile, os
+out, version = sys.argv[1:]
+os.makedirs(f'{out}/nuget', exist_ok=True); os.makedirs(f'{out}/npm', exist_ok=True)
+def nuspec(name, body='', doctype=''):
+    return f'<?xml version="1.0"?>{doctype}<package><metadata><id>{name}</id><version>{version}</version>{body}</metadata></package>'
+def nupkg(name, spec, files={}):
+    with zipfile.ZipFile(f'{out}/nuget/{name}.{version}.nupkg', 'w', zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f'{name}.nuspec', spec)
+        for path, content in files.items(): z.writestr(path, content)
+nupkg('Large', nuspec('Large'), {'tools/Large.deps.json': ' ' * (17 * 1024 * 1024)})
+nupkg('Doctype', nuspec('Doctype', doctype='<!DOCTYPE package [<!ENTITY big "x">]>'))
+nupkg('Floating', nuspec('Floating', '<dependencies><group><dependency id="Any.Version" /></group></dependencies>'))
+with tarfile.open(f'{out}/npm/large-{version}.tgz', 'w:gz') as t:
+    data = b' ' * (17 * 1024 * 1024)
+    info = tarfile.TarInfo('package/package.json'); info.size = len(data); t.addfile(info, io.BytesIO(data))
+`;
+test('the SBOM refuses oversized entries and document types and accepts versionless dependencies', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'runic-sbom-edge-'));
+  try {
+    execFileSync(python, ['-c', edgeFixtures, join(directory, 'packages'), VERSION]);
+    for (const [file, message] of [[nuget('Large'), 'Large.deps.json is larger than 16777216 bytes'],
+      [`npm/large-${VERSION}.tgz`, 'package/package.json is larger than 16777216 bytes'],
+      [nuget('Doctype'), 'must not declare a document type or entities']]) {
+      const {result} = sbom(directory, [file]);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain(message);
+    }
+    const {result, bom} = sbom(directory, [nuget('Floating')]);
+    expect(result.stderr).toBe('');
+    expect(bom.components.find(c => c['bom-ref'] === 'pkg:nuget/Any.Version')).toEqual({type: 'library', 'bom-ref': 'pkg:nuget/Any.Version',
+      name: 'Any.Version', purl: 'pkg:nuget/Any.Version'});
+    expect(bom.dependencies.find(d => d.ref === `pkg:nuget/Floating@${VERSION}`).dependsOn).toEqual(['pkg:nuget/Any.Version']);
+  } finally { rmSync(directory, {recursive: true, force: true}); }
+});

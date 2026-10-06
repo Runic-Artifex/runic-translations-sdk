@@ -31,9 +31,38 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
+MAX_ENTRY = 16 * 1024 * 1024  # largest metadata entry read from an archive
 TOOL = 'runic-release-sbom'
 TOOL_VERSION = '1'
 EXACT = re.compile(r'^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$')
+
+
+def zip_entry(archive, name):
+    """One archive entry, refused before reading when it declares more than MAX_ENTRY bytes."""
+    info = archive.getinfo(name)
+    if info.file_size > MAX_ENTRY:
+        raise ValueError(f'{name} is larger than {MAX_ENTRY} bytes')
+    with archive.open(info) as entry:
+        data = entry.read(MAX_ENTRY + 1)
+    if len(data) > MAX_ENTRY:
+        raise ValueError(f'{name} is larger than {MAX_ENTRY} bytes')
+    return data
+
+
+def tar_entry(archive, name):
+    member = archive.getmember(name)
+    if not member.isfile():
+        raise ValueError(f'{name} must be a regular file')
+    if member.size > MAX_ENTRY:
+        raise ValueError(f'{name} is larger than {MAX_ENTRY} bytes')
+    return archive.extractfile(member).read(MAX_ENTRY + 1)
+
+
+def xml(data, name):
+    """Parse package XML; a document type declaration (entities, external references) is refused."""
+    if b'<!DOCTYPE' in data or b'<!ENTITY' in data:
+        raise ValueError(f'{name} must not declare a document type or entities')
+    return ElementTree.fromstring(data)
 
 
 def local(tag):
@@ -83,14 +112,17 @@ class Graph:
 
 
 def declared(graph, owner, kind, name, requested, shipped):
-    """Link owner to a declared dependency: the shipped artifact it pins, or an external range."""
+    """Link owner to a declared dependency: the shipped artifact it pins, or an external range.
+
+    A dependency without a range (a nuspec <dependency> without version) has no range property.
+    """
     pinned = requested[1:-1] if requested.startswith('[') and requested.endswith(']') else requested
-    if purl(kind, name, pinned) in shipped:
+    if requested and purl(kind, name, pinned) in shipped:
         return graph.depend(owner, purl(kind, name, pinned))
     identity = npm_name(name) if kind == 'npm' else {'name': name}
-    graph.depend(owner, graph.add({'type': 'library', 'bom-ref': f'{purl(kind, name)}#{requested}', **identity,
+    graph.depend(owner, graph.add({'type': 'library', 'bom-ref': f'{purl(kind, name)}#{requested}' if requested else purl(kind, name), **identity,
                                    'purl': purl(kind, name),
-                                   'properties': property_list({'runic:requested-range': requested})}))
+                                   **({'properties': property_list({'runic:requested-range': requested})} if requested else {})}))
 
 
 def bundled_npm(graph, owner, name, version):
@@ -136,7 +168,7 @@ def nuget(path):
         specs = [name for name in archive.namelist() if name.endswith('.nuspec') and '/' not in name]
         if len(specs) != 1:
             raise ValueError(f'{path.name} must contain one root .nuspec')
-        metadata = child(ElementTree.fromstring(archive.read(specs[0])), 'metadata')
+        metadata = child(xml(zip_entry(archive, specs[0]), specs[0]), 'metadata')
         text = lambda name: (getattr(child(metadata, name), 'text', None) or '').strip()
         license_element = child(metadata, 'license')
         repository = child(metadata, 'repository')
@@ -147,14 +179,14 @@ def nuget(path):
                      'licenses': license_of(license_element.text if license_element is not None and license_element.get('type') == 'expression' else None),
                      'externalReferences': [{'type': 'distribution', 'url': f'https://www.nuget.org/packages/{name}/{version}'}],
                      'properties': {'runic:source-commit': repository.get('commit') if repository is not None else None}}
-        requested = sorted({(item.get('id'), item.get('version')) for item in descendants(metadata, 'dependency')})
-        documents = [json.loads(archive.read(entry).decode('utf-8-sig')) for entry in sorted(archive.namelist()) if entry.endswith('.deps.json')]
+        requested = sorted({(item.get('id'), (item.get('version') or '').strip()) for item in descendants(metadata, 'dependency')})
+        documents = [json.loads(zip_entry(archive, entry).decode('utf-8-sig')) for entry in sorted(archive.namelist()) if entry.endswith('.deps.json')]
     return component, [('nuget', *item) for item in requested], lambda graph, ref, shipped: [deps_json(graph, ref, document, shipped) for document in documents]
 
 
 def npm(path):
     with tarfile.open(path, 'r:gz') as archive:
-        manifest = json.load(archive.extractfile('package/package.json'))
+        manifest = json.loads(tar_entry(archive, 'package/package.json'))
     name, version = manifest['name'], manifest['version']
     component = {'type': 'library', 'bom-ref': purl('npm', name, version), **npm_name(name), 'version': version,
                  'purl': purl('npm', name, version), 'licenses': license_of(manifest.get('license')),
@@ -167,8 +199,8 @@ def npm(path):
 
 def vsix(path):
     with zipfile.ZipFile(path) as archive:
-        identity = child(child(ElementTree.fromstring(archive.read('extension.vsixmanifest')), 'Metadata'), 'Identity')
-        manifest = json.loads(archive.read('extension/package.json')) if 'extension/package.json' in archive.namelist() else {}
+        identity = child(child(xml(zip_entry(archive, 'extension.vsixmanifest'), 'extension.vsixmanifest'), 'Metadata'), 'Identity')
+        manifest = json.loads(zip_entry(archive, 'extension/package.json')) if 'extension/package.json' in archive.namelist() else {}
     name, version, publisher = identity.get('Id'), identity.get('Version'), identity.get('Publisher')
     component = {'type': 'application', 'bom-ref': f'vsix:{publisher}/{name}@{version}', 'name': name, 'version': version,
                  'publisher': publisher, 'licenses': license_of(manifest.get('license')), 'properties': {}}
