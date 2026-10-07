@@ -665,31 +665,28 @@ internal sealed class Rmf2LanguageServer
             Console.Error.WriteLine($"runic-rmf2: open buffer {uri} has no project overlay or catalog diagnostics: {error.Message}");
     }
 
+    // Mounted-resource ownership reads the manifest through the same reader as
+    // the command-line tool and the Translations Editor, so a buffer belongs to
+    // exactly the project whose compilation discovers it. A manifest whose
+    // source layout is unusable (including one bad entry while a mount is being
+    // typed) contributes no mounts: its mounted buffers publish only their own
+    // syntax diagnostics until it is fixed, while the open runic.json, which
+    // still resolves through its directory, carries the located configuration
+    // diagnostic. Buffers beneath the project directory resolve through the
+    // ancestor rule, so no implicit-directory fallback is needed here.
     private string[] ProjectSourceRoots(string directory)
     {
         string projectPath = Path.Combine(directory, "runic.json");
         if (PathEntryExists(projectPath) && !IsRegularManifestFile(projectPath)) return [];
-        string text;
-        if (_buffers.TryGetValue(new Uri(projectPath).AbsoluteUri, out Buffer? projectBuffer)) text = projectBuffer.Text;
+        byte[] bytes;
+        if (_buffers.TryGetValue(new Uri(projectPath).AbsoluteUri, out Buffer? projectBuffer)) bytes = Utf8.GetBytes(projectBuffer.Text);
         else
         {
-            try { text = File.ReadAllText(projectPath, Utf8); }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return [directory]; }
+            try { bytes = File.ReadAllBytes(projectPath); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return []; }
         }
-        try
-        {
-            using var document = System.Text.Json.JsonDocument.Parse(text);
-            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
-                !document.RootElement.TryGetProperty("sourceRoots", out var mounts) || mounts.ValueKind != System.Text.Json.JsonValueKind.Array)
-                return [directory];
-            return mounts.EnumerateArray()
-                .Where(mount => mount.ValueKind == System.Text.Json.JsonValueKind.Object &&
-                    mount.TryGetProperty("path", out var value) && value.ValueKind == System.Text.Json.JsonValueKind.String &&
-                    !string.IsNullOrWhiteSpace(value.GetString()))
-                .Select(mount => Path.GetFullPath(mount.GetProperty("path").GetString()!, directory))
-                .ToArray();
-        }
-        catch (System.Text.Json.JsonException) { return [directory]; }
+        TranslationManifestLayout layout = TranslationManifestReader.Read(bytes, directory);
+        return layout.IsValid ? layout.SourceRoots.ToArray() : [];
     }
 
     private Rmf2Workspace Workspace(string path)

@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
+using Runic.Translations.Internal;
 using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tool;
 
-internal sealed record CompilerInputs(TranslationSource Project, IReadOnlyList<TranslationSource> Messages, IReadOnlyList<string>? SourceRoots = null);
+/// <param name="ManifestError">Why runic.json yields no source layout, or <see langword="null"/> when it is usable.</param>
+internal sealed record CompilerInputs(TranslationSource Project, IReadOnlyList<TranslationSource> Messages, IReadOnlyList<string>? SourceRoots = null, string? ManifestError = null);
 
 internal static class InputFiles
 {
@@ -26,26 +27,12 @@ internal static class InputFiles
         string root = Path.GetDirectoryName(configPath)!;
         var messages = new List<TranslationSource>();
         TranslationSource project = projectOverride ?? ReadSource(configPath, DisplayPath(configPath, currentDirectory));
-        JsonDocument config;
-        try { config = JsonDocument.Parse(project.GetUtf8Bytes()); }
-        catch (JsonException) { return new CompilerInputs(project, messages); }
-        using var configLifetime = config;
-        // A non-object root (for example an array) is malformed like invalid
-        // JSON: return no sources and let the compiler report the located
-        // configuration diagnostic instead of failing on property access.
-        if (config.RootElement.ValueKind != JsonValueKind.Object) return new CompilerInputs(project, messages);
-        var roots = new List<string>();
-        if (config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
-        {
-            if (mounts.ValueKind != JsonValueKind.Array) return new CompilerInputs(project, messages);
-            foreach (JsonElement mount in mounts.EnumerateArray())
-            {
-                if (mount.ValueKind != JsonValueKind.Object || !mount.TryGetProperty("path", out JsonElement path) || path.ValueKind != JsonValueKind.String)
-                    return new CompilerInputs(project, messages);
-                roots.Add(Path.GetFullPath(path.GetString()!, root));
-            }
-        }
-        else roots.Add(root);
+        // A malformed manifest (invalid JSON, a non-object root, or a malformed
+        // sourceRoots entry) yields no sources. The compiler reports the located
+        // configuration diagnostic; ManifestError covers layouts it accepts.
+        TranslationManifestLayout layout = TranslationManifestReader.Read(project.GetUtf8Bytes(), root);
+        if (!layout.IsValid) return new CompilerInputs(project, messages, null, layout.Error);
+        IReadOnlyList<string> roots = layout.SourceRoots;
         foreach (string sourceRoot in roots)
         foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, root, projectPath))
             if (string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase) ||

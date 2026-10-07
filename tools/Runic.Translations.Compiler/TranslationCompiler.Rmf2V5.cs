@@ -272,6 +272,7 @@ public static partial class TranslationCompiler
             var path = Required(item, "path", JsonKind.String, project, diagnostics);
             var prefix = Required(item, "namespace", JsonKind.Array, project, diagnostics);
             if (path is null || prefix is null) continue;
+            if (string.IsNullOrWhiteSpace(path.Value.Text)) { Error("Each source root must declare a non-empty path.", project, path.Value.Span); continue; }
             string root = NormalizeResourceRoot(directory, path.Value.Text!);
             string[] segments = prefix.Value.Items.Select(value => value.Text ?? "").ToArray();
             if (prefix.Value.Items.Any(value => value.Kind != JsonKind.String) || segments.Any(segment => !IsIdentifier(segment))) Error("Mount namespaces require identifier segments.", project, prefix.Value.Span);
