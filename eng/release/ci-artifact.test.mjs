@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ARTIFACT, CI_WORKFLOW, REPOSITORY, createRelease, findCiPackages, prepare, releaseCheck, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
+import { ARTIFACT, CI_WORKFLOW, REPOSITORY, VSIX, createRelease, findCiPackages, prepare, releaseCheck, scanVsix, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
+import { writeVsixFixtures } from "./vsix-fixtures.mjs";
 
 const sha = "a".repeat(40);
 const run = (id, extra = {}) => ({ id, head_sha: sha, event: "push", head_branch: "main", path: CI_WORKFLOW,
@@ -24,6 +25,8 @@ test("fails clearly when CI for the commit is missing, running or failed, or its
   expect(() => selectCiRun([run(5, { conclusion: "failure" })], { repository: REPOSITORY, sha })).toThrow("concluded failure");
   const artifact = { id: 70, name: ARTIFACT, expired: false, workflow_run: { id: 7, head_sha: sha } };
   expect(selectArtifact([artifact, { ...artifact, name: "rmf2-vscode-vsix" }], run(7))).toBe(artifact);
+  expect(selectArtifact([artifact, { ...artifact, id: 71, name: "rmf2-vscode-vsix" }], run(7), "rmf2-vscode-vsix").id).toBe(71);
+  expect(() => selectArtifact([artifact], run(7), "rmf2-visualstudio-vsix")).toThrow("no single rmf2-visualstudio-vsix artifact");
   expect(() => selectArtifact([], run(7))).toThrow("no single");
   expect(() => selectArtifact([{ ...artifact, expired: true }], run(7))).toThrow("expired");
   expect(() => selectArtifact([{ ...artifact, workflow_run: { id: 7, head_sha: "c".repeat(40) } }], run(7))).toThrow();
@@ -34,17 +37,19 @@ test("queries GitHub for push runs of the commit", async () => {
   const urls = [];
   const fetchImpl = async url => {
     urls.push(new URL(url));
-    return Response.json(url.includes("/artifacts") ? { artifacts: [{ id: 80, name: ARTIFACT, expired: false, workflow_run: { id: 8, head_sha: sha } }] }
-      : { workflow_runs: [run(8)] });
+    const artifacts = [ARTIFACT, ...VSIX.map(entry => entry.artifact)].map((name, index) => ({ id: 80 + index, name, expired: false, workflow_run: { id: 8, head_sha: sha } }));
+    return Response.json(url.includes("/artifacts") ? { artifacts: artifacts.reverse() } : { workflow_runs: [run(8)] });
   };
-  expect(await findCiPackages({ repository: REPOSITORY, sha, token: "t", fetchImpl })).toEqual({ runId: "8", runUrl: run(8).html_url, artifact: ARTIFACT, artifactId: "80" });
+  expect(await findCiPackages({ repository: REPOSITORY, sha, token: "t", fetchImpl })).toEqual({ runId: "8", runUrl: run(8).html_url, artifact: ARTIFACT, artifactId: "80",
+    vsixArtifactIds: "81,82" });
   expect(urls[0].pathname).toBe(`/repos/${REPOSITORY}/actions/workflows/ci.yml/runs`);
   expect(Object.fromEntries(urls[0].searchParams)).toMatchObject({ head_sha: sha, event: "push", branch: "main" });
   await expect(findCiPackages({ repository: REPOSITORY, sha, token: "t", fetchImpl: async () => new Response("", { status: 403 }) })).rejects.toThrow("failed: 403");
 });
 
-test("packages must be exactly the workspace set at the version, packed from the commit", () => {
+test("packages and VSIX files must be exactly the release set at the version, packed from the commit", () => {
   const directory = mkdtempSync(join(tmpdir(), "runic-translations-ci-artifact-"));
+  const vsix = mkdtempSync(join(tmpdir(), "runic-translations-vsix-"));
   const inventory = { nuget: [{ name: "Runic.Translations" }], npm: [{ name: "@runic-artifex/translations-svelte" }] };
   const version = "1.2.3-preview.1";
   const script = `import io,json,sys,tarfile,zipfile
@@ -59,22 +64,58 @@ with tarfile.open(d+'/npm/runic-artifex-translations-svelte-'+v+'.tgz','w:gz') a
   try {
     mkdirSync(join(directory, "nuget")); mkdirSync(join(directory, "npm"));
     pack();
-    const manifest = prepare(directory, version, sha, "42", inventory);
+    writeVsixFixtures(vsix, version);
+    const manifest = prepare(directory, version, sha, "42", inventory, vsix);
     expect(manifest.packages.map(p => p.name)).toEqual(["Runic.Translations", "@runic-artifex/translations-svelte"]);
-    verify(directory, manifest, sha, version, "42", inventory);
-    expect(() => verify(directory, manifest, "b".repeat(40), version, "42", inventory)).toThrow("Inventory is for");
-    expect(() => verify(directory, manifest, sha, "1.2.3-preview.2", "42", inventory)).toThrow("version");
-    expect(() => verify(directory, manifest, sha, version, "43", inventory)).toThrow("CI run");
-    expect(() => prepare(directory, "1.2.3-preview.2", sha, "42", inventory)).toThrow("exactly");
+    expect(manifest.vsix.map(p => [p.file, p.identity.id, p.identity.version])).toEqual([
+      ["rmf2-vscode-vsix/runic-translations.vsix", "runic-translations", "1.2.3001"],
+      ["rmf2-visualstudio-vsix/runic-translations-visualstudio.vsix", "Runic.Artifex.Translations.Rmf2", "1.2.3.1"]]);
+    expect(manifest.vsix.every(p => /^[0-9a-f]{64}$/.test(p.sha256))).toBe(true);
+    verify(directory, manifest, sha, version, "42", inventory, vsix);
+    expect(() => verify(directory, manifest, "b".repeat(40), version, "42", inventory, vsix)).toThrow("Inventory is for");
+    expect(() => verify(directory, manifest, sha, "1.2.3-preview.2", "42", inventory, vsix)).toThrow("version");
+    expect(() => verify(directory, manifest, sha, version, "43", inventory, vsix)).toThrow("CI run");
+    expect(() => verify(directory, manifest, sha, version, "42", inventory)).toThrow("VSIX directory");
+    expect(() => prepare(directory, "1.2.3-preview.2", sha, "42", inventory, vsix)).toThrow("exactly");
+    writeFileSync(join(vsix, "rmf2-vscode-vsix", "runic-translations.vsix"), "changed");
+    expect(() => verify(directory, manifest, sha, version, "42", inventory, vsix)).toThrow();
+    writeVsixFixtures(vsix, version);
+    writeFileSync(join(vsix, "rmf2-vscode-vsix", "extra.vsix"), "extra");
+    expect(() => prepare(directory, version, sha, "42", inventory, vsix)).toThrow("must contain only");
+    rmSync(join(vsix, "rmf2-vscode-vsix"), { recursive: true });
+    expect(() => prepare(directory, version, sha, "42", inventory, vsix)).toThrow("exactly the IDE extension artifacts");
     pack("1.2.3-preview.2");
-    expect(() => prepare(directory, version, sha, "42", inventory)).toThrow("declares version");
-    expect(() => verify(directory, manifest, sha, version, "42", inventory)).toThrow();
+    writeVsixFixtures(vsix, version);
+    expect(() => prepare(directory, version, sha, "42", inventory, vsix)).toThrow("declares version");
+    expect(() => verify(directory, manifest, sha, version, "42", inventory, vsix)).toThrow();
     pack(version, "b".repeat(40));
-    expect(() => prepare(directory, version, sha, "42", inventory)).toThrow("packed from");
+    expect(() => prepare(directory, version, sha, "42", inventory, vsix)).toThrow("packed from");
     pack();
     writeFileSync(join(directory, "npm", "stale.tgz"), "stale");
-    expect(() => prepare(directory, version, sha, "42", inventory)).toThrow("exactly");
-  } finally { rmSync(directory, { recursive: true, force: true }); }
+    expect(() => prepare(directory, version, sha, "42", inventory, vsix)).toThrow("exactly");
+  } finally { rmSync(directory, { recursive: true, force: true }); rmSync(vsix, { recursive: true, force: true }); }
+});
+
+test("each VSIX must carry the version CI stamps for the release", () => {
+  const vsix = mkdtempSync(join(tmpdir(), "runic-translations-vsix-"));
+  const check = (version, overrides) => { rmSync(vsix, { recursive: true, force: true }); writeVsixFixtures(vsix, version, overrides); return () => scanVsix(vsix, version); };
+  try {
+    expect(check("0.6.0-preview.2")().map(p => p.identity)).toEqual([
+      { id: "runic-translations", version: "0.6.2", publisher: "runic-artifex" },
+      { id: "Runic.Artifex.Translations.Rmf2", version: "0.6.0.2", publisher: "Runic Artifex" }]);
+    expect(check("0.6.0")().map(p => p.identity.version)).toEqual(["0.6.1000", "0.6.0.1000"]);
+    // The unstamped placeholder of the committed manifests is never released.
+    expect(check("0.6.0-preview.2", { vscode: { version: "0.0.1", packageVersion: "0.0.1" } })).toThrow("declares version 0.0.1, not 0.6.2");
+    expect(check("0.6.0-preview.2", { visualStudio: { version: "0.0.1" } })).toThrow("declares version 0.0.1, not 0.6.0.2");
+    expect(check("0.6.0-preview.2", { visualStudio: { version: "0.6.2" } })).toThrow("not 0.6.0.2");
+    expect(check("0.6.0-preview.2", { vscode: { packageVersion: "0.0.1" } })).toThrow("bundles package.json version 0.0.1");
+    expect(check("0.6.0-preview.2", { vscode: { preRelease: false } })).toThrow("is not marked pre-release");
+    expect(check("0.6.0", { vscode: { preRelease: true } })).toThrow("is marked pre-release");
+    expect(check("0.6.0-preview.2", { visualStudio: { id: "Other" } })).toThrow("declares extension Other");
+    expect(check("0.6.0-preview.2", { vscode: { publisher: "someone" } })).toThrow("declares publisher someone");
+    check("0.6.0-preview.2");
+    expect(() => scanVsix(vsix, "0.6.0-rc.1")).toThrow("cannot express");
+  } finally { rmSync(vsix, { recursive: true, force: true }); }
 });
 
 const fakeGh = ({ release = false, tag, draft = false, assets = [], target = sha, annotated = false, tagError = false, releaseError = false } = {}) => {
@@ -149,18 +190,24 @@ test("a rerun keeps a release of this commit, never modifies a published one and
   expect(writes(calls)).toBe(false);
 });
 
-test("publication reuses the CI artifact and never reruns tests or packing", () => {
+test("publication reuses the CI artifacts and never reruns tests or packing", () => {
   const ci = workflow("ci.yml"), release = workflow("publish-preview.yml");
   expect(ci.jobs["build-and-test"].steps.find(s => s.uses?.startsWith("actions/upload-artifact@")).with.name).toBe(ARTIFACT);
+  // Kept as long as the package artifact, so a release can reuse them.
+  for (const { artifact } of VSIX)
+    expect(Object.values(ci.jobs).flatMap(job => job.steps).find(s => s.with?.name === artifact).with["retention-days"]).toBe(30);
+  expect(release.jobs.candidate.outputs["vsix-artifact-ids"]).toBe("${{ steps.ci.outputs.vsix-artifact-ids }}");
   expect(release.jobs.candidate.steps.find(s => s.id === "ci").run).toBe("bun eng/release/ci-artifact.mjs find-ci");
   expect(release.jobs.candidate.if).toContain("github.ref == 'refs/heads/main'");
   for (const [name, source] of [["candidate", "steps.ci"], ["publish", "needs.candidate"]]) {
     const job = release.jobs[name];
     expect(job.steps.filter(s => s.run).map(s => s.run).join("\n")).not.toMatch(/run\.mjs (test|pack|verify)|verify-packages|verify:candidate/);
     // By id, so a re-upload under the same name cannot change what is published.
-    expect(job.steps.find(s => s.uses?.startsWith("actions/download-artifact@")).with).toEqual({
-      "artifact-ids": `\${{ ${source}.outputs.artifact-id }}`, path: "artifacts/packages",
-      "run-id": `\${{ ${source}.outputs.${source === "steps.ci" ? "run-id" : "ci-run-id"} }}`, "github-token": "${{ github.token }}" });
+    const downloads = job.steps.filter(s => s.uses?.startsWith("actions/download-artifact@") && s.with["artifact-ids"]).map(s => s.with);
+    const runId = `\${{ ${source}.outputs.${source === "steps.ci" ? "run-id" : "ci-run-id"} }}`;
+    expect(downloads).toEqual([
+      { "artifact-ids": `\${{ ${source}.outputs.artifact-id }}`, path: "artifacts/packages", "run-id": runId, "github-token": "${{ github.token }}" },
+      { "artifact-ids": `\${{ ${source}.outputs.vsix-artifact-ids }}`, path: "artifacts/vsix", "run-id": runId, "github-token": "${{ github.token }}" }]);
     expect(job.permissions.actions).toBe("read");
   }
 });
@@ -185,14 +232,14 @@ test("a dry run performs every read-only check and never reaches OIDC, publicati
   const runs = publish.steps.filter(s => s.run).map(s => s.run);
   expect(runs.join("\n")).not.toContain("--dry-run");
   const index = text => runs.findIndex(r => r.includes(text));
-  expect(runs[index("ci-artifact.mjs verify")]).toBe('bun eng/release/ci-artifact.mjs verify artifacts/packages artifacts/release/packages.json "$VERSION" "$CI_RUN_ID"');
+  expect(runs[index("ci-artifact.mjs verify")]).toBe('bun eng/release/ci-artifact.mjs verify artifacts/packages artifacts/release/packages.json "$VERSION" "$CI_RUN_ID" artifacts/vsix');
   expect(index("ci-artifact.mjs verify")).toBeLessThan(index("publish.mjs publish"));
-  expect(runs[index("ci-artifact.mjs release ")]).toBe('bun eng/release/ci-artifact.mjs release "$VERSION" artifacts/packages "artifacts/release/$SBOM"');
+  expect(runs[index("ci-artifact.mjs release ")]).toBe('bun eng/release/ci-artifact.mjs release "$VERSION" artifacts/packages artifacts/vsix "artifacts/release/$SBOM"');
   expect(index("publish.mjs publish")).toBeLessThan(index("ci-artifact.mjs release "));
   expect(index("ci-artifact.mjs release ")).toBeLessThan(index("publish.mjs tag-latest"));
 });
 
-test("only the publish job attests, after verifying and before publishing, every package and release asset", () => {
+test("only the publish job attests, after verifying and before publishing, every package, VSIX and release asset", () => {
   const release = workflow("publish-preview.yml");
   expect(Object.entries(release.jobs).filter(([, job]) => job.steps.some(s => s.uses?.startsWith("actions/attest"))).map(([name]) => name)).toEqual(["publish"]);
   const steps = release.jobs.publish.steps;
@@ -200,13 +247,11 @@ test("only the publish job attests, after verifying and before publishing, every
   expect(attest.map(s => s.uses.split("@")[0])).toEqual(["actions/attest-build-provenance", "actions/attest"]);
   for (const step of attest) expect(step.uses).toMatch(/@[0-9a-f]{40}$/);
   const lines = step => step.with["subject-path"].trim().split("\n");
-  const files = ["artifacts/packages/nuget/*.nupkg", "artifacts/packages/npm/*.tgz"];
+  const files = ["artifacts/packages/nuget/*.nupkg", "artifacts/packages/npm/*.tgz", "artifacts/vsix/*/*.vsix"];
   const sbom = "artifacts/release/${{ needs.candidate.outputs.sbom }}";
   expect(lines(attest[0])).toEqual([...files, sbom]);
   expect(lines(attest[1])).toEqual(files);
   expect(attest[1].with["sbom-path"]).toBe(sbom);
-  // The IDE extensions are not released by this workflow.
-  expect(JSON.stringify(release.jobs)).not.toMatch(/vsix/i);
   const index = predicate => steps.findIndex(predicate);
   const first = index(s => s.uses?.startsWith("actions/attest"));
   expect(index(s => s.run?.includes("sha256sum --check --strict"))).toBeLessThan(index(s => s.run?.includes("ci-artifact.mjs verify")));
@@ -218,7 +263,8 @@ test("only the publish job attests, after verifying and before publishing, every
 test("the read-only candidate describes the release and hands its files to publish by hash", () => {
   const { candidate, publish } = workflow("publish-preview.yml").jobs;
   const describe = candidate.steps.find(s => s.id === "describe");
-  expect(describe.run).toContain('bun eng/release/ci-artifact.mjs describe artifacts/packages "$VERSION" artifacts/release');
+  expect(describe.run).toContain('bun eng/release/ci-artifact.mjs describe artifacts/packages artifacts/vsix "$VERSION" artifacts/release');
+  expect(candidate.steps.find(s => s.id === "prepare").run).toContain('prepare artifacts/packages "$VERSION" "$CI_RUN_ID" artifacts/release/packages.json artifacts/vsix');
   expect(describe.run).toContain("sha256sum -- *");
   expect(candidate.outputs["release-sha256"]).toBe("${{ steps.describe.outputs.sha256 }}");
   expect(candidate.outputs.sbom).toBe("${{ steps.describe.outputs.sbom }}");
@@ -229,4 +275,13 @@ test("the read-only candidate describes the release and hands its files to publi
   expect(check["working-directory"]).toBe("artifacts/release");
   expect(check.env.RELEASE_SHA256).toBe("${{ needs.candidate.outputs.release-sha256 }}");
   expect(publish.steps.indexOf(check)).toBeGreaterThan(publish.steps.findIndex(s => s.with?.name === "release-candidate-${{ github.run_id }}"));
+});
+
+test("CI stamps and checks both VSIX files with the mapped release version", () => {
+  const { jobs } = workflow("ci.yml");
+  expect(jobs["ide-packaging"].steps.find(s => s["working-directory"] === "tools/vscode-runic-translations").run).toContain("bun run package");
+  const vsix = jobs.vsix.steps.map(s => s.run ?? "");
+  expect(vsix.findIndex(run => run.startsWith("msbuild tools/visualstudio-runic-translations/")))
+    .toBeLessThan(vsix.indexOf("python tools/visualstudio-runic-translations/package.py --configuration Release"));
+  expect(vsix.join("\n")).not.toContain("RunicIdeReleaseVersion");
 });

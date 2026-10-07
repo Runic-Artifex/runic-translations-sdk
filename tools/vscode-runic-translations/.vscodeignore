@@ -5,3 +5,4 @@ artifacts/**
 bun.lock
 tsconfig.json
 package-assets.mjs
+package.mjs

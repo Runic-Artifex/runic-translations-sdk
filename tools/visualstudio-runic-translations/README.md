@@ -78,6 +78,15 @@ A native-built archive copied to Linux can be verified with `package.py --input
 /path/to/native.vsix`. Cross-compilation alone does not produce an installable
 archive.
 
+The manifest's `Version` is the `|%CurrentProject%;GetRunicVsixVersion|` token. The
+VSSDK build replaces it with the release version of `eng/workspace.json`, mapped to
+`N.N.N.N` like the `AnalyzerReleases` headers: `0.6.0-preview.N` becomes `0.6.0.N`
+and the final `0.6.0` becomes `0.6.0.1000`. `package.py` fails unless the VSIX has
+that version (`--release-version` checks against another release). Pass
+`/p:RunicIdeReleaseVersion=<version>` to MSBuild to build another version. See
+[IDE extension versions](../../eng/release/README.md#ide-extension-versions). Each
+GitHub release attaches the attested VSIX that CI built.
+
 The VS host dependency set is pinned separately from the SDK's modern runtime
 packages: in-process dependencies target the Visual Studio 17.14 API surface.
 The declared host range is `[17.14,19.0)`; native evidence currently covers

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
   <Metadata>
-    <Identity Id="Runic.Artifex.Translations.Rmf2" Version="0.0.1" Language="en-US" Publisher="Runic Artifex" />
+    <Identity Id="Runic.Artifex.Translations.Rmf2" Version="|%CurrentProject%;GetRunicVsixVersion|" Language="en-US" Publisher="Runic Artifex" />
     <DisplayName>Runic RMF2 Translations</DisplayName>
     <Description xml:space="preserve">RMF2 diagnostics, navigation, resource refactoring and inert message preview through the project-local Runic language server. Development preview.</Description>
     <License>LICENSE.txt</License>

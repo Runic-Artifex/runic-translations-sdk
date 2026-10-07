@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Write a CycloneDX 1.6 SBOM describing the files of one release.
 
-sbom.py --repository OWNER/NAME --version VERSION --source SHA --epoch SECONDS --output FILE ARTIFACT...
+sbom.py --repository OWNER/NAME --version VERSION --source SHA --epoch SECONDS --output FILE
+        [--artifact-version FILE_NAME=VERSION]... ARTIFACT...
 
 Reads archive metadata with the standard library only: nothing is extracted or
 executed and nothing is installed, so it runs in the read-only candidate job. The
 output is deterministic: the same artifacts, version, source and commit time
 (--epoch, from `git show -s --format=%ct`) always give the same bytes, so a rerun
 describes a published release identically.
+
+Every artifact must declare the release --version, except an artifact named by
+--artifact-version, which must declare the version given there (for example a
+VSIX, whose format cannot express a SemVer prerelease, with its mapped version).
 
 Every artifact (.nupkg, npm .tgz, .vsix) is a component with its SHA-256. Its
 dependencies are
@@ -219,12 +224,15 @@ def vsix(path):
 READERS = {'.nupkg': nuget, '.tgz': npm, '.vsix': vsix}
 
 
-def build(repository, version, source, epoch, paths):
+def build(repository, version, source, epoch, paths, artifact_versions=None):
+    artifact_versions = artifact_versions or {}
     owner, _, project = repository.partition('/')
     if not owner or not project or not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('Expected OWNER/NAME and a full source commit')
     if len({path.name for path in paths}) != len(paths) or not paths:
         raise ValueError('Expected uniquely named artifacts')
+    if set(artifact_versions) - {path.name for path in paths}:
+        raise ValueError(f'--artifact-version names no artifact: {", ".join(sorted(set(artifact_versions) - {path.name for path in paths}))}')
     graph, artifacts = Graph(), []
     for path in sorted(paths, key=lambda item: item.name):
         reader = READERS.get(path.suffix)
@@ -232,8 +240,9 @@ def build(repository, version, source, epoch, paths):
             raise ValueError(f'Unsupported artifact {path.name}')
         data = path.read_bytes()
         component, requested, extra = reader(path)
-        if path.suffix != '.vsix' and component['version'] != version:
-            raise ValueError(f"{path.name} is version {component['version']}, not {version}")
+        expected = artifact_versions.get(path.name, version)
+        if component['version'] != expected:
+            raise ValueError(f"{path.name} is version {component['version']}, not {expected}")
         component['hashes'] = [{'alg': 'SHA-256', 'content': hashlib.sha256(data).hexdigest()}]
         component['externalReferences'] = [*component.get('externalReferences', []), {'type': 'vcs', 'url': f'https://github.com/{repository}'}]
         component['properties'] = property_list({**component['properties'], 'runic:file': path.name})
@@ -280,9 +289,17 @@ def main(argv=None):
     parser.add_argument('--source', required=True)
     parser.add_argument('--epoch', required=True, type=int, help='Commit time in seconds since the epoch')
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--artifact-version', action='append', default=[], metavar='FILE_NAME=VERSION',
+                        help='Version the named artifact must declare instead of --version')
     parser.add_argument('artifacts', nargs='+', type=Path)
     args = parser.parse_args(argv)
-    bom = build(args.repository, args.version, args.source, args.epoch, args.artifacts)
+    artifact_versions = {}
+    for item in args.artifact_version:
+        name, separator, value = item.partition('=')
+        if not separator or not name or not value or name in artifact_versions:
+            parser.error(f'--artifact-version expects one FILE_NAME=VERSION per artifact: {item}')
+        artifact_versions[name] = value
+    bom = build(args.repository, args.version, args.source, args.epoch, args.artifacts, artifact_versions)
     args.output.write_text(json.dumps(bom, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print(f"Described {len(bom['dependencies'][0]['dependsOn'])} artifacts and {len(bom['components'])} components in {args.output}")
 

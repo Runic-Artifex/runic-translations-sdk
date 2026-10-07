@@ -197,6 +197,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
+      # Packaging stamps the eng/workspace.json release version (eng/release/ide-versions.mjs) and checks the VSIX.
       - name: Build, test and package the VS Code extension
         working-directory: tools/vscode-runic-translations
         run: |
@@ -209,7 +210,8 @@ jobs:
           name: rmf2-vscode-vsix
           path: tools/vscode-runic-translations/artifacts/runic-translations.vsix
           if-no-files-found: error
-          retention-days: 14
+          # Kept as long as the package artifact: Publish preview releases it.
+          retention-days: 30
   vsix:
     name: IDE / Windows VSIX package
     runs-on: windows-2025
@@ -224,6 +226,7 @@ jobs:
       - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
       - name: Build the language server
         run: dotnet build tools/dotnet-runic-translations/dotnet-runic-translations.csproj -c Release
+      # The project stamps the VSIX version from eng/workspace.json; package.py checks it.
       - name: Build the native VSIX with full-framework MSBuild
         run: msbuild tools/visualstudio-runic-translations/Runic.Translations.VisualStudio.csproj /restore /m:1 /p:Configuration=Release
       - name: Verify the generated VSIX against the source manifest
@@ -233,7 +236,8 @@ jobs:
           name: rmf2-visualstudio-vsix
           path: tools/visualstudio-runic-translations/artifacts/runic-translations-visualstudio.vsix
           if-no-files-found: error
-          retention-days: 14
+          # Kept as long as the package artifact: Publish preview releases it.
+          retention-days: 30
   verify:
     name: verify
     if: always()
