@@ -3,7 +3,9 @@ using Runic.Translations.Compiler;
 using ReactiveUI;
 using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Signals;
+using System.Globalization;
 using System.Text.Json;
+using Runic.Translations.Internal;
 using Runic.Application.Views;
 using Runic.Application.Views.ReactiveUI;
 using System.Xml.Linq;
@@ -99,11 +101,24 @@ internal static class EditorSmokeTest
         Require(initial.Success && initial.Documents.Any(document => document.Path == "feature/en.rmf2"), "The manifest fixture did not load.");
         await DrainExternalChangesAsync(session, null).ConfigureAwait(false);
 
-        var cases = new (string Name, string Content, string? Message)[] {
-            ("array root", "[\"not\",\"an\",\"object\"]\n", "Runic project root must be an object."),
-            ("missing path", valid.Replace("\"path\":\"../feature\",", "", StringComparison.Ordinal), "Missing required member 'path'."),
-            ("non-array sourceRoots", valid.Replace("[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", "{\"path\":\"../feature\",\"namespace\":[\"shop\"]}", StringComparison.Ordinal), null),
-            ("half-saved JSON", valid[..(valid.Length / 2)], null),
+        string Mount(string path) => valid.Replace("\"path\":\"../feature\"", "\"path\":\"" + path + "\"", StringComparison.Ordinal);
+        string noMount = TranslationManifestReader.SourceRootWithoutPath;
+        // Message is the manifest diagnostic the load must report; Mutation is
+        // the reason create-key planning must give, when it gets that far.
+        var cases = new (string Name, string Content, string Message, string? Mutation)[] {
+            ("array root", "[\"not\",\"an\",\"object\"]\n", "Runic project root must be an object.", null),
+            ("missing path", valid.Replace("\"path\":\"../feature\",", "", StringComparison.Ordinal), "Missing required member 'path'.", noMount),
+            ("whitespace path", Mount("   "), noMount, noMount),
+            ("non-object mount", valid.Replace("[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", "[42]", StringComparison.Ordinal), "Invalid source mount.", noMount),
+            ("non-array sourceRoots", valid.Replace("[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", "{\"path\":\"../feature\",\"namespace\":[\"shop\"]}", StringComparison.Ordinal),
+                "sourceRoots requires a nonempty array of mounts.", TranslationManifestReader.SourceRootsNotArray),
+            ("half-saved JSON", valid[..(valid.Length / 2)], "Expected a JSON value.", null),
+            // A path still being typed names a directory that does not exist yet.
+            ("missing source root", Mount("../featur"), string.Format(CultureInfo.InvariantCulture, EditorWorkspace.SourceRootMissing, "featur"),
+                string.Format(CultureInfo.InvariantCulture, EditorWorkspace.SourceRootMissing, "featur")),
+            ("escaping source root", Mount("../../.."), string.Format(CultureInfo.InvariantCulture, EditorWorkspace.SourceRootOutsideWorkspace, "../.."),
+                string.Format(CultureInfo.InvariantCulture, EditorWorkspace.SourceRootOutsideWorkspace, "../..")),
+            ("missing baseLocale", valid.Replace("\"baseLocale\":\"en\",", "", StringComparison.Ordinal), "Missing required member 'baseLocale'.", TranslationManifestReader.MissingBaseLocale),
         };
         foreach (var malformed in cases)
         {
@@ -117,10 +132,12 @@ internal static class EditorSmokeTest
             EditorDiagnostic[] manifestErrors = broken.Diagnostics
                 .Where(diagnostic => diagnostic.Path == "translations/runic.json" && diagnostic.Severity == "error").ToArray();
             Require(!broken.Success && manifestErrors.Length != 0, $"A malformed manifest ({malformed.Name}) did not produce a manifest diagnostic.");
-            Require(malformed.Message is null || manifestErrors.Any(diagnostic => diagnostic.Message == malformed.Message),
+            Require(manifestErrors.Any(diagnostic => diagnostic.Message == malformed.Message),
                 $"The {malformed.Name} manifest diagnostic was not '{malformed.Message}': {string.Join(" | ", manifestErrors.Select(diagnostic => diagnostic.Message))}");
             EditorMutationPreview mutation = session.PreviewMutation(new EditorMutationRequest("create-key", null, null, null, null, null, "shop.subtitle", "Subtitle"));
             Require(!mutation.Ok, $"Mutation planning accepted a malformed manifest ({malformed.Name}).");
+            Require(malformed.Mutation is null || mutation.Message?.Detail == malformed.Mutation,
+                $"Mutation planning for the {malformed.Name} manifest did not refuse with '{malformed.Mutation}': {mutation.Message?.Code} {mutation.Message?.Detail}");
         }
 
         await File.WriteAllTextAsync(manifest, valid).ConfigureAwait(false);
@@ -259,6 +276,16 @@ internal static class EditorSmokeTest
             XElement farewellSource = farewellUnit.Descendants().Single(element => element.Name.LocalName == "source");
             farewellSource.AddAfterSelf(new XElement(farewellSource.Name.Namespace + "target", "Auf Wiedersehen"));
             xliff.Save(xliffPath, SaveOptions.DisableFormatting);
+            // An import planned while the manifest's source layout is unusable
+            // (a whitespace mount path compiles with no sources) is refused as a
+            // failed compilation, not planned against an empty project.
+            string mountedManifest = Path.Combine(mountedProject, "runic.json");
+            string mountedValid = await File.ReadAllTextAsync(mountedManifest).ConfigureAwait(false);
+            await File.WriteAllTextAsync(mountedManifest, mountedValid.Replace("\"path\":\"../feature\"", "\"path\":\"   \"", StringComparison.Ordinal)).ConfigureAwait(false);
+            EditorXliffImportPlan brokenImport = await mountedSession.PreviewXliffImportAsync(xliffExport.Documents.Single().Path).ConfigureAwait(false);
+            Require(!brokenImport.Ok && brokenImport.ConfirmationToken is null && brokenImport.Refusals.Any(refusal => refusal.Code == "EDITOR-COMPILE"),
+                "The editor planned an XLIFF import against a manifest with an unusable source root.");
+            await File.WriteAllTextAsync(mountedManifest, mountedValid).ConfigureAwait(false);
             EditorXliffImportPlan xliffPreview = await mountedSession.PreviewXliffImportAsync(xliffExport.Documents.Single().Path).ConfigureAwait(false);
             Require(xliffPreview.Ok && xliffPreview.ChangedCount == 1 && xliffPreview.AddedCount == 1 && xliffPreview.ConfirmationToken is not null,
                 "The editor did not plan the mounted direct MF2 XLIFF import.");

@@ -6,7 +6,8 @@ using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tool;
 
-internal sealed record CompilerInputs(TranslationSource Project, IReadOnlyList<TranslationSource> Messages, IReadOnlyList<string>? SourceRoots = null);
+/// <param name="ManifestError">Why runic.json yields no source layout, or <see langword="null"/> when it is usable.</param>
+internal sealed record CompilerInputs(TranslationSource Project, IReadOnlyList<TranslationSource> Messages, IReadOnlyList<string>? SourceRoots = null, string? ManifestError = null);
 
 internal static class InputFiles
 {
@@ -27,10 +28,10 @@ internal static class InputFiles
         var messages = new List<TranslationSource>();
         TranslationSource project = projectOverride ?? ReadSource(configPath, DisplayPath(configPath, currentDirectory));
         // A malformed manifest (invalid JSON, a non-object root, or a malformed
-        // sourceRoots entry) yields no sources; the compiler then reports the
-        // located configuration diagnostic instead of a raw access error.
+        // sourceRoots entry) yields no sources. The compiler reports the located
+        // configuration diagnostic; ManifestError covers layouts it accepts.
         TranslationManifestLayout layout = TranslationManifestReader.Read(project.GetUtf8Bytes(), root);
-        if (!layout.IsValid) return new CompilerInputs(project, messages);
+        if (!layout.IsValid) return new CompilerInputs(project, messages, null, layout.Error);
         IReadOnlyList<string> roots = layout.SourceRoots;
         foreach (string sourceRoot in roots)
         foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, root, projectPath))

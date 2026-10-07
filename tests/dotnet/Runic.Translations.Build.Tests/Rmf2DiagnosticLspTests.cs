@@ -18,6 +18,7 @@ internal static class Rmf2DiagnosticLspTests
         runner.Add("LSP mounted Unicode diagnostic quick fixes share compiler edits and refuse stale resolution", CodeActions);
         runner.Add("LSP adds unsaved project-directory buffers only where source discovery would", SourceRootOverlays);
         runner.Add("LSP reports malformed unsaved source roots as configuration diagnostics", MalformedSourceRoots);
+        runner.Add("LSP mounted-buffer ownership follows the shared manifest reader", PartialSourceRoots);
         runner.Add("LSP reports a non-object runic.json as a configuration diagnostic", NonObjectConfiguration);
         runner.Add("LSP refuses renames with a clear error when runic.json markup is mistyped", MistypedMarkupRename);
     }
@@ -133,6 +134,41 @@ internal static class Rmf2DiagnosticLspTests
             frame["params"]?["uri"]?.GetValue<string>() == configUri)["params"]!["diagnostics"]!.AsArray();
         Assert.True(config.Any(diagnostic => diagnostic?["message"]?.GetValue<string>() == "Missing required member 'namespace'."),
             "The open runic.json did not receive the located mount diagnostic: " + config.ToJsonString());
+    }
+
+    private static void PartialSourceRoots()
+    {
+        // Ownership of mounted buffers uses the same manifest reader as the CLI
+        // and the Editor: one unusable entry (here a path still being typed)
+        // makes the whole source layout unusable, rather than keeping the valid
+        // mounts as the language server once did. The open runic.json carries
+        // the located diagnostic, and fixing it restores the mount.
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("project"));
+        Directory.CreateDirectory(temporary.Resolve("feature"));
+        File.WriteAllText(temporary.Resolve("project/runic.json"), MountedProject);
+        File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = Saved\n");
+        string configUri = new Uri(temporary.Resolve("project/runic.json")).AbsoluteUri;
+        string featureUri = new Uri(temporary.Resolve("feature/en.rmf2")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = featureUri, ["version"] = 1, ["text"] = "title = Unsaved\n" } });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = configUri, ["version"] = 1,
+            ["text"] = MountedProject.Replace("}]}", "},{\"path\":\"   \",\"namespace\":[\"draft\"]}]}", StringComparison.Ordinal) } });
+        JsonNode preview = session.Request("workspace/executeCommand", new JsonObject {
+            ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(featureUri, "shop_title", "en", new JsonObject()) });
+        Assert.Equal("No runic.json project contains this resource in its project directory or configured source roots.",
+            preview["error"]?["message"]?.GetValue<string>(), preview.ToJsonString());
+        JsonArray config = session.Publications.Last(frame => frame["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" &&
+            frame["params"]?["uri"]?.GetValue<string>() == configUri)["params"]!["diagnostics"]!.AsArray();
+        Assert.True(config.Any(diagnostic => diagnostic?["message"]?.GetValue<string>() == "Each source root must declare a non-empty path."),
+            "The open runic.json did not receive the located mount diagnostic: " + config.ToJsonString());
+        session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = configUri, ["version"] = 2 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = MountedProject }) });
+        JsonNode fixedPreview = session.Request("workspace/executeCommand", new JsonObject {
+            ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(featureUri, "shop_title", "en", new JsonObject()) });
+        Assert.True(fixedPreview["error"] is null, "Fixing runic.json did not restore the mount: " + fixedPreview.ToJsonString());
+        Assert.Contains("Unsaved", fixedPreview["result"]!["runs"]!.ToJsonString());
     }
 
     private static void NonObjectConfiguration()

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
+using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Internal;
 
@@ -28,6 +30,10 @@ internal static class TranslationManifestReader
     internal const string NotAnObject = "Runic project root must be an object.";
     internal const string SourceRootsNotArray = "sourceRoots must be an array.";
     internal const string SourceRootWithoutPath = "Each source root must declare a non-empty path.";
+    internal const string SourceRootInvalidPath = "Each source root path must be a valid file-system path.";
+    internal const string MissingBaseLocale = "runic.json must declare a baseLocale string.";
+    /// <summary>The configuration-discovery diagnostic, shared with MSBuild source discovery.</summary>
+    internal const string DiagnosticId = "RTR0052";
 
     internal static TranslationManifestLayout Read(ReadOnlyMemory<byte> utf8, string projectDirectory)
     {
@@ -53,11 +59,38 @@ internal static class TranslationManifestReader
                 try { roots.Add(Path.GetFullPath(path.GetString()!, projectDirectory)); }
                 catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
                 {
-                    return Invalid(SourceRootWithoutPath, baseLocale);
+                    return Invalid(SourceRootInvalidPath, baseLocale);
                 }
             }
             return new TranslationManifestLayout(roots, baseLocale, null);
         }
+    }
+
+    /// <summary>
+    /// Adds the manifest errors that the compiler cannot see to a compilation.
+    /// The compiler validates the manifest text but not the file system, and
+    /// some layouts the reader rejects (a whitespace or unusable path) compile
+    /// cleanly with no sources. Without this a project that discovers nothing
+    /// would validate successfully. A layout error is added only when the
+    /// compiler reported no error on the manifest itself, so the more precise
+    /// compiler diagnostic is not duplicated; discovery errors (a missing or
+    /// unusable source root) are always added.
+    /// </summary>
+    internal static Rmf2ProjectCompilationV5 WithManifestErrors(
+        Rmf2ProjectCompilationV5 compilation, string projectPath, string? layoutError, IReadOnlyList<string>? discoveryErrors = null)
+    {
+        var errors = new List<string>();
+        if (layoutError is not null && !compilation.Diagnostics.Any(diagnostic =>
+                diagnostic.Severity == TranslationDiagnosticSeverity.Error &&
+                string.Equals(diagnostic.Location.Path, projectPath, StringComparison.Ordinal)))
+            errors.Add(layoutError);
+        if (discoveryErrors is not null) errors.AddRange(discoveryErrors);
+        if (errors.Count == 0) return compilation;
+        var diagnostics = new List<TranslationDiagnostic>(compilation.Diagnostics);
+        foreach (string error in errors)
+            diagnostics.Add(new TranslationDiagnostic(DiagnosticId, TranslationDiagnosticSeverity.Error, error,
+                new TextSourceLocation(projectPath, 0, 0, 1, 1, 1, 1)));
+        return new Rmf2ProjectCompilationV5(null, diagnostics);
     }
 
     private static TranslationManifestLayout Invalid(string error, string? baseLocale = null) => new([], baseLocale, error);

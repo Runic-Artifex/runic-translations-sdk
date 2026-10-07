@@ -10,6 +10,7 @@ using Runic.CommandLine.Spectre;
 using Runic.Translations.Tooling;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
+using Runic.Translations.Internal;
 
 namespace Runic.Translations.Tool;
 
@@ -362,6 +363,7 @@ internal static class Program
         Rmf2ProjectCompilationV5 compilation = units is null
             ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages)
             : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options);
+        compilation = TranslationManifestReader.WithManifestErrors(compilation, inputs.Project.Path, inputs.ManifestError);
         WriteDiagnostics(compilation.Diagnostics, result);
         if (!compilation.Success || compilation.Project is null) return DiagnosticFailure;
         if (invocation.Command == ToolCommand.Validate)

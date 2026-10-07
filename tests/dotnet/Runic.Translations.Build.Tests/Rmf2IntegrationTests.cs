@@ -21,6 +21,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 CLI emits and verifies the cohesive contract", ActivatedV5Cli);
         runner.Add("RMF2 CLI reports a non-object runic.json as a configuration diagnostic", NonObjectConfigurationCli);
         runner.Add("RMF2 manifest reader reports malformed source layouts without throwing", ManifestReaderLayouts);
+        runner.Add("RMF2 CLI rejects a mount path the compiler accepts but discovery cannot use", UnusableMountPathCli);
         runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
         runner.Add("RMF2 CLI re-discovers mounted add, change, rename, and delete", MountedCliMembership);
         runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
@@ -269,12 +270,37 @@ internal static class Rmf2IntegrationTests
             (Project[..^1] + ",\"sourceRoots\":{\"path\":\"../feature\"}}", "sourceRoots must be an array."),
             (Project[..^1] + ",\"sourceRoots\":[{\"namespace\":[]}]}", "Each source root must declare a non-empty path."),
             (Project[..^1] + ",\"sourceRoots\":[\"../feature\"]}", "Each source root must declare a non-empty path."),
+            (Project[..^1] + ",\"sourceRoots\":[{\"path\":\"   \",\"namespace\":[]}]}", "Each source root must declare a non-empty path."),
+            (Project[..^1] + ",\"sourceRoots\":[{\"path\":\"\\u0000x\",\"namespace\":[]}]}", "Each source root path must be a valid file-system path."),
             (Project[..20], "runic.json is not valid JSON."),
         })
         {
             var layout = Read(json);
             Assert.Equal(error, layout.Error);
             Assert.Equal(0, layout.SourceRoots.Count, "A malformed manifest must not expose partial source roots.");
+        }
+    }
+    private static void UnusableMountPathCli()
+    {
+        // A whitespace path is diagnosed by the compiler at the path itself. A
+        // path that the file system cannot resolve compiles cleanly with no
+        // sources, so the reader's error must fail validation instead of
+        // reporting a successful empty project.
+        foreach ((string path, string message, string location) in new[] {
+            ("   ", "Each source root must declare a non-empty path.", "translations/runic.json(1,"),
+            ("\\u0000x", "Each source root path must be a valid file-system path.", "translations/runic.json(1,1,1,1)"),
+        })
+        {
+            using TemporaryDirectory temporary = new();
+            Directory.CreateDirectory(temporary.Resolve("translations"));
+            Directory.CreateDirectory(temporary.Resolve("feature"));
+            File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"sourceRoots\":[{\"path\":\"" + path + "\",\"namespace\":[\"shop\"]}]}");
+            File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "x = Hello\n");
+            ProcessResult result = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+            Assert.Equal(1, result.ExitCode, result.Combined);
+            Assert.Contains(location, result.Combined);
+            Assert.Contains("error RTR0052: " + message, result.Combined);
+            Assert.False(result.Combined.Contains("validated", StringComparison.Ordinal), "An unusable mount validated: " + result.Combined);
         }
     }
     private static void NonObjectConfigurationCli()
