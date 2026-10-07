@@ -42,7 +42,7 @@
     },
     "packages/web/translations-svelte": {
       "name": "@runic-artifex/translations-svelte",
-      "version": "0.6.0-preview.3",
+      "version": "0.6.0-preview.4",
       "devDependencies": {
         "@sveltejs/adapter-static": "4.0.0",
         "@sveltejs/kit": "3.0.0",
@@ -63,7 +63,7 @@
     },
     "packages/web/translations-sveltekit": {
       "name": "@runic-artifex/translations-sveltekit",
-      "version": "0.6.0-preview.3",
+      "version": "0.6.0-preview.4",
       "devDependencies": {
         "@runic-artifex/translations-svelte": "workspace:*",
         "@sveltejs/adapter-static": "4.0.0",
@@ -83,7 +83,7 @@
     },
     "packages/web/vite-plugin-runic-translations": {
       "name": "@runic-artifex/vite-plugin-runic-translations",
-      "version": "0.6.0-preview.3",
+      "version": "0.6.0-preview.4",
       "devDependencies": {
         "@types/node": "24.19.1",
         "typescript": "^6.0.3",

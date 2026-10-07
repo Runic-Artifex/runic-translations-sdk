@@ -1,2 +1,1 @@
 #nullable enable
-Runic.Translations.Wpf.WpfInlineRenderer.SetContent(System.Windows.Controls.TextBlock! target, Runic.Translations.BoundLocalizedTextContent! content) -> void
