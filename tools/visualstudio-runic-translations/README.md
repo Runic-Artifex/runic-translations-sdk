@@ -3,7 +3,9 @@
 Development preview for Visual Studio 2026 (18.x), Windows x64. The manifest
 declares `[18.0,19.0)`. Visual Studio 2022 (17.x) is not supported. The
 in-process API is pinned to 17.14, which 18.x hosts provide. Native evidence
-covers Visual Studio Community 2026 18.8.2. The range declaration is not
+covers Visual Studio Community 2026 18.8.2, except the unsaved-buffer step,
+which failed in the 2026-10-07 rerun (see
+[RMF2 validation](../../docs/guides/translations/rmf2-validation.md#visual-studio-2026-rerun-2026-10-07)). The range declaration is not
 evidence that every 18.x release has been run. The MEF client
 registers direct `.mf2` and grouped `.rmf2` with Visual Studio's remote-code content type and uses the same
 stdio language server as VS Code. TextMate highlighting, diagnostics, completion,
@@ -91,7 +93,9 @@ GitHub release attaches the attested VSIX that CI built.
 The VS host dependency set is pinned separately from the SDK's modern runtime
 packages: in-process dependencies target the Visual Studio 17.14 API surface.
 The declared host range is `[18.0,19.0)`, Visual Studio 2026 only. Native
-evidence covers Visual Studio Community 2026 18.8.2.
+evidence covers Visual Studio Community 2026 18.8.2, except the unsaved-buffer
+step (see
+[RMF2 validation](../../docs/guides/translations/rmf2-validation.md#visual-studio-2026-rerun-2026-10-07)).
 `packages.lock.json` records the graph. The VSIX contains only the extension's
 own managed assembly; VS-owned DLLs resolve from the host.
 

@@ -115,10 +115,17 @@ Results:
   replaced the buffer with `plain = UNSAVED preview marker`, the `plain`
   preview still rendered the saved `Payment details`. This was reproduced in
   two complete runs. A diagnostic copy that waited 20 seconds after the restart
-  failed the same way, and so did a copy that skipped the restart. The preview
-  therefore did not use the unsaved buffer in this host at all; the restart is
-  not the cause. This has to be fixed and rerun before native interaction
-  evidence for Visual Studio 2026 is complete.
+  failed the same way, and so did a copy that skipped the restart, so the
+  restart is not the cause. The cause is in the language server. `BufferUris`
+  in `Rmf2LanguageServer.cs` silently drops any open buffer that lies outside
+  every workspace root: `BufferProjectDirectory` throws for such a path, and
+  `BufferUris` catches the exception and skips the buffer. Visual Studio in
+  loose-file mode sends either no workspace root or one that does not contain
+  the journey's `%TEMP%` fixture, so the preview compiles the file from disk.
+  This regressed in `1e6bd46` (2026-09-21, "index RMF2 project ownership").
+  The 2026-09-11 run that passed predates that commit. The server fix and a
+  native rerun are still needed before native interaction evidence for Visual
+  Studio 2026 is complete.
 - During the buffer replacement, Visual Studio's LSP client also logged a
   non-fatal `ArgumentException` in `StructureTagger.GetTags`, raised by
   `NormalizedSnapshotSpanCollection.IntersectsWith`.
