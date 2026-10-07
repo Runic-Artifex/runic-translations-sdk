@@ -59,6 +59,14 @@ internal static class Rmf2AuthoringTests
         string renamed = Encoding.UTF8.GetString(Rmf2ResourceWriter.RenameSlot(
             Source("en.rmf2", "x = {#link ref=help}Help{/link}\n"), "x", "help", "docs", Source("runic.json", """["not","an","object"]""")));
         Assert.True(renamed.Contains("ref=docs", StringComparison.Ordinal), "Slot rename failed with a non-object project: " + renamed);
+
+        // Configuration-editing operations refuse a non-object manifest with the
+        // compiler's wording instead of a raw JsonNode type error.
+        var arrayProject = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", """["not","an","object"]"""),
+            [Source("en.rmf2", "x = {#link ref=help}Help{/link}\n"), Source("de.rmf2", "x = {#link ref=help}Hilfe{/link}\n")]);
+        Assert.Throws<TranslationAuthoringException>(() => arrayProject.Rename(["x"], "renamed"), "Runic project root must be an object.");
+        Assert.Throws<TranslationAuthoringException>(() => arrayProject.RenameSlot("en.rmf2", "x", "help", "docs"), "Runic project root must be an object.");
+        Assert.Throws<TranslationAuthoringException>(() => arrayProject.SetFallback("de", "en"), "Runic project root must be an object.");
     }
     private static void DirectSources()
     {

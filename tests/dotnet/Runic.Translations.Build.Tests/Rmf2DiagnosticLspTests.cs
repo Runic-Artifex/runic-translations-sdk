@@ -151,12 +151,10 @@ internal static class Rmf2DiagnosticLspTests
             ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(sourceUri, "x", "en", new JsonObject()) });
         JsonNode rename = session.Request("workspace/executeCommand", new JsonObject {
             ["command"] = "runic.renameResource", ["arguments"] = new JsonArray(sourceUri, new JsonArray("x"), "renamed") });
-        foreach ((string operation, JsonNode response) in new[] { ("preview", preview), ("rename", rename) })
-        {
-            string message = response["error"]?["message"]?.GetValue<string>() ?? "";
-            Assert.False(message.Contains("requires an element of type", StringComparison.Ordinal), $"{operation} leaked a raw JSON access error: {message}");
-        }
-        Assert.Contains("Runic project root must be an object.", preview["error"]?["message"]?.GetValue<string>() ?? preview.ToJsonString());
+        JsonNode symbolRename = session.Request("textDocument/rename", new JsonObject {
+            ["textDocument"] = new JsonObject { ["uri"] = sourceUri }, ["position"] = Position(0, 0), ["newName"] = "renamed" });
+        foreach ((string operation, JsonNode response) in new[] { ("runic.renderPreview", preview), ("runic.renameResource", rename), ("textDocument/rename", symbolRename) })
+            Assert.Equal("Runic project root must be an object.", response["error"]?["message"]?.GetValue<string>() ?? response.ToJsonString(), operation);
         JsonArray config = session.Publications.Last(frame => frame["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" &&
             frame["params"]?["uri"]?.GetValue<string>() == configUri)["params"]!["diagnostics"]!.AsArray();
         Assert.True(config.Any(diagnostic => diagnostic?["message"]?.GetValue<string>() == "Runic project root must be an object."),

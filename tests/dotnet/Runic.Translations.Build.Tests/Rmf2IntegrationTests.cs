@@ -23,6 +23,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
         runner.Add("RMF2 CLI re-discovers mounted add, change, rename, and delete", MountedCliMembership);
         runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
+        runner.Add("RMF2 MSBuild reports a non-object runic.json as RTR0052", NonObjectConfigurationBuild);
         runner.Add("RMF2 LSP negotiates Unicode positions and returns versioned rename edits", Lsp);
         runner.Add("RMF2 LSP rescans watched files and configuration with unsaved overlays", LspWatchRescan);
         runner.Add("RMF2 LSP isolates watched diagnostics by project", LspWatchProjectIsolation);
@@ -366,6 +367,27 @@ internal static class Rmf2IntegrationTests
         Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "translations").ExitCode);
         File.Delete(french);
         Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "translations").ExitCode);
+    }
+    private static void NonObjectConfigurationBuild()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations"));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), """["not","an","object"]""");
+        File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "x = Hello\n");
+        string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
+        string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
+        File.WriteAllText(temporary.Resolve("Consumer.proj"), $$"""
+            <Project><PropertyGroup><Configuration>{{configuration}}</Configuration></PropertyGroup>
+            <ItemGroup><TranslationProject Include="translations/runic.json" /></ItemGroup>
+            <Import Project="{{targets}}" />
+            <Target Name="Dump" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources" />
+            </Project>
+            """);
+        var result = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
+        Assert.False(result.ExitCode == 0, result.Combined);
+        Assert.Contains("RTR0052", result.Combined);
+        Assert.Contains("runic.json must contain a JSON object.", result.Combined);
+        Assert.False(result.Combined.Contains("requires an element of type", StringComparison.Ordinal), "MSBuild leaked a raw JSON access error: " + result.Combined);
     }
     private static void MountedBuild()
     {
