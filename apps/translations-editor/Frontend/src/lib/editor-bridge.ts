@@ -132,7 +132,7 @@ async function invokeDocument<T>(path: string, command: "validate" | "save", req
       const terminal = await operation.completion;
       if (terminal.kind !== "succeeded")
         throw new BridgeError(terminal.kind === "cancelled" ? "cancelled" : "failed",
-          terminal.error?.message ?? "The document operation did not complete.");
+          terminal.kind === "failed" ? terminal.error.message : "The document operation did not complete.");
       if (terminal.delivery !== undefined)
         throw new BridgeError("failed", terminal.delivery.message);
       if (terminal.result === undefined)

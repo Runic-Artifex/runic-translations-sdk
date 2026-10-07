@@ -7,7 +7,6 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <RunicBridgeRegisterGlobally>false</RunicBridgeRegisterGlobally>
     <RunicBridgeCompositionType>Runic.Translations.Editor.RunicBridgeComposition</RunicBridgeCompositionType>
     <RunicBridgeFrontendBuildCommand>bun run --bun build</RunicBridgeFrontendBuildCommand>
     <RunicBridgeTypescriptDir>$(MSBuildProjectDirectory)/Frontend/src/generated</RunicBridgeTypescriptDir>

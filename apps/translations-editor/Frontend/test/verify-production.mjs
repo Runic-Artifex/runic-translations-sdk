@@ -6,9 +6,11 @@ const generated = await readFile(new URL("../src/generated/editor.ts", import.me
 if (!generated.includes("export interface EditorState") || !generated.includes("readonly workspace: EditorWorkspacePageReference;") || !generated.includes("readonly interchange: EditorInterchangePageReference;"))
   throw new Error("The generated Views Editor client is missing its routed feature contracts.");
 const generatedDocument = await readFile(new URL("../src/generated/editorDocument.ts", import.meta.url), "utf8");
-const saveArgument = '{ readonly ["content"]: string; readonly ["revision"]: string }';
-if (!generatedDocument.includes(`save(argument: ${saveArgument}): Promise<EditorDocumentState>`) ||
-    !generatedDocument.includes(`startSave(argument: ${saveArgument}): Promise<EditorDocumentSaveOperation>`))
+const generatedTypes = await readFile(new URL("../src/generated/types.ts", import.meta.url), "utf8");
+const saveArgument = "editorDocumentSaveRequest: EditorDocumentSaveRequest";
+if (!/export interface EditorDocumentSaveRequest \{\s*readonly content: string;\s*readonly revision: string;\s*\}/.test(generatedTypes) ||
+    !generatedDocument.includes(`save(${saveArgument}): Promise<EditorDocumentState>`) ||
+    !generatedDocument.includes(`startSave(${saveArgument}): Promise<EditorDocumentSaveOperation>`))
   throw new Error("The generated document client is missing its revision-aware save command or result operation.");
 const index = await readFile(new URL("index.html", build), "utf8");
 for (const script of ['src="/webui.js"', 'src="/runic-cswebui.js"'])
