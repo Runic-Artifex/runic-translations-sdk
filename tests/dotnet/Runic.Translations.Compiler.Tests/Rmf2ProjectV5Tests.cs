@@ -303,14 +303,19 @@ internal static class Rmf2ProjectV5Tests
             Assert.Equal(slot, Readable(result.Project!, "x").Slots.Single().Identifier);
         }
 
-        // RTR0006: class names equal to members of the generated class.
-        foreach (string className in new[] { "Messages", "__readable", "__translationManager" })
+        // Class names equal to a member the readable facade adds: one RTR0069 warning, encoded surface kept.
+        foreach (string className in new[] { "Messages", "__readable" })
         {
-            var invalid = TranslationCompiler.CompileRmf2ProjectV5(Source("translations/runic.json",
+            var result = TranslationCompiler.CompileRmf2ProjectV5(Source("translations/runic.json",
                 "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"" + className + "\"},\"baseLocale\":\"en\"}"),
-                [Source("translations/en.rmf2", "x = X")]);
-            Assert.True(!invalid.Success && invalid.Diagnostics.Any(d => d.Id == "RTR0006"), "Class name '" + className + "' was accepted.");
+                [Source("translations/en.rmf2", "x = X\nToString = Y")]);
+            Assert.True(result.Success, "Class name '" + className + "' was rejected.\n" + Errors(result));
+            TranslationDiagnostic warning = result.Diagnostics.Single();
+            Assert.Equal("RTR0069", warning.Id, className);
+            Assert.Equal("translations/runic.json", warning.Location.Path, className + " location");
+            Assert.True(!Rmf2ReadableNamesV1.SupportsClassName(className), className);
         }
+        Assert.True(Rmf2ReadableNamesV1.SupportsClassName("AppText") && Rmf2ReadableNamesV1.SupportsClassName("messages"), "Supported class names were rejected.");
     }
     private static void ReadableReserved()
     {

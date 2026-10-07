@@ -44,9 +44,7 @@ files after canonical tags.
 
 Catalog ID or generated code name is invalid. The catalog ID, `code.namespace`
 or `code.className` cannot be used. Catalog IDs are lowercase identifiers with
-dots or dashes; namespaces and class names must be ASCII C# identifiers. A class
-name cannot be `Messages`, `__readable` or `__translationManager`, which name
-members of the generated class.
+dots or dashes; namespaces and class names must be ASCII C# identifiers.
 
 ## RTR0009
 
@@ -201,7 +199,10 @@ always writes the readable file.
 Readable C# name is reserved or clashes. A message is left out of the readable
 C# surface (`text.Messages`) because its key, or one of its slot IDs, is
 reserved, or because a verbatim input name or slot ID equals the encoded name
-of another input or slot of the same message. Reserved message keys are the
+of another input (or another slot) of the same message. When
+`code.className` is `Messages` or `__readable`, which name members the facade
+adds to the generated class, the whole readable surface is skipped and RTR0069
+is reported once at `code.className`. Reserved message keys are the
 `object` members (`Equals`, `GetHashCode`, `ToString`, `GetType`,
 `MemberwiseClone`, `Finalize`, `ReferenceEquals`), `ReadableNameVersion`,
 `__text`, and the class names `<ClassName>`, `<ClassName>Messages` and
