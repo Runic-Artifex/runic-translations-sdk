@@ -32,16 +32,28 @@ folds that component into the patch (`patch × 1000 + N`, or `+ 1000` for the fi
 release) and packages a preview with `vsce package --pre-release`. Both orders match
 the release order, and since a final release is a multiple of 1000 and a preview never
 is, no preview can take a later final release's number; mapping preview N to
-`0.6.N` alone would collide with the final `0.6.N`. Previews run from 1 to 999;
-any other prerelease label fails packaging. [`ide-versions.mjs`](ide-versions.mjs)
+`0.6.N` alone would collide with the final `0.6.N`.
+
+Only two release version forms can pass CI: `x.y.z-preview.N` with N from 1 to 999,
+and a final `x.y.z`. IDE packaging rejects every other prerelease label (`-rc.1`,
+`-beta`, `-preview.0`), build metadata (`+build`) and, because Visual Studio reads
+each component as a 16-bit `System.Version` part, any major, minor or patch above
+65534; the folded VS Code patch is then at most 65535000. The **Validate version**
+step of **Publish preview** applies the same pattern before it looks for a CI run,
+so a dispatch with another version fails there with that message. [`ide-versions.mjs`](ide-versions.mjs)
 defines the mapping and `ide-versions.test.mjs` checks that the Visual Studio
 project (`GetRunicVsixVersion`) and `package.py` agree with it.
 
 - `bun run package` in `tools/vscode-runic-translations` (`package.mjs`) copies the
   files `vsce ls` would package to a staging directory, stamps the copied
-  `package.json` and packs that, so tracked files are never modified. It then
-  checks the identity, `extension/package.json` version and pre-release flag of
-  the VSIX.
+  `package.json` and packs that, so tracked files are never modified. The stamp
+  sets `version` and `preview`: the committed manifest keeps `"preview": true`, but
+  a final release is packaged with `"preview": false`, so it does not carry the
+  Marketplace "Preview" label (`GalleryFlags`) of a preview. It then checks the
+  identity, `extension/package.json` version and `preview` field, the pre-release
+  flag and the Preview gallery flag of the VSIX; `prepare` checks them again.
+  `node package.mjs <release> [output]` packages another release; CI packages
+  `0.6.0` this way to check the final-release flags.
 - The Visual Studio project replaces the manifest token with its
   `GetRunicVsixVersion` result during the Windows build, and `package.py` fails
   unless the built VSIX has the mapped version. Set `-p:RunicIdeReleaseVersion=<version>`

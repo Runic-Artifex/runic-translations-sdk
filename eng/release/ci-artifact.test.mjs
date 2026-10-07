@@ -111,6 +111,11 @@ test("each VSIX must carry the version CI stamps for the release", () => {
     expect(check("0.6.0-preview.2", { vscode: { packageVersion: "0.0.1" } })).toThrow("bundles package.json version 0.0.1");
     expect(check("0.6.0-preview.2", { vscode: { preRelease: false } })).toThrow("is not marked pre-release");
     expect(check("0.6.0", { vscode: { preRelease: true } })).toThrow("is marked pre-release");
+    // A final release must not keep the Marketplace "Public Preview" label of a preview.
+    expect(check("0.6.0", { vscode: { preview: true } })).toThrow("has the Marketplace Preview flag");
+    expect(check("0.6.0-preview.2", { vscode: { preview: false } })).toThrow("lacks the Marketplace Preview flag");
+    expect(check("0.6.0", { vscode: { packagePreview: true } })).toThrow("bundles package.json preview true");
+    expect(check("0.6.0-preview.2", { vscode: { packagePreview: false } })).toThrow("bundles package.json preview false");
     expect(check("0.6.0-preview.2", { visualStudio: { id: "Other" } })).toThrow("declares extension Other");
     expect(check("0.6.0-preview.2", { vscode: { publisher: "someone" } })).toThrow("declares publisher someone");
     check("0.6.0-preview.2");

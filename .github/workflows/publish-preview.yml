@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Exact SemVer preview version
+        description: Exact release version, x.y.z-preview.N (1-999) or x.y.z
         required: true
         type: string
       dry-run:
@@ -54,7 +54,14 @@ jobs:
         run: |
           set -euo pipefail
           version="$VERSION"
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+          # The IDE extension versions cannot express another prerelease label, so CI never packages one
+          # (eng/release/ide-versions.mjs, the same pattern; README "IDE extension versions").
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-preview\.[1-9][0-9]{0,2})?$ ]]; then
+            echo "::error::Version '$version' is not x.y.z-preview.N (1 <= N <= 999) or a final x.y.z; IDE extension packaging rejects every other version, so CI cannot have built it."
+            exit 1
+          fi
+          # Also enforces the 65534 component limit and prints the IDE versions this release maps to.
+          bun eng/release/ide-versions.mjs "$version"
           test "$version" = "$(jq -r .version eng/workspace.json)"
           test "$version" = "$(sed -n 's:.*<RunicTranslationsVersion>\(.*\)</RunicTranslationsVersion>.*:\1:p' eng/Versions.props)"
       - name: Find the successful CI run for this commit

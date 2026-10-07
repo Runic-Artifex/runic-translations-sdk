@@ -198,6 +198,7 @@ jobs:
         with:
           bun-version: 1.4.2
       # Packaging stamps the eng/workspace.json release version (eng/release/ide-versions.mjs) and checks the VSIX.
+      # The second package (not uploaded) checks that a final release drops the pre-release and Preview flags.
       - name: Build, test and package the VS Code extension
         working-directory: tools/vscode-runic-translations
         run: |
@@ -205,6 +206,7 @@ jobs:
           bun run --bun check
           bun run --bun test
           bun run package
+          node package.mjs 0.6.0 "$RUNNER_TEMP/final-release-check.vsix"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rmf2-vscode-vsix
