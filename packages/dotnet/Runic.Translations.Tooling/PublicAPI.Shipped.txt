@@ -150,3 +150,4 @@ static Runic.Translations.Tooling.TranslationsToolCommandResult.operator !=(Runi
 static Runic.Translations.Tooling.TranslationsToolCommandResult.operator ==(Runic.Translations.Tooling.TranslationsToolCommandResult? left, Runic.Translations.Tooling.TranslationsToolCommandResult? right) -> bool
 ~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.String.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>
 ~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.TranslationsToolCommandResult.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Runic.Translations.Tooling.TranslationsToolCommandResult>
+static Runic.Translations.Tooling.TranslationsToolCommandModule.Serve(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
