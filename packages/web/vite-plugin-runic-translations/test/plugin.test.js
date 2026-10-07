@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import { build } from "vite";
+import { build, createServer } from "vite";
 import { runicTranslations } from "../dist/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -451,6 +451,43 @@ test("Vite production builds retain static v3 message re-exports", async () => {
     await build({ configFile: false, logLevel: "silent", plugins: [runicTranslations({ manifest })], build: { outDir, minify: false, lib: { entry, formats: ["es"], fileName: () => "bundle.js" } } });
     const bundle = await readFile(join(outDir, "bundle.js"), "utf8"); assert.match(bundle, /USED_MESSAGE/); assert.doesNotMatch(bundle, /UNRELATED_MESSAGE_SENTINEL/);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a dev-server change makes the browser re-import the regenerated messages", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-hmr-timestamp-"));
+  let server;
+  try {
+    const generated = join(root, "app.esm-v5"), source = join(root, "en.rmf2");
+    const manifest = await writeV3Fixture(generated);
+    await writeFile(source, "title = One\n");
+    await writeFile(join(root, "main.js"), "import { m } from 'virtual:runic-translations/app'; export { m };\n");
+    server = await createServer({
+      configFile: false, root, logLevel: "silent", appType: "custom",
+      server: { middlewareMode: true, ws: false, watch: null },
+      plugins: [runicTranslations({ manifest, sourceFiles: [source], typeDeclarations: false })],
+    });
+    const client = server.environments.client;
+    await client.transformRequest("/main.js");
+    const virtualUrl = "virtual:runic-translations/app";
+    const before = (await client.transformRequest(virtualUrl)).code;
+    assert.doesNotMatch(before, /messages\.js\?t=/);
+
+    // The owning build regenerates the messages; the source save then reaches hotUpdate.
+    await writeFile(join(generated, "messages.js"), "export const m = 'two';\n");
+    await writeGeneratedManifest(manifest, JSON.parse(await readFile(manifest, "utf8")));
+    await writeFile(source, "title = Two\n");
+    server.watcher.emit("change", source);
+    let after = "";
+    for (let attempt = 0; attempt < 100 && !/messages\.js\?t=\d+/.test(after); attempt++) {
+      await new Promise(resolveDelay => setTimeout(resolveDelay, 20));
+      after = (await client.transformRequest(virtualUrl))?.code ?? "";
+    }
+    // Without the timestamp the browser keeps its cached module for the unchanged URL.
+    assert.match(after, /messages\.js\?t=\d+/);
+  } finally {
+    await server?.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 // A fake `runic-translations` that implements serve mode. It logs every process start and request
