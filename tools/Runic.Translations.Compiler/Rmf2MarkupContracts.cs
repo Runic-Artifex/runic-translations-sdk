@@ -24,6 +24,23 @@ internal sealed class Rmf2MarkupRegistry
                 "inline", name is "br" or "icon" ? "none" : "inline"));
             Aliases.Add(name, "runic:" + name);
         }
+        // The document profile v1 vocabulary (specs/translations/rmf2-document-profile-v1.md) is
+        // always on. Every option is literal-only and structural.
+        var none = new Dictionary<string, Option>(StringComparer.Ordinal);
+        AddBlock("p", "block", "inline", none);
+        AddBlock("h", "block", "inline", new(StringComparer.Ordinal) { ["level"] = new("integer", Array.Empty<string>(), null, true, 1, 6) });
+        AddBlock("ul", "block", "list-items", none);
+        AddBlock("ol", "block", "list-items", new(StringComparer.Ordinal)
+        {
+            ["start"] = new("integer", Array.Empty<string>(), "1", true, 1, int.MaxValue),
+            ["marker"] = new("enum", ["decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"], "decimal", true),
+        });
+        AddBlock("li", "list-item", "inline", none);
+        void AddBlock(string name, string placement, string children, Dictionary<string, Option> options)
+        {
+            Contracts.Add("runic:" + name, new Contract("runic:" + name, false, false, "children", new Dictionary<string, Option>(options, StringComparer.Ordinal), placement, children));
+            Aliases.Add(name, "runic:" + name);
+        }
     }
     internal static Rmf2MarkupRegistry Read(JsonProperty? property, TranslationSource source, DiagnosticBag diagnostics)
     {

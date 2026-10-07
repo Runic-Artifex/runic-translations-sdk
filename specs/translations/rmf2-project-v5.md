@@ -59,11 +59,13 @@ the already-validated resource.
 
 `CallerFingerprint` is SHA-256 over a deterministic, versioned caller contract:
 
-- caller contract version 1, execution profile, grammar 5, runtime ABI 2, and
+- caller contract version 1, execution profile, grammar 5, runtime ABI 3, and
   generated-name mapping version 1;
 - catalog identity, sorted canonical keys, their logical path segments, and
   sorted NFC caller names/types;
-- canonical slot kinds/cardinalities and app-facing structured/markup contracts.
+- canonical slot kinds/cardinalities, app-facing structured/markup contracts and
+  each message's content kind (`inline` or `document`, see the
+  [document profile](rmf2-document-profile-v1.md)).
 
 It excludes translated text, locals, formatter choices, annotations, selector
 trees, descriptions, source organization, and content-locale/fallback mappings.

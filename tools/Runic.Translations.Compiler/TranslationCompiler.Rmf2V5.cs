@@ -127,6 +127,16 @@ public static partial class TranslationCompiler
             }
         }
 
+        // The document profile: the base locale (or the first locale of an extra key) infers
+        // the content kind; every other locale is checked against it and normalized.
+        var profiles = new Dictionary<Rmf2ProjectEntryV5, Rmf2DocumentAnalysisV5>(ReferenceEqualityComparer.Instance);
+        var kinds = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in canonical.ToArray()) canonical[pair.Key] = Profile(pair.Value, null, entries[manifest.DefaultLocale]);
+        foreach (var pair in extras.ToArray()) extras[pair.Key] = Profile(pair.Value, null, entries[pair.Value.Source.Locale]);
+        foreach (var locale in entries.Values)
+            foreach (var pair in locale.ToArray())
+                if (!profiles.ContainsKey(pair.Value)) Profile(pair.Value, kinds[pair.Key], locale);
+
         var contracts = new List<Rmf2MessageContractV5>();
         foreach (var pair in canonical)
         {
@@ -138,13 +148,14 @@ public static partial class TranslationCompiler
                 {
                     ValidateCallerContract(pair.Value, translated);
                     Rmf2ProjectMarkupV5.ValidateSlots(pair.Key, requirements, translated.Linked, translated.Source.Node.NameLocation, diagnostics);
+                    if (!ReferenceEquals(translated, pair.Value)) ValidateStructure(pair.Value, translated);
                     names.UnionWith(translated.Linked.Names);
                 }
                 else if (locale.Tag != manifest.DefaultLocale)
                     AddPolicyDiagnostic("RTR0010", manifest.Completeness, "Locale '" + locale.Tag + "' lacks direct translation for key '" + pair.Key + "'.", project, locale.Span, diagnostics);
             }
             contracts.Add(new(contracts.Count, pair.Key, Array.AsReadOnly(pair.Value.Source.Path), pair.Value.Linked.Message.Inputs,
-                requirements, names.Count != 0, names.ToArray()));
+                requirements, names.Count != 0, names.ToArray(), profiles[pair.Value].Kind, profiles[pair.Value].Skeletons));
             // The readable C# surface leaves out a message with a reserved or clashing name;
             // its encoded member stays. Reported by every host because `code` is required.
             if (Rmf2ReadableNamesV1.SupportsClassName(manifest.ClassName) &&
@@ -162,10 +173,11 @@ public static partial class TranslationCompiler
             {
                 ValidateCallerContract(pair.Value, entry);
                 Rmf2ProjectMarkupV5.ValidateSlots(pair.Key, requirements, entry.Linked, entry.Source.Node.NameLocation, diagnostics);
+                if (!ReferenceEquals(entry, pair.Value)) ValidateStructure(pair.Value, entry);
                 names.UnionWith(entry.Linked.Names);
             }
             extraContracts.Add(new(-1, pair.Key, Array.AsReadOnly(pair.Value.Source.Path), pair.Value.Linked.Message.Inputs,
-                requirements, names.Count != 0, names.ToArray()));
+                requirements, names.Count != 0, names.ToArray(), profiles[pair.Value].Kind, profiles[pair.Value].Skeletons));
         }
         if (markup.SlotConstraints is { } constraints)
         {
@@ -239,6 +251,40 @@ public static partial class TranslationCompiler
             if (result.Message.Variants.Any(variant => variant.Nodes.Count == 0))
                 AddPolicyDiagnostic("RTR0021", manifest.EmptyValues, "Resource '" + source.Key + "' has an empty variant.", source.Source, new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes), diagnostics);
             return new(source, markup.Link(result.Message, source.Node.NameLocation, diagnostics));
+        }
+        Rmf2ProjectEntryV5 Profile(Rmf2ProjectEntryV5 entry, string? expectedKind, SortedDictionary<string, Rmf2ProjectEntryV5> locale)
+        {
+            var analysis = Rmf2DocumentProfileV5.Analyze(entry.Source.Key, entry.Linked.Message, expectedKind, markup.Contracts, entry.Source.Node.NameLocation, diagnostics);
+            var updated = entry with { Linked = entry.Linked with { Message = analysis.Message } };
+            profiles[updated] = analysis;
+            kinds.TryAdd(entry.Source.Key, analysis.Kind);
+            if (locale.TryGetValue(entry.Source.Key, out var current) && ReferenceEquals(current, entry)) locale[entry.Source.Key] = updated;
+            return updated;
+        }
+        // Structure is locked (RTR0074): every translated document variant must match one of
+        // the source skeletons. RTR0071 flags a match against a different key tuple's variant.
+        void ValidateStructure(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated)
+        {
+            Rmf2DocumentAnalysisV5 source = profiles[origin], target = profiles[translated];
+            if (source.Kind != Rmf2DocumentProfileV5.Document) return;
+            var sourceSkeletons = source.Variants.Select(variant => variant.Skeleton).OfType<IReadOnlyList<Rmf2SkeletonNodeV5>>().ToArray();
+            for (int index = 0; index < target.Variants.Count; index++)
+            {
+                if (target.Variants[index].Encoded is not { } encoded) continue;
+                if (!source.Variants.Any(variant => variant.Encoded == encoded))
+                {
+                    var difference = Rmf2DocumentProfileV5.FirstDifference(sourceSkeletons, target.Variants[index].Skeleton!);
+                    diagnostics.Add("RTR0074", TranslationDiagnosticSeverity.Error, "Translated structure of '" + origin.Source.Key + "' does not match any source structure (structure is locked); first difference at '" +
+                        difference.Path + "': expected " + difference.Expected + ", found " + difference.Found + ".", translated.Source.Node.NameLocation);
+                    continue;
+                }
+                var keys = target.Message.Variants[index].Keys;
+                int same = Enumerable.Range(0, source.Message.Variants.Count).FirstOrDefault(candidate => SameKeys(source.Message.Variants[candidate].Keys, keys), -1);
+                if (same >= 0 && source.Variants[same].Encoded is { } expected && expected != encoded)
+                    diagnostics.Add("RTR0071", TranslationDiagnosticSeverity.Warning, "A translated variant of '" + origin.Source.Key + "' matches the structure of a different source variant, not the one with the same keys; it may have been copied from the wrong variant.", translated.Source.Node.NameLocation);
+            }
+            static bool SameKeys(IReadOnlyList<Rmf2KeyV5> left, IReadOnlyList<Rmf2KeyV5> right) =>
+                left.Count == right.Count && left.Zip(right).All(pair => pair.First.Kind == pair.Second.Kind && (pair.First.Canonical ?? pair.First.Value) == (pair.Second.Canonical ?? pair.Second.Value));
         }
         void ValidateCallerContract(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated)
         {

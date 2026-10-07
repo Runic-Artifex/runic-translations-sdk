@@ -203,6 +203,33 @@ The [payment fixture](../../../specs/translations/examples/rmf2/README.md)
 contains two locales, conditional retry, two links, an icon, a dynamic custom badge,
 a feature directory and an executable DOM example.
 
+## Document messages
+
+A message whose top level is made of blocks is a *document*. The block
+vocabulary is built in: `p` (paragraph), `h level=1..6` (heading), `ul` and
+`ol` (flat lists; `ol` takes `start` and `marker`), and `li` (list item). `p`,
+`h` and `li` contain ordinary inline content.
+
+```rmf2
+help =
+  {#h level=1}Getting started{/h}
+  {#p}Open the {#strong}Settings{/strong} page.{/p}
+  {#ol}{#li}Choose a language.{/li}{#li}Restart the app.{/li}{/ol}
+```
+
+The base locale decides whether a message is inline or a document, and every
+translation must keep that kind (`RTR0070`). Translators change text and inline
+markup, but the block structure (which blocks, in which order, with which
+options) must match a source variant (`RTR0074`). Inside a block, line breaks in
+the source become one space, except next to `br`, U+200B, or between CJK wide
+characters; leading and trailing whitespace is removed. Inline messages keep
+their whitespace exactly.
+
+The `p`, `h`, `ul`, `ol` and `li` names cannot be used as project aliases.
+Nested lists, tables, quotes and custom block elements are not part of this
+version. The normative rules are in the
+[document profile](../../../specs/translations/rmf2-document-profile-v1.md).
+
 ## CLI, editor, and language service
 
 New projects use RMF2. Create one with `runic-translations init`, then validate,

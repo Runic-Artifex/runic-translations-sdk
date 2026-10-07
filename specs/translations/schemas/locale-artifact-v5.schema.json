@@ -79,13 +79,16 @@
               },
               "placement": {
                 "enum": [
-                  "inline"
+                  "inline",
+                  "block",
+                  "list-item"
                 ]
               },
               "children": {
                 "enum": [
                   "inline",
-                  "none"
+                  "none",
+                  "list-items"
                 ]
               },
               "interactive": {
@@ -204,12 +207,28 @@
                 "additionalProperties": {
                   "type": "string"
                 }
+              },
+              "content": {
+                "enum": [
+                  "inline",
+                  "document"
+                ]
+              },
+              "skeletons": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "uniqueItems": true
               }
             },
             "required": [
               "slots",
               "structured",
-              "contentLocales"
+              "contentLocales",
+              "content",
+              "skeletons"
             ],
             "additionalProperties": false
           }

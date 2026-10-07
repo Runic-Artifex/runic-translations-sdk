@@ -64,7 +64,11 @@ public sealed class Rmf2ProjectCompilationV5
 internal sealed record Rmf2SlotV5(string Kind, int Min, int Max);
 internal sealed record Rmf2MessageContractV5(int Id, string Key, IReadOnlyList<string> Path,
     IReadOnlyList<Rmf2InputV5> Inputs, IReadOnlyDictionary<string, Rmf2SlotV5> Slots,
-    bool Structured, IReadOnlyList<string> MarkupNames);
+    bool Structured, IReadOnlyList<string> MarkupNames, string Content = Rmf2DocumentProfileV5.Inline, IReadOnlyList<string>? DocumentSkeletons = null)
+{
+    // Distinct base-locale skeletons in ordinal order; empty for inline messages.
+    internal IReadOnlyList<string> Skeletons => DocumentSkeletons ?? Array.Empty<string>();
+}
 internal sealed record Rmf2TranslationV5(string Key, string ContentLocale, Rmf2MessageV5 Message,
     TextSourceLocation SourceLocation, string? Description);
 internal sealed record Rmf2LocaleV5(string Tag, string? FallbackTag,

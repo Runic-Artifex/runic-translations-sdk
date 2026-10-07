@@ -41,8 +41,14 @@ packs built with 0.6.0-preview.3 or earlier use ABI 2 and must be rebuilt.
   (`TranslationPackFailureReason.MarkupContractVersionMismatch`).
 - `runic.json` needs no change. Custom contracts may add
   `"placement": "inline"` and integer options; `markup.structure` is reserved.
-  Projects that registered an alias named `p`, `h`, `ul`, `ol` or `li` must
-  rename it when the document profile lands.
+- `p`, `h`, `ul`, `ol` and `li` are now built-in aliases for the
+  [document profile](../../../specs/translations/rmf2-document-profile-v1.md).
+  A project alias with one of these names no longer shadows them and reports
+  `RTR0060`; rename it. Messages that use none of these elements stay inline
+  and format as before, but every message contract gains `content` and
+  `skeletons` members. The caller fingerprint, the generated `CatalogData` and
+  `Registration`, `runtime.js`, `transport.js` and every locale artifact
+  therefore change, so the rebuild above also covers projects without documents.
 
 The ledger is reviewed when a release changes the generated contract or package
 baseline. It is not a telemetry promise and does not add a separate release gate;
