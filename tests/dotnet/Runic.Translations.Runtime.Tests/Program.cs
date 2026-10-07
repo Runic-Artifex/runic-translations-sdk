@@ -12,6 +12,7 @@ internal static class Program
         CompiledMessageTests.Register(runner);
         PluralRuleTests.Register(runner);
         Rmf2RuntimeV5Tests.Register(runner);
+        TypedSlotBindingsTests.Register(runner);
         TranslationReferenceTests.Register(runner);
         return await runner.RunAsync().ConfigureAwait(false);
     }

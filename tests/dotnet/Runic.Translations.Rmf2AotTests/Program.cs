@@ -32,7 +32,11 @@ internal static class Program
             InlineMarkupRun strong = runs.Single(run => run.Name == "runic:strong");
             Require(!strong.Options.ContainsKey("@note"), "annotation visibility");
             Require(renderer.ToPlainText("greeting", content) == "Keep\nExtern", "policy projection");
-            Console.WriteLine("PASS Native-AOT RMF2 artifact-v5 structured renderer/annotation/plain-text smoke");
+            BoundLocalizedTextContent bound = new LocalizedTextContent<GreetingSlots>(content).Bind(new GreetingSlots());
+            Require(bound.Key == "greeting" && bound.Slots.Count == 0, "typed slot static key dispatch");
+            Require(renderer.Render(bound).Count == runs.Count, "typed bound render");
+            Require(renderer.ToPlainText(bound) == "Keep\nExtern", "typed bound projection");
+            Console.WriteLine("PASS Native-AOT RMF2 artifact-v5 structured renderer/annotation/plain-text/typed-slot smoke");
             return 0;
         }
         catch (Exception exception)
@@ -53,4 +57,11 @@ internal static class Program
     {
         if (!condition) throw new InvalidOperationException("Native-AOT RMF2 smoke failed at " + operation + ".");
     }
+}
+
+/// <summary>Mirrors the generated slot type shape for a structured message without slots.</summary>
+internal sealed class GreetingSlots : IRmf2SlotBindings<GreetingSlots>
+{
+    static string IRmf2SlotBindings<GreetingSlots>.MessageKey => "greeting";
+    void IRmf2SlotBindings<GreetingSlots>.CopyTo(IDictionary<string, MarkupBinding> destination) { }
 }

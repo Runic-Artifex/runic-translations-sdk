@@ -62,12 +62,39 @@ internal static class Program
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Action did not fire once.");
         renderer.SetContent(target, "payment", content, slots);
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Detached action remained active.");
+        // Typed bound content: same tree as the dictionary overload, build-before-replace and callback teardown.
+        var typed = new LocalizedTextContent<PaymentSlots>(content);
+        BoundLocalizedTextContent bound = typed.Bind(new PaymentSlots(
+            privacy: (InlineLinkBinding)slots["privacy"], retry: (InlineActionBinding)slots["retry"],
+            star: (InlineIconBinding)slots["star"], terms: (InlineLinkBinding)slots["terms"]));
+        string dictionaryShape = Shape(target);
+        renderer.SetContent(target, bound);
+        Require(Shape(target) == dictionaryShape && target.Language.IetfLanguageTag == "en", "Typed bound content rendered a different WPF tree.");
+        var boundButton = target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Button>().Single();
+        BoundLocalizedTextContent rejected = typed.Bind(new PaymentSlots((InlineLinkBinding)slots["privacy"], (InlineActionBinding)slots["retry"],
+            new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock()), false, _ => " "), (InlineLinkBinding)slots["terms"]));
+        bool rejectedBound = false;
+        try { renderer.SetContent(target, rejected); }
+        catch (TranslationFormatException) { rejectedBound = true; }
+        Require(rejectedBound && ReferenceEquals(boundButton, target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Button>().Single()),
+            "A rejected typed render replaced the active content.");
+        renderer.SetContent(target, bound);
+        boundButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Detached typed action remained active.");
         WpfInlineRenderer.ClearContent(target); Require(target.Inlines.Count == 0, "Clear did not dispose content.");
         Console.WriteLine("PASS WPF payment consumer, custom badge, icon accessibility and callback lifetime.");
         return 0;
     }
 
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
+
+    private static string Shape(TextBlock target) => string.Join("|", target.Inlines.Select(Shape));
+    private static string Shape(Inline inline) => inline switch
+    {
+        Run run => "Run:" + run.Text,
+        Span span => span.GetType().Name + "(" + string.Join(",", span.Inlines.Select(Shape)) + ")",
+        InlineUIContainer container => "UI:" + container.Child?.GetType().Name,
+        _ => inline.GetType().Name,
+    };
 }
 
 internal static class PaymentFixture
@@ -164,4 +191,23 @@ internal static class PaymentFixture
         kind == "close"
             ? new CompiledRmf2Node(name, kind)
             : new CompiledRmf2Node(name, kind, [new("ref", new("string-literal", slot))]);
+}
+
+/// <summary>Mirrors the generated slot type shape for the payment message.</summary>
+internal sealed class PaymentSlots : IRmf2SlotBindings<PaymentSlots>
+{
+    public PaymentSlots(InlineLinkBinding privacy, InlineActionBinding retry, InlineIconBinding star, InlineLinkBinding terms)
+    {
+        Privacy = privacy ?? throw new ArgumentNullException(nameof(privacy));
+        Retry = retry ?? throw new ArgumentNullException(nameof(retry));
+        Star = star ?? throw new ArgumentNullException(nameof(star));
+        Terms = terms ?? throw new ArgumentNullException(nameof(terms));
+    }
+    public InlineLinkBinding Privacy { get; }
+    public InlineActionBinding Retry { get; }
+    public InlineIconBinding Star { get; }
+    public InlineLinkBinding Terms { get; }
+    static string IRmf2SlotBindings<PaymentSlots>.MessageKey => "payment";
+    void IRmf2SlotBindings<PaymentSlots>.CopyTo(IDictionary<string, MarkupBinding> destination)
+    { destination.Add("privacy", Privacy); destination.Add("retry", Retry); destination.Add("star", Star); destination.Add("terms", Terms); }
 }

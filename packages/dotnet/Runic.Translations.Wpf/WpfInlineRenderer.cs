@@ -44,13 +44,24 @@ public sealed class WpfInlineRenderer
     public void SetContent(TextBlock target, string key, LocalizedTextContent content, IReadOnlyDictionary<string, InlineMarkupBinding> slots)
     {
         ArgumentNullException.ThrowIfNull(target); target.Dispatcher.VerifyAccess();
-        var runs = _semantic.Render(key, content, slots);
+        Replace(target, _semantic.Render(key, content, slots), content.Locale);
+    }
+
+    /// <summary>Validates typed bound content and replaces it on the target control’s dispatcher thread.</summary>
+    public void SetContent(TextBlock target, BoundLocalizedTextContent content)
+    {
+        ArgumentNullException.ThrowIfNull(target); target.Dispatcher.VerifyAccess();
+        Replace(target, _semantic.Render(content), content.Content.Locale);
+    }
+
+    private void Replace(TextBlock target, IReadOnlyList<InlineMarkupRun> runs, string locale)
+    {
         // Build first: a binding failure must not partially replace displayed content.
         var lifetime = new RenderLifetime();
-        Inline[] inlines = runs.Select(run => Create(run, content.Locale, lifetime)).ToArray();
+        Inline[] inlines = runs.Select(run => Create(run, locale, lifetime)).ToArray();
         ClearContent(target); Lifetimes.Add(target, lifetime);
         target.Inlines.Clear(); target.Inlines.AddRange(inlines);
-        target.Language = XmlLanguage.GetLanguage(content.Locale);
+        target.Language = XmlLanguage.GetLanguage(locale);
     }
 
     /// <summary>Clears rendered content and deactivates callbacks, including on retained detached controls.</summary>

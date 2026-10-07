@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- https://learn.microsoft.com/dotnet/fundamentals/package-validation/diagnostic-ids -->
+<Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Suppression>
+    <DiagnosticId>CP0012</DiagnosticId>
+    <Target>M:Runic.Translations.InlineMarkupBinding.get_EqualityContract</Target>
+    <Left>lib/net10.0/Runic.Translations.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0012</DiagnosticId>
+    <Target>M:Runic.Translations.InlineMarkupBinding.PrintMembers(System.Text.StringBuilder)</Target>
+    <Left>lib/net10.0/Runic.Translations.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0012</DiagnosticId>
+    <Target>P:Runic.Translations.InlineMarkupBinding.EqualityContract</Target>
+    <Left>lib/net10.0/Runic.Translations.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+</Suppressions>
