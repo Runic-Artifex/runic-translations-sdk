@@ -38,12 +38,13 @@ export async function verifySvelteKitQuickStart({ directory, npmArchives, nugetC
 
   const port = await freePort();
   const server = spawn("node", ["build"], { cwd: app, env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" }, stdio: ["ignore", "pipe", "pipe"] });
-  let output = "";
+  let output = "", errors = "";
   server.stdout.on("data", chunk => { output += chunk; });
-  server.stderr.on("data", chunk => { output += chunk; });
+  server.stderr.on("data", chunk => { output += chunk; errors += chunk; });
+  const exited = new Promise(resolveExit => server.once("exit", resolveExit));
   try {
     const origin = `http://127.0.0.1:${port}`;
-    await waitFor(async () => (await fetch(`${origin}/about`)).ok, () => output);
+    await waitFor(async () => (await fetch(`${origin}/about`)).ok, () => output, () => server.exitCode !== null);
     const page = async path => {
       const response = await fetch(`${origin}${path}`, { redirect: "manual" });
       return { status: response.status, location: response.headers.get("location"), body: await response.text() };
@@ -63,9 +64,12 @@ export async function verifySvelteKitQuickStart({ directory, npmArchives, nugetC
     results.forEach((result, index) => index % 2
       ? assertPage(result.body, "de", "Willkommen bei Runic", `concurrent ${paths[index]} #${index}`)
       : assertPage(result.body, "en", "Welcome to Runic", `concurrent ${paths[index]} #${index}`));
-    assert.doesNotMatch(output, /error/i, `The production server logged an error:\n${output}`);
+    // SvelteKit logs a failed request with its stack trace on stderr.
+    assert.doesNotMatch(errors, /^\s+at /m, `The production server logged an error:\n${errors}`);
   } finally {
-    server.kill();
+    // The caller deletes the app directory; let the server release it first.
+    if (server.exitCode === null && server.signalCode === null) server.kill();
+    await exited;
   }
   console.log("SvelteKit quick start passed: prerendering, SSR in both locales, redirects and request isolation.");
 }
@@ -86,8 +90,8 @@ function freePort() {
   });
 }
 
-async function waitFor(ready, log) {
-  for (let attempt = 0; attempt < 150; attempt++) {
+async function waitFor(ready, log, stopped) {
+  for (let attempt = 0; attempt < 150 && !stopped(); attempt++) {
     try { if (await ready()) return; } catch { /* not listening yet */ }
     await new Promise(resolveDelay => setTimeout(resolveDelay, 100));
   }

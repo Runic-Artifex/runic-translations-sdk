@@ -334,9 +334,10 @@ npm run dev
 
 Open `/`, `/de`, and `/de/about`, then use the buttons to switch languages.
 Saving an `.rmf2` file recompiles it while the dev server keeps running, and
-text rendered by components updates in place through Vite HMR. Text computed in a
-server `load` function, like the `/about` title, follows SvelteKit's rule for
-server modules: reload the page to run the load again.
+text rendered by components updates in place through Vite HMR. HMR does not re-run
+`load` functions, so text computed in one, like the `/about` title, keeps its
+old value until a reload or a client-side navigation to the page runs the load
+again.
 
 ```bash
 npm run build
