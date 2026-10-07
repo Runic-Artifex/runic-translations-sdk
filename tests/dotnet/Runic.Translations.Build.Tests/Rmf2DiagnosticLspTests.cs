@@ -75,12 +75,15 @@ internal static class Rmf2DiagnosticLspTests
     }
     private static JsonObject Position(int line, int character) => new() { ["line"] = line, ["character"] = character };
 
-    private sealed class Session : IDisposable
+    internal sealed class Session : IDisposable
     {
         private readonly Process _process;
         private readonly Task<string> _errors;
         private int _nextId;
+        private bool _disposed;
         internal List<JsonNode> Publications { get; } = new();
+        /// <summary>Server stderr; complete only after <see cref="Dispose"/>.</summary>
+        internal string StandardError => _errors.IsCompletedSuccessfully ? _errors.Result : "";
         internal Session(string directory)
         {
             var start = new ProcessStartInfo("dotnet") { WorkingDirectory = directory, RedirectStandardInput = true,
@@ -126,6 +129,9 @@ internal static class Rmf2DiagnosticLspTests
         }
         public void Dispose()
         {
+            // Tests may dispose explicitly to inspect stderr before `using` ends.
+            if (_disposed) return;
+            _disposed = true;
             try
             {
                 Request("shutdown", new JsonObject()); Notify("exit", new JsonObject()); _process.StandardInput.Close();
