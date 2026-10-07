@@ -26,10 +26,11 @@ All current writers use the single `rmf2-execution-v2` contract: resource syntax
 `.rmf2` authoring feed this same contract; direct `.mf2` is an active supported
 representation, not a compatibility format.
 
-## Migration: markup contract v2 (0.6.0-preview.3)
+## Migration: markup contract v2 (0.6.0-preview.4)
 
 RMF2 runtime ABI 3 replaces ABI 2 and the exported markup contract moves from
-version 1 to version 2. No reader for markup contract v1 is retained.
+version 1 to version 2. No reader for markup contract v1 is retained. Output and
+packs built with 0.6.0-preview.3 or earlier use ABI 2 and must be rebuilt.
 
 - Rebuild generated C# and ESM output with the matching compiler. Generated code
   from an earlier release fails its `EnsureRmf2RuntimeAbi` check, and the Vite
@@ -40,8 +41,8 @@ version 1 to version 2. No reader for markup contract v1 is retained.
   (`TranslationPackFailureReason.MarkupContractVersionMismatch`).
 - `runic.json` needs no change. Custom contracts may add
   `"placement": "inline"` and integer options; `markup.structure` is reserved.
-  Projects that registered an alias or contract named `p`, `h`, `ul`, `ol` or
-  `li` must rename it when the document profile lands.
+  Projects that registered an alias named `p`, `h`, `ul`, `ol` or `li` must
+  rename it when the document profile lands.
 
 The ledger is reviewed when a release changes the generated contract or package
 baseline. It is not a telemetry promise and does not add a separate release gate;

@@ -26,7 +26,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     private const string KindMetadata = "build_metadata.AdditionalFiles.RunicTranslationKind";
     private const string ProjectDirectoryProperty = "build_property.ProjectDir";
     private const string RuntimeAssemblyName = "Runic.Translations";
-    private const int RequiredRmf2Version = 3;
+    private const int RequiredRmf2Version = Rmf2ProjectV5.RuntimeAbiVersion;
     private const string CompatibilityNamespace = "Runic.Translations";
     private const string CompatibilityType = "TranslationsCompatibility";
     private static readonly TranslationCompilerOptions CompilerOptions = new();
