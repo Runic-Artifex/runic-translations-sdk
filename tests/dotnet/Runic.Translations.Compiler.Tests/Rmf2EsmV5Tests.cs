@@ -105,7 +105,19 @@ internal static class Rmf2EsmV5Tests
                 const bill: LocalizedContent = typedBill;
                 // @ts-expect-error invoice is a required link slot.
                 import("./billing.esm-v5/runtime.js").then(({toPlainText}) => toPlainText(typedBill, { slots: {} }));
-                void total; void bill;
+                import { baseLocale, createLocaleSource, locales, type Locale } from "./billing.esm-v5/runtime.js";
+                import { getRequestLocale } from "./billing.esm-v5/server.js";
+                interface TypedSource<L extends string> { getLocale(): L; setLocale(locale: L): void; subscribe(listener: (locale: L) => void): () => void; }
+                const source: TypedSource<"de" | "en"> = createLocaleSource({ initialLocale: "de-AT" });
+                const exact: readonly ("de" | "en")[] = locales;
+                const catalogLocales: readonly Locale[] = ["de", "en"];
+                const requestLocale: "de" | "en" = getRequestLocale();
+                const base: Locale = baseLocale;
+                // @ts-expect-error fr is not a locale of the catalog.
+                source.setLocale("fr");
+                // @ts-expect-error fr is not a locale of the catalog.
+                const unknown: Locale = "fr";
+                void total; void bill; void exact; void catalogLocales; void requestLocale; void base; void unknown;
                 """, new UTF8Encoding(false));
             Run("bun", [RepositoryPaths.Resolve("node_modules", "typescript", "bin", "tsc"), "--strict", "--noEmit", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--lib", "ES2022,DOM", "--skipLibCheck", typecheck], directory);
         }

@@ -15,6 +15,7 @@ public static class TranslationsCompatibility
     /// <summary>
     /// The additive typed slot binding surface (<see cref="IRmf2SlotBindings{TSelf}"/>, <see cref="LocalizedTextContent{TSlots}"/>).
     /// The source generator emits the readable C# surface only when the referenced runtime declares this constant.
+    /// The value only grows additively: a newer runtime keeps supporting v1-shaped generated code.
     /// </summary>
     public const int TypedSlotBindingsVersion = 1;
 

@@ -1,0 +1,4 @@
+home {
+  title = Willkommen bei Runic
+  greeting = Hallo, {$name}!
+}

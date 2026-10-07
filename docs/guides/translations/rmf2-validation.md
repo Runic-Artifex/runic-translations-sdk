@@ -123,9 +123,8 @@ Results:
   loose-file mode sends either no workspace root or one that does not contain
   the journey's `%TEMP%` fixture, so the preview compiles the file from disk.
   This regressed in `1e6bd46` (2026-09-21, "index RMF2 project ownership").
-  The 2026-09-11 run that passed predates that commit. The server fix and a
-  native rerun are still needed before native interaction evidence for Visual
-  Studio 2026 is complete.
+  The 2026-09-11 run that passed predates that commit. The server fix and the
+  passing rerun are recorded in the next section.
 - During the buffer replacement, Visual Studio's LSP client also logged a
   non-fatal `ArgumentException` in `StructureTagger.GetTags`, raised by
   `NormalizedSnapshotSpanCollection.IntersectsWith`.
@@ -136,6 +135,33 @@ that no `RunicLanguageClient` export was found. Running
 `devenv /RootSuffix RunicRmf2 /updateconfiguration` in that disposable profile
 fixed it. Note also that `devenv /Log <path>` takes the next argument as the
 log file, so pass a document before `/Log`.
+
+### Visual Studio 2026 journey after the server fix (2026-10-07)
+
+After the language-server fix for loose-file buffers (#17, `9ec00fc4`), the
+journey was run again on the same snapshot-restored VM: Windows 11 Pro build
+26200 with Visual Studio Community 2026 18.8.2. The setup was:
+
+- the VSIX from main CI run 37659155459 (`59ea1a4`): version `0.6.0.2`,
+  `[18.0,19.0)`, SHA-256
+  `6e13294c1a128f2bd178992ae7d83e64481abc16885b747611d5b0bd9dd266bc`;
+- the language server built on the VM from the same commit with .NET SDK
+  10.0.401;
+- `RUNIC_TRANSLATIONS_SERVER`, plus `/RootSuffix RunicRmf2`, after
+  `/updateconfiguration`.
+
+The unmodified `native-host.ps1` ran once and exited with 0. Its receipt lists
+all seven checks:
+
+- selected semantic project;
+- registered preview command;
+- native inert rich content;
+- invalid-number recovery;
+- locale selection;
+- registered restart command, which replaced server process 5980 with 13432;
+- unsaved buffer after restart.
+
+This completes the native interaction evidence for Visual Studio 2026.
 
 ## Representative measurements
 

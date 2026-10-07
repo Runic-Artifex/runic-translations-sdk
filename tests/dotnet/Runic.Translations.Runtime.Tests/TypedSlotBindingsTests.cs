@@ -38,6 +38,7 @@ internal static class TypedSlotBindingsTests
         runner.Add("typed slots wrapper forwards content and converts implicitly", WrapperShape);
         runner.Add("typed slots hand-wrapped content is validated against the slot contract", HandWrapped);
         runner.Add("typed slots keep every runtime binding rule", RuntimeRules);
+        runner.Add("typed slots bound values are a snapshot of CopyTo", BoundIsSnapshot);
     }
 
     internal static LocalizedTextContent Content(bool includeRetry = true, bool includeStar = true, string guide = "guide") =>
@@ -73,6 +74,14 @@ internal static class TypedSlotBindingsTests
         Assert.Throws<TranslationFormatException>(() => renderer.ToPlainText(bound), "explicit label-only");
         Assert.Throws<ArgumentNullException>(() => renderer.Render(null!));
         Assert.Throws<ArgumentNullException>(() => renderer.ToPlainText((BoundLocalizedTextContent)null!));
+    }
+
+    private static void BoundIsSnapshot()
+    {
+        var slots = new RetainingSlots();
+        BoundLocalizedTextContent bound = new LocalizedTextContent<RetainingSlots>(Content()).Bind(slots);
+        slots.Retained!.Add("guide", new InlineLinkBinding(new Uri("https://example.test/later")));
+        Assert.Equal(0, bound.Slots.Count);
     }
 
     private static void BindShape()
@@ -196,4 +205,12 @@ internal sealed class EmbedLikeSlots(HelpSlots inner) : IRmf2SlotBindings<EmbedL
     static string IRmf2SlotBindings<EmbedLikeSlots>.MessageKey => "help";
     void IRmf2SlotBindings<EmbedLikeSlots>.CopyTo(IDictionary<string, MarkupBinding> destination)
     { destination.Add("guide", new EmbedLikeBinding("figure.png")); destination.Add("retry", inner.retry); destination.Add("star", inner.star); }
+}
+
+/// <summary>Hand-written slot type that keeps the CopyTo destination and mutates it later.</summary>
+internal sealed class RetainingSlots : IRmf2SlotBindings<RetainingSlots>
+{
+    public IDictionary<string, MarkupBinding>? Retained { get; private set; }
+    public static string MessageKey => "help";
+    public void CopyTo(IDictionary<string, MarkupBinding> destination) => Retained = destination;
 }

@@ -16,16 +16,21 @@ internal static class GeneratorTestHost
 
     // Consumer compilations treat every warning (at the SDK's current warning wave) as an error.
     internal static GeneratorRun RunWithConsumer(string source, params TestInput[] inputs) =>
-        Run(new TranslationsGenerator(), RuntimeReferenceMode.Matching, source, inputs);
+        Run(new TranslationsGenerator(), RuntimeReferenceMode.Matching, source, ImmutableDictionary<string, ReportDiagnostic>.Empty, inputs);
 
     internal static GeneratorRun RunWithConsumer(RuntimeReferenceMode runtimeReferenceMode, string source, params TestInput[] inputs) =>
-        Run(new TranslationsGenerator(), runtimeReferenceMode, source, inputs);
+        Run(new TranslationsGenerator(), runtimeReferenceMode, source, ImmutableDictionary<string, ReportDiagnostic>.Empty, inputs);
 
     internal static GeneratorRun Run(RuntimeReferenceMode runtimeReferenceMode, params TestInput[] inputs)
-        => Run(new TranslationsGenerator(), runtimeReferenceMode, null, inputs);
+        => Run(new TranslationsGenerator(), runtimeReferenceMode, null, ImmutableDictionary<string, ReportDiagnostic>.Empty, inputs);
+
+    // Global options (for example from a .globalconfig or NoWarn/WarningsNotAsErrors) reach the compilation as SpecificDiagnosticOptions.
+    internal static GeneratorRun RunWithConsumerOptions(RuntimeReferenceMode runtimeReferenceMode, string source,
+        ImmutableDictionary<string, ReportDiagnostic> specificDiagnosticOptions, params TestInput[] inputs) =>
+        Run(new TranslationsGenerator(), runtimeReferenceMode, source, specificDiagnosticOptions, inputs);
 
     private static GeneratorRun Run(TranslationsGenerator generator, RuntimeReferenceMode runtimeReferenceMode,
-        string? consumerSource, params TestInput[] inputs)
+        string? consumerSource, ImmutableDictionary<string, ReportDiagnostic> specificDiagnosticOptions, params TestInput[] inputs)
     {
         var additionalTexts = inputs.Select(static input => (AdditionalText)new MemoryAdditionalText(input.Path, input.Text)).ToImmutableArray();
         var optionsProvider = new TestOptionsProvider(inputs);
@@ -36,7 +41,8 @@ internal static class GeneratorTestHost
             References(runtimeReferenceMode),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable,
                 generalDiagnosticOption: consumerSource is null ? ReportDiagnostic.Default : ReportDiagnostic.Error,
-                warningLevel: consumerSource is null ? 4 : 9999));
+                warningLevel: consumerSource is null ? 4 : 9999,
+                specificDiagnosticOptions: specificDiagnosticOptions));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             generators: new[] { generator.AsSourceGenerator() },

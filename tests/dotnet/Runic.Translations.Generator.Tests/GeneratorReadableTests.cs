@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using System;
 using System.IO;
 using System.Linq;
@@ -91,6 +93,7 @@ internal static class GeneratorReadableTests
             public string @application_title => this.__text.r_6170706c69636174696f6e_r_7469746c65;
 
             /// <summary>Formats <c>cart.items</c>.</summary>
+            /// <param name="count">Input <c>count</c>.</param>
             public string @cart_items(long @count) =>
                 this.__text.r_63617274_r_6974656d73(r_636f756e74: @count);
 
@@ -98,10 +101,12 @@ internal static class GeneratorReadableTests
             public global::Runic.Translations.LocalizedTextContent<global::@Example.@Translations.@AppTextSlots.@checkout_help> @checkout_help => new(this.__text.r_636865636b6f7574_r_68656c70);
 
             /// <summary>Formats <c>greeting</c>.</summary>
+            /// <param name="name">Input <c>name</c>.</param>
             public string @greeting(string @name) =>
                 this.__text.r_6772656574696e67(r_6e616d65: @name);
 
             /// <summary>Formats <c>profile.badge</c>.</summary>
+            /// <param name="r_757365722d6e616d65">Input <c>user-name</c>.</param>
             public string @profile_badge(string @r_757365722d6e616d65) =>
                 this.__text.r_70726f66696c65_r_6261646765(r_757365722d6e616d65: @r_757365722d6e616d65);
         }
@@ -113,6 +118,8 @@ internal static class GeneratorReadableTests
             public sealed class @checkout_help : global::Runic.Translations.IRmf2SlotBindings<global::@Example.@Translations.@AppTextSlots.@checkout_help>
             {
                 /// <summary>Binds every slot. Use named arguments: slots of the same kind share a type.</summary>
+                /// <param name="guide">Binding for slot <c>guide</c>.</param>
+                /// <param name="retry">Binding for slot <c>retry</c>.</param>
                 public @checkout_help(global::Runic.Translations.InlineLinkBinding @guide, global::Runic.Translations.InlineActionBinding @retry)
                 {
                     this.@guide = @guide ?? throw new global::System.ArgumentNullException("guide");
@@ -139,6 +146,7 @@ internal static class GeneratorReadableTests
         runner.Add("readable surface compiles identifier edge cases under warnings as errors", IdentifierEdgeCases);
         runner.Add("typed slots reject wrong kinds, missing (including min:0), misspelled and foreign slots at the Bind argument", CompileFailures);
         runner.Add("readable surface needs the runtime capability and reports RTR0068 otherwise", RuntimeCapability);
+        runner.Add("RTR0068 can be suppressed or kept as a warning through SpecificDiagnosticOptions", RuntimeCapabilityOptions);
         runner.Add("readable surface leaves reserved messages encoded-only with RTR0069", ReservedMessages);
         runner.Add("readable surface stays reflection-free and keeps the encoded files", ReflectionFreeAndAdditive);
     }
@@ -337,6 +345,41 @@ internal static class GeneratorReadableTests
             GeneratorRun run = GeneratorTestHost.Run(mode, ProjectInput(), EnglishInput(), GermanInput());
             Assert.Equal(0, run.SingleResult.Diagnostics.Length, mode + ": " + string.Join("\n", run.SingleResult.Diagnostics));
             Assert.True(run.SingleResult.GeneratedSources.Any(static item => item.HintName == "AppText.Readable.g.cs"), mode + ": readable file");
+        }
+    }
+
+    private static void RuntimeCapabilityOptions()
+    {
+        const string consumer = """
+            namespace Example.Consumer;
+            public static class Probe
+            {
+                public static string Run(Example.Translations.AppText text) => text.r_6772656574696e67(r_6e616d65: "Ada");
+            }
+            """;
+        // The documented global options: NoWarn (Suppress) and WarningsNotAsErrors (Warn). Both reach the compilation as
+        // SpecificDiagnosticOptions, which take precedence over TreatWarningsAsErrors.
+        (ReportDiagnostic Option, DiagnosticSeverity? Expected)[] cases =
+        [
+            (ReportDiagnostic.Suppress, null),
+            (ReportDiagnostic.Warn, DiagnosticSeverity.Warning),
+        ];
+        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V2, RuntimeReferenceMode.ProjectReferenceRmf2V2 })
+        foreach ((ReportDiagnostic option, DiagnosticSeverity? expected) in cases)
+        {
+            var options = ImmutableDictionary.CreateRange([KeyValuePair.Create("RTR0068", option)]);
+            GeneratorRun run = GeneratorTestHost.RunWithConsumerOptions(mode, consumer, options, ProjectInput(), EnglishInput(), GermanInput());
+            string label = mode + " " + option;
+            if (expected is null)
+                Assert.Equal(0, run.SingleResult.Diagnostics.Length, label + ": suppressed diagnostic");
+            else
+            {
+                Diagnostic diagnostic = run.SingleResult.Diagnostics.Single();
+                Assert.Equal("RTR0068", diagnostic.Id, label + ": id");
+                Assert.Equal(expected.Value, diagnostic.Severity, label + ": severity");
+            }
+            // The old runtime lacks the encoded types too, so only the RTR0068 severity is asserted here.
+            Assert.Equal(0, run.Compilation.GetDiagnostics().Count(static item => item.Id == "RTR0068" && item.Severity == DiagnosticSeverity.Error), label + ": escalated");
         }
     }
 

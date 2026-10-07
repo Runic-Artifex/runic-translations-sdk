@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { root, run, workspace } from "./run.mjs";
+import { verifySvelteKitQuickStart } from "./verify-sveltekit-quickstart.mjs";
 
 function quoted(value) {
   return value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
@@ -29,6 +30,17 @@ function dotnetConsumer(directory, name, version, options, program, environment)
     ? ["build", "Consumer.csproj", "--configuration", "Release"]
     : ["run", "--project", "Consumer.csproj", "--configuration", "Release"];
   run("dotnet", args, consumer, environment);
+}
+
+// Vite warns on every dev start when a shipped sourcemap names sources the package omits.
+function assertSelfContainedSourceMaps(name, directory) {
+  const files = readdirSync(directory, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile());
+  for (const map of files.filter(entry => entry.name.endsWith(".map"))) {
+    const path = join(map.parentPath, map.name);
+    const { sources = [], sourcesContent = [], sourceRoot = "" } = JSON.parse(readFileSync(path, "utf8"));
+    sources.forEach((source, index) => assert.ok(typeof sourcesContent[index] === "string" || existsSync(resolve(dirname(path), sourceRoot, source)),
+      `${name}/${relative(directory, path)} points to the missing source ${source}`));
+  }
 }
 
 function assertNoSourceReferences(directory) {
@@ -120,6 +132,7 @@ Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
       const manifest = JSON.parse(readFileSync(join(frontend, "node_modules", name, "package.json"), "utf8"));
       for (const dependency of Object.values({ ...manifest.dependencies, ...manifest.peerDependencies }))
         assert.ok(!/^(workspace:|file:|link:)/.test(dependency), `${name} has an unpublished dependency ${dependency}`);
+      assertSelfContainedSourceMaps(name, join(frontend, "node_modules", name));
     }
     writeFileSync(join(frontend, "consumer.mjs"), `
 import assert from "node:assert/strict";
@@ -175,6 +188,8 @@ export default defineConfig({ plugins: [runicTranslations({
     run("dotnet", ["tool", "run", "runic-translations", "--", "verify", ...compilerArguments], frontend, environment);
     run("bun", ["run", "build"], frontend, environment);
     run("dotnet", ["tool", "run", "runic-translations", "--", "verify", ...compilerArguments], frontend, environment);
+
+    await verifySvelteKitQuickStart({ directory, npmArchives, nugetConfig: join(directory, "NuGet.config"), version, environment });
     console.log("All six NuGet and three npm package consumers passed.");
   } finally {
     rmSync(directory, { recursive: true, force: true });

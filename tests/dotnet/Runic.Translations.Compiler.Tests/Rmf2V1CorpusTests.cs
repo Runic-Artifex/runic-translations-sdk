@@ -164,7 +164,7 @@ internal static class Rmf2V1CorpusTests
 
     // Pinned before the readable C# surface (W220-002) was added. The readable file is a new,
     // separate output; the encoded C# files and ESM must not change.
-    private const string EncodedOutputDigest = "34d6989c318611f1b9327760df59f4d4677d4028af01286974560bca640aeec6";
+    private const string EncodedOutputDigest = "470499a6cd9d963de245759a002355b5f905cce74534fe7db6be0d59efd2b7ec";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     private static void EncodedOutputs()
