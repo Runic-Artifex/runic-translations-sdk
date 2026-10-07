@@ -195,7 +195,10 @@ internal static class Rmf2CSharpOutputRendererV5
             {
                 var parameters = new List<string>(contract.Inputs.Count);
                 for (int index = 0; index < contract.Inputs.Count; index++)
+                {
                     parameters.Add(ParameterType(contract.Inputs[index].Type) + " " + Verbatim(message.Inputs[index].Identifier));
+                    writer.Line("/// <param name=\"" + message.Inputs[index].Identifier + "\">Input <c>" + GenerationSupport.XmlDocumentation(contract.Inputs[index].Name) + "</c>.</param>");
+                }
                 writer.Line("public " + result + " " + Verbatim(message.Member) + "(" + string.Join(", ", parameters) + ") =>"); writer.Indent();
                 writer.Line(body + ";"); writer.Unindent();
             }
@@ -219,6 +222,8 @@ internal static class Rmf2CSharpOutputRendererV5
             {
                 var parameters = message.Slots.Select(slot => SlotType(message.Contract.Slots[slot.Source].Kind) + " " + Verbatim(slot.Identifier));
                 writer.Line("/// <summary>Binds every slot. Use named arguments: slots of the same kind share a type.</summary>");
+                foreach (Rmf2ReadableNameV1 slot in message.Slots)
+                    writer.Line("/// <param name=\"" + slot.Identifier + "\">Binding for slot <c>" + GenerationSupport.XmlDocumentation(slot.Source) + "</c>.</param>");
                 writer.Line("public " + type + "(" + string.Join(", ", parameters) + ")");
                 writer.Line("{"); writer.Indent();
                 foreach (Rmf2ReadableNameV1 slot in message.Slots)
