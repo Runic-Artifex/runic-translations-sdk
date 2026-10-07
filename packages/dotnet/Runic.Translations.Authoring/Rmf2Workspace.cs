@@ -226,7 +226,10 @@ public sealed class Rmf2Workspace
         }
         if (changes.Count == 0) throw new TranslationAuthoringException("No explicit functional slot was found. Implicit slots must be made explicit before renaming.");
         JsonObject config = ProjectObject(_project.GetUtf8Bytes());
-        if (config["markup"]?["slots"]?[string.Join('_', logical)] is JsonObject slots && slots.TryGetPropertyValue(name, out var bounds))
+        // Each level is type-checked: indexing a JsonArray or JsonValue by name
+        // throws, and markup or slots may be mistyped in a hand-edited manifest.
+        if (config["markup"] is JsonObject markup && markup["slots"] is JsonObject slotContracts &&
+            slotContracts[string.Join('_', logical)] is JsonObject slots && slots.TryGetPropertyValue(name, out var bounds))
         {
             if (slots.ContainsKey(newName)) throw new TranslationAuthoringException("The target slot contract already exists.");
             slots[newName] = bounds?.DeepClone(); slots.Remove(name);
@@ -423,7 +426,7 @@ public sealed class Rmf2Workspace
     {
         byte[] bytes = changes.GetValueOrDefault(_project.Path) ?? _project.GetUtf8Bytes();
         JsonObject config = ProjectObject(bytes);
-        if (config["markup"]?["slots"] is not JsonObject slots) return;
+        if (config["markup"] is not JsonObject markupContracts || markupContracts["slots"] is not JsonObject slots) return;
         bool changed = false;
         foreach (var pair in keys)
         {

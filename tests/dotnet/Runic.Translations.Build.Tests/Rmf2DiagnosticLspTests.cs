@@ -19,6 +19,7 @@ internal static class Rmf2DiagnosticLspTests
         runner.Add("LSP adds unsaved project-directory buffers only where source discovery would", SourceRootOverlays);
         runner.Add("LSP reports malformed unsaved source roots as configuration diagnostics", MalformedSourceRoots);
         runner.Add("LSP reports a non-object runic.json as a configuration diagnostic", NonObjectConfiguration);
+        runner.Add("LSP refuses renames with a clear error when runic.json markup is mistyped", MistypedMarkupRename);
     }
 
     private static void CodeActions()
@@ -159,6 +160,34 @@ internal static class Rmf2DiagnosticLspTests
             frame["params"]?["uri"]?.GetValue<string>() == configUri)["params"]!["diagnostics"]!.AsArray();
         Assert.True(config.Any(diagnostic => diagnostic?["message"]?.GetValue<string>() == "Runic project root must be an object."),
             "The open runic.json did not receive the root-kind diagnostic: " + config.ToJsonString());
+    }
+
+    private static void MistypedMarkupRename()
+    {
+        // "markup": [] (or a non-object slots member) must not surface a raw
+        // JsonNode type error through either rename route; the edited catalog
+        // is refused with the compiler's configuration message instead.
+        foreach ((string markup, string expected) in new[] {
+            ("[]", "The complete edited catalog is invalid: markup must be an object."),
+            ("{\"slots\":[]}", "The complete edited catalog is invalid: markup.slots must be an object.") })
+        {
+            using TemporaryDirectory temporary = new();
+            string config = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","markup":""" + markup + "}";
+            File.WriteAllText(temporary.Resolve("runic.json"), """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en"}""");
+            File.WriteAllText(temporary.Resolve("en.rmf2"), "x = Saved\n");
+            string configUri = new Uri(temporary.Resolve("runic.json")).AbsoluteUri;
+            string sourceUri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
+            using Session session = new(temporary.Path);
+            session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+            session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = sourceUri, ["version"] = 1, ["text"] = "x = Unsaved\n" } });
+            session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = configUri, ["version"] = 1, ["text"] = config } });
+            JsonNode command = session.Request("workspace/executeCommand", new JsonObject {
+                ["command"] = "runic.renameResource", ["arguments"] = new JsonArray(sourceUri, new JsonArray("x"), "renamed") });
+            JsonNode symbol = session.Request("textDocument/rename", new JsonObject {
+                ["textDocument"] = new JsonObject { ["uri"] = sourceUri }, ["position"] = Position(0, 0), ["newName"] = "renamed" });
+            foreach ((string operation, JsonNode response) in new[] { ("runic.renameResource", command), ("textDocument/rename", symbol) })
+                Assert.Equal(expected, response["error"]?["message"]?.GetValue<string>() ?? response.ToJsonString(), operation + " with markup " + markup);
+        }
     }
 
     private static JsonObject Position(int line, int character) => new() { ["line"] = line, ["character"] = character };
