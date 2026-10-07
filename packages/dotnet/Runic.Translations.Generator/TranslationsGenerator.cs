@@ -97,7 +97,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 !reader.StringComparer.Equals(type.Namespace, CompatibilityNamespace) ||
                 !type.GetDeclaringType().IsNil)
                 continue;
-            int version = -1, rmf2Version = -1;
+            int version = -1, rmf2Version = -1, typedSlotsVersion = -1;
             foreach (FieldDefinitionHandle fieldHandle in type.GetFields())
             {
                 FieldDefinition field = reader.GetFieldDefinition(fieldHandle);
@@ -108,8 +108,9 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 int value = reader.GetBlobReader(constant.Value).ReadInt32();
                 if (reader.StringComparer.Equals(field.Name, "RuntimeAbiVersion")) version = value;
                 else if (reader.StringComparer.Equals(field.Name, "Rmf2RuntimeAbiVersion")) rmf2Version = value;
+                else if (reader.StringComparer.Equals(field.Name, "TypedSlotBindingsVersion")) typedSlotsVersion = value;
             }
-            return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version));
+            return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version, typedSlotsVersion));
         }
         return new RuntimeReference(true, RuntimeAbiState.Missing);
     }
@@ -120,8 +121,9 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         if (!string.Equals(compilation.AssemblyName, RuntimeAssemblyName, StringComparison.Ordinal)) return RuntimeReference.None;
         INamedTypeSymbol? compatibility = compilation.Assembly.GetTypeByMetadataName(CompatibilityNamespace + "." + CompatibilityType);
         if (compatibility is null) return new RuntimeReference(true, RuntimeAbiState.Missing);
-        int version = Constant(compatibility, "RuntimeAbiVersion"), rmf2Version = Constant(compatibility, "Rmf2RuntimeAbiVersion");
-        return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version));
+        int version = Constant(compatibility, "RuntimeAbiVersion"), rmf2Version = Constant(compatibility, "Rmf2RuntimeAbiVersion"),
+            typedSlotsVersion = Constant(compatibility, "TypedSlotBindingsVersion");
+        return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version, typedSlotsVersion));
 
         static int Constant(INamedTypeSymbol type, string name)
         {
@@ -230,11 +232,11 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         GeneratorInput selected = projects[0];
         sourceTexts[selected.Path] = SourceText.From(selected.Text!, StrictUtf8);
         var project = new TranslationSource(selected.Path, StrictUtf8.GetBytes(selected.Text!));
-        GenerateRmf2V5(context, project, compiled, sourceTexts);
+        GenerateRmf2V5(context, project, compiled, sourceTexts, runtimeAbi.SupportsReadableSurface);
     }
 
     private static void GenerateRmf2V5(SourceProductionContext context, TranslationSource project,
-        IReadOnlyList<Rmf2SourceUnitV5> units, Dictionary<string, SourceText> sourceTexts)
+        IReadOnlyList<Rmf2SourceUnitV5> units, Dictionary<string, SourceText> sourceTexts, bool readableSurface)
     {
         Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, units, CompilerOptions, context.CancellationToken);
         bool hasErrors = false;
@@ -253,15 +255,20 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 Rmf2ProjectV5EmissionEligibility.Message));
             return;
         }
-        TranslationGeneratedOutput[] outputs =
+        var outputs = new List<TranslationGeneratedOutput>(5)
         {
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked),
             TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(linked),
             TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked),
         };
+        // The readable surface needs the typed slot types of a runtime that declares
+        // TypedSlotBindingsVersion. Without it, keep the encoded files and explain the gap.
+        if (readableSurface) outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpReadable(linked));
+        else context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.ReadableSurfaceUnsupported, Location.None,
+            "The referenced Runic.Translations runtime does not support the readable C# surface; update it. The encoded accessors are still generated."));
         var emittedHints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (int index = 0; index < outputs.Length; index++)
+        for (int index = 0; index < outputs.Count; index++)
         {
             TranslationGeneratedOutput output = outputs[index];
             if (!emittedHints.Add(output.RelativePath))
@@ -400,15 +407,24 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     {
         internal static readonly RuntimeAbiState Missing = new RuntimeAbiState(-1);
 
-        internal RuntimeAbiState(int version, int rmf2Version = -1) { Version = version; Rmf2Version = rmf2Version; }
+        internal RuntimeAbiState(int version, int rmf2Version = -1, int typedSlotBindingsVersion = -1)
+        {
+            Version = version;
+            Rmf2Version = rmf2Version;
+            TypedSlotBindingsVersion = typedSlotBindingsVersion;
+        }
         internal int Rmf2Version { get; }
 
         internal int Version { get; }
+        // Additive capability, not part of the ABI gate: a runtime without it still gets the encoded surface.
+        internal int TypedSlotBindingsVersion { get; }
         internal bool IsMissing => Version < 0;
         internal bool IsCompatible => Version == 1 && Rmf2Version == 2;
+        internal bool SupportsReadableSurface => TypedSlotBindingsVersion >= 1;
 
-        public bool Equals(RuntimeAbiState other) => Version == other.Version && Rmf2Version == other.Rmf2Version;
+        public bool Equals(RuntimeAbiState other) => Version == other.Version && Rmf2Version == other.Rmf2Version &&
+            TypedSlotBindingsVersion == other.TypedSlotBindingsVersion;
         public override bool Equals(object? obj) => obj is RuntimeAbiState other && Equals(other);
-        public override int GetHashCode() => HashCode.Combine(Version, Rmf2Version);
+        public override int GetHashCode() => HashCode.Combine(Version, Rmf2Version, TypedSlotBindingsVersion);
     }
 }

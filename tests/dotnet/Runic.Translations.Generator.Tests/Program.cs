@@ -10,6 +10,7 @@ internal static class Program
         GeneratorTests.Register(runner);
         GeneratorIncrementalityTests.Register(runner);
         GeneratorDiagnosticsTests.Register(runner);
+        GeneratorReadableTests.Register(runner);
         return runner.Run();
     }
 }
