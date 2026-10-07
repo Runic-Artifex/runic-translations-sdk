@@ -37,7 +37,18 @@ internal sealed class Rmf2LanguageServer
     internal static readonly StringComparer PathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
     private readonly SortedSet<string> _diskProjectDirectories = new(PathComparer);
     private readonly SortedSet<string> _projectDirectories = new(PathComparer);
-    private readonly HashSet<string> _reportedBufferFailures = new(StringComparer.Ordinal);
+    // Disk source keys come from Path.GetFullPath (native separators) while
+    // buffer keys come from URIs (portable separators). On Windows both the
+    // separator and the case must be ignored or one file appears twice.
+    internal static readonly IEqualityComparer<string> SourcePathComparer = new PlatformSourcePathComparer();
+    // Failure categories already reported per open buffer (bounded by the
+    // number of exception types, not by changing positions in messages).
+    private readonly Dictionary<string, HashSet<string>> _reportedBufferFailures = new(StringComparer.Ordinal);
+    // Project ownership per open buffer. Resolution depends on the buffer path,
+    // open runic.json overlays, and the project index, so it is invalidated by
+    // the buffer's own revision, by any configuration buffer change, and by
+    // every project index refresh. Unrelated keystrokes reuse it.
+    private readonly Dictionary<string, (string? Project, Exception? Error)> _bufferProjects = new(StringComparer.Ordinal);
     private const int MaximumProjectIndexEntries = 100_000;
     private bool _globalDiagnosticsRefreshPending;
     private bool _projectIndexRescanPending;
@@ -230,7 +241,8 @@ internal sealed class Rmf2LanguageServer
             bool configuration = Path.GetFileName(LocalPath(uri)).Equals("runic.json", StringComparison.OrdinalIgnoreCase);
             try
             {
-                _buffers.Remove(uri); _reportedBufferFailures.RemoveWhere(entry => entry.StartsWith(uri + "\n", StringComparison.Ordinal));
+                _buffers.Remove(uri); _reportedBufferFailures.Remove(uri);
+                if (configuration) _bufferProjects.Clear(); else _bufferProjects.Remove(uri);
                 Publish(uri, new JsonArray());
                 if (configuration) QueueGlobalDiagnosticsRefresh();
             }
@@ -436,6 +448,7 @@ internal sealed class Rmf2LanguageServer
 
     private void RefreshProjectIndex(bool rescanWorkspace)
     {
+        _bufferProjects.Clear();
         if (rescanWorkspace)
             ReplaceProjectIndex(_workspaceRoots, _diskProjectDirectories, MaximumProjectIndexEntries, _revisionGate, null, _requestCancellation);
         _projectDirectories.Clear();
@@ -608,21 +621,47 @@ internal sealed class Rmf2LanguageServer
     }
 
     // Resolves the project that owns an open buffer for overlays and diagnostics.
-    // Buffers inside an explicit workspace root keep the strict boundary rules,
-    // including the refusal of linked paths. A loose buffer outside every root
-    // (Visual Studio loose-file mode, or a root that does not contain the file)
-    // uses the same nearest regular runic.json ancestor rule as explicit
-    // commands, so it joins exactly the project a preview loads from disk. The
-    // workspace then overlays such a buffer only onto a source that the project
-    // already reads from disk.
+    // Buffers inside an explicit workspace root use the strict boundary rules
+    // first, including the refusal of linked paths. When no project owns a safe
+    // in-root buffer (a root opened on a feature folder below its runic.json),
+    // or the buffer lies outside every root (Visual Studio loose-file mode, or
+    // a root that does not contain the file), the buffer uses the same nearest
+    // regular runic.json ancestor rule as explicit commands, so it joins exactly
+    // the project a preview loads from disk. The workspace overlays buffers of
+    // such an external project only onto sources it already reads from disk.
     private string ResolveBufferProjectDirectory(string path)
-        => IsInsideWorkspaceRoot(path) ? BufferProjectDirectory(path) : ProjectDirectory(path, allowExternalAncestor: true);
+    {
+        if (!IsInsideWorkspaceRoot(path)) return ProjectDirectory(path, allowExternalAncestor: true);
+        try { return BufferProjectDirectory(path); }
+        catch (InvalidOperationException) when (IsSafeWorkspacePath(path))
+        {
+            return ProjectDirectory(path, allowExternalAncestor: true);
+        }
+    }
+
+    private string? BufferProject(string uri, out Exception? error)
+    {
+        if (!_bufferProjects.TryGetValue(uri, out var entry))
+        {
+            try { entry = (ResolveBufferProjectDirectory(LocalPath(uri)), null); }
+            catch (Exception failure) when (failure is InvalidOperationException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            {
+                entry = (null, failure);
+            }
+            _bufferProjects[uri] = entry;
+        }
+        error = entry.Error;
+        return entry.Project;
+    }
 
     private void ReportBufferFailure(string uri, Exception error)
     {
-        // stdout is the LSP channel. Report each distinct failure once per open
-        // buffer on stderr instead of once per keystroke.
-        if (_reportedBufferFailures.Add(uri + "\n" + error.Message))
+        // stdout is the LSP channel. Report each failure category once per open
+        // buffer on stderr instead of once per keystroke; messages can carry
+        // changing source positions, so they are not part of the key.
+        if (!_reportedBufferFailures.TryGetValue(uri, out HashSet<string>? reported))
+            _reportedBufferFailures[uri] = reported = new HashSet<string>(StringComparer.Ordinal);
+        if (reported.Add(error.GetType().FullName ?? error.GetType().Name))
             Console.Error.WriteLine($"runic-rmf2: open buffer {uri} has no project overlay or catalog diagnostics: {error.Message}");
     }
 
@@ -670,18 +709,21 @@ internal sealed class Rmf2LanguageServer
             throw new InvalidOperationException("Translation project manifests must be regular non-linked runic.json files.");
         _buffers.TryGetValue(new Uri(projectPath).AbsoluteUri, out var projectBuffer);
         CompilerInputs inputs = InputFiles.ReadProject(directory, projectBuffer is null ? null : new TranslationSource(projectPath, Utf8.GetBytes(projectBuffer.Text)));
-        var sources = inputs.Messages.Select(s => new TranslationSource(Path.GetFullPath(s.Path), s.GetUtf8Bytes())).ToDictionary(s => s.Path, StringComparer.Ordinal);
+        var sources = inputs.Messages.Select(s => new TranslationSource(Path.GetFullPath(s.Path), s.GetUtf8Bytes())).ToDictionary(s => s.Path, SourcePathComparer);
+        // A project outside every workspace root was reached through the
+        // explicit-command ancestor rule, not through the bounded index.
+        bool externalProject = !IsInsideWorkspaceRoot(directory);
         foreach (string uri in group)
         {
             Buffer buffer = _buffers[uri];
             string file = LocalPath(uri);
-            if (!IsInsideWorkspaceRoot(file))
+            if (externalProject || !IsInsideWorkspaceRoot(file))
             {
-                // A loose buffer outside every workspace root may only replace
-                // a source that this project already reads from disk. It never
-                // adds a file that the preview would not otherwise compile.
-                string? diskSource = sources.Keys.FirstOrDefault(key => PathComparer.Equals(key.Replace('\\', '/'), file));
-                if (diskSource is not null) sources[diskSource] = new TranslationSource(diskSource, Utf8.GetBytes(buffer.Text));
+                // Buffers of an external project, and loose buffers outside
+                // every root, may only replace a source that this project
+                // already reads from disk. They never add a file that the
+                // preview would not otherwise compile.
+                if (sources.ContainsKey(file)) sources[file] = new TranslationSource(file, Utf8.GetBytes(buffer.Text));
                 continue;
             }
             if (sources.ContainsKey(file) || ((Path.GetExtension(file).Equals(".rmf2", StringComparison.OrdinalIgnoreCase) ||
@@ -699,9 +741,8 @@ internal sealed class Rmf2LanguageServer
     {
         foreach (string uri in _buffers.Keys.Order(StringComparer.Ordinal))
         {
-            string? candidate = null;
-            try { candidate = ResolveBufferProjectDirectory(LocalPath(uri)); }
-            catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { ReportBufferFailure(uri, error); }
+            string? candidate = BufferProject(uri, out Exception? error);
+            if (error is not null) ReportBufferFailure(uri, error);
             if (candidate is not null && PathComparer.Equals(candidate, projectDirectory)) yield return uri;
         }
     }
@@ -743,16 +784,20 @@ internal sealed class Rmf2LanguageServer
             // A configuration overlay can add, remove, or remount source roots.
             // Rebuild ownership before validating every resulting project group;
             // otherwise buffers from the old mapping retain stale diagnostics.
+            _bufferProjects.Clear();
             QueueGlobalDiagnosticsRefresh();
             return;
         }
+        _bufferProjects.Remove(uri);
         IReadOnlyList<TranslationDiagnostic> catalogDiagnostics = Array.Empty<TranslationDiagnostic>();
         string[] group = [uri];
         try
         {
-            string project = ResolveBufferProjectDirectory(LocalPath(uri));
+            string project = BufferProject(uri, out Exception? unresolved) ?? throw unresolved!;
             group = BufferUris(project).ToArray();
             catalogDiagnostics = Workspace(project, group).Validate().Diagnostics;
+            // A later failure after recovery is worth reporting again.
+            _reportedBufferFailures.Remove(uri);
         }
         catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException) {
             // Without a resolvable project only the buffer's own syntax
@@ -789,13 +834,10 @@ internal sealed class Rmf2LanguageServer
         var unresolved = new List<string>();
         foreach (string uri in _buffers.Keys.Order(StringComparer.Ordinal))
         {
-            try
-            {
-                string project = ResolveBufferProjectDirectory(LocalPath(uri));
-                if (!groups.TryGetValue(project, out List<string>? group)) groups.Add(project, group = []);
-                group.Add(uri);
-            }
-            catch (Exception error) when (error is InvalidOperationException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { ReportBufferFailure(uri, error); unresolved.Add(uri); }
+            string? project = BufferProject(uri, out Exception? error);
+            if (project is null) { ReportBufferFailure(uri, error!); unresolved.Add(uri); continue; }
+            if (!groups.TryGetValue(project, out List<string>? group)) groups.Add(project, group = []);
+            group.Add(uri);
         }
         foreach (var group in groups)
         {
@@ -821,7 +863,7 @@ internal sealed class Rmf2LanguageServer
         {
             if (!_buffers.TryGetValue(uri, out Buffer? current)) continue;
             string path = LocalPath(uri);
-            var diagnostics = current.Syntax.Diagnostics.Concat(catalogDiagnostics.Where(d => Path.GetFullPath(d.Location.Path).Replace('\\', '/') == path))
+            var diagnostics = current.Syntax.Diagnostics.Concat(catalogDiagnostics.Where(d => PathComparer.Equals(Path.GetFullPath(d.Location.Path).Replace('\\', '/'), path)))
                 .DistinctBy(d => (d.Id, d.Location.StartByte, d.Location.LengthBytes, d.Message));
             Publish(uri, new JsonArray(diagnostics.Select(d => (JsonNode)new JsonObject {
                 ["range"] = Range(current, d.Location), ["severity"] = d.Severity == TranslationDiagnosticSeverity.Error ? 1 : 2,
@@ -939,4 +981,12 @@ internal sealed class Rmf2LanguageServer
         _output.Write(Encoding.ASCII.GetBytes("Content-Length: " + bytes.Length + "\r\n\r\n")); _output.Write(bytes); _output.Flush();
     }
     private sealed record Buffer(string Text, int Version, Rmf2ResourceDocument Syntax);
+    private sealed class PlatformSourcePathComparer : IEqualityComparer<string>
+    {
+        // Backslash is a legal file-name character on Unix, so only Windows
+        // folds separators; case follows PathComparer.
+        private static string Normalize(string path) => OperatingSystem.IsWindows() ? path.Replace('\\', '/') : path;
+        public bool Equals(string? x, string? y) => x is null || y is null ? x == y : PathComparer.Equals(Normalize(x), Normalize(y));
+        public int GetHashCode(string path) => PathComparer.GetHashCode(Normalize(path));
+    }
 }

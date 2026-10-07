@@ -26,91 +26,133 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 LSP rescans watched files and configuration with unsaved overlays", LspWatchRescan);
         runner.Add("RMF2 LSP isolates watched diagnostics by project", LspWatchProjectIsolation);
         runner.Add("RMF2 workspace project indexing is entry-bounded, cancellable, and atomic", ProjectIndexBounds);
-        runner.Add("RMF2 LSP overlays loose-file buffers on external projects without a containing root", LspLooseFileBuffers);
+        runner.Add("RMF2 LSP overlays buffers on projects outside or above the workspace root", LspLooseFileBuffers);
         runner.Add("RMF2 LSP project identity follows platform path case rules", ProjectIdentityCase);
     }
 
     private static void LspLooseFileBuffers()
     {
         // Visual Studio loose-file mode sends no root, or a root that does not
-        // contain the opened file. Explicit commands already load the external
-        // project by its runic.json ancestor; open buffers must join it.
-        foreach (bool siblingRoot in new[] { false, true })
+        // contain the opened file; an editor may also open a feature folder
+        // below the project's runic.json. Explicit commands already load such
+        // a project by its runic.json ancestor; open buffers must join it.
+        var variants = new (string Name, string? Root, string File, string Saved, string Line, string Key)[] {
+            ("null root", null, "en.rmf2", "plain = Payment details", "plain", "plain"),
+            ("unrelated sibling root", "sibling", "en.rmf2", "plain = Payment details", "plain", "plain"),
+            ("feature-folder root inside the project", "project/account", "account/en.rmf2", "heading = Your account", "heading", "account_heading"),
+        };
+        foreach (var variant in variants)
         {
             using TemporaryDirectory temporary = new();
             string project = temporary.Resolve("project");
             CopyDirectory(RepositoryPaths.Resolve("specs/translations/examples/rmf2"), project);
             Directory.CreateDirectory(temporary.Resolve("sibling"));
             Directory.CreateDirectory(temporary.Resolve("orphan"));
-            string englishPath = Path.Combine(project, "en.rmf2");
-            string saved = File.ReadAllText(englishPath);
-            string unsaved = saved.Replace("plain = Payment details", "plain = UNSAVED preview marker", StringComparison.Ordinal);
-            Assert.False(saved == unsaved, "The example no longer contains the plain preview message.");
-            string englishUri = new Uri(englishPath).AbsoluteUri;
-            string operation = siblingRoot ? "unrelated sibling root" : "null root";
+            string sourcePath = Path.Combine(project, variant.File);
+            string saved = File.ReadAllText(sourcePath);
+            string unsaved = saved.Replace(variant.Saved, variant.Line + " = UNSAVED preview marker", StringComparison.Ordinal);
+            Assert.False(saved == unsaved, $"The example no longer contains '{variant.Saved}'.");
+            string sourceUri = new Uri(sourcePath).AbsoluteUri;
+            string operation = variant.Name;
 
             using var session = new Rmf2DiagnosticLspTests.Session(temporary.Path);
             session.Request("initialize", new JsonObject {
-                ["rootUri"] = siblingRoot ? new Uri(temporary.Resolve("sibling")).AbsoluteUri : null,
+                ["rootUri"] = variant.Root is null ? null : new Uri(temporary.Resolve(variant.Root)).AbsoluteUri,
                 ["capabilities"] = new JsonObject(),
             });
-            session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = englishUri, ["version"] = 1, ["text"] = unsaved } });
+            session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = sourceUri, ["version"] = 1, ["text"] = unsaved } });
             JsonNode preview = session.Request("workspace/executeCommand", new JsonObject {
-                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(englishUri, "plain", "en", new JsonObject()) });
+                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(sourceUri, variant.Key, "en", new JsonObject()) });
             string runs = preview["result"]?["runs"]?.ToJsonString() ?? preview.ToJsonString();
             Assert.Contains("UNSAVED preview marker", runs);
-            Assert.False(runs.Contains("Payment details", StringComparison.Ordinal), $"Preview compiled the saved file instead of the open buffer ({operation}).");
+            Assert.False(runs.Contains(variant.Saved[(variant.Line.Length + 3)..], StringComparison.Ordinal), $"Preview compiled the saved file instead of the open buffer ({operation}).");
 
             // Catalog diagnostics come from the same project compilation. A
             // conflicting input type is not a syntax error, so it proves the
             // buffer was validated against its external project.
-            session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = englishUri, ["version"] = 2 },
-                ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = unsaved.Replace("plain = UNSAVED preview marker", "plain = {$value :integer} {$value :string}", StringComparison.Ordinal) }) });
-            session.Request("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = englishUri } });
+            session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = sourceUri, ["version"] = 2 },
+                ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = saved.Replace(variant.Saved, variant.Line + " = {$value :integer} {$value :string}", StringComparison.Ordinal) }) });
+            session.Request("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = sourceUri } });
             JsonArray diagnostics = session.Publications.Last(frame => frame["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" &&
-                frame["params"]?["uri"]?.GetValue<string>() == englishUri)["params"]!["diagnostics"]!.AsArray();
+                frame["params"]?["uri"]?.GetValue<string>() == sourceUri)["params"]!["diagnostics"]!.AsArray();
             Assert.True(diagnostics.Any(diagnostic => diagnostic?["message"]?.GetValue<string>().Contains("Conflicting formatter input types", StringComparison.Ordinal) == true),
-                $"Catalog diagnostics were not published for a loose buffer ({operation}): {diagnostics.ToJsonString()}");
+                $"Catalog diagnostics were not published for the buffer ({operation}): {diagnostics.ToJsonString()}");
 
-            // A loose buffer only replaces sources the project already reads
-            // from disk. An unsaved file is never added to the compilation.
-            string injectedUri = new Uri(Path.Combine(project, "injected.rmf2")).AbsoluteUri;
+            // Buffers of a project outside every root only replace sources the
+            // project already reads from disk. An unsaved file is never added.
+            string injectedUri = new Uri(Path.Combine(Path.GetDirectoryName(sourcePath)!, "injected.rmf2")).AbsoluteUri;
+            string injectedKey = variant.Key == variant.Line ? "injected" : "account_injected";
             session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = injectedUri, ["version"] = 1, ["text"] = "injected = Unsaved file\n" } });
-            session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = englishUri, ["version"] = 3 },
+            session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = sourceUri, ["version"] = 3 },
                 ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = unsaved }) });
             JsonNode injected = session.Request("workspace/executeCommand", new JsonObject {
-                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(englishUri, "injected", "en", new JsonObject()) });
-            Assert.True(injected["error"] is not null, $"A loose unsaved file joined the external project ({operation}): {injected.ToJsonString()}");
+                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(sourceUri, injectedKey, "en", new JsonObject()) });
+            Assert.True(injected["error"] is not null, $"An unsaved file joined the external project ({operation}): {injected.ToJsonString()}");
             JsonNode restored = session.Request("workspace/executeCommand", new JsonObject {
-                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(englishUri, "plain", "en", new JsonObject()) });
+                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(sourceUri, variant.Key, "en", new JsonObject()) });
             Assert.Contains("UNSAVED preview marker", restored["result"]?["runs"]?.ToJsonString() ?? restored.ToJsonString());
 
             // A loose buffer without any project keeps syntax-only diagnostics
             // and the reason is reported on stderr instead of being swallowed.
+            // Repeated edits report the same failure category only once.
             string orphanUri = new Uri(temporary.Resolve("orphan/en.rmf2")).AbsoluteUri;
             session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = orphanUri, ["version"] = 1, ["text"] = "x = Orphan\n" } });
+            for (int version = 2; version < 6; version++)
+                session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = orphanUri, ["version"] = version },
+                    ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = $"x = Orphan {version}\n" }) });
             session.Request("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = orphanUri } });
             session.Dispose();
-            Assert.Contains("runic-rmf2: open buffer " + orphanUri, session.StandardError);
+            string orphanReport = "runic-rmf2: open buffer " + orphanUri + " ";
+            Assert.Contains(orphanReport, session.StandardError);
             Assert.Contains("No runic.json project", session.StandardError);
+            int reports = session.StandardError.Split('\n').Count(line => line.StartsWith(orphanReport, StringComparison.Ordinal));
+            Assert.Equal(1, reports, $"Unresolved buffer failures must be reported once per category ({operation}).");
         }
     }
 
     private static void ProjectIdentityCase()
     {
+        var sourcePaths = Rmf2LanguageServer.SourcePathComparer;
         if (!OperatingSystem.IsWindows())
         {
             Assert.False(Rmf2LanguageServer.PathComparer.Equals("/tmp/project", "/TMP/project"), "Case-sensitive file systems must keep distinct project paths.");
+            Assert.False(sourcePaths.Equals("/tmp/project/en.rmf2", "/tmp/Project/en.rmf2"), "Case-sensitive file systems must keep distinct source paths.");
+            Assert.False(sourcePaths.Equals("/tmp/a\\b.rmf2", "/tmp/a/b.rmf2"), "Backslash is a file-name character on Unix.");
+            Assert.True(sourcePaths.Equals("/tmp/project/en.rmf2", "/tmp/project/en.rmf2"), "Identical source paths must match.");
             return;
         }
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("project"));
         File.WriteAllText(temporary.Resolve("project/runic.json"), Project);
+        string sourcePath = temporary.Resolve("project/en.rmf2");
+        File.WriteAllText(sourcePath, "x = Saved\n");
         static string FlipDrive(string path) => char.IsUpper(path[0]) ? char.ToLowerInvariant(path[0]) + path[1..] : char.ToUpperInvariant(path[0]) + path[1..];
         var index = new SortedSet<string>(Rmf2LanguageServer.PathComparer);
         Rmf2LanguageServer.ReplaceProjectIndex([temporary.Path, FlipDrive(temporary.Path)], index, 10_000, new object(), null, System.Threading.CancellationToken.None);
         Assert.Equal(1, index.Count, "Drive-letter case produced duplicate project identities.");
         Assert.True(index.Contains(FlipDrive(Path.GetFullPath(temporary.Resolve("project")))), "Drive-letter case changed project identity.");
+        // Disk sources use native separators; buffer overlays use portable ones.
+        Assert.True(sourcePaths.Equals(Path.GetFullPath(sourcePath), FlipDrive(Path.GetFullPath(sourcePath)).Replace('\\', '/')), "Drive-letter case or separators split one source path.");
+
+        // A client that reports the drive letter in a different case than the
+        // workspace root must still overlay the buffer and receive catalog
+        // diagnostics: source replacement and diagnostic attribution share it.
+        foreach (string? root in new[] { new Uri(temporary.Path).AbsoluteUri, null })
+        {
+            using var session = new Rmf2DiagnosticLspTests.Session(temporary.Path);
+            session.Request("initialize", new JsonObject { ["rootUri"] = root, ["capabilities"] = new JsonObject() });
+            string flippedUri = new Uri(FlipDrive(Path.GetFullPath(sourcePath))).AbsoluteUri;
+            session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = flippedUri, ["version"] = 1, ["text"] = "x = UNSAVED preview marker\n" } });
+            JsonNode preview = session.Request("workspace/executeCommand", new JsonObject {
+                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(flippedUri, "x", "en", new JsonObject()) });
+            Assert.Contains("UNSAVED preview marker", preview.ToJsonString());
+            session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = flippedUri, ["version"] = 2 },
+                ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "x = {$value :integer} {$value :string}\n" }) });
+            session.Request("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = flippedUri } });
+            string published = session.Publications.Last(frame => frame["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" &&
+                frame["params"]?["uri"]?.GetValue<string>() == flippedUri).ToJsonString();
+            Assert.Contains("Conflicting formatter input types", published);
+        }
     }
 
     private static void CopyDirectory(string source, string destination)
