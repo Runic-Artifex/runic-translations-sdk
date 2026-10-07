@@ -25,6 +25,7 @@ public sealed class Rmf2SourceDiscovery : ITask
                 string config = Path.GetFullPath(project.ItemSpec), root = Path.GetDirectoryName(config)!;
                 if (new FileInfo(config).Length > 8 * 1024 * 1024) throw new IOException("Translation project exceeds byte limit.");
                 using var json = JsonDocument.Parse(File.ReadAllBytes(config));
+                if (json.RootElement.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("runic.json must contain a JSON object.");
                 if (json.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
                 {
                     if (mounts.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("sourceRoots must be an array.");

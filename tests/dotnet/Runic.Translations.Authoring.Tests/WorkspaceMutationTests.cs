@@ -24,6 +24,21 @@ internal static class WorkspaceMutationTests
         runner.Add("Recovery works after the final edit boundary", FinalBoundaryRecovery);
         runner.Add("Recovery refuses to overwrite post-interruption edits", RecoveryConflict);
         runner.Add("Transaction and recovery journals reject path escapes", PathEscapes);
+        runner.Add("Workspace mutations refuse a non-object runic.json with a clear error", NonObjectManifest);
+    }
+
+    private static void NonObjectManifest()
+    {
+        using ProjectWorkspace project = new();
+        string direct = System.IO.Path.Combine(project.Path, "runic.json");
+        string manifest = File.Exists(direct) ? direct : System.IO.Path.Combine(project.Path, "translations", "runic.json");
+        File.WriteAllText(manifest, """["not","an","object"]""");
+        Assert.Throws<TranslationAuthoringException>(
+            () => TranslationWorkspaceMutation.AddLocale(new TranslationAddLocaleRequest(project.Path, "product", "fr", "de", "de")),
+            "runic.json must contain an object.");
+        Assert.Throws<TranslationAuthoringException>(
+            () => TranslationWorkspaceMutation.CreateKey(new TranslationCreateKeyRequest(project.Path, "product", "dialog_confirm", "Confirm")),
+            "runic.json must contain an object.");
     }
 
     private static void AddLocale()

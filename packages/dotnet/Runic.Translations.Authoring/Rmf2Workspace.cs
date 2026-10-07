@@ -225,7 +225,7 @@ public sealed class Rmf2Workspace
             if (!edited.SequenceEqual(document.Source.GetUtf8Bytes())) changes[document.Source.Path] = edited;
         }
         if (changes.Count == 0) throw new TranslationAuthoringException("No explicit functional slot was found. Implicit slots must be made explicit before renaming.");
-        var config = JsonNode.Parse(_project.GetUtf8Bytes())!;
+        JsonObject config = ProjectObject(_project.GetUtf8Bytes());
         if (config["markup"]?["slots"]?[string.Join('_', logical)] is JsonObject slots && slots.TryGetPropertyValue(name, out var bounds))
         {
             if (slots.ContainsKey(newName)) throw new TranslationAuthoringException("The target slot contract already exists.");
@@ -393,7 +393,7 @@ public sealed class Rmf2Workspace
                 foreach (var source in _sources.Values.Where(source => string.Equals(Locale(source.Path), locale, StringComparison.OrdinalIgnoreCase))) changes[source.Path] = null;
             }
         }
-        var config = JsonNode.Parse(_project.GetUtf8Bytes())!.AsObject();
+        JsonObject config = ProjectObject(_project.GetUtf8Bytes());
         config["locales"] = new JsonArray(locales.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (JsonNode)(pair.Value is null ? new JsonObject { ["tag"] = pair.Key } : new JsonObject { ["tag"] = pair.Key, ["fallback"] = pair.Value })).ToArray());
         changes[_project.Path] = Utf8.GetBytes(config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
         return Plan(changes);
@@ -408,10 +408,21 @@ public sealed class Rmf2Workspace
         return new ProfileLocaleView(null, null, Array.Empty<ProfileLocale>(), compilation.Diagnostics);
     }
 
+    // Configuration edits rewrite runic.json as a JSON object. A malformed or
+    // non-object manifest (for example an unsaved array) is refused with the
+    // same wording as the compiler diagnostic instead of a raw JSON error.
+    private static JsonObject ProjectObject(byte[] bytes)
+    {
+        JsonNode? node;
+        try { node = JsonNode.Parse(bytes); }
+        catch (JsonException exception) { throw new TranslationAuthoringException("runic.json is malformed.", exception); }
+        return node as JsonObject ?? throw new TranslationAuthoringException("Runic project root must be an object.");
+    }
+
     private void UpdateSlotKeys(Dictionary<string, byte[]?> changes, IReadOnlyDictionary<string, string?> keys, bool duplicate)
     {
         byte[] bytes = changes.GetValueOrDefault(_project.Path) ?? _project.GetUtf8Bytes();
-        var config = JsonNode.Parse(bytes)!;
+        JsonObject config = ProjectObject(bytes);
         if (config["markup"]?["slots"] is not JsonObject slots) return;
         bool changed = false;
         foreach (var pair in keys)

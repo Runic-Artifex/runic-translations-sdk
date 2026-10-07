@@ -18,6 +18,7 @@ internal static class Rmf2DiagnosticLspTests
         runner.Add("LSP mounted Unicode diagnostic quick fixes share compiler edits and refuse stale resolution", CodeActions);
         runner.Add("LSP adds unsaved project-directory buffers only where source discovery would", SourceRootOverlays);
         runner.Add("LSP reports malformed unsaved source roots as configuration diagnostics", MalformedSourceRoots);
+        runner.Add("LSP reports a non-object runic.json as a configuration diagnostic", NonObjectConfiguration);
     }
 
     private static void CodeActions()
@@ -131,6 +132,33 @@ internal static class Rmf2DiagnosticLspTests
             frame["params"]?["uri"]?.GetValue<string>() == configUri)["params"]!["diagnostics"]!.AsArray();
         Assert.True(config.Any(diagnostic => diagnostic?["message"]?.GetValue<string>() == "Missing required member 'namespace'."),
             "The open runic.json did not receive the located mount diagnostic: " + config.ToJsonString());
+    }
+
+    private static void NonObjectConfiguration()
+    {
+        // An unsaved runic.json whose root is an array must surface the
+        // compiler's configuration diagnostic, not a raw JSON access error.
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("runic.json"), """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en"}""");
+        File.WriteAllText(temporary.Resolve("en.rmf2"), "x = Saved\n");
+        string configUri = new Uri(temporary.Resolve("runic.json")).AbsoluteUri;
+        string sourceUri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = sourceUri, ["version"] = 1, ["text"] = "x = Unsaved\n" } });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = configUri, ["version"] = 1, ["text"] = """["not","an","object"]""" } });
+        JsonNode preview = session.Request("workspace/executeCommand", new JsonObject {
+            ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(sourceUri, "x", "en", new JsonObject()) });
+        JsonNode rename = session.Request("workspace/executeCommand", new JsonObject {
+            ["command"] = "runic.renameResource", ["arguments"] = new JsonArray(sourceUri, new JsonArray("x"), "renamed") });
+        JsonNode symbolRename = session.Request("textDocument/rename", new JsonObject {
+            ["textDocument"] = new JsonObject { ["uri"] = sourceUri }, ["position"] = Position(0, 0), ["newName"] = "renamed" });
+        foreach ((string operation, JsonNode response) in new[] { ("runic.renderPreview", preview), ("runic.renameResource", rename), ("textDocument/rename", symbolRename) })
+            Assert.Equal("Runic project root must be an object.", response["error"]?["message"]?.GetValue<string>() ?? response.ToJsonString(), operation);
+        JsonArray config = session.Publications.Last(frame => frame["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" &&
+            frame["params"]?["uri"]?.GetValue<string>() == configUri)["params"]!["diagnostics"]!.AsArray();
+        Assert.True(config.Any(diagnostic => diagnostic?["message"]?.GetValue<string>() == "Runic project root must be an object."),
+            "The open runic.json did not receive the root-kind diagnostic: " + config.ToJsonString());
     }
 
     private static JsonObject Position(int line, int character) => new() { ["line"] = line, ["character"] = character };
