@@ -3,7 +3,6 @@ using Runic.Translations.Compiler;
 using ReactiveUI;
 using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Signals;
-using System.Globalization;
 using System.Text.Json;
 using Runic.Translations.Internal;
 using Runic.Application.Views;
@@ -114,10 +113,10 @@ internal static class EditorSmokeTest
                 "sourceRoots requires a nonempty array of mounts.", TranslationManifestReader.SourceRootsNotArray),
             ("half-saved JSON", valid[..(valid.Length / 2)], "Expected a JSON value.", null),
             // A path still being typed names a directory that does not exist yet.
-            ("missing source root", Mount("../featur"), string.Format(CultureInfo.InvariantCulture, EditorWorkspace.SourceRootMissing, "featur"),
-                string.Format(CultureInfo.InvariantCulture, EditorWorkspace.SourceRootMissing, "featur")),
-            ("escaping source root", Mount("../../.."), string.Format(CultureInfo.InvariantCulture, EditorWorkspace.SourceRootOutsideWorkspace, "../.."),
-                string.Format(CultureInfo.InvariantCulture, EditorWorkspace.SourceRootOutsideWorkspace, "../..")),
+            ("missing source root", Mount("../featur"), EditorWorkspace.SourceRootMissing("featur"),
+                EditorWorkspace.SourceRootMissing("featur")),
+            ("escaping source root", Mount("../../.."), EditorWorkspace.SourceRootOutsideWorkspace("../.."),
+                EditorWorkspace.SourceRootOutsideWorkspace("../..")),
             ("missing baseLocale", valid.Replace("\"baseLocale\":\"en\",", "", StringComparison.Ordinal), "Missing required member 'baseLocale'.", TranslationManifestReader.MissingBaseLocale),
         };
         foreach (var malformed in cases)

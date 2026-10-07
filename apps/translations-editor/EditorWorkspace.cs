@@ -1641,16 +1641,16 @@ internal sealed class EditorWorkspace : IDisposable
             string display = NormalizeRelativePath(Path.GetRelativePath(_root, sourceRoot));
             if (!IsWithinSourceRoot(_root, sourceRoot) &&
                 !string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceRoot)), Path.TrimEndingDirectorySeparator(_root), StringComparison.Ordinal))
-                errors?.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, SourceRootOutsideWorkspace, display));
+                errors?.Add(SourceRootOutsideWorkspace(display));
             else if (!Directory.Exists(sourceRoot))
-                errors?.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, SourceRootMissing, display));
+                errors?.Add(SourceRootMissing(display));
             else usable.Add(sourceRoot);
         }
         return usable;
     }
 
-    internal const string SourceRootOutsideWorkspace = "Source root '{0}' is outside the workspace folder opened in the Translations Editor.";
-    internal const string SourceRootMissing = "Source root '{0}' is not an existing directory.";
+    internal static string SourceRootOutsideWorkspace(string root) => $"Source root '{root}' is outside the workspace folder opened in the Translations Editor.";
+    internal static string SourceRootMissing(string root) => $"Source root '{root}' is not an existing directory.";
 
     private static IEnumerable<string> EnumerateSourceFiles(string root, string extension)
     {
