@@ -23,7 +23,10 @@ Use one exact release for all Runic packages and the `dotnet-runic-translations`
 tool. The package requires `@sveltejs/kit` 3. Request-scoped rendering uses the
 generated `/server` module, which imports `AsyncLocalStorage` from
 `node:async_hooks`. Node adapters work as-is. Edge platforms such as Cloudflare
-need Node.js compatibility enabled (`nodejs_compat`).
+need Node.js compatibility enabled (`nodejs_compat`), and runtimes without
+`AsyncLocalStorage` are not supported. See the
+[ESM backend](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/esm.md)
+for which generated modules need it.
 
 ## Entry points
 
