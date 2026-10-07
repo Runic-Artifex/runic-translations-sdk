@@ -12,5 +12,6 @@
     <ProjectReference Include="../../../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" />
     <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/TestRunner.cs" Link="TestRunner.cs" />
     <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/Rmf2RuntimeV5Tests.cs" Link="Rmf2RuntimeV5Tests.cs" />
+    <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/TypedSlotBindingsTests.cs" Link="TypedSlotBindingsTests.cs" />
   </ItemGroup>
 </Project>

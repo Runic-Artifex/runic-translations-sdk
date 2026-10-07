@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -8,8 +9,10 @@ using System.Text.Json;
 
 namespace Runic.Translations;
 
+/// <summary>A typed application-owned binding for a functional RMF2 markup slot.</summary>
+public abstract record MarkupBinding;
 /// <summary>A typed application-owned functional inline binding.</summary>
-public abstract record InlineMarkupBinding;
+public abstract record InlineMarkupBinding : MarkupBinding;
 /// <summary>Application-owned navigation destination.</summary>
 public sealed record InlineLinkBinding(Uri Destination) : InlineMarkupBinding;
 /// <summary>Application-owned activation callback; rendering never invokes it.</summary>
@@ -163,12 +166,26 @@ public sealed class Rmf2InlineRenderer
         IReadOnlyDictionary<string, InlineMarkupBinding>? slots = null)
     {
         ArgumentNullException.ThrowIfNull(content);
-        slots ??= new Dictionary<string, InlineMarkupBinding>();
+        return RenderCore(key, content, slots ?? new Dictionary<string, InlineMarkupBinding>());
+    }
+
+    /// <summary>Builds semantic inline runs for typed bound content, applying the same contract checks as the string-key overload.</summary>
+    public IReadOnlyList<InlineMarkupRun> Render(BoundLocalizedTextContent content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return RenderCore(content.Key, content.Content, content.Slots);
+    }
+
+    // Generic over the binding type because IReadOnlyDictionary is invariant; TBinding is a
+    // reference type, so this is shared code without per-instantiation specialization.
+    private IReadOnlyList<InlineMarkupRun> RenderCore<TBinding>(string key, LocalizedTextContent content,
+        IReadOnlyDictionary<string, TBinding> slots) where TBinding : MarkupBinding
+    {
         if (!_slots.TryGetValue(key, out Dictionary<string, string>? required) ||
             !_bounds.TryGetValue(key, out Dictionary<string, (int Min, int Max)>? bounds))
             throw new TranslationFormatException("Unknown RMF2 message contract '" + key + "'.");
         foreach (var slot in required)
-            if (!slots.TryGetValue(slot.Key, out InlineMarkupBinding? binding) || !Matches(slot.Value, binding))
+            if (!slots.TryGetValue(slot.Key, out TBinding? binding) || !Matches(slot.Value, binding))
                 throw new TranslationFormatException("Missing or incompatible binding for slot '" + slot.Key + "'.");
         LocalizedTextContentNode[] nodes = content.Nodes.ToArray(); int at = 0, count = 0;
         var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -203,8 +220,9 @@ public sealed class Rmf2InlineRenderer
                     if (option.Name == "ref" && node.Value is "runic:link" or "runic:action" or "runic:icon")
                     {
                         if (!required.TryGetValue(option.Value, out string? kind) || !bounds.ContainsKey(option.Value) ||
-                            kind != node.Value || !slots.TryGetValue(option.Value, out binding) || !Matches(kind, binding))
+                            kind != node.Value || !slots.TryGetValue(option.Value, out TBinding? bound) || !Matches(kind, bound))
                             throw new TranslationFormatException("Invalid functional slot '" + option.Value + "'.");
+                        binding = (InlineMarkupBinding)(MarkupBinding)bound;
                         occurrences[option.Value] = occurrences.GetValueOrDefault(option.Value) + 1;
                     }
                     else if (!tag.Options.TryGetValue(option.Name, out Option? schema) || !schema.Accepts(option.Value))
@@ -224,10 +242,18 @@ public sealed class Rmf2InlineRenderer
 
     /// <summary>Explicit projection; action labels require opt-in, custom explicit/alternate-text policies require an adapter, and meaningful icons require alternate text in the effective locale.</summary>
     public string ToPlainText(string key, LocalizedTextContent content, IReadOnlyDictionary<string, InlineMarkupBinding>? slots = null,
-        bool allowActionLabels = false, bool annotateLinkDestinations = false)
+        bool allowActionLabels = false, bool annotateLinkDestinations = false) =>
+        Project(Render(key, content, slots), content.Locale, allowActionLabels, annotateLinkDestinations);
+
+    /// <summary>Explicit plain-text projection of typed bound content, with the same policies as the string-key overload.</summary>
+    [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "The overloads take unrelated first parameters (string key vs. bound content), so calls cannot become ambiguous.")]
+    public string ToPlainText(BoundLocalizedTextContent content, bool allowActionLabels = false, bool annotateLinkDestinations = false) =>
+        Project(Render(content), content.Content.Locale, allowActionLabels, annotateLinkDestinations);
+
+    private string Project(IReadOnlyList<InlineMarkupRun> runs, string locale, bool allowActionLabels, bool annotateLinkDestinations)
     {
         var text = new StringBuilder();
-        foreach (InlineMarkupRun run in Render(key, content, slots)) Append(run);
+        foreach (InlineMarkupRun run in runs) Append(run);
         return text.ToString();
         void Append(InlineMarkupRun run)
         {
@@ -240,7 +266,7 @@ public sealed class Rmf2InlineRenderer
             {
                 if (!icon.Decorative)
                 {
-                    string? label = icon.AccessibleName!(content.Locale);
+                    string? label = icon.AccessibleName!(locale);
                     if (string.IsNullOrWhiteSpace(label)) throw new TranslationFormatException("Meaningful icon alternate text is empty.");
                     text.Append(label);
                 }
@@ -252,7 +278,7 @@ public sealed class Rmf2InlineRenderer
             if (annotateLinkDestinations && run.Binding is InlineLinkBinding link) text.Append(" (").Append(link.Destination).Append(')');
         }
     }
-    private static bool Matches(string kind, InlineMarkupBinding binding) => kind switch
+    private static bool Matches(string kind, MarkupBinding? binding) => kind switch
     { "runic:link" => binding is InlineLinkBinding { Destination: not null } link && (!link.Destination.IsAbsoluteUri || link.Destination.Scheme is "http" or "https" or "mailto" or "tel"), "runic:action" => binding is InlineActionBinding { Activate: not null }, "runic:icon" => binding is InlineIconBinding, _ => false };
     private sealed record Tag(bool Standalone, string Children, bool Interactive, string PlainText, Dictionary<string, Option> Options);
     private sealed record Option(string Type, string[] Values, bool LiteralOnly)
