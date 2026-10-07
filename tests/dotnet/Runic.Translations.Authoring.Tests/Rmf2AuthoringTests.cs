@@ -24,6 +24,7 @@ internal static class Rmf2AuthoringTests
         runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
         runner.Add("RMF2 locale plans preserve mounted projects and commit atomically", ExecutionV2Locales);
         runner.Add("Direct MF2 workspaces expose semantic authoring and filename transactions", DirectSources);
+        runner.Add("RMF2 workspaces tolerate malformed source roots so validation can report them", MalformedSourceRoots);
     }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     private static TranslationSource Project() => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}");
@@ -37,6 +38,21 @@ internal static class Rmf2AuthoringTests
         Assert.True(!ReferenceEquals(original, changed), "Changed source reused stale syntax.");
         cache.Create(Path.GetTempPath(), Project(), [Source("de.rmf2", "x = Zwei\n")]);
         Assert.True(!ReferenceEquals(changed, cache.Create(Path.GetTempPath(), Project(), [Source("en.rmf2", "x = Two\n")]).Documents[0]), "Syntax cache exceeded its capacity.");
+    }
+    private static void MalformedSourceRoots()
+    {
+        // An unsaved runic.json is often incomplete. Construction must not fail
+        // with a raw dictionary error; the compiler reports the located problem.
+        const string config = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en","sourceRoots":[{"path":"feature"},{"namespace":["orphan"]},"invalid",{"path":"shop","namespace":["shop"]}]}""";
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", config), [Source("feature/en.rmf2", "title = Feature\n"), Source("shop/en.rmf2", "title = Shop\n")]);
+        Rmf2ResourceDocument shop = workspace.Documents.Single(document => document.Source.Path == "shop/en.rmf2");
+        Assert.Equal("shop.title", string.Join('.', workspace.LogicalPath(shop.Source.Path, shop.Nodes.Single())));
+        Rmf2ResourceDocument feature = workspace.Documents.Single(document => document.Source.Path == "feature/en.rmf2");
+        Assert.Equal("title", string.Join('.', workspace.LogicalPath(feature.Source.Path, feature.Nodes.Single())));
+        foreach (string malformed in new[] {
+            """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"sourceRoots":{"path":"feature"}}""",
+            """["not","an","object"]""" })
+            _ = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", malformed), [Source("feature/en.rmf2", "title = Feature\n")]);
     }
     private static void DirectSources()
     {

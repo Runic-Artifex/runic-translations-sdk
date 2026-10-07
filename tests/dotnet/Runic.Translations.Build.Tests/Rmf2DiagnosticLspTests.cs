@@ -14,7 +14,11 @@ namespace Runic.Translations.Build.Tests;
 internal static class Rmf2DiagnosticLspTests
 {
     internal static void Register(TestRunner runner)
-        => runner.Add("LSP mounted Unicode diagnostic quick fixes share compiler edits and refuse stale resolution", CodeActions);
+    {
+        runner.Add("LSP mounted Unicode diagnostic quick fixes share compiler edits and refuse stale resolution", CodeActions);
+        runner.Add("LSP adds unsaved project-directory buffers only where source discovery would", SourceRootOverlays);
+        runner.Add("LSP reports malformed unsaved source roots as configuration diagnostics", MalformedSourceRoots);
+    }
 
     private static void CodeActions()
     {
@@ -73,6 +77,62 @@ internal static class Rmf2DiagnosticLspTests
             Assert.Equal(text, File.ReadAllText(path), "LSP code-action discovery wrote the source file.");
         }
     }
+    private const string MountedProject = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","sourceRoots":[{"path":"../feature","namespace":["shop"]}]}""";
+
+    private static void SourceRootOverlays()
+    {
+        // With sourceRoots configured, discovery ignores resources in the
+        // project directory itself. An open buffer there must not join the
+        // compilation either, or every preview fails for the whole project.
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("project"));
+        Directory.CreateDirectory(temporary.Resolve("feature"));
+        File.WriteAllText(temporary.Resolve("project/runic.json"), MountedProject);
+        File.WriteAllText(temporary.Resolve("project/en.rmf2"), "stray = Outside every source root\n");
+        File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = Saved\n");
+        string strayUri = new Uri(temporary.Resolve("project/en.rmf2")).AbsoluteUri;
+        string featureUri = new Uri(temporary.Resolve("feature/en.rmf2")).AbsoluteUri;
+        string newFeatureUri = new Uri(temporary.Resolve("feature/de.rmf2")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = strayUri, ["version"] = 1, ["text"] = "stray = Unsaved stray\n" } });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = featureUri, ["version"] = 1, ["text"] = "title = UNSAVED mounted marker\n" } });
+        JsonNode preview = session.Request("workspace/executeCommand", new JsonObject {
+            ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(featureUri, "shop_title", "en", new JsonObject()) });
+        Assert.True(preview["error"] is null, "An open project-directory buffer outside the source roots broke the preview: " + preview.ToJsonString());
+        Assert.Contains("UNSAVED mounted marker", preview["result"]!["runs"]!.ToJsonString());
+        // A new unsaved resource beneath a configured source root still joins.
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = newFeatureUri, ["version"] = 1, ["text"] = "title = Ungespeichert\n" } });
+        JsonNode german = session.Request("workspace/executeCommand", new JsonObject {
+            ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(newFeatureUri, "shop_title", "de", new JsonObject()) });
+        Assert.Contains("Ungespeichert", german.ToJsonString());
+    }
+
+    private static void MalformedSourceRoots()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("project"));
+        Directory.CreateDirectory(temporary.Resolve("feature"));
+        File.WriteAllText(temporary.Resolve("project/runic.json"), MountedProject);
+        File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "title = Saved\n");
+        string configUri = new Uri(temporary.Resolve("project/runic.json")).AbsoluteUri;
+        string featureUri = new Uri(temporary.Resolve("feature/en.rmf2")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = featureUri, ["version"] = 1, ["text"] = "title = Unsaved\n" } });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = configUri, ["version"] = 1,
+            ["text"] = MountedProject.Replace(",\"namespace\":[\"shop\"]", "", StringComparison.Ordinal) } });
+        JsonNode preview = session.Request("workspace/executeCommand", new JsonObject {
+            ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(featureUri, "title", "en", new JsonObject()) });
+        string message = preview["error"]?["message"]?.GetValue<string>() ?? "";
+        Assert.Contains("Missing required member 'namespace'.", message);
+        Assert.False(message.Contains("given key", StringComparison.Ordinal), "A malformed mount leaked a raw dictionary error: " + message);
+        JsonArray config = session.Publications.Last(frame => frame["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" &&
+            frame["params"]?["uri"]?.GetValue<string>() == configUri)["params"]!["diagnostics"]!.AsArray();
+        Assert.True(config.Any(diagnostic => diagnostic?["message"]?.GetValue<string>() == "Missing required member 'namespace'."),
+            "The open runic.json did not receive the located mount diagnostic: " + config.ToJsonString());
+    }
+
     private static JsonObject Position(int line, int character) => new() { ["line"] = line, ["character"] = character };
 
     internal sealed class Session : IDisposable
