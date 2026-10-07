@@ -48,7 +48,9 @@ public sealed class LocalizedTextContent<TSlots> where TSlots : class, IRmf2Slot
         string key = TSlots.MessageKey ?? throw new InvalidOperationException("Typed slot bindings must declare a message key.");
         var bindings = new Dictionary<string, MarkupBinding>(StringComparer.Ordinal);
         slots.CopyTo(bindings);
-        return new BoundLocalizedTextContent(key, Content, new ReadOnlyDictionary<string, MarkupBinding>(bindings));
+        // Snapshot after CopyTo: a hand-written slot type may keep the destination and must not mutate the bound values.
+        var snapshot = new Dictionary<string, MarkupBinding>(bindings, StringComparer.Ordinal);
+        return new BoundLocalizedTextContent(key, Content, new ReadOnlyDictionary<string, MarkupBinding>(snapshot));
     }
 
     /// <summary>Returns the untyped content for the dynamic string-key rendering path.</summary>
