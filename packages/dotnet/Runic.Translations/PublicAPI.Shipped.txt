@@ -1,4 +1,8 @@
 #nullable enable
+Runic.Translations.BoundLocalizedTextContent
+Runic.Translations.BoundLocalizedTextContent.Content.get -> Runic.Translations.LocalizedTextContent!
+Runic.Translations.BoundLocalizedTextContent.Key.get -> string!
+Runic.Translations.BoundLocalizedTextContent.Slots.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.MarkupBinding!>!
 Runic.Translations.CompiledRmf2Annotation
 Runic.Translations.CompiledRmf2Annotation.CompiledRmf2Annotation(string! name, Runic.Translations.CompiledRmf2Value? value = null) -> void
 Runic.Translations.CompiledRmf2Annotation.Name.get -> string!
@@ -171,6 +175,9 @@ Runic.Translations.ExternalTranslationSnapshotFactory.CreateSnapshotAsync(Runic.
 Runic.Translations.ExternalTranslationSnapshotFactory.ExternalTranslationSnapshotFactory(Runic.Translations.IExternalTranslationSource! source, string! catalog, string! contractFingerprint, System.Func<string!, Runic.Translations.TranslationPackContract!>! contractFactory, Runic.Translations.TranslationPackLimits? limits = null, Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null) -> void
 Runic.Translations.IExternalTranslationSource
 Runic.Translations.IExternalTranslationSource.LoadAsync(string! catalog, string! locale, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Runic.Translations.ExternalTranslationPack?>
+Runic.Translations.IRmf2SlotBindings<TSelf>
+Runic.Translations.IRmf2SlotBindings<TSelf>.CopyTo(System.Collections.Generic.IDictionary<string!, Runic.Translations.MarkupBinding!>! destination) -> void
+Runic.Translations.IRmf2SlotBindings<TSelf>.MessageKey.get -> string!
 Runic.Translations.ITextValueFormatter
 Runic.Translations.ITextValueFormatter.Format(in Runic.Translations.TextArgument value, string! resourceLocale) -> string!
 Runic.Translations.ITranslationManager
@@ -235,6 +242,12 @@ Runic.Translations.InlineMarkupRun.Text.init -> void
 Runic.Translations.LocalizedTextContent
 Runic.Translations.LocalizedTextContent.Locale.get -> string!
 Runic.Translations.LocalizedTextContent.Nodes.get -> System.ReadOnlyMemory<Runic.Translations.LocalizedTextContentNode!>
+Runic.Translations.LocalizedTextContent<TSlots>
+Runic.Translations.LocalizedTextContent<TSlots>.Bind(TSlots! slots) -> Runic.Translations.BoundLocalizedTextContent!
+Runic.Translations.LocalizedTextContent<TSlots>.Content.get -> Runic.Translations.LocalizedTextContent!
+Runic.Translations.LocalizedTextContent<TSlots>.Locale.get -> string!
+Runic.Translations.LocalizedTextContent<TSlots>.LocalizedTextContent(Runic.Translations.LocalizedTextContent! content) -> void
+Runic.Translations.LocalizedTextContent<TSlots>.Nodes.get -> System.ReadOnlyMemory<Runic.Translations.LocalizedTextContentNode!>
 Runic.Translations.LocalizedTextContentNode
 Runic.Translations.LocalizedTextContentNode.Annotations.get -> System.ReadOnlyMemory<Runic.Translations.CompiledRmf2Annotation!>
 Runic.Translations.LocalizedTextContentNode.Attributes.get -> System.ReadOnlyMemory<Runic.Translations.CompiledTextMarkupProperty>
@@ -245,13 +258,18 @@ Runic.Translations.LocalizedTextContentNodeKind.ElementEnd = 2 -> Runic.Translat
 Runic.Translations.LocalizedTextContentNodeKind.ElementStandalone = 3 -> Runic.Translations.LocalizedTextContentNodeKind
 Runic.Translations.LocalizedTextContentNodeKind.ElementStart = 1 -> Runic.Translations.LocalizedTextContentNodeKind
 Runic.Translations.LocalizedTextContentNodeKind.Text = 0 -> Runic.Translations.LocalizedTextContentNodeKind
+Runic.Translations.MarkupBinding
+Runic.Translations.MarkupBinding.MarkupBinding() -> void
+Runic.Translations.MarkupBinding.MarkupBinding(Runic.Translations.MarkupBinding! original) -> void
 Runic.Translations.MissingTranslationPolicy
 Runic.Translations.MissingTranslationPolicy.ReturnKey = 1 -> Runic.Translations.MissingTranslationPolicy
 Runic.Translations.MissingTranslationPolicy.ReturnMarker = 2 -> Runic.Translations.MissingTranslationPolicy
 Runic.Translations.MissingTranslationPolicy.Throw = 0 -> Runic.Translations.MissingTranslationPolicy
 Runic.Translations.Rmf2InlineRenderer
+Runic.Translations.Rmf2InlineRenderer.Render(Runic.Translations.BoundLocalizedTextContent! content) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.InlineMarkupRun!>!
 Runic.Translations.Rmf2InlineRenderer.Render(string! key, Runic.Translations.LocalizedTextContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.InlineMarkupBinding!>? slots = null) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.InlineMarkupRun!>!
 Runic.Translations.Rmf2InlineRenderer.Rmf2InlineRenderer(string! contractJson) -> void
+Runic.Translations.Rmf2InlineRenderer.ToPlainText(Runic.Translations.BoundLocalizedTextContent! content, bool allowActionLabels = false, bool annotateLinkDestinations = false) -> string!
 Runic.Translations.Rmf2InlineRenderer.ToPlainText(string! key, Runic.Translations.LocalizedTextContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.InlineMarkupBinding!>? slots = null, bool allowActionLabels = false, bool annotateLinkDestinations = false) -> string!
 Runic.Translations.TextArgument
 Runic.Translations.TextArgument.Format.get -> Runic.Translations.TextArgumentFormat
@@ -437,7 +455,7 @@ Runic.Translations.VerifiedExternalTranslationPack.Messages.get -> System.Collec
 Runic.Translations.VerifiedTranslationPackMessage
 Runic.Translations.VerifiedTranslationPackMessage.Key.get -> Runic.Translations.TranslationKey
 Runic.Translations.VerifiedTranslationPackMessage.Message.get -> Runic.Translations.CompiledTextMessage!
-abstract Runic.Translations.InlineMarkupBinding.<Clone>$() -> Runic.Translations.InlineMarkupBinding!
+abstract Runic.Translations.MarkupBinding.<Clone>$() -> Runic.Translations.MarkupBinding!
 const Runic.Translations.CompiledTranslationCatalog.DynamicKeyId = -1 -> int
 const Runic.Translations.TextPatternFormatter.DefaultMaximumOutputLength = 1048576 -> int
 const Runic.Translations.TextPatternFormatter.MaximumArguments = 32 -> int
@@ -456,6 +474,7 @@ const Runic.Translations.TranslationTransport.Version = 1 -> int
 const Runic.Translations.TranslationsCompatibility.MessageGrammarVersion = 2 -> int
 const Runic.Translations.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 2 -> int
 const Runic.Translations.TranslationsCompatibility.RuntimeAbiVersion = 1 -> int
+const Runic.Translations.TranslationsCompatibility.TypedSlotBindingsVersion = 1 -> int
 override Runic.Translations.CompiledTextMarkupProperty.GetHashCode() -> int
 override Runic.Translations.CompiledTextMessageSelector.GetHashCode() -> int
 override Runic.Translations.CompiledTranslationValue.GetHashCode() -> int
@@ -471,21 +490,28 @@ override Runic.Translations.InlineLinkBinding.<Clone>$() -> Runic.Translations.I
 override Runic.Translations.InlineLinkBinding.Equals(object? obj) -> bool
 override Runic.Translations.InlineLinkBinding.GetHashCode() -> int
 override Runic.Translations.InlineLinkBinding.ToString() -> string!
+override Runic.Translations.InlineMarkupBinding.EqualityContract.get -> System.Type!
 override Runic.Translations.InlineMarkupBinding.Equals(object? obj) -> bool
 override Runic.Translations.InlineMarkupBinding.GetHashCode() -> int
+override Runic.Translations.InlineMarkupBinding.PrintMembers(System.Text.StringBuilder! builder) -> bool
 override Runic.Translations.InlineMarkupBinding.ToString() -> string!
 override Runic.Translations.InlineMarkupRun.Equals(object? obj) -> bool
 override Runic.Translations.InlineMarkupRun.GetHashCode() -> int
 override Runic.Translations.InlineMarkupRun.ToString() -> string!
+override Runic.Translations.MarkupBinding.Equals(object? obj) -> bool
+override Runic.Translations.MarkupBinding.GetHashCode() -> int
+override Runic.Translations.MarkupBinding.ToString() -> string!
 override Runic.Translations.TranslationKey.GetHashCode() -> int
 override Runic.Translations.TranslationPackArgumentContract.GetHashCode() -> int
 override Runic.Translations.TranslationPlaceholderDescriptor.GetHashCode() -> int
 override Runic.Translations.TranslationReferenceArgument.GetHashCode() -> int
 override Runic.Translations.TranslationReferenceJsonContext.GeneratedSerializerOptions.get -> System.Text.Json.JsonSerializerOptions?
 override Runic.Translations.TranslationReferenceJsonContext.GetTypeInfo(System.Type! type) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?
+override abstract Runic.Translations.InlineMarkupBinding.<Clone>$() -> Runic.Translations.InlineMarkupBinding!
 override sealed Runic.Translations.InlineActionBinding.Equals(Runic.Translations.InlineMarkupBinding? other) -> bool
 override sealed Runic.Translations.InlineIconBinding.Equals(Runic.Translations.InlineMarkupBinding? other) -> bool
 override sealed Runic.Translations.InlineLinkBinding.Equals(Runic.Translations.InlineMarkupBinding? other) -> bool
+override sealed Runic.Translations.InlineMarkupBinding.Equals(Runic.Translations.MarkupBinding? other) -> bool
 static Runic.Translations.CompiledTextMarkupProperty.operator !=(Runic.Translations.CompiledTextMarkupProperty left, Runic.Translations.CompiledTextMarkupProperty right) -> bool
 static Runic.Translations.CompiledTextMarkupProperty.operator ==(Runic.Translations.CompiledTextMarkupProperty left, Runic.Translations.CompiledTextMarkupProperty right) -> bool
 static Runic.Translations.CompiledTextMessage.FromRmf2(Runic.Translations.CompiledRmf2Message! message) -> Runic.Translations.CompiledTextMessage!
@@ -505,6 +531,9 @@ static Runic.Translations.InlineMarkupBinding.operator !=(Runic.Translations.Inl
 static Runic.Translations.InlineMarkupBinding.operator ==(Runic.Translations.InlineMarkupBinding? left, Runic.Translations.InlineMarkupBinding? right) -> bool
 static Runic.Translations.InlineMarkupRun.operator !=(Runic.Translations.InlineMarkupRun? left, Runic.Translations.InlineMarkupRun? right) -> bool
 static Runic.Translations.InlineMarkupRun.operator ==(Runic.Translations.InlineMarkupRun? left, Runic.Translations.InlineMarkupRun? right) -> bool
+static Runic.Translations.LocalizedTextContent<TSlots>.implicit operator Runic.Translations.LocalizedTextContent!(Runic.Translations.LocalizedTextContent<TSlots!>! content) -> Runic.Translations.LocalizedTextContent!
+static Runic.Translations.MarkupBinding.operator !=(Runic.Translations.MarkupBinding? left, Runic.Translations.MarkupBinding? right) -> bool
+static Runic.Translations.MarkupBinding.operator ==(Runic.Translations.MarkupBinding? left, Runic.Translations.MarkupBinding? right) -> bool
 static Runic.Translations.TextArgument.CreateRmf2(string! name, Runic.Translations.TextArgument value) -> Runic.Translations.TextArgument
 static Runic.Translations.TextMessageSelector.SelectPlural(decimal value, string! locale, bool ordinal) -> string!
 static Runic.Translations.TextPatternFormatter.Format(string! pattern, System.ReadOnlySpan<Runic.Translations.TextArgument> arguments, string! resourceLocale, Runic.Translations.ITextValueFormatter? valueFormatter = null, int maximumOutputLength = 1048576) -> string!
@@ -528,9 +557,10 @@ static Runic.Translations.TranslationReferenceArgument.operator ==(Runic.Transla
 static Runic.Translations.TranslationReferenceJsonContext.Default.get -> Runic.Translations.TranslationReferenceJsonContext!
 static Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(int requiredVersion) -> void
 static Runic.Translations.TranslationsCompatibility.SupportsRmf2RuntimeAbi(int requiredVersion) -> bool
-virtual Runic.Translations.InlineMarkupBinding.EqualityContract.get -> System.Type!
 virtual Runic.Translations.InlineMarkupBinding.Equals(Runic.Translations.InlineMarkupBinding? other) -> bool
-virtual Runic.Translations.InlineMarkupBinding.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual Runic.Translations.MarkupBinding.EqualityContract.get -> System.Type!
+virtual Runic.Translations.MarkupBinding.Equals(Runic.Translations.MarkupBinding? other) -> bool
+virtual Runic.Translations.MarkupBinding.PrintMembers(System.Text.StringBuilder! builder) -> bool
 virtual Runic.Translations.TranslationPackIntegrityVerifier.Invoke(System.ReadOnlyMemory<byte> content, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 ~Runic.Translations.TranslationReferenceJsonContext.TranslationReference.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Runic.Translations.TranslationReference>
 ~override Runic.Translations.CompiledTextMarkupProperty.Equals(object obj) -> bool

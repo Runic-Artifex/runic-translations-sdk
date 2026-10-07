@@ -1,6 +1,6 @@
 {
   "name": "@runic-artifex/translations-sveltekit",
-  "version": "0.6.0-preview.3",
+  "version": "0.6.0-preview.4",
   "description": "SvelteKit locale routing and request integration for Runic Translations",
   "homepage": "https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/translations-sveltekit#readme",
   "bugs": {

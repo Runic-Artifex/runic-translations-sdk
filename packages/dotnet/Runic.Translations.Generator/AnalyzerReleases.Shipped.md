@@ -41,3 +41,12 @@ RTR0062 | Runic.Translations | Error | Markup slot or project markup reference i
 RTR0065 | Runic.Translations | Error | Message is not executable in the RMF2 profile
 RTR0066 | Runic.Translations | Error | MF2 syntax error
 RTR0067 | Runic.Translations | Error | MF2 data model is invalid
+
+## Release 0.6.0.3
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+RTR0068 | Runic.Translations | Warning | Referenced runtime lacks the readable C# surface
+RTR0069 | Runic.Translations | Warning | Readable C# name is reserved or clashes
