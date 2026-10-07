@@ -4,7 +4,7 @@ using Runic.Application.Views.ReactiveUI;
 
 namespace Runic.Translations.Editor;
 
-public sealed partial class EditorWindow : ReactiveRunicWindow<EditorViewModel>, IDisposable, IAsyncDisposable
+public sealed partial class EditorWindow : ReactiveRunicWindow<EditorViewModel>, IAsyncDisposable
 {
     private readonly CsWebUiBridgeWindow<EditorViewModel> _host;
 
@@ -15,7 +15,6 @@ public sealed partial class EditorWindow : ReactiveRunicWindow<EditorViewModel>,
     public void Show(string entry) => _host.Show(entry);
     public void ShowWebView(string entry) => _host.NativeWindow.ShowWebView(entry);
     public string StartServer(string entry) => _host.StartServer(entry);
-    public ValueTask<CsWebUiBridgeCloseResult> CloseAsync(TimeSpan timeout) => _host.CloseAsync(timeout);
-    public void Dispose() => _host.Dispose();
+    public ValueTask<BridgeWindowCloseResult> CloseAsync(TimeSpan timeout) => _host.CloseAsync(timeout);
     public ValueTask DisposeAsync() => _host.DisposeAsync();
 }

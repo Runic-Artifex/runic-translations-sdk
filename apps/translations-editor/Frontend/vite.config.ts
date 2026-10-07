@@ -1,4 +1,4 @@
-import { runicToolkitAdapter } from "@runic-artifex/sveltekit";
+import { runicAdapter } from "@runic-artifex/sveltekit";
 import tailwindcss from "@tailwindcss/vite";
 import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations";
 import { sveltekit } from "@sveltejs/kit/vite";
@@ -18,7 +18,7 @@ export default defineConfig({
       sourceFiles: ["../EditorResources/runic.json", "../EditorResources/en.rmf2", "../EditorResources/de.rmf2"],
     }),
     sveltekit({
-      adapter: runicToolkitAdapter({ mode: "spa", desktop: false, fallback: "index.html" }),
+      adapter: runicAdapter({ mode: "spa", desktop: false, fallback: "index.html" }),
       router: { type: "hash" },
     }),
   ],

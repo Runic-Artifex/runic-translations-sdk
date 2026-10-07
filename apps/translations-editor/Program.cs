@@ -287,15 +287,15 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         finally { WebUiApplication.Clean(); }
     }
 
-    private static Task<CommandOutcome<EditorCommandResult>> OpenEditorAsync(
+    private static async Task<CommandOutcome<EditorCommandResult>> OpenEditorAsync(
         string workspacePath,
         bool useWebView)
     {
         if (!EditorUiAvailable())
-            return Task.FromResult(CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
-                new CommandFault("REDIT0004", "The packaged web UI is unavailable.")));
+            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
+                new CommandFault("REDIT0004", "The packaged web UI is unavailable."));
         using var services = CreateEditorServices(workspacePath);
-        using (var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host)))
+        await using (var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host)))
         {
             window.SetRootFolder(EditorUiRoot());
             window.SetSize(1440, 900);
@@ -304,7 +304,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             WebUiApplication.Wait();
         }
         WebUiApplication.Clean();
-        return Task.FromResult(CommandOutcome.Success(new EditorCommandResult(string.Empty)));
+        return CommandOutcome.Success(new EditorCommandResult(string.Empty));
     }
 
     private static async Task<CommandOutcome<EditorCommandResult>> ServeHostedWebAsync(string workspacePath)
@@ -313,7 +313,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
                 new CommandFault("REDIT0004", "The packaged web UI is unavailable."));
         using var services = CreateEditorServices(workspacePath);
-        using (var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host)))
+        await using (var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host)))
         {
             window.SetRootFolder(EditorUiRoot());
             string url = window.StartServer("index.html");
