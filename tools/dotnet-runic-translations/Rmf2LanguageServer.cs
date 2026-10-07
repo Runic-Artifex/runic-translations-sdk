@@ -697,6 +697,11 @@ internal sealed class Rmf2LanguageServer
         // the opened workspace (for example an inert preview fixture). Such a
         // project is loaded directly but never added to the watched index.
         string directory = ProjectDirectory(path, allowExternalAncestor: true);
+        // The command resolved its project from disk just now. A runic.json may
+        // have appeared without a watched-file notification (common in loose-file
+        // mode), so cached buffer ownership is re-resolved against the same disk
+        // state. Commands are rare; keystrokes keep using the cache.
+        _bufferProjects.Clear();
         string[] group = BufferUris(directory).ToArray();
         return Workspace(directory, group);
     }

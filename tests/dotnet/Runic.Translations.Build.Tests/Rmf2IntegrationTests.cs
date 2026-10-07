@@ -27,6 +27,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 LSP isolates watched diagnostics by project", LspWatchProjectIsolation);
         runner.Add("RMF2 workspace project indexing is entry-bounded, cancellable, and atomic", ProjectIndexBounds);
         runner.Add("RMF2 LSP overlays buffers on projects outside or above the workspace root", LspLooseFileBuffers);
+        runner.Add("RMF2 LSP regroups open buffers when a nested project appears without a watch", LspNestedProjectWithoutWatch);
         runner.Add("RMF2 LSP project identity follows platform path case rules", ProjectIdentityCase);
     }
 
@@ -107,6 +108,38 @@ internal static class Rmf2IntegrationTests
             Assert.Contains("No runic.json project", session.StandardError);
             int reports = session.StandardError.Split('\n').Count(line => line.StartsWith(orphanReport, StringComparison.Ordinal));
             Assert.Equal(1, reports, $"Unresolved buffer failures must be reported once per category ({operation}).");
+        }
+    }
+
+    private static void LspNestedProjectWithoutWatch()
+    {
+        // Loose-file clients may never send didChangeWatchedFiles. A nested
+        // runic.json created on disk must still regroup open buffers for the
+        // next explicit command instead of reusing cached ownership.
+        foreach (bool parentRoot in new[] { false, true })
+        {
+            using TemporaryDirectory temporary = new();
+            string project = temporary.Resolve("project");
+            CopyDirectory(RepositoryPaths.Resolve("specs/translations/examples/rmf2"), project);
+            string sourcePath = Path.Combine(project, "account", "en.rmf2");
+            string sourceUri = new Uri(sourcePath).AbsoluteUri;
+            string operation = parentRoot ? "parent root" : "null root";
+            using var session = new Rmf2DiagnosticLspTests.Session(temporary.Path);
+            session.Request("initialize", new JsonObject {
+                ["rootUri"] = parentRoot ? new Uri(temporary.Path).AbsoluteUri : null,
+                ["capabilities"] = new JsonObject(),
+            });
+            session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = sourceUri, ["version"] = 1, ["text"] = "heading = UNSAVED nested marker\n" } });
+            JsonNode before = session.Request("workspace/executeCommand", new JsonObject {
+                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(sourceUri, "account_heading", "en", new JsonObject()) });
+            Assert.Contains("UNSAVED nested marker", before.ToJsonString());
+
+            File.WriteAllText(Path.Combine(project, "account", "runic.json"), Project);
+            JsonNode after = session.Request("workspace/executeCommand", new JsonObject {
+                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(sourceUri, "heading", "en", new JsonObject()) });
+            string runs = after["result"]?["runs"]?.ToJsonString() ?? after.ToJsonString();
+            Assert.Contains("UNSAVED nested marker", runs);
+            Assert.False(runs.Contains("Your account", StringComparison.Ordinal), $"Stale buffer ownership rendered the saved file ({operation}).");
         }
     }
 
