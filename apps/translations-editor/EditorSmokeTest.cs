@@ -83,6 +83,66 @@ internal static class EditorSmokeTest
         Require(preview.RenderedJson?.Contains("Exactly one item", StringComparison.Ordinal) == true, "Mounted selected example wasn't previewed canonically.");
     }
 
+    private static async Task MalformedManifestJourneyAsync(string root)
+    {
+        // A hand-edited or half-saved runic.json must produce diagnostics, not
+        // exceptions, in load, mutation planning and the external-change scan,
+        // and the editor must recover once the manifest is fixed.
+        string project = Path.Combine(root, "translations"), feature = Path.Combine(root, "feature");
+        Directory.CreateDirectory(project); Directory.CreateDirectory(feature);
+        const string valid = "{\"schemaVersion\":1,\"catalog\":\"manifest\",\"code\":{\"namespace\":\"Smoke.Translations\",\"className\":\"ManifestText\"},\"baseLocale\":\"en\",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]}\n";
+        string manifest = Path.Combine(project, "runic.json");
+        await File.WriteAllTextAsync(manifest, valid).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(feature, "en.rmf2"), "title = Shop\n").ConfigureAwait(false);
+        using var session = new EditorSession(root);
+        WorkspaceSnapshot initial = await session.LoadAsync().ConfigureAwait(false);
+        Require(initial.Success && initial.Documents.Any(document => document.Path == "feature/en.rmf2"), "The manifest fixture did not load.");
+        await DrainExternalChangesAsync(session, null).ConfigureAwait(false);
+
+        var cases = new (string Name, string Content, string? Message)[] {
+            ("array root", "[\"not\",\"an\",\"object\"]\n", "Runic project root must be an object."),
+            ("missing path", valid.Replace("\"path\":\"../feature\",", "", StringComparison.Ordinal), "Missing required member 'path'."),
+            ("non-array sourceRoots", valid.Replace("[{\"path\":\"../feature\",\"namespace\":[\"shop\"]}]", "{\"path\":\"../feature\",\"namespace\":[\"shop\"]}", StringComparison.Ordinal), null),
+            ("half-saved JSON", valid[..(valid.Length / 2)], null),
+        };
+        foreach (var malformed in cases)
+        {
+            await File.WriteAllTextAsync(manifest, malformed.Content).ConfigureAwait(false);
+            // The scan must report the manifest change and then settle; a scan
+            // that throws would fail again on every subsequent check. Scan before
+            // loading: a load resets the external-change baseline.
+            await DrainExternalChangesAsync(session, "translations/runic.json").ConfigureAwait(false);
+            await session.CheckExternalChangesAsync().ConfigureAwait(false);
+            WorkspaceSnapshot broken = await session.LoadAsync().ConfigureAwait(false);
+            EditorDiagnostic[] manifestErrors = broken.Diagnostics
+                .Where(diagnostic => diagnostic.Path == "translations/runic.json" && diagnostic.Severity == "error").ToArray();
+            Require(!broken.Success && manifestErrors.Length != 0, $"A malformed manifest ({malformed.Name}) did not produce a manifest diagnostic.");
+            Require(malformed.Message is null || manifestErrors.Any(diagnostic => diagnostic.Message == malformed.Message),
+                $"The {malformed.Name} manifest diagnostic was not '{malformed.Message}': {string.Join(" | ", manifestErrors.Select(diagnostic => diagnostic.Message))}");
+            EditorMutationPreview mutation = session.PreviewMutation(new EditorMutationRequest("create-key", null, null, null, null, null, "shop.subtitle", "Subtitle"));
+            Require(!mutation.Ok, $"Mutation planning accepted a malformed manifest ({malformed.Name}).");
+        }
+
+        await File.WriteAllTextAsync(manifest, valid).ConfigureAwait(false);
+        await DrainExternalChangesAsync(session, "translations/runic.json").ConfigureAwait(false);
+        WorkspaceSnapshot recovered = await session.LoadAsync().ConfigureAwait(false);
+        Require(recovered.Success && recovered.Documents.Any(document => document.Path == "feature/en.rmf2"), "The editor did not recover after the manifest was fixed.");
+    }
+
+    private static async Task DrainExternalChangesAsync(EditorSession session, string? expectedPath)
+    {
+        var deadline = System.Diagnostics.Stopwatch.StartNew();
+        bool observed = expectedPath is null;
+        while (deadline.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            EditorExternalChanges changes = await session.CheckExternalChangesAsync().ConfigureAwait(false);
+            observed |= changes.Paths.Contains(expectedPath);
+            if (observed && changes.Paths.Count == 0) return;
+            await Task.Delay(100).ConfigureAwait(false);
+        }
+        Require(observed, $"The external-change scan never reported '{expectedPath}'.");
+    }
+
     public static async Task<int> RunAsync(string workspacePath)
     {
         string container = Path.Combine(Path.GetTempPath(), $"runic-editor-smoke-{Guid.NewGuid():N}");
@@ -90,6 +150,7 @@ internal static class EditorSmokeTest
         {
             await AuthoringJourneyAsync(Path.Combine(container, "authoring")).ConfigureAwait(false);
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
+            await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
             string project = Path.Combine(container, "translations");
             // Smoke tests exercise an intentionally minimal workspace. They must
             // never mutate the packaged example or a caller-provided directory.

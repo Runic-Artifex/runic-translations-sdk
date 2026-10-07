@@ -20,6 +20,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 CLI accepts symlinked ancestors but rejects links below the project", LinkedAncestorCli);
         runner.Add("RMF2 CLI emits and verifies the cohesive contract", ActivatedV5Cli);
         runner.Add("RMF2 CLI reports a non-object runic.json as a configuration diagnostic", NonObjectConfigurationCli);
+        runner.Add("RMF2 manifest reader reports malformed source layouts without throwing", ManifestReaderLayouts);
         runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
         runner.Add("RMF2 CLI re-discovers mounted add, change, rename, and delete", MountedCliMembership);
         runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
@@ -253,6 +254,28 @@ internal static class Rmf2IntegrationTests
         var rejected = TestFixture.RunTool(temporary, "generate", "--project", "home/translations", "--output", "out", "--emit-json");
         Assert.False(rejected.ExitCode == 0, rejected.Combined);
         Assert.Contains("symbolic link", rejected.Combined);
+    }
+    private static void ManifestReaderLayouts()
+    {
+        string directory = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "runic-manifest-reader"));
+        Runic.Translations.Internal.TranslationManifestLayout Read(string json) =>
+            Runic.Translations.Internal.TranslationManifestReader.Read(Encoding.UTF8.GetBytes(json), directory);
+        var implicitRoot = Read(Project);
+        Assert.True(implicitRoot.IsValid && implicitRoot.SourceRoots.Single() == directory && implicitRoot.BaseLocale == "en", "Missing sourceRoots must mean the project directory.");
+        var mounted = Read(Project[..^1] + ",\"sourceRoots\":[{\"path\":\"../feature\",\"namespace\":[]}]}");
+        Assert.Equal(Path.GetFullPath("../feature", directory), mounted.SourceRoots.Single());
+        foreach ((string json, string error) in new[] {
+            ("""["not","an","object"]""", "Runic project root must be an object."),
+            (Project[..^1] + ",\"sourceRoots\":{\"path\":\"../feature\"}}", "sourceRoots must be an array."),
+            (Project[..^1] + ",\"sourceRoots\":[{\"namespace\":[]}]}", "Each source root must declare a non-empty path."),
+            (Project[..^1] + ",\"sourceRoots\":[\"../feature\"]}", "Each source root must declare a non-empty path."),
+            (Project[..20], "runic.json is not valid JSON."),
+        })
+        {
+            var layout = Read(json);
+            Assert.Equal(error, layout.Error);
+            Assert.Equal(0, layout.SourceRoots.Count, "A malformed manifest must not expose partial source roots.");
+        }
     }
     private static void NonObjectConfigurationCli()
     {
