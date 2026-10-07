@@ -162,5 +162,6 @@ does not create a missing expected-output tree. Exit
 code `0` is valid and current, `1` represents catalog or generated-output
 diagnostics, and `2` represents invalid invocation or an operational failure.
 
-For SvelteKit locale routing and request-scoped SSR, pass the generated locale
-metadata and `/server` context to the Runic SvelteKit adapter.
+For SvelteKit locale routing and request-scoped SSR, continue with the
+[SvelteKit quick start](quickstart-sveltekit.md). It passes the generated
+`/server` context to the Runic SvelteKit adapter.
