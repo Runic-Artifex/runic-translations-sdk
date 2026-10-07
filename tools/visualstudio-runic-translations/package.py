@@ -64,8 +64,8 @@ if args.check_source:
     target = dict(source_contract['target'][0])
     prerequisite = dict(source_contract['prerequisite'])
     assert identity == {'Id': 'Runic.Artifex.Translations.Rmf2', 'Language': 'en-US', 'Publisher': 'Runic Artifex'}, 'Unexpected source VSIX identity'
-    assert target == {'Id': 'Microsoft.VisualStudio.Community', 'Version': '[17.14,19.0)'}, 'Manifest must declare the 17.14 API floor through the 18.x host line'
-    assert prerequisite['Id'] == 'Microsoft.VisualStudio.Component.CoreEditor' and prerequisite['Version'] == '[17.14,19.0)', 'Core editor prerequisite must match the declared installation range'
+    assert target == {'Id': 'Microsoft.VisualStudio.Community', 'Version': '[18.0,19.0)'}, 'Manifest must declare the Visual Studio 2026 (18.x) host line'
+    assert prerequisite['Id'] == 'Microsoft.VisualStudio.Component.CoreEditor' and prerequisite['Version'] == '[18.0,19.0)', 'Core editor prerequisite must match the declared installation range'
     assert source_contract['target'][1] == 'amd64', 'VSIX must declare the amd64 product architecture'
     assert source_contract['license'] == 'LICENSE.txt', 'VSIX must carry the packaged license name'
     assert {(dict(asset)['Type'], dict(asset)['Path']) for asset in source_contract['assets']} == {
