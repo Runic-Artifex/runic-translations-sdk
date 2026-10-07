@@ -264,9 +264,13 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         };
         // The readable surface needs the typed slot types of a runtime that declares
         // TypedSlotBindingsVersion. Without it, keep the encoded files and explain the gap.
-        if (readableSurface) outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpReadable(linked));
-        else context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.ReadableSurfaceUnsupported, Location.None,
-            "The referenced Runic.Translations runtime does not support the readable C# surface; update it. The encoded accessors are still generated."));
+        // A class named like a facade member gets no readable file; the compiler already reported RTR0069.
+        if (Rmf2ReadableNamesV1.SupportsClassName(linked.ClassName))
+        {
+            if (readableSurface) outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpReadable(linked));
+            else context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.ReadableSurfaceUnsupported, Location.None,
+                "The referenced Runic.Translations runtime does not support the readable C# surface; update it. The encoded accessors are still generated."));
+        }
         var emittedHints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int index = 0; index < outputs.Count; index++)
         {
