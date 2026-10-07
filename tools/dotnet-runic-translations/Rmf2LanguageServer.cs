@@ -679,7 +679,8 @@ internal sealed class Rmf2LanguageServer
         try
         {
             using var document = System.Text.Json.JsonDocument.Parse(text);
-            if (!document.RootElement.TryGetProperty("sourceRoots", out var mounts) || mounts.ValueKind != System.Text.Json.JsonValueKind.Array)
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("sourceRoots", out var mounts) || mounts.ValueKind != System.Text.Json.JsonValueKind.Array)
                 return [directory];
             return mounts.EnumerateArray()
                 .Where(mount => mount.ValueKind == System.Text.Json.JsonValueKind.Object &&

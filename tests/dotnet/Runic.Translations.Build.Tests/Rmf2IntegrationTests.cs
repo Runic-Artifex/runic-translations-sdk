@@ -19,6 +19,7 @@ internal static class Rmf2IntegrationTests
         runner.Add("RMF2 CLI discovers feature mounts and produces cohesive packs", MountedCli);
         runner.Add("RMF2 CLI accepts symlinked ancestors but rejects links below the project", LinkedAncestorCli);
         runner.Add("RMF2 CLI emits and verifies the cohesive contract", ActivatedV5Cli);
+        runner.Add("RMF2 CLI reports a non-object runic.json as a configuration diagnostic", NonObjectConfigurationCli);
         runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
         runner.Add("RMF2 CLI re-discovers mounted add, change, rename, and delete", MountedCliMembership);
         runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
@@ -251,6 +252,17 @@ internal static class Rmf2IntegrationTests
         var rejected = TestFixture.RunTool(temporary, "generate", "--project", "home/translations", "--output", "out", "--emit-json");
         Assert.False(rejected.ExitCode == 0, rejected.Combined);
         Assert.Contains("symbolic link", rejected.Combined);
+    }
+    private static void NonObjectConfigurationCli()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations"));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), """["not","an","object"]""");
+        File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "x = Hello\n");
+        ProcessResult result = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+        Assert.Equal(1, result.ExitCode, result.Combined);
+        Assert.Contains("RTR0019", result.Combined);
+        Assert.Contains("Runic project root must be an object.", result.Combined);
     }
     private static void ActivatedV5Cli()
     {

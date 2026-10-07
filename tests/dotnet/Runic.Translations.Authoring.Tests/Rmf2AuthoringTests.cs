@@ -53,6 +53,12 @@ internal static class Rmf2AuthoringTests
             """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"sourceRoots":{"path":"feature"}}""",
             """["not","an","object"]""" })
             _ = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", malformed), [Source("feature/en.rmf2", "title = Feature\n")]);
+
+        // Slot renames read markup aliases from the project; a non-object
+        // configuration contributes no aliases instead of failing.
+        string renamed = Encoding.UTF8.GetString(Rmf2ResourceWriter.RenameSlot(
+            Source("en.rmf2", "x = {#link ref=help}Help{/link}\n"), "x", "help", "docs", Source("runic.json", """["not","an","object"]""")));
+        Assert.True(renamed.Contains("ref=docs", StringComparison.Ordinal), "Slot rename failed with a non-object project: " + renamed);
     }
     private static void DirectSources()
     {

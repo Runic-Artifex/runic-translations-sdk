@@ -30,6 +30,10 @@ internal static class InputFiles
         try { config = JsonDocument.Parse(project.GetUtf8Bytes()); }
         catch (JsonException) { return new CompilerInputs(project, messages); }
         using var configLifetime = config;
+        // A non-object root (for example an array) is malformed like invalid
+        // JSON: return no sources and let the compiler report the located
+        // configuration diagnostic instead of failing on property access.
+        if (config.RootElement.ValueKind != JsonValueKind.Object) return new CompilerInputs(project, messages);
         var roots = new List<string>();
         if (config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
         {

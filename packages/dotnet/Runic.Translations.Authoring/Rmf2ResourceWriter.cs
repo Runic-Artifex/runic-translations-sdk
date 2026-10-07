@@ -74,9 +74,10 @@ public static class Rmf2ResourceWriter
         if (project is not null)
         {
             using var config = JsonDocument.Parse(project.GetUtf8Bytes());
-            if (config.RootElement.TryGetProperty("markup", out var markup) && markup.TryGetProperty("aliases", out var aliases))
+            if (config.RootElement.ValueKind == JsonValueKind.Object && config.RootElement.TryGetProperty("markup", out var markup) &&
+                markup.ValueKind == JsonValueKind.Object && markup.TryGetProperty("aliases", out var aliases) && aliases.ValueKind == JsonValueKind.Object)
                 foreach (var alias in aliases.EnumerateObject())
-                    if (alias.Value.GetString() is "runic:link" or "runic:action" or "runic:icon") functional.Add(alias.Name);
+                    if (alias.Value.ValueKind == JsonValueKind.String && alias.Value.GetString() is "runic:link" or "runic:action" or "runic:icon") functional.Add(alias.Name);
         }
         var references = node.MessageSyntax!.Expressions.Where(expression => expression.MarkupName is not null && functional.Contains(expression.MarkupName) && expression.MarkupKind != Mf2MarkupKind.Close)
             .SelectMany(expression => expression.Options.Where(option => option.Name == "ref" && option.Value is { Kind: not Mf2OperandKind.Variable })).Select(option => option.Value!).ToArray();
