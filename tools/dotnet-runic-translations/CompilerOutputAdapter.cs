@@ -25,7 +25,8 @@ internal static class CompilerOutputAdapter
             outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(project));
             outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project));
             // No reference set here, so the readable file is always written; an old runtime fails with CS0246.
-            outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpReadable(project));
+            if (Rmf2ReadableNamesV1.SupportsClassName(project.ClassName))
+                outputs.Add(TranslationOutputRenderer.RenderRmf2V5CSharpReadable(project));
         }
         if ((emission & ToolEmission.Json) != 0)
         {

@@ -28,6 +28,9 @@ internal static class Rmf2ReadableNamesV1
     // Facade members: the version constant and the facade's field.
     private static readonly string[] FacadeMembers = ["ReadableNameVersion", "__text"];
 
+    /// <summary>False when the class name equals a member the readable facade adds to the generated class.</summary>
+    internal static bool SupportsClassName(string className) => className is not ("Messages" or "__readable");
+
     internal static string MessagesTypeName(string className) => className + "Messages";
     internal static string SlotsTypeName(string className) => className + "Slots";
 

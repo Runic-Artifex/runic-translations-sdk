@@ -367,6 +367,20 @@ internal static class GeneratorReadableTests
         Assert.Equal(DiagnosticSeverity.Error, run.SingleResult.Diagnostics.Single().Severity, "escalated severity");
         Diagnostic[] errors = run.Compilation.GetDiagnostics().Where(static item => item.Severity >= DiagnosticSeverity.Warning).ToArray();
         Assert.Equal(0, errors.Length, string.Join("\n", errors.Select(static item => item.ToString())));
+
+        // A class named like a facade member keeps building with its encoded surface only.
+        GeneratorRun messages = GeneratorTestHost.RunWithConsumer("""
+            namespace Example.Consumer;
+            public static class Probe
+            {
+                public static string Run(Example.Translations.Messages text) => text.r_6b657074;
+            }
+            """, ProjectInput(project.Replace("\"AppText\"", "\"Messages\"", StringComparison.Ordinal)), EnglishInput("kept = Kept\n"));
+        Assert.Equal("RTR0069", messages.SingleResult.Diagnostics.Single().Id, "class-name diagnostic");
+        Assert.Equal("Messages.Accessors.g.cs|Messages.CatalogData.g.cs|Messages.Keys.g.cs|Messages.Registration.g.cs",
+            string.Join("|", messages.SingleResult.GeneratedSources.Select(static item => item.HintName).Order(StringComparer.Ordinal)), "class-name hint files");
+        Diagnostic[] classNameProblems = messages.Compilation.GetDiagnostics().Where(static item => item.Severity >= DiagnosticSeverity.Warning).ToArray();
+        Assert.Equal(0, classNameProblems.Length, string.Join("\n", classNameProblems.Select(static item => item.ToString())));
     }
 
     private static void ReflectionFreeAndAdditive()
