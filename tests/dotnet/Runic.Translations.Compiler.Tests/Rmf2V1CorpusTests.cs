@@ -20,6 +20,7 @@ internal static class Rmf2V1CorpusTests
         runner.Add("RMF2 v1 corpus freezes the linked contract layouts fingerprints and artifacts", Contract);
         runner.Add("RMF2 v1 corpus agrees across linked .NET loaded packs generated ESM and dynamic ESM packs", Execution);
         runner.Add("RMF2 v1 corpus pack rejection taxonomy agrees across .NET and ESM", InvalidPacks);
+        runner.Add("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical beside the readable surface", EncodedOutputs);
     }
 
     private static void Contract()
@@ -159,6 +160,30 @@ internal static class Rmf2V1CorpusTests
             Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Id + ": " + item.Message)));
             yield return result.Project!;
         }
+    }
+
+    // Pinned before the readable C# surface (W220-002) was added. The readable file is a new,
+    // separate output; the encoded C# files and ESM must not change.
+    private const string EncodedOutputDigest = "470499a6cd9d963de245759a002355b5f905cce74534fe7db6be0d59efd2b7ec";
+    private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
+
+    private static void EncodedOutputs()
+    {
+        Rmf2ProjectV5 project = Compile();
+        TranslationGeneratedOutput[] outputs =
+        [
+            TranslationOutputRenderer.RenderRmf2V5CSharpKeys(project),
+            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(project),
+            TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(project),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project),
+            .. TranslationOutputRenderer.RenderRmf2V5EsmModules(project),
+        ];
+        string digest = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+            string.Join("\n", outputs.Select(output => output.RelativePath + " " + output.Sha256)))));
+        Assert.Equal(EncodedOutputDigest, digest, "Encoded C# and ESM output digest");
+        Assert.True(TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(Root, "runic.json"))),
+            CorpusSources.Select(path => new TranslationSource("translations/" + path, File.ReadAllBytes(Path.Combine(Root, path)))))
+            .Diagnostics.All(diagnostic => diagnostic.Id != "RTR0069"), "The corpus reported a readable-name warning.");
     }
 
     private static Rmf2ProjectV5 Compile(bool reverse = false)

@@ -145,6 +145,11 @@ public static partial class TranslationCompiler
             }
             contracts.Add(new(contracts.Count, pair.Key, Array.AsReadOnly(pair.Value.Source.Path), pair.Value.Linked.Message.Inputs,
                 requirements, names.Count != 0, names.ToArray()));
+            // The readable C# surface leaves out a message with a reserved or clashing name;
+            // its encoded member stays. Reported by every host because `code` is required.
+            if (Rmf2ReadableNamesV1.SupportsClassName(manifest.ClassName) &&
+                !Rmf2ReadableNamesV1.TryCreate(manifest.ClassName, contracts[^1], out _, out string? readableProblem))
+                diagnostics.Add(Rmf2ReadableNamesV1.DiagnosticId, TranslationDiagnosticSeverity.Warning, readableProblem!, pair.Value.Source.Node.NameLocation);
         }
         // Allowed extra keys are retained for dynamic consumers, but never add
         // canonical generated API members. Their contracts must still agree.

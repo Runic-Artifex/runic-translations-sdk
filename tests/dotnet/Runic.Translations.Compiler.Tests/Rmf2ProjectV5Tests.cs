@@ -27,6 +27,9 @@ internal static class Rmf2ProjectV5Tests
         runner.Add("RMF2 v5 fallback changes freshness while preserving caller compatibility", Fallback);
         runner.Add("RMF2 v5 allowed extra keys retain separate dynamic contracts", ExtraKeys);
         runner.Add("RMF2 v5 generated names are NFC injective portable and order independent", Names);
+        runner.Add("RMF2 readable C# names use verbatim identifiers and the encoded fallback", ReadableNames);
+        runner.Add("RMF2 readable C# names report reserved keys slots and clashes as RTR0069", ReadableReserved);
+        runner.Add("RMF2 readable C# names are stable and leave fingerprints unchanged", ReadableStability);
         runner.Add("RMF2 v5 metadata spans limits and cancellation retain project validation", Validation);
     }
 
@@ -266,6 +269,95 @@ internal static class Rmf2ProjectV5Tests
         Assert.Equal(string.Join(',', generated.Reverse()), string.Join(',', names.Reverse().Select(Rmf2GeneratedNamesV1.Identifier)));
         var broad = Good("x = {$用户} {$café} {$a-b} {$class}");
         Assert.Equal(4, broad.CanonicalMessages[0].Inputs.Count);
+    }
+    private static Rmf2ReadableMessageV1 Readable(Rmf2ProjectV5 project, string key)
+    {
+        Assert.True(Rmf2ReadableNamesV1.TryCreate(project.ClassName, project.CanonicalMessages.Single(message => message.Key == key), out var readable, out string? problem),
+            "Readable names rejected '" + key + "': " + problem);
+        return readable!;
+    }
+    private static string Joined(IEnumerable<Rmf2ReadableNameV1> names) => string.Join(",", names.Select(name => name.Source + "=" + name.Identifier));
+    private static void ReadableNames()
+    {
+        var hostile = Good("hostile =\n  .input {$__proto__ :string}\n  .input {$constructor :string}\n  .input {$user-name :string}\n  .input {$café :string}\n  .input {$用户 :string}\n  {{{$__proto__}{$constructor}{$user-name}{$café}{$用户}}}");
+        Rmf2ReadableMessageV1 message = Readable(hostile, "hostile");
+        Assert.Equal("hostile", message.Member);
+        // Canonical contract order (ordinal by NFC name).
+        Assert.Equal("__proto__=__proto__,café=" + Rmf2GeneratedNamesV1.Identifier("café") + ",constructor=constructor,user-name=r_757365722d6e616d65,用户=" + Rmf2GeneratedNamesV1.Identifier("用户"),
+            Joined(message.Inputs));
+        Assert.Equal(Rmf2GeneratedNamesV1.Identifier("café"), message.Inputs[1].Identifier);
+        Assert.Equal(0, message.Slots.Count);
+
+        var slots = Good("help = {#link ref=help-link}Help{/link} {#link ref=|app:x|}X{/link} {#action ref=retry}Retry{/action}");
+        Assert.Equal("app:x=" + Rmf2GeneratedNamesV1.Identifier("app:x") + ",help-link=r_68656c702d6c696e6b,retry=retry", Joined(Readable(slots, "help").Slots));
+
+        var nested = Good("checkout {\n  help = {#link ref=guide}Guide{/link}\n}");
+        Assert.Equal("checkout_help", Readable(nested, "checkout_help").Member);
+        Assert.Equal("guide=guide", Joined(Readable(nested, "checkout_help").Slots));
+
+        // Names the generated slot type handles structurally are accepted.
+        foreach (string slot in new[] { "MessageKey", "CopyTo", "d", "destination", "__destination" })
+        {
+            var result = Compile("x = {#link ref=" + slot + "}Go{/link}");
+            Assert.True(result.Success && result.Diagnostics.All(d => d.Id != "RTR0069"), "Slot '" + slot + "' was rejected.\n" + Errors(result));
+            Assert.Equal(slot, Readable(result.Project!, "x").Slots.Single().Identifier);
+        }
+
+        // Class names equal to a member the readable facade adds: one RTR0069 warning, encoded surface kept.
+        foreach (string className in new[] { "Messages", "__readable" })
+        {
+            var result = TranslationCompiler.CompileRmf2ProjectV5(Source("translations/runic.json",
+                "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"" + className + "\"},\"baseLocale\":\"en\"}"),
+                [Source("translations/en.rmf2", "x = X\nToString = Y")]);
+            Assert.True(result.Success, "Class name '" + className + "' was rejected.\n" + Errors(result));
+            TranslationDiagnostic warning = result.Diagnostics.Single();
+            Assert.Equal("RTR0069", warning.Id, className);
+            Assert.Equal("translations/runic.json", warning.Location.Path, className + " location");
+            Assert.True(!Rmf2ReadableNamesV1.SupportsClassName(className), className);
+        }
+        Assert.True(Rmf2ReadableNamesV1.SupportsClassName("AppText") && Rmf2ReadableNamesV1.SupportsClassName("messages"), "Supported class names were rejected.");
+    }
+    private static void ReadableReserved()
+    {
+        foreach (string key in new[] { "ToString", "Equals", "GetHashCode", "GetType", "MemberwiseClone", "Finalize", "ReferenceEquals", "__text", "ReadableNameVersion", "AppText", "AppTextMessages", "AppTextSlots" })
+            ReadableWarning(key + " = Text\nkept = Kept", key);
+        ReadableWarning("guide = {#link ref=guide}Guide{/link}\nkept = Kept", "guide");
+        ReadableWarning("x = {#link ref=ToString}Go{/link}\nkept = Kept", "x");
+        ReadableWarning("x = {$r_757365722d6e616d65} {$user-name}\nkept = Kept", "x");
+        ReadableWarning("x = {#link ref=r_612d62}A{/link}{#link ref=a-b}B{/link}\nkept = Kept", "x");
+        // Inputs and slots are separate scopes: an input and a slot with the same readable name do not clash.
+        var scopes = Compile("x = {$r_612d62} {#link ref=a-b}B{/link}");
+        Assert.True(scopes.Success && scopes.Diagnostics.All(d => d.Id != "RTR0069"), Errors(scopes));
+        // Object member names are allowed as inputs; only the slot and key lists are reserved.
+        var input = Compile("x = {$ToString}");
+        Assert.True(input.Success && input.Diagnostics.All(d => d.Id != "RTR0069"), Errors(input));
+    }
+    private static void ReadableWarning(string english, string key)
+    {
+        var result = Compile(english);
+        Assert.True(result.Success, "RTR0069 must stay a warning.\n" + Errors(result));
+        TranslationDiagnostic warning = result.Diagnostics.Single(d => d.Id == "RTR0069");
+        Assert.Equal(TranslationDiagnosticSeverity.Warning, warning.Severity);
+        Assert.True(warning.Message.Contains("'" + key + "'", StringComparison.Ordinal), warning.Message);
+        Assert.Equal("translations/en.rmf2", warning.Location.Path);
+        int name = english.IndexOf(key + " =", StringComparison.Ordinal);
+        if (name < 0) name = english.IndexOf(key, StringComparison.Ordinal);
+        Assert.Equal(Encoding.UTF8.GetByteCount(english[..name]), warning.Location.StartByte, "RTR0069 location for " + key);
+        Assert.True(!Rmf2ReadableNamesV1.TryCreate(result.Project!.ClassName, result.Project.CanonicalMessages.Single(m => m.Key == key), out _, out _), "Reserved message stayed readable.");
+        Assert.True(Rmf2ReadableNamesV1.TryCreate(result.Project.ClassName, result.Project.CanonicalMessages.Single(m => m.Key == "kept"), out _, out _), "An unrelated message was dropped.");
+    }
+    private static void ReadableStability()
+    {
+        const string english = "greeting = Hello {$name}\nhelp = {#link ref=guide}Guide{/link} {#action ref=retry}Retry{/action}";
+        var before = Good(english);
+        var after = Good(english + "\nunrelated = {$user-name} {#link ref=other}x{/link}");
+        foreach (string key in new[] { "greeting", "help" })
+        {
+            Rmf2ReadableMessageV1 first = Readable(before, key), second = Readable(after, key);
+            Assert.Equal(first.Member + "|" + Joined(first.Inputs) + "|" + Joined(first.Slots), second.Member + "|" + Joined(second.Inputs) + "|" + Joined(second.Slots));
+        }
+        // Readable names add no fingerprint input: the corpus pins its fingerprint, source hash and outputs (Rmf2V1CorpusTests).
+        Assert.Equal(1, Rmf2ReadableNamesV1.Version);
     }
     private static void ExtraKeys()
     {

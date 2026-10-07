@@ -107,6 +107,80 @@ collisions. Generator emission uses this mapping and separate generated helper
 scopes. RMF2 resource keys retain their existing ASCII path rules and
 underscore-key collision rejection.
 
+## Readable C# name policy version 1
+
+Generated C# also exposes a readable surface beside the encoded members
+(decision D016). It is additive: the generated-name mapping version 1 above,
+the encoded members, the `r_args_*` members, keys, the caller fingerprint and
+all ABIs are unchanged, and no readable name is part of the caller fingerprint,
+the web module manifest, ESM or the corpus index. `<ClassName>Messages.ReadableNameVersion`
+is always `1` for this policy. The readable names below are guaranteed for
+version 1.
+
+Facade and types:
+
+- The facade is the top-level sealed class `<ClassName>Messages`, reached
+  through the instance property `<ClassName>.Messages`.
+- The slot types of structured messages are nested in the top-level static
+  class `<ClassName>Slots` as `<ClassName>Slots.<key>`. Every structured message
+  has a slot type, which is empty when the message has no functional slots.
+- Visibility follows `code.visibility`.
+
+Message members:
+
+- A canonical message's member name is its canonical key, verbatim (keys are
+  already ASCII identifiers and unique, see RTR0018). There is no case change,
+  PascalCase or grouping by path.
+- The member is a property when the message has no inputs and a method
+  otherwise. A plain message returns `string`; a structured message returns
+  `LocalizedTextContent<<ClassName>Slots.<key>>`.
+- Extra (non-canonical) keys are not part of the readable surface.
+
+Input parameters and slot IDs:
+
+- A name matching `^[A-Za-z_][A-Za-z0-9_]*$` is used verbatim.
+- Any other name uses its generated-name v1 encoding (`r_<hex>` of the NFC
+  UTF-8 bytes) for that parameter or slot property only; the message stays on
+  the readable surface. There is no Unicode verbatim name, transliteration,
+  suffixing or rewriting of `-` to `_`.
+- Slot properties and slot constructor parameters use the same names.
+- Input parameters follow the canonical contract's input order. Slot
+  constructor parameters follow the contract's slot order (ordinal by slot ID).
+
+Reserved names and clashes. Names are compared ordinally after the verbatim or
+encoded rule. A message that matches one of these rules is left out of the
+readable surface, stays available through its encoded member, and is reported
+as warning RTR0069 at its base-locale name:
+
+- Message keys `Equals`, `GetHashCode`, `ToString`, `GetType`,
+  `MemberwiseClone`, `Finalize`, `ReferenceEquals`, `ReadableNameVersion`,
+  `__text`, `<ClassName>`, `<ClassName>Messages` and `<ClassName>Slots`.
+- Slot names equal to one of the `object` members above, or to the message key.
+  `MessageKey`, `CopyTo`, `d`, `destination` and `__destination` are allowed.
+- A verbatim input name equal to the encoded name of another input of the same
+  message, or a verbatim slot ID equal to the encoded name of another slot of
+  the same message. Inputs and slots are separate scopes.
+
+If `code.className` is `Messages` or `__readable`, which name members the
+facade adds to the generated class, no readable surface is generated and
+RTR0069 is reported once at `code.className`; the encoded surface is unchanged.
+
+A message's readable names depend only on its own key, input names, slot IDs,
+the class name and the fixed lists above, so adding or removing another message
+never renames, adds or drops a readable member.
+
+Emission details that are not part of the policy: every user-derived identifier
+is emitted with an `@` prefix, types are `global::`-qualified and members
+`this.`-qualified. Changing them does not change a name and does not bump the
+version. A change to the identifier rule or encoded fallback, the reserved list
+or clash rule, the facade or slot type names, or parameter order bumps
+`ReadableNameVersion`. `GeneratedNameVersion` is never changed by this policy.
+
+The C# source generator emits the readable file `<ClassName>.Readable.g.cs`
+only when the referenced runtime declares
+`TranslationsCompatibility.TypedSlotBindingsVersion`; otherwise it reports
+warning RTR0068 and emits the other generated files unchanged.
+
 The cross-locale fixture in [corpus/v5-project](corpus/v5-project/README.md)
 exercises the carrier, generated backends, exact ESM runtime, and strict pack
 decoders. It is an internal fixture, not proof that an installed package or a
