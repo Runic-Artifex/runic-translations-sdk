@@ -20,7 +20,10 @@ npm install --save-dev --save-exact \
 ```
 
 Use one exact release for all Runic packages and the `dotnet-runic-translations`
-tool. The package requires `@sveltejs/kit` 3.
+tool. The package requires `@sveltejs/kit` 3. Request-scoped rendering uses the
+generated `/server` module, which imports `AsyncLocalStorage` from
+`node:async_hooks`. Node adapters work as-is. Edge platforms such as Cloudflare
+need Node.js compatibility enabled (`nodejs_compat`).
 
 ## Entry points
 
@@ -48,7 +51,7 @@ export const routing = createRunicLocaleRouting({
 | `baseLocale` | required | Locale used when no strategy resolves one. Must be in `locales`. |
 | `baseLocalePath` | `'unprefixed'` | `'unprefixed'` serves the base locale at `/about`. `'prefixed'` serves it at `/en/about`. |
 | `basePath` | `''` | Match SvelteKit's `paths.base` when the app is not served from `/`. |
-| `resolutionOrder` | `['url', 'cookie', 'application', 'browser']` | Order of the strategies that resolve a locale. |
+| `resolutionOrder` | `['url', 'cookie', 'application', 'browser']` | Order of the strategies that resolve a locale. A cookie, even a stale one, wins over `applicationLocale` unless you reorder. |
 
 The routing object also exposes `localizeUrl(url, locale)`,
 `delocalizeUrl(url)`, `canonicalUrl(url, locale)`, `inspectUrl(url)`,
@@ -88,7 +91,7 @@ isolated.
 | --- | --- | --- |
 | `runWithLocale` | none | Generated `/server` function that scopes message calls to the request. |
 | `cookie` | `{ name: 'runic_locale', path: '/', httpOnly: true, sameSite: 'lax' }` | Cookie that is read for the `cookie` strategy, plus SvelteKit cookie options. Use `false` to ignore cookies. |
-| `persistLocale` | `false` | Writes the resolved locale to the cookie on every response. |
+| `persistLocale` | `false` | Writes the resolved locale to the cookie on every resolved response (pages, data, errors), but not on the handle's canonical redirects. SvelteKit adds `Secure` by default. Pass `cookie: { secure: false }` for plain-HTTP hosts other than `localhost`. |
 | `applicationLocale` | none | `(event) => locale`, for example from a user profile, for the `application` strategy. |
 | `canonicalRedirect` | `true` | Redirects to the canonical localized URL. |
 | `redirectStatus` | `307` | Status code for canonical redirects. |

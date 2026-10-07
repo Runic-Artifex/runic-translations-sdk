@@ -25,8 +25,12 @@ npm install --save-dev --save-exact \
   @runic-artifex/translations-svelte@<VERSION>
 ```
 
-Any SvelteKit adapter works. This guide uses `adapter-node` so you can run the
-production server locally. Commit `.config/dotnet-tools.json` and the npm
+This guide uses `adapter-node` so you can run the production server locally.
+Other adapters work if the server runtime provides `node:async_hooks`. The
+generated server module uses its `AsyncLocalStorage` to scope each request's
+locale. Edge platforms such as Cloudflare need Node.js compatibility enabled
+(`nodejs_compat`), and runtimes without `AsyncLocalStorage` are not supported.
+Commit `.config/dotnet-tools.json` and the npm
 lockfile. A clean checkout then restores the same compiler with
 `dotnet tool restore`.
 
@@ -122,9 +126,17 @@ export type Locale = (typeof routing.locales)[number];
 | `'unprefixed'` (default) | `/`, `/about` | `/de`, `/de/about` | Renders English. `/en/about` redirects to `/about`. |
 | `'prefixed'` | `/en`, `/en/about` | `/de`, `/de/about` | Redirects to the visitor's locale. |
 
-With `'prefixed'`, an unprefixed request is resolved in order from the
-`runic_locale` cookie, `Accept-Language`, and then `baseLocale`. It then
-redirects with `307`. Mixed-case prefixes such as `/DE/about` redirect to the
+With `'prefixed'`, an unprefixed request is resolved in this order:
+
+1. The `runic_locale` cookie.
+2. The application locale, if you pass `applicationLocale` to the handle.
+3. `Accept-Language`.
+4. `baseLocale`.
+
+The handle then redirects with `307`. A cookie wins over the application
+locale, even a stale one. If a user's profile locale should take precedence,
+update or clear the cookie when the profile changes, or change
+`resolutionOrder`. Mixed-case prefixes such as `/DE/about` redirect to the
 canonical `/de/about` in both modes. If the app sets `paths.base`, pass the same
 value as `basePath`.
 
@@ -218,6 +230,7 @@ Replace `src/routes/+layout.svelte`:
 	import { createLocaleSource } from 'virtual:runic-translations/app/runtime';
 	import { routing, type Locale } from '#lib/i18n.ts';
 	import { localeContext } from '#lib/locale.ts';
+	import favicon from '#lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -235,10 +248,14 @@ Replace `src/routes/+layout.svelte`:
 	});
 </script>
 
+<svelte:head>
+	<link rel="icon" href={favicon} />
+</svelte:head>
+
 {@render children()}
 ```
 
-The generated runtime types locales as `string`, and the cast narrows them to
+The favicon lines come from the `sv create` template. The generated runtime types locales as `string`, and the cast narrows them to
 the routing union. `synchronizeLocaleWithNavigation` updates the source after
 every client-side navigation. `requestLocale` makes `locale.setLocale('de')`
 navigate to the German URL instead of changing state in place. The `$effect`
@@ -336,9 +353,23 @@ enable `persistLocale`:
 export const handle = createRunicLocaleHandle(routing, { runWithLocale, persistLocale: true });
 ```
 
-Each rendered page then sets `runic_locale` (`HttpOnly`, `SameSite=Lax`). With
-a `'prefixed'` base locale, a later visit to `/` redirects to the remembered
-locale. Use the `cookie` option to rename the cookie or change its attributes,
+The handle then sets `runic_locale` on every response it resolves, including
+pages, `__data.json` requests, and error pages. Its own canonical redirects do
+not set the cookie. SvelteKit serializes the cookie as
+`HttpOnly; Secure; SameSite=Lax` because it adds `Secure` by default. Browsers
+accept `Secure` cookies on `http://localhost`, but they drop them on other
+plain-HTTP hosts. For those hosts, pass `cookie: { secure: false }`:
+
+```ts
+export const handle = createRunicLocaleHandle(routing, {
+	runWithLocale,
+	persistLocale: true,
+	cookie: { secure: false }
+});
+```
+
+With a `'prefixed'` base locale, a later visit to `/` redirects to the
+remembered locale. Use the `cookie` option to rename the cookie or change its attributes,
 and use `applicationLocale` to supply a locale from a user profile.
 
 ### Prerendering
