@@ -36,12 +36,14 @@ using Runic.Translations;
 ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
 var text = new AppText(manager);
 
-Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
+Console.WriteLine(text.Messages.application_title);
 ```
 
-This C# v5 accessor represents `application.title`: each source path segment
-uses a collision-safe `r_` plus UTF-8 hexadecimal encoding. ESM exposes the
-same message through `m.application_title()`. Follow the
+`text.Messages.application_title` is the readable accessor for
+`application.title`, named by its flattened key as in ESM
+(`m.application_title()`). The generated class also keeps the encoded member
+`text.r_6170706c69636174696f6e_r_7469746c65` (each path segment as `r_` plus
+UTF-8 hexadecimal bytes), the stable machine-facing contract. Follow the
 [.NET consumer quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md)
 to run the generated library from a console application and restore it on CI.
 

@@ -1,0 +1,8 @@
+greeting = Hello {$name}
+profile {
+  badge = Signed in as {$user-name}
+}
+checkout {
+  help = Read the {#link ref=guide}guide{/link} or {#action ref=retry}try again{/action}.
+  rating = Rated {#icon ref=star/} by {#link ref=reviews}our customers{/link}.
+}

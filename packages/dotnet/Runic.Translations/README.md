@@ -12,7 +12,7 @@ Replace `<VERSION>` with the current preview shown on NuGet. The package targets
 
 ## Use a generated catalog
 
-Given the project template's starter catalog with `code.className` set to `AppText`, the generator creates registration and typed accessors. The starter message `application.title` has two path segments. Each segment is encoded as `r_` followed by the hexadecimal UTF-8 bytes of its NFC-normalized text, and the encoded segments are joined with `_`:
+Given the project template's starter catalog with `code.className` set to `AppText`, the generator creates registration and typed accessors. `text.Messages` is the readable surface and names each message by its flattened key, so the starter message `application.title` is `application_title`. The encoded `r_<hex>` members stay available as the stable machine-facing contract. Each encoded segment is `r_` followed by the hexadecimal UTF-8 bytes of its NFC-normalized text, and the encoded segments are joined with `_`.
 
 ```csharp
 using Example.Translations;
@@ -22,10 +22,10 @@ ITranslationManager manager = await AppTextCatalog.CreateManagerAsync(
     initialLocale: "en");
 var text = new AppText(manager);
 
-Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
+Console.WriteLine(text.Messages.application_title);
 
 await manager.SetLocaleAsync("de");
-Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
+Console.WriteLine(text.Messages.application_title);
 ```
 
 Each successful locale change replaces the complete immutable snapshot. Reads through `manager.Current` do not observe a partially updated catalog.

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "catalog": "shop",
+  "code": { "namespace": "Example.ReadableConsumer", "className": "ShopText", "visibility": "internal" },
+  "baseLocale": "en",
+  "locales": [ "en", "de" ],
+  "markup": {
+    "slots": {
+      "checkout_help": { "retry": { "min": 0, "max": 1 } }
+    }
+  }
+}
