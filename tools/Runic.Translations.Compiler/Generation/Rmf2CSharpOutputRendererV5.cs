@@ -143,6 +143,119 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpRegistration, project.ClassName + ".Registration.g.cs", writer);
     }
 
+    // The readable surface (readable-name policy 1) forwards to the encoded accessors, so there is
+    // one formatting path. Every user-derived identifier is '@'-prefixed, types are global::-qualified
+    // and members this.-qualified, so no key, input or slot name can capture another reference.
+    internal static TranslationGeneratedOutput RenderReadable(Rmf2ProjectV5 project)
+    {
+        GenerationWriter writer = StartFile(project);
+        string visibility = Visibility(project);
+        string ns = "global::" + string.Join(".", project.CodeNamespace.Split('.').Select(Verbatim)) + ".";
+        string className = Verbatim(project.ClassName);
+        string messages = Verbatim(Rmf2ReadableNamesV1.MessagesTypeName(project.ClassName));
+        string slots = Verbatim(Rmf2ReadableNamesV1.SlotsTypeName(project.ClassName));
+        var readable = new List<Rmf2ReadableMessageV1>();
+        foreach (Rmf2MessageContractV5 message in Canonical(project))
+            if (Rmf2ReadableNamesV1.TryCreate(project.ClassName, message, out Rmf2ReadableMessageV1? names, out _)) readable.Add(names!);
+
+        writer.Line(visibility + " sealed partial class " + className);
+        writer.Line("{"); writer.Indent();
+        writer.Line("private " + ns + messages + "? __readable;"); writer.Blank();
+        writer.Line("/// <summary>Readable accessors for the " + GenerationSupport.XmlDocumentation(project.Id) + " translation catalog.</summary>");
+        writer.Line("public " + ns + messages + " Messages => this.__readable ??= new " + ns + messages + "(this);");
+        writer.Unindent(); writer.Line("}"); writer.Blank();
+
+        writer.Line("/// <summary>Readable accessors for the " + GenerationSupport.XmlDocumentation(project.Id) + " translation catalog. Each member forwards to its encoded accessor.</summary>");
+        writer.Line(visibility + " sealed class " + messages);
+        writer.Line("{"); writer.Indent();
+        writer.Line("/// <summary>The readable C# name policy version of this surface.</summary>");
+        writer.Line("public const int ReadableNameVersion = " + Rmf2ReadableNamesV1.Version + ";");
+        writer.Line("private readonly " + ns + className + " __text;"); writer.Blank();
+        writer.Line("internal " + messages + "(" + ns + className + " text) => this.__text = text;");
+        foreach (Rmf2ReadableMessageV1 message in readable)
+        {
+            Rmf2MessageContractV5 contract = message.Contract;
+            string result = contract.Structured
+                ? "global::Runic.Translations.LocalizedTextContent<" + ns + slots + "." + Verbatim(message.Member) + ">"
+                : "string";
+            string encoded = "this.__text." + Member(contract);
+            if (contract.Inputs.Count != 0)
+            {
+                var arguments = new List<string>(contract.Inputs.Count);
+                for (int index = 0; index < contract.Inputs.Count; index++)
+                    arguments.Add(Rmf2GeneratedNamesV1.Identifier(contract.Inputs[index].Name) + ": " + Verbatim(message.Inputs[index].Identifier));
+                encoded += "(" + string.Join(", ", arguments) + ")";
+            }
+            string body = contract.Structured ? "new(" + encoded + ")" : encoded;
+            writer.Blank();
+            writer.Line("/// <summary>Formats <c>" + GenerationSupport.XmlDocumentation(string.Join(".", contract.Path)) + "</c>.</summary>");
+            if (contract.Inputs.Count == 0)
+                writer.Line("public " + result + " " + Verbatim(message.Member) + " => " + body + ";");
+            else
+            {
+                var parameters = new List<string>(contract.Inputs.Count);
+                for (int index = 0; index < contract.Inputs.Count; index++)
+                {
+                    parameters.Add(ParameterType(contract.Inputs[index].Type) + " " + Verbatim(message.Inputs[index].Identifier));
+                    writer.Line("/// <param name=\"" + message.Inputs[index].Identifier + "\">Input <c>" + GenerationSupport.XmlDocumentation(contract.Inputs[index].Name) + "</c>.</param>");
+                }
+                writer.Line("public " + result + " " + Verbatim(message.Member) + "(" + string.Join(", ", parameters) + ") =>"); writer.Indent();
+                writer.Line(body + ";"); writer.Unindent();
+            }
+        }
+        writer.Unindent(); writer.Line("}"); writer.Blank();
+
+        writer.Line("/// <summary>Typed slot bindings for the structured messages of the " + GenerationSupport.XmlDocumentation(project.Id) + " translation catalog.</summary>");
+        writer.Line(visibility + " static class " + slots);
+        writer.Line("{"); writer.Indent();
+        bool first = true;
+        foreach (Rmf2ReadableMessageV1 message in readable.Where(static item => item.Contract.Structured))
+        {
+            if (!first) writer.Blank();
+            first = false;
+            string type = Verbatim(message.Member), self = ns + slots + "." + type;
+            string contract = "global::Runic.Translations.IRmf2SlotBindings<" + self + ">";
+            writer.Line("/// <summary>Slot bindings for <c>" + GenerationSupport.XmlDocumentation(string.Join(".", message.Contract.Path)) + "</c>.</summary>");
+            writer.Line("public sealed class " + type + " : " + contract);
+            writer.Line("{"); writer.Indent();
+            if (message.Slots.Count != 0)
+            {
+                var parameters = message.Slots.Select(slot => SlotType(message.Contract.Slots[slot.Source].Kind) + " " + Verbatim(slot.Identifier));
+                writer.Line("/// <summary>Binds every slot. Use named arguments: slots of the same kind share a type.</summary>");
+                foreach (Rmf2ReadableNameV1 slot in message.Slots)
+                    writer.Line("/// <param name=\"" + slot.Identifier + "\">Binding for slot <c>" + GenerationSupport.XmlDocumentation(slot.Source) + "</c>.</param>");
+                writer.Line("public " + type + "(" + string.Join(", ", parameters) + ")");
+                writer.Line("{"); writer.Indent();
+                foreach (Rmf2ReadableNameV1 slot in message.Slots)
+                    writer.Line("this." + Verbatim(slot.Identifier) + " = " + Verbatim(slot.Identifier) + " ?? throw new global::System.ArgumentNullException(" + GenerationSupport.CSharpString(slot.Identifier) + ");");
+                writer.Unindent(); writer.Line("}");
+                foreach (Rmf2ReadableNameV1 slot in message.Slots)
+                {
+                    writer.Line("/// <summary>Binding for slot <c>" + GenerationSupport.XmlDocumentation(slot.Source) + "</c>.</summary>");
+                    writer.Line("public " + SlotType(message.Contract.Slots[slot.Source].Kind) + " " + Verbatim(slot.Identifier) + " { get; }");
+                }
+            }
+            writer.Line("static string " + contract + ".MessageKey => " + GenerationSupport.CSharpString(message.Contract.Key) + ";");
+            writer.Line("void " + contract + ".CopyTo(global::System.Collections.Generic.IDictionary<string, global::Runic.Translations.MarkupBinding> __destination)");
+            writer.Line("{"); writer.Indent();
+            foreach (Rmf2ReadableNameV1 slot in message.Slots)
+                writer.Line("__destination.Add(" + GenerationSupport.CSharpString(slot.Source) + ", this." + Verbatim(slot.Identifier) + ");");
+            writer.Unindent(); writer.Line("}");
+            writer.Unindent(); writer.Line("}");
+        }
+        writer.Unindent(); writer.Line("}");
+        return Output(TranslationGeneratedOutputKind.CSharpReadable, project.ClassName + ".Readable.g.cs", writer);
+    }
+
+    private static string Verbatim(string identifier) => "@" + identifier;
+    private static string SlotType(string kind) => kind switch
+    {
+        "runic:link" => "global::Runic.Translations.InlineLinkBinding",
+        "runic:action" => "global::Runic.Translations.InlineActionBinding",
+        "runic:icon" => "global::Runic.Translations.InlineIconBinding",
+        _ => throw new InvalidOperationException("Unknown functional slot kind '" + kind + "'."),
+    };
+
     private static void WriteAccessor(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageContractV5 message)
     {
         string member = Member(message), result = message.Structured ? "global::Runic.Translations.LocalizedTextContent" : "string";

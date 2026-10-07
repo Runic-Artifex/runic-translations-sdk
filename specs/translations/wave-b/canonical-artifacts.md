@@ -7,13 +7,19 @@ directory, operating system, clock, current culture, username, or process ID.
 
 ## Output groups and names
 
-The C# source generator and `--emit-csharp` renderer emit four hint files per
+The C# source generator and `--emit-csharp` renderer emit five hint files per
 catalog class:
 
 1. `{ClassName}.Keys.g.cs`
 2. `{ClassName}.Accessors.g.cs`
 3. `{ClassName}.CatalogData.g.cs`
 4. `{ClassName}.Registration.g.cs`
+5. `{ClassName}.Readable.g.cs`: the readable facade `{ClassName}Messages` and
+   the typed slot types `{ClassName}Slots.<key>` (readable C# name policy 1 in
+   [rmf2-project-v5.md](../rmf2-project-v5.md)). The source generator emits it
+   only when the referenced runtime declares
+   `TranslationsCompatibility.TypedSlotBindingsVersion` and reports `RTR0068`
+   otherwise; `--emit-csharp` cannot inspect references and always writes it.
 
 Generated C# uses the v5 caller and markup contracts, generated-name mapping 1,
 and requires RMF2 runtime ABI 2. Hint names and generated members compare

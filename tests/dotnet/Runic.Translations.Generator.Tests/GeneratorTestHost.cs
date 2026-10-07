@@ -14,14 +14,23 @@ internal static class GeneratorTestHost
 {
     internal static GeneratorRun Run(params TestInput[] inputs) => Run(RuntimeReferenceMode.Matching, inputs);
 
+    // Consumer compilations treat every warning (at the SDK's current warning wave) as an error.
     internal static GeneratorRun RunWithConsumer(string source, params TestInput[] inputs) =>
-        Run(new TranslationsGenerator(), RuntimeReferenceMode.Matching, source, inputs);
+        Run(new TranslationsGenerator(), RuntimeReferenceMode.Matching, source, ImmutableDictionary<string, ReportDiagnostic>.Empty, inputs);
+
+    internal static GeneratorRun RunWithConsumer(RuntimeReferenceMode runtimeReferenceMode, string source, params TestInput[] inputs) =>
+        Run(new TranslationsGenerator(), runtimeReferenceMode, source, ImmutableDictionary<string, ReportDiagnostic>.Empty, inputs);
 
     internal static GeneratorRun Run(RuntimeReferenceMode runtimeReferenceMode, params TestInput[] inputs)
-        => Run(new TranslationsGenerator(), runtimeReferenceMode, null, inputs);
+        => Run(new TranslationsGenerator(), runtimeReferenceMode, null, ImmutableDictionary<string, ReportDiagnostic>.Empty, inputs);
+
+    // Global options (for example from a .globalconfig or NoWarn/WarningsNotAsErrors) reach the compilation as SpecificDiagnosticOptions.
+    internal static GeneratorRun RunWithConsumerOptions(RuntimeReferenceMode runtimeReferenceMode, string source,
+        ImmutableDictionary<string, ReportDiagnostic> specificDiagnosticOptions, params TestInput[] inputs) =>
+        Run(new TranslationsGenerator(), runtimeReferenceMode, source, specificDiagnosticOptions, inputs);
 
     private static GeneratorRun Run(TranslationsGenerator generator, RuntimeReferenceMode runtimeReferenceMode,
-        string? consumerSource, params TestInput[] inputs)
+        string? consumerSource, ImmutableDictionary<string, ReportDiagnostic> specificDiagnosticOptions, params TestInput[] inputs)
     {
         var additionalTexts = inputs.Select(static input => (AdditionalText)new MemoryAdditionalText(input.Path, input.Text)).ToImmutableArray();
         var optionsProvider = new TestOptionsProvider(inputs);
@@ -30,7 +39,10 @@ internal static class GeneratorTestHost
             "GeneratorConsumer",
             new[] { CSharpSyntaxTree.ParseText(consumerSource ?? "internal static class EntryPoint { }", parseOptions) },
             References(runtimeReferenceMode),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable,
+                generalDiagnosticOption: consumerSource is null ? ReportDiagnostic.Default : ReportDiagnostic.Error,
+                warningLevel: consumerSource is null ? 4 : 9999,
+                specificDiagnosticOptions: specificDiagnosticOptions));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             generators: new[] { generator.AsSourceGenerator() },
@@ -84,12 +96,15 @@ internal static class GeneratorTestHost
             yield return SyntheticRuntimeReference(trustedAssemblies, runtimeReferenceMode);
     }
 
-    private static PortableExecutableReference SyntheticRuntimeReference(string trustedAssemblies, RuntimeReferenceMode mode)
+    private static MetadataReference SyntheticRuntimeReference(string trustedAssemblies, RuntimeReferenceMode mode)
     {
         string rmf2Marker = mode switch
         {
             RuntimeReferenceMode.Rmf2V1 => "public const int Rmf2RuntimeAbiVersion = 1;",
             RuntimeReferenceMode.Rmf2V2 => "public const int Rmf2RuntimeAbiVersion = 2;",
+            RuntimeReferenceMode.Rmf2V2Typed => "public const int Rmf2RuntimeAbiVersion = 2; public const int TypedSlotBindingsVersion = 1;",
+            RuntimeReferenceMode.ProjectReferenceRmf2V2 => "public const int Rmf2RuntimeAbiVersion = 2;",
+            RuntimeReferenceMode.ProjectReferenceRmf2V2Typed => "public const int Rmf2RuntimeAbiVersion = 2; public const int TypedSlotBindingsVersion = 1;",
             RuntimeReferenceMode.Rmf2Zero => "public const int Rmf2RuntimeAbiVersion = 0;",
             RuntimeReferenceMode.Rmf2Unknown => "public const int Rmf2RuntimeAbiVersion = 3;",
             _ => string.Empty,
@@ -109,6 +124,7 @@ internal static class GeneratorTestHost
                 .Where(static path => !IsRuntimeAssembly(path))
                 .Select(static path => MetadataReference.CreateFromFile(path)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        if (mode is RuntimeReferenceMode.ProjectReferenceRmf2V2 or RuntimeReferenceMode.ProjectReferenceRmf2V2Typed) return compilation.ToMetadataReference();
         using var stream = new MemoryStream();
         Microsoft.CodeAnalysis.Emit.EmitResult result = compilation.Emit(stream);
         if (!result.Success)
@@ -184,6 +200,11 @@ internal enum RuntimeReferenceMode
     Rmf2V2,
     Rmf2Zero,
     Rmf2Unknown,
+    // Synthetic metadata runtime with TypedSlotBindingsVersion (the readable surface).
+    Rmf2V2Typed,
+    // Synthetic runtimes passed as a CompilationReference, as an IDE passes a project reference.
+    ProjectReferenceRmf2V2,
+    ProjectReferenceRmf2V2Typed,
 }
 
 internal sealed record GeneratorRun(

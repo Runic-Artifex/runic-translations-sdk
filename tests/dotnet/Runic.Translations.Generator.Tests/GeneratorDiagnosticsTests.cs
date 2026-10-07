@@ -72,7 +72,7 @@ internal static partial class GeneratorDiagnosticsTests
         Assert.Equal(DiagnosticSeverity.Warning, warning.Severity, "policy severity");
         Assert.Equal("translations/de.rmf2", warning.Location.GetLineSpan().Path, "diagnostic path");
         Assert.Equal(1, warning.Location.GetLineSpan().StartLinePosition.Line, "diagnostic line");
-        Assert.Equal(4, extra.SingleResult.GeneratedSources.Length, "generated sources despite a warning");
+        Assert.Equal(5, extra.SingleResult.GeneratedSources.Length, "generated sources despite a warning");
     }
 
     private static TestInput ProjectInput() => new("C:/repo/translations/runic.json", "Project", Project);

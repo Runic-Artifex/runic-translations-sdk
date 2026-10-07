@@ -45,6 +45,8 @@ internal enum TranslationGeneratedOutputKind
     EsmServer,
     /// <summary>TypeScript declarations for request-local server locale context.</summary>
     EsmServerTypes,
+    /// <summary>The readable C# facade and typed slot bindings (readable-name policy 1).</summary>
+    CSharpReadable,
 }
 
 /// <summary>A deterministic, UTF-8 compiler output for exactly one concern.</summary>

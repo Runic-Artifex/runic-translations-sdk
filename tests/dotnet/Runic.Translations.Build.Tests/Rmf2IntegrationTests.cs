@@ -337,13 +337,14 @@ internal static class Rmf2IntegrationTests
         Assert.False(Directory.EnumerateFiles(temporary.Resolve("out"), "*.locale-v4.json", SearchOption.AllDirectories).Any(), "semantic contract emitted retired artifacts");
         Assert.False(File.Exists(temporary.Resolve("out/app.translations-v1.d.ts")), "semantic contract emitted the retired TypeScript edge contract");
         Assert.False(Directory.EnumerateFiles(temporary.Resolve("out"), "app.template-manifest-*.json", SearchOption.TopDirectoryOnly).Any(), "semantic contract emitted a retired template manifest");
-        Assert.True(Directory.EnumerateFiles(temporary.Resolve("out"), "*.g.cs", SearchOption.TopDirectoryOnly).Count() == 4, "v5 typed C# output is incomplete");
+        Assert.True(Directory.EnumerateFiles(temporary.Resolve("out"), "*.g.cs", SearchOption.TopDirectoryOnly).Count() == 5, "v5 typed C# output is incomplete");
+        Assert.True(Directory.EnumerateFiles(temporary.Resolve("out"), "*.Readable.g.cs", SearchOption.TopDirectoryOnly).Count() == 1, "readable C# output missing");
         ProcessResult verify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "out");
         Assert.Equal(0, verify.ExitCode, verify.Combined);
 
         ProcessResult csharp = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "csharp", "--emit-csharp");
         Assert.Equal(0, csharp.ExitCode, csharp.Combined);
-        Assert.True(TestFixture.RelativeFiles(temporary.Resolve("csharp")).Length == 4 &&
+        Assert.True(TestFixture.RelativeFiles(temporary.Resolve("csharp")).Length == 5 &&
             TestFixture.RelativeFiles(temporary.Resolve("csharp")).All(static file => file.EndsWith(".g.cs", StringComparison.Ordinal)),
             "--emit-csharp produced another output group");
         ProcessResult json = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "json", "--emit-json");

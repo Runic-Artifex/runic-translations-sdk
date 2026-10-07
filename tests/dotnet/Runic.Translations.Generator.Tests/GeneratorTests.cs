@@ -45,7 +45,7 @@ internal static class GeneratorTests
         GeneratorRun run = GeneratorTestHost.Run(ProjectInput(), MessageInput());
         Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
         Assert.Equal(
-            "AppText.Accessors.g.cs|AppText.CatalogData.g.cs|AppText.Keys.g.cs|AppText.Registration.g.cs",
+            "AppText.Accessors.g.cs|AppText.CatalogData.g.cs|AppText.Keys.g.cs|AppText.Readable.g.cs|AppText.Registration.g.cs",
             string.Join("|", HintNames(run)),
             "hint files");
         Diagnostic[] errors = run.Compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
