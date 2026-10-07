@@ -46,7 +46,11 @@ the compiler on the next change. `vite build`
 always runs the tool once.
 
 A change is compiled once and then invalidated in every Vite environment
-(client, SSR) through the `hotUpdate` hook.
+(client, SSR) through the `hotUpdate` hook. The regenerated modules get a new
+HMR timestamp, so the browser imports the new messages, and components that
+render them update in place. Values computed once on the server, such as data
+returned from a SvelteKit `load` function, are not re-run by HMR; they update
+when the page is reloaded.
 
 Manifest mode treats the supplied generated directory as externally owned.
 Changes to `sourceFiles` trigger a Vite refresh, but the plugin cannot recompile

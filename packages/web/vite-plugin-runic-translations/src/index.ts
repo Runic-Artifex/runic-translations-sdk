@@ -83,7 +83,7 @@ interface WebModuleManifest {
 interface ModuleGraph<Module> {
   getModuleById(id: string): Module | undefined;
   getModulesByFile(file: string): Set<Module> | undefined;
-  invalidateModule(module: Module): void;
+  invalidateModule(module: Module, seen?: Set<Module>, timestamp?: number, isHmr?: boolean): void;
 }
 
 /** Catalog state before a validated refresh, used to invalidate both old and new virtual modules. */
@@ -288,13 +288,19 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     return operation;
   }
 
-  function invalidate<Module>(graph: ModuleGraph<Module>, change: Change): Module[] {
+  function invalidate<Module>(graph: ModuleGraph<Module>, change: Change, timestamp?: number): Module[] {
     const modules = change.catalogs.flatMap(id => entryKinds.map(kind => graph.getModuleById(`${prefix}${id}/${kind}`)))
       .filter((module): module is Module => module !== undefined);
     // Generated dependencies can keep transformed code after a virtual re-export is invalidated.
+    // During HMR they also need a new timestamp: the browser caches ES modules by URL, so a
+    // re-fetched virtual module would otherwise import the previous generated messages again.
+    const seen = new Set<Module>();
+    const invalidateModule = (module: Module) => timestamp === undefined
+      ? graph.invalidateModule(module)
+      : graph.invalidateModule(module, seen, timestamp, true);
     for (const generated of change.generatedPaths)
-      for (const module of graph.getModulesByFile(generated) ?? []) graph.invalidateModule(module);
-    for (const module of modules) graph.invalidateModule(module);
+      for (const module of graph.getModulesByFile(generated) ?? []) invalidateModule(module);
+    for (const module of modules) invalidateModule(module);
     return modules;
   }
 
@@ -395,7 +401,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
         if (first) throw error;
         return [];
       }
-      return invalidate(this.environment.moduleGraph, change);
+      return invalidate(this.environment.moduleGraph, change, update.timestamp);
     },
   };
 }
