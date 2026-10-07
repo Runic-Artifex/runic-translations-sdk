@@ -3,9 +3,9 @@
 Development preview for Visual Studio 2026 (18.x), Windows x64. The manifest
 declares `[18.0,19.0)`. Visual Studio 2022 (17.x) is not supported. The
 in-process API is pinned to 17.14, which 18.x hosts provide. Native evidence
-covers Visual Studio Community 2026 18.8.2, except the unsaved-buffer step,
-which failed in the 2026-10-07 rerun (see
-[RMF2 validation](../../docs/guides/translations/rmf2-validation.md#visual-studio-2026-rerun-2026-10-07)). The range declaration is not
+covers Visual Studio Community 2026 18.8.2; the complete native journey passed
+on 2026-10-07 (see
+[RMF2 validation](../../docs/guides/translations/rmf2-validation.md#visual-studio-2026-journey-after-the-server-fix-2026-10-07)). The range declaration is not
 evidence that every 18.x release has been run. The MEF client
 registers direct `.mf2` and grouped `.rmf2` with Visual Studio's remote-code content type and uses the same
 stdio language server as VS Code. TextMate highlighting, diagnostics, completion,
@@ -93,9 +93,8 @@ GitHub release attaches the attested VSIX that CI built.
 The VS host dependency set is pinned separately from the SDK's modern runtime
 packages: in-process dependencies target the Visual Studio 17.14 API surface.
 The declared host range is `[18.0,19.0)`, Visual Studio 2026 only. Native
-evidence covers Visual Studio Community 2026 18.8.2, except the unsaved-buffer
-step (see
-[RMF2 validation](../../docs/guides/translations/rmf2-validation.md#visual-studio-2026-rerun-2026-10-07)).
+evidence covers Visual Studio Community 2026 18.8.2 (see
+[RMF2 validation](../../docs/guides/translations/rmf2-validation.md#visual-studio-2026-journey-after-the-server-fix-2026-10-07)).
 `packages.lock.json` records the graph. The VSIX contains only the extension's
 own managed assembly; VS-owned DLLs resolve from the host.
 
@@ -104,10 +103,9 @@ own managed assembly; VS-owned DLLs resolve from the host.
 Use a dedicated experimental instance; the maintained test expects
 `/RootSuffix RunicRmf2` and a signed-in interactive Windows desktop. The script
 copies the maintained payment fixture and explicitly activates
-`rmf2-execution-v2`. The 2026-10-07 rerun on Visual Studio 2026 18.8.2 passed
-every step except the last: the unsaved buffer is not reflected in the
-preview. See
-[RMF2 validation](../../docs/guides/translations/rmf2-validation.md#visual-studio-2026-rerun-2026-10-07).
+`rmf2-execution-v2`. Every step passed on Visual Studio 2026 18.8.2 on
+2026-10-07. See
+[RMF2 validation](../../docs/guides/translations/rmf2-validation.md#visual-studio-2026-journey-after-the-server-fix-2026-10-07).
 To run the check:
 
 1. Build the language server and VSIX, or use the CI `rmf2-visualstudio-vsix`
