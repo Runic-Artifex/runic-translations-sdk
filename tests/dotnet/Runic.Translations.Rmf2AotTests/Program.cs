@@ -10,7 +10,7 @@ namespace Runic.Translations.Rmf2AotTests;
 internal static class Program
 {
     private const string Fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-    private const string MarkupContract = "{\"version\":1,\"contracts\":{\"runic:strong\":{\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}},\"shop:break\":{\"kind\":\"standalone\",\"children\":\"none\",\"interactive\":false,\"plainText\":\"lineBreak\",\"options\":{}},\"shop:children\":{\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}},\"shop:omit\":{\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"omit\",\"options\":{}}},\"messages\":{\"greeting\":{\"slots\":{},\"structured\":true,\"contentLocales\":{\"de\":\"de\"}}}}";
+    private const string MarkupContract = "{\"version\":2,\"contracts\":{\"runic:strong\":{\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}},\"shop:break\":{\"kind\":\"standalone\",\"placement\":\"inline\",\"children\":\"none\",\"interactive\":false,\"plainText\":\"lineBreak\",\"options\":{}},\"shop:children\":{\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}},\"shop:omit\":{\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"omit\",\"options\":{}}},\"messages\":{\"greeting\":{\"slots\":{},\"structured\":true,\"contentLocales\":{\"de\":\"de\"}}}}";
 
     public static async Task<int> Main()
     {

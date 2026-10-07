@@ -319,7 +319,7 @@ internal static class GeneratorReadableTests
                 public static string Run(Example.Translations.AppText text) => text.r_6772656574696e67(r_6e616d65: "Ada");
             }
             """;
-        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V2, RuntimeReferenceMode.ProjectReferenceRmf2V2 })
+        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V3, RuntimeReferenceMode.ProjectReferenceRmf2V3 })
         {
             GeneratorRun run = GeneratorTestHost.RunWithConsumer(mode, consumer, ProjectInput(), EnglishInput(), GermanInput());
             Diagnostic diagnostic = GeneratorTestHost.Run(mode, ProjectInput(), EnglishInput(), GermanInput()).SingleResult.Diagnostics.Single();
@@ -340,7 +340,7 @@ internal static class GeneratorReadableTests
             Diagnostic[] problems = real.GetDiagnostics().Where(static item => item.Severity >= DiagnosticSeverity.Warning).ToArray();
             Assert.Equal(0, problems.Length, mode + ": " + string.Join("\n", problems.Select(static item => item.ToString())));
         }
-        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V2Typed, RuntimeReferenceMode.ProjectReferenceRmf2V2Typed })
+        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V3Typed, RuntimeReferenceMode.ProjectReferenceRmf2V3Typed })
         {
             GeneratorRun run = GeneratorTestHost.Run(mode, ProjectInput(), EnglishInput(), GermanInput());
             Assert.Equal(0, run.SingleResult.Diagnostics.Length, mode + ": " + string.Join("\n", run.SingleResult.Diagnostics));
@@ -364,7 +364,7 @@ internal static class GeneratorReadableTests
             (ReportDiagnostic.Suppress, null),
             (ReportDiagnostic.Warn, DiagnosticSeverity.Warning),
         ];
-        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V2, RuntimeReferenceMode.ProjectReferenceRmf2V2 })
+        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V3, RuntimeReferenceMode.ProjectReferenceRmf2V3 })
         foreach ((ReportDiagnostic option, DiagnosticSeverity? expected) in cases)
         {
             var options = ImmutableDictionary.CreateRange([KeyValuePair.Create("RTR0068", option)]);
@@ -435,7 +435,7 @@ internal static class GeneratorReadableTests
         Assert.Equal("AppText.Accessors.g.cs|AppText.CatalogData.g.cs|AppText.Keys.g.cs|AppText.Readable.g.cs|AppText.Registration.g.cs",
             string.Join("|", run.SingleResult.GeneratedSources.Select(static item => item.HintName).Order(StringComparer.Ordinal)), "hint files");
         // The encoded files are the same with and without the readable surface.
-        GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V2, ProjectInput(), EnglishInput(), GermanInput());
+        GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3, ProjectInput(), EnglishInput(), GermanInput());
         foreach (GeneratedSourceResult encoded in old.SingleResult.GeneratedSources)
             Assert.Equal(encoded.SourceText.ToString(), run.SingleResult.GeneratedSources.Single(item => item.HintName == encoded.HintName).SourceText.ToString(), encoded.HintName);
     }

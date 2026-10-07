@@ -1,1 +1,3 @@
 #nullable enable
+*REMOVED*const Runic.Translations.Compiler.Rmf2ProjectCompilationV5.RuntimeAbiVersion = 2 -> int
+const Runic.Translations.Compiler.Rmf2ProjectCompilationV5.RuntimeAbiVersion = 3 -> int

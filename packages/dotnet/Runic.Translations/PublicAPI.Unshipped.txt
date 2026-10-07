@@ -1,1 +1,4 @@
 #nullable enable
+*REMOVED*const Runic.Translations.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 2 -> int
+const Runic.Translations.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 3 -> int
+Runic.Translations.TranslationPackFailureReason.MarkupContractVersionMismatch = 15 -> Runic.Translations.TranslationPackFailureReason

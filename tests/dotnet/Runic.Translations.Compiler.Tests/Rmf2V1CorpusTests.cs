@@ -163,8 +163,11 @@ internal static class Rmf2V1CorpusTests
     }
 
     // Pinned before the readable C# surface (W220-002) was added. The readable file is a new,
-    // separate output; the encoded C# files and ESM must not change.
-    private const string EncodedOutputDigest = "470499a6cd9d963de245759a002355b5f905cce74534fe7db6be0d59efd2b7ec";
+    // separate output; the encoded C# files and ESM must not change. Re-pinned for markup
+    // contract v2 / RMF2 ABI 3 (W220-004): CatalogData and Registration (ABI marker, v2 contract
+    // JSON, fingerprint), runtime.js/.d.ts, transport.js and the web manifest changed; Keys,
+    // Accessors and messages.js are unchanged.
+    private const string EncodedOutputDigest = "a4c85be51dd327f557e0be9debfcb052f9e5fa01ee78e169acf6ca8f2dc48db1";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     private static void EncodedOutputs()

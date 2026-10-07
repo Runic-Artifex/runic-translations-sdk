@@ -3,7 +3,7 @@
 This contract defines the runtime, generated-output, build, and external-pack
 edges for the selected semantic translation contract. All current writers use
 resource syntax `rmf2-v1`, execution contract `rmf2-execution-v2`, grammar/AST
-and locale artifact 5, RMF2 runtime ABI 2, ESM ABI 4, and web manifest 3.
+and locale artifact 5, RMF2 runtime ABI 3, ESM ABI 4, and web manifest 3.
 
 The normative topics are split as follows:
 

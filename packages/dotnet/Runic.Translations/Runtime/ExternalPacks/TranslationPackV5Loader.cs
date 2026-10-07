@@ -32,6 +32,14 @@ internal static class TranslationPackV5Loader
                 throw Error("The external pack message grammar version is unsupported.", TranslationPackFailureReason.MessageGrammarVersionMismatch);
             if (String(root["profile"]) != contract.Profile || contract.Profile != "rmf2-execution-v2")
                 throw Error("The external pack execution profile is unsupported.", TranslationPackFailureReason.MessageGrammarVersionMismatch);
+            // Check the markup contract version before the catalog, fingerprint and raw contract
+            // comparisons: a pack from another compiler release also has another fingerprint,
+            // and its actionable reason is a rebuild, not a generic contract mismatch.
+            if (root["markupContract"].ValueKind != JsonValueKind.Object ||
+                !root["markupContract"].TryGetProperty("version", out JsonElement markupVersion) ||
+                markupVersion.ValueKind != JsonValueKind.Number || !markupVersion.TryGetInt32(out int markupVersionNumber) ||
+                markupVersionNumber != Rmf2InlineRenderer.MarkupContractVersion)
+                throw Error("The external pack was built for another Runic markup contract and must be rebuilt with the current compiler.", TranslationPackFailureReason.MarkupContractVersionMismatch);
             string catalog = String(root["catalog"]), locale = String(root["locale"]), fingerprint = String(root["contractFingerprint"]);
             if (!TranslationPackValidation.IsCatalog(catalog)) throw Error("The external pack catalog identifier is invalid.");
             if (!TranslationPackValidation.IsCanonicalLocale(locale)) throw Error("The external pack locale is not canonical.");

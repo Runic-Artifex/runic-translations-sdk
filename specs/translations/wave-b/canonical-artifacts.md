@@ -22,7 +22,7 @@ catalog class:
    otherwise; `--emit-csharp` cannot inspect references and always writes it.
 
 Generated C# uses the v5 caller and markup contracts, generated-name mapping 1,
-and requires RMF2 runtime ABI 2. Hint names and generated members compare
+and requires RMF2 runtime ABI 3. Hint names and generated members compare
 ordinally. Source-generator output enters the current compilation; the Build
 package does not copy those files into its generated-asset directory.
 

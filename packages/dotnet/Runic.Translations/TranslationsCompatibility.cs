@@ -9,8 +9,8 @@ public static class TranslationsCompatibility
     /// <summary>The ABI version embedded into generated C#.</summary>
     public const int RuntimeAbiVersion = 1;
 
-    /// <summary>The additive ABI for v4 markup and v5 typed expression evaluation.</summary>
-    public const int Rmf2RuntimeAbiVersion = 2;
+    /// <summary>The ABI for v5 typed expression evaluation and RMF2 markup contract v2.</summary>
+    public const int Rmf2RuntimeAbiVersion = 3;
 
     /// <summary>
     /// The additive typed slot binding surface (<see cref="IRmf2SlotBindings{TSelf}"/>, <see cref="LocalizedTextContent{TSlots}"/>).

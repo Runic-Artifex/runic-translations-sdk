@@ -83,7 +83,8 @@ public sealed class Rmf2LanguageService
     private Rmf2MarkupRegistry.Contract? Resolve(string name) => _registry.Contracts.GetValueOrDefault(_registry.Aliases.GetValueOrDefault(name, name));
     private static bool Contains(TextSourceLocation location, int position) => location.StartByte <= position && position < location.StartByte + location.LengthBytes;
     private static string DescribeContract(Rmf2MarkupRegistry.Contract contract) => contract.Name + " · " + (contract.Standalone ? "standalone" : "paired") + (contract.Interactive ? " · interactive" : "") + " · plain text: " + contract.PlainText;
-    private static string DescribeOption(Rmf2MarkupRegistry.Option option) => option.Type + (option.Values.Length == 0 ? "" : " (" + string.Join(", ", option.Values) + ")") + (option.Default is null ? " · required" : " · default: " + option.Default) + (option.LiteralOnly ? " · literal only" : " · literal or variable");
+    private static string DescribeOption(Rmf2MarkupRegistry.Option option) => option.Type + (option.Values.Length == 0 ? "" : " (" + string.Join(", ", option.Values) + ")") +
+        (option.Type == "integer" ? " (" + option.Minimum.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".." + option.Maximum.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")" : "") + (option.Default is null ? " · required" : " · default: " + option.Default) + (option.LiteralOnly ? " · literal only" : " · literal or variable");
     private static string DescribeVariable(Mf2SyntaxDocument syntax, string name)
     {
         var declaration = syntax.Declarations.FirstOrDefault(d => d.Name == name);

@@ -36,6 +36,8 @@ public enum TranslationPackFailureReason
     Cancelled,
     /// <summary>The pack is empty, malformed, invalid UTF-8, incomplete, or has an unsupported shape.</summary>
     Malformed,
+    /// <summary>The pack was built for another RMF2 markup contract version and must be rebuilt with the current compiler.</summary>
+    MarkupContractVersionMismatch,
 }
 
 /// <summary>Reads stable machine-classifiable metadata from external pack exceptions.</summary>
@@ -116,6 +118,7 @@ public static class TranslationPackFailure
         TranslationPackFailureReason.SourceFailure => "source-failure",
         TranslationPackFailureReason.Cancelled => "cancelled",
         TranslationPackFailureReason.Malformed => "malformed",
+        TranslationPackFailureReason.MarkupContractVersionMismatch => "markup-contract-version-mismatch",
         _ => "unknown",
     };
 

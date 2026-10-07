@@ -22,6 +22,7 @@ internal static class Rmf2ProjectV5Tests
         runner.Add("RMF2 v5 locale tags enforce structural BCP 47 extension grammar", LocaleTags);
         runner.Add("RMF2 v5 markup canonicalizes aliases typed defaults locals and annotations", Markup);
         runner.Add("RMF2 v5 markup validates every variant and functional slot obligation", InvalidMarkup);
+        runner.Add("RMF2 markup contract v2 exports placement children and bounded integer options", MarkupContractV2);
         runner.Add("RMF2 v5 caller fingerprint excludes content but source hash detects it", Fingerprints);
         runner.Add("RMF2 v5 caller fingerprint captures inputs slots and renderer contracts", FingerprintChanges);
         runner.Add("RMF2 v5 fallback changes freshness while preserving caller compatibility", Fallback);
@@ -195,10 +196,47 @@ internal static class Rmf2ProjectV5Tests
         Assert.Equal("close", tags[1].Annotations[0].Name);
         Assert.Equal("100", project.MarkupContracts["app:badge"].Options["amount"].Default);
         using var exported = JsonDocument.Parse(project.MarkupContract);
-        Assert.Equal(1, exported.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal(2, exported.RootElement.GetProperty("version").GetInt32());
         var locals = Good("x =\n  .input {$n :integer}\n  .local $amount = {$n :number}\n  {{{#badge amount=$amount}Yes{/badge}}}", config: Custom);
         Assert.Equal("local", locals.Locales[0].DirectResources[0].Message.Variants[0].Nodes.OfType<Rmf2MarkupV5>().First().Options[0].Value.Kind);
         Rmf2RuntimeV5Tests.Lower(locals.Locales[0].DirectResources[0].Message).FormatContent([new("n", 42L)], "en");
+    }
+    private const string IntegerContract = ",\"markup\":{\"contracts\":[{\"name\":\"app:step\",\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"level\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":6,\"default\":\"1\"},\"count\":{\"type\":\"integer\"}}}],\"aliases\":{\"step\":\"app:step\"}}";
+    private static void MarkupContractV2()
+    {
+        var project = Good("x = {#step level=3 count=-2147483648}A{/step}{#br/}{#step level=|6| count=2147483647}B{/step}{#step count=0}C{/step}", config: IntegerContract);
+        var tags = project.Locales[0].DirectResources[0].Message.Variants[0].Nodes.OfType<Rmf2MarkupV5>().Where(tag => tag.MarkupKind == "open").ToArray();
+        Assert.Equal("number-literal", tags[1].Options.Single(option => option.Name == "level").Value.Kind, "Quoted integer literal normalizes to a number literal");
+        Assert.Equal("6", tags[1].Options.Single(option => option.Name == "level").Value.Canonical);
+        Assert.Equal("1", tags[2].Options.Single(option => option.Name == "level").Value.Value, "Integer default");
+        using var exported = JsonDocument.Parse(project.MarkupContract);
+        Assert.Equal(2, exported.RootElement.GetProperty("version").GetInt32());
+        JsonElement step = exported.RootElement.GetProperty("contracts").GetProperty("app:step");
+        Assert.Equal("inline", step.GetProperty("placement").GetString());
+        Assert.Equal("inline", step.GetProperty("children").GetString());
+        Assert.Equal(1, step.GetProperty("options").GetProperty("level").GetProperty("minimum").GetInt32());
+        Assert.Equal(6, step.GetProperty("options").GetProperty("level").GetProperty("maximum").GetInt32());
+        Assert.Equal(int.MinValue, step.GetProperty("options").GetProperty("count").GetProperty("minimum").GetInt32());
+        Assert.Equal(int.MaxValue, step.GetProperty("options").GetProperty("count").GetProperty("maximum").GetInt32());
+        JsonElement br = exported.RootElement.GetProperty("contracts").GetProperty("runic:br");
+        Assert.Equal("none", br.GetProperty("children").GetString()); Assert.Equal("inline", br.GetProperty("placement").GetString());
+        var dynamic = Good("x =\n  .input {$n :integer}\n  {{{#step level=$n count=1}X{/step}}}", config: IntegerContract);
+        Rmf2RuntimeV5Tests.Lower(dynamic.Locales[0].DirectResources[0].Message).FormatContent([new("n", 4L)], "en");
+        Bad("x =\n  .input {$n :number}\n  {{{#step level=$n count=1}X{/step}}}", config: IntegerContract);
+        foreach (string literal in new[] { "01", "1.0", "1e1", "+1", "-0", "0", "7", "|01|", "| 3|", "|3 |", "-1" })
+            Bad("x = {#step level=" + literal + " count=1}X{/step}", config: IntegerContract);
+        foreach (string literal in new[] { "2147483648", "-2147483649", "00", "-", "|-|", "|1e3|" })
+            Bad("x = {#step count=" + literal + "}X{/step}", config: IntegerContract);
+        string Config(string contract) => ",\"markup\":{\"contracts\":[" + contract + "]}";
+        const string head = "{\"name\":\"app:x\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\"";
+        Bad("x = Text", config: Config(head + ",\"placement\":\"block\"}"), diagnostic: "RTR0060");
+        Bad("x = Text", config: Config(head + ",\"placement\":\"list-item\"}"), diagnostic: "RTR0060");
+        Bad("x = Text", config: Config(head + ",\"options\":{\"n\":{\"type\":\"number\",\"minimum\":1}}}"), diagnostic: "RTR0060");
+        Bad("x = Text", config: Config(head + ",\"options\":{\"n\":{\"type\":\"integer\",\"minimum\":5,\"maximum\":4}}}"), diagnostic: "RTR0060");
+        Bad("x = Text", config: Config(head + ",\"options\":{\"n\":{\"type\":\"integer\",\"maximum\":2147483648}}}"), diagnostic: "RTR0060");
+        Bad("x = Text", config: Config(head + ",\"options\":{\"n\":{\"type\":\"integer\",\"default\":\"01\"}}}"), diagnostic: "RTR0060");
+        Bad("x = Text", config: ",\"markup\":{\"structure\":{}}", diagnostic: "RTR0060");
+        Good("x = Text", config: Config(head + ",\"placement\":\"inline\"}"));
     }
     private static void InvalidMarkup()
     {

@@ -138,8 +138,10 @@ application code during compilation:
 }
 ```
 
-Options support string, number, boolean, and enum types, defaults, and
-`literalOnly`. `tone=$tone` resolves an input; literal options are checked at
+Options support string, number, integer, boolean, and enum types, defaults, and
+`literalOnly`. Integer options take optional `minimum`/`maximum` bounds and
+accept only canonical decimal integers such as `3` or `-1`. Custom contracts
+may declare `"placement": "inline"`, the default and only custom placement. `tone=$tone` resolves an input; literal options are checked at
 build/load time, dynamic options again before invoking a renderer factory.
 `@attributes` are preserved separately as inert annotations and never become UI
 properties. Applications map allowed options explicitly.
@@ -286,9 +288,9 @@ Their READMEs describe configuration, supported refactor scope and host checks.
 
 ## Versions and execution limits
 
-RMF2 resource syntax and markup contract/renderer ABI remain version **1**. The
-supported execution contract is **rmf2-execution-v2**: normalized AST and
-resolved locale artifact **5**, .NET RMF2 ABI requirement **2**, and ESM ABI
+RMF2 resource syntax remains version **1**; the markup contract is version
+**2**. The supported execution contract is **rmf2-execution-v2**: normalized AST
+and resolved locale artifact **5**, .NET RMF2 ABI requirement **3**, and ESM ABI
 **4**. The generator, CLI/MSBuild integration, and Vite plugin use that contract
 for both direct `.mf2` and grouped `.rmf2` sources.
 

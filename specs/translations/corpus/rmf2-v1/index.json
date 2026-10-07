@@ -4,8 +4,8 @@
   "contracts": {
     "messageAstVersion": 5,
     "localeArtifactVersion": 5,
-    "runtimeAbiVersion": 2,
-    "markupContractVersion": 1,
+    "runtimeAbiVersion": 3,
+    "markupContractVersion": 2,
     "generatedNameVersion": 1
   },
   "project": {
@@ -22,14 +22,14 @@
   },
   "localeOnlyKeys": ["locale_extra"],
   "determinism": {
-    "callerFingerprint": "sha256:7e1daafd0eb60cfb1688568d2be0160dc190db392f869af1df5846beebc155b0",
+    "callerFingerprint": "sha256:fa748f0d00ae0fef159fb5e8bec03e1fc6202e1584ea1c5342353ec6482d47f7",
     "sourceHash": "sha256:2cbe590dba3e210aa805f13e3458876a796e7a64636c4345601c5a775b46ec60",
-    "assetManifestSha256": "sha256:24d5ce3c223e4f29162ec1a0d719548fe4bfcc6d0e971752d2602062af253ea6",
+    "assetManifestSha256": "sha256:aeb84bf854343f13180f58e8149e961942437d900bc7ee708ccfc883a637adfb",
     "localeArtifactSha256": {
-      "de": "sha256:8e9cd5f06851c19d90785cad83d0a5f38274a559da0261bf29f8dd85185e0d06",
-      "en": "sha256:f0902b3ac0af4d992a51abc857b6c415e02b776178d16f41abd40671a67cfab8",
-      "fr": "sha256:b63ad8cae6b57ba7020c3affdcf88bb7f503527ee0ffcfdca7161fe7683d0676",
-      "fr-FR": "sha256:81475d1975ac3b7dab152b5687b4fb5b40c8a3182eb53c6804fe45e9a315e3f5"
+      "de": "sha256:9c128cb75ce5856a2f1b40cb7f84ffcf8b59978b347528e19cee9f16cc6c0690",
+      "en": "sha256:55dc96da7492dd7febc9d53e53e3c02711eac2fc8b11743aa217df963f066398",
+      "fr": "sha256:df30bcb192d532049880f79b8cae077eb343014eedfa9c9443006236a115825b",
+      "fr-FR": "sha256:9b1870c2b0900cf2c11faa1139c9af2575ef255f45e5f04c53d7583286d94b43"
     }
   },
   "locales": [
@@ -159,7 +159,9 @@
     { "id": "unknown-root-member", "mutation": "addRootMember", "value": true, "rejection": "RTR0023/unknown-member" },
     { "id": "unknown-key", "mutation": "addMessage", "value": true, "rejection": "RTR0023/unknown-key" },
     { "id": "content-locale", "mutation": "contentLocale", "value": "en", "rejection": "RTR0023/argument-contract-mismatch" },
-    { "id": "markup-contract", "mutation": "markupContract", "value": {}, "rejection": "RTR0023/argument-contract-mismatch" },
+    { "id": "markup-contract", "mutation": "markupContract", "value": { "version": 2, "contracts": {}, "messages": {} }, "rejection": "RTR0023/argument-contract-mismatch" },
+    { "id": "markup-contract-v1", "mutation": "markupContract", "value": { "version": 1, "contracts": {}, "messages": {} }, "rejection": "RTR0023/markup-contract-version-mismatch" },
+    { "id": "markup-contract-unversioned", "mutation": "markupContract", "value": {}, "rejection": "RTR0023/markup-contract-version-mismatch" },
     { "id": "unknown-ast-member", "mutation": "addAstMember", "value": true, "rejection": "RTR0023/unknown-member" },
     { "id": "ast-version", "mutation": "astVersion", "value": 4, "rejection": "RTR0023/artifact-version-mismatch" },
     { "id": "unknown-wrapper-member", "mutation": "addWrapperMember", "value": true, "rejection": "RTR0023/unknown-member" },

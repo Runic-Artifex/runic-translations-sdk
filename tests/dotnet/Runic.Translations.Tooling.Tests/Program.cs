@@ -240,7 +240,7 @@ internal static class Program
             compilation.CallerFingerprint is null || compilation.SourceHash is null ||
             Rmf2ProjectCompilationV5.ExecutionProfile != "rmf2-execution-v2" ||
             Rmf2ProjectCompilationV5.MessageGrammarVersion != 5 ||
-            Rmf2ProjectCompilationV5.RuntimeAbiVersion != 2)
+            Rmf2ProjectCompilationV5.RuntimeAbiVersion != 3)
             throw new InvalidOperationException("The public v5 compilation result omitted selected contract metadata.");
         return compilation;
     }

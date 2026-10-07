@@ -249,3 +249,6 @@ Rename the conflicting type or member, or move it to another namespace.
 `RTR0020` is reported by the `runic-translations` tool and MSBuild when a
 generated output path is invalid or escapes the output root. `RTR0023` is the
 runtime's classification of a rejected external translation pack.
+`RTR0023/markup-contract-version-mismatch` means the pack was built for another
+Runic markup contract version (for example by an earlier compiler release);
+rebuild the pack with the current compiler.

@@ -32,6 +32,8 @@ public sealed class Rmf2InlineRenderer
     private readonly Dictionary<string, Dictionary<string, string>> _contentLocales = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, (int Min, int Max)>> _bounds = new(StringComparer.Ordinal);
     private static readonly IReadOnlyDictionary<string, string> EmptyOptions = new ReadOnlyDictionary<string, string>(new Dictionary<string, string>());
+    // Markup contract v2 (W220-003): explicit placement and child models plus integer options.
+    internal const int MarkupContractVersion = 2;
 
     /// <summary>Links the compiler-exported RMF2 markup contract. The caller owns UI implementations.</summary>
     public Rmf2InlineRenderer(string contractJson)
@@ -39,19 +41,29 @@ public sealed class Rmf2InlineRenderer
         ArgumentNullException.ThrowIfNull(contractJson);
         using JsonDocument json = JsonDocument.Parse(contractJson, new JsonDocumentOptions { MaxDepth = 32 });
         JsonElement root = json.RootElement;
-        if (root.GetProperty("version").GetInt32() != 1) throw new ArgumentException("Unsupported RMF2 contract version.", nameof(contractJson));
+        if (root.GetProperty("version").GetInt32() != MarkupContractVersion) throw new ArgumentException("Unsupported RMF2 contract version.", nameof(contractJson));
         foreach (JsonProperty item in root.GetProperty("contracts").EnumerateObject())
         {
             var options = new Dictionary<string, Option>(StringComparer.Ordinal);
             foreach (JsonProperty option in item.Value.GetProperty("options").EnumerateObject())
-                options.Add(option.Name, new Option(option.Value.GetProperty("type").GetString()!, option.Value.GetProperty("values").EnumerateArray().Select(v => v.GetString()!).ToArray(), option.Value.GetProperty("literalOnly").GetBoolean()));
+            {
+                string type = option.Value.GetProperty("type").GetString()!;
+                if (type is not ("string" or "number" or "integer" or "boolean" or "enum")) throw new ArgumentException("Unsupported RMF2 markup option type.", nameof(contractJson));
+                long minimum = int.MinValue, maximum = int.MaxValue;
+                if (type == "integer")
+                {
+                    minimum = option.Value.GetProperty("minimum").GetInt32();
+                    maximum = option.Value.GetProperty("maximum").GetInt32();
+                    if (minimum > maximum) throw new ArgumentException("Invalid RMF2 integer option bounds.", nameof(contractJson));
+                }
+                options.Add(option.Name, new Option(type, option.Value.GetProperty("values").EnumerateArray().Select(v => v.GetString()!).ToArray(), option.Value.GetProperty("literalOnly").GetBoolean(), minimum, maximum));
+            }
             string kind = item.Value.GetProperty("kind").GetString()!;
             if (kind is not ("paired" or "standalone")) throw new ArgumentException("Unsupported RMF2 markup kind.", nameof(contractJson));
             bool standalone = kind == "standalone";
-            string children = item.Value.TryGetProperty("children", out JsonElement childrenElement)
-                ? childrenElement.GetString()!
-                : standalone ? "none" : "inline";
-            if (children != (standalone ? "none" : "inline")) throw new ArgumentException("RMF2 markup child model does not match its kind.", nameof(contractJson));
+            string children = item.Value.GetProperty("children").GetString()!;
+            string placement = item.Value.GetProperty("placement").GetString()!;
+            if (placement != "inline" || children != (standalone ? "none" : "inline")) throw new ArgumentException("RMF2 markup placement or child model is not supported.", nameof(contractJson));
             string plainText = item.Value.GetProperty("plainText").GetString()!;
             if (plainText is not ("children" or "lineBreak" or "alternateText" or "explicit" or "omit")) throw new ArgumentException("Unsupported RMF2 plain-text projection policy.", nameof(contractJson));
             _tags.Add(item.Name, new Tag(standalone, children, item.Value.GetProperty("interactive").GetBoolean(), plainText, options));
@@ -278,14 +290,30 @@ public sealed class Rmf2InlineRenderer
             if (annotateLinkDestinations && run.Binding is InlineLinkBinding link) text.Append(" (").Append(link.Destination).Append(')');
         }
     }
+    // Canonical decimal text only (no sign on zero, no leading zeros, no fraction or exponent),
+    // within the declared bounds; identical to the compiler and the ESM markupLiteral rule.
+    internal static bool AcceptsInteger(string text, long minimum, long maximum)
+    {
+        if (text.Length == 0 || text.Length > 11) return false;
+        int start = text[0] == '-' ? 1 : 0;
+        if (start == text.Length || (text[start] == '0' && text.Length != 1)) return false;
+        for (int index = start; index < text.Length; index++) if (!char.IsAsciiDigit(text[index])) return false;
+        return long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long value) && value >= minimum && value <= maximum;
+    }
     private static bool Matches(string kind, MarkupBinding? binding) => kind switch
     { "runic:link" => binding is InlineLinkBinding { Destination: not null } link && (!link.Destination.IsAbsoluteUri || link.Destination.Scheme is "http" or "https" or "mailto" or "tel"), "runic:action" => binding is InlineActionBinding { Activate: not null }, "runic:icon" => binding is InlineIconBinding, _ => false };
     private sealed record Tag(bool Standalone, string Children, bool Interactive, string PlainText, Dictionary<string, Option> Options);
-    private sealed record Option(string Type, string[] Values, bool LiteralOnly)
+    private sealed record Option(string Type, string[] Values, bool LiteralOnly, long Minimum, long Maximum)
     {
-        internal bool AcceptsType(TextArgumentType type) => Type switch { "number" => type is TextArgumentType.Int or TextArgumentType.Number, "boolean" => type == TextArgumentType.Bool, _ => type == TextArgumentType.String };
+        internal bool AcceptsType(TextArgumentType type) => Type switch { "number" => type is TextArgumentType.Int or TextArgumentType.Number, "integer" => type == TextArgumentType.Int, "boolean" => type == TextArgumentType.Bool, _ => type == TextArgumentType.String };
         internal bool Accepts(string value) => Type switch
-        { "enum" => Values.Contains(value, StringComparer.Ordinal), "number" => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double number) && double.IsFinite(number), "boolean" => value is "true" or "false", _ => true };
+        {
+            "enum" => Values.Contains(value, StringComparer.Ordinal),
+            "number" => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double number) && double.IsFinite(number),
+            "integer" => AcceptsInteger(value, Minimum, Maximum),
+            "boolean" => value is "true" or "false",
+            _ => true,
+        };
         internal bool Accepts(CompiledRmf2Value value, Dictionary<string, TextArgumentType> types)
         {
             if (value.Kind is "input" or "local")
@@ -293,6 +321,7 @@ public sealed class Rmf2InlineRenderer
             return Type switch
             {
                 "number" => value.Kind == "number-literal" && value.Canonical is not null,
+                "integer" => (value.Kind == "string-literal" || value.Kind == "number-literal" && value.Canonical == value.Value) && AcceptsInteger(value.Value, Minimum, Maximum),
                 "boolean" => value.Kind == "string-literal" && value.Value is "true" or "false",
                 "enum" => value.Kind == "string-literal" && Values.Contains(value.Value, StringComparer.Ordinal),
                 "string" => value.Kind == "string-literal",

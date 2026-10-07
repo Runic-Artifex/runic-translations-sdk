@@ -14,7 +14,7 @@ execution profiles and cannot be mixed in one project.
 | Authoring representation | Direct `.mf2` or grouped `.rmf2` files |
 | Message grammar and normalized AST | 5 (`rmf2-execution-v2`) |
 | Resolved locale artifact | 5 |
-| Runtime/generated-code ABI | RMF2 ABI 2 |
+| Runtime/generated-code ABI | RMF2 ABI 3 (markup contract v2) |
 | ESM ABI | 4 (`web-module-manifest-v3`) |
 | Transport contract | 1 |
 

@@ -11,7 +11,7 @@
   "properties": {
     "webModuleManifestVersion": { "const": 3 },
     "esmAbiVersion": { "const": 4 },
-    "rmf2RuntimeAbiVersion": { "const": 2 },
+    "rmf2RuntimeAbiVersion": { "const": 3 },
     "messageGrammarVersion": { "const": 5 },
     "profile": { "const": "rmf2-execution-v2" },
     "generatedNameVersion": { "const": 1 },

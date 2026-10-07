@@ -50,7 +50,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("internal static class " + className);
         writer.Line("{"); writer.Indent();
         writer.Line("internal const int GeneratedRuntimeAbiVersion = 1;");
-        writer.Line("internal const int RequiredRmf2RuntimeAbiVersion = 2;"); writer.Blank();
+        writer.Line("internal const int RequiredRmf2RuntimeAbiVersion = " + Rmf2ProjectV5.RuntimeAbiVersion + ";"); writer.Blank();
         writer.Line("internal static global::Runic.Translations.CompiledTranslationCatalog CreateDefinition()");
         writer.Line("{"); writer.Indent();
         writer.Line("return new global::Runic.Translations.CompiledTranslationCatalog("); writer.Indent();
@@ -80,7 +80,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public const string Rmf2MarkupContract = " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
         writer.Line("public const string Rmf2Profile = " + GenerationSupport.CSharpString(Rmf2ProjectV5.Profile) + ";");
         writer.Line("public const int RuntimeAbiVersion = 1;");
-        writer.Line("public const int Rmf2RuntimeAbiVersion = 2;");
+        writer.Line("public const int Rmf2RuntimeAbiVersion = " + Rmf2ProjectV5.RuntimeAbiVersion + ";");
         writer.Line("public const int MessageGrammarVersion = 5;");
         writer.Line("public const int GeneratedNameVersion = 1;");
         writer.Line("public const int GeneratorVersion = 1;"); writer.Blank();
@@ -91,7 +91,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("{"); writer.Indent();
         writer.Line("if (global::Runic.Translations.TranslationsCompatibility.RuntimeAbiVersion != 1)"); writer.Indent();
         writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");"); writer.Unindent();
-        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(2);");
+        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("return new global::Runic.Translations.CompiledTranslationProvider(" + className + "CatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
         writer.Line("public static async global::System.Threading.Tasks.ValueTask<global::Runic.Translations.ITranslationManager> CreateManagerAsync("); writer.Indent();
@@ -113,7 +113,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackLimits? limits = null,");
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(2);");
+        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("var factory = new global::Runic.Translations.ExternalTranslationSnapshotFactory(externalSource, CatalogId, ContractFingerprint, CreateExternalPackContract, limits, integrityVerifier);");
         writer.Line("return CreateProvider(valueFormatter, factory, options);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
@@ -136,7 +136,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null,");
         writer.Line("global::System.Threading.CancellationToken cancellationToken = default)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(2);");
+        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("return global::Runic.Translations.TranslationPackLoader.LoadAsync(source, CreateExternalPackContract(locale), limits, integrityVerifier, cancellationToken);");
         writer.Unindent(); writer.Line("}");
         writer.Unindent(); writer.Line("}");

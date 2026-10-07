@@ -53,7 +53,7 @@ generated server entrypoint rather than a mutable global source.
 Dynamic loading consumes locale artifact 5 and validates the
 closed artifact envelope, profile and grammar 5, catalog, caller fingerprint,
 locale and content-locale mappings, linked markup/slot contract, and bounded
-typed message semantics. Runtime ABI 2 and the source hash are metadata of the
+typed message semantics. Runtime ABI 3 and the source hash are metadata of the
 separate `web-module-manifest-v3.json`, where the Vite plugin validates them;
 they are not locale-artifact members. Import `/dynamic`, call
 `decodeLocaleArtifact` once after loading JSON, then call

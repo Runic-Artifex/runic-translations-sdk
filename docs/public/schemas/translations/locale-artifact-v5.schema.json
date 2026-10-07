@@ -64,7 +64,7 @@
       "type": "object",
       "properties": {
         "version": {
-          "const": 1
+          "const": 2
         },
         "contracts": {
           "type": "object",
@@ -75,6 +75,17 @@
                 "enum": [
                   "paired",
                   "standalone"
+                ]
+              },
+              "placement": {
+                "enum": [
+                  "inline"
+                ]
+              },
+              "children": {
+                "enum": [
+                  "inline",
+                  "none"
                 ]
               },
               "interactive": {
@@ -98,6 +109,7 @@
                       "enum": [
                         "string",
                         "number",
+                        "integer",
                         "boolean",
                         "enum"
                       ]
@@ -107,6 +119,16 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "minimum": {
+                      "type": "integer",
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
+                    },
+                    "maximum": {
+                      "type": "integer",
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
                     },
                     "default": {
                       "type": [
@@ -130,6 +152,8 @@
             },
             "required": [
               "kind",
+              "placement",
+              "children",
               "interactive",
               "plainText",
               "options"
