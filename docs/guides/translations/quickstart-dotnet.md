@@ -74,7 +74,8 @@ method with one parameter per input otherwise.
   identifier, such as `user-name` or `café`, keeps its encoded name for that
   parameter only: a message with `$user-name` is called as
   `text.Messages.profile_badge(r_757365722d6e616d65: "ada")`. A key that is
-  reserved in C# (for example `ToString`) stays encoded-only and reports
+  reserved by the readable-name policy (for example `ToString`, which C# does
+  not reserve) stays encoded-only and reports
   [`RTR0069`](diagnostics.md#rtr0069).
 - **Rich content.** A message with markup returns
   `LocalizedTextContent<AppTextSlots.key>`. Bind its link, action and icon
@@ -92,6 +93,7 @@ method with one parameter per input otherwise.
   slots are compile errors at the `Bind` argument. The
   [consumer example](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/fixtures/translations/readable-consumer)
   shows link, action, icon and conditional slots.
+  A structured message without functional slots is bound with `Bind(new())`.
 
 Change the title in `en.rmf2`, rebuild, and the same
 typed property prints the new text. Your application's reference to its own

@@ -15,3 +15,16 @@ dotnet run --project tests/fixtures/translations/readable-consumer/ReadableConsu
 ```
 
 The fixture `bin` and `obj` directories are disposable.
+
+## Compile-time rejection
+
+Invalid bindings fail at the `Bind` argument, not at runtime. Each of these
+wrong calls gives the error shown, and `GeneratorReadableTests.CompileFailures`
+in `tests/dotnet/Runic.Translations.Generator.Tests` proves each one:
+
+| Call | Error |
+|---|---|
+| `text.Messages.help.Bind(new(guide: action, retry: action))` (wrong kind) | CS1503 |
+| `text.Messages.help.Bind(new(guide: link))` (missing slot) | CS7036 |
+| `text.Messages.help.Bind(new(guide: link, retyr: action))` (misspelled slot) | CS1739 |
+| `text.Messages.help.Bind(new AppTextSlots.other(guide: link))` (another message's slots) | CS1503 |
