@@ -10,7 +10,8 @@ file, a one-based line and column, and UTF-16 columns.
 
 Most diagnostics are errors and stop generation. `RTR0010`, `RTR0011` and
 `RTR0021` follow the project's `validation` policies (`allow`, `warning` or
-`error`), and some `RTR0051` reports are warnings.
+`error`), and some `RTR0051` reports are warnings, as are `RTR0068` and
+`RTR0069`.
 
 ## RTR0001
 
@@ -43,7 +44,9 @@ files after canonical tags.
 
 Catalog ID or generated code name is invalid. The catalog ID, `code.namespace`
 or `code.className` cannot be used. Catalog IDs are lowercase identifiers with
-dots or dashes; namespaces and class names must be C# identifiers.
+dots or dashes; namespaces and class names must be ASCII C# identifiers. A class
+name cannot be `Messages`, `__readable` or `__translationManager`, which name
+members of the generated class.
 
 ## RTR0009
 
@@ -180,6 +183,36 @@ MF2 syntax error. The message is not valid MF2 syntax.
 MF2 data model is invalid. The message parses but violates the MF2 data model:
 for example a matcher without a catch-all variant, duplicate variant keys, or a
 local used before its declaration.
+
+## RTR0068
+
+Referenced runtime lacks the readable C# surface. The C# source generator
+found a `Runic.Translations` reference that predates the readable surface (its
+`TranslationsCompatibility` has no `TypedSlotBindingsVersion`). The generator
+still emits the encoded accessors, keys, catalog data and registration, but
+skips `<ClassName>.Readable.g.cs`, so `text.Messages` is unavailable. Code that
+does not use `Messages` keeps building. Reference `Runic.Translations` at the
+same version as `Runic.Translations.Build`. Only the source generator reports
+this; `runic-translations generate --emit-csharp` cannot inspect references and
+always writes the readable file.
+
+## RTR0069
+
+Readable C# name is reserved or clashes. A message is left out of the readable
+C# surface (`text.Messages`) because its key, or one of its slot IDs, is
+reserved, or because a verbatim input name or slot ID equals the encoded name
+of another input or slot of the same message. Reserved message keys are the
+`object` members (`Equals`, `GetHashCode`, `ToString`, `GetType`,
+`MemberwiseClone`, `Finalize`, `ReferenceEquals`), `ReadableNameVersion`,
+`__text`, and the class names `<ClassName>`, `<ClassName>Messages` and
+`<ClassName>Slots`. A slot ID is reserved when it is an `object` member or equal
+to the message key. The message stays available through its encoded member.
+Rename the key, input or slot, or change the severity in `.editorconfig`:
+
+```ini
+[*.cs]
+dotnet_diagnostic.RTR0069.severity = error # or none
+```
 
 ## Other hosts
 

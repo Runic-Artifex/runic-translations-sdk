@@ -41,7 +41,9 @@ internal static partial class GeneratorDiagnosticsTests
         Assert.True(missing.Length == 0, "Compiler diagnostics without a descriptor: " + string.Join(", ", missing));
 
         string reference = File.ReadAllText(Path.Combine(root, "docs", "guides", "translations", "diagnostics.md"));
-        string shipped = File.ReadAllText(Path.Combine(root, "packages", "dotnet", "Runic.Translations.Generator", "AnalyzerReleases.Shipped.md"));
+        // A rule is release-tracked once it is listed as shipped or as new in the unshipped release.
+        string shipped = File.ReadAllText(Path.Combine(root, "packages", "dotnet", "Runic.Translations.Generator", "AnalyzerReleases.Shipped.md")) +
+            File.ReadAllText(Path.Combine(root, "packages", "dotnet", "Runic.Translations.Generator", "AnalyzerReleases.Unshipped.md"));
         Assert.True(reference.StartsWith("# Diagnostics\n", StringComparison.Ordinal), "The diagnostics reference must keep its #diagnostics anchor.");
         var titles = new HashSet<string>(StringComparer.Ordinal);
         foreach (DiagnosticDescriptor descriptor in TranslationsDiagnostics.All)

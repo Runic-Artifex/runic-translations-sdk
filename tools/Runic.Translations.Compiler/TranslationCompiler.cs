@@ -236,7 +236,8 @@ public static partial class TranslationCompiler
             model.ClassName = className.Value.Text!;
             if (IsWindowsDeviceStem(model.ClassName))
                 diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Generated class name '" + model.ClassName + "' produces a Windows-reserved filename stem.", source, className.Value.Span);
-            else if (!IsIdentifier(model.ClassName))
+            // A class name equal to a generated instance member would be CS0542 (member named like its enclosing type).
+            else if (!IsIdentifier(model.ClassName) || model.ClassName is "Messages" or "__readable" or "__translationManager")
                 diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error, "Invalid generated class name '" + model.ClassName + "'.", source, className.Value.Span);
         }
         if (visibility is not null)

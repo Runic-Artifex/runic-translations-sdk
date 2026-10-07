@@ -38,6 +38,7 @@ internal static class GenerationSupport
         "dynamic", "equals", "file", "from", "get", "global", "group", "init", "into", "join", "let", "managed",
         "nameof", "not", "notnull", "on", "or", "orderby", "partial", "record", "remove", "required", "scoped",
         "select", "set", "unmanaged", "value", "var", "when", "where", "with", "yield",
+        "__arglist", "__makeref", "__reftype", "__refvalue",
     };
 
     internal static string CSharpIdentifier(string value) => CSharpKeywords.Contains(value) ? "@" + value : value;

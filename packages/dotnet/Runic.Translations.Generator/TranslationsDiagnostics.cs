@@ -74,13 +74,18 @@ internal static class TranslationsDiagnostics
         "RTR0066", "MF2 syntax error", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0066");
     internal static readonly DiagnosticDescriptor InvalidDataModel = new(
         "RTR0067", "MF2 data model is invalid", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0067");
+    internal static readonly DiagnosticDescriptor ReadableSurfaceUnsupported = new(
+        "RTR0068", "Referenced runtime lacks the readable C# surface", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0068");
+    internal static readonly DiagnosticDescriptor ReadableNameReserved = new(
+        "RTR0069", "Readable C# name is reserved or clashes", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0069");
 
     private static readonly Dictionary<string, DiagnosticDescriptor> ById = Index(
         UnreadableSource, DuplicateInputs, UnsupportedProjectSchema, InvalidLocale, InvalidCodeName, EmptyBaseLocale,
         MissingTranslation, ExtraLocaleKey, InvalidFallback, FallbackCycle, MalformedPattern, CallerInputChanged,
         NameCollision, InvalidStructure, EmptyVariant, LimitExceeded, RuntimeAbi, UnsupportedContentLocale,
         InvalidVariableOrFunction, InvalidResourceSyntax, InvalidMetadata, InvalidSourceLayout, ConflictingDeclaration,
-        InvalidMarkupContract, InvalidMarkup, InvalidMarkupReference, NotExecutable, SyntaxError, InvalidDataModel);
+        InvalidMarkupContract, InvalidMarkup, InvalidMarkupReference, NotExecutable, SyntaxError, InvalidDataModel,
+        ReadableSurfaceUnsupported, ReadableNameReserved);
 
     private static readonly object UnknownGate = new();
     private static readonly Dictionary<string, DiagnosticDescriptor> Unknown = new(System.StringComparer.Ordinal);

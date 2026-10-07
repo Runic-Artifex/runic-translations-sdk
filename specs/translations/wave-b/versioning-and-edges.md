@@ -13,6 +13,7 @@ The following identifiers are independent compatibility selectors:
 | ESM ABI | 4 |
 | Web module manifest | 3 |
 | Generated-name mapping | 1 |
+| Readable C# name policy (C# only) | 1 |
 | Asset manifest edge | 1 |
 
 Package SemVer is not a behavior selector. Readers may support multiple explicit
