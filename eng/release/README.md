@@ -10,6 +10,14 @@ CI builds from the same commit to the GitHub release; they are not published to 
 extension marketplace. The editor is verified with the release source but is not
 released by this workflow.
 
+## Release notes
+
+Add user-facing notes to `eng/release/notes/<version>.md` as changes merge,
+including upgrade steps for breaking changes. `ci-artifact.mjs release` passes that
+file to `gh release create --notes-file`, and gh puts it above the list of merged
+pull requests that `--generate-notes` adds. Without a notes file the release has
+only the generated list.
+
 ## IDE extension versions
 
 Neither VSIX format accepts a SemVer prerelease label, so CI stamps each extension
