@@ -43,6 +43,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../eng/translations/Rmf2Preview.cs" Link="Shared/Rmf2Preview.cs" />
+    <Compile Include="../../eng/translations/TranslationManifestReader.cs" Link="Shared/TranslationManifestReader.cs" />
     <PackageReference Include="Runic.Platform.$(RunicNativeProvider)" />
   </ItemGroup>
 

@@ -62,16 +62,29 @@ internal sealed class EditorWorkspace : IDisposable
             if (!reconcile && _pendingChanges.IsEmpty)
                 return new EditorExternalChanges(false, [], []);
 
-            Dictionary<string, byte[]> currentFiles = ReadCurrentTranslationFiles(cancellationToken);
+            // Take only the events observed before this scan. Events arriving
+            // while the inventory is being read remain queued for the next
+            // reconciliation and cannot be acknowledged by this baseline. If
+            // the read fails, the taken events and flags are restored so the
+            // next scan still reports them instead of silently losing them.
+            var candidates = new HashSet<string>(_pendingChanges.Keys, StringComparer.Ordinal);
+            foreach (string path in candidates) _pendingChanges.TryRemove(path, out _);
+            Dictionary<string, byte[]> currentFiles;
+            try
+            {
+                currentFiles = ReadCurrentTranslationFiles(cancellationToken);
+            }
+            catch
+            {
+                foreach (string path in candidates) _pendingChanges.TryAdd(path, 0);
+                if (overflowed) Interlocked.Exchange(ref _watcherOverflowed, 1);
+                if (reconcile) Interlocked.Exchange(ref _reconcileRequested, 1);
+                throw;
+            }
             Dictionary<string, string> current = currentFiles.ToDictionary(
                 static pair => pair.Key,
                 static pair => Revision(pair.Value),
                 StringComparer.Ordinal);
-            // Remove only the events observed for this scan.  Events arriving
-            // while the inventory is being read remain queued for the next
-            // reconciliation and cannot be acknowledged by this baseline.
-            var candidates = new HashSet<string>(_pendingChanges.Keys, StringComparer.Ordinal);
-            foreach (string path in candidates) _pendingChanges.TryRemove(path, out _);
             // A source event, manifest event, or directory membership event
             // all request a complete previous/current inventory comparison.
             // Comparing only queued paths loses delayed watcher events and can
@@ -658,7 +671,7 @@ internal sealed class EditorWorkspace : IDisposable
                         after);
                     continue;
                 }
-                string targetPath = DirectInterchangeTargetPath(state, configPath, import.TargetLocale!, key);
+                string targetPath = DirectInterchangeTargetPath(state, configPath, manifestContent, import.TargetLocale!, key);
                 WorkspaceFile? target = state.Files.FirstOrDefault(file => string.Equals(file.Path, targetPath, StringComparison.Ordinal));
                 byte[]? original = target is null ? null : StrictUtf8.GetBytes(target.Content);
                 documents.Add(new PreparedInterchangeDocument(
@@ -1097,6 +1110,7 @@ internal sealed class EditorWorkspace : IDisposable
     private string DirectInterchangeTargetPath(
         WorkspaceState state,
         string configPath,
+        string manifestContent,
         string targetLocale,
         string logicalKey)
     {
@@ -1111,15 +1125,10 @@ internal sealed class EditorWorkspace : IDisposable
             .Single(locale => string.Equals(locale.Tag, project.DefaultLocale, StringComparison.Ordinal))
             .DirectResources.SingleOrDefault(resource => string.Equals(resource.Key, logicalKey, StringComparison.Ordinal))
             ?? throw new TranslationAuthoringException("The imported direct MF2 key has no canonical source resource.");
-        string projectRoot = Path.GetDirectoryName(configPath)!;
-        var sourceRoots = new List<string>();
-        using (JsonDocument config = JsonDocument.Parse(File.ReadAllBytes(configPath)))
-        {
-            if (config.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
-                foreach (JsonElement mount in mounts.EnumerateArray())
-                    sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
-            else sourceRoots.Add(projectRoot);
-        }
+        // Resolve against the manifest this plan compiled, not a later disk state.
+        TranslationManifestLayout layout = TranslationManifestReader.Read(StrictUtf8.GetBytes(manifestContent), Path.GetDirectoryName(configPath)!);
+        if (!layout.IsValid) throw new TranslationAuthoringException(layout.Error!);
+        IReadOnlyList<string> sourceRoots = layout.SourceRoots;
 
         string sourceFullPath = ContainedPath(source.SourceLocation.Path);
         string[] matches = sourceRoots.Where(root => IsWithinSourceRoot(root, sourceFullPath)).ToArray();
@@ -1268,17 +1277,18 @@ internal sealed class EditorWorkspace : IDisposable
         string projectRoot = Path.GetDirectoryName(configPath)!;
         string configRelativePath = NormalizeRelativePath(Path.GetRelativePath(_root, configPath));
         var paths = new List<string> { configPath };
-        var sourceRoots = new List<string>();
-        using (JsonDocument config = JsonDocument.Parse(replacementPath == configRelativePath && replacementContent is not null ? StrictUtf8.GetBytes(replacementContent) : File.ReadAllBytes(configPath)))
+        // A malformed or half-saved manifest contributes no source roots. The
+        // compiler then reports the located configuration diagnostic, and the
+        // next load after the manifest is fixed discovers the sources again.
+        TranslationManifestLayout layout = TranslationManifestReader.Read(
+            replacementPath == configRelativePath && replacementContent is not null ? StrictUtf8.GetBytes(replacementContent) : File.ReadAllBytes(configPath),
+            projectRoot);
+        var discoveryErrors = new List<string>();
+        IReadOnlyList<string> sourceRoots = UsableSourceRoots(layout.SourceRoots, discoveryErrors);
+        foreach (string sourceRoot in sourceRoots)
         {
-            if (config.RootElement.TryGetProperty("sourceRoots", out var mounts))
-                foreach (var mount in mounts.EnumerateArray()) sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
-            else sourceRoots.Add(projectRoot);
-            foreach (string sourceRoot in sourceRoots)
-            {
-                paths.AddRange(EnumerateSourceFiles(sourceRoot, ".mf2").Order(StringComparer.Ordinal));
-                paths.AddRange(EnumerateSourceFiles(sourceRoot, ".rmf2").Order(StringComparer.Ordinal));
-            }
+            paths.AddRange(EnumerateSourceFiles(sourceRoot, ".mf2").Order(StringComparer.Ordinal));
+            paths.AddRange(EnumerateSourceFiles(sourceRoot, ".rmf2").Order(StringComparer.Ordinal));
         }
         var files = new List<WorkspaceFile>(paths.Count);
         TranslationSource? projectSource = null;
@@ -1320,8 +1330,9 @@ internal sealed class EditorWorkspace : IDisposable
             files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         }
 
-        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
-            projectSource, messageSources, null, cancellationToken);
+        Rmf2ProjectCompilationV5 compilation = TranslationManifestReader.WithManifestErrors(
+            TranslationCompiler.CompileRmf2ProjectV5(projectSource, messageSources, null, cancellationToken),
+            projectSource.Path, layout.Error, discoveryErrors);
         Rmf2ProjectV5? rmf2 = compilation.Project;
         (string Tag, string? Fallback)[] compiledLocales = rmf2?.Locales.Select(static locale => (locale.Tag, locale.FallbackTag)).ToArray() ?? [];
         if (compiledLocales.Length != 0)
@@ -1483,7 +1494,9 @@ internal sealed class EditorWorkspace : IDisposable
             if (locales.Count == 0 && defaultLocale.Length != 0) locales.Add(new EditorLocale(defaultLocale, null));
             return new EditorCatalog(id, schemaVersion, defaultLocale, locales, [new EditorLayer("base", 0)]);
         }
-        catch (JsonException)
+        // A manifest with a catalog but missing or mistyped members is shown
+        // without catalog metadata; the compiler diagnostics explain why.
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
             return null;
         }
@@ -1560,20 +1573,13 @@ internal sealed class EditorWorkspace : IDisposable
         // subsequent watcher event will repopulate the inventory when the
         // project is recreated, while this scan can still report removals.
         if (config is null) return new Dictionary<string, byte[]>(StringComparer.Ordinal);
-        string projectRoot = Path.GetDirectoryName(config)!;
-        var sourceRoots = new List<string>();
-        using (JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(config)))
-        {
-            if (document.RootElement.TryGetProperty("sourceRoots", out JsonElement mounts))
-            {
-                foreach (JsonElement mount in mounts.EnumerateArray())
-                    sourceRoots.Add(Path.GetFullPath(mount.GetProperty("path").GetString()!, projectRoot));
-            }
-            else
-            {
-                sourceRoots.Add(projectRoot);
-            }
-        }
+        // A malformed manifest, or a source root that is missing or outside the
+        // workspace (common while a path is being typed), must not fail the
+        // scan: it would fail again on every check. The load reports those as
+        // manifest diagnostics. The manifest itself stays in the inventory, so
+        // fixing it is reported and rediscovers the sources.
+        IReadOnlyList<string> sourceRoots = UsableSourceRoots(
+            TranslationManifestReader.Read(File.ReadAllBytes(config), Path.GetDirectoryName(config)!).SourceRoots, null);
         var result = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
             [NormalizeRelativePath(Path.GetRelativePath(_root, config))] = ReadSourceBytes(ContainedPath(NormalizeRelativePath(Path.GetRelativePath(_root, config)))),
@@ -1622,6 +1628,29 @@ internal sealed class EditorWorkspace : IDisposable
     private static bool IsSourcePath(string path) =>
         path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
+
+    // Source roots the Editor can enumerate. A root outside the opened
+    // workspace folder cannot be edited or watched here, and a missing root is
+    // usually a path still being typed; both are skipped and, when errors is
+    // supplied, reported as manifest diagnostics instead of failing the load.
+    private List<string> UsableSourceRoots(IReadOnlyList<string> sourceRoots, List<string>? errors)
+    {
+        var usable = new List<string>(sourceRoots.Count);
+        foreach (string sourceRoot in sourceRoots)
+        {
+            string display = NormalizeRelativePath(Path.GetRelativePath(_root, sourceRoot));
+            if (!IsWithinSourceRoot(_root, sourceRoot) &&
+                !string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceRoot)), Path.TrimEndingDirectorySeparator(_root), StringComparison.Ordinal))
+                errors?.Add(SourceRootOutsideWorkspace(display));
+            else if (!Directory.Exists(sourceRoot))
+                errors?.Add(SourceRootMissing(display));
+            else usable.Add(sourceRoot);
+        }
+        return usable;
+    }
+
+    internal static string SourceRootOutsideWorkspace(string root) => $"Source root '{root}' is outside the workspace folder opened in the Translations Editor.";
+    internal static string SourceRootMissing(string root) => $"Source root '{root}' is not an existing directory.";
 
     private static IEnumerable<string> EnumerateSourceFiles(string root, string extension)
     {
@@ -1728,8 +1757,16 @@ internal sealed class EditorWorkspace : IDisposable
     {
         string? config = FindMf2ProjectConfig();
         if (config is null) return null;
-        using var document = JsonDocument.Parse(File.ReadAllBytes(config));
+        TranslationManifestLayout layout = TranslationManifestReader.Read(File.ReadAllBytes(config), Path.GetDirectoryName(config)!);
+        if (!layout.IsValid) throw new TranslationAuthoringException(layout.Error!);
         var state = ReadStateAsync(null, null, CancellationToken.None).GetAwaiter().GetResult();
+        // A source root that is missing or outside the workspace would plan
+        // against a partial inventory; refuse with the load's manifest diagnostic.
+        string configRelative = NormalizeRelativePath(Path.GetRelativePath(_root, config));
+        if (state.Compilation.Diagnostics.FirstOrDefault(diagnostic =>
+                diagnostic.Id == TranslationManifestReader.DiagnosticId && diagnostic.Severity == TranslationDiagnosticSeverity.Error &&
+                string.Equals(diagnostic.Location.Path, configRelative, StringComparison.Ordinal)) is { } discovery)
+            throw new TranslationAuthoringException(discovery.Message);
         var sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && IsSourcePath(file.Path)).Select(file => Source(file.Path, file.Content)).ToArray();
         if (sources.Length == 0) return null;
         var workspace = new Rmf2Workspace(_root, new TranslationSource(Path.GetRelativePath(_root, config).Replace('\\', '/'), File.ReadAllBytes(config)), sources);
@@ -1739,7 +1776,7 @@ internal sealed class EditorWorkspace : IDisposable
         string[] Target() => (request.TargetKey ?? "").Split('.', StringSplitOptions.RemoveEmptyEntries);
         if (request.Kind == "create-key")
         {
-            string locale = document.RootElement.GetProperty("baseLocale").GetString()!;
+            string locale = layout.BaseLocale ?? throw new TranslationAuthoringException(TranslationManifestReader.MissingBaseLocale);
             string path = sources.Where(source => string.Equals(workspace.Locale(source.Path), locale, StringComparison.OrdinalIgnoreCase)).Select(source => source.Path).Order(StringComparer.Ordinal).FirstOrDefault(path => {
                 try { workspace.LocalPath(path, Target()); return true; }
                 catch (TranslationAuthoringException) { return false; }

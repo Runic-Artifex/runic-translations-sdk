@@ -67,6 +67,21 @@ internal static class Rmf2AuthoringTests
         Assert.Throws<TranslationAuthoringException>(() => arrayProject.Rename(["x"], "renamed"), "Runic project root must be an object.");
         Assert.Throws<TranslationAuthoringException>(() => arrayProject.RenameSlot("en.rmf2", "x", "help", "docs"), "Runic project root must be an object.");
         Assert.Throws<TranslationAuthoringException>(() => arrayProject.SetFallback("de", "en"), "Runic project root must be an object.");
+
+        // A mistyped markup or slots member must not fail on JsonNode indexing.
+        // The edited catalog is validated and refused with the compiler's message.
+        foreach ((string markup, string expected) in new[] {
+            ("[]", "The complete edited catalog is invalid: markup must be an object."),
+            ("\"text\"", "The complete edited catalog is invalid: markup must be an object."),
+            ("{\"slots\":[]}", "The complete edited catalog is invalid: markup.slots must be an object."),
+            ("{\"slots\":{\"x\":[]}}", "The complete edited catalog is invalid:") })
+        {
+            var mistyped = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json",
+                "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"markup\":" + markup + "}"),
+                [Source("en.rmf2", "x = {#link ref=help}Help{/link}\n")]);
+            Assert.Throws<TranslationAuthoringException>(() => mistyped.Rename(["x"], "renamed"), expected);
+            Assert.Throws<TranslationAuthoringException>(() => mistyped.RenameSlot("en.rmf2", "x", "help", "docs"), expected);
+        }
     }
     private static void DirectSources()
     {
