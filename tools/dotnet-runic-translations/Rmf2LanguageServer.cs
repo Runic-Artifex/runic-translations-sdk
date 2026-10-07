@@ -731,9 +731,14 @@ internal sealed class Rmf2LanguageServer
                 if (sources.ContainsKey(file)) sources[file] = new TranslationSource(file, Utf8.GetBytes(buffer.Text));
                 continue;
             }
+            // A new unsaved resource joins the project only where discovery
+            // would find it on disk: beneath a configured source root, or the
+            // project directory when no roots are configured. ReadProject
+            // reports the project directory as the implicit root and returns
+            // no roots only for a malformed configuration.
             if (sources.ContainsKey(file) || ((Path.GetExtension(file).Equals(".rmf2", StringComparison.OrdinalIgnoreCase) ||
                 Path.GetExtension(file).Equals(".mf2", StringComparison.OrdinalIgnoreCase)) &&
-                (inputs.SourceRoots?.Any(sourceRoot => IsWithin(sourceRoot, file)) == true || IsWithin(directory, file))))
+                (inputs.SourceRoots is { } sourceRoots ? sourceRoots.Any(sourceRoot => IsWithin(sourceRoot, file)) : IsWithin(directory, file))))
                 sources[file] = new TranslationSource(file, Utf8.GetBytes(buffer.Text));
         }
         string root = directory;

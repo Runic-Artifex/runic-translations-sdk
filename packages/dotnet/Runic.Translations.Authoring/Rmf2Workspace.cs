@@ -37,11 +37,34 @@ public sealed class Rmf2Workspace
         _root = Path.GetFullPath(root); _project = project;
         _projectDirectory = Path.GetDirectoryName(Path.GetFullPath(_project.Path, _root))!;
         using var config = JsonDocument.Parse(_project.GetUtf8Bytes());
-        _baseLocale = config.RootElement.GetProperty("baseLocale").GetString()!;
-        _hasMounts = config.RootElement.TryGetProperty("sourceRoots", out var mounts);
+        // An unsaved or hand-edited runic.json may be malformed. Construction
+        // stays tolerant so Validate() can report the compiler's located
+        // diagnostics (for example "Missing required member 'namespace'")
+        // instead of failing here with a raw dictionary or JSON access error.
+        JsonElement settings = config.RootElement;
+        bool isObject = settings.ValueKind == JsonValueKind.Object;
+        _baseLocale = isObject && settings.TryGetProperty("baseLocale", out var baseLocale) && baseLocale.ValueKind == JsonValueKind.String
+            ? baseLocale.GetString()! : "";
+        JsonElement mounts = default;
+        _hasMounts = isObject && settings.TryGetProperty("sourceRoots", out mounts);
         if (_hasMounts)
-            foreach (var mount in mounts.EnumerateArray())
-                _mounts.Add((Path.GetFullPath(mount.GetProperty("path").GetString()!, _projectDirectory), mount.GetProperty("namespace").EnumerateArray().Select(v => v.GetString()!).ToArray()));
+        {
+            if (mounts.ValueKind == JsonValueKind.Array)
+                foreach (var mount in mounts.EnumerateArray())
+                {
+                    // Rename addresses mounts by their position among object
+                    // entries, so every object keeps a slot. An entry without a
+                    // string path owns no files (empty root); one without a
+                    // namespace array contributes no namespace segments.
+                    if (mount.ValueKind != JsonValueKind.Object) continue;
+                    string mountRoot = mount.TryGetProperty("path", out var path) && path.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(path.GetString())
+                        ? Path.GetFullPath(path.GetString()!, _projectDirectory) : "";
+                    string[] prefix = mount.TryGetProperty("namespace", out var ns) && ns.ValueKind == JsonValueKind.Array
+                        ? ns.EnumerateArray().Select(v => v.ValueKind == JsonValueKind.String ? v.GetString()! : "").ToArray()
+                        : Array.Empty<string>();
+                    _mounts.Add((mountRoot, prefix));
+                }
+        }
         else _mounts.Add((_projectDirectory, Array.Empty<string>()));
         _sources = sources.ToDictionary(s => s.Path, StringComparer.Ordinal);
         _direct = _sources.Values.Any(source => source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase));
@@ -469,6 +492,7 @@ public sealed class Rmf2Workspace
         string physical = Path.GetFullPath(path, _root);
         foreach (var mount in _mounts)
         {
+            if (mount.Root.Length == 0) continue; // A malformed mount owns no files.
             string relative = Path.GetRelativePath(mount.Root, physical);
             if (relative != ".." && !relative.StartsWith("../", StringComparison.Ordinal) && !Path.IsPathRooted(relative)) return mount;
         }
@@ -479,6 +503,7 @@ public sealed class Rmf2Workspace
         string physical = Path.GetFullPath(path, _root);
         foreach (var mount in _mounts)
         {
+            if (mount.Root.Length == 0) continue; // A malformed mount owns no files.
             string relative = Path.GetRelativePath(mount.Root, physical);
             if (relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relative)) continue;
             string directory = Path.GetDirectoryName(relative)?.Replace('\\', '/') ?? "";
