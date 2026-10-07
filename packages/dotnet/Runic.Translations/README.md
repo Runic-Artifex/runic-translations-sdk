@@ -12,7 +12,7 @@ Replace `<VERSION>` with the current preview shown on NuGet. The package targets
 
 ## Use a generated catalog
 
-Given the project template's starter catalog with `code.className` set to `AppText`, the generator creates registration and typed accessors. Each path segment of the starter message `application.title` is encoded as `r_` followed by its UTF-8 bytes in hexadecimal:
+Given the project template's starter catalog with `code.className` set to `AppText`, the generator creates registration and typed accessors. The starter message `application.title` has two path segments. Each segment is encoded as `r_` followed by the hexadecimal UTF-8 bytes of its NFC-normalized text, and the encoded segments are joined with `_`:
 
 ```csharp
 using Example.Translations;
