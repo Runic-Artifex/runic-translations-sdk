@@ -13,6 +13,12 @@ compiler AST and never parse authoring patterns or fetch JSON.
 `runWithLocale(locale, operation)` and ordinary message calls inside it resolve
 request-locally. Concurrent renders do not share mutable locale state. An
 explicit `{ locale }` option still overrides the context for an individual call.
+`server.js` imports `AsyncLocalStorage` from `node:async_hooks`, so it needs
+Node.js or another server runtime that implements that module, such as Bun, Deno,
+or Cloudflare Workers with `nodejs_compat` enabled. Runtimes without
+`AsyncLocalStorage` are not supported. Only
+server code imports `server.js`; `messages.js` and `runtime.js` have no
+Node.js dependency and run in the browser.
 The optional Vite package maps `virtual:runic-translations/{catalog}`, `/runtime`,
 `/transport`, and `/dynamic` to these ordinary modules and invalidates them on
 watched changes.
@@ -34,7 +40,13 @@ so Vite can remove message modules whose properties are not referenced.
 
 `runtime.js` exports `locales`, `baseLocale`, and `resolveLocale`, as well as
 `createLocaleSource`, which creates an explicitly scoped
-mutable locale source with `getLocale`, `subscribe`, and `setLocale`. Framework
+mutable locale source with `getLocale`, `subscribe`, and `setLocale`.
+`runtime.d.ts` declares a `Locale` union of the catalog's locales, for example
+`"de" | "en"`. `locales`, `baseLocale`, `getLocale`, the source returned by
+`createLocaleSource`, and `getRequestLocale` in `server.d.ts` use it, so a
+source fits a typed `MutableLocaleSource<Locale>` without a cast. Functions
+that resolve a tag, such as `resolveLocale`, `runWithLocale` and the
+`initialLocale` option, still accept any string. Framework
 adapters consume this structural contract and create one source per browser root
 or browser root. SSR uses the generated server entrypoint rather than a mutable
 global source.

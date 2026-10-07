@@ -222,13 +222,12 @@ Replace `src/routes/+layout.svelte`:
 
 ```svelte
 <script lang="ts">
-	import type { MutableLocaleSource } from '@runic-artifex/translations-svelte/translations';
 	import {
 		createLocaleNavigation,
 		synchronizeLocaleWithNavigation
 	} from '@runic-artifex/translations-sveltekit/translations/navigation';
 	import { createLocaleSource } from 'virtual:runic-translations/app/runtime';
-	import { routing, type Locale } from '#lib/i18n.ts';
+	import { routing } from '#lib/i18n.ts';
 	import { localeContext } from '#lib/locale.ts';
 	import favicon from '#lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
@@ -237,7 +236,7 @@ Replace `src/routes/+layout.svelte`:
 
 	// The root layout owns one locale source, seeded from the server's locale.
 	// svelte-ignore state_referenced_locally
-	const source = createLocaleSource({ initialLocale: data.locale }) as MutableLocaleSource<Locale>;
+	const source = createLocaleSource({ initialLocale: data.locale });
 	synchronizeLocaleWithNavigation(source, routing);
 	const locale = localeContext.provide(source, {
 		requestLocale: createLocaleNavigation(routing)
@@ -255,9 +254,10 @@ Replace `src/routes/+layout.svelte`:
 {@render children()}
 ```
 
-The favicon lines come from the `sv create` template. The generated runtime types locales as `string`, and the cast narrows them to
-the routing union. `synchronizeLocaleWithNavigation` updates the source after
-every client-side navigation. `requestLocale` makes `locale.setLocale('de')`
+The favicon lines come from the `sv create` template. The generated runtime
+types the source with the catalog's locales (`"de" | "en"`), so it fits the
+routing's `Locale` without a cast. `synchronizeLocaleWithNavigation` updates
+the source after every client-side navigation. `requestLocale` makes `locale.setLocale('de')`
 navigate to the German URL instead of changing state in place. The `$effect`
 keeps `<html lang>` correct after client-side navigation; the handle sets it
 for server-rendered responses.
