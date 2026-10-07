@@ -6,6 +6,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { REPOSITORY, describe } from './ci-artifact.mjs';
+import { writeVsixFixtures } from './vsix-fixtures.mjs';
 const VERSION = '1.2.3-preview.1';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const python = process.platform === 'win32' ? 'python' : 'python3';
@@ -42,7 +43,7 @@ with tarfile.open(f'{out}/npm/runic-artifex-fixture-{version}.tgz', 'w:gz') as t
     info = tarfile.TarInfo('package/package.json'); info.size = len(data); t.addfile(info, io.BytesIO(data))
 os.makedirs(f'{out}/vsix', exist_ok=True)
 with zipfile.ZipFile(f'{out}/vsix/fixture.vsix', 'w') as z:
-    z.writestr('extension.vsixmanifest', '<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"><Metadata><Identity Id="fixture" Version="0.0.1" Publisher="runic-artifex" /></Metadata></PackageManifest>')
+    z.writestr('extension.vsixmanifest', '<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"><Metadata><Identity Id="fixture" Version="1.2.3001" Publisher="runic-artifex" /></Metadata></PackageManifest>')
     z.writestr('extension/package.json', json.dumps({'name': 'fixture', 'license': 'MIT', 'dependencies': {'vscode-languageclient': '10.1.2', 'ranged': '^2.0.0'}}))
 `;
 function withFixtures(check) {
@@ -52,16 +53,19 @@ function withFixtures(check) {
     check(directory);
   } finally { rmSync(directory, {recursive: true, force: true}); }
 }
-const sbom = (directory, files, output = join(directory, 'sbom.json'), version = VERSION) => {
+const sbom = (directory, files, output = join(directory, 'sbom.json'), version = VERSION, artifactVersions = {}) => {
   const result = spawnSync(python, [join(root, 'eng/release/sbom.py'), '--repository', REPOSITORY, '--version', version,
-    '--source', source, '--epoch', '1790000000', '--output', output, ...files.map(file => join(directory, 'packages', file))], {encoding: 'utf8'});
+    '--source', source, '--epoch', '1790000000', '--output', output,
+    ...Object.entries(artifactVersions).flatMap(([file, value]) => ['--artifact-version', `${file}=${value}`]),
+    ...files.map(file => join(directory, 'packages', file))], {encoding: 'utf8'});
   return {result, bom: result.status === 0 ? JSON.parse(readFileSync(output, 'utf8')) : undefined};
 };
 const nuget = name => `nuget/${name}.${VERSION}.nupkg`;
 const npmFile = `npm/runic-artifex-fixture-${VERSION}.tgz`;
 
 test('the SBOM describes each artifact by hash with its declared and bundled dependencies', () => withFixtures(directory => {
-  const {result, bom} = sbom(directory, [nuget('Runic.Fixture'), nuget('Runic.Fixture.Core'), nuget('dotnet-fixture'), npmFile, 'vsix/fixture.vsix']);
+  const {result, bom} = sbom(directory, [nuget('Runic.Fixture'), nuget('Runic.Fixture.Core'), nuget('dotnet-fixture'), npmFile, 'vsix/fixture.vsix'],
+    undefined, VERSION, {'fixture.vsix': '1.2.3001'});
   expect(result.stderr).toBe('');
   expect(bom).toMatchObject({bomFormat: 'CycloneDX', specVersion: '1.6', version: 1});
   expect(bom.serialNumber).toMatch(/^urn:uuid:[0-9a-f-]{36}$/);
@@ -71,7 +75,7 @@ test('the SBOM describes each artifact by hash with its declared and bundled dep
   const components = Object.fromEntries(bom.components.map(c => [c['bom-ref'], c]));
   const edges = Object.fromEntries(bom.dependencies.map(d => [d.ref, d.dependsOn]));
   const core = `pkg:nuget/Runic.Fixture.Core@${VERSION}`, fixture = `pkg:nuget/Runic.Fixture@${VERSION}`, tool = `pkg:nuget/dotnet-fixture@${VERSION}`;
-  const npm = `pkg:npm/%40runic-artifex/fixture@${VERSION}`, vsix = 'vsix:runic-artifex/fixture@0.0.1';
+  const npm = `pkg:npm/%40runic-artifex/fixture@${VERSION}`, vsix = 'vsix:runic-artifex/fixture@1.2.3001';
   expect(edges.release).toEqual([npm, tool, core, fixture, vsix].sort());
   expect(components[core].hashes).toEqual([{alg: 'SHA-256', content: sha256(join(directory, 'packages', nuget('Runic.Fixture.Core')))}]);
   expect(components[npm].hashes[0].content).toBe(sha256(join(directory, 'packages', npmFile)));
@@ -106,16 +110,33 @@ test('the SBOM is deterministic and rejects artifacts of another version', () =>
   expect(result.stderr).toContain(`is version ${VERSION}, not 9.9.9-preview.9`);
 }));
 
-test('describe writes the same SBOM of exactly the release packages', () => withFixtures(directory => {
-  const packages = join(directory, 'packages');
+test('every artifact declares the release version unless --artifact-version names its own', () => withFixtures(directory => {
+  const files = [nuget('Runic.Fixture.Core'), 'vsix/fixture.vsix'];
+  // A VSIX is not exempt: without its mapped version it must declare the release version.
+  expect(sbom(directory, files).result.stderr).toContain(`fixture.vsix is version 1.2.3001, not ${VERSION}`);
+  expect(sbom(directory, files, undefined, VERSION, {'fixture.vsix': '0.0.1'}).result.stderr).toContain('fixture.vsix is version 1.2.3001, not 0.0.1');
+  expect(sbom(directory, files, undefined, VERSION, {'fixture.vsix': '1.2.3001'}).result.status).toBe(0);
+  expect(sbom(directory, files, undefined, VERSION, {'fixture.vsix': '1.2.3001', 'other.vsix': '1'}).result.stderr).toContain('--artifact-version names no artifact: other.vsix');
+  const malformed = spawnSync(python, [join(root, 'eng/release/sbom.py'), '--repository', REPOSITORY, '--version', VERSION, '--source', source,
+    '--epoch', '1', '--output', join(directory, 'x.json'), '--artifact-version', 'fixture.vsix', join(directory, 'packages', files[1])], {encoding: 'utf8'});
+  expect(malformed.stderr).toContain('expects one FILE_NAME=VERSION');
+}));
+
+test('describe writes the same SBOM of exactly the release packages and both VSIX files at their mapped versions', () => withFixtures(directory => {
+  const packages = join(directory, 'packages'), vsix = join(directory, 'vsix');
   rmSync(join(packages, 'vsix'), {recursive: true});
+  writeVsixFixtures(vsix, VERSION);
   const inventory = {nuget: ['Runic.Fixture', 'Runic.Fixture.Core', 'dotnet-fixture'].map(name => ({name})), npm: [{name: '@runic-artifex/fixture'}]};
-  const first = describe(packages, VERSION, source, join(directory, 'first'), 1790000000, inventory);
-  const second = describe(packages, VERSION, source, join(directory, 'second'), 1790000000, inventory);
+  const first = describe(packages, vsix, VERSION, source, join(directory, 'first'), 1790000000, inventory);
+  const second = describe(packages, vsix, VERSION, source, join(directory, 'second'), 1790000000, inventory);
   expect(first).toEndWith(`runic-translations-sdk-${VERSION}.cdx.json`);
   expect(readFileSync(first, 'utf8')).toBe(readFileSync(second, 'utf8'));
-  expect(JSON.parse(readFileSync(first, 'utf8')).dependencies[0].dependsOn).toHaveLength(4);
-  expect(() => describe(packages, VERSION, source, join(directory, 'third'), 1790000000, {...inventory, npm: []})).toThrow('exactly');
+  const released = JSON.parse(readFileSync(first, 'utf8')).dependencies[0].dependsOn;
+  expect(released).toHaveLength(6);
+  expect(released.filter(ref => ref.startsWith('vsix:'))).toEqual(['vsix:Runic Artifex/Runic.Artifex.Translations.Rmf2@1.2.3.1', 'vsix:runic-artifex/runic-translations@1.2.3001']);
+  expect(() => describe(packages, vsix, VERSION, source, join(directory, 'third'), 1790000000, {...inventory, npm: []})).toThrow('exactly');
+  writeVsixFixtures(vsix, VERSION, {visualStudio: {version: '0.0.1'}});
+  expect(() => describe(packages, vsix, VERSION, source, join(directory, 'fourth'), 1790000000, inventory)).toThrow('declares version 0.0.1');
 }));
 // Hostile or unusual metadata: oversized entries, document type declarations and versionless dependencies.
 const edgeFixtures = String.raw`

@@ -65,4 +65,12 @@ report, not merely a zero CLI exit code. Failure logs are retained under
 `artifacts/host-failure`. Packaging produces `artifacts/runic-translations.vsix`;
 no marketplace upload or user-profile installation is part of these commands.
 
+The `version` in `package.json` is a placeholder. `bun run package` (`package.mjs`)
+stamps the release version of `eng/workspace.json`, mapped to `x.y.z`, into a
+staged copy and packs that: `0.6.0-preview.N` becomes `0.6.N`, packaged with
+`--pre-release`, and the final `0.6.0` becomes `0.6.1000`. It fails if the VSIX
+does not carry that version and flag. See
+[IDE extension versions](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#ide-extension-versions) for
+the full mapping. Each GitHub release attaches the attested VSIX that CI built.
+
 The language client follows Microsoft's [Language Server Extension Guide](https://code.visualstudio.com/api/language-extensions/language-server-extension-guide).

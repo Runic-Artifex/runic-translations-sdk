@@ -10,3 +10,4 @@
 *.binlog
 *.nupkg
 *.snupkg
+/tools/*/artifacts/
