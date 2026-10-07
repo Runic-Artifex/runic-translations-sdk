@@ -66,27 +66,69 @@ bun run test:host
 bun run package
 ```
 
-The Visual Studio client builds against its pinned 17.14 SDK with zero
-warnings/errors on Linux and with Visual Studio's native MSBuild on Windows.
-The official VSSDK packaging targets generate installer metadata; the archive
-verifier checks declared assets, TextMate grammar and exclusion of host DLLs.
-Installation and native host checks passed on Windows 11 build 26200,
-Visual Studio Community 2026 18.8.2, on 2026-09-11 in an isolated `RunicRmf2`
-profile, using the then-current default-profile fixture. The maintained
+The Visual Studio client supports Visual Studio 2026 (18.x) only. Its VSIX
+declares `[18.0,19.0)` for both the installation target and the core-editor
+prerequisite. On 2026-10-07 the maintainer narrowed the range from
+`[17.14,19.0)`, so Visual Studio 2022 17.14 is no longer a declared host.
+The client still builds against its pinned 17.14 SDK, an API surface that
+18.x hosts provide, with zero warnings or errors on Linux and with Visual
+Studio's native MSBuild on Windows. The official VSSDK packaging targets
+generate the installer metadata. The archive verifier checks the declared
+assets and range, the TextMate grammar, and the exclusion of host DLLs.
+Installation and native host checks passed on Windows 11 build 26200 with
+Visual Studio Community 2026 18.8.2 on 2026-09-11, in an isolated `RunicRmf2`
+profile that used the default-profile fixture of that time. The maintained
 [native interaction test](../../../tools/visualstudio-runic-translations/test/native-host.ps1)
-checks registered commands, inert rich
-content, invalid-number recovery, locale selection and unsaved text after server
-restart. That updated execution-v2 script still requires an interactive Windows
-rerun. The VSIX declares
-`[17.14,19.0)` because the client targets the 17.14 API and the tested host is
-in the 18.x line. This range declaration is not a claim that every host is
-validated: native evidence currently covers only Visual Studio Community 2026
-18.8.2; the Visual Studio 2022 17.14 host remains platform-only validation.
+checks:
+
+- registered commands;
+- inert rich content;
+- invalid-number recovery;
+- locale selection;
+- unsaved text after a server restart.
 
 The focused RMF2 CLI/LSP suite includes v5 preview and
 resource-only refactor coverage, plus mounted multi-project discovery and
 diagnostic isolation. See the [Windows integration procedure](../../../tools/visualstudio-runic-translations/README.md)
 for build, installation and interactive-session execution.
+
+### Visual Studio 2026 rerun (2026-10-07)
+
+The execution-v2 journey was rerun on Windows 11 Pro build 26200 (the
+snapshot-restored `bootstrap-imgui-win11` VM) with Visual Studio Community 2026
+18.8.2. The setup was:
+
+- the VSIX from CI run 37644616400 on branch `ide/w200-001-vs2026-range`
+  (`53600500`): version `0.6.0.2`, `[18.0,19.0)`, SHA-256
+  `490774da289e89aba902282c20d9ab330782747e280369b1eea6c033a43a439d`;
+- the language server built on the VM from the same commit with .NET SDK
+  10.0.401;
+- `RUNIC_TRANSLATIONS_SERVER`, plus `/RootSuffix RunicRmf2`.
+
+Results:
+
+- **Passed:** the semantic project selection, the registered preview command,
+  the native inert rich content (`[shop:badge] Ready` with the inert Retry
+  action), invalid-number recovery, the German locale and the registered
+  restart command. The restart started a new server process.
+- **Failed:** the last check, *unsaved buffer after restart*. After the script
+  replaced the buffer with `plain = UNSAVED preview marker`, the `plain`
+  preview still rendered the saved `Payment details`. This was reproduced in
+  two complete runs. A diagnostic copy that waited 20 seconds after the restart
+  failed the same way, and so did a copy that skipped the restart. The preview
+  therefore did not use the unsaved buffer in this host at all; the restart is
+  not the cause. This has to be fixed and rerun before native interaction
+  evidence for Visual Studio 2026 is complete.
+- During the buffer replacement, Visual Studio's LSP client also logged a
+  non-fatal `ArgumentException` in `StructureTagger.GetTags`, raised by
+  `NormalizedSnapshotSpanCollection.IntersectsWith`.
+
+Reinstalling the VSIX into the existing `RunicRmf2` profile from an SSH session
+left the new MEF part out of the component catalog: preview commands reported
+that no `RunicLanguageClient` export was found. Running
+`devenv /RootSuffix RunicRmf2 /updateconfiguration` in that disposable profile
+fixed it. Note also that `devenv /Log <path>` takes the next argument as the
+log file, so pass a document before `/Log`.
 
 ## Representative measurements
 
