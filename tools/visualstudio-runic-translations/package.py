@@ -23,8 +23,10 @@ VERSION_TOKEN = '|%CurrentProject%;GetRunicVsixVersion|'
 
 def vsix_version(release):
     """0.6.0-preview.N is 0.6.0.N and the final 0.6.0 is 0.6.0.1000, as in eng/release/ide-versions.mjs."""
-    match = re.fullmatch(r'(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})(?:-preview\.([1-9]\d{0,2}))?', release)
+    match = re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-preview\.([1-9]\d{0,2}))?', release)
     assert match, f'Release version {release} cannot be mapped to a VSIX version; use x.y.z or x.y.z-preview.N (1 <= N <= 999)'
+    # Visual Studio parses each component as a 16-bit System.Version part.
+    assert all(int(part) <= 65534 for part in match.group(1, 2, 3)), f'Release version {release} has a component above 65534'
     return '.'.join(match.group(1, 2, 3)) + '.' + (match.group(4) or '1000')
 
 

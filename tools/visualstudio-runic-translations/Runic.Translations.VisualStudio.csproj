@@ -43,14 +43,17 @@
   -->
   <PropertyGroup>
     <RunicIdeReleaseVersion Condition="'$(RunicIdeReleaseVersion)' == ''">$([System.Text.RegularExpressions.Regex]::Replace($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../eng/workspace.json')), '(?s)^.*?"version"\s*:\s*"([^"]*)".*$', '$1'))</RunicIdeReleaseVersion>
-    <RunicIdeReleaseVersionSupported>$([System.Text.RegularExpressions.Regex]::IsMatch('$(RunicIdeReleaseVersion)', '^(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})(-preview\.[1-9]\d{0,2})?$'))</RunicIdeReleaseVersionSupported>
+    <!-- 0 to 65534: Visual Studio parses each component as a 16-bit System.Version part. The pattern uses
+         [.] because MSBuild on Unix rewrites a backslash that follows a property expansion into a slash. -->
+    <_RunicVersionPart>(0|[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-4])</_RunicVersionPart>
+    <RunicIdeReleaseVersionSupported>$([System.Text.RegularExpressions.Regex]::IsMatch('$(RunicIdeReleaseVersion)', '^$(_RunicVersionPart)[.]$(_RunicVersionPart)[.]$(_RunicVersionPart)(-preview\.[1-9]\d{0,2})?$'))</RunicIdeReleaseVersionSupported>
     <_RunicVsixPreview>$([System.Text.RegularExpressions.Regex]::Replace('$(RunicIdeReleaseVersion)', '^[^-]*(-preview\.(\d+))?$', '$2'))</_RunicVsixPreview>
     <_RunicVsixRevision Condition="'$(_RunicVsixPreview)' != ''">$(_RunicVsixPreview)</_RunicVsixRevision>
     <_RunicVsixRevision Condition="'$(_RunicVsixPreview)' == ''">1000</_RunicVsixRevision>
     <RunicVsixVersion Condition="'$(RunicIdeReleaseVersionSupported)' == 'True'">$([System.Text.RegularExpressions.Regex]::Replace('$(RunicIdeReleaseVersion)', '-.*$', '')).$(_RunicVsixRevision)</RunicVsixVersion>
   </PropertyGroup>
   <Target Name="GetRunicVsixVersion" Returns="$(RunicVsixVersion)">
-    <Error Condition="'$(RunicIdeReleaseVersionSupported)' != 'True'" Text="Release version '$(RunicIdeReleaseVersion)' cannot be mapped to a VSIX version; use x.y.z or x.y.z-preview.N (1 &lt;= N &lt;= 999). See eng/release/ide-versions.mjs." />
+    <Error Condition="'$(RunicIdeReleaseVersionSupported)' != 'True'" Text="Release version '$(RunicIdeReleaseVersion)' cannot be mapped to a VSIX version; use x.y.z (each component at most 65534) or x.y.z-preview.N (1 &lt;= N &lt;= 999). See eng/release/ide-versions.mjs." />
   </Target>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <Import Project="$(VSToolsPath)/VSSDK/Microsoft.VsSDK.targets" Condition="'$(OS)' == 'Windows_NT'" />

@@ -110,7 +110,8 @@ export function scan(directory, version, source, inventory = workspace) {
 }
 
 // Exactly the two IDE extensions, one per CI artifact directory, with their identities and the
-// version CI stamped for this release (see ide-versions.mjs); VS Code is a pre-release for a preview.
+// version CI stamped for this release (see ide-versions.mjs); VS Code is a pre-release, with the
+// Marketplace "Preview" label, exactly for a preview.
 export function scanVsix(directory, version) {
   const versions = ideVersions(version);
   assert.deepEqual(readdirSync(directory).sort(), VSIX.map(entry => entry.artifact).sort(), "VSIX directory must contain exactly the IDE extension artifacts");
@@ -118,13 +119,15 @@ export function scanVsix(directory, version) {
     assert.deepEqual(readdirSync(join(directory, artifact)), [file], `${artifact} must contain only ${file}`);
     const path = resolve(directory, artifact, file);
     assert.ok(lstatSync(path).isFile(), `${file} must be a regular file`);
-    const { packageVersion, preRelease, ...identity } = vsixMetadata(path);
+    const { packageVersion, packagePreview, preRelease, preview, ...identity } = vsixMetadata(path);
     assert.equal(identity.id, id, `${file} declares extension ${identity.id}`);
     assert.equal(identity.publisher, publisher, `${file} declares publisher ${identity.publisher}`);
     assert.equal(identity.version, versions[format], `${file} declares version ${identity.version}, not ${versions[format]} for ${version}`);
     if (format === "vscode") {
       assert.equal(packageVersion, versions.vscode, `${file} bundles package.json version ${packageVersion}, not ${versions.vscode}`);
       assert.equal(preRelease, versions.vscodePreRelease, `${file} ${preRelease ? "is" : "is not"} marked pre-release`);
+      assert.equal(preview, versions.vscodePreRelease, `${file} ${preview ? "has" : "lacks"} the Marketplace Preview flag`);
+      assert.equal(packagePreview, versions.vscodePreRelease, `${file} bundles package.json preview ${packagePreview}`);
     }
     return { name: artifact, file: `${artifact}/${file}`, sha256: sha256(readFileSync(path)), identity };
   });
