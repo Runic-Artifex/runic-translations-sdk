@@ -69,7 +69,7 @@ internal static class Rmf2DocumentProfileV5
             }
             else if (kind == Document && kinds[index] == Document)
             {
-                var builder = new DocumentBuilder(key, contracts, location, diagnostics);
+                var builder = new DocumentBuilder(key, contracts, location, diagnostics, expectedKind is null);
                 IReadOnlyList<Rmf2SkeletonNodeV5>? skeleton = builder.Build(variant.Nodes);
                 variants.Add(skeleton is null ? variant : variant with { Nodes = builder.Output.AsReadOnly() });
                 results.Add(new(Document, skeleton));
@@ -209,8 +209,10 @@ internal static class Rmf2DocumentProfileV5
         internal Rmf2SkeletonNodeV5 Build() => new(name, options, Children.Select(child => child.Build()).ToArray(), container);
     }
 
+    // source is true for the base locale. Heading levels are locked with the structure, so
+    // RTR0077 is reported for the source only: a translator could not fix it.
     private sealed class DocumentBuilder(string key, IReadOnlyDictionary<string, Rmf2MarkupContractV5> contracts,
-        TextSourceLocation location, DiagnosticBag diagnostics)
+        TextSourceLocation location, DiagnosticBag diagnostics, bool source)
     {
         internal List<Rmf2NodeV5> Output { get; } = new();
 
@@ -277,7 +279,7 @@ internal static class Rmf2DocumentProfileV5
                         if (tag.Name == "runic:h" && tag.Options.FirstOrDefault(option => option.Name == "level")?.Value is { Kind: "number-literal" } level &&
                             int.TryParse(level.Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int value))
                         {
-                            if (value > heading + 1)
+                            if (source && value > heading + 1)
                                 Warning("RTR0077", heading == 0
                                     ? "The first heading in '" + key + "' has level " + value + " at '" + path + "'; heading levels are relative to the message and should start at 1."
                                     : "Heading level skips from " + heading + " to " + value + " at '" + path + "' in '" + key + "'.");

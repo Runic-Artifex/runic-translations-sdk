@@ -227,6 +227,9 @@ internal static class Rmf2DocumentProfileTests
         Silent("x = {#p}{#br/}{/p}", "RTR0076");
         Warns("x = {#h level=1}a{/h}{#h level=3}b{/h}", "RTR0077", contains: "from 1 to 3");
         Warns("x = {#h level=2}a{/h}", "RTR0077", contains: "first heading");
+        // Heading levels are locked with the structure: only the base locale reports RTR0077.
+        var headings = Compile("x = {#h level=2}a{/h}", "x = {#h level=2}b{/h}");
+        Assert.Equal("en", string.Join(",", headings.Diagnostics.Where(d => d.Id == "RTR0077").Select(d => System.IO.Path.GetFileNameWithoutExtension(d.Location.Path))), "RTR0077 locales");
         Silent("x = {#h level=1}a{/h}{#h level=2}b{/h}{#h level=2}c{/h}{#h level=1}d{/h}{#h level=2}e{/h}", "RTR0077");
     }
 

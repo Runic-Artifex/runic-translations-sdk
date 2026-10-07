@@ -98,6 +98,12 @@ the same text:
      starts.
 3. Other characters, including U+3000 and U+00A0, are kept.
 
+Deleting a run between two wide characters can place a combining mark directly
+after a base character, for example `か`, a line break and U+3099 become
+`か` + U+3099. The compiler does not recompose the result, so the text is then
+not in NFC. No profile invariant depends on NFC; authors should keep a
+combining mark on the line of its base character.
+
 A block that is empty after normalization reports warning `RTR0076`. A line
 break between two Thai, Lao, Khmer or Myanmar characters that becomes a space
 reports warning `RTR0078`.
@@ -141,9 +147,10 @@ empty source variant. Examples: `p,ul(li,li),p`, `h[level=1]`,
 Paths name an element by its 1-based position among siblings with the same
 name, for example `ul[1]/li[3]`.
 
-Heading levels are checked per variant: a first heading above level 1, or a
-heading more than one level deeper than the one before it, reports warning
-`RTR0077`.
+Heading levels are checked per base-locale variant: a first heading above
+level 1, or a heading more than one level deeper than the one before it,
+reports warning `RTR0077`. Translations are not checked, because their heading
+levels are locked with the structure.
 
 ## 7. Locale artifact members
 
@@ -156,7 +163,9 @@ Every entry of `markupContract.messages` in a
   Inline messages have an empty array.
 
 `content` is part of the caller contract and the fingerprint. `skeletons` is
-only in the full contract, which the fingerprint also covers.
+only in the full markup contract; the caller fingerprint does not cover it.
+Packs are bound to the skeletons because both pack loaders compare the pack's
+`markupContract` with the generated contract byte for byte.
 
 ## 8. Diagnostics
 

@@ -296,7 +296,8 @@ render, but usually indicate a mistake.
 ## RTR0077
 
 Document heading skips a level. The first heading of a document is not level 1,
-or a heading is more than one level deeper than the heading before it.
+or a heading is more than one level deeper than the heading before it. Only the
+base locale reports it; translations keep the source heading levels.
 
 ## RTR0078
 
