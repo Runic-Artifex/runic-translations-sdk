@@ -12,6 +12,12 @@ public static class TranslationsCompatibility
     /// <summary>The additive ABI for v4 markup and v5 typed expression evaluation.</summary>
     public const int Rmf2RuntimeAbiVersion = 2;
 
+    /// <summary>
+    /// The additive typed slot binding surface (<see cref="IRmf2SlotBindings{TSelf}"/>, <see cref="LocalizedTextContent{TSlots}"/>).
+    /// The source generator emits the readable C# surface only when the referenced runtime declares this constant.
+    /// </summary>
+    public const int TypedSlotBindingsVersion = 1;
+
     /// <summary>Checks an embedded RMF2 ABI requirement against the executing runtime, without const inlining.</summary>
     public static bool SupportsRmf2RuntimeAbi(int requiredVersion) => requiredVersion == Rmf2RuntimeAbiVersion;
 
