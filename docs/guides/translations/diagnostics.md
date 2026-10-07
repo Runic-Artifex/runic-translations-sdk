@@ -230,8 +230,9 @@ its severity, use one of the same mechanisms as RTR0068:
 - `<WarningsNotAsErrors>$(WarningsNotAsErrors);RTR0069</WarningsNotAsErrors>`
   keeps the warning but stops it from failing the build;
 - a `.globalconfig` file (`is_global = true`) with
-  `dotnet_diagnostic.RTR0069.severity = none` (or `error`), added as a
-  `GlobalAnalyzerConfigFiles` item.
+  `dotnet_diagnostic.RTR0069.severity = none` to remove the warning, or `error`
+  to fail the build on it, added as a `GlobalAnalyzerConfigFiles` item. Put the
+  key at the top level of the file, not inside a section.
 
 The compiler cannot detect two collisions, because they are C# declarations in
 the consumer's own code and produce ordinary C# errors instead of RTR0069:
