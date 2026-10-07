@@ -19,6 +19,7 @@ internal static class Rmf2DocumentProfileTests
         runner.Add("RMF2 document profile locks translated structure with RTR0074 and RTR0071", LockedStructure);
         runner.Add("RMF2 document profile warns about empty blocks and skipped headings", Warnings);
         runner.Add("RMF2 document profile validates block options and default alias collisions", Options);
+        runner.Add("RMF2 document profile artifacts validate against locale-artifact-v5", Artifact);
     }
 
     private const string Example = "backup =\n    {#p}{#strong}Before continuing{/strong}, save a copy of {$fileName}.{/p}\n    {#ul}\n      {#li}Read the {#link ref=guide}guide{/link}.{/li}\n      {#li}{#action ref=check}Check{/action} the result.{/li}\n    {/ul}\n    {#p}You can continue when the check finishes.{/p}\n";
@@ -102,6 +103,15 @@ internal static class Rmf2DocumentProfileTests
         // A translated empty variant in a document message is normalized to zero blocks.
         var translatedEmpty = Good("x =\n  .input {$n :integer}\n  .match $n\n  0 {{  }}\n  * {{{#p}{$n}{/p}}}", "x =\n  .input {$n :integer}\n  .match $n\n  0 {{ }}\n  * {{{#p}{$n}{/p}}}");
         Assert.Equal(0, translatedEmpty.Locales.Single(locale => locale.Tag == "de").DirectResources[0].Message.Variants[0].Nodes.Count);
+    }
+
+    private static void Artifact()
+    {
+        var project = Good("x =\n  .input {$n :integer}\n  .match $n\n  0 {{}}\n  * {{{#h level=1}T{/h}{#p}{$n}{/p}{#ol start=2}{#li}a{/li}{/ol}}}\n" + Example);
+        Assert.Equal(" ; h[level=1],p,ol[marker=decimal;start=2](li)", string.Join(" ; ", Contract(project).Skeletons));
+        var artifact = Runic.Translations.Compiler.Generation.Rmf2LocaleArtifactV5.Render(project, "en");
+        Rmf2SemanticV5SchemaTests.AssertValidation(Rmf2SemanticV5SchemaTests.ReadSchema("locale-artifact-v5.schema.json"),
+            System.Text.Json.Nodes.JsonNode.Parse(artifact.Text)!.AsObject(), true, "Document locale artifact");
     }
 
     private static void Skeletons()

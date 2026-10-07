@@ -122,7 +122,7 @@ reports warning `RTR0071`.
 Skeletons are written in this form:
 
 ```abnf
-skeleton  = node *("," node)
+skeleton  = [ node *("," node) ]       ; empty for a variant with no blocks
 node      = name [ "[" options "]" ] [ "(" [ skeleton ] ")" ]
 name      = 1*namechar                  ; contract name without "runic:"
 options   = option *(";" option)        ; every option, defaults included,
@@ -133,8 +133,10 @@ escaped   = "\" ( "\" / "[" / "]" / "(" / ")" / "," / ";" / "=" / "$" )
 ```
 
 A leading `$` in a literal is escaped; `$` elsewhere is not. Lists always have
-parentheses, so an empty list is `ul()`. Examples: `p,ul(li,li),p`,
-`h[level=1]`, `ol[marker=decimal;start=1](li)`.
+parentheses, so an empty list is `ul()`. A variant with no blocks (an empty
+variant) has the empty skeleton; a translated empty variant therefore needs an
+empty source variant. Examples: `p,ul(li,li),p`, `h[level=1]`,
+`ol[marker=decimal;start=1](li)`.
 
 Paths name an element by its 1-based position among siblings with the same
 name, for example `ul[1]/li[3]`.
@@ -150,7 +152,8 @@ Every entry of `markupContract.messages` in a
 
 - `content`: `"inline"` or `"document"`;
 - `skeletons`: the distinct encoded skeletons of the base-locale variants,
-  sorted in ordinal order. Inline messages have an empty array.
+  sorted in ordinal order, including the empty string for an empty variant.
+  Inline messages have an empty array.
 
 `content` is part of the caller contract and the fingerprint. `skeletons` is
 only in the full contract, which the fingerprint also covers.
