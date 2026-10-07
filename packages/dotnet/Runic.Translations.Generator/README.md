@@ -31,12 +31,19 @@ using Runic.Translations;
 ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
 var text = new AppText(manager);
 
-Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
+Console.WriteLine(text.Messages.application_title);
 ```
 
-The C# v5 generator encodes each path segment as `r_` plus UTF-8 hexadecimal
-bytes. Use IDE completion and the generated resource-path documentation to
-find accessors. See the [.NET consumer quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md)
+`text.Messages` is the readable surface. It names each message by its
+flattened key, as ESM does (`application_title`), and returns
+`LocalizedTextContent<AppTextSlots.key>` for messages with markup; bind their
+slots with `Bind(new(...))` and named arguments. An input name or slot ID that
+is not an ASCII identifier keeps its encoded `r_<hex>` name for that parameter
+only. The encoded members, such as `text.r_6170706c69636174696f6e_r_7469746c65`
+(each path segment as `r_` plus UTF-8 hexadecimal bytes), remain the stable
+machine-facing contract. The readable file needs a `Runic.Translations`
+runtime with typed slot support; an older runtime keeps the encoded members and
+reports `RTR0068`. See the [.NET consumer quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md)
 for a complete template and console application workflow.
 
 The generator reports compiler diagnostics at source locations and writes no

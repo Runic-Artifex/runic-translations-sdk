@@ -60,7 +60,11 @@ compatibility, not provenance. Artifact, grammar, profile, and ABI mismatches
 are rejected before an artifact can activate.
 
 The CLI, source generator/MSBuild integration, and Vite plugin use the v5
-C#/ESM backends. Checkout verification includes an
+C#/ESM backends. Generated C# adds a readable surface beside the encoded members
+([readable C# name policy 1](../../../specs/translations/rmf2-project-v5.md#readable-c-name-policy-version-1));
+its slot types map `runic:link`, `runic:action` and `runic:icon` slots to
+`InlineLinkBinding`, `InlineActionBinding` and `InlineIconBinding` (see the
+[RMF2 guide](rmf2.md)). Checkout verification includes an
 isolated package-only C# and ESM consumer, strict external-pack composition, and
 NativeAOT execution from the packed build/runtime graph. Cross-backend corpus
 checks cover the maintained execution-v2 contract. These checks do not claim

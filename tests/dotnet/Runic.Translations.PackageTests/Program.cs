@@ -183,6 +183,8 @@ internal static class Program
         var generatedText = new ConsumerText(generatedManager);
         Assert(string.Equals(generatedText.r_4772656574696e67("Ada"), "Hello Ada", StringComparison.Ordinal),
             "typed generated accessor compiles and formats through the packed runtime");
+        Assert(string.Equals(generatedText.Messages.Greeting(name: "Ada"), "Hello Ada", StringComparison.Ordinal),
+            "readable generated accessor compiles and formats through the packed runtime");
 
         CompiledTranslationCatalog catalog = CreateCatalog();
         var provider = new CompiledTranslationProvider(catalog);

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Source-tree consumer of the readable C# surface and typed slots (issues #13 and #14). -->
+  <Import Project="../../../../eng/build/translations.props" />
+  <Import Project="../../../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Runic.Translations.ReadableConsumer</AssemblyName>
+    <RootNamespace>Example.ReadableConsumer</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" />
+    <!-- Register the compiler first so Roslyn resolves the generator's dependency from this source tree. -->
+    <Analyzer Include="../../../../packages/dotnet/Runic.Translations.Generator/bin/$(Configuration)/net10.0/Runic.Translations.Compiler.dll" />
+    <ProjectReference Include="../../../../packages/dotnet/Runic.Translations.Generator/Runic.Translations.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <Import Project="../../../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets" />
+  <Import Project="../../../../eng/build/translations.targets" />
+</Project>

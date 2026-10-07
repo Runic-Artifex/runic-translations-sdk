@@ -169,6 +169,26 @@ with explicit custom factories and callback deactivation when replacing or
 clearing content. Its maintained Windows consumer passes native execution and accessibility
 checks in an interactive Windows 11 desktop session, and cross-compiles on Linux.
 
+The readable generated C# surface types each structured message's slots. A
+message with markup returns `LocalizedTextContent<AppTextSlots.key>`, and
+`Bind(new(...))` takes one constructor argument per slot, in slot-ID order, typed
+by its kind:
+
+| Slot kind | C# binding type |
+|---|---|
+| `runic:link` | `InlineLinkBinding` |
+| `runic:action` | `InlineActionBinding` |
+| `runic:icon` | `InlineIconBinding` |
+
+Every slot is a required constructor argument, including a conditional
+(`min: 0`) slot, because a translation may use it. A slot ID that is not an
+ASCII identifier, such as `help-link`, uses its encoded name (`r_<hex>`) as the
+argument and property name. `Rmf2InlineRenderer.Render`, `ToPlainText` and WPF
+`SetContent` accept the resulting `BoundLocalizedTextContent` and apply the same
+runtime checks as the string-key overloads. Unlike ESM's structural
+`SlotBindings<S>`, C# slot types are nominal per message: another message's
+slots do not convert even when their shape matches.
+
 Plain-text conversion is explicit. `br` becomes LF, link labels are retained
 (with optional destination annotation), meaningful icons require a localized
 alternate label, and action labels require `allowActionLabels`. Custom web tags

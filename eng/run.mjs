@@ -133,10 +133,12 @@ function testManaged() {
     "tests/dotnet/Runic.Translations.Runtime.Tests/Runic.Translations.Runtime.Tests.csproj",
     "tests/dotnet/Runic.Translations.Tooling.Tests/Runic.Translations.Tooling.Tests.csproj",
     "tests/dotnet/Runic.Translations.Rmf2AotTests/Runic.Translations.Rmf2AotTests.csproj",
+    // Builds against the generator output of the solution build above.
+    "tests/fixtures/translations/readable-consumer/ReadableConsumer.csproj",
   ];
   for (const project of projects)
     run("dotnet", ["run", "--project", project, "--configuration", configuration,
-      ...(project.includes("Rmf2AotTests") ? [] : ["--no-build"])]);
+      ...(project.includes("Rmf2AotTests") || project.includes("readable-consumer") ? [] : ["--no-build"])]);
 }
 
 function testPackagedManaged(version = workspace.version) {

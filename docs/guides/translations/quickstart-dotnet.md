@@ -52,18 +52,46 @@ using Runic.Translations;
 
 ITranslationManager manager = await AppTextCatalog.CreateManagerAsync();
 var text = new AppText(manager);
-Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
+Console.WriteLine(text.Messages.application_title);
 ```
 
 ```sh
 dotnet run --project Example.App/Example.App.csproj
 ```
 
-The program prints `AppText`. The C# v5 generator encodes each path segment as
-`r_` followed by its UTF-8 bytes in hexadecimal, preserving unambiguous names:
-`application.title` becomes `r_6170706c69636174696f6e_r_7469746c65`. IDE completion
-shows the generated members and their resource-path documentation. ESM uses
-the flattened message key, `m.application_title()`, instead.
+The program prints `AppText`. `text.Messages` is the readable C# surface. Each
+message is a member named by its flattened key, the same name ESM uses
+(`m.application_title()`): a property when the message has no inputs, and a
+method with one parameter per input otherwise.
+
+- **Encoded members.** The generated class also keeps the encoded members,
+  such as `text.r_6170706c69636174696f6e_r_7469746c65` (each path segment is
+  `r_` followed by its UTF-8 bytes in hexadecimal). They are the stable
+  machine-facing contract and never change; use them where a name must stay
+  fixed across SDK releases, such as in generated code. The readable names
+  follow a versioned policy (`AppTextMessages.ReadableNameVersion`).
+- **Non-identifier names.** An input name or slot ID that is not an ASCII
+  identifier, such as `user-name` or `café`, keeps its encoded name for that
+  parameter only: a message with `$user-name` is called as
+  `text.Messages.profile_badge(r_757365722d6e616d65: "ada")`. A key that is
+  reserved in C# (for example `ToString`) stays encoded-only and reports
+  [`RTR0069`](diagnostics.md#rtr0069).
+- **Rich content.** A message with markup returns
+  `LocalizedTextContent<AppTextSlots.key>`. Bind its link, action and icon
+  slots with named arguments, because slots of the same kind share a type:
+
+  ```csharp
+  BoundLocalizedTextContent help = text.Messages.checkout_help.Bind(new(
+      guide: new InlineLinkBinding(guideUri),
+      retry: new InlineActionBinding(Retry)));
+  var renderer = new Rmf2InlineRenderer(AppTextCatalog.Rmf2MarkupContract);
+  string plain = renderer.ToPlainText(help, allowActionLabels: true);
+  ```
+
+  A wrong binding kind, a missing or misspelled slot, or another message's
+  slots are compile errors at the `Bind` argument. The
+  [consumer example](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/fixtures/translations/readable-consumer)
+  shows link, action, icon and conditional slots.
 
 Change the title in `en.rmf2`, rebuild, and the same
 typed property prints the new text. Your application's reference to its own
