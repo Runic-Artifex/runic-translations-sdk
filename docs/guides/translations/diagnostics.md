@@ -188,11 +188,23 @@ Referenced runtime lacks the readable C# surface. The C# source generator
 found a `Runic.Translations` reference that predates the readable surface (its
 `TranslationsCompatibility` has no `TypedSlotBindingsVersion`). The generator
 still emits the encoded accessors, keys, catalog data and registration, but
-skips `<ClassName>.Readable.g.cs`, so `text.Messages` is unavailable. Code that
-does not use `Messages` keeps building. Reference `Runic.Translations` at the
+skips `<ClassName>.Readable.g.cs`, so `text.Messages` is unavailable. Without
+`TreatWarningsAsErrors`, the build stays green and code that does not use
+`Messages` keeps building. With `TreatWarningsAsErrors`, RTR0068 fails the build
+even when the code does not use `Messages`. Reference `Runic.Translations` at the
 same version as `Runic.Translations.Build`. Only the source generator reports
 this; `runic-translations generate --emit-csharp` cannot inspect references and
 always writes the readable file.
+
+RTR0068 is reported at no source location, so an `.editorconfig` section cannot
+suppress it. Use one of these instead:
+
+- `<NoWarn>$(NoWarn);RTR0068</NoWarn>` removes the warning.
+- `<WarningsNotAsErrors>$(WarningsNotAsErrors);RTR0068</WarningsNotAsErrors>`
+  keeps the warning but stops it from failing the build.
+- A `.globalconfig` file (`is_global = true`) with
+  `dotnet_diagnostic.RTR0068.severity = none` (or `suggestion`), added to the
+  project as a `GlobalAnalyzerConfigFiles` item.
 
 ## RTR0069
 
@@ -208,12 +220,28 @@ is reported once at `code.className`. Reserved message keys are the
 `__text`, and the class names `<ClassName>`, `<ClassName>Messages` and
 `<ClassName>Slots`. A slot ID is reserved when it is an `object` member or equal
 to the message key. The message stays available through its encoded member.
-Rename the key, input or slot, or change the severity in `.editorconfig`:
+Rename the key, input or slot to fix it.
 
-```ini
-[*.cs]
-dotnet_diagnostic.RTR0069.severity = error # or none
-```
+RTR0069 is reported at the `.rmf2` or `runic.json` location of the name, not in
+a `.cs` file, so an `.editorconfig` `[*.cs]` section does not apply. To change
+its severity, use one of the same mechanisms as RTR0068:
+
+- `<NoWarn>$(NoWarn);RTR0069</NoWarn>` removes the warning;
+- `<WarningsNotAsErrors>$(WarningsNotAsErrors);RTR0069</WarningsNotAsErrors>`
+  keeps the warning but stops it from failing the build;
+- a `.globalconfig` file (`is_global = true`) with
+  `dotnet_diagnostic.RTR0069.severity = none` (or `error`), added as a
+  `GlobalAnalyzerConfigFiles` item.
+
+The compiler cannot detect two collisions, because they are C# declarations in
+the consumer's own code and produce ordinary C# errors instead of RTR0069:
+
+- a user `partial` declaration of `<ClassName>` that already declares a member
+  named `Messages`;
+- user types named `<ClassName>Messages` or `<ClassName>Slots` in the same
+  namespace as the generated class.
+
+Rename the conflicting type or member, or move it to another namespace.
 
 ## Other hosts
 

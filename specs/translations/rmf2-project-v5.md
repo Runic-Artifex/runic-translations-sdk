@@ -161,7 +161,7 @@ as warning RTR0069 at its base-locale name:
   message, or a verbatim slot ID equal to the encoded name of another slot of
   the same message. Inputs and slots are separate scopes.
 
-If `code.className` is `Messages` or `__readable`, which name the members the
+If `code.className` is `Messages` or `__readable`, which name members the
 facade adds to the generated class, no readable surface is generated and
 RTR0069 is reported once at `code.className`; the encoded surface is unchanged.
 
