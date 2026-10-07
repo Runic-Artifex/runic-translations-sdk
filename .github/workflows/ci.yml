@@ -83,7 +83,7 @@ jobs:
       - name: Install the locked Chromium browser
         working-directory: packages/web/translations-svelte
         run: |
-          "$GITHUB_WORKSPACE/eng/ci/retry.sh" 3 300 bun node_modules/playwright-core/cli.js install --with-deps chromium
+          "$GITHUB_WORKSPACE/eng/ci/install-chromium.sh"
           bun -e 'import { chromium } from "playwright-core"; console.log("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
       - name: Verify inline SSR identity and real browser hydration
         working-directory: packages/web/translations-svelte
@@ -140,7 +140,7 @@ jobs:
         working-directory: apps/translations-editor/tests/HostedBrowserE2E
         run: |
           bun install --frozen-lockfile
-          "$GITHUB_WORKSPACE/eng/ci/retry.sh" 3 300 bun node_modules/playwright-core/cli.js install --with-deps chromium
+          "$GITHUB_WORKSPACE/eng/ci/install-chromium.sh"
           bun -e 'import { chromium } from "playwright-core"; console.log("WEBUI_BROWSER_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
       - name: Verify real hosted editor RMF2 editing and recovery
         run: bun apps/translations-editor/tests/HostedBrowserE2E/run-hosted-rmf2-ui.mjs apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll
@@ -174,7 +174,7 @@ jobs:
         working-directory: apps/translations-editor/tests/HostedBrowserE2E
         run: |
           bun install --frozen-lockfile
-          "$GITHUB_WORKSPACE/eng/ci/retry.sh" 3 300 bun node_modules/playwright-core/cli.js install --with-deps chromium
+          "$GITHUB_WORKSPACE/eng/ci/install-chromium.sh"
           bun -e 'import { chromium } from "playwright-core"; console.log("WEBUI_BROWSER_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
       - name: Verify real hosted editing with the packed editor build
         run: bun apps/translations-editor/tests/HostedBrowserE2E/run-hosted-rmf2-ui.mjs apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll
