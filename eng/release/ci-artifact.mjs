@@ -229,13 +229,21 @@ export function releaseCheck(version, source, spawn = spawnSync) {
 // A published release is never changed: with immutable releases its assets cannot be
 // added, so a published release missing an asset (for example one created before the
 // SBOM existed) is kept as it is with a warning. The attestations still cover those files.
-export function createRelease(version, source, files, spawn = spawnSync) {
+// Hand-written notes for a version, if eng/release/notes/<version>.md exists.
+export function releaseNotes(version, directory = resolve(root, "eng/release/notes")) {
+  const path = join(directory, `${version}.md`);
+  return existsSync(path) ? path : undefined;
+}
+
+// gh puts the --notes-file text before the notes that --generate-notes adds.
+export function createRelease(version, source, files, spawn = spawnSync, notes = releaseNotes(version)) {
   const tag = `v${version}`;
   const found = existingRelease(version, source, spawn);
   const gh = (args, what) => {
     if (spawn("gh", args, { stdio: "inherit" }).status !== 0) throw new Error(`Could not ${what} GitHub release ${tag}.`);
   };
-  if (!found) gh(["release", "create", tag, ...files, "--repo", REPOSITORY, "--target", source, "--prerelease", "--generate-notes"], "create");
+  if (!found) gh(["release", "create", tag, ...files, "--repo", REPOSITORY, "--target", source, "--prerelease", "--generate-notes",
+    ...(notes ? ["--notes-file", notes] : [])], "create");
   else {
     const present = new Set((found.assets ?? []).map(asset => asset.name));
     const missing = files.filter(file => !present.has(basename(file)));

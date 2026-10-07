@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ARTIFACT, CI_WORKFLOW, REPOSITORY, VSIX, createRelease, findCiPackages, prepare, releaseCheck, scanVsix, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
+import { ARTIFACT, CI_WORKFLOW, REPOSITORY, VSIX, createRelease, releaseNotes, findCiPackages, prepare, releaseCheck, scanVsix, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
 import { writeVsixFixtures } from "./vsix-fixtures.mjs";
 
 const sha = "a".repeat(40);
@@ -179,6 +179,13 @@ test("a rerun keeps a release of this commit, never modifies a published one and
   const create = calls.at(-1);
   expect(create.slice(0, 3)).toEqual(["gh", "release", "create"]);
   expect(create[create.indexOf("--target") + 1]).toBe(sha);
+  expect(create).toContain("--generate-notes");
+  expect(create).not.toContain("--notes-file");
+  ({ spawn, calls } = fakeGh());
+  createRelease("1.2.3", sha, files, spawn, "eng/release/notes/1.2.3.md");
+  const withNotes = calls.at(-1);
+  expect(withNotes).toContain("--generate-notes");
+  expect(withNotes[withNotes.indexOf("--notes-file") + 1]).toBe("eng/release/notes/1.2.3.md");
   // Immutable releases reject new assets: a published release missing one is kept with a warning.
   ({ spawn, calls } = fakeGh({ release: true, tag: sha, assets: ["A.nupkg"] }));
   expect(createRelease("1.2.3", sha, files, spawn)).toContain("kept unchanged without b.tgz");
@@ -289,4 +296,13 @@ test("CI stamps and checks both VSIX files with the mapped release version", () 
   expect(vsix.findIndex(run => run.startsWith("msbuild tools/visualstudio-runic-translations/")))
     .toBeLessThan(vsix.indexOf("python tools/visualstudio-runic-translations/package.py --configuration Release"));
   expect(vsix.join("\n")).not.toContain("RunicIdeReleaseVersion");
+});
+
+test("hand-written release notes are used only when the version has a notes file", () => {
+  const directory = mkdtempSync(join(tmpdir(), "runic-translations-notes-"));
+  try {
+    writeFileSync(join(directory, "1.2.3.md"), "# Notes\n");
+    expect(releaseNotes("1.2.3", directory)).toBe(join(directory, "1.2.3.md"));
+    expect(releaseNotes("1.2.4", directory)).toBeUndefined();
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
