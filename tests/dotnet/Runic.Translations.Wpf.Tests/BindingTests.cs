@@ -24,7 +24,8 @@ internal static class BindingTests
         Trace.Listeners.Add(new ConsoleTraceListener());
         var manager = new FakeManager();
         var messages = new FakeMessages(manager);
-        var renderer = new WpfInlineRenderer(PaymentFixture.MarkupContract, _ => { });
+        var renderer = new WpfInlineRenderer(PaymentFixture.MarkupContract, _ => { }, new Dictionary<string, WpfMarkupFactory> {
+            ["shop:badge"] = (_, children) => { var span = new Span(); span.Inlines.AddRange(children); return span; } });
         using var source = new TranslationSource(manager, messages, renderer);
         TranslationSource.Default = source;
         Dispatcher dispatcher = Dispatcher.CurrentDispatcher;
