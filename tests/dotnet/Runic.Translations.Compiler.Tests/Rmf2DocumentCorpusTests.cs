@@ -24,6 +24,7 @@ internal static class Rmf2DocumentCorpusTests
         runner.Add("RMF2 document corpus compiler cases report the expected diagnostics", CompilerCases);
         runner.Add("RMF2 document corpus agrees across linked .NET loaded packs generated ESM and dynamic ESM packs", Execution);
         runner.Add("RMF2 document corpus pack rejection taxonomy agrees across .NET and ESM", InvalidPacks);
+        runner.Add("RMF2 document corpus renders the shared HTML oracle through the generated DOM adapter and retires callbacks", DomAdapter);
     }
 
     private static void Contract()
@@ -93,9 +94,13 @@ internal static class Rmf2DocumentCorpusTests
             foreach (JsonElement slot in test.GetProperty("slots").EnumerateArray())
             {
                 JsonElement definition = slotDefinitions.GetProperty(slot.GetString()!);
-                slots.Add(slot.GetString()!, definition.GetProperty("kind").GetString() == "runic:link"
-                    ? new InlineLinkBinding(new Uri(definition.GetProperty("href").GetString()!, UriKind.Absolute))
-                    : new InlineActionBinding(() => { }));
+                string label = definition.TryGetProperty("accessibleName", out JsonElement name) ? name.GetString()! : "";
+                slots.Add(slot.GetString()!, definition.GetProperty("kind").GetString() switch
+                {
+                    "runic:link" => new InlineLinkBinding(new Uri(definition.GetProperty("href").GetString()!, UriKind.Absolute)),
+                    "runic:icon" => new InlineIconBinding(definition.GetProperty("asset").GetString()!, false, _ => label),
+                    _ => new InlineActionBinding(() => { }),
+                });
             }
             CompiledRmf2Message direct = Rmf2V1CorpusTests.Lower(linked.Message with { Inputs = messageContract.Inputs }, linked.ContentLocale);
             CompiledRmf2Message loaded = verified[locale].Messages.Single(item => item.Key.Name == key).Message!.Rmf2V5!;
@@ -124,6 +129,25 @@ internal static class Rmf2DocumentCorpusTests
         }
 
         RunEsm(project, index.RootElement);
+    }
+
+    // W220-005: the generated DOM document adapter renders every execution to the canonical HTML in
+    // html.json (the Svelte adapter checks the same oracle), and retires links and actions on replace and clear.
+    private static void DomAdapter()
+    {
+        using JsonDocument index = Index();
+        Rmf2ProjectV5 project = Compile();
+        string directory = Rmf2V1CorpusTests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "index.json"), index.RootElement.GetRawText(), new UTF8Encoding(false));
+            File.Copy(Path.Combine(Root, "html.json"), Path.Combine(directory, "html.json"));
+            foreach (Rmf2LocaleV5 locale in project.Locales)
+                File.WriteAllBytes(Path.Combine(directory, locale.Tag + ".json"), Rmf2LocaleArtifactV5.Render(project, locale.Tag).GetUtf8Bytes());
+            File.WriteAllText(Path.Combine(directory, "dom.mjs"), EsmDomScript, new UTF8Encoding(false));
+            Rmf2V1CorpusTests.Run("bun", [Path.Combine(directory, "dom.mjs")], directory);
+        }
+        finally { Directory.Delete(directory, true); }
     }
 
     private static void InvalidPacks()
@@ -365,7 +389,7 @@ internal static class Rmf2DocumentCorpusTests
     private const string EsmExecutionScript = """
         import { readFile } from "node:fs/promises";
         import { m } from "./documents.esm-v5/messages.js";
-        import { actionBinding, bindMarkup, createDocumentRenderer, createInlineRenderer, defineMarkup, linkBinding, rmf2Contract, toPlainText } from "./documents.esm-v5/runtime.js";
+        import { actionBinding, bindMarkup, createDocumentRenderer, createInlineRenderer, defineMarkup, iconBinding, linkBinding, rmf2Contract, toPlainText } from "./documents.esm-v5/runtime.js";
         import { decodeLocalePack, formatDynamicMessage } from "./documents.esm-v5/dynamic.js";
         const index=JSON.parse(await readFile(new URL("./index.json",import.meta.url),"utf8"));
         const artifacts=Object.create(null);
@@ -379,7 +403,7 @@ internal static class Rmf2DocumentCorpusTests
         // A corpus projection is a template in which {text} stands for the projected children.
         const projectionOf=({custom,...options})=>({...options,custom:Object.entries(custom??{}).map(([name,template])=>bindMarkup(contractOf(name),({children})=>template.replaceAll("{text}",children.join(""))))});
         const argsOf=spec=>{const args=Object.create(null);for(const [name,item] of Object.entries(spec))args[name]=item.type==="int64"?BigInt(item.value):item.value;return args;};
-        const slotsOf=names=>Object.fromEntries(names.map(name=>{const definition=index.slots[name];return [name,definition.kind==="runic:link"?linkBinding({href:definition.href}):actionBinding({onActivate(){}})];}));
+        const slotsOf=names=>Object.fromEntries(names.map(name=>{const definition=index.slots[name];return [name,definition.kind==="runic:link"?linkBinding({href:definition.href}):definition.kind==="runic:icon"?iconBinding({asset:definition.asset,decorative:false,accessibleName:()=>definition.accessibleName}):actionBinding({onActivate(){}})];}));
         const check=(value,test,source)=>{
           const id=test.id+"/"+source,slots=slotsOf(test.slots);
           if(value.kind!=="localized-document"||value.locale!==test.expected.contentLocale)throw new Error(id+": kind or content locale "+value.kind+" "+value.locale);
@@ -390,6 +414,71 @@ internal static class Rmf2DocumentCorpusTests
         for(const test of index.executions){const args=argsOf(test.arguments);check(formatDynamicMessage(artifacts[test.locale],test.key,args),test,"dynamic");check(Object.keys(test.arguments).length===0?m[test.key]({locale:test.locale}):m[test.key](args,{locale:test.locale}),test,"generated");}
         const inline=createInlineRenderer({text:value=>value,element:({children})=>children.join("")});
         for(const test of index.rendererRejections){const value=m[test.key]({locale:"en"});let failed=false;try{(test.renderer==="document"?tree:inline).render(value,{slots:Object.create(null)});}catch{failed=true;}if(!failed)throw new Error(test.id+": accepted");}
+        """;
+
+    private const string EsmDomScript = """
+        import { readFile } from "node:fs/promises";
+        import { m } from "./documents.esm-v5/messages.js";
+        import { actionBinding, bindMarkup, createDomDocumentRenderer, defineMarkup, iconBinding, linkBinding, rmf2Contract } from "./documents.esm-v5/runtime.js";
+        import { decodeLocalePack, formatDynamicMessage } from "./documents.esm-v5/dynamic.js";
+        const index=JSON.parse(await readFile(new URL("./index.json",import.meta.url),"utf8"));
+        const oracle=JSON.parse(await readFile(new URL("./html.json",import.meta.url),"utf8"));
+        // A minimal DOM: the adapter only creates elements and text nodes, sets attributes, appends and listens for clicks.
+        class FakeElement{constructor(tag){this.tag=tag;this.attributes=new Map();this.children=[];this.listeners=[];}setAttribute(name,value){this.attributes.set(name,String(value));}removeAttribute(name){this.attributes.delete(name);}getAttribute(name){return this.attributes.get(name)??null;}append(...nodes){this.children.push(...nodes);}replaceChildren(...nodes){this.children=[...nodes];}addEventListener(type,listener){if(type==="click")this.listeners.push(listener);}removeEventListener(type,listener){this.listeners=this.listeners.filter(item=>item!==listener);}click(){for(const listener of this.listeners)listener();}}
+        const fake={createElement:tag=>new FakeElement(tag),createTextNode:value=>({text:value})};
+        // Canonical HTML: attributes in ordinal name order, text escaped for &, < and >, attribute values for & and ".
+        const escape=value=>value.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+        const html=node=>node.tag===undefined?escape(node.text):"<"+node.tag+[...node.attributes].sort(([a],[b])=>a<b?-1:a>b?1:0).map(([name,value])=>" "+name+"=\""+value.replaceAll("&","&amp;").replaceAll("\"","&quot;")+"\"").join("")+">"+(node.tag==="br"?"":node.children.map(html).join("")+"</"+node.tag+">");
+        const find=(node,tag)=>node.tag===tag?node:(node.children??[]).map(child=>find(child,tag)).find(Boolean);
+        const contractOf=name=>defineMarkup({name,...rmf2Contract.contracts[name]});
+        const customNames=Object.keys(rmf2Contract.contracts).filter(name=>!name.startsWith("runic:"));
+        const custom=customNames.map(name=>bindMarkup(contractOf(name),({name,occurrence,children})=>{const node=fake.createElement("span");node.setAttribute("data-runic-markup",name);node.setAttribute("data-runic-occurrence",occurrence);node.append(...children);return node;}));
+        const dom=createDomDocumentRenderer(fake,{custom});
+        const argsOf=spec=>{const args=Object.create(null);for(const [name,item] of Object.entries(spec))args[name]=item.type==="int64"?BigInt(item.value):item.value;return args;};
+        const icon=(definition,accessibleName=()=>definition.accessibleName)=>iconBinding({asset:doc=>{const node=doc.createElement("span");node.append(doc.createTextNode(definition.asset));return node;},decorative:false,accessibleName});
+        const slotsOf=names=>Object.fromEntries(names.map(name=>{const definition=index.slots[name];return [name,definition.kind==="runic:link"?linkBinding({href:definition.href}):definition.kind==="runic:icon"?icon(definition):actionBinding({onActivate(){}})];}));
+        const artifacts=Object.create(null);
+        for(const locale of ["en","de","fr"]){const decoded=await decodeLocalePack(new Uint8Array(await readFile(new URL("./"+locale+".json",import.meta.url))),locale);if(!decoded.ok)throw new Error(locale+": "+decoded.reason);artifacts[locale]=decoded.value;}
+        for(const test of index.executions){
+          const args=argsOf(test.arguments),slots=slotsOf(test.slots);
+          for(const [source,value] of [["dynamic",formatDynamicMessage(artifacts[test.locale],test.key,args)],["generated",Object.keys(test.arguments).length===0?m[test.key]({locale:test.locale}):m[test.key](args,{locale:test.locale})]]){
+            const actual=dom.render(value,{slots}).map(html).join("");
+            if(actual!==oracle.executions[test.id])throw new Error(test.id+"/"+source+": html "+actual);
+          }
+        }
+        if(Object.keys(oracle.executions).sort().join()!==index.executions.map(test=>test.id).sort().join())throw new Error("html.json must cover every execution");
+        // Heading levels are relative to the host's base; beyond h6 the element stays h6 with an explicit aria-level.
+        const heading=createDomDocumentRenderer(fake,{headingBase:6}).render(m.whitespace_headings({locale:"en"}),{slots:{}}).map(html).join("");
+        if(!heading.startsWith("<h6 class=\"runic-leaf\" data-runic-occurrence=\"h[1]\" lang=\"en\">Title</h6><h6 aria-level=\"7\" class=\"runic-leaf\" data-runic-occurrence=\"h[2]\" lang=\"en\" role=\"heading\">Section</h6>"))throw new Error("heading base: "+heading);
+        for(const headingBase of [0,10,1.5,"2"]){let failed=false;try{createDomDocumentRenderer(fake,{headingBase});}catch{failed=true;}if(!failed)throw new Error("headingBase accepted "+headingBase);}
+        // Callback retirement: setContent and clearContent retire the previous render, even for retained detached nodes.
+        let calls=0;
+        const live={guide:linkBinding({href:"https://example.test/guide"}),check:actionBinding({onActivate(){calls++;}})};
+        const backup=m.guide_backup({fileName:"report.txt"},{locale:"en"}),target=fake.createElement("div");
+        dom.setContent(target,backup,{slots:live});
+        const first=find(target,"button"),firstLink=find(target,"a");
+        first.click();if(calls!==1)throw new Error("the action did not fire once");
+        let rejected=false;try{dom.setContent(target,backup,{slots:{guide:live.guide}});}catch{rejected=true;}
+        if(!rejected||find(target,"button")!==first)throw new Error("a rejected render replaced the displayed content");
+        first.click();if(calls!==2)throw new Error("a rejected render retired the displayed content");
+        dom.setContent(target,backup,{slots:live});
+        const second=find(target,"button");
+        if(second===first)throw new Error("setContent reused the previous action");
+        first.click();if(calls!==2)throw new Error("a replaced action remained active");
+        if(firstLink.getAttribute("href")!==null||first.getAttribute("disabled")===null)throw new Error("a replaced link or action was not retired");
+        if(first.listeners.length!==0)throw new Error("a retired action kept its application callback");
+        second.click();if(calls!==3)throw new Error("the replacement action is inactive");
+        dom.clearContent(target);
+        second.click();if(calls!==3||target.children.length!==0)throw new Error("clearContent left an active action");
+        // A nested render from an icon's accessibleName restores the outer render's lifetime: the outer link
+        // after the icon is still tracked and retired with its own render.
+        let nested=0;
+        const reentrant={guide:live.guide,star:icon(index.slots.star,()=>{nested++;dom.render(backup,{slots:live});return "Star";})};
+        dom.setContent(target,m.formatting_marks({locale:"en"}),{slots:reentrant});
+        const outerLink=find(target,"a");
+        if(nested!==1||outerLink.getAttribute("href")!=="https://example.test/guide")throw new Error("a nested render broke the outer render");
+        dom.clearContent(target);
+        if(outerLink.getAttribute("href")!==null)throw new Error("the outer render lost its lifetime after a nested render");
         """;
 
     private const string EsmInvalidScript = """

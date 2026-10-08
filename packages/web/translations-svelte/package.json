@@ -1,7 +1,7 @@
 {
   "name": "@runic-artifex/translations-svelte",
   "version": "0.6.0-preview.4",
-  "description": "Svelte 5 localization and RMF2 inline-content helpers for Runic Translations",
+  "description": "Svelte 5 localization and RMF2 inline and document content helpers for Runic Translations",
   "homepage": "https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/translations-svelte#readme",
   "bugs": {
     "url": "https://github.com/Runic-Artifex/runic-translations-sdk/issues"
@@ -36,6 +36,11 @@
       "types": "./dist/inline/index.d.ts",
       "svelte": "./dist/inline/index.js",
       "import": "./dist/inline/index.js"
+    },
+    "./document": {
+      "types": "./dist/document/index.d.ts",
+      "svelte": "./dist/document/index.js",
+      "import": "./dist/document/index.js"
     }
   },
   "files": [
@@ -47,9 +52,9 @@
     "clean": "bun -e \"import('node:fs').then(({rmSync}) => rmSync('dist', { recursive: true, force: true }))\"",
     "build": "bun run --bun clean && svelte-package -i src -o dist",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "bun run --bun build && vitest run test/locale.svelte.test.ts test/locale-hydration.svelte.test.ts test/localization-stress.test.ts && node test/verify-inline-ssr.mjs",
+    "test": "bun run --bun build && vitest run test/locale.svelte.test.ts test/locale-hydration.svelte.test.ts test/localization-stress.test.ts test/document.svelte.test.ts && node test/verify-inline-ssr.mjs",
     "pack:check": "bun pm pack --dry-run",
-    "test:inline-browser": "node test/verify-inline-ssr.mjs && node test/verify-inline-hydration.mjs"
+    "test:inline-browser": "node test/verify-inline-ssr.mjs && node test/verify-inline-hydration.mjs && node test/verify-document-hydration.mjs"
   },
   "peerDependencies": {
     "svelte": ">=5.46.4 <6"

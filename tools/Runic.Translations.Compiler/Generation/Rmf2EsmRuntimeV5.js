@@ -698,3 +698,48 @@ export function createDomInlineRenderer(document,custom=[]) { return createInlin
 function renderOption(schema,value){if(typeof value!=="string")return false;if(schema.type==="integer")return integerOption(value,schema);if(schema.type==="enum")return schema.values.includes(value);if(schema.type==="boolean")return value==="true"||value==="false";if(schema.type==="number"){try{parseDecimal(value);return true;}catch{return false;}}return true;}
 // Canonical decimal integer text within the declared bounds; identical to the compiler and .NET rule.
 function integerOption(text,schema){return typeof text==="string"&&text.length<=11&&/^(?:0|-?[1-9][0-9]*)$/.test(text)&&Number(text)>=schema.minimum&&Number(text)<=schema.maximum;}
+// Document profile v1 DOM adapter: semantic elements built with createElement and text nodes, never HTML strings,
+// and no inline style attributes (strict CSP). Leaves carry the runic-leaf class (white-space: pre-wrap). setContent
+// and clearContent retire the previous render: its actions stop calling back and its links lose their destination.
+// Empty paragraphs, headings and lists are skipped like in the plain-text projection; occurrences keep counting them.
+const domDocumentLifetimes=new WeakMap();
+export function createDomDocumentRenderer(document,{headingBase=2,custom=[]}={}) {
+  if(!Number.isInteger(headingBase)||headingBase<1||headingBase>9)throw new RangeError("headingBase must be an integer from 1 to 9.");
+  let lifetime=null;
+  const empty=new WeakSet();
+  const create=(tag,occurrence)=>{const node=document.createElement(tag);node.setAttribute("data-runic-occurrence",occurrence);return node;};
+  const core=createDocumentRenderer({text(value){const node=document.createTextNode(value);if(value==="")empty.add(node);return node;},
+    element({name,children,binding,locale,occurrence}) {
+      if(name==="runic:icon"){const node=typeof binding.asset==="function"?binding.asset(document):binding.asset?.cloneNode?.(true);if(!node||typeof node.setAttribute!=="function")throw new TypeError("The application icon asset must create a DOM element.");if(binding.decorative){node.setAttribute("aria-hidden","true");node.removeAttribute("aria-label");}else{const label=binding.accessibleName(locale);if(typeof label!=="string"||!label.trim())throw new TypeError("Meaningful icon alternate text is empty.");node.setAttribute("role","img");node.setAttribute("aria-label",label);}node.setAttribute("data-runic-occurrence",occurrence);return node;}
+      const tag={"runic:strong":"strong","runic:em":"em","runic:bold":"b","runic:italic":"i","runic:code":"code","runic:br":"br","runic:link":"a","runic:action":"button"}[name];
+      if(!tag)throw new TypeError(`No DOM renderer linked for '${name}'.`);
+      const node=create(tag,occurrence),own=lifetime;
+      if(name==="runic:link"){node.setAttribute("href",binding.href);own.links.push(node);}
+      if(name==="runic:action"){node.setAttribute("type","button");let activate=binding.onActivate;const listener=()=>{if(own.active)activate?.();};node.addEventListener("click",listener);own.actions.push({node,release(){activate=null;node.removeEventListener("click",listener);}});}
+      node.append(...children);return node;
+    },
+    block(name,options,children,{occurrence,locale}) {
+      const present=children.filter(child=>child!==null);
+      if(name==="runic:ul"||name==="runic:ol"?present.length===0:name!=="runic:li"&&present.every(child=>empty.has(child)))return null;
+      let node;
+      if(name==="runic:h"){const level=headingBase+Number(options.level)-1;node=create(level<=6?"h"+level:"h6",occurrence);if(level>6){node.setAttribute("role","heading");node.setAttribute("aria-level",String(level));}}
+      else if(name==="runic:ol"){node=create("ol",occurrence);if(options.start!=="1")node.setAttribute("start",options.start);const type={"lower-alpha":"a","upper-alpha":"A","lower-roman":"i","upper-roman":"I"}[options.marker];if(type)node.setAttribute("type",type);}
+      else if(["runic:p","runic:ul","runic:li"].includes(name))node=create(name.slice(6),occurrence);
+      else throw new TypeError(`No DOM renderer linked for block '${name}'.`);
+      if(!["runic:ul","runic:ol"].includes(name))node.setAttribute("class","runic-leaf");
+      // Top-level blocks carry the effective content locale, which differs from the requested one after a fallback.
+      if(!occurrence.includes("/"))node.setAttribute("lang",locale);
+      node.append(...present);return node;
+    }},custom);
+  // A nested render (from an icon's accessibleName or a custom binding) restores the outer render's lifetime.
+  function build(content,options){const own={active:true,links:[],actions:[]},outer=lifetime;lifetime=own;try{return {nodes:core.render(content,options).filter(node=>node!==null),own};}finally{lifetime=outer;}}
+  // Retiring also drops the references to application callbacks, so retained nodes do not keep them alive.
+  function retire(target){const previous=domDocumentLifetimes.get(target);if(!previous)return;previous.active=false;for(const link of previous.links)link.removeAttribute("href");for(const action of previous.actions){action.node.setAttribute("disabled","");action.release();}previous.links.length=0;previous.actions.length=0;domDocumentLifetimes.delete(target);}
+  return Object.freeze({
+    render(content,options){return build(content,options).nodes;},
+    // Builds first, so a binding failure leaves the displayed content and its callbacks untouched.
+    setContent(target,content,options){const {nodes,own}=build(content,options);retire(target);domDocumentLifetimes.set(target,own);target.replaceChildren(...nodes);},
+    clearContent(target){retire(target);target.replaceChildren();},
+    extend(extra){return createDomDocumentRenderer(document,{headingBase,custom:[...custom,...extra]});},
+  });
+}

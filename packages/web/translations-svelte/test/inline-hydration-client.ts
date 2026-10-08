@@ -29,4 +29,4 @@ try {
 } catch (error) {
   blankRejected = String(error).includes("Meaningful icon alternate text is empty.");
 }
-window.runicInlineResult = { ...result, activatedCalls, disposedCalls: calls, empty: target.textContent === "", blankRejected };
+window.runicInlineResult = { ...result, activatedCalls, disposedCalls: calls, linkRetired: !link.hasAttribute("href"), empty: target.textContent === "", blankRejected };
