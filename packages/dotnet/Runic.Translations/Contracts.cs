@@ -132,13 +132,16 @@ public interface ITranslationSnapshotNotifier
     event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
 }
 
-/// <summary>Why a snapshot was published.</summary>
+/// <summary>
+/// Why a snapshot was published. The values are explicit and stable; there is no "unknown" member because the manager always knows the
+/// reason and event data cannot be created without one (as with the other enums here, the first member is a real value).
+/// </summary>
 public enum TranslationSnapshotPublishReason
 {
     /// <summary>A successful locale switch.</summary>
-    LocaleChanged,
+    LocaleChanged = 0,
     /// <summary>A successful refresh of the active locale.</summary>
-    Refresh,
+    Refresh = 1,
 }
 
 /// <summary>Describes a published snapshot.</summary>
