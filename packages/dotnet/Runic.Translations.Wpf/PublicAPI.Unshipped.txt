@@ -1,1 +1,44 @@
 #nullable enable
+Runic.Translations.Wpf.MessageExtension
+Runic.Translations.Wpf.MessageExtension.Arg0.get -> object?
+Runic.Translations.Wpf.MessageExtension.Arg0.set -> void
+Runic.Translations.Wpf.MessageExtension.Arg1.get -> object?
+Runic.Translations.Wpf.MessageExtension.Arg1.set -> void
+Runic.Translations.Wpf.MessageExtension.Arg2.get -> object?
+Runic.Translations.Wpf.MessageExtension.Arg2.set -> void
+Runic.Translations.Wpf.MessageExtension.Arg3.get -> object?
+Runic.Translations.Wpf.MessageExtension.Arg3.set -> void
+Runic.Translations.Wpf.MessageExtension.Key.get -> string?
+Runic.Translations.Wpf.MessageExtension.Key.set -> void
+Runic.Translations.Wpf.MessageExtension.MessageExtension() -> void
+Runic.Translations.Wpf.MessageExtension.MessageExtension(string! key) -> void
+Runic.Translations.Wpf.MessageExtension.Source.get -> Runic.Translations.Wpf.TranslationSource?
+Runic.Translations.Wpf.MessageExtension.Source.set -> void
+Runic.Translations.Wpf.TranslationSource
+Runic.Translations.Wpf.TranslationSource.Dispose() -> void
+Runic.Translations.Wpf.TranslationSource.Invalidate() -> void
+Runic.Translations.Wpf.TranslationSource.Locale.get -> string!
+Runic.Translations.Wpf.TranslationSource.Manager.get -> Runic.Translations.ITranslationManager!
+Runic.Translations.Wpf.TranslationSource.Messages.get -> object!
+Runic.Translations.Wpf.TranslationSource.PropertyChanged -> System.ComponentModel.PropertyChangedEventHandler?
+Runic.Translations.Wpf.TranslationSource.RefreshAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.Wpf.TranslationSource.Renderer.get -> Runic.Translations.Wpf.WpfInlineRenderer?
+Runic.Translations.Wpf.TranslationSource.TranslationSource(Runic.Translations.ITranslationManager! manager, object! messages, Runic.Translations.Wpf.WpfInlineRenderer? renderer = null, System.Windows.Threading.Dispatcher? dispatcher = null) -> void
+Runic.Translations.Wpf.TranslationSource.Version.get -> int
+Runic.Translations.Wpf.TranslationSource.this[string! key].get -> string!
+Runic.Translations.Wpf.Translations
+override Runic.Translations.Wpf.MessageExtension.ProvideValue(System.IServiceProvider! serviceProvider) -> object!
+static Runic.Translations.Wpf.TranslationSource.Default.get -> Runic.Translations.Wpf.TranslationSource?
+static Runic.Translations.Wpf.TranslationSource.Default.set -> void
+static Runic.Translations.Wpf.Translations.GetArguments(System.Windows.DependencyObject! element) -> System.Collections.Generic.IReadOnlyList<object?>?
+static Runic.Translations.Wpf.Translations.GetRichMessage(System.Windows.DependencyObject! element) -> string?
+static Runic.Translations.Wpf.Translations.GetSlots(System.Windows.DependencyObject! element) -> System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.InlineMarkupBinding!>?
+static Runic.Translations.Wpf.Translations.GetSource(System.Windows.DependencyObject! element) -> Runic.Translations.Wpf.TranslationSource?
+static Runic.Translations.Wpf.Translations.SetArguments(System.Windows.DependencyObject! element, System.Collections.Generic.IReadOnlyList<object?>? value) -> void
+static Runic.Translations.Wpf.Translations.SetRichMessage(System.Windows.DependencyObject! element, string? value) -> void
+static Runic.Translations.Wpf.Translations.SetSlots(System.Windows.DependencyObject! element, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.InlineMarkupBinding!>? value) -> void
+static Runic.Translations.Wpf.Translations.SetSource(System.Windows.DependencyObject! element, Runic.Translations.Wpf.TranslationSource? value) -> void
+static readonly Runic.Translations.Wpf.Translations.ArgumentsProperty -> System.Windows.DependencyProperty!
+static readonly Runic.Translations.Wpf.Translations.RichMessageProperty -> System.Windows.DependencyProperty!
+static readonly Runic.Translations.Wpf.Translations.SlotsProperty -> System.Windows.DependencyProperty!
+static readonly Runic.Translations.Wpf.Translations.SourceProperty -> System.Windows.DependencyProperty!
