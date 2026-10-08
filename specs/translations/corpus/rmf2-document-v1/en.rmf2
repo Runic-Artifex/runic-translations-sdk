@@ -17,6 +17,12 @@ lists {
   bullets =
     {#ul}{#li}First line{#br/}
       second line{/li}{#li}{#em}Only{/em}{/li}{/ul}
+  decimal = {#ol}{#li}One{/li}{#li}Two{/li}{/ol}
+  lower = {#ol start=4 marker=lower-roman}{#li}Four{/li}{#li}Five{/li}{/ol}
+  upper = {#ol start=26 marker=upper-alpha}{#li}Twenty-six{/li}{#li}Twenty-seven{/li}{/ol}
+  note =
+    .input {$note :string}
+    {{{#ul}{#li}Note: {$note}{/li}{/ul}}}
 }
 files =
   .input {$count :integer}
@@ -34,5 +40,18 @@ whitespace {
     {#h level=1}Title{/h}
     {#h level=|2|}Section{/h}
     {#p}Body{/p}
+  ideographic =
+    ‏{#p}　Indented　{/p}　‎
+    {#p}Next{/p}⁦⁩
+  empty =
+    {#p}{/p}
+    {#p}A{/p}
+    {#p}{/p}
+    {#p}B{/p}
+    {#p}{/p}
+}
+custom {
+  projection = {#p}See {#term}RMF2{/term} now{#hidden}, quietly{/hidden}.{/p}
+  nested = {#p}Start {#strong}{#em}deep{/em} text{/strong}{/p}
 }
 inline = Plain {#strong}inline{/strong} text.

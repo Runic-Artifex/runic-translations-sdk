@@ -283,9 +283,35 @@ internal static class Rmf2RuntimeV5Tests
             "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"n\":{\"type\":\"date\",\"values\":[],\"default\":null,\"literalOnly\":false}}",
         })
             Assert.Throws<Exception>(() => _ = new Rmf2InlineRenderer(MarkupContractJson(contract: contract)));
-        foreach (string text in new[] { "0", "1", "-1", "2147483647", "-2147483648" })
+        // Every v2 message requires content, skeletons and contentLocales; a missing member is a malformed contract.
+        const string message = "\"slots\":{},\"structured\":false,\"contentLocales\":{\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]";
+        _ = Rmf2MarkupContract.Link("{\"version\":2,\"contracts\":{},\"messages\":{\"x\":{" + message + "}}}");
+        foreach (string member in new[] { ",\"contentLocales\":{\"en\":\"en\"}", ",\"content\":\"inline\"", ",\"skeletons\":[]" })
+        {
+            ArgumentException missing = Assert.Throws<ArgumentException>(() => _ = Rmf2MarkupContract.Link("{\"version\":2,\"contracts\":{},\"messages\":{\"x\":{" + message.Replace(member, "", StringComparison.Ordinal) + "}}}"));
+            Assert.True(missing.GetType() == typeof(ArgumentException), "Missing " + member + " threw " + missing.GetType().Name);
+        }
+        Assert.Throws<ArgumentException>(() => _ = Rmf2MarkupContract.Link("{\"version\":2,\"contracts\":{},\"messages\":{\"x\":{" + message.Replace("[]", "[\"p\"]", StringComparison.Ordinal) + "}}}"));
+        // Built-ins must have the shape the compiler exports, so a hand-built contract fails at Link and not while projecting.
+        const string ol = "\"kind\":\"paired\",\"placement\":\"block\",\"children\":\"list-items\",\"interactive\":false,\"plainText\":\"children\",\"options\":{";
+        const string start = "\"start\":{\"type\":\"integer\",\"values\":[],\"default\":\"1\",\"literalOnly\":true,\"minimum\":1,\"maximum\":2147483647}";
+        const string marker = "\"marker\":{\"type\":\"enum\",\"values\":[\"decimal\",\"lower-alpha\",\"lower-roman\",\"upper-alpha\",\"upper-roman\"],\"default\":\"decimal\",\"literalOnly\":true}";
+        static string BuiltIn(string name, string body) => "{\"version\":2,\"contracts\":{\"" + name + "\":{" + body + "}},\"messages\":{}}";
+        _ = Rmf2MarkupContract.Link(BuiltIn("runic:ol", ol + marker + "," + start + "}"));
+        foreach ((string name, string body) in new[]
+        {
+            ("runic:ol", ol + start + "}"),
+            ("runic:ol", ol + marker.Replace(",\"upper-roman\"", "", StringComparison.Ordinal) + "," + start + "}"),
+            ("runic:ol", ol + marker + "," + start.Replace("\"minimum\":1", "\"minimum\":0", StringComparison.Ordinal) + "}"),
+            ("runic:link", "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}"),
+            ("runic:unknown", "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}"),
+        })
+            Assert.Throws<ArgumentException>(() => _ = Rmf2MarkupContract.Link(BuiltIn(name, body)));
+        // The pack-level literal forms are pinned by the shared rmf2-document-v1 corpus; these are the
+        // negative and empty forms that no built-in option bound can reach.
+        foreach (string text in new[] { "0", "-1", "-2147483648" })
             Assert.True(Rmf2MarkupContract.AcceptsInteger(text, int.MinValue, int.MaxValue), "Integer text rejected: " + text);
-        foreach (string text in new[] { "", "-", "-0", "01", "+1", "1.0", "1e1", " 1", "1 ", "2147483648", "-2147483649", "١" })
+        foreach (string text in new[] { "", "-", "-2147483649" })
             Assert.False(Rmf2MarkupContract.AcceptsInteger(text, int.MinValue, int.MaxValue), "Integer text accepted: " + text);
         Assert.False(Rmf2MarkupContract.AcceptsInteger("7", 1, 6), "Integer above maximum accepted");
         Assert.False(Rmf2MarkupContract.AcceptsInteger("0", 1, 6), "Integer below minimum accepted");

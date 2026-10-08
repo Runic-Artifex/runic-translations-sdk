@@ -128,6 +128,8 @@ internal static class PaymentFixture
                 "terms": { "kind": "runic:link", "min": 1, "max": 1 }
               },
               "structured": true,
+              "content": "inline",
+              "skeletons": [],
               "contentLocales": { "en": "en" }
             }
           }

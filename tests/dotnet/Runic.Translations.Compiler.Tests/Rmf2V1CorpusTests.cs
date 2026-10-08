@@ -173,7 +173,7 @@ internal static class Rmf2V1CorpusTests
     // createDocumentRenderer and document plain text; runtime.d.ts, messages.d.ts, dynamic.d.ts
     // and transport.d.ts gain the LocalizedDocument types; the web manifest changes only in the
     // sha256 and byteLength of those five assets. All C# outputs and locale artifacts are unchanged.
-    private const string EncodedOutputDigest = "2d2ab55159097edbc00130a7005830d4af6ae4561df7f2d7e4503d332fb41c70";
+    private const string EncodedOutputDigest = "996657f32151e4857fe5ae67b46080b477ba311d9562fc987858ee4edfe20160";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     private static void EncodedOutputs()

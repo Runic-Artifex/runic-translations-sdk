@@ -235,7 +235,7 @@ version. The normative rules are in the
 A document message's generated C# accessor returns `LocalizedDocumentContent`
 (readable surface: `LocalizedDocumentContent<AppTextSlots.key>`, bound with
 `Bind(new(...))` like inline content). Render it with `Rmf2DocumentRenderer`,
-constructed once from the generated `Rmf2MarkupContract` constant. `Render`
+constructed once from `Rmf2MarkupContract.Link(...)` over the generated `Rmf2MarkupContract` constant. `Render`
 returns a list of `DocumentBlock` records with the canonical `Name`
 (`runic:p`, `runic:h`, `runic:ul`, `runic:ol`, `runic:li`), the resolved
 `Options` with defaults, the child `Blocks` of a list, the `Inlines` of a
@@ -259,8 +259,11 @@ line and list items by a line break. Unordered items start with the list marker
 (default `- `, `ListMarker` / `listMarker`); ordered items start with `n. `,
 counted from `start` in the `ol` marker style (decimal, bijective letters, or
 roman numerals for 1 to 3999 with a decimal fallback). Further lines of an item
-are indented by two spaces. `Rmf2PlainTextOptions.Custom` supplies projections
-for custom inline tags with `explicit` or `alternateText` policies.
+are indented by two spaces. Empty blocks are skipped, so the text never starts
+or ends with a line break. `Rmf2PlainTextOptions.Custom` and the ESM `custom`
+bindings supply projections for custom inline tags with `explicit` or
+`alternateText` policies only; `children`, `omit` and `lineBreak` tags keep their
+declared projection even when a binding is supplied.
 
 ## CLI, editor, and language service
 

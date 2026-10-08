@@ -8,6 +8,9 @@ guide {
     {/ul}
     {#p}Sie können fortfahren, wenn die Prüfung abgeschlossen ist.{/p}}}
 }
+lists {
+  upper = {#ol start=26 marker=upper-alpha}{#li}Sechsundzwanzig{/li}{#li}Siebenundzwanzig{/li}{/ol}
+}
 files =
   .input {$count :integer}
   .match $count

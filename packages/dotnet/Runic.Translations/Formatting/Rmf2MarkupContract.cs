@@ -83,7 +83,10 @@ public sealed class Rmf2MarkupContract
             if (!supported) throw new FormatException("RMF2 markup placement or child model is not supported.");
             string plainText = item.Value.GetProperty("plainText").GetString()!;
             if (plainText is not ("children" or "lineBreak" or "alternateText" or "explicit" or "omit")) throw new FormatException("Unsupported RMF2 plain-text projection policy.");
-            Tags.Add(item.Name, new Tag(standalone, placement, children, item.Value.GetProperty("interactive").GetBoolean(), plainText, options));
+            var tag = new Tag(standalone, placement, children, item.Value.GetProperty("interactive").GetBoolean(), plainText, options);
+            if (item.Name.StartsWith("runic:", StringComparison.Ordinal) && !(BuiltIns.TryGetValue(item.Name, out Tag? builtIn) && builtIn.SameShape(tag)))
+                throw new FormatException("RMF2 built-in markup '" + item.Name + "' does not have the built-in contract shape.");
+            Tags.Add(item.Name, tag);
         }
         foreach (JsonProperty message in root.GetProperty("messages").EnumerateObject())
         {
@@ -94,14 +97,13 @@ public sealed class Rmf2MarkupContract
                 slots.Add(slot.Name, slot.Value.GetProperty("kind").GetString()!);
                 bounds.Add(slot.Name, (slot.Value.GetProperty("min").GetInt32(), slot.Value.GetProperty("max").GetInt32()));
             }
-            var locales = message.Value.TryGetProperty("contentLocales", out JsonElement contentLocales)
-                ? contentLocales.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!, StringComparer.Ordinal)
-                : new Dictionary<string, string>(StringComparer.Ordinal);
-            string content = message.Value.TryGetProperty("content", out JsonElement contentKind) ? contentKind.GetString()! : "inline";
+            // Markup contract v2 requires the content kind, the source skeletons and the content locales.
+            var locales = message.Value.GetProperty("contentLocales").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString()!, StringComparer.Ordinal);
+            string content = message.Value.GetProperty("content").GetString()!;
             if (content is not ("inline" or "document")) throw new FormatException("Unsupported RMF2 message content kind.");
             var skeletons = new HashSet<string>(StringComparer.Ordinal);
-            if (message.Value.TryGetProperty("skeletons", out JsonElement skeletonValues))
-                foreach (JsonElement skeleton in skeletonValues.EnumerateArray()) skeletons.Add(skeleton.GetString()!);
+            foreach (JsonElement skeleton in message.Value.GetProperty("skeletons").EnumerateArray()) skeletons.Add(skeleton.GetString()!);
+            if (content == "inline" && skeletons.Count != 0) throw new FormatException("An inline RMF2 message cannot declare document skeletons.");
             Messages.Add(message.Name, new Message(slots, bounds, locales, content == "document", skeletons));
         }
     }
@@ -288,10 +290,48 @@ public sealed class Rmf2MarkupContract
     internal sealed record Message(Dictionary<string, string> Slots, Dictionary<string, (int Min, int Max)> Bounds,
         Dictionary<string, string> ContentLocales, bool Document, HashSet<string> Skeletons);
 
-    internal sealed record Tag(bool Standalone, string Placement, string Children, bool Interactive, string PlainText, Dictionary<string, Option> Options);
+    internal sealed record Tag(bool Standalone, string Placement, string Children, bool Interactive, string PlainText, Dictionary<string, Option> Options)
+    {
+        internal bool SameShape(Tag other) =>
+            Standalone == other.Standalone && Placement == other.Placement && Children == other.Children && Interactive == other.Interactive && PlainText == other.PlainText &&
+            Options.Count == other.Options.Count && Options.All(option => other.Options.TryGetValue(option.Key, out Option? actual) && option.Value.SameShape(actual));
+    }
+
+    // The built-in vocabulary the compiler exports (markup contract v2, document profile v1). A
+    // linked contract carries only the built-ins its messages use, each with exactly this shape.
+    private static readonly Dictionary<string, Tag> BuiltIns = CreateBuiltIns();
+
+    private static Dictionary<string, Tag> CreateBuiltIns()
+    {
+        var none = new Dictionary<string, Option>(StringComparer.Ordinal);
+        var tags = new Dictionary<string, Tag>(StringComparer.Ordinal)
+        {
+            ["runic:strong"] = new(false, "inline", "inline", false, "children", none),
+            ["runic:em"] = new(false, "inline", "inline", false, "children", none),
+            ["runic:bold"] = new(false, "inline", "inline", false, "children", none),
+            ["runic:italic"] = new(false, "inline", "inline", false, "children", none),
+            ["runic:code"] = new(false, "inline", "inline", false, "children", none),
+            ["runic:br"] = new(true, "inline", "none", false, "lineBreak", none),
+            ["runic:link"] = new(false, "inline", "inline", true, "children", none),
+            ["runic:action"] = new(false, "inline", "inline", true, "explicit", none),
+            ["runic:icon"] = new(true, "inline", "none", false, "alternateText", none),
+            ["runic:p"] = new(false, "block", "inline", false, "children", none),
+            ["runic:h"] = new(false, "block", "inline", false, "children", new(StringComparer.Ordinal) { ["level"] = new("integer", [], true, 1, 6) }),
+            ["runic:ul"] = new(false, "block", "list-items", false, "children", none),
+            ["runic:ol"] = new(false, "block", "list-items", false, "children", new(StringComparer.Ordinal)
+            {
+                ["start"] = new("integer", [], true, 1, int.MaxValue),
+                ["marker"] = new("enum", ["decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"], true, int.MinValue, int.MaxValue),
+            }),
+            ["runic:li"] = new(false, "list-item", "inline", false, "children", none),
+        };
+        return tags;
+    }
 
     internal sealed record Option(string Type, string[] Values, bool LiteralOnly, long Minimum, long Maximum)
     {
+        internal bool SameShape(Option other) =>
+            Type == other.Type && LiteralOnly == other.LiteralOnly && Minimum == other.Minimum && Maximum == other.Maximum && Values.Order(StringComparer.Ordinal).SequenceEqual(other.Values.Order(StringComparer.Ordinal), StringComparer.Ordinal);
         internal bool AcceptsType(TextArgumentType type) => Type switch { "number" => type is TextArgumentType.Int or TextArgumentType.Number, "integer" => type == TextArgumentType.Int, "boolean" => type == TextArgumentType.Bool, _ => type == TextArgumentType.String };
         internal bool Accepts(string value) => Type switch
         {

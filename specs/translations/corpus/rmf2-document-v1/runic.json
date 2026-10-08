@@ -14,5 +14,29 @@
   ],
   "validation": {
     "translationCompleteness": "allow"
+  },
+  "markup": {
+    "contracts": [
+      {
+        "name": "shop:term",
+        "kind": "paired",
+        "children": "inline",
+        "interactive": false,
+        "plainText": "explicit",
+        "options": {}
+      },
+      {
+        "name": "shop:hidden",
+        "kind": "paired",
+        "children": "inline",
+        "interactive": false,
+        "plainText": "omit",
+        "options": {}
+      }
+    ],
+    "aliases": {
+      "term": "shop:term",
+      "hidden": "shop:hidden"
+    }
   }
 }

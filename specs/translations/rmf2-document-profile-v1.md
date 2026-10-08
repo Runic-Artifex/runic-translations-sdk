@@ -162,6 +162,9 @@ Every entry of `markupContract.messages` in a
   sorted in ordinal order, including the empty string for an empty variant.
   Inline messages have an empty array.
 
+Both members and `contentLocales` are required on every message of a markup
+contract v2; a runtime rejects a contract that lacks one.
+
 `content` is part of the caller contract and the fingerprint. `skeletons` is
 only in the full markup contract; the caller fingerprint does not cover it.
 Packs are bound to the skeletons because both pack loaders compare the pack's
@@ -215,5 +218,8 @@ starts with its number followed by `. `: numbers count from `start`; the
 `decimal` marker writes decimal digits, the alpha markers write bijective
 base-26 letters (`a`..`z`, `aa`, ...), and the roman markers write roman
 numerals for 1 to 3999 and decimal digits otherwise. Every further line of an
-item is indented by two spaces; empty lines stay empty. Inline content is
-projected as for inline messages.
+item is indented by two spaces; empty lines stay empty. A block or list that
+projects to the empty string is skipped with its separator, so the projection
+never starts or ends with a line break. Inline content is projected as for
+inline messages; a custom projection applies only to custom tags whose policy
+is `explicit` or `alternateText`.

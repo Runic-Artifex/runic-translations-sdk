@@ -235,17 +235,9 @@ internal static class Rmf2DocumentProfileTests
 
     private static void Options()
     {
-        // Unquoted 01, +1 and -0 are already malformed MF2 numbers (RTR0067); quoted forms reach the integer rule.
-        foreach (string option in new[] { "level=0", "level=7", "level=|01|", "level=1.0", "level=1e1", "level=|+1|", "level=|-0|", "level=|2147483648|", "level=| 1|" })
-            Bad("x = {#h " + option + "}a{/h}", "RTR0061");
-        foreach (string option in new[] { "level=01", "level=+1", "level=-0" })
-            Assert.True(!Compile("x = {#h " + option + "}a{/h}").Success, "Accepted " + option);
-        Good("x = {#h level=|2|}a{/h}");
+        // The accepted and rejected integer literal forms are pinned by the shared rmf2-document-v1 corpus.
         Bad("x = {#h}a{/h}", "RTR0061", contains: "level");
         Bad("x =\n  .input {$n :integer}\n  {{{#h level=$n}a{/h}}}", "RTR0061");
-        Bad("x = {#ol start=0}{#li}a{/li}{/ol}", "RTR0061");
-        Bad("x = {#ol marker=disc}{#li}a{/li}{/ol}", "RTR0061");
-        Good("x = {#ol start=2147483647}{#li}a{/li}{/ol}");
         foreach (string alias in new[] { "p", "h", "ul", "ol", "li" })
         {
             var result = Compile("x = Text", config: ",\"markup\":{\"contracts\":[{\"name\":\"app:x\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\"}],\"aliases\":{\"" + alias + "\":\"app:x\"}}");

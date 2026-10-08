@@ -14,17 +14,34 @@
       "en.rmf2",
       "de.rmf2",
       "fr.rmf2"
+    ],
+    "diagnostics": [
+      "RTR0076:en:warning",
+      "RTR0076:en:warning",
+      "RTR0076:en:warning"
     ]
   },
   "determinism": {
-    "callerFingerprint": "sha256:dc2e0339ec7c5706a7084b1ebc0dbfc3c7a8c83fdcf89ec43668e91c8422a4db",
+    "callerFingerprint": "sha256:ff5cd4bed24afded536b767cacdc00f3f3048d6c8feec0da5b5786d1b67f18ba",
     "localeArtifactSha256": {
-      "de": "sha256:5a00c698b95b5d2f0fc1184ec247fa6b9389a967d31d2ef4eef934bf9c35d1f6",
-      "en": "sha256:b204d957e8686567fd9adad871db1a004bd44b84e4d30e21480c5563c5d87a80",
-      "fr": "sha256:a7be2e211c71133af76374b5fc4f5b84504e6d4886672cb3e44adfc995553c4a"
+      "de": "sha256:49056cf5fc0a9b972e57423a895a8aa332146c80e4bdc4b4b3a41eb36e05883a",
+      "en": "sha256:830aefe8c40626e4cff2aa736648b3be989b22107c00cc25db65d5b99f01e600",
+      "fr": "sha256:6a921db5f38331e3fb628e64092e4e92b7a8551c2775e5abb232491013a99aa0"
     }
   },
   "messages": {
+    "custom_nested": {
+      "content": "document",
+      "skeletons": [
+        "p"
+      ]
+    },
+    "custom_projection": {
+      "content": "document",
+      "skeletons": [
+        "p"
+      ]
+    },
     "files": {
       "content": "document",
       "skeletons": [
@@ -55,10 +72,34 @@
         "ul(li,li)"
       ]
     },
+    "lists_decimal": {
+      "content": "document",
+      "skeletons": [
+        "ol[marker=decimal;start=1](li,li)"
+      ]
+    },
+    "lists_lower": {
+      "content": "document",
+      "skeletons": [
+        "ol[marker=lower-roman;start=4](li,li)"
+      ]
+    },
+    "lists_note": {
+      "content": "document",
+      "skeletons": [
+        "ul(li)"
+      ]
+    },
     "lists_roman": {
       "content": "document",
       "skeletons": [
         "ol[marker=upper-roman;start=3998](li,li,li)"
+      ]
+    },
+    "lists_upper": {
+      "content": "document",
+      "skeletons": [
+        "ol[marker=upper-alpha;start=26](li,li)"
       ]
     },
     "whitespace_collapse": {
@@ -67,10 +108,22 @@
         "p,p"
       ]
     },
+    "whitespace_empty": {
+      "content": "document",
+      "skeletons": [
+        "p,p,p,p,p"
+      ]
+    },
     "whitespace_headings": {
       "content": "document",
       "skeletons": [
         "h[level=1],h[level=2],p"
+      ]
+    },
+    "whitespace_ideographic": {
+      "content": "document",
+      "skeletons": [
+        "p,p"
       ]
     }
   },
@@ -890,6 +943,534 @@
           }
         ]
       }
+    },
+    {
+      "id": "backup-hostile-placeholder",
+      "locale": "en",
+      "key": "guide_backup",
+      "arguments": {
+        "fileName": {
+          "type": "string",
+          "value": "&lt;b&gt; {#p}<i>"
+        }
+      },
+      "slots": [
+        "check",
+        "guide"
+      ],
+      "expected": {
+        "contentLocale": "en",
+        "blocks": [
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[1]",
+            "inlines": [
+              {
+                "name": "runic:strong",
+                "options": {},
+                "occurrence": "p[1]/0",
+                "children": [
+                  "Before continuing"
+                ]
+              },
+              ", save a copy of ",
+              "&lt;b&gt; {#p}<i>",
+              "."
+            ]
+          },
+          {
+            "name": "runic:ul",
+            "options": {},
+            "occurrence": "ul[1]",
+            "blocks": [
+              {
+                "name": "runic:li",
+                "options": {},
+                "occurrence": "ul[1]/li[1]",
+                "inlines": [
+                  "Read the ",
+                  {
+                    "name": "runic:link",
+                    "options": {
+                      "ref": "guide"
+                    },
+                    "occurrence": "ul[1]/li[1]/1",
+                    "children": [
+                      "guide"
+                    ]
+                  },
+                  "."
+                ]
+              },
+              {
+                "name": "runic:li",
+                "options": {},
+                "occurrence": "ul[1]/li[2]",
+                "inlines": [
+                  {
+                    "name": "runic:action",
+                    "options": {
+                      "ref": "check"
+                    },
+                    "occurrence": "ul[1]/li[2]/0",
+                    "children": [
+                      "Check"
+                    ]
+                  },
+                  " the result."
+                ]
+              }
+            ]
+          },
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[2]",
+            "inlines": [
+              "You can continue when the check finishes."
+            ]
+          }
+        ],
+        "plainText": [
+          {
+            "options": {
+              "allowActionLabels": true
+            },
+            "value": "Before continuing, save a copy of &lt;b&gt; {#p}<i>.\n\n- Read the guide.\n- Check the result.\n\nYou can continue when the check finishes."
+          },
+          {
+            "options": {
+              "allowActionLabels": true,
+              "annotateLinkDestinations": true,
+              "listMarker": "* "
+            },
+            "value": "Before continuing, save a copy of &lt;b&gt; {#p}<i>.\n\n* Read the guide (https://example.test/guide).\n* Check the result.\n\nYou can continue when the check finishes."
+          }
+        ],
+        "plainTextRejected": [
+          {
+            "options": {}
+          }
+        ]
+      }
+    },
+    {
+      "id": "ol-default-options",
+      "locale": "en",
+      "key": "lists_decimal",
+      "arguments": {},
+      "slots": [],
+      "expected": {
+        "contentLocale": "en",
+        "blocks": [
+          {
+            "name": "runic:ol",
+            "options": {
+              "marker": "decimal",
+              "start": "1"
+            },
+            "occurrence": "ol[1]",
+            "blocks": [
+              {
+                "name": "runic:li",
+                "options": {},
+                "occurrence": "ol[1]/li[1]",
+                "inlines": [
+                  "One"
+                ]
+              },
+              {
+                "name": "runic:li",
+                "options": {},
+                "occurrence": "ol[1]/li[2]",
+                "inlines": [
+                  "Two"
+                ]
+              }
+            ]
+          }
+        ],
+        "plainText": [
+          {
+            "options": {},
+            "value": "1. One\n2. Two"
+          },
+          {
+            "options": {
+              "annotateLinkDestinations": true,
+              "listMarker": "* "
+            },
+            "value": "1. One\n2. Two"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ol-lower-roman",
+      "locale": "en",
+      "key": "lists_lower",
+      "arguments": {},
+      "slots": [],
+      "expected": {
+        "contentLocale": "en",
+        "blocks": [
+          {
+            "name": "runic:ol",
+            "options": {
+              "marker": "lower-roman",
+              "start": "4"
+            },
+            "occurrence": "ol[1]",
+            "blocks": [
+              {
+                "name": "runic:li",
+                "options": {},
+                "occurrence": "ol[1]/li[1]",
+                "inlines": [
+                  "Four"
+                ]
+              },
+              {
+                "name": "runic:li",
+                "options": {},
+                "occurrence": "ol[1]/li[2]",
+                "inlines": [
+                  "Five"
+                ]
+              }
+            ]
+          }
+        ],
+        "plainText": [
+          {
+            "options": {},
+            "value": "iv. Four\nv. Five"
+          },
+          {
+            "options": {
+              "annotateLinkDestinations": true,
+              "listMarker": "* "
+            },
+            "value": "iv. Four\nv. Five"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ol-upper-alpha-de",
+      "locale": "de",
+      "key": "lists_upper",
+      "arguments": {},
+      "slots": [],
+      "expected": {
+        "contentLocale": "de",
+        "blocks": [
+          {
+            "name": "runic:ol",
+            "options": {
+              "marker": "upper-alpha",
+              "start": "26"
+            },
+            "occurrence": "ol[1]",
+            "blocks": [
+              {
+                "name": "runic:li",
+                "options": {},
+                "occurrence": "ol[1]/li[1]",
+                "inlines": [
+                  "Sechsundzwanzig"
+                ]
+              },
+              {
+                "name": "runic:li",
+                "options": {},
+                "occurrence": "ol[1]/li[2]",
+                "inlines": [
+                  "Siebenundzwanzig"
+                ]
+              }
+            ]
+          }
+        ],
+        "plainText": [
+          {
+            "options": {},
+            "value": "Z. Sechsundzwanzig\nAA. Siebenundzwanzig"
+          },
+          {
+            "options": {
+              "annotateLinkDestinations": true,
+              "listMarker": "* "
+            },
+            "value": "Z. Sechsundzwanzig\nAA. Siebenundzwanzig"
+          }
+        ]
+      }
+    },
+    {
+      "id": "placeholder-line-feed-in-item",
+      "locale": "en",
+      "key": "lists_note",
+      "arguments": {
+        "note": {
+          "type": "string",
+          "value": "first\nsecond"
+        }
+      },
+      "slots": [],
+      "expected": {
+        "contentLocale": "en",
+        "blocks": [
+          {
+            "name": "runic:ul",
+            "options": {},
+            "occurrence": "ul[1]",
+            "blocks": [
+              {
+                "name": "runic:li",
+                "options": {},
+                "occurrence": "ul[1]/li[1]",
+                "inlines": [
+                  "Note: ",
+                  "first\nsecond"
+                ]
+              }
+            ]
+          }
+        ],
+        "plainText": [
+          {
+            "options": {},
+            "value": "- Note: first\n  second"
+          },
+          {
+            "options": {
+              "annotateLinkDestinations": true,
+              "listMarker": "* "
+            },
+            "value": "* Note: first\n  second"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-inline-occurrence",
+      "locale": "en",
+      "key": "custom_nested",
+      "arguments": {},
+      "slots": [],
+      "expected": {
+        "contentLocale": "en",
+        "blocks": [
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[1]",
+            "inlines": [
+              "Start ",
+              {
+                "name": "runic:strong",
+                "options": {},
+                "occurrence": "p[1]/1",
+                "children": [
+                  {
+                    "name": "runic:em",
+                    "options": {},
+                    "occurrence": "p[1]/1.0",
+                    "children": [
+                      "deep"
+                    ]
+                  },
+                  " text"
+                ]
+              }
+            ]
+          }
+        ],
+        "plainText": [
+          {
+            "options": {},
+            "value": "Start deep text"
+          },
+          {
+            "options": {
+              "annotateLinkDestinations": true,
+              "listMarker": "* "
+            },
+            "value": "Start deep text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "custom-explicit-and-omit",
+      "locale": "en",
+      "key": "custom_projection",
+      "arguments": {},
+      "slots": [],
+      "expected": {
+        "contentLocale": "en",
+        "blocks": [
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[1]",
+            "inlines": [
+              "See ",
+              {
+                "name": "shop:term",
+                "options": {},
+                "occurrence": "p[1]/1",
+                "children": [
+                  "RMF2"
+                ]
+              },
+              " now",
+              {
+                "name": "shop:hidden",
+                "options": {},
+                "occurrence": "p[1]/3",
+                "children": [
+                  ", quietly"
+                ]
+              },
+              "."
+            ]
+          }
+        ],
+        "plainText": [
+          {
+            "options": {
+              "custom": {
+                "shop:term": "«{text}»",
+                "shop:hidden": "HIDDEN {text}"
+              }
+            },
+            "value": "See «RMF2» now."
+          },
+          {
+            "options": {
+              "custom": {
+                "shop:term": "{text} (term)"
+              }
+            },
+            "value": "See RMF2 (term) now."
+          }
+        ],
+        "plainTextRejected": [
+          {
+            "options": {}
+          },
+          {
+            "options": {
+              "custom": {
+                "shop:hidden": "HIDDEN"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "empty-blocks-skipped",
+      "locale": "en",
+      "key": "whitespace_empty",
+      "arguments": {},
+      "slots": [],
+      "expected": {
+        "contentLocale": "en",
+        "blocks": [
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[1]",
+            "inlines": []
+          },
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[2]",
+            "inlines": [
+              "A"
+            ]
+          },
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[3]",
+            "inlines": []
+          },
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[4]",
+            "inlines": [
+              "B"
+            ]
+          },
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[5]",
+            "inlines": []
+          }
+        ],
+        "plainText": [
+          {
+            "options": {},
+            "value": "A\n\nB"
+          },
+          {
+            "options": {
+              "annotateLinkDestinations": true,
+              "listMarker": "* "
+            },
+            "value": "A\n\nB"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ideographic-space-and-bidi-marks",
+      "locale": "en",
+      "key": "whitespace_ideographic",
+      "arguments": {},
+      "slots": [],
+      "expected": {
+        "contentLocale": "en",
+        "blocks": [
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[1]",
+            "inlines": [
+              "　Indented　"
+            ]
+          },
+          {
+            "name": "runic:p",
+            "options": {},
+            "occurrence": "p[2]",
+            "inlines": [
+              "Next"
+            ]
+          }
+        ],
+        "plainText": [
+          {
+            "options": {},
+            "value": "　Indented　\n\nNext"
+          },
+          {
+            "options": {
+              "annotateLinkDestinations": true,
+              "listMarker": "* "
+            },
+            "value": "　Indented　\n\nNext"
+          }
+        ]
+      }
     }
   ],
   "rendererRejections": [
@@ -1020,6 +1601,163 @@
         "RTR0078:en:warning"
       ],
       "success": true
+    },
+    {
+      "id": "heading-level-zero",
+      "sources": {
+        "en": "x = {#h level=0}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-above-maximum",
+      "sources": {
+        "en": "x = {#h level=7}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error",
+        "RTR0077:en:warning"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-quoted-leading-zero",
+      "sources": {
+        "en": "x = {#h level=|01|}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-fraction",
+      "sources": {
+        "en": "x = {#h level=1.0}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-exponent",
+      "sources": {
+        "en": "x = {#h level=1e1}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-quoted-plus-sign",
+      "sources": {
+        "en": "x = {#h level=|+1|}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-quoted-negative-zero",
+      "sources": {
+        "en": "x = {#h level=|-0|}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-quoted-above-int32",
+      "sources": {
+        "en": "x = {#h level=|2147483648|}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-quoted-leading-space",
+      "sources": {
+        "en": "x = {#h level=| 1|}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-unquoted-leading-zero",
+      "sources": {
+        "en": "x = {#h level=01}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0067:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-unquoted-plus-sign",
+      "sources": {
+        "en": "x = {#h level=+1}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "heading-level-unquoted-negative-zero",
+      "sources": {
+        "en": "x = {#h level=-0}a{/h}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "ol-start-zero",
+      "sources": {
+        "en": "x = {#ol start=0}{#li}a{/li}{/ol}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "ol-unknown-marker",
+      "sources": {
+        "en": "x = {#ol marker=disc}{#li}a{/li}{/ol}\n"
+      },
+      "diagnostics": [
+        "RTR0061:en:error"
+      ],
+      "success": false
+    },
+    {
+      "id": "integer-literals-quoted",
+      "sources": {
+        "en": "x = {#h level=|1|}a{/h}{#ol start=|7|}{#li}a{/li}{/ol}\n"
+      },
+      "diagnostics": [],
+      "success": true
+    },
+    {
+      "id": "ol-start-maximum",
+      "sources": {
+        "en": "x = {#ol start=2147483647}{#li}a{/li}{/ol}\n"
+      },
+      "diagnostics": [],
+      "success": true
     }
   ],
   "invalidPacks": [
@@ -1075,6 +1813,248 @@
         "messages": {}
       },
       "rejection": "RTR0023/markup-contract-version-mismatch"
+    },
+    {
+      "id": "leaf-trailing-space",
+      "mutation": "editText",
+      "key": "guide_backup",
+      "text": 8,
+      "suffix": " ",
+      "rejection": "RTR0023/malformed-pattern"
+    },
+    {
+      "id": "leaf-space-across-inline-boundary",
+      "mutation": "editText",
+      "key": "guide_backup",
+      "text": 6,
+      "prefix": " ",
+      "rejection": "RTR0023/malformed-pattern"
+    },
+    {
+      "id": "list-item-at-root",
+      "mutation": "insertNodes",
+      "key": "guide_backup",
+      "at": 0,
+      "nodes": [
+        {
+          "kind": "markup",
+          "name": "runic:li",
+          "markupKind": "open",
+          "options": [],
+          "annotations": []
+        },
+        {
+          "kind": "text",
+          "value": "Loose"
+        },
+        {
+          "kind": "markup",
+          "name": "runic:li",
+          "markupKind": "close",
+          "options": [],
+          "annotations": []
+        }
+      ],
+      "rejection": "RTR0023/malformed-pattern"
+    },
+    {
+      "id": "paragraph-inside-list",
+      "mutation": "insertNodes",
+      "key": "guide_backup",
+      "at": 9,
+      "nodes": [
+        {
+          "kind": "markup",
+          "name": "runic:p",
+          "markupKind": "open",
+          "options": [],
+          "annotations": []
+        },
+        {
+          "kind": "text",
+          "value": "Loose"
+        },
+        {
+          "kind": "markup",
+          "name": "runic:p",
+          "markupKind": "close",
+          "options": [],
+          "annotations": []
+        }
+      ],
+      "rejection": "RTR0023/malformed-pattern"
+    },
+    {
+      "id": "block-inside-inline-markup",
+      "mutation": "insertNodes",
+      "key": "guide_backup",
+      "at": 2,
+      "nodes": [
+        {
+          "kind": "markup",
+          "name": "runic:p",
+          "markupKind": "open",
+          "options": [],
+          "annotations": []
+        },
+        {
+          "kind": "text",
+          "value": "Loose"
+        },
+        {
+          "kind": "markup",
+          "name": "runic:p",
+          "markupKind": "close",
+          "options": [],
+          "annotations": []
+        }
+      ],
+      "rejection": "RTR0023/malformed-pattern"
+    },
+    {
+      "id": "integer-option-leading-zero",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "026"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-plus-sign",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "+26"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-fraction",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "26.0"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-exponent",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "2.6e1"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-leading-space",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": " 26"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-trailing-space",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "26 "
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-negative-zero",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "-0"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-below-minimum",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "0"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-above-int32",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "2147483648"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-arabic-indic-digits",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "٢٦"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    },
+    {
+      "id": "integer-option-non-canonical-number",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "number-literal",
+        "value": "26.0",
+        "canonical": "26"
+      },
+      "rejection": "RTR0023/argument-contract-mismatch"
+    }
+  ],
+  "validPacks": [
+    {
+      "id": "integer-option-string-literal",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "string-literal",
+        "value": "26"
+      }
+    },
+    {
+      "id": "integer-option-number-literal",
+      "mutation": "setOption",
+      "key": "lists_upper",
+      "option": "start",
+      "value": {
+        "kind": "number-literal",
+        "value": "26",
+        "canonical": "26"
+      }
     }
   ]
 }

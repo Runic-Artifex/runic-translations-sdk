@@ -268,13 +268,19 @@ internal static class Rmf2PlainText
     }
 
     // Top-level blocks are separated by a blank line and list items by one line break. Each
-    // further line of an item is indented two spaces; blank lines carry no spaces.
+    // further line of an item is indented two spaces; blank lines carry no spaces. Empty blocks
+    // add no separator, so the projection never starts or ends with a line break.
     internal static string Document(Rmf2MarkupContract contract, IReadOnlyList<DocumentBlock> blocks, string locale, Rmf2PlainTextOptions options)
     {
         var parts = new List<string>(blocks.Count);
         foreach (DocumentBlock block in blocks)
         {
-            if (contract.Tags[block.Name].Children != "list-items") { parts.Add(Inline(contract, block.Inlines, locale, options)); continue; }
+            if (contract.Tags[block.Name].Children != "list-items")
+            {
+                string text = Inline(contract, block.Inlines, locale, options);
+                if (text.Length != 0) parts.Add(text);
+                continue;
+            }
             var items = new List<string>(block.Blocks.Count);
             long start = block.Name == "runic:ol" ? long.Parse(block.Options["start"], System.Globalization.CultureInfo.InvariantCulture) : 1;
             for (int index = 0; index < block.Blocks.Count; index++)
@@ -284,7 +290,7 @@ internal static class Rmf2PlainText
                 for (int line = 1; line < lines.Length; line++) if (lines[line].Length != 0) lines[line] = "  " + lines[line];
                 items.Add(marker + string.Join('\n', lines));
             }
-            parts.Add(string.Join('\n', items));
+            if (items.Count != 0) parts.Add(string.Join('\n', items));
         }
         return string.Join("\n\n", parts);
     }
