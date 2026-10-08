@@ -59,13 +59,17 @@ Headings are bold paragraphs that UI Automation exposes as headings at
 lists and items with their positions. Links and actions get their slot name as
 `AutomationId`. Every render builds a fresh `FlowDocument` with the content
 locale's `Language` and `FlowDirection`; replacing it or calling `ClearContent`
-retires its callbacks. Copying a selection puts the plain-text projection on the
-clipboard, with list markers and block breaks, action labels and meaningful icon
-text, and without link destinations or rich formats. See the
+retires its callbacks. Empty paragraphs, headings and lists are skipped.
+Copying a selection puts the plain-text projection on the clipboard, with list
+markers and block breaks, action labels and meaningful icon text, Windows line
+endings, and without link destinations or rich formats. See the
 [document adapter guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#wpf-document-adapter).
 
-Run the interactive Windows sample, which renders the bounded example of issue
-#15, with:
+The repository has an interactive Windows sample: a window with the bounded
+example of issue #15 in a `FlowDocumentScrollViewer`, buttons to render again,
+clear the document and show the clipboard text. Its source is
+[`DocumentSample.cs`](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.Wpf.Tests/DocumentSample.cs).
+In a clone of the repository, run it with:
 
 ```powershell
 dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests -- --sample

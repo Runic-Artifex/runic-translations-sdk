@@ -21,7 +21,13 @@ namespace Runic.Translations.Wpf;
 /// <remarks>
 /// Paragraphs become <see cref="Paragraph"/>, headings a bold <see cref="Paragraph"/> exposed to UI Automation as a heading,
 /// lists <see cref="List"/> with <see cref="List.MarkerStyle"/> and <see cref="List.StartIndex"/>, and list items <see cref="ListItem"/>.
-/// Copying replaces the clipboard text with the plain-text projection of the selected blocks.
+/// Copying replaces the clipboard text with the plain-text projection of the selected blocks, with Windows line endings.
+/// Empty paragraphs, headings and lists are skipped, as in the plain-text projection.
+/// The rendered <see cref="FlowDocument"/> binds its font family, size and foreground to the viewer; these local values
+/// override an implicit <see cref="FlowDocument"/> style, so style the viewer or use the theme callback. Headings, lists and
+/// list items pick up implicit <see cref="Paragraph"/>, <see cref="List"/> and <see cref="ListItem"/> styles.
+/// When the application sets <see cref="FlowDocumentScrollViewer.Document"/> itself, the previous render keeps its callbacks
+/// until the next <c>SetContent</c> or <see cref="ClearContent"/> on that viewer.
 /// </remarks>
 public sealed class WpfDocumentRenderer
 {
@@ -36,7 +42,8 @@ public sealed class WpfDocumentRenderer
     /// <param name="contractJson">The compiler-exported RMF2 markup contract.</param>
     /// <param name="navigate">Called when an active link is activated.</param>
     /// <param name="custom">Factories for declared custom inline contracts.</param>
-    /// <param name="theme">Called with the canonical contract name for every created inline and block element, for example to style <c>runic:h</c>.</param>
+    /// <param name="theme">Called with the canonical contract name for every rendered block and markup inline, for example to style <c>runic:h</c>.
+    /// Plain text runs are not passed.</param>
     public WpfDocumentRenderer(string contractJson, Action<Uri> navigate,
         IReadOnlyDictionary<string, WpfMarkupFactory>? custom = null, Action<string, TextElement>? theme = null)
     {
@@ -109,23 +116,28 @@ public sealed class WpfDocumentRenderer
         var lifetime = new RenderLifetime();
         var leaves = new List<DocumentLeaf>();
         var document = new FlowDocument { Language = XmlLanguage.GetLanguage(locale), FlowDirection = Direction(locale) };
-        foreach (DocumentBlock block in blocks) document.Blocks.Add(Create(block));
+        foreach (DocumentBlock block in blocks)
+            if (Create(block) is Block created) document.Blocks.Add(created);
         return new DocumentRender(document, lifetime, leaves);
 
-        Block Create(DocumentBlock block)
+        Block? Create(DocumentBlock block)
         {
+            // Empty blocks are skipped, as in the plain-text projection: a paragraph or heading with only empty text and a
+            // list without items. List items are always rendered.
+            if (block.Name is "runic:ul" or "runic:ol" ? block.Blocks.Count == 0 : block.Inlines.All(run => run.Text?.Length == 0)) return null;
             switch (block.Name)
             {
                 case "runic:p":
                 {
-                    var paragraph = Leaf(new Paragraph(), block, null, null);
+                    var paragraph = Leaf(new Paragraph(), block, null, null, out _);
                     _theme?.Invoke(block.Name, paragraph);
                     return paragraph;
                 }
                 case "runic:h":
                 {
                     int level = Math.Min(_headingBase + int.Parse(block.Options["level"], NumberStyles.None, CultureInfo.InvariantCulture) - 1, 9);
-                    var heading = Leaf(new HeadingParagraph { FontWeight = FontWeights.Bold }, block, null, null);
+                    var heading = new HeadingParagraph { FontWeight = FontWeights.Bold };
+                    Leaf(heading, block, null, null, out heading.Text);
                     AutomationProperties.SetHeadingLevel(heading, (AutomationHeadingLevel)level);
                     _theme?.Invoke(block.Name, heading);
                     return heading;
@@ -135,6 +147,9 @@ public sealed class WpfDocumentRenderer
                     bool ordered = block.Name == "runic:ol";
                     long start = ordered ? long.Parse(block.Options["start"], NumberStyles.None, CultureInfo.InvariantCulture) : 1;
                     string marker = ordered ? block.Options["marker"] : "disc";
+                    // WPF numbers items from an int StartIndex; the profile allows start up to int.MaxValue.
+                    if (start + block.Blocks.Count - 1 > int.MaxValue)
+                        throw new TranslationFormatException("The ordered list at '" + block.Occurrence + "' numbers items past " + int.MaxValue + ", which WPF list markers cannot show.");
                     var list = new DocumentList { MarkerStyle = MarkerStyle(marker) };
                     if (ordered) list.StartIndex = (int)start;
                     for (int index = 0; index < block.Blocks.Count; index++)
@@ -144,7 +159,7 @@ public sealed class WpfDocumentRenderer
                         AutomationProperties.SetPositionInSet(listItem, index + 1);
                         AutomationProperties.SetSizeOfSet(listItem, block.Blocks.Count);
                         // The item's paragraph has no margin of its own, so items are spaced like a list rather than like paragraphs.
-                        listItem.Blocks.Add(Leaf(new Paragraph { Margin = new Thickness(0) }, item, ordered ? Number(start + index, marker) + ". " : "- ", list));
+                        listItem.Blocks.Add(Leaf(new Paragraph { Margin = new Thickness(0) }, item, ordered ? Number(start + index, marker) + ". " : "- ", list, out listItem.Text));
                         _theme?.Invoke(item.Name, listItem);
                         list.ListItems.Add(listItem);
                     }
@@ -156,10 +171,12 @@ public sealed class WpfDocumentRenderer
             }
         }
 
-        Paragraph Leaf(Paragraph paragraph, DocumentBlock block, string? marker, List? list)
+        // The leaf's copy text (with action labels and icon alternate text, without list markers) is its UI Automation name.
+        Paragraph Leaf(Paragraph paragraph, DocumentBlock block, string? marker, List? list, out string text)
         {
             foreach (InlineMarkupRun run in block.Inlines) paragraph.Inlines.Add(_inlines.Create(run, locale, lifetime));
             leaves.Add(new DocumentLeaf(paragraph, marker, list));
+            text = WpfInlineBuilder.CopyText(paragraph.Inlines, lifetime).Replace('\n', ' ').Trim();
             return paragraph;
         }
     }
@@ -210,7 +227,9 @@ public sealed class WpfDocumentRenderer
     }
 
     // Copy and drag replace the text formats with the plain-text projection of the selection. The rich formats
-    // (XAML, XAML package, RTF) are not offered: they would carry the internal element types and link destinations.
+    // (XAML, XAML package, RTF) are not offered because they would serialise each Hyperlink's NavigateUri and leak link
+    // destinations that the projection leaves out. WPF has already serialised them when SettingData is raised, so
+    // cancelling discards that output; the internal element subclasses would be written as their standard types anyway.
     private static void OnSettingData(object sender, DataObjectSettingDataEventArgs e)
     {
         if (Current(sender) is not null && e.Format is not null &&
@@ -222,7 +241,8 @@ public sealed class WpfDocumentRenderer
     private static void OnCopying(object sender, DataObjectCopyingEventArgs e)
     {
         if (Current(sender) is not DocumentRender render || sender is not FlowDocumentScrollViewer viewer || viewer.Selection is not TextRange selection) return;
-        string text = render.Project(selection.Start, selection.End);
+        // The projection uses \n; the Windows clipboard text formats use \r\n.
+        string text = render.Project(selection.Start, selection.End).Replace("\n", "\r\n", StringComparison.Ordinal);
         e.DataObject.SetData(DataFormats.UnicodeText, text);
         e.DataObject.SetData(DataFormats.Text, text);
     }
@@ -236,19 +256,23 @@ public sealed class WpfDocumentRenderer
     /// <summary>A heading paragraph exposed to UI Automation with its heading level.</summary>
     private sealed class HeadingParagraph : Paragraph
     {
+        internal string Text = "";
+        public HeadingParagraph() => SetResourceReference(StyleProperty, typeof(Paragraph));
         protected override AutomationPeer OnCreateAutomationPeer() => new Peer(this);
         private sealed class Peer(HeadingParagraph owner) : TextElementAutomationPeer(owner)
         {
             protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Text;
             protected override string GetClassNameCore() => "Paragraph";
             protected override bool IsControlElementCore() => true;
-            protected override string GetNameCore() => Named(owner, base.GetNameCore());
+            protected override string GetNameCore() => Named(owner.Text, base.GetNameCore());
+            protected override AutomationHeadingLevel GetHeadingLevelCore() => AutomationProperties.GetHeadingLevel(owner);
         }
     }
 
     /// <summary>A list exposed to UI Automation as a list.</summary>
     private sealed class DocumentList : List
     {
+        public DocumentList() => SetResourceReference(StyleProperty, typeof(List));
         protected override AutomationPeer OnCreateAutomationPeer() => new Peer(this);
         private sealed class Peer(DocumentList owner) : TextElementAutomationPeer(owner)
         {
@@ -261,21 +285,23 @@ public sealed class WpfDocumentRenderer
     /// <summary>A list item exposed to UI Automation as a list item with its position in the list.</summary>
     private sealed class DocumentListItem : ListItem
     {
+        internal string Text = "";
+        public DocumentListItem() => SetResourceReference(StyleProperty, typeof(ListItem));
         protected override AutomationPeer OnCreateAutomationPeer() => new Peer(this);
         private sealed class Peer(DocumentListItem owner) : TextElementAutomationPeer(owner)
         {
             protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.ListItem;
             protected override string GetClassNameCore() => "ListItem";
             protected override bool IsControlElementCore() => true;
-            protected override string GetNameCore() => Named(owner, base.GetNameCore());
+            protected override string GetNameCore() => Named(owner.Text, base.GetNameCore());
             protected override int GetPositionInSetCore() => AutomationProperties.GetPositionInSet(owner);
             protected override int GetSizeOfSetCore() => AutomationProperties.GetSizeOfSet(owner);
         }
     }
 
-    // An explicit AutomationProperties.Name wins; otherwise the element's text names it.
-    private static string Named(TextElement owner, string explicitName) =>
-        string.IsNullOrEmpty(explicitName) ? new TextRange(owner.ContentStart, owner.ContentEnd).Text.Trim() : explicitName;
+    // An explicit AutomationProperties.Name wins; otherwise the leaf's copy text, computed when it was built, names it.
+    // TextRange.Text is not used: it includes the native list marker ("•\t").
+    private static string Named(string text, string explicitName) => string.IsNullOrEmpty(explicitName) ? text : explicitName;
 }
 
 /// <summary>A leaf paragraph of a rendered document, with its plain-text list marker and list.</summary>

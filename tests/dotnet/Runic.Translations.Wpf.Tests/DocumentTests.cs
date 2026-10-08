@@ -44,8 +44,9 @@ internal static class DocumentTests
         var itemPeer = ContentElementAutomationPeer.CreatePeerForElement(list.ListItems.ElementAt(1))!;
         Require(itemPeer.GetAutomationControlType() == AutomationControlType.ListItem && itemPeer.GetPositionInSet() == 2 && itemPeer.GetSizeOfSet() == 2,
             "List items do not expose their position.");
-        Require(ContentElementAutomationPeer.CreatePeerForElement(list.ListItems.First())!.GetName() == "Read the guide.", "List item name: " +
-            ContentElementAutomationPeer.CreatePeerForElement(list.ListItems.First())!.GetName());
+        // Item names are the copy text without the native list marker, including the action label.
+        string[] names = list.ListItems.Select(item => ContentElementAutomationPeer.CreatePeerForElement(item)!.GetName()).ToArray();
+        Require(names.SequenceEqual(["Read the guide.", "Check the result."]), "List item names: " + string.Join(" | ", names));
 
         // Activation goes through the active lifetime.
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -78,6 +79,7 @@ internal static class DocumentTests
         Require(viewer.Document is null && checks == 1 && !cleared.IsEnabled, "Clear did not retire the document.");
 
         Headings(snapshot);
+        EmptyBlocks();
         Copy(snapshot, renderer, semantic, bound);
         Console.WriteLine("PASS WPF document structure, UI Automation, callback retirement and copy projection.");
     }
@@ -117,6 +119,29 @@ internal static class DocumentTests
             "List numbering differs from the plain-text projection.");
     }
 
+    private static void EmptyBlocks()
+    {
+        var none = new Dictionary<string, string>();
+        var options = new Dictionary<string, string> { ["start"] = "1", ["marker"] = "decimal" };
+        DocumentBlock Text(string name, string occurrence, string text) => new(name, none, [], [new InlineMarkupRun("text", text, [], none, null, true)], null, occurrence, false);
+        var renderer = new WpfDocumentRenderer(DocumentFixture.MarkupContract, _ => { });
+        // Empty paragraphs, headings and lists are skipped, as in plain text; an empty list item keeps its place.
+        DocumentRender render = renderer.Build([
+            new("runic:p", none, [], [], null, "p[1]", false), Text("runic:p", "p[2]", "A"), Text("runic:h", "h[1]", ""),
+            new("runic:ul", none, [], [], null, "ul[1]", false), new("runic:ol", options, [Text("runic:li", "ol[1]/li[1]", "")], [], null, "ol[1]", false),
+            Text("runic:p", "p[3]", "B"),
+        ], "en");
+        Require(Shape(render.Document) == "Paragraph(Run:A)|List[Decimal](ListItem(Paragraph(Run:)))|Paragraph(Run:B)", "Empty blocks: " + Shape(render.Document));
+        // WPF list markers count from an int StartIndex: numbering past int.MaxValue is rejected.
+        var last = new Dictionary<string, string> { ["start"] = int.MaxValue.ToString(System.Globalization.CultureInfo.InvariantCulture), ["marker"] = "decimal" };
+        bool rejected = false;
+        try { renderer.Build([new("runic:ol", last, [Text("runic:li", "ol[1]/li[1]", "x"), Text("runic:li", "ol[1]/li[2]", "y")], [], null, "ol[1]", false)], "en"); }
+        catch (TranslationFormatException) { rejected = true; }
+        Require(rejected, "A list numbered past int.MaxValue was accepted.");
+        Require(Shape(renderer.Build([new("runic:ol", last, [Text("runic:li", "ol[1]/li[1]", "x")], [], null, "ol[1]", false)], "en").Document) ==
+            "List[Decimal@2147483647](ListItem(Paragraph(Run:x)))", "The last representable start was rejected.");
+    }
+
     private static void Copy(CompiledTranslationSnapshot snapshot, WpfDocumentRenderer renderer, Rmf2DocumentRenderer semantic, BoundLocalizedDocumentContent bound)
     {
         var options = new Rmf2PlainTextOptions { AllowActionLabels = true };
@@ -142,6 +167,11 @@ internal static class DocumentTests
         string blocks = render.Project(save.ContentStart.GetPositionAtOffset(2), read.ContentStart.GetPositionAtOffset(4));
         Require(blocks == "save a copy of <report>.txt.\n\n- Read", "Copy across blocks: " + blocks);
 
+        // A whole list copies each marker once: native WPF markers are not part of the projection.
+        var wholeList = (List)document.Blocks.ElementAt(1);
+        string listCopy = render.Project(wholeList.ContentStart, wholeList.ContentEnd);
+        Require(listCopy == "- Read the guide.\n- Check the result.", "Whole-list copy: " + listCopy);
+
         // Lists: ordered markers, continuation lines and meaningful icon text.
         var lists = new FlowDocumentScrollViewer();
         var slots = new Dictionary<string, MarkupBinding> { ["star"] = DocumentFixture.Star() };
@@ -166,7 +196,13 @@ internal static class DocumentTests
                 Require(setting.CommandCancelled, "The copy handler kept the " + format + " format.");
             }
             viewer.RaiseEvent(new DataObjectCopyingEventArgs(data, false));
-            Require(data.GetData(DataFormats.UnicodeText) as string == "- the guide.\n- Check the", "The copy handler did not set the projected text.");
+            // The clipboard text formats use Windows line endings.
+            Require(data.GetData(DataFormats.UnicodeText) as string == "- the guide.\r\n- Check the", "The copy handler did not set the projected text.");
+            viewer.Selection.Select(wholeList.ContentStart, wholeList.ContentEnd);
+            var listData = new DataObject();
+            viewer.RaiseEvent(new DataObjectCopyingEventArgs(listData, false));
+            Require(listData.GetData(DataFormats.UnicodeText) as string == "- Read the guide.\r\n- Check the result." &&
+                listData.GetData(DataFormats.Text) as string == "- Read the guide.\r\n- Check the result.", "Whole-list clipboard text: " + listData.GetData(DataFormats.UnicodeText));
             // A document the application set itself is left to WPF.
             viewer.Document = new FlowDocument(new Paragraph(new Run("Own")));
             var own = new DataObjectSettingDataEventArgs(new DataObject(), DataFormats.Rtf);

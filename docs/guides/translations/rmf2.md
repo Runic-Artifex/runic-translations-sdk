@@ -382,6 +382,14 @@ documents.SetContent(helpViewer, text.Messages.guide_backup(fileName: fileName).
 | `ol start marker` | `List` with `StartIndex` and `Decimal`, `LowerLatin`, `UpperLatin`, `LowerRoman` or `UpperRoman` markers |
 | `li` | `ListItem` holding a `Paragraph` without margin, exposed as a list item with its position and set size |
 
+Empty blocks are skipped, as in the plain-text projection: a paragraph or
+heading with only empty text and a list without items are not rendered. List
+items are always rendered. Headings and list items are named for UI Automation
+by their copy text (action labels and meaningful icon text included, no list
+marker), so Narrator reads "Check the result." rather than the bullet. An
+`ol` whose numbering would pass 2147483647 throws `TranslationFormatException`,
+because WPF list markers count from an `int` `StartIndex`.
+
 `HeadingBase` (1 to 9) defaults to 2. WPF numbers letter markers bijectively
 past `z` and falls back to decimal past 3999 for roman markers, like the
 plain-text projection. Inline content uses the inline mapping; links and
@@ -391,11 +399,16 @@ key counts the text before an element and changes with the translation.
 
 Each call builds a fresh `FlowDocument` with `Language` and `FlowDirection` from
 the effective content locale and binds its font family, size and foreground to
-the viewer. A binding failure leaves the displayed document untouched. Replacing
+the viewer. These local bindings override an implicit `FlowDocument` style, so
+style the viewer instead. Headings, lists and list items are internal
+subclasses that still pick up implicit `Paragraph`, `List` and `ListItem`
+styles. A binding failure leaves the displayed document untouched. Replacing
 or clearing the document (`ClearContent`) retires its callbacks: retained links
-and action buttons are disabled and no longer call back. The theme callback is
-called with the canonical contract name for every block and inline element it
-creates, for example to size `runic:h` headings by
+and action buttons are disabled and no longer call back. If the application
+sets `viewer.Document` itself, the previous render keeps its callbacks until the
+next `SetContent` or `ClearContent` on that viewer. The theme callback is
+called with the canonical contract name for every block and markup inline
+(plain text runs are not passed), for example to size `runic:h` headings by
 `AutomationProperties.GetHeadingLevel`.
 
 Copying (and dragging) a selection puts the plain-text projection on the
@@ -403,12 +416,16 @@ clipboard instead of WPF's text and rich formats: a selection inside one
 paragraph or item copies the selected text; a selection across blocks keeps list
 markers, a line break between items and a blank line between blocks. Action
 labels and meaningful icon text are copied, link destinations and decorative
-icons are not. The adapter does not offer RTF or XAML clipboard formats.
+icons are not. The clipboard text uses Windows line endings (`\r\n`). The
+adapter does not offer RTF or XAML clipboard formats, because they would
+serialise each link's `NavigateUri` and leak destinations that the projection
+leaves out.
 
 `FlowDocumentScrollViewer` is the supported host: links and action buttons are
-keyboard focusable and activate with Enter, and text stays selectable. A
-`RichTextBox`, even when read-only, keeps keyboard focus in its editor and needs
-`IsDocumentEnabled` and Ctrl+click for links, so the adapter does not target it.
+tab stops and activate with Enter, there is no editor caret or editor focus
+model, and selection and copy work. A read-only `RichTextBox` with
+`IsDocumentEnabled` also activates links on a plain click, but it is an editor
+with a caret and its own focus handling, so the adapter does not target it.
 
 ## CLI, editor, and language service
 

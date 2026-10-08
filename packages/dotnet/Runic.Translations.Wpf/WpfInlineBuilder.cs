@@ -141,7 +141,12 @@ internal sealed class WpfInlineBuilder
                     case Run run:
                         TextPointer start = run.ContentStart.CompareTo(from) < 0 ? from : run.ContentStart;
                         TextPointer end = run.ContentEnd.CompareTo(to) > 0 ? to : run.ContentEnd;
-                        if (start.CompareTo(end) < 0) text.Append(new TextRange(start, end).Text);
+                        // Slice the run's own text: TextRange.Text would add the native list marker of an enclosing list item.
+                        if (start.CompareTo(end) < 0)
+                        {
+                            int offset = Math.Clamp(run.ContentStart.GetOffsetToPosition(start), 0, run.Text.Length);
+                            text.Append(run.Text, offset, Math.Clamp(start.GetOffsetToPosition(end), 0, run.Text.Length - offset));
+                        }
                         break;
                     case LineBreak:
                         text.Append('\n');

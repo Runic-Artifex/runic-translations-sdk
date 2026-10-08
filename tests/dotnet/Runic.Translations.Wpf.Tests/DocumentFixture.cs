@@ -75,18 +75,19 @@ internal static class DocumentFixture
         return contract.ToJsonString();
     }
 
-    internal static CompiledTranslationSnapshot CreateSnapshot()
+    // The interactive sample also builds the same English messages under a right-to-left locale ("he") to check mirroring.
+    internal static CompiledTranslationSnapshot CreateSnapshot(string locale = "en")
     {
         CompiledRmf2Input[] backupInputs = [new("fileName", TextArgumentType.String)];
         var backup = new CompiledRmf2Message(backupInputs,
             [new("input", "fileName", new(new("input", "fileName"), TextArgumentType.String, "string"))], [],
-            [new([], Backup())], "en");
-        var lists = new CompiledRmf2Message([], [], [], [new([], Lists())], "en");
-        var catalog = new CompiledTranslationCatalog("guide", "en",
+            [new([], Backup())], locale);
+        var lists = new CompiledRmf2Message([], [], [], [new([], Lists())], locale);
+        var catalog = new CompiledTranslationCatalog("guide", locale,
             [CompiledTranslationDefinition.FromRmf2Inputs("backup", backupInputs), CompiledTranslationDefinition.FromRmf2Inputs("lists", [])],
-            [new CompiledTranslationLocale("en", null,
+            [new CompiledTranslationLocale(locale, null,
                 [new CompiledTranslationValue(0, "", CompiledTextMessage.FromRmf2(backup)), new CompiledTranslationValue(1, "", CompiledTextMessage.FromRmf2(lists))])]);
-        return new CompiledTranslationSnapshot(catalog, "en");
+        return new CompiledTranslationSnapshot(catalog, locale);
     }
 
     internal static LocalizedDocumentContent Backup(CompiledTranslationSnapshot snapshot, string fileName) =>
