@@ -284,11 +284,11 @@ internal static class Rmf2RuntimeV5Tests
         })
             Assert.Throws<Exception>(() => _ = new Rmf2InlineRenderer(MarkupContractJson(contract: contract)));
         foreach (string text in new[] { "0", "1", "-1", "2147483647", "-2147483648" })
-            Assert.True(Rmf2InlineRenderer.AcceptsInteger(text, int.MinValue, int.MaxValue), "Integer text rejected: " + text);
+            Assert.True(Rmf2MarkupContract.AcceptsInteger(text, int.MinValue, int.MaxValue), "Integer text rejected: " + text);
         foreach (string text in new[] { "", "-", "-0", "01", "+1", "1.0", "1e1", " 1", "1 ", "2147483648", "-2147483649", "١" })
-            Assert.False(Rmf2InlineRenderer.AcceptsInteger(text, int.MinValue, int.MaxValue), "Integer text accepted: " + text);
-        Assert.False(Rmf2InlineRenderer.AcceptsInteger("7", 1, 6), "Integer above maximum accepted");
-        Assert.False(Rmf2InlineRenderer.AcceptsInteger("0", 1, 6), "Integer below minimum accepted");
+            Assert.False(Rmf2MarkupContract.AcceptsInteger(text, int.MinValue, int.MaxValue), "Integer text accepted: " + text);
+        Assert.False(Rmf2MarkupContract.AcceptsInteger("7", 1, 6), "Integer above maximum accepted");
+        Assert.False(Rmf2MarkupContract.AcceptsInteger("0", 1, 6), "Integer below minimum accepted");
     }
     private static void Compatibility()
     {

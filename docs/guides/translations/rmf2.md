@@ -147,8 +147,8 @@ build/load time, dynamic options again before invoking a renderer factory.
 properties. Applications map allowed options explicitly.
 
 Generated ESM exports `linkBinding`, `actionBinding`, `iconBinding`, `defineMarkup`,
-`enumOption`, `bindMarkup`, `createInlineRenderer`, `createDomInlineRenderer`, and
-`toPlainText`. Message return types carry the union of possible slots;
+`enumOption`, `bindMarkup`, `createInlineRenderer`, `createDocumentRenderer`,
+`createDomInlineRenderer`, and `toPlainText`. Message return types carry the union of possible slots;
 `renderer.render(content, {slots})` checks their typed kinds. Custom contracts and
 the generated registry are deeply frozen. `extend` composes a new renderer and
 rejects duplicate or incompatible registrations.
@@ -229,6 +229,38 @@ The `p`, `h`, `ul`, `ol` and `li` names cannot be used as project aliases.
 Nested lists, tables, quotes and custom block elements are not part of this
 version. The normative rules are in the
 [document profile](../../../specs/translations/rmf2-document-profile-v1.md).
+
+### Rendering documents
+
+A document message's generated C# accessor returns `LocalizedDocumentContent`
+(readable surface: `LocalizedDocumentContent<AppTextSlots.key>`, bound with
+`Bind(new(...))` like inline content). Render it with `Rmf2DocumentRenderer`,
+constructed once from the generated `Rmf2MarkupContract` constant. `Render`
+returns a list of `DocumentBlock` records with the canonical `Name`
+(`runic:p`, `runic:h`, `runic:ul`, `runic:ol`, `runic:li`), the resolved
+`Options` with defaults, the child `Blocks` of a list, the `Inlines` of a
+paragraph, heading or list item, and an `Occurrence` path such as `ul[1]/li[2]`.
+The path is the same in every locale for the same source variant. Inline
+elements inside a document carry `InlineMarkupRun.Occurrence` as
+`<block path>/<index path>`, for example `p[1]/0` or `ul[1]/li[2]/1.0`; text
+runs have none.
+`Rmf2InlineRenderer` rejects document messages and `Rmf2DocumentRenderer`
+rejects inline messages.
+
+Generated ESM returns `LocalizedDocument` for document messages. Create a
+renderer with `createDocumentRenderer({text, element, block})`; the block
+factory is called as `block(name, options, children, {occurrence, locale})`
+after its children. Native WPF, DOM and Svelte document adapters are not part of
+this version.
+
+`ToPlainText` (.NET, with `Rmf2PlainTextOptions`) and `toPlainText` (ESM)
+project documents with fixed rules: top-level blocks are separated by a blank
+line and list items by a line break. Unordered items start with the list marker
+(default `- `, `ListMarker` / `listMarker`); ordered items start with `n. `,
+counted from `start` in the `ol` marker style (decimal, bijective letters, or
+roman numerals for 1 to 3999 with a decimal fallback). Further lines of an item
+are indented by two spaces. `Rmf2PlainTextOptions.Custom` supplies projections
+for custom inline tags with `explicit` or `alternateText` policies.
 
 ## CLI, editor, and language service
 

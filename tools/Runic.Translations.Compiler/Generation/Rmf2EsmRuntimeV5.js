@@ -308,7 +308,8 @@ export function formatCompiledMessage(key, wrapper, inputs, requestedLocale) {
   if (!selected) throw new RangeError("Message has no matching variant.");
   const built = buildNodes(selected.nodes, context, locale, `v${selectedIndex}.`);
   if (!contract.structured) { if (built.some(node => node.kind !== "text")) throw new TypeError("Structured content cannot be formatted as text."); return built.map(node => node.value).join(""); }
-  return Object.freeze({ kind: "localized-content", key, locale, nodes: Object.freeze(built) });
+  const kind = rmf2Contract.messages?.[key]?.content === "document" ? "localized-document" : "localized-content";
+  return Object.freeze({ kind, key, locale, nodes: Object.freeze(built) });
 }
 
 function buildNodes(nodes, context, locale, path) {
@@ -456,9 +457,41 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
     }
     if (stack.length) return "malformed-pattern";
     for (const [slot,bounds] of Object.entries(slotRequirements)) if ((slotCounts[slot] ?? 0) < bounds.min || (slotCounts[slot] ?? 0) > bounds.max) return "argument-contract-mismatch";
+    // Document profile v1: block rules and leaf invariants are malformed patterns; a skeleton
+    // outside the locked source skeletons is a structure mismatch. Inline messages stay inline.
+    if (rmf2Contract.messages?.[key]?.content === "document") { const skeleton = documentSkeleton(variant.nodes); if (skeleton === null) return "malformed-pattern"; if (!rmf2Contract.messages[key].skeletons.includes(skeleton)) return "document-structure-mismatch"; }
+    else if (variant.nodes.some(node => node.kind === "markup" && rmf2Contract.contracts[node.name].placement !== "inline")) return "malformed-pattern";
   }
   return fallback ? null : "malformed-pattern";
 }
+
+// Checks the block rules and leaf invariants of one balanced document variant and returns its
+// encoded skeleton, or null when the variant breaks a rule (document profile v1, sections 3 to 6).
+function documentSkeleton(nodes) {
+  const frames = [{ model: "root", first: true }]; let encoded = "", leaf = [];
+  for (const node of nodes) {
+    const frame = frames.at(-1), contract = node.kind === "markup" ? rmf2Contract.contracts[node.name] : null;
+    if (frame.model === "root" || frame.model === "list") {
+      if (!contract) return null;
+      if (node.markupKind === "close") { frames.pop(); if (frame.model === "list") encoded += ")"; continue; }
+      if (contract.placement !== (frame.model === "root" ? "block" : "list-item")) return null;
+      if (!frame.first) encoded += ","; frame.first = false;
+      encoded += node.name.startsWith("runic:") ? node.name.slice(6) : node.name;
+      const options = skeletonOptions(node.options); if (options) encoded += `[${options}]`;
+      if (contract.children === "list-items") { encoded += "("; frames.push({ model: "list", first: true }); } else { frames.push({ model: "leaf" }); leaf = []; }
+    } else {
+      // Inside a leaf block or its inline markup: a close in the leaf frame closes the block.
+      if (contract && node.markupKind === "close") { if (frame.model === "leaf" && !normalizedLeaf(leaf)) return null; frames.pop(); continue; }
+      if (contract && contract.placement !== "inline") return null;
+      leaf.push(node); if (contract && node.markupKind === "open") frames.push({ model: "inline" });
+    }
+  }
+  return frames.length === 1 ? encoded : null;
+}
+// The compiler's option encoding: ordinal key order, canonical literals with the skeleton metacharacters escaped, variables as $name.
+function skeletonOptions(options) { return [...options].sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0).map(option => { if (["input","local"].includes(option.value.kind)) return `${option.name}=$${option.value.value}`; const value = option.value.canonical ?? option.value.value; let text = ""; for (let index = 0; index < value.length; index++) { if ("\\[](),;=".includes(value[index]) || index === 0 && value[index] === "$") text += "\\"; text += value[index]; } return `${option.name}=${text}`; }).join(";"); }
+// No CR or LF in leaf text and no space or tab at either end; paired inline tags are transparent, placeholders and standalone markup are atoms.
+function normalizedLeaf(leaf) { const characters = []; for (const node of leaf) { if (node.kind === "text") { for (const character of node.value) { if (character === "\r" || character === "\n") return false; characters.push(character); } } else if (node.kind === "expression" || node.markupKind === "standalone") characters.push(null); } return !characters.length || ![" ","\t"].includes(characters[0]) && ![" ","\t"].includes(characters.at(-1)); }
 
 function validateExpression(expression, symbols, references) {
   const memberError=closedMemberError(expression,["operand","valueType","function","options","annotations"],["operand","valueType","options","annotations"]);if(memberError)return memberError;
@@ -603,10 +636,14 @@ export function actionBinding({ onActivate }) { if (typeof onActivate !== "funct
 export function iconBinding({ asset,decorative,accessibleName }) { if (asset == null || typeof decorative !== "boolean" || !decorative && typeof accessibleName !== "function") throw new TypeError("A meaningful icon requires a localized accessibleName function."); return Object.freeze({ kind:"runic:icon",asset,decorative,accessibleName }); }
 export function enumOption(values,defaultValue){if(!Array.isArray(values)||!values.length||values.some(value=>typeof value!=="string")||defaultValue!==undefined&&!values.includes(defaultValue))throw new TypeError("Invalid enum option.");return Object.freeze({type:"enum",values:Object.freeze([...values]),...(defaultValue===undefined?{}:{default:defaultValue})});}
 export function createInlineRenderer(factory, bindings = []) {
-  return createInlineRendererCore(factory, bindings, false);
+  return createRendererCore(factory, bindings, false, false);
 }
-function createInlineRendererCore(factory, bindings = [], allowUnboundCustom = false) {
+export function createDocumentRenderer(factory, bindings = []) {
+  return createRendererCore(factory, bindings, false, true);
+}
+function createRendererCore(factory, bindings = [], allowUnboundCustom = false, documents = false) {
   if (!factory || typeof factory.text !== "function" || typeof factory.element !== "function") throw new TypeError("An inline renderer requires text and element factories.");
+  if (documents && typeof factory.block !== "function") throw new TypeError("A document renderer requires a block factory.");
   const custom = new Map();
   for (const binding of bindings) {
     if (!isRecord(binding) || !isRecord(binding.contract) || typeof binding.render !== "function") throw new TypeError("Invalid markup renderer binding.");
@@ -620,20 +657,39 @@ function createInlineRendererCore(factory, bindings = [], allowUnboundCustom = f
     custom.set(suppliedContract.name,binding.render);
   }
   function render(content,{slots=Object.create(null)}={}) {
-    const requirements=rmf2Contract.messages[content.key]?.slots;if(content.kind!=="localized-content"||!requirements||!isRecord(slots))throw new TypeError("Unknown RMF2 content contract.");
+    const requirements=rmf2Contract.messages[content?.key]?.slots;if(!isRecord(content)||!["localized-content","localized-document"].includes(content.kind)||!requirements||!isRecord(slots))throw new TypeError("Unknown RMF2 content contract.");
+    const document=rmf2Contract.messages[content.key].content==="document";
+    if(document!==(content.kind==="localized-document"))throw new TypeError("Unknown RMF2 content contract.");
+    if(document!==documents)throw new TypeError(document?`'${content.key}' is a document message; render it with createDocumentRenderer.`:`'${content.key}' is an inline message; render it with createInlineRenderer.`);
     const validatedSlots=Object.create(null);for (const [reference,requirement] of Object.entries(requirements)) validatedSlots[reference]=validateSlotBinding(reference,requirement.kind,slots[reference]);
     const counts=Object.create(null);let count=0;
-    function visit(nodes,interactive=false,depth=0){if(depth>16)throw new RangeError("Inline nesting exceeds 16 levels.");return nodes.map(node=>{if(++count>4096)throw new RangeError("Inline node limit exceeded.");if(node.kind==="text")return node;const contract=rmf2Contract.contracts[node.name];if(node.kind!=="element"||!contract||(contract.kind==="standalone")!==node.standalone||interactive&&contract.interactive)throw new TypeError("Unknown or invalid inline markup.");let binding;for(const[name,value]of Object.entries(node.attributes)){if(name==="ref"&&["runic:link","runic:action","runic:icon"].includes(node.name)){binding=validatedSlots[value];if(requirements[value]?.kind!==node.name||!binding)throw new TypeError(`Invalid slot '${value}'.`);counts[value]=(counts[value]??0)+1;}else if(!contract.options[name]||!renderOption(contract.options[name],value))throw new TypeError(`Invalid option '${name}'.`);}if(["runic:link","runic:action","runic:icon"].includes(node.name)&&!binding)throw new TypeError("Missing functional slot ref.");for(const name of Object.keys(contract.options))if(!Object.hasOwn(node.attributes,name))throw new TypeError(`Missing option '${name}'.`);const element={name:node.name,children:visit(node.children,interactive||contract.interactive,depth+1),options:node.attributes,binding,occurrence:`${content.key}:${node.occurrence}`,locale:content.locale,standalone:node.standalone};if(!custom.has(node.name)&&!node.name.startsWith("runic:")&&!allowUnboundCustom)throw new TypeError(`No renderer linked for '${node.name}'.`);return element;});}
-    const output=visit(content.nodes);for(const[slot,bounds]of Object.entries(requirements))if((counts[slot]??0)<bounds.min||(counts[slot]??0)>bounds.max)throw new TypeError(`Slot multiplicity mismatch for '${slot}'.`);
-    function materialize(node){if(node.kind==="text")return factory.text(node.value);const contract=rmf2Contract.contracts[node.name];if(!custom.has(node.name)&&!node.name.startsWith("runic:")&&["omit","lineBreak"].includes(contract?.plainText))return contract.plainText==="lineBreak"?"\n":"";const element={...node,children:node.children.map(materialize)};return custom.has(node.name)?custom.get(node.name)(element):factory.element(element);}
+    function checkOptions(node,contract){let binding;for(const[name,value]of Object.entries(node.attributes)){if(name==="ref"&&["runic:link","runic:action","runic:icon"].includes(node.name)){binding=validatedSlots[value];if(requirements[value]?.kind!==node.name||!binding)throw new TypeError(`Invalid slot '${value}'.`);counts[value]=(counts[value]??0)+1;}else if(!contract.options[name]||!renderOption(contract.options[name],value))throw new TypeError(`Invalid option '${name}'.`);}if(["runic:link","runic:action","runic:icon"].includes(node.name)&&!binding)throw new TypeError("Missing functional slot ref.");for(const name of Object.keys(contract.options))if(!Object.hasOwn(node.attributes,name))throw new TypeError(`Missing option '${name}'.`);return binding;}
+    // In documents an inline element's occurrence is <blockPath>/<index path>; inline messages keep <key>:<node occurrence>.
+    function visit(nodes,interactive=false,depth=0,prefix=null){if(depth>16)throw new RangeError("Inline nesting exceeds 16 levels.");return nodes.map((node,index)=>{if(++count>4096)throw new RangeError("Inline node limit exceeded.");if(node.kind==="text")return node;const contract=rmf2Contract.contracts[node.name];if(node.kind!=="element"||!contract||contract.placement!=="inline"||(contract.kind==="standalone")!==node.standalone||interactive&&contract.interactive)throw new TypeError("Unknown or invalid inline markup.");const binding=checkOptions(node,contract);const occurrence=prefix===null?`${content.key}:${node.occurrence}`:prefix+index;const element={name:node.name,children:visit(node.children,interactive||contract.interactive,depth+1,prefix===null?null:occurrence+"."),options:node.attributes,binding,occurrence,locale:content.locale,standalone:node.standalone};if(!custom.has(node.name)&&!node.name.startsWith("runic:")&&!allowUnboundCustom)throw new TypeError(`No renderer linked for '${node.name}'.`);return element;});}
+    function blocks(nodes,list,path,depth){const siblings=Object.create(null);return nodes.map(node=>{if(++count>4096)throw new RangeError("Document node limit exceeded.");const contract=node.kind==="element"?rmf2Contract.contracts[node.name]:undefined;if(!contract||node.standalone||contract.placement!==(list?"list-item":"block"))throw new TypeError("Invalid document structure.");if(depth+1>16)throw new RangeError("Document nesting exceeds 16 levels.");checkOptions(node,contract);const name=node.name.startsWith("runic:")?node.name.slice(6):node.name;siblings[name]=(siblings[name]??0)+1;const occurrence=`${path?path+"/":""}${name}[${siblings[name]}]`;return contract.children==="list-items"?{block:true,name:node.name,options:node.attributes,children:blocks(node.children,true,occurrence,depth+1),occurrence}:{block:true,name:node.name,options:node.attributes,children:visit(node.children,false,depth+1,occurrence+"/"),occurrence};});}
+    const output=document?blocks(content.nodes,false,"",0):visit(content.nodes);for(const[slot,bounds]of Object.entries(requirements))if((counts[slot]??0)<bounds.min||(counts[slot]??0)>bounds.max)throw new TypeError(`Slot multiplicity mismatch for '${slot}'.`);
+    function materialize(node){if(node.kind==="text")return factory.text(node.value);if(node.block)return factory.block(node.name,node.options,Object.freeze(node.children.map(materialize)),Object.freeze({occurrence:node.occurrence,locale:content.locale}));const contract=rmf2Contract.contracts[node.name];if(!custom.has(node.name)&&!node.name.startsWith("runic:")&&["omit","lineBreak"].includes(contract?.plainText))return contract.plainText==="lineBreak"?"\n":"";const element={...node,children:node.children.map(materialize)};return custom.has(node.name)?custom.get(node.name)(element):factory.element(element);}
     return Object.freeze(output.map(materialize));
   }
-  return Object.freeze({ render, extend(extra) { return createInlineRendererCore(factory,[...bindings,...extra],allowUnboundCustom); } });
+  return Object.freeze({ render, extend(extra) { return createRendererCore(factory,[...bindings,...extra],allowUnboundCustom,documents); } });
 }
 function validateSlotBinding(reference,kind,binding){if(binding?.kind!==kind)throw new TypeError(`Missing or incompatible slot '${reference}'.`);return kind==="runic:link"?linkBinding(binding):kind==="runic:action"?actionBinding(binding):iconBinding(binding);}
 export function defineMarkup(contract) { if (!isRecord(contract) || !validName(contract.name,true) || contract.name.startsWith("runic:") || !["paired","standalone"].includes(contract.kind) || contract.placement !== undefined && contract.placement !== "inline" || contract.children !== (contract.kind === "standalone" ? "none" : "inline") || typeof contract.interactive !== "boolean" || !["children","lineBreak","alternateText","explicit","omit"].includes(contract.plainText) || contract.options !== undefined && !isRecord(contract.options)) throw new TypeError("Invalid markup contract."); return cloneFreeze(contract); }
 export function bindMarkup(contract,render) { if (typeof render !== "function") throw new TypeError("A markup renderer is required."); return Object.freeze({contract,render}); }
-export function toPlainText(content,{slots=Object.create(null),allowActionLabels=false,annotateLinkDestinations=false,custom=[]}={}) { const renderer=createInlineRendererCore({text:value=>value,element({name,children,binding,locale}) { if (name==="runic:br") return "\n"; if (name==="runic:action"&&!allowActionLabels) throw new TypeError("Action labels require explicit projection policy."); if (name==="runic:icon") { if (binding?.decorative) return ""; const label=binding?.accessibleName?.(locale); if (typeof label!=="string"||!label.trim()) throw new TypeError("Meaningful icon alternate text is empty."); return label; } const contract=rmf2Contract.contracts[name]; if(!name.startsWith("runic:")&&contract?.plainText==="lineBreak")return "\n";if(!name.startsWith("runic:")&&contract?.plainText==="omit")return "";if(!name.startsWith("runic:")&&["explicit","alternateText"].includes(contract?.plainText))throw new TypeError("Custom markup requires an explicit plain-text adapter.");const text=children.join(""); return name==="runic:link"&&annotateLinkDestinations?`${text} (${binding.href})`:text; }},custom,true); return renderer.render(content,{slots}).join(""); }
+export function toPlainText(content,{slots=Object.create(null),allowActionLabels=false,annotateLinkDestinations=false,custom=[],listMarker="- "}={}) {
+  if (typeof listMarker !== "string") throw new TypeError("The list marker must be a string.");
+  const document = content?.kind === "localized-document";
+  const renderer=createRendererCore({text:value=>value,element({name,children,binding,locale}) { if (name==="runic:br") return "\n"; if (name==="runic:action"&&!allowActionLabels) throw new TypeError("Action labels require explicit projection policy."); if (name==="runic:icon") { if (binding?.decorative) return ""; const label=binding?.accessibleName?.(locale); if (typeof label!=="string"||!label.trim()) throw new TypeError("Meaningful icon alternate text is empty."); return label; } const contract=rmf2Contract.contracts[name]; if(!name.startsWith("runic:")&&contract?.plainText==="lineBreak")return "\n";if(!name.startsWith("runic:")&&contract?.plainText==="omit")return "";if(!name.startsWith("runic:")&&["explicit","alternateText"].includes(contract?.plainText))throw new TypeError("Custom markup requires an explicit plain-text adapter.");const text=children.join(""); return name==="runic:link"&&annotateLinkDestinations?`${text} (${binding.href})`:text; },
+    // Document projection (document profile v1): items are joined by one line break, further item lines are indented two spaces.
+    block(name,options,children) { if (!["runic:ul","runic:ol"].includes(name)) return children.join(""); const start=name==="runic:ol"?Number(options.start):1; return children.map((item,index)=>(name==="runic:ol"?`${listNumber(start+index,options.marker)}. `:listMarker)+item.split("\n").map((line,lineIndex)=>lineIndex&&line?`  ${line}`:line).join("\n")).join("\n"); }},custom,true,document);
+  return renderer.render(content,{slots}).join(document?"\n\n":"");
+}
+// Fixed, locale-independent numbering: decimal, bijective base-26 letters, and roman numerals for 1 to 3999 with a decimal fallback.
+function listNumber(value,marker) {
+  if ((marker==="lower-alpha"||marker==="upper-alpha")&&value>0) { let letters=""; for (let rest=value; rest>0; rest=Math.floor((rest-1)/26)) letters=String.fromCharCode(97+(rest-1)%26)+letters; return marker==="upper-alpha"?letters.toUpperCase():letters; }
+  if ((marker==="lower-roman"||marker==="upper-roman")&&value>=1&&value<=3999) { let roman="",rest=value; for (const [amount,symbol] of [[1000,"M"],[900,"CM"],[500,"D"],[400,"CD"],[100,"C"],[90,"XC"],[50,"L"],[40,"XL"],[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]]) for (; rest>=amount; rest-=amount) roman+=symbol; return marker==="lower-roman"?roman.toLowerCase():roman; }
+  return String(value);
+}
 export function createDomInlineRenderer(document,custom=[]) { return createInlineRenderer({text:value=>document.createTextNode(value),element({name,children,binding,locale}) { if(name==="runic:icon"){const node=typeof binding.asset==="function"?binding.asset(document):binding.asset?.cloneNode?.(true);if(!node||typeof node.setAttribute!=="function")throw new TypeError("The application icon asset must create a DOM element.");if(binding.decorative){node.setAttribute("aria-hidden","true");node.removeAttribute("aria-label");}else{const label=binding.accessibleName(locale);if(typeof label!=="string"||!label.trim())throw new TypeError("Meaningful icon alternate text is empty.");node.setAttribute("role","img");node.setAttribute("aria-label",label);}return node;}const tags={"runic:strong":"strong","runic:em":"em","runic:bold":"span","runic:italic":"span","runic:code":"code","runic:br":"br","runic:link":"a","runic:action":"button"};const node=document.createElement(tags[name]);if(name==="runic:bold")node.style.fontWeight="bold";if(name==="runic:italic")node.style.fontStyle="italic";if(name==="runic:link")node.href=binding.href;if(name==="runic:action"){node.type="button";node.addEventListener("click",binding.onActivate);}node.append(...children);return node;}},custom); }
 function renderOption(schema,value){if(typeof value!=="string")return false;if(schema.type==="integer")return integerOption(value,schema);if(schema.type==="enum")return schema.values.includes(value);if(schema.type==="boolean")return value==="true"||value==="false";if(schema.type==="number"){try{parseDecimal(value);return true;}catch{return false;}}return true;}
 // Canonical decimal integer text within the declared bounds; identical to the compiler and .NET rule.

@@ -169,7 +169,11 @@ internal static class Rmf2V1CorpusTests
     // Accessors and messages.js are unchanged. Re-pinned for the document profile (W220-004):
     // every message contract gains "content":"inline" and "skeletons":[] (all corpus messages are
     // inline), which changes the contract fingerprint and the embedded contract JSON only.
-    private const string EncodedOutputDigest = "d5b083195426bf67bbb194a11c127e9444ba765075486cf757cf37ee69d8dadd";
+    // Re-pinned for the document runtime (W220-004): runtime.js gains document validation,
+    // createDocumentRenderer and document plain text; runtime.d.ts, messages.d.ts, dynamic.d.ts
+    // and transport.d.ts gain the LocalizedDocument types; the web manifest changes only in the
+    // sha256 and byteLength of those five assets. All C# outputs and locale artifacts are unchanged.
+    private const string EncodedOutputDigest = "2d2ab55159097edbc00130a7005830d4af6ae4561df7f2d7e4503d332fb41c70";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     private static void EncodedOutputs()
@@ -205,7 +209,7 @@ internal static class Rmf2V1CorpusTests
 
     private static JsonDocument Index() => JsonDocument.Parse(File.ReadAllBytes(Path.Combine(Root, "index.json")));
 
-    private static TranslationPackContract PackContract(Rmf2ProjectV5 project, string locale)
+    internal static TranslationPackContract PackContract(Rmf2ProjectV5 project, string locale)
     {
         HashSet<string> resolved = project.Locales.Single(item => item.Tag == locale).ResolvedResources.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
         Rmf2MessageContractV5[] canonical = project.CanonicalMessages.OrderBy(item => item.Id).ToArray();
@@ -243,7 +247,7 @@ internal static class Rmf2V1CorpusTests
         return TextArgument.CreateRmf2(item.Name, carrier);
     }).ToArray();
 
-    private static CompiledRmf2Message Lower(Rmf2MessageV5 message, string contentLocale)
+    internal static CompiledRmf2Message Lower(Rmf2MessageV5 message, string contentLocale)
     {
         CompiledRmf2Message lowered = Rmf2RuntimeV5Tests.Lower(message);
         return new CompiledRmf2Message(lowered.Inputs.ToArray(), lowered.Declarations.ToArray(), lowered.Selectors.ToArray(), lowered.Variants.ToArray(), contentLocale);
@@ -445,7 +449,7 @@ internal static class Rmf2V1CorpusTests
         finally { Directory.Delete(directory, true); }
     }
 
-    private static string Write(IReadOnlyList<TranslationGeneratedOutput> outputs)
+    internal static string Write(IReadOnlyList<TranslationGeneratedOutput> outputs)
     {
         string directory = Path.Combine(Path.GetTempPath(), "runic-rmf2-v1-corpus-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -458,7 +462,7 @@ internal static class Rmf2V1CorpusTests
         return directory;
     }
 
-    private static void Run(string file, IReadOnlyList<string> arguments, string directory)
+    internal static void Run(string file, IReadOnlyList<string> arguments, string directory)
     {
         var start = new ProcessStartInfo(file) { WorkingDirectory = directory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (string argument in arguments) start.ArgumentList.Add(argument);

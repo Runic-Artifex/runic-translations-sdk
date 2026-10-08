@@ -1,0 +1,38 @@
+guide {
+  backup =
+    .input {$fileName :string}
+    {{{#p}{#strong}Before continuing{/strong}, save a copy of {$fileName}.{/p}
+    {#ul}
+      {#li}Read the {#link ref=guide}guide{/link}.{/li}
+      {#li}{#action ref=check}Check{/action} the result.{/li}
+    {/ul}
+    {#p}You can continue when the check finishes.{/p}}}
+}
+lists {
+  alpha =
+    {#h level=1}Appendix{/h}
+    {#ol start=25 marker=lower-alpha}{#li}Twenty-five{/li}{#li}Twenty-six{/li}{#li}Twenty-seven{/li}{/ol}
+  roman =
+    {#ol start=|3998| marker=upper-roman}{#li}Second to last{/li}{#li}Last{/li}{#li}Beyond{/li}{/ol}
+  bullets =
+    {#ul}{#li}First line{#br/}
+      second line{/li}{#li}{#em}Only{/em}{/li}{/ul}
+}
+files =
+  .input {$count :integer}
+  .match $count
+  0 {{}}
+  one {{{#p}One file is ready.{/p}}}
+  * {{{#p}{$count} files are ready.{/p}{#ul}{#li}Review them.{/li}{/ul}}}
+whitespace {
+  collapse =
+    {#p}   This line
+      wraps   here.   {/p}
+    {#p}日本
+      語{/p}
+  headings =
+    {#h level=1}Title{/h}
+    {#h level=|2|}Section{/h}
+    {#p}Body{/p}
+}
+inline = Plain {#strong}inline{/strong} text.

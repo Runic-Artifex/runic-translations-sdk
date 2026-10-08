@@ -38,6 +38,8 @@ public enum TranslationPackFailureReason
     Malformed,
     /// <summary>The pack was built for another RMF2 markup contract version and must be rebuilt with the current compiler.</summary>
     MarkupContractVersionMismatch,
+    /// <summary>A document message variant has a block structure that is not one of the skeletons locked by the generated contract.</summary>
+    DocumentStructureMismatch,
 }
 
 /// <summary>Reads stable machine-classifiable metadata from external pack exceptions.</summary>
@@ -119,6 +121,7 @@ public static class TranslationPackFailure
         TranslationPackFailureReason.Cancelled => "cancelled",
         TranslationPackFailureReason.Malformed => "malformed",
         TranslationPackFailureReason.MarkupContractVersionMismatch => "markup-contract-version-mismatch",
+        TranslationPackFailureReason.DocumentStructureMismatch => "document-structure-mismatch",
         _ => "unknown",
     };
 

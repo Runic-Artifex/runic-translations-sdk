@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "catalog": "documents",
+  "code": {
+    "namespace": "Runic.Conformance",
+    "className": "DocumentText",
+    "visibility": "public"
+  },
+  "baseLocale": "en",
+  "locales": [
+    "en",
+    "de",
+    { "tag": "fr", "fallback": "de" }
+  ],
+  "validation": {
+    "translationCompleteness": "allow"
+  }
+}
