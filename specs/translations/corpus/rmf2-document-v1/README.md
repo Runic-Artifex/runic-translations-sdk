@@ -39,8 +39,16 @@ the warnings the project itself is expected to report.
   `suffix` to the `text`-th text node, `insertNodes` inserts `nodes` at node
   index `at`, and `setOption` replaces the value of the first `option`.
 
+`html.json` is the oracle for DOM-based adapters: the canonical semantic HTML
+of every execution with heading base 2, attributes in ordinal name order, no
+hydration comments or framework scoping classes, and custom tags rendered as
+`<span data-runic-markup="<name>" data-runic-occurrence="...">`. The generated
+DOM adapter (compiler corpus tests) and the Svelte `LocalizedDocument`
+(`packages/web/translations-svelte`) must both produce it. Update it together with
+any intended change to the adapters.
+
 `determinism` pins the caller fingerprint and the generated artifact hashes, so
 an unintended change to the contract or to the emitters fails the runners.
 
-Tables, embeds, nested lists, quotes, code blocks, custom blocks, native
-adapters and segment-level XLIFF are outside this version.
+Tables, embeds, nested lists, quotes, code blocks, custom blocks and
+segment-level XLIFF are outside this version.

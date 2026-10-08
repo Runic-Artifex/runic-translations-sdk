@@ -85,7 +85,7 @@ jobs:
         run: |
           "$GITHUB_WORKSPACE/eng/ci/install-chromium.sh"
           bun -e 'import { chromium } from "playwright-core"; console.log("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
-      - name: Verify inline SSR identity and real browser hydration
+      - name: Verify inline and document SSR identity and real browser hydration
         working-directory: packages/web/translations-svelte
         run: bun run --bun test:inline-browser
   rmf2-native-aot:

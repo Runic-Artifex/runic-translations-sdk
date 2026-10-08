@@ -176,7 +176,9 @@ internal static class Rmf2V1CorpusTests
     // Re-pinned for the #39 review: runtime.js applies custom plain-text bindings only to explicit
     // and alternateText tags and skips empty blocks; runtime.d.ts gains the toPlainText overload for
     // LocalizedContent | LocalizedDocument. The web manifest changes only for those two assets.
-    private const string EncodedOutputDigest = "996657f32151e4857fe5ae67b46080b477ba311d9562fc987858ee4edfe20160";
+    // Re-pinned for the DOM document adapter (W220-005): runtime.js gains createDomDocumentRenderer and
+    // runtime.d.ts its declaration; the web manifest changes only for those two assets.
+    private const string EncodedOutputDigest = "259ff6bfb81ed967bf4de13d12edb290ae4356514779611e838dfef283032603";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     private static void EncodedOutputs()

@@ -63,7 +63,8 @@ artifact formats only its own locale. Compiled and dynamic modes return the same
 plain or structured result shapes. A document message returns a
 `LocalizedDocument` (`kind: "localized-document"`); render it with
 `createDocumentRenderer`, which adds a `block` factory to the inline factories,
-or project it with `toPlainText(content, {slots, listMarker})`. Both runtimes
+render it as semantic HTML with `createDomDocumentRenderer` (see
+[web document adapters](rmf2.md#web-document-adapters)), or project it with `toPlainText(content, {slots, listMarker})`. Both runtimes
 reject a pack whose document message has a block structure outside the
 generated contract as `RTR0023/document-structure-mismatch`.
 

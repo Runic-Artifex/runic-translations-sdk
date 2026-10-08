@@ -26,8 +26,8 @@ try {
   await page.goto(`${vite.resolvedUrls.local[0]}inline-hydration`);
   await page.waitForFunction(() => window.runicInlineResult !== undefined);
   assert.deepEqual(errors, []);
-  assert.deepEqual(await page.evaluate(() => window.runicInlineResult), { sameButton: true, sameLink: true, escaped: true, accessibleName: "Star", accessibleNameCalls: 1, badge: "Available", initialCalls: 0, activatedCalls: 1, disposedCalls: 1, empty: true, blankRejected: true });
-  console.log("RMF2 Svelte SSR identity, escaping, accessibility, custom markup and action teardown passed.");
+  assert.deepEqual(await page.evaluate(() => window.runicInlineResult), { sameButton: true, sameLink: true, escaped: true, accessibleName: "Star", accessibleNameCalls: 1, badge: "Available", initialCalls: 0, activatedCalls: 1, disposedCalls: 1, linkRetired: true, empty: true, blankRejected: true });
+  console.log("RMF2 Svelte SSR identity, escaping, accessibility, custom markup and action and link teardown passed.");
 } finally {
   await browser?.close();
   await vite.close();

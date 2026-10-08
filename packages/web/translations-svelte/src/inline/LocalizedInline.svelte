@@ -1,8 +1,13 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import type { Attachment } from "svelte/attachments";
   import type { InlineNode, InlineElement, InlineSnippets } from "./types.js";
   let { nodes, custom = {} }: { nodes: readonly InlineNode[]; custom?: InlineSnippets } = $props();
   const iconLabels = new WeakMap<InlineElement, string>();
+  // Retire controls when they leave the tree: a retained, detached link loses its destination and a retained
+  // action is disabled, so neither navigates nor calls back after its content is replaced or cleared.
+  const retireLink: Attachment<HTMLAnchorElement> = node => () => node.removeAttribute("href");
+  const retireAction: Attachment<HTMLButtonElement> = node => () => { node.disabled = true; };
   function snippet(name: string): Snippet<[InlineElement]> {
     const render = custom[name];
     if (!render) throw new TypeError(`No Svelte snippet linked for '${name}'.`);
@@ -38,9 +43,9 @@
     {:else if node.name === "runic:br"}
       <br data-runic-occurrence={node.occurrence} />
     {:else if node.binding?.kind === "runic:link"}
-      <a href={node.binding.href} data-runic-occurrence={node.occurrence}>{@render renderNodes(node.children)}</a>
+      <a href={node.binding.href} data-runic-occurrence={node.occurrence} {@attach retireLink}>{@render renderNodes(node.children)}</a>
     {:else if node.binding?.kind === "runic:action"}
-      <button type="button" onclick={node.binding.onActivate} data-runic-occurrence={node.occurrence}>{@render renderNodes(node.children)}</button>
+      <button type="button" onclick={node.binding.onActivate} data-runic-occurrence={node.occurrence} {@attach retireAction}>{@render renderNodes(node.children)}</button>
     {:else if node.binding?.kind === "runic:icon"}
       <span role={node.binding.decorative ? undefined : "img"} aria-hidden={node.binding.decorative ? "true" : undefined} aria-label={iconLabel(node)} data-runic-occurrence={node.occurrence}>
         {#if typeof node.binding.asset === "string"}{node.binding.asset}{:else}{@render icon(node.binding.asset)()}{/if}
