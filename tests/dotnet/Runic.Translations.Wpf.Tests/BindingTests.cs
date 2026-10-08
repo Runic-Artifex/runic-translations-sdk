@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ internal static class BindingTests
 
     internal static void Run()
     {
+        Trace.Listeners.Add(new ConsoleTraceListener());
         var manager = new FakeManager();
         var messages = new FakeMessages(manager);
         var renderer = new WpfInlineRenderer(PaymentFixture.MarkupContract, _ => { });
