@@ -338,6 +338,7 @@ internal static class BindingTests
     private static void Inheritance(NotifyingManager manager, FakeMessages primary, NotifyingManager otherManager, OtherMessages other, Dispatcher dispatcher)
     {
         manager.Switch("en");
+        Flush(dispatcher);
         const string Children = "<TextBlock Text=\"{rt:Message application_title}\"/><TextBlock Text=\"{rt:Message only_other}\"/>" +
             "<TextBlock Text=\"{rt:Message pair, Arg0={Binding Source=a}, Arg1={Binding Source=b}}\"/><TextBlock rt:TranslationProperties.RichMessage='payment'/>";
 
@@ -354,6 +355,7 @@ internal static class BindingTests
         Flush(dispatcher);
         Require(((TextBlock)panel.Children[0]).Text == "Anderer Titel", "The inherited catalog did not follow its manager.");
         otherManager.Switch("en");
+        Flush(dispatcher);
 
         // Inheritance that arrives after load, as in a DataTemplate instance added under a parent.
         var template = Parse<DataTemplate>("<DataTemplate {NS}><StackPanel>" + Children + "</StackPanel></DataTemplate>");

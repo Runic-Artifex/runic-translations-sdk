@@ -242,7 +242,12 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
         if (member is PropertyInfo property)
         {
             Order(key, [], values.Count, names);
-            return property.GetValue(Messages)!;
+            try { return property.GetValue(Messages)!; }
+            catch (TargetInvocationException exception) when (exception.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+                throw;
+            }
         }
         var method = (MethodInfo)member;
         ParameterInfo[] parameters = method.GetParameters();
