@@ -317,7 +317,24 @@ Refactors validate the complete catalog.
 executes the verified .NET plan with inert functional bindings. Hover adds
 compiled input types and content/fallback locales when validation succeeds.
 Explicit `runic.renameInput`, `runic.renameSlot` and `runic.renameResource`
-commands return resource-source transactions. Configuration-changing edits require a client that
+commands return resource-source transactions.
+
+Document messages get block-aware tooling. Completion offers block tags at the
+message root, only `li` inside a list, and only inline markup inside a
+paragraph, heading or list item; it also offers enum values and small integer
+ranges such as heading levels. Hover on a block tag shows its placement, child
+model and plain-text rendering, and hover on a message shows its content kind
+and, for documents, the locked structure (one skeleton per distinct source
+variant). Blocks that span lines fold, and headings appear under their message
+in document symbols. Formatting lays out a plain document message with one block
+per line and two spaces of indentation per list level; leaf text is kept byte
+for byte, and messages with declarations, `.match` or quoted patterns are left
+unchanged. A quick fix for `RTR0078` joins a line break between Thai, Lao, Khmer
+or Myanmar characters. For a document message `runic.renderPreview` returns a
+`blocks` tree (name, options, occurrence, child blocks and inline `runs`); its
+top-level `runs` member holds the plain-text projection as a fallback for
+clients that only render inline runs, such as the VS Code and Visual Studio
+previews. Configuration-changing edits require a client that
 synchronizes `runic.json` through `runicConfigurationSync` initialization options.
 
 The editor discovers recursive resources and mounted namespaces, exposes logical
@@ -325,7 +342,9 @@ rows backed by physical files, edits message values, creates missing translation
 in the corresponding locale file, previews and validates through the shared
 compiler, and preserves physical revisions. Structural create/move/rename/
 duplicate/delete and locale/fallback workflows use shared transactions, and rich
-preview controls render the normalized inline tree. Projects compile with the
+preview controls render the normalized inline tree. Document messages render as
+inert paragraphs, headings and lists, with the pseudo-localization simulation
+applied per block. Projects compile with the
 v5 carrier; AST 5 preview requests execute the verified .NET artifact/pack plan
 on the editor host and return inert semantic runs. The frontend never coerces
 AST 5 into a JavaScript executor.
@@ -334,7 +353,9 @@ Editor changes are resource-only and do not rewrite application call sites.
 Its closed XLIFF 2.1 text profile losslessly round-trips direct plain resources
 for the supported execution contract. Structured declarations, expressions, selectors,
 or markup produce the existing semantic-loss report, and the corresponding
-text-profile import is refused rather than approximated.
+text-profile import is refused rather than approximated. The loss entry of a
+document message (`XLIFF21-STRUCTURED-MESSAGE`) names the document profile;
+segment-level XLIFF for documents is not part of this version.
 
 The version-explicit [RMF2 v1 corpus](../../../specs/translations/corpus/rmf2-v1/README.md)
 is the shared release oracle for the execution-v2 boundary. The compiler,

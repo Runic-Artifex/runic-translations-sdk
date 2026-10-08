@@ -33,7 +33,8 @@ internal sealed record TranslationInterchangeSourceUnit(
     string Key,
     string Text,
     bool Structured,
-    TranslationInterchangeUnitMetadata Metadata);
+    TranslationInterchangeUnitMetadata Metadata,
+    bool Document = false);
 
 internal sealed record TranslationInterchangeTargetUnit(string Key, string Text, bool Structured);
 
@@ -91,7 +92,8 @@ internal static class TranslationInterchangeProjectionAdapter
                         contract.Inputs
                             .OrderBy(static input => input.Name, StringComparer.Ordinal)
                             .Select(static input => new TranslationInterchangePlaceholder(input.Name, input.Type, string.Empty))
-                            .ToArray()));
+                            .ToArray()),
+                    contract.Content == Rmf2DocumentProfileV5.Document);
             })
             .ToArray();
         TranslationInterchangeLocale[] locales = project.Locales

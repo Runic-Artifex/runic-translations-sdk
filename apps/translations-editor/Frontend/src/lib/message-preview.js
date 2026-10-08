@@ -167,19 +167,43 @@ export function parseMessageArtifact(astJson) {
  * Converts the compiler host's JSON preview runs to the same inert semantic
  * result consumed by InlinePreview. Markup names and options remain data.
  * @param {string} renderedJson
- * @returns {{ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] }}
+ * A document message adds a `blocks` tree; its `runs` member is only the
+ * plain-text fallback for clients without a document preview and is ignored.
+ * @returns {{ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] } | { kind: "document", blocks: PreviewBlock[] }}
  */
 export function parseRenderedMessagePreview(renderedJson) {
   const document = JSON.parse(renderedJson);
   if (!isRecord(document) || typeof document.key !== "string" ||
       typeof document.locale !== "string" || !Array.isArray(document.runs) ||
-      !hasExactKeys(document, ["key", "locale", "runs"])) {
+      !hasExactKeys(document, ["key", "locale", "runs"]) && !hasExactKeys(document, ["key", "locale", "runs", "blocks"])) {
     throw new TypeError("The compiler host returned an invalid rendered message preview.");
+  }
+  if ("blocks" in document) {
+    const blocks = document.blocks;
+    if (!Array.isArray(blocks)) throw new TypeError("The compiler host returned an invalid rendered message preview.");
+    return { kind: "document", blocks: blocks.map(renderedBlock) };
   }
   const nodes = document.runs.map(renderedRun);
   return hasMarkup(nodes)
     ? { kind: "content", nodes }
     : { kind: "text", value: flattenPreview(nodes) };
+}
+
+/** @param {unknown} value @returns {PreviewBlock} */
+function renderedBlock(value) {
+  if (!isRecord(value) || !hasExactKeys(value, ["name", "occurrence", "options", "blocks", "runs"]) ||
+      typeof value.name !== "string" || value.name.length === 0 || typeof value.occurrence !== "string" ||
+      !isStringRecord(value.options) || !Array.isArray(value.blocks) || !Array.isArray(value.runs) ||
+      value.blocks.length > 0 && value.runs.length > 0) {
+    throw new TypeError("The compiler host returned an invalid rendered document block.");
+  }
+  return {
+    name: value.name,
+    occurrence: value.occurrence,
+    options: { ...value.options },
+    blocks: value.blocks.map(renderedBlock),
+    nodes: value.runs.map(renderedRun),
+  };
 }
 
 /** @param {unknown} value @returns {PreviewNode} */
@@ -240,3 +264,4 @@ function hasMarkup(nodes) {
 }
 
 /** @typedef {{ kind: "text", value: string } | { kind: "element", name: string, attributes: Record<string, string>, children: PreviewNode[] }} PreviewNode */
+/** @typedef {{ name: string, occurrence: string, options: Record<string, string>, blocks: PreviewBlock[], nodes: PreviewNode[] }} PreviewBlock */

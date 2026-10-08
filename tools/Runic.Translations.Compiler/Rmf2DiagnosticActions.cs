@@ -71,6 +71,20 @@ public static class Rmf2DiagnosticActions
             Rmf2DiagnosticQuickFix? fix = EmptyFix(source, node, diagnostic, revision ??= Revision(source));
             if (fix is not null) fixes.Add(fix);
         }
+        // RTR0078 is a project diagnostic, but the condition is purely syntactic: a line break inside
+        // a document leaf between two Thai, Lao, Khmer or Myanmar characters. Joining the lines
+        // removes the break together with the continuation indentation.
+        foreach (Rmf2ResourceNode node in document.Nodes.Where(item => !item.IsGroup && item.MessageSyntax is not null))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach ((int start, int end) in Rmf2DocumentSyntax.SoutheastAsianBreaks(node.MessageSyntax!))
+            {
+                if (end >= node.MessageByteMap.Count) continue;
+                int from = node.MessageByteMap[start], to = node.MessageByteMap[end];
+                fixes.Add(new Rmf2DiagnosticQuickFix("rmf2.join-lines:" + from.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    "Join the lines without a space", "RTR0078", node.NameLocation, revision ??= Revision(source), from, to - from, string.Empty));
+            }
+        }
         return fixes.AsReadOnly();
     }
 

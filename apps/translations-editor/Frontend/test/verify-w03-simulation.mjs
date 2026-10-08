@@ -85,6 +85,28 @@ assert.equal(element.children[0].value, "ïïťééḿś ḟööŕ",
   "Nested text nodes must be transformed while the element wrapper stays intact.");
 assert.equal(element.children[1].children[0].value, "ÀÀďàà", "Deeply nested text nodes must be transformed.");
 
+const documentResult = {
+  kind: "document",
+  blocks: [
+    { name: "runic:h", occurrence: "h[1]", options: { level: "1" }, blocks: [], nodes: [{ kind: "text", value: "Title" }] },
+    { name: "runic:ol", occurrence: "ol[1]", options: { start: "1", marker: "lower-alpha" }, nodes: [],
+      blocks: [{ name: "runic:li", occurrence: "ol[1]/li[1]", options: {}, blocks: [], nodes: [{ kind: "text", value: "Step" }] }] },
+  ],
+};
+const simulatedDocument = simulation.simulatePreviewResult(documentResult, { pseudoLocalization: true });
+assert.deepEqual(simulatedDocument, {
+  kind: "document",
+  blocks: [
+    { name: "runic:h", occurrence: "h[1]", options: { level: "1" }, blocks: [],
+      nodes: [{ kind: "text", value: "[" }, { kind: "text", value: "Ťïïťĺéé" }, { kind: "text", value: "]" }] },
+    { name: "runic:ol", occurrence: "ol[1]", options: { start: "1", marker: "lower-alpha" }, nodes: [],
+      blocks: [{ name: "runic:li", occurrence: "ol[1]/li[1]", options: {}, blocks: [],
+        nodes: [{ kind: "text", value: "[" }, { kind: "text", value: "Śťééṕ" }, { kind: "text", value: "]" }] }] },
+  ],
+}, "Document simulation must delimit each leaf and keep block names, options and occurrences.");
+assert.equal(simulation.simulatePreviewResult(documentResult, { pseudoLocalization: false }), documentResult,
+  "With simulation off, a document result must pass through untouched.");
+
 // --- Persistence mirrors the appearance module contract ---
 
 assert.deepEqual(simulation.readUiSimulation(read), { pseudoLocalization: false, direction: "ltr" },

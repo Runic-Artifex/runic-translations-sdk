@@ -165,6 +165,32 @@ public static class Rmf2ResourceWriter
         var formatted = Require(new TranslationSource(source.Path, result));
         if (!document.Nodes.Where(n => !n.IsGroup).Select(n => n.Message).SequenceEqual(formatted.Nodes.Where(n => !n.IsGroup).Select(n => n.Message)))
             throw new TranslationAuthoringException("Formatting would change message content.");
+        return LayoutDocuments(source.Path, result, formatted);
+    }
+
+    // Canonical document layout: one block per line, two spaces per list level. Only whitespace
+    // between blocks changes; leaves are kept byte for byte, which the signature check enforces.
+    private static byte[] LayoutDocuments(string path, byte[] bytes, Rmf2ResourceDocument document)
+    {
+        string newline = Utf8.GetString(bytes).Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var changes = new List<(int Start, int Length, byte[] Bytes)>();
+        foreach (var node in document.Nodes.Where(n => !n.IsGroup && n.MessageSyntax is not null))
+        {
+            string? layout = Rmf2DocumentSyntax.Layout(node.MessageSyntax!);
+            if (layout is null || layout == node.Message!.Replace("\r\n", "\n", StringComparison.Ordinal)) continue;
+            int from = node.NameLocation.StartByte, end = node.Location.StartByte + node.Location.LengthBytes;
+            string replacement = Entry(node.Path[^1], layout, node.NameLocation.Column - 1, newline).TrimStart(' ');
+            changes.Add((from, end - from, Utf8.GetBytes(replacement)));
+        }
+        if (changes.Count == 0) return bytes;
+        byte[] result = Replace(bytes, changes);
+        var laidOut = Require(new TranslationSource(path, result));
+        var before = document.Nodes.Where(n => !n.IsGroup).ToArray();
+        var after = laidOut.Nodes.Where(n => !n.IsGroup).ToArray();
+        if (before.Length != after.Length || before.Zip(after).Any(pair => pair.First.Key != pair.Second.Key || pair.First.Message != pair.Second.Message &&
+            (pair.First.MessageSyntax is null || pair.Second.MessageSyntax is null ||
+             Rmf2DocumentSyntax.Signature(pair.First.MessageSyntax) != Rmf2DocumentSyntax.Signature(pair.Second.MessageSyntax))))
+            throw new TranslationAuthoringException("Formatting would change message content.");
         return result;
     }
 

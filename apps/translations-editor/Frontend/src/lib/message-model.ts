@@ -44,6 +44,16 @@ export type PreviewNode =
   | { kind: "text"; value: string }
   | { kind: "element"; name: string; attributes: Record<string, string>; children: PreviewNode[] };
 
+/** One semantic block of a document message preview (RMF2 document profile v1). */
+export type PreviewBlock = {
+  name: string;
+  occurrence: string;
+  options: Record<string, string>;
+  blocks: PreviewBlock[];
+  nodes: PreviewNode[];
+};
+
 export type MessagePreviewResult =
   | { kind: "text"; value: string }
-  | { kind: "content"; nodes: PreviewNode[] };
+  | { kind: "content"; nodes: PreviewNode[] }
+  | { kind: "document"; blocks: PreviewBlock[] };
