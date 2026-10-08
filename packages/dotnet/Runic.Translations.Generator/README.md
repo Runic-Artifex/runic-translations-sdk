@@ -74,3 +74,16 @@ The containing Build package is a public preview. It requires a .NET 10 compiler
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations-sdk/issues)
 
 Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for bundled data attribution.
+
+## Optional XAML diagnostics
+
+`Runic.Translations.Build` can pass explicitly selected XAML as additional files
+with `RunicTranslationKind=Xaml`. `RunicTranslationCatalog` asserts the local
+catalog for a file; `RunicTranslationDefaultCatalog` asserts the default catalog
+only when the file has no explicit source declarations. Declare both metadata
+names through `CompilerVisibleItemMetadata` when wiring the analyzer manually.
+The generator parses the optional markup using XML namespace scopes, then checks
+static messages against the same compiled contract and readable naming used by
+its C# emission. It does not reference WPF or evaluate markup extensions. See
+[the Build package](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Build/README.md#check-wpf-xaml-at-build-time)
+for setup, diagnostics and the limits of dynamic/external source validation.

@@ -35,6 +35,56 @@ The project declaration and messages become Roslyn `AdditionalFiles` with
 defaults to `obj/<configuration>/<target-framework>/translations/app.esm-v5/`
 and `web-module-manifest-v3.json`; consume it with the Vite adapter.
 
+## Check WPF XAML at build time
+
+For a WPF project with a local `TranslationProject`, declare the catalog used by
+its default source (the `catalog` value from `runic.json`):
+
+```xml
+<PropertyGroup>
+  <TranslationsXamlCatalog>app</TranslationsXamlCatalog>
+</PropertyGroup>
+```
+
+`Page` and `ApplicationDefinition` items in `UseWPF=true` projects are scanned
+automatically. Static `{rt:Message application_title}` and long-form
+`Message`/`MessageInput` declarations are checked against the generated readable
+surface: exact key, input count, readable parameter names and plain content kind.
+Static `rt:TranslationProperties.RichMessage` keys are checked for inline rich
+content. Namespace aliases and nested/quoted markup-extension arguments work;
+Binding values are not evaluated. Errors `RTR0080`–`RTR0083` include the XAML
+file and line. The check uses the compiler's existing catalog and readable-name
+policy, with no additional runtime contract or WPF dependency in the generator.
+
+The catalog setting is an assertion about the source your application provides;
+it does not create a source. A file containing an explicit `Message.Source` or
+`TranslationProperties.Source` declaration (including a Setter using its static
+dependency property) is conservatively excluded from the
+project default's catalog checks, since resources/styles/templates may select a
+different catalog. `Binding.Source` selects binding data and does not disable
+catalog checks. To assert a known local catalog for such a file, or to check
+an explicitly selected file outside WPF, use:
+
+```xml
+<ItemGroup>
+  <TranslationXaml Include="Views/Checkout.xaml" Catalog="app" />
+</ItemGroup>
+```
+
+A per-file `Catalog` assertion also covers explicit sources in that file. The
+catalog must be the local `TranslationProject` catalog; external catalogs are
+not loaded by this check. Without a catalog assertion, only declaration mistakes
+that do not require a catalog (missing Key, duplicate/mixed/gapped inputs) are
+checked. Keys and input names from bindings, resources or `x:Static`, and dynamic
+input collections, retain runtime validation. For rich messages, argument/slot
+values remain runtime checks or typed C# checks. This scan does not type-check
+Binding results or arbitrary XAML; WPF continues to compile and load it.
+
+Set `TranslationsValidateXaml=false` to disable the optional scan. It requires
+neither artifact emission nor the CLI tool. The translation sources and XAML
+must be in the same generating C# project; a precompiled catalog from a library
+is an unresolved external catalog.
+
 ## Select generated artifacts
 
 Set one or more of these properties to `true`:

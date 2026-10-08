@@ -95,6 +95,15 @@ internal static class TranslationsDiagnostics
     internal static readonly DiagnosticDescriptor DocumentLineBreakSpace = new(
         "RTR0078", "Line break between Southeast Asian characters became a space", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0078");
 
+    internal static readonly DiagnosticDescriptor XamlDeclaration = new(
+        "RTR0080", "Translation XAML declaration is invalid", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0080");
+    internal static readonly DiagnosticDescriptor XamlKey = new(
+        "RTR0081", "Translation XAML message key is unknown", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0081");
+    internal static readonly DiagnosticDescriptor XamlInputs = new(
+        "RTR0082", "Translation XAML inputs do not match", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0082");
+    internal static readonly DiagnosticDescriptor XamlKind = new(
+        "RTR0083", "Translation XAML message kind does not match", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0083");
+
     private static readonly Dictionary<string, DiagnosticDescriptor> ById = Index(
         UnreadableSource, DuplicateInputs, UnsupportedProjectSchema, InvalidLocale, InvalidCodeName, EmptyBaseLocale,
         MissingTranslation, ExtraLocaleKey, InvalidFallback, FallbackCycle, MalformedPattern, CallerInputChanged,
@@ -102,7 +111,7 @@ internal static class TranslationsDiagnostics
         InvalidVariableOrFunction, InvalidResourceSyntax, InvalidMetadata, InvalidSourceLayout, ConflictingDeclaration,
         InvalidMarkupContract, InvalidMarkup, InvalidMarkupReference, NotExecutable, SyntaxError, InvalidDataModel,
         ReadableSurfaceUnsupported, ReadableNameReserved, DocumentContentKind, DocumentVariantStructure, DocumentChildInvalid,
-        DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace);
+        DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace, XamlDeclaration, XamlKey, XamlInputs, XamlKind);
 
     private static readonly object UnknownGate = new();
     private static readonly Dictionary<string, DiagnosticDescriptor> Unknown = new(System.StringComparer.Ordinal);

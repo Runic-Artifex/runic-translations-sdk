@@ -320,3 +320,19 @@ rebuild the pack from the same sources as the application. A document message
 that breaks the block rules themselves (text outside a block, a misplaced
 element, or a leaf that starts or ends with whitespace) is
 `RTR0023/malformed-pattern`.
+
+## RTR0080
+
+Translation XAML declaration is invalid. The optional XAML validator found malformed XML, an invalid Message declaration (missing/duplicate Key or properties), or a catalog assertion that does not name the local TranslationProject. Fix the declaration or remove the assertion for an external catalog. Runtime-valued keys and sources are allowed; they are not evaluated during the build.
+
+## RTR0081
+
+Translation XAML message key is unknown. In a file whose catalog is explicitly declared, a static key does not exist on the generated readable surface. Use the flattened readable name (for example, `application_title`), including its exact case. Encoded-only reserved names are not available to Message.
+
+## RTR0082
+
+Translation XAML inputs do not match. Use contiguous Arg0 through Arg3 or unique MessageInput names, never both. Each named input needs a Name and Value. For an asserted catalog, supply exactly the generated method's inputs using its readable C# parameter names; non-identifiers use their encoded fallback. Binding expressions are accepted as values and are checked by WPF at runtime.
+
+## RTR0083
+
+Translation XAML message kind does not match. Message accepts plain strings; TranslationProperties.RichMessage accepts inline rich content. Document content needs the document renderer. Use the adapter matching the declared message content kind.

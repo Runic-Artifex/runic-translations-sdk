@@ -168,6 +168,8 @@ internal static class GeneratorTestHost
                 _fileOptions[input.Path] = new DictionaryOptions(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["build_metadata.AdditionalFiles.RunicTranslationKind"] = input.Kind,
+                    ["build_metadata.AdditionalFiles.RunicTranslationCatalog"] = input.Catalog ?? string.Empty,
+                    ["build_metadata.AdditionalFiles.RunicTranslationDefaultCatalog"] = input.DefaultCatalog ?? string.Empty,
                 });
             }
         }
@@ -188,7 +190,7 @@ internal static class GeneratorTestHost
     }
 }
 
-internal readonly record struct TestInput(string Path, string Kind, string Text);
+internal readonly record struct TestInput(string Path, string Kind, string Text, string? Catalog = null, string? DefaultCatalog = null);
 
 internal enum RuntimeReferenceMode
 {

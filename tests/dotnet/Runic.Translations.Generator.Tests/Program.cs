@@ -11,6 +11,7 @@ internal static class Program
         GeneratorIncrementalityTests.Register(runner);
         GeneratorDiagnosticsTests.Register(runner);
         GeneratorReadableTests.Register(runner);
+        GeneratorXamlTests.Register(runner);
         return runner.Run();
     }
 }

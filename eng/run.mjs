@@ -149,6 +149,7 @@ function testPackagedManaged(version = workspace.version) {
   const packageArguments = [`-p:TranslationsPackageVersion=${version}`, `-p:TranslationsPackageFeed=${feed}`];
   run("dotnet", ["run", "--project", "tests/dotnet/Runic.Translations.AotTests/Runic.Translations.AotTests.csproj", "--configuration", configuration, ...packageArguments], root, environment);
   run("dotnet", ["run", "--project", "tests/dotnet/Runic.Translations.PackageTests/Runic.Translations.PackageTests.csproj", "--configuration", configuration, ...packageArguments, "--", "--feed", feed], root, environment);
+  run("dotnet", ["run", "--project", "tests/dotnet/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj", "--configuration", configuration, "--no-build", "--", "--xaml-packages", feed, version], root, environment);
 }
 
 function testNativeAot() {
