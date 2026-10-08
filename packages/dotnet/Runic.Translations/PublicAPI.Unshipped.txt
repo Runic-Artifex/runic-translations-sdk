@@ -1,1 +1,8 @@
 #nullable enable
+Runic.Translations.ITranslationSnapshotNotifier
+Runic.Translations.ITranslationSnapshotNotifier.SnapshotPublished -> System.EventHandler<Runic.Translations.TranslationSnapshotPublishedEventArgs!>?
+Runic.Translations.TranslationSnapshotPublishedEventArgs
+Runic.Translations.TranslationSnapshotPublishedEventArgs.IsRefresh.get -> bool
+Runic.Translations.TranslationSnapshotPublishedEventArgs.Snapshot.get -> Runic.Translations.ITranslationSnapshot!
+Runic.Translations.TranslationSnapshotPublishedEventArgs.TranslationSnapshotPublishedEventArgs(Runic.Translations.ITranslationSnapshot! snapshot, bool isRefresh) -> void
+Runic.Translations.TranslationManager.SnapshotPublished -> System.EventHandler<Runic.Translations.TranslationSnapshotPublishedEventArgs!>?

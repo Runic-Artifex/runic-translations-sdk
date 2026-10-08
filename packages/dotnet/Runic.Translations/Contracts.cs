@@ -55,7 +55,8 @@ public interface ITranslationManager
     /// <see cref="SetLocaleAsync"/> work resolves deterministically: whichever acquires the lock
     /// first runs first, and a refresh that runs after a committed switch recomposes the newly
     /// active locale. <see cref="LocaleChanged"/> is never raised by a refresh because the active
-    /// locale is unchanged.
+    /// locale is unchanged. Managers that implement <see cref="ITranslationSnapshotNotifier"/> raise
+    /// <see cref="ITranslationSnapshotNotifier.SnapshotPublished"/> for refreshes and locale switches alike.
     /// </para>
     /// <para>
     /// The replacement publishes only after the same validation gates as
@@ -109,4 +110,33 @@ public sealed class ExternalTranslationPack
 
     /// <summary>The encoded external-pack document.</summary>
     public ReadOnlyMemory<byte> Content { get; }
+}
+
+/// <summary>
+/// Optionally implemented by managers that report every published snapshot, including refreshes that keep the locale.
+/// </summary>
+public interface ITranslationSnapshotNotifier
+{
+    /// <summary>
+    /// Raised after a snapshot becomes <see cref="ITranslationManager.Current"/>: once for a successful locale switch
+    /// (together with <see cref="ITranslationManager.LocaleChanged"/>) and once for each successful
+    /// <see cref="ITranslationManager.RefreshAsync"/>. Subscriber failures never affect the publishing caller.
+    /// </summary>
+    event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
+}
+
+/// <summary>Describes a published snapshot.</summary>
+public sealed class TranslationSnapshotPublishedEventArgs : EventArgs
+{
+    /// <summary>Creates event data.</summary>
+    public TranslationSnapshotPublishedEventArgs(ITranslationSnapshot snapshot, bool isRefresh)
+    {
+        Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+        IsRefresh = isRefresh;
+    }
+
+    /// <summary>The newly published snapshot.</summary>
+    public ITranslationSnapshot Snapshot { get; }
+    /// <summary><see langword="true"/> when the locale did not change.</summary>
+    public bool IsRefresh { get; }
 }

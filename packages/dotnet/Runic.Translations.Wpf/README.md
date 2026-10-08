@@ -49,8 +49,17 @@ keeps its `.resx` and `ResourceDictionary` resources. WPF on .NET 10 for Windows
 
 ### 1. Install
 
-Add the runtime and the build package to your WPF project, or reference the
-translations library that holds your catalog (see the
+Your WPF project targets Windows:
+
+```xml
+<PropertyGroup>
+  <TargetFramework>net10.0-windows</TargetFramework>
+  <UseWPF>true</UseWPF>
+</PropertyGroup>
+```
+
+Add the runtime and the build package, or reference the translations library
+that holds your catalog (see the
 [.NET quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md)).
 Use one exact version for all of them:
 
@@ -81,9 +90,10 @@ orders {
 ```
 
 Add `de.rmf2` (or any locale) with the same keys. The build generates `AppText`
-and `AppTextCatalog`; `AppText.Messages` is the readable surface, with members
+and `AppTextCatalog`. `AppText.Messages` is the readable surface, with members
 named by the flattened key: `orders_title`, `orders_greeting(name)`,
-`orders_count(count)` and `orders_help`.
+`orders_count(count)` and `orders_help`, whose slots type is
+`AppTextSlots.orders_help`.
 
 ### 3. Create one source at startup
 
@@ -100,45 +110,79 @@ protected override async void OnStartup(StartupEventArgs e)
 }
 ```
 
-Create the source on the UI thread (or pass the `Dispatcher`). The renderer is
-needed only for messages with markup.
+Pass `text.Messages`, not `text`; the constructor rejects anything that is not a
+generated readable surface. Create the source on the UI thread (it uses the
+application's dispatcher, else the current thread's, and throws if there is none;
+pass a `Dispatcher` otherwise). The renderer is needed only for messages with
+markup. Set `Default` once at startup: replacing it after a binding used it
+throws, and disposing the default source clears it.
+
+If you await in `OnStartup`, keep the default context: `ConfigureAwait(false)`
+would continue on a thread-pool thread, where the source cannot find a dispatcher
+and `Show()` fails.
 
 ### 4. Bind the screen
 
 ```xml
-<Window xmlns:rt="clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf" ...>
+<Window xmlns:rt="clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf"
+        xmlns:res="clr-namespace:MyApp.Properties" ...>
   <StackPanel>
     <!-- Plain message. -->
     <TextBlock Text="{rt:Message orders_title}" FontSize="20"/>
 
-    <!-- Inputs come from Arg0..Arg3, in the generated method's parameter order (a constant is `{Binding Source=text}`). -->
+    <!-- Inputs: Arg0..Arg3 in the generated method's parameter order (a constant is {Binding Source=text}). -->
     <TextBlock Text="{rt:Message orders_greeting, Arg0={Binding UserName}}"/>
     <TextBlock Text="{rt:Message orders_count, Arg0={Binding OpenOrders}}"/>
 
-    <!-- Message with markup: links, actions and icons come from the DataContext. -->
-    <TextBlock rt:Translations.RichMessage="orders_help"
-               rt:Translations.Slots="{Binding HelpSlots}"/>
+    <!-- Message with markup: the generated typed slots come from the view model. -->
+    <TextBlock rt:TranslationProperties.RichMessage="orders_help"
+               rt:TranslationProperties.Slots="{Binding HelpSlots}"/>
 
     <!-- Everything else is unchanged. -->
-    <Button Content="{x:Static res:Strings.Close}"/>
+    <Button Content="{x:Static res:Resources.Close}"/>
   </StackPanel>
 </Window>
 ```
 
 `{rt:Message}` works on any dependency property (`Content`, `Header`, `ToolTip`,
-`Title`, ...). Slots are the same bindings as in the renderer examples above,
-put in a dictionary by slot ID:
+`Title`, ...), in styles and in templates. The slots are the generated typed
+object, so a wrong binding kind or a missing slot is a compile error in the view
+model:
 
 ```csharp
-public IReadOnlyDictionary<string, InlineMarkupBinding> HelpSlots { get; } =
-    new Dictionary<string, InlineMarkupBinding> { ["guide"] = new InlineLinkBinding(guideUri) };
+public AppTextSlots.orders_help HelpSlots { get; } =
+    new(guide: new InlineLinkBinding(guideUri));
 ```
 
-For rich messages with inputs, set `rt:Translations.Arguments` to a list in
-parameter order. A mistyped message name, the wrong number of inputs or using a
-plain message as rich (or the reverse) fails when the XAML loads, with the
-reason in the exception. A slot problem found while rendering is traced as a
-binding error and the previous content stays.
+An `IReadOnlyDictionary<string, InlineMarkupBinding>` by slot ID is accepted for
+dynamic use, without compile-time checks.
+
+More than four inputs, or inputs you want checked by name, use the long form. The
+names are the generated method's parameter names:
+
+```xml
+<TextBlock>
+  <TextBlock.Text>
+    <rt:Message Key="orders_greeting">
+      <rt:MessageInput Name="name" Value="{Binding UserName}"/>
+    </rt:Message>
+  </TextBlock.Text>
+</TextBlock>
+```
+
+For rich messages with inputs, set `rt:TranslationProperties.Arguments` to a
+list in parameter order or a dictionary by parameter name. A null input becomes
+empty text; other values convert with the invariant culture to the parameter
+type, and a number input that is null or not convertible is an error.
+
+Mistakes surface early. A mistyped message name, a gap in `Arg0..Arg3`, a wrong
+input name or count, or using a plain message as rich (or the reverse) fails when
+the XAML loads, with the parameter names in the exception. For rich messages
+that is when `RichMessage` is set, so set `rt:TranslationProperties.Source`
+before it if you name one. Problems found later, while binding or rendering
+(a missing slot, an input of the wrong type, a throwing message), are traced like
+any WPF binding error: plain text shows `[key]`, rich content keeps what it had.
+A rich message whose inputs have not been set yet renders once they are.
 
 ### 5. Switch locale
 
@@ -146,13 +190,14 @@ binding error and the previous content stays.
 await manager.SetLocaleAsync("de");
 ```
 
-Every `{rt:Message}` and `RichMessage` refreshes when the manager raises
-`LocaleChanged`, from any thread: the source marshals to the dispatcher it was
+Every `{rt:Message}` and `RichMessage` refreshes when the manager publishes the
+new snapshot, from any thread: the source marshals to the dispatcher it was
 created on, and each rich element renders on its own dispatcher. Several changes
-in a row render once. `ITranslationManager.RefreshAsync` republishes the active
-locale (for example after external pack bytes change) but never raises
-`LocaleChanged`; call `await source.RefreshAsync()` instead, or `source.Invalidate()`
-after refreshing the manager yourself.
+in a row render once. The built-in manager also publishes
+`ITranslationManager.RefreshAsync` (for example after external pack bytes
+change), although that never raises `LocaleChanged`. A custom
+`ITranslationManager` is followed through `LocaleChanged` only; implement
+`ITranslationSnapshotNotifier` or call `source.Invalidate()` after refreshing it.
 
 Nothing leaks when windows close: the manager holds only a weak reference to the
 source, the source holds rich elements weakly, and WPF's own bindings do the
@@ -162,13 +207,21 @@ rest. Dispose the source only if you replace it during the application's life.
 
 `{rt:Message}` is an ordinary markup extension, so it mixes with `{x:Static}`,
 `{DynamicResource}` and `{StaticResource}` in one tree, and you can move a screen
-at a time. Keep `.resx` for strings you have not migrated. To use two catalogs,
-create one `TranslationSource` each and pick it with `Source={StaticResource ...}`
-on `{rt:Message}` or `rt:Translations.Source` on the element; `TranslationSource.Default`
-is the fallback. Locale and culture are separate: the source follows the
-manager's locale only, so set `CultureInfo` and `FrameworkElement.Language`
-yourself where existing resources need them. There is no `.resx` importer and no
-`FlowDocument` conversion; use `WpfDocumentRenderer` for document messages.
+at a time. Keep `.resx` for strings you have not migrated. To use a second
+catalog, create another `TranslationSource` and pass it with `Source=` on
+`{rt:Message}` or `rt:TranslationProperties.Source` (inherited) on a parent
+element; `TranslationSource.Default` is the fallback. Locale and culture are
+separate: the source follows the manager's locale only, so set `CultureInfo` and
+`FrameworkElement.Language` yourself where existing resources need them. There is
+no `.resx` importer and no `FlowDocument` conversion; use `WpfDocumentRenderer`
+for document messages.
+
+### Designer
+
+Visual Studio and Blend do not run `OnStartup`, so no default source exists.
+`{rt:Message key}` then shows `[key]` and rich elements stay empty instead of
+failing every view. At run time a missing source fails the load. Message names
+are not checked at build time yet.
 
 ## Documents
 
