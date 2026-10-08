@@ -21,6 +21,8 @@ internal static class Rmf2AuthoringTests
         runner.Add("RMF2 input references follow logical resources without capturing translation locals", References);
         runner.Add("RMF2 local rename changes semantic references without touching literal text", LocalRename);
         runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
+        runner.Add("RMF2 formatter lays out document messages canonically and keeps leaves byte for byte", FormatDocuments);
+        runner.Add("RMF2 formatter leaves document messages without a canonical layout verbatim and formats the rest", FormatDocumentRefusals);
         runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
         runner.Add("RMF2 locale plans preserve mounted projects and commit atomically", ExecutionV2Locales);
         runner.Add("Direct MF2 workspaces expose semantic authoring and filename transactions", DirectSources);
@@ -262,6 +264,23 @@ internal static class Rmf2AuthoringTests
         Assert.True(Encoding.UTF8.GetString(formatted).Contains("  # Translator context", StringComparison.Ordinal), "Formatter lost comment.");
         byte[] edited = Rmf2ResourceWriter.SetMessage(new TranslationSource("en.rmf2", formatted), "shop_title", "New\nMessage");
         Assert.Equal("Translator context", Rmf2ResourceReader.Read(new TranslationSource("en.rmf2", edited)).Nodes[1].Comments[0]);
+    }
+    private static void FormatDocuments()
+    {
+        const string text = "shop {\r\n  notice =\r\n    {#h level=2}Title{/h}   {#ol start=3}{#li}One\r\n    and more{/li}{#li}{#strong}Two{/strong}{/li}{/ol}\r\n  inline = Keep {#strong}this{/strong}   spacing\r\n  plain =\r\n    .input {$n :integer}\r\n    {{{#p}{$n}{/p} {#p}x{/p}}}\r\n}\r\n";
+        byte[] formatted = Rmf2ResourceWriter.Format(Source("en.rmf2", text));
+        Assert.Equal("shop {\r\n  notice =\r\n    {#h level=2}Title{/h}\r\n    {#ol start=3}\r\n      {#li}One\r\n    and more{/li}\r\n      {#li}{#strong}Two{/strong}{/li}\r\n    {/ol}\r\n" +
+            "  inline = Keep {#strong}this{/strong}   spacing\r\n  plain =\r\n    .input {$n :integer}\r\n    {{{#p}{$n}{/p} {#p}x{/p}}}\r\n}\r\n", Encoding.UTF8.GetString(formatted));
+        Assert.Equal(Encoding.UTF8.GetString(formatted), Encoding.UTF8.GetString(Rmf2ResourceWriter.Format(new TranslationSource("en.rmf2", formatted))), "Formatting is not idempotent.");
+    }
+    private static void FormatDocumentRefusals()
+    {
+        // Selections, text between blocks, unbalanced tags and quoted patterns have no canonical
+        // layout: each stays byte for byte, and the plain document message beside them is laid out.
+        const string refused = "selected =\n  .input {$n :integer}\n  .match $n\n  1 {{{#p}One{/p}   {#p}x{/p}}}\n  * {{{#p}Many{/p}   {#p}y{/p}}}\n" +
+            "between = {#p}A{/p} loose {#p}B{/p}\nunbalanced = {#p}A{/p}   {#p}B\nunopened = {#p}A{/p}   B{/p}\nquoted = {{{#p}A{/p}   {#p}B{/p}}}\n";
+        string formatted = Encoding.UTF8.GetString(Rmf2ResourceWriter.Format(Source("en.rmf2", refused + "plain = {#p}A{/p}   {#p}B{/p}\n")));
+        Assert.Equal(refused + "plain =\n  {#p}A{/p}\n  {#p}B{/p}\n", formatted);
     }
     private static void Refactors()
     {
