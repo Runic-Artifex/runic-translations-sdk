@@ -71,13 +71,15 @@ try {
   const link = await example.locator("a").elementHandle();
   await page.evaluate(() => window.runicDocument.replace("files-one-de"));
   assert.equal(await example.locator("button").count(), 0);
-  await button.evaluate(node => node.click());
-  assert.equal(await page.evaluate(() => window.runicDocumentCalls), 1, "a detached action remained active");
+  // Svelte delegates clicks to the mount root, so re-attach the retained button there and re-enable it.
+  const reattach = node => { document.querySelector('[data-execution="backup-en"]').append(node); node.disabled = false; node.click(); node.remove(); };
+  await button.evaluate(reattach);
+  assert.equal(await page.evaluate(() => window.runicDocumentCalls), 1, "a retired action remained active");
   assert.deepEqual(await link.evaluate(node => [node.isConnected, node.hasAttribute("href")]), [false, false], "a detached link kept its destination");
   await page.evaluate(() => window.runicDocument.replace("backup-en"));
   const replacement = await example.locator("button").elementHandle();
   await page.evaluate(() => window.runicDocument.clear());
-  await replacement.evaluate(node => node.click());
+  await replacement.evaluate(reattach);
   assert.equal(await page.evaluate(() => window.runicDocumentCalls), 1, "a cleared action remained active");
   assert.equal(await example.textContent(), "");
   await page.evaluate(() => window.runicDocument.unmount());

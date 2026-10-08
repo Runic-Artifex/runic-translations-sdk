@@ -1,0 +1,82 @@
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import type { Attachment } from "svelte/attachments";
+  import type { InlineBinding, InlineNode, InlineElement, InlineSnippets } from "./types.js";
+  // Internal: LocalizedInline renders standalone content (span.bold, span.italic); LocalizedDocument passes
+  // documentMode={true} for the document adapters' b and i elements.
+  let { nodes, custom = {}, documentMode }: { nodes: readonly InlineNode[]; custom?: InlineSnippets; documentMode: boolean } = $props();
+  const iconLabels = new WeakMap<InlineElement, string>();
+  // Retire controls when they leave the tree: a retained, detached link loses its destination and a retained
+  // action is disabled and leaves the live set, so neither navigates nor calls back after its content is
+  // replaced or cleared, even when the application re-attaches the element and re-enables it.
+  const live = new WeakSet<HTMLButtonElement>();
+  const retireLink: Attachment<HTMLAnchorElement> = node => () => node.removeAttribute("href");
+  const retireAction: Attachment<HTMLButtonElement> = node => { live.add(node); return () => { live.delete(node); node.disabled = true; }; };
+  function activate(event: MouseEvent & { currentTarget: EventTarget & HTMLButtonElement }, binding: InlineBinding | undefined): void {
+    if (live.has(event.currentTarget) && binding?.kind === "runic:action") binding.onActivate();
+  }
+  // Keys include the element name and slot ref, so a different element or slot at the same occurrence gets a new
+  // element and the previous control is retired instead of being reused with another binding.
+  function key(node: InlineNode): unknown {
+    return node.kind === "text" ? node : `${node.name}\u0000${node.options.ref ?? ""}\u0000${node.occurrence}`;
+  }
+  function snippet(name: string): Snippet<[InlineElement]> {
+    const render = custom[name];
+    if (!render) throw new TypeError(`No Svelte snippet linked for '${name}'.`);
+    return render;
+  }
+  function icon(value: unknown): Snippet {
+    if (typeof value !== "function") throw new TypeError("Svelte icon assets must be text or snippets.");
+    return value as Snippet;
+  }
+  function iconLabel(node: InlineElement): string | undefined {
+    if (node.binding?.kind !== "runic:icon" || node.binding.decorative) return undefined;
+    const cached = iconLabels.get(node);
+    if (cached !== undefined) return cached;
+    const label = node.binding.accessibleName?.(node.locale);
+    if (typeof label !== "string" || !label.trim()) throw new TypeError("Meaningful icon alternate text is empty.");
+    iconLabels.set(node, label);
+    return label;
+  }
+</script>
+
+{#snippet renderNodes(items: readonly InlineNode[])}
+  {#each items as node (key(node))}
+    {#if node.kind === "text"}
+      {node.value}
+    {:else if node.name === "runic:strong"}
+      <strong data-runic-occurrence={node.occurrence}>{@render renderNodes(node.children)}</strong>
+    {:else if node.name === "runic:em"}
+      <em data-runic-occurrence={node.occurrence}>{@render renderNodes(node.children)}</em>
+    {:else if documentMode && node.name === "runic:bold"}
+      <b data-runic-occurrence={node.occurrence}>{@render renderNodes(node.children)}</b>
+    {:else if documentMode && node.name === "runic:italic"}
+      <i data-runic-occurrence={node.occurrence}>{@render renderNodes(node.children)}</i>
+    {:else if node.name === "runic:bold" || node.name === "runic:italic"}
+      <span class={{ bold: node.name === "runic:bold", italic: node.name === "runic:italic" }} data-runic-occurrence={node.occurrence}>{@render renderNodes(node.children)}</span>
+    {:else if node.name === "runic:code"}
+      <code data-runic-occurrence={node.occurrence}>{@render renderNodes(node.children)}</code>
+    {:else if node.name === "runic:br"}
+      <br data-runic-occurrence={node.occurrence} />
+    {:else if node.binding?.kind === "runic:link"}
+      <a href={node.binding.href} data-runic-occurrence={node.occurrence} {@attach retireLink}>{@render renderNodes(node.children)}</a>
+    {:else if node.binding?.kind === "runic:action"}
+      <button type="button" onclick={event => activate(event, node.binding)} data-runic-occurrence={node.occurrence} {@attach retireAction}>{@render renderNodes(node.children)}</button>
+    {:else if node.binding?.kind === "runic:icon"}
+      <span role={node.binding.decorative ? undefined : "img"} aria-hidden={node.binding.decorative ? "true" : undefined} aria-label={iconLabel(node)} data-runic-occurrence={node.occurrence}>
+        {#if typeof node.binding.asset === "string"}{node.binding.asset}{:else}{@render icon(node.binding.asset)()}{/if}
+      </span>
+    {:else}
+      {@render snippet(node.name)(node)}
+    {/if}
+  {/each}
+{/snippet}
+
+{@render renderNodes(nodes)}
+
+<style>
+  .bold { font-weight: var(--runic-inline-bold-weight, bold); }
+  .italic { font-style: italic; }
+  a { color: var(--runic-inline-link-color, LinkText); }
+  button { font: inherit; }
+</style>

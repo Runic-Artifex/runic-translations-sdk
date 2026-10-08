@@ -169,7 +169,7 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function toPlainText<S extends Record<string,string>>(content: LocalizedDocument<S>, options: { slots: SlotBindings<S>; allowActionLabels?: boolean; annotateLinkDestinations?: boolean; custom?: readonly MarkupBinding<string>[]; listMarker?: string }): string;
         export declare function toPlainText<S extends Record<string,string>>(content: LocalizedContent<S> | LocalizedDocument<S>, options: { slots: SlotBindings<S>; allowActionLabels?: boolean; annotateLinkDestinations?: boolean; custom?: readonly MarkupBinding<string>[]; listMarker?: string }): string;
         export declare function createDomInlineRenderer(document: Document, bindings?: readonly MarkupBinding<Node>[]): InlineRenderer<Node>;
-        export interface DomDocumentRenderer extends DocumentRenderer<Node> { setContent<S extends Record<string,string>>(target: Element, content: LocalizedDocument<S>, options: { slots: SlotBindings<S> }): void; clearContent(target: Element): void; extend(bindings: readonly MarkupBinding<Node>[]): DomDocumentRenderer; }
+        export interface DomDocumentRenderer extends DocumentRenderer<Node> { setContent<S extends Record<string,string>>(target: Element | DocumentFragment, content: LocalizedDocument<S>, options: { slots: SlotBindings<S> }): void; clearContent(target: Element | DocumentFragment): void; extend(bindings: readonly MarkupBinding<Node>[]): DomDocumentRenderer; }
         export declare function createDomDocumentRenderer(document: Document, options?: { headingBase?: number; custom?: readonly MarkupBinding<Node>[] }): DomDocumentRenderer;
         """;
 

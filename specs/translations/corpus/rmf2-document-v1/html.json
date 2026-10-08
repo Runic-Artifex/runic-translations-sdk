@@ -22,7 +22,8 @@
     "placeholder-line-feed-in-item": "<ul data-runic-occurrence=\"ul[1]\" lang=\"en\"><li class=\"runic-leaf\" data-runic-occurrence=\"ul[1]/li[1]\">Note: first\nsecond</li></ul>",
     "nested-inline-occurrence": "<p class=\"runic-leaf\" data-runic-occurrence=\"p[1]\" lang=\"en\">Start <strong data-runic-occurrence=\"p[1]/1\"><em data-runic-occurrence=\"p[1]/1.0\">deep</em> text</strong></p>",
     "custom-explicit-and-omit": "<p class=\"runic-leaf\" data-runic-occurrence=\"p[1]\" lang=\"en\">See <span data-runic-markup=\"shop:term\" data-runic-occurrence=\"p[1]/1\">RMF2</span> now<span data-runic-markup=\"shop:hidden\" data-runic-occurrence=\"p[1]/3\">, quietly</span>.</p>",
-    "empty-blocks-skipped": "<p class=\"runic-leaf\" data-runic-occurrence=\"p[1]\" lang=\"en\"></p><p class=\"runic-leaf\" data-runic-occurrence=\"p[2]\" lang=\"en\">A</p><p class=\"runic-leaf\" data-runic-occurrence=\"p[3]\" lang=\"en\"></p><p class=\"runic-leaf\" data-runic-occurrence=\"p[4]\" lang=\"en\">B</p><p class=\"runic-leaf\" data-runic-occurrence=\"p[5]\" lang=\"en\"></p>",
+    "empty-blocks-skipped": "<p class=\"runic-leaf\" data-runic-occurrence=\"p[2]\" lang=\"en\">A</p><p class=\"runic-leaf\" data-runic-occurrence=\"p[4]\" lang=\"en\">B</p>",
+    "inline-formatting-in-document": "<p class=\"runic-leaf\" data-runic-occurrence=\"p[1]\" lang=\"en\"><b data-runic-occurrence=\"p[1]/0\">Bold</b>, <i data-runic-occurrence=\"p[1]/2\">italic</i>, <code data-runic-occurrence=\"p[1]/4\">code</code>, <span aria-label=\"Star\" data-runic-occurrence=\"p[1]/6\" role=\"img\">★</span> and a <a data-runic-occurrence=\"p[1]/8\" href=\"https://example.test/guide\">link</a>.</p>",
     "ideographic-space-and-bidi-marks": "<p class=\"runic-leaf\" data-runic-occurrence=\"p[1]\" lang=\"en\">　Indented　</p><p class=\"runic-leaf\" data-runic-occurrence=\"p[2]\" lang=\"en\">Next</p>"
   }
 }

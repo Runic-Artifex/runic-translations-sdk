@@ -279,6 +279,11 @@ under a strict content security policy and in SSR output:
 | `ol start marker` | `<ol>` with `start` (when not 1) and `type` `a`, `A`, `i` or `I` (when not decimal) |
 | `li` | `<li class="runic-leaf">` |
 
+Empty blocks are skipped, as in the plain-text projection: a paragraph or
+heading whose inline content is empty renders no element, and neither does a
+list without items. List items are always rendered. Occurrence paths keep
+counting skipped blocks, so the paragraph after an empty one is still `p[2]`.
+
 Every block and inline element carries `data-runic-occurrence`, and each
 top-level block carries `lang` with the effective content locale, which differs
 from the requested locale after a fallback. Leaves keep their text verbatim
@@ -294,16 +299,22 @@ The heading base defaults to 2, so `h level=1` becomes `<h2>` under a page's
 own `<h1>`; pass `headingBase` (1 to 9) to change it. Browsers number `ol`
 items the same way as the plain-text projection: bijective letters past `z`
 and decimal past 3999 for roman markers. Inline content uses the same mapping
-as inline messages, except that the DOM adapter renders `bold` and `italic` as
-`<b>` and `<i>` instead of styled spans.
+as inline messages, except for `bold` and `italic`: both document adapters
+render them as `<b>` and `<i>`, while a standalone `LocalizedInline` and the
+inline DOM renderer keep `<span class="bold">` and `<span class="italic">`.
+`code` is `<code>` everywhere.
 
 Generated ESM exports `createDomDocumentRenderer(document, {headingBase,
-custom})`. `render(content, {slots})` returns fresh nodes. `setContent(target,
-content, {slots})` builds the nodes first, so a binding failure leaves the
-displayed content untouched, then replaces the target's children;
-`setContent` and `clearContent(target)` retire the previous render, so its
-actions no longer call back and its links lose their `href`, even when the
-application retained the detached nodes.
+custom})`. `render(content, {slots})` returns fresh nodes that the adapter
+does not track: they are never retired, so the application owns their
+lifetime. `setContent(target, content, {slots})` builds the nodes first, so a
+binding failure leaves the displayed content untouched, then replaces the
+target's children. The target is an `Element` or a `DocumentFragment`, which
+includes a `ShadowRoot`. `setContent` and `clearContent(target)` retire the
+previous render, so its actions no longer call back and its links lose their
+`href`, even when the application retained the detached nodes. Retirement
+tracks renders per generated runtime module: content that another catalog's
+runtime placed into the same target is replaced but not retired.
 
 ```js
 import { m } from "./generated/app.esm/messages.js";
@@ -316,11 +327,15 @@ renderer.setContent(help, m.guide_backup({ fileName }), {
 ```
 
 The Svelte `./document` entry exports `documentFactory` and
-`LocalizedDocument`, which reuses `LocalizedInline` for leaf content and accepts
-the same `custom` snippets and a `headingBase` prop. Create the catalog renderer
+`LocalizedDocument`, which renders leaf content with `LocalizedInline`'s markup
+in document mode (`<b>` and `<i>`) and accepts the same `custom` snippets and a
+`headingBase` prop, validated on every render. Create the catalog renderer
 once with `createDocumentRenderer(documentFactory)`. `LocalizedDocument` keys
-blocks by their occurrence path, so hydration adopts the server elements, and
-component teardown retires actions and links that leave the tree. Inline
+blocks by their occurrence path and inline elements by name, slot and
+occurrence, so hydration adopts the server elements and a different slot at
+the same position gets a new control. Component teardown retires actions and
+links that leave the tree; a retired action stays inert even if the
+application re-attaches and re-enables it. Inline
 occurrence keys count the text before an element, so a translation that adds
 text before a link changes the link's key; do not keep application state keyed
 by inline occurrences across content changes.

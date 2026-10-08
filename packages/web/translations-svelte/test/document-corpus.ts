@@ -21,7 +21,8 @@ export function corpusNodes(id: string, onActivate: () => void = () => undefined
   const locale = execution.expected.contentLocale;
   const binding = (ref: string | undefined): InlineBinding | undefined => {
     if (ref === undefined) return undefined;
-    const slot = (index.slots as Record<string, { kind: string; href?: string }>)[ref];
+    const slot = (index.slots as Record<string, { kind: string; href?: string; asset?: string; accessibleName?: string }>)[ref];
+    if (slot.kind === "runic:icon") return { kind: "runic:icon", asset: slot.asset!, decorative: false, accessibleName: () => slot.accessibleName! };
     return slot.kind === "runic:link" ? { kind: "runic:link", href: slot.href! } : { kind: "runic:action", onActivate };
   };
   const inline = (node: ExpectedInline): InlineNode => typeof node === "string"

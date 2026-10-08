@@ -13,9 +13,11 @@ bullet lists with a custom list marker, ordered lists with `start` and every
 marker style (bijective letters past `z`, roman numerals past 3999) and default
 options, a `.match` message with an empty variant, whitespace collapsing, U+3000
 at a leaf edge, bidi marks between blocks, empty blocks, a nested inline
-occurrence, placeholder values that contain markup syntax or a line feed, custom
-`explicit` and `omit` tags, and an inline message next to documents. Links and
-actions are bound through typed functional slots. `project.diagnostics` lists
+occurrence, `bold`, `italic`, `code` and a meaningful icon inside a document,
+placeholder values that contain markup syntax or a line feed, custom `explicit`
+and `omit` tags, and an inline message next to documents. Links, actions and
+icons are bound through typed functional slots; an icon slot gives its asset
+text and its accessible name. `project.diagnostics` lists
 the warnings the project itself is expected to report.
 
 - `messages` pins each message's content kind and encoded skeletons.
@@ -41,8 +43,11 @@ the warnings the project itself is expected to report.
 
 `html.json` is the oracle for DOM-based adapters: the canonical semantic HTML
 of every execution with heading base 2, attributes in ordinal name order, no
-hydration comments or framework scoping classes, and custom tags rendered as
-`<span data-runic-markup="<name>" data-runic-occurrence="...">`. The generated
+hydration comments or framework scoping classes, custom tags rendered as
+`<span data-runic-markup="<name>" data-runic-occurrence="...">`, and icons as
+`<span role="img" aria-label="..." data-runic-occurrence="...">` holding the
+asset text. Empty paragraphs, headings and lists are skipped, as in the
+plain-text projection; occurrence paths keep counting them. The generated
 DOM adapter (compiler corpus tests) and the Svelte `LocalizedDocument`
 (`packages/web/translations-svelte`) must both produce it. Update it together with
 any intended change to the adapters.

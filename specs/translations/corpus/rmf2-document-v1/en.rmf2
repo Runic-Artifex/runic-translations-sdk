@@ -54,4 +54,7 @@ custom {
   projection = {#p}See {#term}RMF2{/term} now{#hidden}, quietly{/hidden}.{/p}
   nested = {#p}Start {#strong}{#em}deep{/em} text{/strong}{/p}
 }
+formatting {
+  marks = {#p}{#bold}Bold{/bold}, {#italic}italic{/italic}, {#code}code{/code}, {#icon ref=star/} and a {#link ref=guide}link{/link}.{/p}
+}
 inline = Plain {#strong}inline{/strong} text.
