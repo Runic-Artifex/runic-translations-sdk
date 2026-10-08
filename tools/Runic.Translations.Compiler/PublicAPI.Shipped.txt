@@ -227,7 +227,7 @@ Runic.Translations.Compiler.TranslationVisibility.Internal = 1 -> Runic.Translat
 Runic.Translations.Compiler.TranslationVisibility.Public = 0 -> Runic.Translations.Compiler.TranslationVisibility
 const Runic.Translations.Compiler.Rmf2ProjectCompilationV5.ExecutionProfile = "rmf2-execution-v2" -> string!
 const Runic.Translations.Compiler.Rmf2ProjectCompilationV5.MessageGrammarVersion = 5 -> int
-const Runic.Translations.Compiler.Rmf2ProjectCompilationV5.RuntimeAbiVersion = 2 -> int
+const Runic.Translations.Compiler.Rmf2ProjectCompilationV5.RuntimeAbiVersion = 3 -> int
 override Runic.Translations.Compiler.Mf2DeclarationSyntax.Equals(object? obj) -> bool
 override Runic.Translations.Compiler.Mf2DeclarationSyntax.GetHashCode() -> int
 override Runic.Translations.Compiler.Mf2DeclarationSyntax.ToString() -> string!

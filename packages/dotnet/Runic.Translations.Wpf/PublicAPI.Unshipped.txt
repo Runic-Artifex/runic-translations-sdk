@@ -1,8 +1,1 @@
 #nullable enable
-Runic.Translations.Wpf.WpfDocumentRenderer
-Runic.Translations.Wpf.WpfDocumentRenderer.HeadingBase.get -> int
-Runic.Translations.Wpf.WpfDocumentRenderer.HeadingBase.init -> void
-Runic.Translations.Wpf.WpfDocumentRenderer.SetContent(System.Windows.Controls.FlowDocumentScrollViewer! target, Runic.Translations.BoundLocalizedDocumentContent! content) -> void
-Runic.Translations.Wpf.WpfDocumentRenderer.SetContent(System.Windows.Controls.FlowDocumentScrollViewer! target, string! key, Runic.Translations.LocalizedDocumentContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.MarkupBinding!>! slots) -> void
-Runic.Translations.Wpf.WpfDocumentRenderer.WpfDocumentRenderer(string! contractJson, System.Action<System.Uri!>! navigate, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.Wpf.WpfMarkupFactory!>? custom = null, System.Action<string!, System.Windows.Documents.TextElement!>? theme = null) -> void
-static Runic.Translations.Wpf.WpfDocumentRenderer.ClearContent(System.Windows.Controls.FlowDocumentScrollViewer! target) -> void
