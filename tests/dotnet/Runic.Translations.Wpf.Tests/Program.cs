@@ -103,13 +103,15 @@ internal static class PaymentFixture
 
     internal const string MarkupContract = """
         {
-          "version": 1,
+          "version": 2,
           "contracts": {
-            "runic:action": { "kind": "paired", "interactive": true, "plainText": "explicit", "options": {} },
-            "runic:icon": { "kind": "standalone", "interactive": false, "plainText": "alternateText", "options": {} },
-            "runic:link": { "kind": "paired", "interactive": true, "plainText": "children", "options": {} },
+            "runic:action": { "kind": "paired", "placement": "inline", "children": "inline", "interactive": true, "plainText": "explicit", "options": {} },
+            "runic:icon": { "kind": "standalone", "placement": "inline", "children": "none", "interactive": false, "plainText": "alternateText", "options": {} },
+            "runic:link": { "kind": "paired", "placement": "inline", "children": "inline", "interactive": true, "plainText": "children", "options": {} },
             "shop:badge": {
               "kind": "paired",
+              "placement": "inline",
+              "children": "inline",
               "interactive": false,
               "plainText": "children",
               "options": {
