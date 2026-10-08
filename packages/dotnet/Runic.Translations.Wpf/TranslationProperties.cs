@@ -17,9 +17,9 @@ namespace Runic.Translations.Wpf;
 /// and optional inputs in <see cref="ArgumentsProperty"/>. Plain messages use <see cref="MessageExtension"/> instead.
 /// </summary>
 /// <remarks>
-/// Setting <see cref="RichMessageProperty"/> checks synchronously that the message exists, has markup, and that a source
-/// and renderer are available (a XAML load fails with the reason). Set <see cref="SourceProperty"/> before it when you
-/// name a source. Rendering happens later on the element's dispatcher; a failure there is traced like a binding error and
+/// Setting <see cref="RichMessageProperty"/> on an element whose own <see cref="SourceProperty"/> is set checks synchronously that
+/// the message exists, has markup and that the source has a renderer (a XAML load fails with the reason); set the source
+/// before it. Otherwise the source is the inherited or default one and everything is checked at the first render. Rendering happens later on the element's dispatcher; a failure there is traced like a binding error and
 /// the previous content stays. An element whose message needs inputs renders once <see cref="ArgumentsProperty"/> is set.
 /// In a designer without a source the element stays empty.
 /// </remarks>
@@ -71,14 +71,10 @@ public static class TranslationProperties
     private static void RichMessageChanged(DependencyObject element, DependencyPropertyChangedEventArgs e)
     {
         TextBlock block = Target(element);
-        if (e.NewValue is string { Length: > 0 } key)
+        // Only a source set on this element is certain; an inherited one may not have flowed yet (templates), so
+        // everything else is checked at the first render and traced.
+        if (e.NewValue is string { Length: > 0 } key && block.ReadLocalValue(SourceProperty) is TranslationSource source)
         {
-            TranslationSource? source = GetSource(block) ?? TranslationSource.UseDefault();
-            if (source is null)
-            {
-                if (TranslationDesign.IsInDesignMode) return;
-                throw new InvalidOperationException("No TranslationSource: set TranslationSource.Default at startup or TranslationProperties.Source before RichMessage.");
-            }
             if (source.Renderer is null) throw new InvalidOperationException("Rich messages need a WpfInlineRenderer: pass one to the TranslationSource.");
             source.Validate(key, rich: true);
         }
@@ -153,7 +149,7 @@ internal sealed class RichMessageBinding
             source.Validate(key, rich: true, values.Count, names);
             object content = source.Resolve(key, values, names);
             object? slots = TranslationProperties.GetSlots(block);
-            if (slots is IReadOnlyDictionary<string, InlineMarkupBinding> dictionary)
+            if (AsSlotDictionary(slots) is { } dictionary)
             {
                 renderer.SetContent(block, key, TranslationSource.ToContent(content), dictionary);
             }
@@ -177,6 +173,22 @@ internal sealed class RichMessageBinding
         }
     }
 
+    /// <summary>Accepts any dictionary of slot bindings by slot ID: generic, read-only (covariant) or non-generic.</summary>
+    private static IReadOnlyDictionary<string, InlineMarkupBinding>? AsSlotDictionary(object? slots)
+    {
+        if (slots is IReadOnlyDictionary<string, InlineMarkupBinding> readOnly) return readOnly;
+        if (slots is IDictionary<string, InlineMarkupBinding> generic) return new Dictionary<string, InlineMarkupBinding>(generic);
+        if (slots is not IDictionary loose) return null;
+        var copy = new Dictionary<string, InlineMarkupBinding>(StringComparer.Ordinal);
+        foreach (DictionaryEntry entry in loose)
+        {
+            if (entry.Key is not string id || entry.Value is not InlineMarkupBinding binding)
+                throw new InvalidOperationException("Slots must map slot IDs (string) to InlineMarkupBinding values.");
+            copy.Add(id, binding);
+        }
+        return copy;
+    }
+
     /// <summary>False when the message needs inputs that have not been supplied yet.</summary>
     private static bool TryReadArguments(TranslationSource source, string key, object? arguments, out List<object?> values, out List<string>? names)
     {
@@ -187,6 +199,16 @@ internal sealed class RichMessageBinding
         {
             names = [.. named.Keys];
             values = [.. named.Values];
+        }
+        else if (arguments is IDictionary loose)
+        {
+            names = [];
+            values = [];
+            foreach (DictionaryEntry entry in loose)
+            {
+                names.Add(entry.Key as string ?? throw new InvalidOperationException("Arguments dictionary keys must be parameter names (string)."));
+                values.Add(entry.Value);
+            }
         }
         else if (arguments is IEnumerable sequence and not string)
         {

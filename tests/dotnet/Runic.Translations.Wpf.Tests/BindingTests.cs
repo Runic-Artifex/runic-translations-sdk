@@ -15,13 +15,15 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Runic.Translations;
 using Runic.Translations.Wpf;
+using Runic.Translations.Wpf.Tests;
 
 /// <summary>XAML binding helper checks: plain and rich messages, inputs, publications, threads, templates and lifetime.</summary>
 internal static class BindingTests
 {
     private const string Namespaces =
         "xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' " +
-        "xmlns:rt='clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf'";
+        "xmlns:rt='clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf' " +
+        "xmlns:t='clr-namespace:Runic.Translations.Wpf.Tests;assembly=Runic.Translations.Wpf.Tests'";
 
     internal static void Run()
     {
@@ -34,12 +36,19 @@ internal static class BindingTests
         TranslationSource.Default = source;
         Dispatcher dispatcher = Dispatcher.CurrentDispatcher;
 
+        var otherManager = new NotifyingManager();
+        var otherMessages = new OtherMessages(otherManager);
+        using var other = new TranslationSource(otherManager, otherMessages, renderer);
+        Catalogs.Primary = source;
+        Catalogs.Other = other;
+
         Construction(manager, messages);
         Plain(manager, dispatcher, out TextBlock title);
         Inputs(manager, dispatcher);
         Publications(manager, messages, source, dispatcher, title);
         Templates(dispatcher);
         Rich(manager, messages, source, dispatcher);
+        Inheritance(manager, messages, otherManager, otherMessages, dispatcher);
         Lifetime(manager, source, dispatcher);
         Defaults(manager, source, dispatcher, title);
         Console.WriteLine("PASS WPF XAML binding helper: plain, inputs, rich, publications, templates, defaults and lifetime.");
@@ -103,16 +112,19 @@ internal static class BindingTests
         // Load-time checks name the problem with parameter names.
         XamlParseException gap = Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message pair, Arg1={Binding Source=x}}\"/>"), "A gap in Arg0..Arg3 was accepted.");
         Require(gap.ToString().Contains("Arg0", StringComparison.Ordinal), "The gap error does not name Arg0: " + gap.Message);
-        XamlParseException arity = Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message pair, Arg0={Binding Source=x}}\"/>"), "Too few inputs were accepted.");
+        XamlParseException arity = Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message pair, Source={x:Static t:Catalogs.Primary}, Arg0={Binding Source=x}}\"/>"), "Too few inputs were accepted.");
         Require(arity.ToString().Contains("first", StringComparison.Ordinal) && arity.ToString().Contains("second", StringComparison.Ordinal), "The arity error omits parameter names.");
-        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS}><TextBlock.Text><rt:Message Key='pair'><rt:MessageInput Name='first' Value='{Binding Source=x}'/>" +
+        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS}><TextBlock.Text><rt:Message Key='pair' Source='{x:Static t:Catalogs.Primary}'><rt:MessageInput Name='first' Value='{Binding Source=x}'/>" +
             "<rt:MessageInput Name='third' Value='{Binding Source=x}'/></rt:Message></TextBlock.Text></TextBlock>"), "An unknown input name was accepted.");
-        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS}><TextBlock.Text><rt:Message Key='pair'><rt:MessageInput Name='first' Value='{Binding Source=x}'/>" +
+        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS}><TextBlock.Text><rt:Message Key='pair' Source='{x:Static t:Catalogs.Primary}'><rt:MessageInput Name='first' Value='{Binding Source=x}'/>" +
             "<rt:MessageInput Name='first' Value='{Binding Source=x}'/></rt:Message></TextBlock.Text></TextBlock>"), "A duplicate input name was accepted.");
-        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS}><TextBlock.Text><rt:Message Key='pair' Arg0='{Binding Source=x}'><rt:MessageInput Name='first' Value='{Binding Source=x}'/>" +
+        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS}><TextBlock.Text><rt:Message Key='pair' Source='{x:Static t:Catalogs.Primary}' Arg0='{Binding Source=x}'><rt:MessageInput Name='first' Value='{Binding Source=x}'/>" +
             "</rt:Message></TextBlock.Text></TextBlock>"), "Mixed input forms were accepted.");
-        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message nope}\"/>"), "An unknown message was accepted.");
-        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message payment, Arg0={Binding Source=1}}\"/>"), "A rich message was accepted as plain.");
+        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message nope, Source={x:Static t:Catalogs.Primary}}\"/>"), "An unknown message was accepted.");
+        var inheritedBad = Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message nope}\"/>");
+        Flush(dispatcher);
+        Require(inheritedBad.Text == "[nope]", "An unknown message on an element was not shown as [key]: " + inheritedBad.Text);
+        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message payment, Source={x:Static t:Catalogs.Primary}, Arg0={Binding Source=1}}\"/>"), "A rich message was accepted as plain.");
     }
 
     private static void Publications(NotifyingManager manager, FakeMessages messages, TranslationSource source, Dispatcher dispatcher, TextBlock title)
@@ -226,9 +238,8 @@ internal static class BindingTests
         Require(HasButton(late), "Late Arguments did not render.");
 
         // Load-time checks: bad key, plain key as rich, missing renderer.
-        Throws<ArgumentException>(() => TranslationProperties.SetRichMessage(new TextBlock(), "missing"), "A bad rich key was accepted.");
-        Throws<ArgumentException>(() => TranslationProperties.SetRichMessage(new TextBlock(), "application_title"), "A plain message was accepted as rich.");
-        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} rt:TranslationProperties.RichMessage='missing'/>"), "XAML accepted a bad rich key.");
+        Throws<ArgumentException>(() => TranslationProperties.SetRichMessage(Local(source), "missing"), "A bad rich key was accepted.");
+        Throws<ArgumentException>(() => TranslationProperties.SetRichMessage(Local(source), "application_title"), "A plain message was accepted as rich.");
         using (var bare = new TranslationSource(Peer, new FakeMessages(Peer)))
         {
             var unrendered = new TextBlock();
@@ -263,7 +274,11 @@ internal static class BindingTests
         Require(!abandonedSource.IsAlive, "The manager kept an abandoned source alive.");
         Peer.Switch("de");
         Require(Peer.Subscribers == 0, "An abandoned source did not detach from the manager.");
-        Require(source.ListenerCount < 8, "Dead rich listeners accumulate: " + source.ListenerCount);
+        CreateAbandonedRich(dispatcher, 300);
+        for (int attempt = 0; attempt < 5; attempt++) { GC.Collect(); GC.WaitForPendingFinalizers(); Flush(dispatcher); }
+        TextBlock last = CreateAbandonedRich(dispatcher, 1);
+        Require(source.ListenerCount < 10, "Dead rich listeners accumulate: " + source.ListenerCount);
+        GC.KeepAlive(last);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -303,6 +318,77 @@ internal static class BindingTests
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference CreateAbandonedSource(NotifyingManager peer) => new(new TranslationSource(peer, new FakeMessages(peer)));
 
+    private static TextBlock Local(TranslationSource source) { var block = new TextBlock(); TranslationProperties.SetSource(block, source); return block; }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static TextBlock CreateAbandonedRich(Dispatcher dispatcher, int count)
+    {
+        TextBlock last = new();
+        for (int index = 0; index < count; index++)
+        {
+            last = new TextBlock();
+            TranslationProperties.SetSlots(last, DictionarySlots());
+            TranslationProperties.SetArguments(last, new object?[] { 1L });
+            TranslationProperties.SetRichMessage(last, "payment");
+        }
+        Flush(dispatcher);
+        return last;
+    }
+
+    private static void Inheritance(NotifyingManager manager, FakeMessages primary, NotifyingManager otherManager, OtherMessages other, Dispatcher dispatcher)
+    {
+        manager.Switch("en");
+        const string Children = "<TextBlock Text=\"{rt:Message application_title}\"/><TextBlock Text=\"{rt:Message only_other}\"/>" +
+            "<TextBlock Text=\"{rt:Message pair, Arg0={Binding Source=a}, Arg1={Binding Source=b}}\"/><TextBlock rt:TranslationProperties.RichMessage='payment'/>";
+
+        // A parent in XAML names the catalog for plain and rich children; a key in both catalogs shows the parent's.
+        var panel = Parse<StackPanel>("<StackPanel {NS} rt:TranslationProperties.Source='{x:Static t:Catalogs.Other}'>" + Children + "</StackPanel>");
+        PrepareRich(panel);
+        int primaryCalls = primary.PaymentCalls;
+        Flush(dispatcher);
+        CheckOther(panel, "Other title", "a|b");
+        Require(other.PaymentCalls > 0 && primary.PaymentCalls == primaryCalls, "The rich child did not use the parent's catalog.");
+
+        // The parent's catalog follows its own manager.
+        otherManager.Switch("de");
+        Flush(dispatcher);
+        Require(((TextBlock)panel.Children[0]).Text == "Anderer Titel", "The inherited catalog did not follow its manager.");
+        otherManager.Switch("en");
+
+        // Inheritance that arrives after load, as in a DataTemplate instance added under a parent.
+        var template = Parse<DataTemplate>("<DataTemplate {NS}><StackPanel>" + Children + "</StackPanel></DataTemplate>");
+        var loaded = (StackPanel)template.LoadContent();
+        PrepareRich(loaded);
+        var host = Parse<StackPanel>("<StackPanel {NS} rt:TranslationProperties.Source='{x:Static t:Catalogs.Other}'/>");
+        primaryCalls = primary.PaymentCalls;
+        other.PaymentCalls = 0;
+        host.Children.Add(loaded);
+        Flush(dispatcher);
+        CheckOther(loaded, "Other title", "a|b");
+        Require(other.PaymentCalls > 0 && primary.PaymentCalls == primaryCalls, "The templated rich child did not use the parent's catalog.");
+
+        // Clearing the parent's source falls back to the default catalog.
+        TranslationProperties.SetSource(panel, null);
+        Flush(dispatcher);
+        Require(((TextBlock)panel.Children[0]).Text == "Application" && ((TextBlock)panel.Children[1]).Text == "[only_other]" && primary.PaymentCalls > primaryCalls,
+            "Clearing the inherited source did not fall back to the default.");
+    }
+
+    private static void PrepareRich(Panel panel)
+    {
+        var rich = (TextBlock)panel.Children[3];
+        TranslationProperties.SetSlots(rich, TypedSlots());
+        TranslationProperties.SetArguments(rich, new object?[] { 1L });
+    }
+
+    private static void CheckOther(Panel panel, string title, string pair)
+    {
+        string shown = string.Join(" | ", panel.Children.OfType<TextBlock>().Select(block => block.Text));
+        Require(((TextBlock)panel.Children[0]).Text == title && ((TextBlock)panel.Children[1]).Text == "only in other" && ((TextBlock)panel.Children[2]).Text == pair,
+            "The parent's catalog was not used by plain children: " + shown);
+        Require(HasButton((TextBlock)panel.Children[3]), "The rich child did not render.");
+    }
+
     private static void Defaults(NotifyingManager manager, TranslationSource source, Dispatcher dispatcher, TextBlock title)
     {
         // The default was used by bindings, so replacing it silently would split plain and rich bindings.
@@ -317,8 +403,11 @@ internal static class BindingTests
         Require(title.Text == "Anwendung" && manager.Subscribers == 0, $"A disposed source still followed the manager: {title.Text}, {manager.Subscribers} subscribers.");
 
         // No source: a load fails with the reason.
-        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message application_title}\"/>"), "XAML loaded without a source.");
-        Throws<InvalidOperationException>(() => TranslationProperties.SetRichMessage(new TextBlock(), "payment"), "A rich message was accepted without a source.");
+        var unsourced = Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message application_title}\"/>");
+        var unsourcedRich = new TextBlock();
+        TranslationProperties.SetRichMessage(unsourcedRich, "payment");
+        Flush(dispatcher);
+        Require(unsourced.Text == "[application_title]" && unsourcedRich.Inlines.Count == 0, "Elements without any source did not degrade quietly: " + unsourced.Text);
 
         // In a designer there is no startup code: show the key and stay quiet. Permanent for the process, so it runs last.
         DesignerProperties.IsInDesignModeProperty.OverrideMetadata(typeof(DependencyObject), new FrameworkPropertyMetadata(true));
@@ -388,13 +477,28 @@ internal static class BindingTests
         public override void Switch(string locale)
         {
             base.Switch(locale);
-            SnapshotPublished?.Invoke(this, new TranslationSnapshotPublishedEventArgs(Current, isRefresh: false));
+            SnapshotPublished?.Invoke(this, new TranslationSnapshotPublishedEventArgs(Current, TranslationSnapshotPublishReason.LocaleChanged));
         }
         public override ValueTask RefreshAsync(CancellationToken cancellationToken = default)
         {
             Refreshes++;
-            SnapshotPublished?.Invoke(this, new TranslationSnapshotPublishedEventArgs(Current, isRefresh: true));
+            SnapshotPublished?.Invoke(this, new TranslationSnapshotPublishedEventArgs(Current, TranslationSnapshotPublishReason.Refresh));
             return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>A second catalog sharing a key with the first.</summary>
+    private sealed class OtherMessages(FakeManager manager)
+    {
+        public const int ReadableNameVersion = 1;
+        public int PaymentCalls { get; set; }
+        public string application_title => manager.CurrentLocale == "de" ? "Anderer Titel" : "Other title";
+        public string only_other => "only in other";
+        public string pair(string first, string second) => first + "|" + second;
+        public LocalizedTextContent<PaymentSlots> payment(long count)
+        {
+            PaymentCalls++;
+            return new(manager.Current.FormatContent(PaymentFixture.Key, [new TextArgument("count", count), new TextArgument("tone", "positive")]));
         }
     }
 
@@ -418,5 +522,15 @@ internal static class BindingTests
             PaymentCalls++;
             return new(manager.Current.FormatContent(PaymentFixture.Key, [new TextArgument("count", count), new TextArgument("tone", "positive")]));
         }
+    }
+}
+
+namespace Runic.Translations.Wpf.Tests
+{
+    /// <summary>Lets XAML name the sources under test with x:Static.</summary>
+    public static class Catalogs
+    {
+        public static TranslationSource? Primary { get; set; }
+        public static TranslationSource? Other { get; set; }
     }
 }

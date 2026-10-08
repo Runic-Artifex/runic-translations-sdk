@@ -170,7 +170,7 @@ public sealed class TranslationManager : ITranslationManager, ITranslationSnapsh
 
             if (published is not null)
             {
-                NotifySnapshotPublished(new TranslationSnapshotPublishedEventArgs(published, isRefresh: true));
+                NotifySnapshotPublished(new TranslationSnapshotPublishedEventArgs(published, TranslationSnapshotPublishReason.Refresh));
             }
         }
         finally
@@ -233,7 +233,7 @@ public sealed class TranslationManager : ITranslationManager, ITranslationSnapsh
             if (notification is not null)
             {
                 NotifyLocaleChanged(notification);
-                NotifySnapshotPublished(new TranslationSnapshotPublishedEventArgs(publishedSwitch!, isRefresh: false));
+                NotifySnapshotPublished(new TranslationSnapshotPublishedEventArgs(publishedSwitch!, TranslationSnapshotPublishReason.LocaleChanged));
             }
         }
         finally

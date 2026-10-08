@@ -239,20 +239,22 @@ internal static class RuntimeTests
         TranslationManager manager = new(new ImmediateProvider(locale => new FakeSnapshot("app", locale)), initial);
         var published = new List<TranslationSnapshotPublishedEventArgs>();
         int locales = 0;
-        manager.SnapshotPublished += (_, args) => published.Add(args);
+        var order = new List<string>();
+        manager.SnapshotPublished += (_, args) => { published.Add(args); order.Add("published"); };
         manager.SnapshotPublished += (_, _) => throw new InvalidOperationException("subscriber failed");
-        manager.LocaleChanged += (_, _) => locales++;
+        manager.LocaleChanged += (_, _) => { locales++; order.Add("locale"); };
         await manager.SetLocaleAsync("en-US");
         Assert.Equal(0, published.Count);
         await manager.SetLocaleAsync("de-DE");
         Assert.Equal(1, published.Count);
         Assert.Same(manager.Current, published[0].Snapshot);
-        Assert.True(!published[0].IsRefresh, "switch is not a refresh");
+        Assert.True(published[0].Reason == TranslationSnapshotPublishReason.LocaleChanged, "switch reason");
         await manager.RefreshAsync();
         Assert.Equal(2, published.Count);
         Assert.Same(manager.Current, published[1].Snapshot);
-        Assert.True(published[1].IsRefresh, "refresh is flagged");
+        Assert.True(published[1].Reason == TranslationSnapshotPublishReason.Refresh, "refresh reason");
         Assert.Equal(1, locales);
+        Assert.True(order.SequenceEqual(["locale", "published", "published"]), "LocaleChanged precedes SnapshotPublished: " + string.Join(",", order));
     }
 
     private static async Task ReentrantNotification()

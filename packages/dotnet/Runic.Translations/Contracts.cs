@@ -119,24 +119,40 @@ public interface ITranslationSnapshotNotifier
 {
     /// <summary>
     /// Raised after a snapshot becomes <see cref="ITranslationManager.Current"/>: once for a successful locale switch
-    /// (together with <see cref="ITranslationManager.LocaleChanged"/>) and once for each successful
-    /// <see cref="ITranslationManager.RefreshAsync"/>. Subscriber failures never affect the publishing caller.
+    /// and once for each successful <see cref="ITranslationManager.RefreshAsync"/>.
     /// </summary>
+    /// <remarks>
+    /// For a locale switch it is raised after <see cref="ITranslationManager.LocaleChanged"/>. Handlers run on the
+    /// thread that completed the publication, which may be a thread-pool thread, never while the manager holds its
+    /// transition lock, so a handler may call <see cref="ITranslationManager.RefreshAsync"/> or
+    /// <see cref="ITranslationManager.SetLocaleAsync"/>. Notifications of transitions that complete close together
+    /// are not serialized and may arrive out of order; read <see cref="ITranslationManager.Current"/> for the latest
+    /// state instead of relying on the event data. A subscriber failure never affects the publishing caller.
+    /// </remarks>
     event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
+}
+
+/// <summary>Why a snapshot was published.</summary>
+public enum TranslationSnapshotPublishReason
+{
+    /// <summary>A successful locale switch.</summary>
+    LocaleChanged,
+    /// <summary>A successful refresh of the active locale.</summary>
+    Refresh,
 }
 
 /// <summary>Describes a published snapshot.</summary>
 public sealed class TranslationSnapshotPublishedEventArgs : EventArgs
 {
     /// <summary>Creates event data.</summary>
-    public TranslationSnapshotPublishedEventArgs(ITranslationSnapshot snapshot, bool isRefresh)
+    public TranslationSnapshotPublishedEventArgs(ITranslationSnapshot snapshot, TranslationSnapshotPublishReason reason)
     {
         Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
-        IsRefresh = isRefresh;
+        Reason = reason;
     }
 
     /// <summary>The newly published snapshot.</summary>
     public ITranslationSnapshot Snapshot { get; }
-    /// <summary><see langword="true"/> when the locale did not change.</summary>
-    public bool IsRefresh { get; }
+    /// <summary>Why the snapshot was published.</summary>
+    public TranslationSnapshotPublishReason Reason { get; }
 }

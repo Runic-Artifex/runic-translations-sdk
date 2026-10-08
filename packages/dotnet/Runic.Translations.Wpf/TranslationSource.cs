@@ -61,12 +61,12 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
         }
     }
 
-    /// <summary>Creates a source on the application's dispatcher, or on <paramref name="dispatcher"/> when given.</summary>
+    /// <summary>Creates a source on the current thread's dispatcher (else the application's), or on <paramref name="dispatcher"/> when given.</summary>
     /// <param name="manager">The manager whose snapshot publications refresh bindings.</param>
     /// <param name="messages">The generated readable surface, <c>new AppText(manager).Messages</c>, not <c>AppText</c> itself.</param>
     /// <param name="renderer">Required only for rich messages bound with <c>TranslationProperties.RichMessage</c>.</param>
     /// <param name="dispatcher">
-    /// The UI dispatcher. Defaults to <see cref="Application.Current"/>'s, else the current thread's; there is no
+    /// The UI dispatcher. Defaults to the current thread's dispatcher, else <see cref="Application.Current"/>'s; there is no
     /// implicit dispatcher, so a call from a thread without one must pass it.
     /// </param>
     public TranslationSource(ITranslationManager manager, object messages, WpfInlineRenderer? renderer = null, Dispatcher? dispatcher = null)
@@ -76,7 +76,7 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
         FieldInfo? version = messages.GetType().GetField("ReadableNameVersion", BindingFlags.Public | BindingFlags.Static);
         if (version is not { IsLiteral: true })
             throw new ArgumentException($"{messages.GetType().Name} is not a generated readable surface. Pass 'text.Messages', not 'text'.", nameof(messages));
-        _dispatcher = dispatcher ?? Application.Current?.Dispatcher ?? Dispatcher.FromThread(Thread.CurrentThread)
+        _dispatcher = dispatcher ?? Dispatcher.FromThread(Thread.CurrentThread) ?? Application.Current?.Dispatcher
             ?? throw new InvalidOperationException("No dispatcher: create the TranslationSource on the UI thread or pass the UI Dispatcher.");
         Manager = manager;
         Messages = messages;
