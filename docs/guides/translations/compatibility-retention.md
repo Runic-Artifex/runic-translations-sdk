@@ -35,6 +35,10 @@ packs built with 0.6.0-preview.3 or earlier use ABI 2 and must be rebuilt.
 - Rebuild generated C# and ESM output with the matching compiler. Generated code
   from an earlier release fails its `EnsureRmf2RuntimeAbi` check, and the Vite
   plugin rejects a manifest with `rmf2RuntimeAbiVersion` 2.
+- Every message entry of the contract gains `content` and `skeletons`, so the
+  caller fingerprint, the generated C# `CatalogData` and `Registration`, all
+  generated ESM files, the web module manifest and every locale artifact change,
+  even in projects without documents.
 - Rebuild **every** external pack, including packs for inline-only projects.
   Both pack loaders reject a pack whose `markupContract.version` is not 2 with
   `RTR0023/markup-contract-version-mismatch`
