@@ -87,9 +87,13 @@ public sealed class MessageExtension : MarkupExtension
         return multi.ProvideValue(serviceProvider);
     }
 
-    /// <summary>True for a dependency property of an element; false for a Style setter or a shared template value.</summary>
+    /// <summary>
+    /// True for a dependency property of an element, including template content (WPF passes an internal <c>SharedDp</c>
+    /// as target while it parses a template, and the binding is then applied to each instance); false for a Style setter.
+    /// </summary>
     private static bool IsElementTarget(IServiceProvider serviceProvider) =>
-        serviceProvider?.GetService(typeof(IProvideValueTarget)) is IProvideValueTarget { TargetObject: DependencyObject, TargetProperty: DependencyProperty };
+        serviceProvider?.GetService(typeof(IProvideValueTarget)) is IProvideValueTarget { TargetObject: { } target, TargetProperty: DependencyProperty }
+        && (target is DependencyObject || target.GetType().Name == "SharedDp");
 
     private static MultiBinding InheritedBinding(string key, List<BindingBase> bindings, List<string>? names)
     {
