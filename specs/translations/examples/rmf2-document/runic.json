@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "catalog": "help",
+  "code": {
+    "namespace": "Example",
+    "className": "HelpText"
+  },
+  "baseLocale": "en"
+}

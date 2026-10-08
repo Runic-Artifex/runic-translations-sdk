@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>RMF2 document example</title>
+<style>.runic-leaf { white-space: pre-wrap; }</style>
+<body>
+<label>Language <select id="locale"><option>en</option><option>de</option></select></label>
+<button id="rerender" type="button">Render again</button>
+<section id="help" aria-label="Backup help"></section>
+<p id="status" role="status"></p>
+<section id="guide" tabindex="-1"><h2>Guide</h2><p>The application owns this route.</p></section>
+<script type="module">
+import { m } from './generated/help.esm-v5/messages.js';
+import { actionBinding, createDomDocumentRenderer, linkBinding, toPlainText } from './generated/help.esm-v5/runtime.js';
+
+const renderer = createDomDocumentRenderer(document);
+const status = document.querySelector('#status');
+let renders = 0, checks = 0, slots;
+function render() {
+  const locale = document.querySelector('#locale').value, generation = ++renders;
+  slots = {
+    guide: linkBinding({ href: '#guide' }),
+    check: actionBinding({ onActivate: () => { status.textContent = `Check ${++checks} from render ${generation}`; } }),
+  };
+  // setContent retires the previous render: its retained links lose href and its actions stop calling back.
+  renderer.setContent(document.querySelector('#help'), m.guide_backup({ fileName: 'report.txt' }, { locale }), { slots });
+}
+// A selection that covers the whole message copies its plain-text projection, with list markers and the
+// action label; a partial selection keeps the browser's own text.
+document.querySelector('#help').addEventListener('copy', event => {
+  const selection = document.getSelection(), whole = document.createRange();
+  whole.selectNodeContents(event.currentTarget);
+  if (!selection.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  if (range.compareBoundaryPoints(Range.START_TO_START, whole) > 0 || range.compareBoundaryPoints(Range.END_TO_END, whole) < 0) return;
+  const locale = document.querySelector('#locale').value;
+  event.clipboardData.setData('text/plain', toPlainText(m.guide_backup({ fileName: 'report.txt' }, { locale }), { slots, allowActionLabels: true }));
+  event.preventDefault();
+});
+document.querySelector('#locale').addEventListener('change', render);
+document.querySelector('#rerender').addEventListener('click', () => { render(); status.textContent = 'Rendered again'; });
+render();
+</script></body></html>

@@ -1,0 +1,10 @@
+guide {
+  backup =
+    .input {$fileName :string}
+    {{{#p}{#strong}Bevor Sie fortfahren{/strong}, sichern Sie eine Kopie von {$fileName}.{/p}
+    {#ul}
+      {#li}Lesen Sie die {#link ref=guide}Anleitung{/link}.{/li}
+      {#li}{#action ref=check}Prüfen{/action} Sie das Ergebnis.{/li}
+    {/ul}
+    {#p}Sie können fortfahren, wenn die Prüfung abgeschlossen ist.{/p}}}
+}

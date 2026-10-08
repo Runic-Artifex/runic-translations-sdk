@@ -54,7 +54,8 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "bun run --bun build && vitest run test/locale.svelte.test.ts test/locale-hydration.svelte.test.ts test/localization-stress.test.ts test/document.svelte.test.ts && node test/verify-inline-ssr.mjs",
     "pack:check": "bun pm pack --dry-run",
-    "test:inline-browser": "node test/verify-inline-ssr.mjs && node test/verify-inline-hydration.mjs && node test/verify-document-hydration.mjs"
+    "test:inline-browser": "node test/verify-inline-ssr.mjs && node test/verify-inline-hydration.mjs && node test/verify-document-hydration.mjs",
+    "test:document-example": "node test/verify-document-example.mjs"
   },
   "peerDependencies": {
     "svelte": ">=5.46.4 <6"

@@ -1,0 +1,13 @@
+guide {
+  # Backup instructions; the guide route and the check action are supplied by the application.
+  @param $fileName - The file the user is about to change
+  @example {"fileName":"report.txt"}
+  backup =
+    .input {$fileName :string}
+    {{{#p}{#strong}Before continuing{/strong}, save a copy of {$fileName}.{/p}
+    {#ul}
+      {#li}Read the {#link ref=guide}guide{/link}.{/li}
+      {#li}{#action ref=check}Check{/action} the result.{/li}
+    {/ul}
+    {#p}You can continue when the check finishes.{/p}}}
+}

@@ -355,6 +355,10 @@ by inline occurrences across content changes.
 <LocalizedDocument {nodes} />
 ```
 
+The maintained [document example](../../../specs/translations/examples/rmf2-document/README.md)
+renders the bounded #15 message with the DOM adapter and shows keyboard
+navigation, copying and callback retirement.
+
 Both adapters render every execution of the shared document corpus to the
 canonical HTML in
 [`html.json`](../../../specs/translations/corpus/rmf2-document-v1/html.json).
