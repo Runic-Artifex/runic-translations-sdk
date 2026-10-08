@@ -6,8 +6,8 @@
   const leaves = new Set(["runic:p", "runic:h", "runic:li"]);
   const known = new Set([...leaves, "runic:ul", "runic:ol"]);
   const markerTypes: Readonly<Record<string, string>> = { "lower-alpha": "a", "upper-alpha": "A", "lower-roman": "i", "upper-roman": "I" };
-  // Empty blocks are skipped, as in plain text: a paragraph or heading whose inline content is only empty text and
-  // a list without items render nothing. List items are always rendered. Occurrences keep counting skipped blocks.
+  // Paragraphs and headings with no children or only empty text, and lists with no items, render nothing. List items
+  // are always rendered; a paragraph holding only an element is kept. Occurrences keep counting skipped blocks.
   function blocks(items: readonly DocumentNode[]): readonly DocumentBlock[] {
     for (const item of items)
       if (item.kind !== "block" || !known.has(item.name)) throw new TypeError(`No Svelte document renderer linked for '${item.kind === "block" ? item.name : item.kind}'.`);

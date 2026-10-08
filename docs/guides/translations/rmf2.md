@@ -250,8 +250,8 @@ rejects inline messages.
 Generated ESM returns `LocalizedDocument` for document messages. Create a
 renderer with `createDocumentRenderer({text, element, block})`; the block
 factory is called as `block(name, options, children, {occurrence, locale})`
-after its children. The [web document adapters](#web-document-adapters) build on
-it.
+after its children. The [web document adapters](#web-document-adapters) and the
+[WPF document adapter](#wpf-document-adapter) build on it.
 
 `ToPlainText` (.NET, with `Rmf2PlainTextOptions`) and `toPlainText` (ESM)
 project documents with fixed rules: top-level blocks are separated by a blank
@@ -279,10 +279,11 @@ under a strict content security policy and in SSR output:
 | `ol start marker` | `<ol>` with `start` (when not 1) and `type` `a`, `A`, `i` or `I` (when not decimal) |
 | `li` | `<li class="runic-leaf">` |
 
-Empty blocks are skipped, as in the plain-text projection: a paragraph or
-heading whose inline content is empty renders no element, and neither does a
-list without items. List items are always rendered. Occurrence paths keep
-counting skipped blocks, so the paragraph after an empty one is still `p[2]`.
+Paragraphs and headings with no children or only empty text, and lists with
+no items, render no element. List items are always rendered. A paragraph whose
+only content is an element, such as a decorative icon, is kept even though the
+plain-text projection drops it. Occurrence paths keep counting skipped blocks,
+so the paragraph after an empty one is still `p[2]`.
 
 Every block and inline element carries `data-runic-occurrence`, and each
 top-level block carries `lang` with the effective content locale, which differs
@@ -300,8 +301,10 @@ own `<h1>`; pass `headingBase` (1 to 9) to change it. Browsers number `ol`
 items the same way as the plain-text projection: bijective letters past `z`
 and decimal past 3999 for roman markers. Inline content uses the same mapping
 as inline messages, except for `bold` and `italic`: both document adapters
-render them as `<b>` and `<i>`, while a standalone `LocalizedInline` and the
-inline DOM renderer keep `<span class="bold">` and `<span class="italic">`.
+render them as `<b>` and `<i>`, while a standalone `LocalizedInline` keeps
+`<span class="bold">` and `<span class="italic">` and the inline DOM renderer
+(`createDomInlineRenderer`) keeps a `<span>` with an inline `font-weight` or
+`font-style` style.
 `code` is `<code>` everywhere.
 
 Generated ESM exports `createDomDocumentRenderer(document, {headingBase,
@@ -314,7 +317,10 @@ includes a `ShadowRoot`. `setContent` and `clearContent(target)` retire the
 previous render, so its actions no longer call back and its links lose their
 `href`, even when the application retained the detached nodes. Retirement
 tracks renders per generated runtime module: content that another catalog's
-runtime placed into the same target is replaced but not retired.
+runtime placed into the same target is replaced but not retired. For a
+`DocumentFragment` target, retirement is tracked on the fragment itself: after
+the fragment is appended to an element, a `setContent` on that element does not
+retire the fragment's earlier render.
 
 ```js
 import { m } from "./generated/app.esm/messages.js";
@@ -358,6 +364,75 @@ by inline occurrences across content changes.
 Both adapters render every execution of the shared document corpus to the
 canonical HTML in
 [`html.json`](../../../specs/translations/corpus/rmf2-document-v1/html.json).
+
+### WPF document adapter
+
+`Runic.Translations.Wpf` renders document messages with `WpfDocumentRenderer`
+into a read-only `FlowDocumentScrollViewer`. Construct it once per catalog from
+the generated `Rmf2MarkupContract` constant, with the same navigation handler,
+custom inline factories and theme callback as `WpfInlineRenderer`, then call
+`SetContent` on the UI thread:
+
+```csharp
+var documents = new WpfDocumentRenderer(AppTextCatalog.Rmf2MarkupContract, Navigate);
+documents.SetContent(helpViewer, text.Messages.guide_backup(fileName: fileName).Bind(new(
+    check: new InlineActionBinding(Check),
+    guide: new InlineLinkBinding(guideUri))));
+```
+
+| Block | WPF |
+| --- | --- |
+| `p` | `Paragraph` |
+| `h level=n` | bold `Paragraph` with `AutomationProperties.HeadingLevel` `HeadingBase + n - 1` (clamped at 9), exposed to UI Automation as a heading |
+| `ul` | `List` with `MarkerStyle="Disc"`, exposed as a UI Automation list |
+| `ol start marker` | `List` with `StartIndex` and `Decimal`, `LowerLatin`, `UpperLatin`, `LowerRoman` or `UpperRoman` markers |
+| `li` | `ListItem` holding a `Paragraph` without margin, exposed as a list item with its position and set size |
+
+Paragraphs and headings with no children or only empty text, and lists with
+no items, are not rendered. List items are always rendered. A paragraph whose
+only content is an element, such as a decorative icon, is kept even though the
+plain-text projection drops it. Headings and list items are named for UI Automation
+by their copy text (action labels and meaningful icon text included, no list
+marker), so Narrator reads "Check the result." rather than the bullet. An
+`ol` whose numbering would pass 2147483647 throws `TranslationFormatException`,
+because WPF list markers count from an `int` `StartIndex`.
+
+`HeadingBase` (1 to 9) defaults to 2. WPF numbers letter markers bijectively
+past `z` and falls back to decimal past 3999 for roman markers, like the
+plain-text projection. Inline content uses the inline mapping; links and
+actions additionally get their slot name as `AutomationProperties.AutomationId`.
+Use the slot name, not the inline occurrence key, to find them: an occurrence
+key counts the text before an element and changes with the translation.
+
+Each call builds a fresh `FlowDocument` with `Language` and `FlowDirection` from
+the effective content locale and binds its font family, size and foreground to
+the viewer. These local bindings override an implicit `FlowDocument` style, so
+style the viewer instead. Headings, lists and list items are internal
+subclasses that still pick up implicit `Paragraph`, `List` and `ListItem`
+styles. A binding failure leaves the displayed document untouched. Replacing
+or clearing the document (`ClearContent`) retires its callbacks: retained links
+and action buttons are disabled and no longer call back. If the application
+sets `viewer.Document` itself, the previous render keeps its callbacks until the
+next `SetContent` or `ClearContent` on that viewer. The theme callback is
+called with the canonical contract name for every block and markup inline
+(plain text runs are not passed), for example to size `runic:h` headings by
+`AutomationProperties.GetHeadingLevel`.
+
+Copying (and dragging) a selection puts the plain-text projection on the
+clipboard instead of WPF's text and rich formats: a selection inside one
+paragraph or item copies the selected text; a selection across blocks keeps list
+markers, a line break between items and a blank line between blocks. Action
+labels and meaningful icon text are copied, link destinations and decorative
+icons are not. The clipboard text uses Windows line endings (`\r\n`). The
+adapter does not offer RTF or XAML clipboard formats, because they would
+serialise each link's `NavigateUri` and leak destinations that the projection
+leaves out.
+
+`FlowDocumentScrollViewer` is the supported host: links and action buttons are
+tab stops and activate with Enter, there is no editor caret or editor focus
+model, and selection and copy work. A read-only `RichTextBox` with
+`IsDocumentEnabled` also activates links on a plain click, but it is an editor
+with a caret and its own focus handling, so the adapter does not target it.
 
 ## CLI, editor, and language service
 

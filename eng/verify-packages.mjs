@@ -73,7 +73,7 @@ export async function verifyPackages(version = workspace.version) {
     dotnetConsumer(directory, "Runic.Translations.Build", version, { build: true },
       "Console.WriteLine(\"Build package restored.\");", environment);
     dotnetConsumer(directory, "Runic.Translations.Wpf", version, { framework: "net10.0-windows", wpf: true },
-      "using Runic.Translations.Wpf; _ = typeof(WpfInlineRenderer);", environment);
+      "using Runic.Translations.Wpf; _ = typeof(WpfInlineRenderer); _ = typeof(WpfDocumentRenderer);", environment);
     for (const consumer of readdirSync(directory, { withFileTypes: true }).filter(entry => entry.isDirectory())) {
       const path = join(directory, consumer.name);
       if (existsSync(join(path, "obj", "project.assets.json"))) assertNoSourceReferences(path);

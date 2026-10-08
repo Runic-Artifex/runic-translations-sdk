@@ -46,8 +46,8 @@ of every execution with heading base 2, attributes in ordinal name order, no
 hydration comments or framework scoping classes, custom tags rendered as
 `<span data-runic-markup="<name>" data-runic-occurrence="...">`, and icons as
 `<span role="img" aria-label="..." data-runic-occurrence="...">` holding the
-asset text. Empty paragraphs, headings and lists are skipped, as in the
-plain-text projection; occurrence paths keep counting them. The generated
+asset text. Paragraphs and headings with no children or only empty text,
+and lists with no items, are skipped; occurrence paths keep counting them. The generated
 DOM adapter (compiler corpus tests) and the Svelte `LocalizedDocument`
 (`packages/web/translations-svelte`) must both produce it. Update it together with
 any intended change to the adapters.
