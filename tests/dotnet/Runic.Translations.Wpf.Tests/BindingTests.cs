@@ -411,7 +411,9 @@ internal static class BindingTests
         Require(failure.ToString().Contains("create it earlier", StringComparison.Ordinal) && failure.ToString().Contains("only_late", StringComparison.Ordinal),
             "The late-source error is not actionable: " + failure.Message);
         using var late = new TranslationSource(manager, new LateMessages());
-        Require(Parse<TextBlock>(Xaml) is { } shown && Flush(dispatcher, shown).Text == "late only", "Creating the source first did not fix the load.");
+        var shown = Parse<TextBlock>(Xaml);
+        TranslationProperties.SetSource(shown, late);
+        Require(Flush(dispatcher, shown).Text == "late only", "Creating the source first did not fix the load.");
     }
 
     private static void PrepareRich(Panel panel)
