@@ -228,6 +228,12 @@ are separate: the source follows the manager's locale only, so set `CultureInfo`
 no `.resx` importer and no `FlowDocument` conversion; use `WpfDocumentRenderer`
 for document messages.
 
+Create every `TranslationSource` before loading the views that use it (in
+`OnStartup`, before `InitializeComponent`). A message that only a source created
+later has fails the load with "No live TranslationSource has a message ...",
+because the load check cannot know about a source that does not exist yet; create
+the source earlier or pass `Source=` explicitly.
+
 ### Designer
 
 Visual Studio and Blend do not run `OnStartup`, so no default source exists.

@@ -38,7 +38,7 @@ internal static class BindingTests
 
         var otherManager = new NotifyingManager();
         var otherMessages = new OtherMessages(otherManager);
-        using var other = new TranslationSource(otherManager, otherMessages, renderer);
+        var other = new TranslationSource(otherManager, otherMessages, renderer);
         Catalogs.Primary = source;
         Catalogs.Other = other;
 
@@ -51,6 +51,14 @@ internal static class BindingTests
         Inheritance(manager, messages, otherManager, otherMessages, dispatcher);
         Lifetime(manager, source, dispatcher);
         Defaults(manager, source, dispatcher, title);
+
+        // With no live source at all, nothing can be checked at load and the load passes.
+        other.Dispose();
+        var orphan = Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message anything}\"/>");
+        var orphanRich = new TextBlock();
+        TranslationProperties.SetRichMessage(orphanRich, "anything");
+        Flush(dispatcher);
+        Require(orphan.Text == "[anything]" && orphanRich.Inlines.Count == 0, "A load without any source did not pass quietly: " + orphan.Text);
         Console.WriteLine("PASS WPF XAML binding helper: plain, inputs, rich, publications, templates, defaults and lifetime.");
     }
 
@@ -125,7 +133,7 @@ internal static class BindingTests
         Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message nope}\"/>"), "A typo was accepted on an element.");
         Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message payment, Arg0={Binding Source=1}}\"/>"), "A rich message was accepted as plain on an element.");
         Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message pair, Arg0={Binding Source=x}}\"/>"), "A wrong input count was accepted on an element.");
-        Throws<Exception>(() => Parse<DataTemplate>("<DataTemplate {NS}><TextBlock Text=\"{rt:Message nope}\"/></DataTemplate>").LoadContent(), "A typo was accepted in a template.");
+        ThrowsLoad(() => Parse<DataTemplate>("<DataTemplate {NS}><TextBlock Text=\"{rt:Message nope}\"/></DataTemplate>").LoadContent(), "A typo was accepted in a template.");
         Throws<ArgumentException>(() => TranslationProperties.SetRichMessage(new TextBlock(), "missing"), "A rich typo was accepted.");
         Throws<ArgumentException>(() => TranslationProperties.SetRichMessage(new TextBlock(), "application_title"), "A plain message was accepted as rich.");
         Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message payment, Source={x:Static t:Catalogs.Primary}, Arg0={Binding Source=1}}\"/>"), "A rich message was accepted as plain.");
@@ -361,6 +369,14 @@ internal static class BindingTests
         Require(styled.Text == "Other title", "A Style setter did not follow the inherited source: " + styled.Text);
         panel.Children.Remove(styled);
 
+        // So does a Setter inside a trigger.
+        var triggered = Parse<TextBlock>("<TextBlock {NS} Tag='go'><TextBlock.Style><Style TargetType='TextBlock'><Style.Triggers><DataTrigger Binding='{Binding Tag, RelativeSource={RelativeSource Self}}' Value='go'>" +
+            "<Setter Property='Text' Value=\"{rt:Message application_title}\"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>");
+        panel.Children.Add(triggered);
+        Flush(dispatcher);
+        Require(triggered.Text == "Other title", "A trigger setter did not follow the inherited source: " + triggered.Text);
+        panel.Children.Remove(triggered);
+
         // The parent's catalog follows its own manager.
         otherManager.Switch("de");
         Flush(dispatcher);
@@ -385,6 +401,17 @@ internal static class BindingTests
         Flush(dispatcher);
         Require(((TextBlock)panel.Children[0]).Text == "Application" && ((TextBlock)panel.Children[1]).Text == "[only_other]" && primary.PaymentCalls > primaryCalls,
             "Clearing the inherited source did not fall back to the default.");
+        LateSource(manager, dispatcher);
+    }
+
+    private static void LateSource(NotifyingManager manager, Dispatcher dispatcher)
+    {
+        const string Xaml = "<TextBlock {NS} Text=\"{rt:Message only_late}\"/>";
+        Exception failure = ThrowsLoad(() => Parse<TextBlock>(Xaml), "A key of a source created later loaded.");
+        Require(failure.ToString().Contains("create it earlier", StringComparison.Ordinal) && failure.ToString().Contains("only_late", StringComparison.Ordinal),
+            "The late-source error is not actionable: " + failure.Message);
+        using var late = new TranslationSource(manager, new LateMessages());
+        Require(Parse<TextBlock>(Xaml) is { } shown && Flush(dispatcher, shown).Text == "late only", "Creating the source first did not fix the load.");
     }
 
     private static void PrepareRich(Panel panel)
@@ -450,7 +477,17 @@ internal static class BindingTests
 
     private static bool HasButton(TextBlock block) => block.Inlines.OfType<InlineUIContainer>().Any(item => item.Child is Button);
 
+    private static TextBlock Flush(Dispatcher dispatcher, TextBlock block) { Flush(dispatcher); return block; }
+
     private static void Flush(Dispatcher dispatcher) => dispatcher.Invoke(DispatcherPriority.ApplicationIdle, new Action(() => { }));
+
+    /// <summary>A failed load is a XamlParseException, or the ArgumentException that caused it.</summary>
+    private static Exception ThrowsLoad(Action action, string message)
+    {
+        try { action(); }
+        catch (Exception exception) when (exception is XamlParseException or ArgumentException) { return exception; }
+        throw new InvalidOperationException(message);
+    }
 
     private static T Throws<T>(Action action, string message) where T : Exception
     {
@@ -516,6 +553,12 @@ internal static class BindingTests
             PaymentCalls++;
             return new(manager.Current.FormatContent(PaymentFixture.Key, [new TextArgument("count", count), new TextArgument("tone", "positive")]));
         }
+    }
+
+    private sealed class LateMessages
+    {
+        public const int ReadableNameVersion = 1;
+        public string only_late => "late only";
     }
 
     private sealed class WrongFacade { public string application_title => ""; }

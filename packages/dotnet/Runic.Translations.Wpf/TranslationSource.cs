@@ -198,13 +198,16 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
     /// </summary>
     internal static void CheckLive(string key, bool rich, int? inputCount, IReadOnlyList<string>? names)
     {
-        TranslationSource[] live;
+        var live = new List<TranslationSource>();
         lock (RegistryGate)
         {
             Registry.RemoveAll(item => !item.TryGetTarget(out _));
-            live = [.. Registry.Select(item => item.TryGetTarget(out TranslationSource? source) ? source : null!).Where(source => source is not null && Volatile.Read(ref source._disposed) == 0)];
+            foreach (WeakReference<TranslationSource> item in Registry)
+            {
+                if (item.TryGetTarget(out TranslationSource? candidate) && Volatile.Read(ref candidate._disposed) == 0) live.Add(candidate);
+            }
         }
-        if (live.Length == 0) return;
+        if (live.Count == 0) return;
         ArgumentException? first = null;
         bool anyHas = false;
         foreach (TranslationSource source in live)
@@ -214,7 +217,7 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
             try { source.Validate(key, rich, inputCount, names); return; }
             catch (ArgumentException exception) { first ??= exception; }
         }
-        if (!anyHas) throw new ArgumentException($"No translation source has a message '{key}'. Use the flattened readable name, such as 'checkout_help'.", nameof(key));
+        if (!anyHas) throw new ArgumentException($"No live TranslationSource has a message '{key}'. Use the flattened readable name, such as 'checkout_help'. If the catalog's source is created after this XAML loads, create it earlier (before InitializeComponent) or pass Source= explicitly.", nameof(key));
         throw first!;
     }
 
