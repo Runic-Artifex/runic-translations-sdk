@@ -55,13 +55,16 @@ internal static class Rmf2DocumentSyntax
     }
 
     // Visible heading text: pattern text with whitespace collapsed; placeholders keep their source.
+    // Variables in markup options, such as a link target, are not visible text and stay out.
     internal static string HeadingText(Mf2SyntaxDocument syntax, Block block)
     {
         var text = new StringBuilder();
+        TextSourceLocation[] markup = syntax.Expressions.Where(item => item.MarkupName is not null).Select(item => item.Location).ToArray();
         foreach (Mf2SyntaxToken token in syntax.Tokens)
         {
             int start = token.Location.StartByte;
             if (start < block.ContentStart || start >= block.ContentEnd) continue;
+            if (markup.Any(location => location.StartByte <= start && start < location.StartByte + location.LengthBytes)) continue;
             if (token.Kind is Mf2SyntaxTokenKind.Text or Mf2SyntaxTokenKind.Whitespace) text.Append(token.Value);
             else if (token.Kind == Mf2SyntaxTokenKind.Variable) text.Append('{').Append('$').Append(token.Value).Append('}');
         }

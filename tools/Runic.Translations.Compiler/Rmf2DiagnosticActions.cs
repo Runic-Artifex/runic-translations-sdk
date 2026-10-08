@@ -81,8 +81,12 @@ public static class Rmf2DiagnosticActions
             {
                 if (end >= node.MessageByteMap.Count) continue;
                 int from = node.MessageByteMap[start], to = node.MessageByteMap[end];
+                // One fix per break, all reported at the message name, so the title names the lines.
+                int line = 1 + source.Bytes.AsSpan(0, from).Count((byte)'\n'), last = line + source.Bytes.AsSpan(from, to - from).Count((byte)'\n');
                 fixes.Add(new Rmf2DiagnosticQuickFix("rmf2.join-lines:" + from.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    "Join the lines without a space", "RTR0078", node.NameLocation, revision ??= Revision(source), from, to - from, string.Empty));
+                    "Join lines " + line.ToString(System.Globalization.CultureInfo.InvariantCulture) + " and " +
+                    last.ToString(System.Globalization.CultureInfo.InvariantCulture) + " without a space",
+                    "RTR0078", node.NameLocation, revision ??= Revision(source), from, to - from, string.Empty));
             }
         }
         return fixes.AsReadOnly();
