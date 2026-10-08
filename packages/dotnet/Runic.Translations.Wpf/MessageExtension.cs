@@ -53,7 +53,7 @@ public sealed class MessageExtension : MarkupExtension
         source.Validate(key, inputs.Count, rich: false);
         if (inputs.Count == 0)
         {
-            return new Binding { Source = source, Path = new PropertyPath("[0]", key), Mode = BindingMode.OneWay }.ProvideValue(serviceProvider);
+            return new Binding { Source = source, Path = new PropertyPath("[" + key + "]"), Mode = BindingMode.OneWay }.ProvideValue(serviceProvider);
         }
         var multi = new MultiBinding { Converter = new MessageConverter(source, key), Mode = BindingMode.OneWay };
         multi.Bindings.Add(new Binding(nameof(TranslationSource.Version)) { Source = source, Mode = BindingMode.OneWay });
