@@ -1,6 +1,6 @@
 {
   "name": "@runic-artifex/translations-svelte",
-  "version": "0.6.0-preview.4",
+  "version": "0.6.0-preview.5",
   "description": "Svelte 5 localization and RMF2 inline and document content helpers for Runic Translations",
   "homepage": "https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/translations-svelte#readme",
   "bugs": {
