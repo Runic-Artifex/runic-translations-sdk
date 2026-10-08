@@ -114,6 +114,8 @@ internal static class BindingTests
         Require(!weakRich.IsAlive, "A rich binding kept its element alive.");
 
         // After Dispose the source stops following the manager.
+        manager.Switch("de"); Flush(dispatcher);
+        Require(title.Text == "Anwendung", "The source stopped following the manager before Dispose.");
         source.Dispose();
         manager.Switch("en");
         Flush(dispatcher);
