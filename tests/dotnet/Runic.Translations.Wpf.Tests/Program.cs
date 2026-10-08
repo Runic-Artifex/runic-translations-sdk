@@ -12,8 +12,9 @@ using Runic.Translations.Wpf;
 internal static class Program
 {
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
+        if (args.Contains("--sample", StringComparer.Ordinal)) return DocumentSample.Run();
         CompiledTranslationSnapshot snapshot = PaymentFixture.CreateSnapshot();
         LocalizedTextContent content = snapshot.FormatContent(PaymentFixture.Key,
             [new TextArgument("count", 1), new TextArgument("tone", "positive")]);
@@ -82,6 +83,7 @@ internal static class Program
         boundButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Detached typed action remained active.");
         WpfInlineRenderer.ClearContent(target); Require(target.Inlines.Count == 0, "Clear did not dispose content.");
         Console.WriteLine("PASS WPF payment consumer, custom badge, icon accessibility and callback lifetime.");
+        DocumentTests.Run();
         return 0;
     }
 

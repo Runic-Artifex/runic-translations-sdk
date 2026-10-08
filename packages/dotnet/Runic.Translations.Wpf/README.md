@@ -39,5 +39,37 @@ a detached button. Call `ClearContent` when disposing the host. The adapter buil
 before touching the existing control so a binding failure preserves its content.
 The theme owns final typography and button presentation. No icon library ships.
 
+Retired links and action buttons are also disabled, so retained detached controls
+look inert.
+
+## Documents
+
+`WpfDocumentRenderer` renders RMF2 document messages (paragraphs, headings and
+flat lists) into a read-only `FlowDocumentScrollViewer`:
+
+```csharp
+var documents = new WpfDocumentRenderer(AppTextCatalog.Rmf2MarkupContract, Navigate) { HeadingBase = 2 };
+documents.SetContent(helpViewer, text.Messages.guide_backup(fileName: fileName).Bind(new(
+    check: new InlineActionBinding(Check),
+    guide: new InlineLinkBinding(guideUri))));
+```
+
+Headings are bold paragraphs that UI Automation exposes as headings at
+`HeadingBase + level - 1`; lists and list items are exposed as UI Automation
+lists and items with their positions. Links and actions get their slot name as
+`AutomationId`. Every render builds a fresh `FlowDocument` with the content
+locale's `Language` and `FlowDirection`; replacing it or calling `ClearContent`
+retires its callbacks. Copying a selection puts the plain-text projection on the
+clipboard, with list markers and block breaks, action labels and meaningful icon
+text, and without link destinations or rich formats. See the
+[document adapter guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#wpf-document-adapter).
+
+Run the interactive Windows sample, which renders the bounded example of issue
+#15, with:
+
+```powershell
+dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests -- --sample
+```
+
 Cross-compilation is supported through `EnableWindowsTargeting`. Runtime and
 accessibility verification require Windows; Linux cannot execute WPF controls.

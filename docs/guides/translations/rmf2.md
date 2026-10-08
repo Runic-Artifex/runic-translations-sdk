@@ -250,8 +250,8 @@ rejects inline messages.
 Generated ESM returns `LocalizedDocument` for document messages. Create a
 renderer with `createDocumentRenderer({text, element, block})`; the block
 factory is called as `block(name, options, children, {occurrence, locale})`
-after its children. The [web document adapters](#web-document-adapters) build on
-it.
+after its children. The [web document adapters](#web-document-adapters) and the
+[WPF document adapter](#wpf-document-adapter) build on it.
 
 `ToPlainText` (.NET, with `Rmf2PlainTextOptions`) and `toPlainText` (ESM)
 project documents with fixed rules: top-level blocks are separated by a blank
@@ -358,6 +358,57 @@ by inline occurrences across content changes.
 Both adapters render every execution of the shared document corpus to the
 canonical HTML in
 [`html.json`](../../../specs/translations/corpus/rmf2-document-v1/html.json).
+
+### WPF document adapter
+
+`Runic.Translations.Wpf` renders document messages with `WpfDocumentRenderer`
+into a read-only `FlowDocumentScrollViewer`. Construct it once per catalog from
+the generated `Rmf2MarkupContract` constant, with the same navigation handler,
+custom inline factories and theme callback as `WpfInlineRenderer`, then call
+`SetContent` on the UI thread:
+
+```csharp
+var documents = new WpfDocumentRenderer(AppTextCatalog.Rmf2MarkupContract, Navigate);
+documents.SetContent(helpViewer, text.Messages.guide_backup(fileName: fileName).Bind(new(
+    check: new InlineActionBinding(Check),
+    guide: new InlineLinkBinding(guideUri))));
+```
+
+| Block | WPF |
+| --- | --- |
+| `p` | `Paragraph` |
+| `h level=n` | bold `Paragraph` with `AutomationProperties.HeadingLevel` `HeadingBase + n - 1` (clamped at 9), exposed to UI Automation as a heading |
+| `ul` | `List` with `MarkerStyle="Disc"`, exposed as a UI Automation list |
+| `ol start marker` | `List` with `StartIndex` and `Decimal`, `LowerLatin`, `UpperLatin`, `LowerRoman` or `UpperRoman` markers |
+| `li` | `ListItem` holding a `Paragraph` without margin, exposed as a list item with its position and set size |
+
+`HeadingBase` (1 to 9) defaults to 2. WPF numbers letter markers bijectively
+past `z` and falls back to decimal past 3999 for roman markers, like the
+plain-text projection. Inline content uses the inline mapping; links and
+actions additionally get their slot name as `AutomationProperties.AutomationId`.
+Use the slot name, not the inline occurrence key, to find them: an occurrence
+key counts the text before an element and changes with the translation.
+
+Each call builds a fresh `FlowDocument` with `Language` and `FlowDirection` from
+the effective content locale and binds its font family, size and foreground to
+the viewer. A binding failure leaves the displayed document untouched. Replacing
+or clearing the document (`ClearContent`) retires its callbacks: retained links
+and action buttons are disabled and no longer call back. The theme callback is
+called with the canonical contract name for every block and inline element it
+creates, for example to size `runic:h` headings by
+`AutomationProperties.GetHeadingLevel`.
+
+Copying (and dragging) a selection puts the plain-text projection on the
+clipboard instead of WPF's text and rich formats: a selection inside one
+paragraph or item copies the selected text; a selection across blocks keeps list
+markers, a line break between items and a blank line between blocks. Action
+labels and meaningful icon text are copied, link destinations and decorative
+icons are not. The adapter does not offer RTF or XAML clipboard formats.
+
+`FlowDocumentScrollViewer` is the supported host: links and action buttons are
+keyboard focusable and activate with Enter, and text stays selectable. A
+`RichTextBox`, even when read-only, keeps keyboard focus in its editor and needs
+`IsDocumentEnabled` and Ctrl+click for links, so the adapter does not target it.
 
 ## CLI, editor, and language service
 
