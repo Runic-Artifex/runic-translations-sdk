@@ -84,6 +84,7 @@ internal static class Program
         WpfInlineRenderer.ClearContent(target); Require(target.Inlines.Count == 0, "Clear did not dispose content.");
         Console.WriteLine("PASS WPF payment consumer, custom badge, icon accessibility and callback lifetime.");
         DocumentTests.Run();
+        BindingTests.Run();
         return 0;
     }
 

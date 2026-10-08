@@ -55,7 +55,8 @@ public interface ITranslationManager
     /// <see cref="SetLocaleAsync"/> work resolves deterministically: whichever acquires the lock
     /// first runs first, and a refresh that runs after a committed switch recomposes the newly
     /// active locale. <see cref="LocaleChanged"/> is never raised by a refresh because the active
-    /// locale is unchanged.
+    /// locale is unchanged. Managers that implement <see cref="ITranslationSnapshotNotifier"/> raise
+    /// <see cref="ITranslationSnapshotNotifier.SnapshotPublished"/> for refreshes and locale switches alike.
     /// </para>
     /// <para>
     /// The replacement publishes only after the same validation gates as
@@ -109,4 +110,49 @@ public sealed class ExternalTranslationPack
 
     /// <summary>The encoded external-pack document.</summary>
     public ReadOnlyMemory<byte> Content { get; }
+}
+
+/// <summary>
+/// Optionally implemented by managers that report every published snapshot, including refreshes that keep the locale.
+/// </summary>
+public interface ITranslationSnapshotNotifier
+{
+    /// <summary>
+    /// Raised after a snapshot becomes <see cref="ITranslationManager.Current"/>: once for a successful locale switch
+    /// and once for each successful <see cref="ITranslationManager.RefreshAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// For a locale switch it is raised after <see cref="ITranslationManager.LocaleChanged"/>. Handlers run on the
+    /// thread that completed the publication, which may be a thread-pool thread, never while the manager holds its
+    /// transition lock, so a handler may call <see cref="ITranslationManager.RefreshAsync"/> or
+    /// <see cref="ITranslationManager.SetLocaleAsync"/>. Notifications of transitions that complete close together
+    /// are not serialized and may arrive out of order; read <see cref="ITranslationManager.Current"/> for the latest
+    /// state instead of relying on the event data. A subscriber failure never affects the publishing caller.
+    /// </remarks>
+    event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
+}
+
+/// <summary>Why a snapshot was published.</summary>
+public enum TranslationSnapshotPublishReason
+{
+    /// <summary>A successful locale switch.</summary>
+    LocaleChanged,
+    /// <summary>A successful refresh of the active locale.</summary>
+    Refresh,
+}
+
+/// <summary>Describes a published snapshot.</summary>
+public sealed class TranslationSnapshotPublishedEventArgs : EventArgs
+{
+    /// <summary>Creates event data.</summary>
+    public TranslationSnapshotPublishedEventArgs(ITranslationSnapshot snapshot, TranslationSnapshotPublishReason reason)
+    {
+        Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+        Reason = reason;
+    }
+
+    /// <summary>The newly published snapshot.</summary>
+    public ITranslationSnapshot Snapshot { get; }
+    /// <summary>Why the snapshot was published.</summary>
+    public TranslationSnapshotPublishReason Reason { get; }
 }

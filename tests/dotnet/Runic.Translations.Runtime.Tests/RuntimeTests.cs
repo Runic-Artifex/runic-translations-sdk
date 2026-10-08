@@ -12,6 +12,7 @@ internal static class RuntimeTests
 {
     public static void Register(TestRunner runner)
     {
+        runner.Add("manager publishes snapshots on switch and refresh, never on no-ops", SnapshotPublications);
         runner.Add("manager exposes initial immutable reference", InitialState);
         runner.Add("manager validates initial snapshot", InitialValidation);
         runner.Add("manager same locale is no-op", SameLocaleNoOp);
@@ -230,6 +231,30 @@ internal static class RuntimeTests
         await manager.SetLocaleAsync("unsupported");
         Assert.Same(initial, manager.Current);
         Assert.Equal(0, events);
+    }
+
+    private static async Task SnapshotPublications()
+    {
+        FakeSnapshot initial = new("app", "en-US");
+        TranslationManager manager = new(new ImmediateProvider(locale => new FakeSnapshot("app", locale)), initial);
+        var published = new List<TranslationSnapshotPublishedEventArgs>();
+        int locales = 0;
+        var order = new List<string>();
+        manager.SnapshotPublished += (_, args) => { published.Add(args); order.Add("published"); };
+        manager.SnapshotPublished += (_, _) => throw new InvalidOperationException("subscriber failed");
+        manager.LocaleChanged += (_, _) => { locales++; order.Add("locale"); };
+        await manager.SetLocaleAsync("en-US");
+        Assert.Equal(0, published.Count);
+        await manager.SetLocaleAsync("de-DE");
+        Assert.Equal(1, published.Count);
+        Assert.Same(manager.Current, published[0].Snapshot);
+        Assert.True(published[0].Reason == TranslationSnapshotPublishReason.LocaleChanged, "switch reason");
+        await manager.RefreshAsync();
+        Assert.Equal(2, published.Count);
+        Assert.Same(manager.Current, published[1].Snapshot);
+        Assert.True(published[1].Reason == TranslationSnapshotPublishReason.Refresh, "refresh reason");
+        Assert.Equal(1, locales);
+        Assert.True(order.SequenceEqual(["locale", "published", "published"]), "LocaleChanged precedes SnapshotPublished: " + string.Join(",", order));
     }
 
     private static async Task ReentrantNotification()

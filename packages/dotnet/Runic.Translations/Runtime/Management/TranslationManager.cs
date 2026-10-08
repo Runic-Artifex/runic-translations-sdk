@@ -19,7 +19,7 @@ namespace Runic.Translations;
     "Design",
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "The transition semaphore never exposes its wait handle, and disposing it would race active callers.")]
-public sealed class TranslationManager : ITranslationManager
+public sealed class TranslationManager : ITranslationManager, ITranslationSnapshotNotifier
 {
     private readonly object _pendingGate = new();
     private readonly Dictionary<string, PendingSwitch> _pendingSwitches =
@@ -55,6 +55,9 @@ public sealed class TranslationManager : ITranslationManager
 
     /// <inheritdoc />
     public event EventHandler<TranslationLocaleChangedEventArgs>? LocaleChanged;
+
+    /// <inheritdoc />
+    public event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
 
     /// <inheritdoc />
     public ValueTask SetLocaleAsync(
@@ -122,6 +125,7 @@ public sealed class TranslationManager : ITranslationManager
     {
         try
         {
+            ITranslationSnapshot? published = null;
             await _transitionGate.WaitAsync(pending.CancellationToken).ConfigureAwait(false);
             try
             {
@@ -156,11 +160,17 @@ public sealed class TranslationManager : ITranslationManager
                     }
 
                     Interlocked.Exchange(ref _current, replacement);
+                    published = replacement;
                 }
             }
             finally
             {
                 _transitionGate.Release();
+            }
+
+            if (published is not null)
+            {
+                NotifySnapshotPublished(new TranslationSnapshotPublishedEventArgs(published, TranslationSnapshotPublishReason.Refresh));
             }
         }
         finally
@@ -177,6 +187,7 @@ public sealed class TranslationManager : ITranslationManager
         try
         {
             TranslationLocaleChangedEventArgs? notification = null;
+            ITranslationSnapshot? publishedSwitch = null;
             await _transitionGate.WaitAsync(pending.CancellationToken).ConfigureAwait(false);
             try
             {
@@ -210,6 +221,7 @@ public sealed class TranslationManager : ITranslationManager
                         ITranslationSnapshot previous =
                             Interlocked.Exchange(ref _current, replacement);
                         notification = new TranslationLocaleChangedEventArgs(previous, replacement);
+                        publishedSwitch = replacement;
                     }
                 }
             }
@@ -221,6 +233,7 @@ public sealed class TranslationManager : ITranslationManager
             if (notification is not null)
             {
                 NotifyLocaleChanged(notification);
+                NotifySnapshotPublished(new TranslationSnapshotPublishedEventArgs(publishedSwitch!, TranslationSnapshotPublishReason.LocaleChanged));
             }
         }
         finally
@@ -373,6 +386,27 @@ public sealed class TranslationManager : ITranslationManager
             {
                 // Locale publication is complete. Subscriber failures cannot roll it back
                 // and must not fault callers that successfully committed the transition.
+            }
+        }
+    }
+
+    private void NotifySnapshotPublished(TranslationSnapshotPublishedEventArgs notification)
+    {
+        EventHandler<TranslationSnapshotPublishedEventArgs>? handlers = SnapshotPublished;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (Delegate registeredHandler in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((EventHandler<TranslationSnapshotPublishedEventArgs>)registeredHandler)(this, notification);
+            }
+            catch (Exception)
+            {
+                // Publication is complete; subscriber failures cannot roll it back.
             }
         }
     }
