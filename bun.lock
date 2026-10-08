@@ -12,15 +12,15 @@
       "name": "@runic-artifex/translations-editor-frontend",
       "version": "1.0.0-preview.1",
       "dependencies": {
-        "@runic-artifex/svelte": "0.7.0-preview.1",
-        "@runic-artifex/views": "0.7.0-preview.1",
+        "@runic-artifex/svelte": "0.7.0-preview.3",
+        "@runic-artifex/views": "0.7.0-preview.3",
         "svelte": "5.57.1",
       },
       "devDependencies": {
         "@fontsource-variable/inter": "^5.3.0",
         "@internationalized/date": "^3.12.4",
         "@lucide/svelte": "^1.52.0",
-        "@runic-artifex/sveltekit": "0.7.0-preview.1",
+        "@runic-artifex/sveltekit": "0.7.0-preview.3",
         "@runic-artifex/translations-svelte": "workspace:*",
         "@runic-artifex/vite-plugin-runic-translations": "workspace:*",
         "@sveltejs/adapter-static": "4.0.0",
@@ -156,9 +156,9 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@runic-artifex/svelte": ["@runic-artifex/svelte@0.7.0-preview.1", "", { "peerDependencies": { "@runic-artifex/views": "0.7.0-preview.1", "svelte": ">=5.46.4 <6" } }, "sha512-eEOblUvGItyAMZGZcxgtOnmA25PWPHMzlOtt3NlZXTfEdjbnpj47+WFMS9Umz/GFmZvhE35iB4WFUMk4Ub0YGA=="],
+    "@runic-artifex/svelte": ["@runic-artifex/svelte@0.7.0-preview.3", "", { "peerDependencies": { "@runic-artifex/views": "0.7.0-preview.3", "svelte": ">=5.46.4 <6" } }, "sha512-CzkHD/+90N2cfguT/PILQNj4XfGeo7pMe9nfC8BNCoTugi4kJbukTuCvLXGuG8YVE5EgIzoXAj8S05yFdfaNFQ=="],
 
-    "@runic-artifex/sveltekit": ["@runic-artifex/sveltekit@0.7.0-preview.1", "", { "peerDependencies": { "@sveltejs/adapter-static": ">=4 <5", "@sveltejs/kit": ">=3 <4", "@sveltejs/vite-plugin-svelte": ">=7 <8", "svelte": ">=5.57.1 <6", "vite": ">=8.0.12 <9" } }, "sha512-r0yRv++Xpc/OdVodb8b4b36u3EOvdJJsvDHec5zhKz9UP7GGohQQ09k9iUPv4hSiDhs3hNfkQdZnHYtgJaBifA=="],
+    "@runic-artifex/sveltekit": ["@runic-artifex/sveltekit@0.7.0-preview.3", "", { "peerDependencies": { "@sveltejs/adapter-static": ">=4 <5", "@sveltejs/kit": ">=3 <4", "@sveltejs/vite-plugin-svelte": ">=7 <8", "svelte": ">=5.57.1 <6", "vite": ">=8.0.12 <9" } }, "sha512-rAEi1+9XKhZNHk/gm5OYFdZoScPD6GgsrTBdD0zpmK+B2eQjo7dVytUSiUnAbA8JszJZDm2y9jOuooNpaOeqcQ=="],
 
     "@runic-artifex/translations-editor-frontend": ["@runic-artifex/translations-editor-frontend@workspace:apps/translations-editor/Frontend"],
 
@@ -166,7 +166,7 @@
 
     "@runic-artifex/translations-sveltekit": ["@runic-artifex/translations-sveltekit@workspace:packages/web/translations-sveltekit"],
 
-    "@runic-artifex/views": ["@runic-artifex/views@0.7.0-preview.1", "", {}, "sha512-S/4kz3hn/7KmnrSkhcOnCyvu3zWFSLhZGjS4ubkRUtS3zYnkyE31CRnkQXp30UtMz6wVJYphY661djhDnehq0Q=="],
+    "@runic-artifex/views": ["@runic-artifex/views@0.7.0-preview.3", "", {}, "sha512-x+pxfew9OFOebOYY7TZS7wI7XCKAcacNA5Mx7Gz72BsI0BADrY/kIin2HYwEXsulogaJcIyQnJNXwPlPBaiM3A=="],
 
     "@runic-artifex/vite-plugin-runic-translations": ["@runic-artifex/vite-plugin-runic-translations@workspace:packages/web/vite-plugin-runic-translations"],
 
