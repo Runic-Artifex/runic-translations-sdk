@@ -279,10 +279,11 @@ under a strict content security policy and in SSR output:
 | `ol start marker` | `<ol>` with `start` (when not 1) and `type` `a`, `A`, `i` or `I` (when not decimal) |
 | `li` | `<li class="runic-leaf">` |
 
-Empty blocks are skipped, as in the plain-text projection: a paragraph or
-heading whose inline content is empty renders no element, and neither does a
-list without items. List items are always rendered. Occurrence paths keep
-counting skipped blocks, so the paragraph after an empty one is still `p[2]`.
+Paragraphs and headings with no children or only empty text, and lists with
+no items, render no element. List items are always rendered. A paragraph whose
+only content is an element, such as a decorative icon, is kept even though the
+plain-text projection drops it. Occurrence paths keep counting skipped blocks,
+so the paragraph after an empty one is still `p[2]`.
 
 Every block and inline element carries `data-runic-occurrence`, and each
 top-level block carries `lang` with the effective content locale, which differs
@@ -300,8 +301,10 @@ own `<h1>`; pass `headingBase` (1 to 9) to change it. Browsers number `ol`
 items the same way as the plain-text projection: bijective letters past `z`
 and decimal past 3999 for roman markers. Inline content uses the same mapping
 as inline messages, except for `bold` and `italic`: both document adapters
-render them as `<b>` and `<i>`, while a standalone `LocalizedInline` and the
-inline DOM renderer keep `<span class="bold">` and `<span class="italic">`.
+render them as `<b>` and `<i>`, while a standalone `LocalizedInline` keeps
+`<span class="bold">` and `<span class="italic">` and the inline DOM renderer
+(`createDomInlineRenderer`) keeps a `<span>` with an inline `font-weight` or
+`font-style` style.
 `code` is `<code>` everywhere.
 
 Generated ESM exports `createDomDocumentRenderer(document, {headingBase,
@@ -314,7 +317,10 @@ includes a `ShadowRoot`. `setContent` and `clearContent(target)` retire the
 previous render, so its actions no longer call back and its links lose their
 `href`, even when the application retained the detached nodes. Retirement
 tracks renders per generated runtime module: content that another catalog's
-runtime placed into the same target is replaced but not retired.
+runtime placed into the same target is replaced but not retired. For a
+`DocumentFragment` target, retirement is tracked on the fragment itself: after
+the fragment is appended to an element, a `setContent` on that element does not
+retire the fragment's earlier render.
 
 ```js
 import { m } from "./generated/app.esm/messages.js";
@@ -382,9 +388,10 @@ documents.SetContent(helpViewer, text.Messages.guide_backup(fileName: fileName).
 | `ol start marker` | `List` with `StartIndex` and `Decimal`, `LowerLatin`, `UpperLatin`, `LowerRoman` or `UpperRoman` markers |
 | `li` | `ListItem` holding a `Paragraph` without margin, exposed as a list item with its position and set size |
 
-Empty blocks are skipped, as in the plain-text projection: a paragraph or
-heading with only empty text and a list without items are not rendered. List
-items are always rendered. Headings and list items are named for UI Automation
+Paragraphs and headings with no children or only empty text, and lists with
+no items, are not rendered. List items are always rendered. A paragraph whose
+only content is an element, such as a decorative icon, is kept even though the
+plain-text projection drops it. Headings and list items are named for UI Automation
 by their copy text (action labels and meaningful icon text included, no list
 marker), so Narrator reads "Check the result." rather than the bullet. An
 `ol` whose numbering would pass 2147483647 throws `TranslationFormatException`,

@@ -701,7 +701,7 @@ function integerOption(text,schema){return typeof text==="string"&&text.length<=
 // Document profile v1 DOM adapter: semantic elements built with createElement and text nodes, never HTML strings,
 // and no inline style attributes (strict CSP). Leaves carry the runic-leaf class (white-space: pre-wrap). setContent
 // and clearContent retire the previous render: its actions stop calling back and its links lose their destination.
-// Empty paragraphs, headings and lists are skipped like in the plain-text projection; occurrences keep counting them.
+// Paragraphs and headings with no children or only empty text, and lists with no items, are skipped; occurrences keep counting them.
 const domDocumentLifetimes=new WeakMap();
 export function createDomDocumentRenderer(document,{headingBase=2,custom=[]}={}) {
   if(!Number.isInteger(headingBase)||headingBase<1||headingBase>9)throw new RangeError("headingBase must be an integer from 1 to 9.");

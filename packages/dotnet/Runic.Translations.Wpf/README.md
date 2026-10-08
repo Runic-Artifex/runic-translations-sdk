@@ -59,7 +59,8 @@ Headings are bold paragraphs that UI Automation exposes as headings at
 lists and items with their positions. Links and actions get their slot name as
 `AutomationId`. Every render builds a fresh `FlowDocument` with the content
 locale's `Language` and `FlowDirection`; replacing it or calling `ClearContent`
-retires its callbacks. Empty paragraphs, headings and lists are skipped.
+retires its callbacks. Paragraphs and headings with no children or only empty
+text, and lists with no items, are skipped.
 Copying a selection puts the plain-text projection on the clipboard, with list
 markers and block breaks, action labels and meaningful icon text, Windows line
 endings, and without link destinations or rich formats. See the

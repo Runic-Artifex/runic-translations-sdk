@@ -80,6 +80,7 @@ internal static class DocumentTests
 
         Headings(snapshot);
         EmptyBlocks();
+        LinkFirst();
         Copy(snapshot, renderer, semantic, bound);
         Console.WriteLine("PASS WPF document structure, UI Automation, callback retirement and copy projection.");
     }
@@ -140,6 +141,31 @@ internal static class DocumentTests
         Require(rejected, "A list numbered past int.MaxValue was accepted.");
         Require(Shape(renderer.Build([new("runic:ol", last, [Text("runic:li", "ol[1]/li[1]", "x")], [], null, "ol[1]", false)], "en").Document) ==
             "List[Decimal@2147483647](ListItem(Paragraph(Run:x)))", "The last representable start was rejected.");
+    }
+
+    private static void LinkFirst()
+    {
+        // A list item whose first inline is a link: the item boundary and the link's start are the same position.
+        var none = new Dictionary<string, string>();
+        InlineMarkupRun Plain(string text) => new("text", text, [], none, null, true);
+        var link = new InlineMarkupRun("runic:link", null, [Plain("guide")], new Dictionary<string, string> { ["ref"] = "guide" },
+            new InlineLinkBinding(new Uri("https://example.test/guide")), false) { Occurrence = "ul[1]/li[1]/0" };
+        DocumentRender render = new WpfDocumentRenderer(DocumentFixture.MarkupContract, _ => { }).Build([
+            new("runic:ul", none, [new("runic:li", none, [], [link, Plain(" first.")], null, "ul[1]/li[1]", false),
+                new("runic:li", none, [], [Plain("Second.")], null, "ul[1]/li[2]", false)], [], null, "ul[1]", false)], "en");
+        var list = (List)render.Document.Blocks.FirstBlock;
+        var first = (Paragraph)list.ListItems.First().Blocks.FirstBlock;
+        Run guide = (Run)Descendants(render.Document).OfType<Hyperlink>().Single().Inlines.FirstInline;
+        Require(ContentElementAutomationPeer.CreatePeerForElement(list.ListItems.First())!.GetName() == "guide first.", "Link-first item name.");
+        Require(render.Project(list.ContentStart, list.ContentEnd) == "- guide first.\n- Second.", "Link-first list copy: " + render.Project(list.ContentStart, list.ContentEnd));
+        Require(render.Project(first.ContentStart, first.ContentEnd) == "- guide first.", "Link-first whole item copy: " + render.Project(first.ContentStart, first.ContentEnd));
+        // A selection starting inside the link's run copies from that offset.
+        string across = render.Project(guide.ContentStart.GetPositionAtOffset(2), list.ContentEnd);
+        Require(across == "- ide first.\n- Second.", "Copy from inside a link across items: " + across);
+        string inside = render.Project(guide.ContentStart.GetPositionAtOffset(1), guide.ContentStart.GetPositionAtOffset(4));
+        Require(inside == "uid", "Copy inside a link: " + inside);
+        string tail = render.Project(guide.ContentStart.GetPositionAtOffset(3), first.ContentEnd);
+        Require(tail == "de first.", "Copy from inside a link to the item end: " + tail);
     }
 
     private static void Copy(CompiledTranslationSnapshot snapshot, WpfDocumentRenderer renderer, Rmf2DocumentRenderer semantic, BoundLocalizedDocumentContent bound)

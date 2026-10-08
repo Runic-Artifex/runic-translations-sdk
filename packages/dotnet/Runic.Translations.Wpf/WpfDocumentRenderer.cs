@@ -22,7 +22,7 @@ namespace Runic.Translations.Wpf;
 /// Paragraphs become <see cref="Paragraph"/>, headings a bold <see cref="Paragraph"/> exposed to UI Automation as a heading,
 /// lists <see cref="List"/> with <see cref="List.MarkerStyle"/> and <see cref="List.StartIndex"/>, and list items <see cref="ListItem"/>.
 /// Copying replaces the clipboard text with the plain-text projection of the selected blocks, with Windows line endings.
-/// Empty paragraphs, headings and lists are skipped, as in the plain-text projection.
+/// Paragraphs and headings with no children or only empty text, and lists with no items, are skipped.
 /// The rendered <see cref="FlowDocument"/> binds its font family, size and foreground to the viewer; these local values
 /// override an implicit <see cref="FlowDocument"/> style, so style the viewer or use the theme callback. Headings, lists and
 /// list items pick up implicit <see cref="Paragraph"/>, <see cref="List"/> and <see cref="ListItem"/> styles.
@@ -122,8 +122,8 @@ public sealed class WpfDocumentRenderer
 
         Block? Create(DocumentBlock block)
         {
-            // Empty blocks are skipped, as in the plain-text projection: a paragraph or heading with only empty text and a
-            // list without items. List items are always rendered.
+            // Skip paragraphs and headings with no children or only empty text, and lists with no items. List items are
+            // always rendered. A paragraph holding only an element (a decorative icon) is kept, unlike in plain text.
             if (block.Name is "runic:ul" or "runic:ol" ? block.Blocks.Count == 0 : block.Inlines.All(run => run.Text?.Length == 0)) return null;
             switch (block.Name)
             {
