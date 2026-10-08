@@ -33,6 +33,7 @@
   } from "#lib/appearance.js";
   import AppDialog from "#lib/AppDialog.svelte";
   import ArtifactPreviewPanel from "#lib/ArtifactPreviewPanel.svelte";
+  import DocumentPreview from "#lib/DocumentPreview.svelte";
   import CommandPalette from "#lib/CommandPalette.svelte";
   import { buildEditorCommandPalette } from "#lib/command-palette.js";
   import { createEditorBridge } from "#lib/editor-bridge.js";
@@ -2318,6 +2319,8 @@
                   <p>{simulatedPreviewResult.value}</p>
                 {:else if simulatedPreviewResult?.kind === "content"}
                   <div class="safe-content">{@render previewNodes(simulatedPreviewResult.nodes)}</div>
+                {:else if simulatedPreviewResult?.kind === "document"}
+                  <div class="safe-content"><DocumentPreview blocks={simulatedPreviewResult.blocks} /></div>
                 {:else}
                   <span class="preview-placeholder">{ui.text("ui_page_preview_edit_to_build")}</span>
                 {/if}

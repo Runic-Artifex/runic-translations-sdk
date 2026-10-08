@@ -1,7 +1,8 @@
 <script lang="ts">
+  import DocumentPreview from "#lib/DocumentPreview.svelte";
   import InlinePreview from "#lib/InlinePreview.svelte";
   import { Badge } from "#lib/components/ui/badge/index.js";
-  import type { SimulationPreviewNode, UiDirection } from "#lib/simulation.js";
+  import type { SimulationPreviewNode, SimulationPreviewResult, UiDirection } from "#lib/simulation.js";
   import { getUiText } from "#lib/ui-text.js";
 
   let {
@@ -14,14 +15,8 @@
     onclose,
   }: {
     open: boolean;
-    baseResult:
-      | { kind: "text"; value: string }
-      | { kind: "content"; nodes: SimulationPreviewNode[] }
-      | undefined;
-    simulatedResult:
-      | { kind: "text"; value: string }
-      | { kind: "content"; nodes: SimulationPreviewNode[] }
-      | undefined;
+    baseResult: SimulationPreviewResult | undefined;
+    simulatedResult: SimulationPreviewResult | undefined;
     pseudoLocalization: boolean;
     direction: UiDirection;
     busy: boolean;
@@ -63,6 +58,8 @@
             <p>{baseResult.value}</p>
           {:else if baseResult?.kind === "content"}
             {@render artifactNodes(baseResult.nodes)}
+          {:else if baseResult?.kind === "document"}
+            <DocumentPreview blocks={baseResult.blocks} />
           {:else}
             <span class="artifact-placeholder">{ui.text("ui_artifact_preview_edit_to_preview")}</span>
           {/if}
@@ -80,6 +77,8 @@
             <p>{simulatedResult.value}</p>
           {:else if simulatedResult?.kind === "content"}
             {@render artifactNodes(simulatedResult.nodes)}
+          {:else if simulatedResult?.kind === "document"}
+            <DocumentPreview blocks={simulatedResult.blocks} />
           {:else}
             <span class="artifact-placeholder">{ui.text("ui_artifact_preview_edit_to_preview")}</span>
           {/if}

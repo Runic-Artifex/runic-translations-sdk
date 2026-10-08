@@ -51,8 +51,8 @@ internal static class GeneratorTests
         Diagnostic[] errors = run.Compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
         Assert.Equal(0, errors.Length, string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
         string generated = Serialize(run);
-        Assert.True(generated.Contains("EnsureRmf2RuntimeAbi(2)", StringComparison.Ordinal), "RMF2 ABI 2 guard missing");
-        Assert.True(generated.Contains("Rmf2RuntimeAbiVersion = 2", StringComparison.Ordinal), "RMF2 ABI 2 marker missing");
+        Assert.True(generated.Contains("EnsureRmf2RuntimeAbi(3)", StringComparison.Ordinal), "RMF2 ABI 3 guard missing");
+        Assert.True(generated.Contains("Rmf2RuntimeAbiVersion = 3", StringComparison.Ordinal), "RMF2 ABI 3 marker missing");
         Assert.True(generated.Contains("RuntimeAbiVersion = 1", StringComparison.Ordinal), "base generated ABI marker missing");
         Assert.True(generated.Contains("CompiledTextMessage.FromRmf2", StringComparison.Ordinal), "typed v5 message construction missing");
         Assert.True(!generated.Contains("C:/repo", StringComparison.OrdinalIgnoreCase), "absolute path leaked into generated source");

@@ -2,7 +2,7 @@
 
 This directory is the version-explicit release oracle for `rmf2-v1` resources
 executed by `rmf2-execution-v2`: normalized message AST and locale artifact v5,
-runtime ABI 2, generated-name mapping v1, and markup contract v1. `index.json`
+runtime ABI 3, generated-name mapping v1, and markup contract v2. `index.json`
 is language-neutral; the compiler, generated C#, .NET pack loader, generated
 ESM, and ESM dynamic-pack runners consume the same cases and expectations.
 
@@ -30,7 +30,9 @@ taxonomy shared by .NET and ESM, including closed-member rejection for every
 normalized wrapper, AST, input, declaration, selector, variant, key, node,
 expression, option, annotation, and value object shape. Value discriminator
 cases also prove that a missing or non-string `kind` remains malformed even
-when the object contains an additive member.
+when the object contains an additive member. A pack whose `markupContract.version`
+is not 2 is rejected as `RTR0023/markup-contract-version-mismatch`; a
+same-version contract difference stays `RTR0023/argument-contract-mismatch`.
 
 The corpus intentionally excludes terms, references, group fallback, C++, rich
 XLIFF, application call-site rewriting, migration from non-RMF2 legacy formats,

@@ -48,7 +48,10 @@ describe these rules and the integration boundary. Public schema mirrors are
 [locale artifact v5](https://runic-artifex.eu/schemas/translations/locale-artifact-v5.schema.json).
 The CLI `schema` command also exports both v5 schemas for offline validation;
 schema distribution alone does not change a project's source representation.
-Resource syntax and markup contracts remain version 1.
+Resource syntax remains version 1. The exported markup contract is version 2:
+every contract carries `placement` and `children`, and options may use the
+bounded `integer` type. Packs with another markup contract version are rejected
+as `RTR0023/markup-contract-version-mismatch` and must be rebuilt.
 
 The v5 pack path is explicitly dispatched by artifact version, grammar and
 `rmf2-execution-v2` profile. It validates bounded strict JSON/UTF-8, the caller

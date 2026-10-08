@@ -32,6 +32,14 @@ internal static class TranslationPackV5Loader
                 throw Error("The external pack message grammar version is unsupported.", TranslationPackFailureReason.MessageGrammarVersionMismatch);
             if (String(root["profile"]) != contract.Profile || contract.Profile != "rmf2-execution-v2")
                 throw Error("The external pack execution profile is unsupported.", TranslationPackFailureReason.MessageGrammarVersionMismatch);
+            // Check the markup contract version before the catalog, fingerprint and raw contract
+            // comparisons: a pack from another compiler release also has another fingerprint,
+            // and its actionable reason is a rebuild, not a generic contract mismatch.
+            if (root["markupContract"].ValueKind != JsonValueKind.Object ||
+                !root["markupContract"].TryGetProperty("version", out JsonElement markupVersion) ||
+                markupVersion.ValueKind != JsonValueKind.Number || !markupVersion.TryGetInt32(out int markupVersionNumber) ||
+                markupVersionNumber != Rmf2MarkupContract.Version)
+                throw Error("The external pack was built for another Runic markup contract and must be rebuilt with the current compiler.", TranslationPackFailureReason.MarkupContractVersionMismatch);
             string catalog = String(root["catalog"]), locale = String(root["locale"]), fingerprint = String(root["contractFingerprint"]);
             if (!TranslationPackValidation.IsCatalog(catalog)) throw Error("The external pack catalog identifier is invalid.");
             if (!TranslationPackValidation.IsCanonicalLocale(locale)) throw Error("The external pack locale is not canonical.");
@@ -43,7 +51,14 @@ internal static class TranslationPackV5Loader
             if (!string.Equals(fingerprint, contract.ContractFingerprint, StringComparison.Ordinal)) throw Error("The external pack fingerprint does not match the generated contract.", TranslationPackFailureReason.ContractFingerprintMismatch);
             if (root["markupContract"].GetRawText() != contract.Rmf2MarkupContract)
                 throw Error("The RMF2 markup contract differs from the trusted catalog.", TranslationPackFailureReason.ArgumentContractMismatch);
-            var markup = new Rmf2InlineRenderer(contract.Rmf2MarkupContract!);
+            // The pack's contract equals the trusted one byte for byte, so a link failure means the
+            // trusted contract itself is not a valid markup contract v2, not that the AST is malformed.
+            Rmf2MarkupContract markup;
+            try { markup = Rmf2MarkupContract.Link(contract.Rmf2MarkupContract!); }
+            catch (ArgumentException exception)
+            {
+                throw Error("The trusted RMF2 markup contract is not a valid markup contract v2: " + exception.Message, TranslationPackFailureReason.ArgumentContractMismatch);
+            }
             if (root["messages"].ValueKind != JsonValueKind.Object) throw Error("The external pack messages value must be an object.");
             var messages = new List<VerifiedTranslationPackMessage>();
             var keys = new HashSet<string>(StringComparer.Ordinal);
@@ -68,15 +83,19 @@ internal static class TranslationPackV5Loader
     }
 
     private static VerifiedTranslationPackMessage ReadMessage(JsonElement value, TranslationPackMessageContract contract,
-        TranslationPackLimits limits, Rmf2InlineRenderer markup, string locale)
+        TranslationPackLimits limits, Rmf2MarkupContract markup, string locale)
     {
         Dictionary<string, JsonElement> wrapper = Members(value, ["contentLocale", "ast"]);
         string contentLocale = String(wrapper["contentLocale"]);
-        if (!TranslationPackValidation.IsCanonicalLocale(contentLocale) || contentLocale != markup.ExpectedLocale(contract.Key.Name, locale))
+        if (!TranslationPackValidation.IsCanonicalLocale(contentLocale) || contentLocale != markup.Get(contract.Key.Name).ContentLocales[locale])
             throw Error("RMF2 effective content locale mismatch.", TranslationPackFailureReason.ArgumentContractMismatch);
         CompiledRmf2Message message = ReadAst(wrapper["ast"], contract, limits, contentLocale);
         try { markup.ValidatePlanV5(contract, message); }
         catch (TranslationFormatException exception) { throw Error(exception.Message, TranslationPackFailureReason.ArgumentContractMismatch); }
+        catch (Rmf2DocumentPlanException exception)
+        {
+            throw Error(exception.Message, exception.Structure ? TranslationPackFailureReason.DocumentStructureMismatch : TranslationPackFailureReason.MalformedPattern);
+        }
         return new VerifiedTranslationPackMessage(contract.Key, CompiledTextMessage.FromRmf2(message));
     }
 

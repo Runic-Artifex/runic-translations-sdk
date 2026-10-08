@@ -3,7 +3,7 @@
   "profileVersion": 2,
   "mf2Baseline": "LDML-48.2",
   "resourceSyntaxVersion": 1,
-  "markupContractVersion": 1,
+  "markupContractVersion": 2,
   "messageGrammarVersion": 5,
   "normalizedAstVersion": 5,
   "artifactVersion": 5,

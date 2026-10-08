@@ -144,6 +144,7 @@ internal static class GeneratorReadableTests
         runner.Add("readable surface snapshot matches the design shape", ReadableSnapshot);
         runner.Add("readable surface forwards to the encoded surface in every locale", ReadableEqualsEncoded);
         runner.Add("readable surface compiles identifier edge cases under warnings as errors", IdentifierEdgeCases);
+        runner.Add("document messages generate document content accessors that render in every locale", DocumentAccessors);
         runner.Add("typed slots reject wrong kinds, missing (including min:0), misspelled and foreign slots at the Bind argument", CompileFailures);
         runner.Add("readable surface needs the runtime capability and reports RTR0068 otherwise", RuntimeCapability);
         runner.Add("RTR0068 can be suppressed or kept as a warning through SpecificDiagnosticOptions", RuntimeCapabilityOptions);
@@ -217,6 +218,60 @@ internal static class GeneratorReadableTests
         AssertClean(run);
         Assert.Equal("Hello Ada|Badge for ada|One item|Read the guide or retry.\nHallo Ada|Abzeichen für ada|Ein Artikel|Lies die Anleitung.",
             Execute(run, "Example.Consumer.Probe"), "readable execution");
+    }
+
+    private static void DocumentAccessors()
+    {
+        const string english = "notice =\n  {#h level=1}Backup{/h}\n  {#p}Read the {#link ref=guide}guide{/link}.{/p}\n  {#ol start=3}{#li}Save{/li}{#li}Check{/li}{/ol}\n";
+        const string german = "notice =\n  {#h level=1}Sicherung{/h}\n  {#p}Lies die {#link ref=guide}Anleitung{/link}.{/p}\n  {#ol start=3}{#li}Speichern{/li}{#li}Pr\u00FCfen{/li}{/ol}\n";
+        string notice = Path("notice");
+        string source = $$"""
+            namespace Example.Consumer;
+            using System;
+            using System.Collections.Generic;
+            using Example.Translations;
+            using Runic.Translations;
+
+            public static class Probe
+            {
+                public static string Run()
+                {
+                    ITranslationManager manager = AppTextCatalog.CreateManagerAsync("en").AsTask().GetAwaiter().GetResult();
+                    var text = new AppText(manager);
+                    var renderer = new Rmf2DocumentRenderer(Rmf2MarkupContract.Link(AppTextCatalog.Rmf2MarkupContract));
+                    var guide = new InlineLinkBinding(new Uri("https://example.test/guide"));
+                    var output = new List<string>();
+                    foreach (string locale in new[] { "en", "de" })
+                    {
+                        manager.SetLocaleAsync(locale).AsTask().GetAwaiter().GetResult();
+                        LocalizedDocumentContent<AppTextSlots.notice> content = text.Messages.notice;
+                        LocalizedDocumentContent encoded = text.{{notice}};
+                        LocalizedDocumentContent escape = text.r_args_{{notice}}(ReadOnlySpan<TextArgument>.Empty);
+                        BoundLocalizedDocumentContent bound = content.Bind(new(guide: guide));
+                        IReadOnlyList<DocumentBlock> blocks = renderer.Render(bound);
+                        Require(blocks.Count == 3 && blocks[0].Name == "runic:h" && blocks[0].Options["level"] == "1", "heading");
+                        Require(blocks[1].Inlines[1].Occurrence == "p[1]/1" && blocks[1].Inlines[1].Binding == guide, "link");
+                        Require(blocks[2].Options["start"] == "3" && blocks[2].Blocks[1].Occurrence == "ol[1]/li[2]", "list");
+                        var slots = new Dictionary<string, MarkupBinding> { ["guide"] = guide };
+                        string typed = renderer.ToPlainText(bound);
+                        Require(typed == renderer.ToPlainText("notice", encoded, slots) && typed == renderer.ToPlainText("notice", escape, slots), "encoded");
+                        LocalizedDocumentContent untyped = content;
+                        Require(untyped.Locale == locale && encoded.Locale == locale, "content locale");
+                        output.Add(typed);
+                    }
+                    return string.Join("\n--\n", output);
+                }
+
+                private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
+            }
+            """;
+        string project = Project.Replace("\"checkout_help\": { \"retry\": { \"min\": 0, \"max\": 1 } }", "", StringComparison.Ordinal);
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, ProjectInput(project), EnglishInput(english), GermanInput(german));
+        AssertClean(run);
+        string readable = Readable(run);
+        Assert.True(readable.Contains("public global::Runic.Translations.LocalizedDocumentContent<global::@Example.@Translations.@AppTextSlots.@notice> @notice => new(", StringComparison.Ordinal), readable);
+        Assert.Equal("Backup\n\nRead the guide.\n\n3. Save\n4. Check\n--\nSicherung\n\nLies die Anleitung.\n\n3. Speichern\n4. Pr\u00FCfen",
+            Execute(run, "Example.Consumer.Probe"), "document execution");
     }
 
     private static void IdentifierEdgeCases()
@@ -319,7 +374,7 @@ internal static class GeneratorReadableTests
                 public static string Run(Example.Translations.AppText text) => text.r_6772656574696e67(r_6e616d65: "Ada");
             }
             """;
-        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V2, RuntimeReferenceMode.ProjectReferenceRmf2V2 })
+        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V3, RuntimeReferenceMode.ProjectReferenceRmf2V3 })
         {
             GeneratorRun run = GeneratorTestHost.RunWithConsumer(mode, consumer, ProjectInput(), EnglishInput(), GermanInput());
             Diagnostic diagnostic = GeneratorTestHost.Run(mode, ProjectInput(), EnglishInput(), GermanInput()).SingleResult.Diagnostics.Single();
@@ -340,7 +395,7 @@ internal static class GeneratorReadableTests
             Diagnostic[] problems = real.GetDiagnostics().Where(static item => item.Severity >= DiagnosticSeverity.Warning).ToArray();
             Assert.Equal(0, problems.Length, mode + ": " + string.Join("\n", problems.Select(static item => item.ToString())));
         }
-        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V2Typed, RuntimeReferenceMode.ProjectReferenceRmf2V2Typed })
+        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V3Typed, RuntimeReferenceMode.ProjectReferenceRmf2V3Typed })
         {
             GeneratorRun run = GeneratorTestHost.Run(mode, ProjectInput(), EnglishInput(), GermanInput());
             Assert.Equal(0, run.SingleResult.Diagnostics.Length, mode + ": " + string.Join("\n", run.SingleResult.Diagnostics));
@@ -364,7 +419,7 @@ internal static class GeneratorReadableTests
             (ReportDiagnostic.Suppress, null),
             (ReportDiagnostic.Warn, DiagnosticSeverity.Warning),
         ];
-        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V2, RuntimeReferenceMode.ProjectReferenceRmf2V2 })
+        foreach (RuntimeReferenceMode mode in new[] { RuntimeReferenceMode.Rmf2V3, RuntimeReferenceMode.ProjectReferenceRmf2V3 })
         foreach ((ReportDiagnostic option, DiagnosticSeverity? expected) in cases)
         {
             var options = ImmutableDictionary.CreateRange([KeyValuePair.Create("RTR0068", option)]);
@@ -435,7 +490,7 @@ internal static class GeneratorReadableTests
         Assert.Equal("AppText.Accessors.g.cs|AppText.CatalogData.g.cs|AppText.Keys.g.cs|AppText.Readable.g.cs|AppText.Registration.g.cs",
             string.Join("|", run.SingleResult.GeneratedSources.Select(static item => item.HintName).Order(StringComparer.Ordinal)), "hint files");
         // The encoded files are the same with and without the readable surface.
-        GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V2, ProjectInput(), EnglishInput(), GermanInput());
+        GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3, ProjectInput(), EnglishInput(), GermanInput());
         foreach (GeneratedSourceResult encoded in old.SingleResult.GeneratedSources)
             Assert.Equal(encoded.SourceText.ToString(), run.SingleResult.GeneratedSources.Single(item => item.HintName == encoded.HintName).SourceText.ToString(), encoded.HintName);
     }

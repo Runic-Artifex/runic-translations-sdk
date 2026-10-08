@@ -64,7 +64,7 @@
       "type": "object",
       "properties": {
         "version": {
-          "const": 1
+          "const": 2
         },
         "contracts": {
           "type": "object",
@@ -75,6 +75,20 @@
                 "enum": [
                   "paired",
                   "standalone"
+                ]
+              },
+              "placement": {
+                "enum": [
+                  "inline",
+                  "block",
+                  "list-item"
+                ]
+              },
+              "children": {
+                "enum": [
+                  "inline",
+                  "none",
+                  "list-items"
                 ]
               },
               "interactive": {
@@ -98,6 +112,7 @@
                       "enum": [
                         "string",
                         "number",
+                        "integer",
                         "boolean",
                         "enum"
                       ]
@@ -107,6 +122,16 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "minimum": {
+                      "type": "integer",
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
+                    },
+                    "maximum": {
+                      "type": "integer",
+                      "minimum": -2147483648,
+                      "maximum": 2147483647
                     },
                     "default": {
                       "type": [
@@ -130,6 +155,8 @@
             },
             "required": [
               "kind",
+              "placement",
+              "children",
               "interactive",
               "plainText",
               "options"
@@ -180,12 +207,27 @@
                 "additionalProperties": {
                   "type": "string"
                 }
+              },
+              "content": {
+                "enum": [
+                  "inline",
+                  "document"
+                ]
+              },
+              "skeletons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "uniqueItems": true
               }
             },
             "required": [
               "slots",
               "structured",
-              "contentLocales"
+              "contentLocales",
+              "content",
+              "skeletons"
             ],
             "additionalProperties": false
           }

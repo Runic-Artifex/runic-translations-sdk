@@ -101,12 +101,12 @@ internal static class GeneratorTestHost
         string rmf2Marker = mode switch
         {
             RuntimeReferenceMode.Rmf2V1 => "public const int Rmf2RuntimeAbiVersion = 1;",
-            RuntimeReferenceMode.Rmf2V2 => "public const int Rmf2RuntimeAbiVersion = 2;",
-            RuntimeReferenceMode.Rmf2V2Typed => "public const int Rmf2RuntimeAbiVersion = 2; public const int TypedSlotBindingsVersion = 1;",
-            RuntimeReferenceMode.ProjectReferenceRmf2V2 => "public const int Rmf2RuntimeAbiVersion = 2;",
-            RuntimeReferenceMode.ProjectReferenceRmf2V2Typed => "public const int Rmf2RuntimeAbiVersion = 2; public const int TypedSlotBindingsVersion = 1;",
+            RuntimeReferenceMode.Rmf2V3 => "public const int Rmf2RuntimeAbiVersion = 3;",
+            RuntimeReferenceMode.Rmf2V3Typed => "public const int Rmf2RuntimeAbiVersion = 3; public const int TypedSlotBindingsVersion = 1;",
+            RuntimeReferenceMode.ProjectReferenceRmf2V3 => "public const int Rmf2RuntimeAbiVersion = 3;",
+            RuntimeReferenceMode.ProjectReferenceRmf2V3Typed => "public const int Rmf2RuntimeAbiVersion = 3; public const int TypedSlotBindingsVersion = 1;",
             RuntimeReferenceMode.Rmf2Zero => "public const int Rmf2RuntimeAbiVersion = 0;",
-            RuntimeReferenceMode.Rmf2Unknown => "public const int Rmf2RuntimeAbiVersion = 3;",
+            RuntimeReferenceMode.Rmf2Unknown => "public const int Rmf2RuntimeAbiVersion = 4;",
             _ => string.Empty,
         };
         SyntaxTree tree = CSharpSyntaxTree.ParseText($$"""
@@ -124,7 +124,7 @@ internal static class GeneratorTestHost
                 .Where(static path => !IsRuntimeAssembly(path))
                 .Select(static path => MetadataReference.CreateFromFile(path)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        if (mode is RuntimeReferenceMode.ProjectReferenceRmf2V2 or RuntimeReferenceMode.ProjectReferenceRmf2V2Typed) return compilation.ToMetadataReference();
+        if (mode is RuntimeReferenceMode.ProjectReferenceRmf2V3 or RuntimeReferenceMode.ProjectReferenceRmf2V3Typed) return compilation.ToMetadataReference();
         using var stream = new MemoryStream();
         Microsoft.CodeAnalysis.Emit.EmitResult result = compilation.Emit(stream);
         if (!result.Success)
@@ -197,14 +197,14 @@ internal enum RuntimeReferenceMode
     Legacy,
     Missing,
     Rmf2V1,
-    Rmf2V2,
+    Rmf2V3,
     Rmf2Zero,
     Rmf2Unknown,
     // Synthetic metadata runtime with TypedSlotBindingsVersion (the readable surface).
-    Rmf2V2Typed,
+    Rmf2V3Typed,
     // Synthetic runtimes passed as a CompilationReference, as an IDE passes a project reference.
-    ProjectReferenceRmf2V2,
-    ProjectReferenceRmf2V2Typed,
+    ProjectReferenceRmf2V3,
+    ProjectReferenceRmf2V3Typed,
 }
 
 internal sealed record GeneratorRun(

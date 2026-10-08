@@ -14,7 +14,7 @@ execution profiles and cannot be mixed in one project.
 | Authoring representation | Direct `.mf2` or grouped `.rmf2` files |
 | Message grammar and normalized AST | 5 (`rmf2-execution-v2`) |
 | Resolved locale artifact | 5 |
-| Runtime/generated-code ABI | RMF2 ABI 2 |
+| Runtime/generated-code ABI | RMF2 ABI 3 (markup contract v2) |
 | ESM ABI | 4 (`web-module-manifest-v3`) |
 | Transport contract | 1 |
 
@@ -82,6 +82,8 @@ selectors rather than falling back to an older carrier.
 The [v5 project linker](rmf2-project-v5.md) provides an explicit typed
 compiler model, cross-locale caller/markup contracts, separate compatibility and
 freshness hashes, and the generated-name mapping for the dependent backends.
+The [document profile v1](rmf2-document-profile-v1.md) defines block-level
+document messages, their whitespace normalization and locked structure.
 The version-explicit [`rmf2-v1` corpus](corpus/rmf2-v1/README.md) names the
 unchanged resource syntax, not a retired execution profile. It is the shared
 release oracle for the current v5 contract: compiler, generated C#, .NET

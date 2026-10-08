@@ -28,16 +28,17 @@ internal sealed class Rmf2ProjectMarkupV5
             {
                 string[] values = option.Value.Values.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
                 string? fallback = option.Value.Default;
+                var schema = new Rmf2MarkupOptionContractV5(option.Value.Type, Array.AsReadOnly(values), null, option.Value.LiteralOnly, option.Value.Minimum, option.Value.Maximum);
                 if (fallback is not null)
                 {
-                    if (!TryLiteral(option.Value.Type, values, new(option.Value.Type == "number" ? "number-literal" : "string-literal", fallback), out var canonical))
+                    if (!TryLiteral(schema, DefaultLiteral(schema.Type, fallback), out var canonical))
                         Error("Invalid default for markup option '" + option.Key + "'.");
                     else fallback = canonical!.Canonical ?? canonical.Value;
                 }
-                options.Add(option.Key, new(option.Value.Type, Array.AsReadOnly(values), fallback, option.Value.LiteralOnly));
+                options.Add(option.Key, schema with { Default = fallback });
             }
             contracts.Add(entry.Key, new(entry.Key, entry.Value.Standalone, entry.Value.Interactive, entry.Value.PlainText,
-                new ReadOnlyDictionary<string, Rmf2MarkupOptionContractV5>(options)));
+                new ReadOnlyDictionary<string, Rmf2MarkupOptionContractV5>(options), entry.Value.Placement, entry.Value.Children));
         }
         Contracts = new ReadOnlyDictionary<string, Rmf2MarkupContractV5>(contracts);
         // The v1 schema uses string defaults even for numeric/boolean options.
@@ -86,7 +87,8 @@ internal sealed class Rmf2ProjectMarkupV5
                 }
                 if (contract.Standalone != (tag.MarkupKind == "standalone")) Error("Markup '" + name + "' uses the wrong paired/standalone form.");
                 if (contract.Interactive && stack.Any(parent => parent.Interactive)) Error("Interactive markup cannot be nested inside another interactive element.");
-                if (stack.Count >= 16) Error("Inline markup nesting exceeds 16 levels.");
+                // Inline nesting only; the document profile checks the total element depth (RTR0073).
+                if (contract.Placement == "inline" && stack.Count(parent => parent.Placement == "inline") >= 16) Error("Inline markup nesting exceeds 16 levels.");
                 var options = new SortedDictionary<string, Rmf2ValueV5>(StringComparer.Ordinal);
                 foreach (var option in tag.Options) options[option.Name] = option.Value;
                 bool functional = name is "runic:link" or "runic:action" or "runic:icon";
@@ -110,15 +112,14 @@ internal sealed class Rmf2ProjectMarkupV5
                     {
                         if (schema.LiteralOnly || !types.TryGetValue(option.Value.Value, out string? type) || !AcceptsType(schema.Type, type)) Error("Markup option '" + option.Key + "' has an incompatible variable type.");
                     }
-                    else if (!TryLiteral(schema.Type, schema.Values, option.Value, out var value)) Error("Invalid typed literal for markup option '" + option.Key + "'.");
+                    else if (!TryLiteral(schema, option.Value, out var value)) Error("Invalid typed literal for markup option '" + option.Key + "'.");
                     else options[option.Key] = value!;
                 }
                 foreach (var option in contract.Options)
                     if (!options.ContainsKey(option.Key))
                     {
                         if (option.Value.Default is null) Error("Missing required markup option '" + option.Key + "'.");
-                        else if (TryLiteral(option.Value.Type, option.Value.Values,
-                            new(option.Value.Type == "number" ? "number-literal" : "string-literal", option.Value.Default), out var value)) options[option.Key] = value!;
+                        else if (TryLiteral(option.Value, DefaultLiteral(option.Value.Type, option.Value.Default), out var value)) options[option.Key] = value!;
                     }
                 nodes.Add(tag with { Name = name, Options = options.Select(option => new Rmf2OptionV5(option.Key, option.Value)).ToArray() });
                 if (tag.MarkupKind == "open") stack.Push(contract);
@@ -172,38 +173,57 @@ internal sealed class Rmf2ProjectMarkupV5
         foreach (var contract in contracts)
         {
             var options = new SortedDictionary<string, object>(StringComparer.Ordinal);
-            foreach (var option in contract.Value.Options) options[option.Key] = new { type = option.Value.Type, values = option.Value.Values, @default = option.Value.Default, literalOnly = option.Value.LiteralOnly };
-            exportedContracts[contract.Key] = new { kind = contract.Value.Standalone ? "standalone" : "paired", interactive = contract.Value.Interactive, plainText = contract.Value.PlainText, options };
+            foreach (var option in contract.Value.Options)
+                options[option.Key] = option.Value.Type == "integer"
+                    ? new { type = option.Value.Type, values = option.Value.Values, @default = option.Value.Default, literalOnly = option.Value.LiteralOnly, minimum = option.Value.Minimum, maximum = option.Value.Maximum }
+                    : new { type = option.Value.Type, values = option.Value.Values, @default = option.Value.Default, literalOnly = option.Value.LiteralOnly };
+            // Contract v2 always writes the placement and child model; runtimes accept exactly v2.
+            exportedContracts[contract.Key] = new
+            {
+                kind = contract.Value.Standalone ? "standalone" : "paired", placement = contract.Value.Placement, children = contract.Value.Children,
+                interactive = contract.Value.Interactive, plainText = contract.Value.PlainText, options,
+            };
         }
         var exportedMessages = new SortedDictionary<string, object>(StringComparer.Ordinal);
         foreach (var message in messages)
         {
             var slots = new SortedDictionary<string, object>(StringComparer.Ordinal);
             foreach (var slot in message.Slots) slots[slot.Key] = new { kind = slot.Value.Kind, min = slot.Value.Min, max = slot.Value.Max };
-            if (locales is null) exportedMessages[message.Key] = new { slots, structured = message.Structured, markup = message.MarkupNames };
+            // The content kind is part of the caller contract; skeletons are not, because
+            // they change no generated API. Packs are checked against them at load time.
+            if (locales is null) exportedMessages[message.Key] = new { slots, structured = message.Structured, markup = message.MarkupNames, content = message.Content };
             else
             {
                 var contentLocales = new SortedDictionary<string, string>(StringComparer.Ordinal);
                 foreach (var locale in locales)
                     if (locale.ResolvedResources.FirstOrDefault(resource => resource.Key == message.Key) is { } resource) contentLocales[locale.Tag] = resource.ContentLocale;
-                exportedMessages[message.Key] = new { slots, structured = message.Structured, contentLocales };
+                exportedMessages[message.Key] = new { slots, structured = message.Structured, contentLocales, content = message.Content, skeletons = message.Skeletons };
             }
         }
-        return JsonSerializer.Serialize(new { version = 1, contracts = exportedContracts, messages = exportedMessages });
+        return JsonSerializer.Serialize(new { version = Rmf2ProjectV5.MarkupContractVersion, contracts = exportedContracts, messages = exportedMessages });
     }
 
     private static bool AcceptsType(string schema, string type) => schema switch
-    { "number" => type is "int64" or "decimal", "boolean" => type == "boolean", _ => type == "string" };
+    { "number" => type is "int64" or "decimal", "integer" => type == "int64", "boolean" => type == "boolean", _ => type == "string" };
 
-    private static bool TryLiteral(string type, IReadOnlyList<string> values, Rmf2ValueV5 value, out Rmf2ValueV5? result)
+    private static Rmf2ValueV5 DefaultLiteral(string type, string text) => type is "number" or "integer" ? new("number-literal", text, text) : new("string-literal", text);
+
+    private static bool TryLiteral(Rmf2MarkupOptionContractV5 schema, Rmf2ValueV5 value, out Rmf2ValueV5? result)
     {
         result = value;
-        if (type == "number")
+        if (schema.Type == "number")
         {
             if (value.Kind != "number-literal" || !Rmf2DecimalV5.TryCanonicalize(value.Value, out string canonical)) return false;
             result = new("number-literal", canonical, canonical); return true;
         }
+        // A quoted or unquoted literal; only canonical decimal text is accepted, so the
+        // text is already canonical. Both spellings normalize to one number literal.
+        if (schema.Type == "integer")
+        {
+            if (value.Kind is not ("number-literal" or "string-literal") || !Rmf2IntegerOption.Accepts(value.Value, schema.Minimum, schema.Maximum)) return false;
+            result = new("number-literal", value.Value, value.Value); return true;
+        }
         if (value.Kind != "string-literal") return false;
-        return type switch { "string" => true, "boolean" => value.Value is "true" or "false", "enum" => values.Contains(value.Value, StringComparer.Ordinal), _ => false };
+        return schema.Type switch { "string" => true, "boolean" => value.Value is "true" or "false", "enum" => schema.Values.Contains(value.Value, StringComparer.Ordinal), _ => false };
     }
 }

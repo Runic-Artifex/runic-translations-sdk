@@ -50,7 +50,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("internal static class " + className);
         writer.Line("{"); writer.Indent();
         writer.Line("internal const int GeneratedRuntimeAbiVersion = 1;");
-        writer.Line("internal const int RequiredRmf2RuntimeAbiVersion = 2;"); writer.Blank();
+        writer.Line("internal const int RequiredRmf2RuntimeAbiVersion = " + Rmf2ProjectV5.RuntimeAbiVersion + ";"); writer.Blank();
         writer.Line("internal static global::Runic.Translations.CompiledTranslationCatalog CreateDefinition()");
         writer.Line("{"); writer.Indent();
         writer.Line("return new global::Runic.Translations.CompiledTranslationCatalog("); writer.Indent();
@@ -80,7 +80,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public const string Rmf2MarkupContract = " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
         writer.Line("public const string Rmf2Profile = " + GenerationSupport.CSharpString(Rmf2ProjectV5.Profile) + ";");
         writer.Line("public const int RuntimeAbiVersion = 1;");
-        writer.Line("public const int Rmf2RuntimeAbiVersion = 2;");
+        writer.Line("public const int Rmf2RuntimeAbiVersion = " + Rmf2ProjectV5.RuntimeAbiVersion + ";");
         writer.Line("public const int MessageGrammarVersion = 5;");
         writer.Line("public const int GeneratedNameVersion = 1;");
         writer.Line("public const int GeneratorVersion = 1;"); writer.Blank();
@@ -91,7 +91,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("{"); writer.Indent();
         writer.Line("if (global::Runic.Translations.TranslationsCompatibility.RuntimeAbiVersion != 1)"); writer.Indent();
         writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");"); writer.Unindent();
-        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(2);");
+        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("return new global::Runic.Translations.CompiledTranslationProvider(" + className + "CatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
         writer.Line("public static async global::System.Threading.Tasks.ValueTask<global::Runic.Translations.ITranslationManager> CreateManagerAsync("); writer.Indent();
@@ -113,7 +113,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackLimits? limits = null,");
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(2);");
+        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("var factory = new global::Runic.Translations.ExternalTranslationSnapshotFactory(externalSource, CatalogId, ContractFingerprint, CreateExternalPackContract, limits, integrityVerifier);");
         writer.Line("return CreateProvider(valueFormatter, factory, options);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
@@ -136,7 +136,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null,");
         writer.Line("global::System.Threading.CancellationToken cancellationToken = default)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(2);");
+        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("return global::Runic.Translations.TranslationPackLoader.LoadAsync(source, CreateExternalPackContract(locale), limits, integrityVerifier, cancellationToken);");
         writer.Unindent(); writer.Line("}");
         writer.Unindent(); writer.Line("}");
@@ -175,9 +175,11 @@ internal static class Rmf2CSharpOutputRendererV5
         foreach (Rmf2ReadableMessageV1 message in readable)
         {
             Rmf2MessageContractV5 contract = message.Contract;
-            string result = contract.Structured
-                ? "global::Runic.Translations.LocalizedTextContent<" + ns + slots + "." + Verbatim(message.Member) + ">"
-                : "string";
+            string result = contract.Content == Rmf2DocumentProfileV5.Document
+                ? "global::Runic.Translations.LocalizedDocumentContent<" + ns + slots + "." + Verbatim(message.Member) + ">"
+                : contract.Structured
+                    ? "global::Runic.Translations.LocalizedTextContent<" + ns + slots + "." + Verbatim(message.Member) + ">"
+                    : "string";
             string encoded = "this.__text." + Member(contract);
             if (contract.Inputs.Count != 0)
             {
@@ -258,31 +260,35 @@ internal static class Rmf2CSharpOutputRendererV5
 
     private static void WriteAccessor(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageContractV5 message)
     {
-        string member = Member(message), result = message.Structured ? "global::Runic.Translations.LocalizedTextContent" : "string";
-        string format = message.Structured ? "FormatContent" : "Format";
+        bool document = message.Content == Rmf2DocumentProfileV5.Document;
+        string member = Member(message), result = document ? "global::Runic.Translations.LocalizedDocumentContent"
+            : message.Structured ? "global::Runic.Translations.LocalizedTextContent" : "string";
+        string format = message.Structured || document ? "FormatContent" : "Format";
+        // Document messages wrap the formatted node stream; the renderer checks it against the locked skeletons.
+        string open = document ? "new global::Runic.Translations.LocalizedDocumentContent(" : string.Empty, close = document ? ")" : string.Empty;
         writer.Blank();
         writer.Line("/// <summary>Formats <c>" + GenerationSupport.XmlDocumentation(string.Join(".", message.Path)) + "</c>.</summary>");
         if (message.Inputs.Count == 0)
-            writer.Line("public " + result + " " + member + " => __translationManager.Current." + format + "(" + Key(project, message) + ", global::System.ReadOnlySpan<global::Runic.Translations.TextArgument>.Empty);");
+            writer.Line("public " + result + " " + member + " => " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", global::System.ReadOnlySpan<global::Runic.Translations.TextArgument>.Empty)" + close + ";");
         else
         {
             var parameters = new List<string>(message.Inputs.Count);
             foreach (Rmf2InputV5 input in message.Inputs) parameters.Add(ParameterType(input.Type) + " " + Rmf2GeneratedNamesV1.Identifier(input.Name));
             writer.Line("public " + result + " " + member + "(" + string.Join(", ", parameters) + ")");
             writer.Line("{"); writer.Indent();
-            writer.Line("return __translationManager.Current." + format + "(" + Key(project, message) + ", new global::Runic.Translations.TextArgument[]");
+            writer.Line("return " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", new global::Runic.Translations.TextArgument[]");
             writer.Line("{"); writer.Indent();
             foreach (Rmf2InputV5 input in message.Inputs)
             {
                 string parameter = Rmf2GeneratedNamesV1.Identifier(input.Name);
                 writer.Line("global::Runic.Translations.TextArgument.CreateRmf2(" + GenerationSupport.CSharpString(input.Name) + ", new global::Runic.Translations.TextArgument(\"_\", " + parameter + ")),");
             }
-            writer.Unindent(); writer.Line("});");
+            writer.Unindent(); writer.Line("})" + close + ";");
             writer.Unindent(); writer.Line("}");
         }
         // Always retain a span-shaped escape hatch. It keeps the generated API
         // usable if a future C# surface cannot faithfully model a caller name.
-        writer.Line("public " + result + " r_args_" + member + "(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __translationManager.Current." + format + "(" + Key(project, message) + ", arguments);");
+        writer.Line("public " + result + " r_args_" + member + "(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", arguments)" + close + ";");
     }
 
     private static void WriteDefinitions(GenerationWriter writer, Rmf2V5DefinitionTable table, string suffix)

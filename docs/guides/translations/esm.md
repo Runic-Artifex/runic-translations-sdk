@@ -53,14 +53,19 @@ generated server entrypoint rather than a mutable global source.
 Dynamic loading consumes locale artifact 5 and validates the
 closed artifact envelope, profile and grammar 5, catalog, caller fingerprint,
 locale and content-locale mappings, linked markup/slot contract, and bounded
-typed message semantics. Runtime ABI 2 and the source hash are metadata of the
+typed message semantics. Runtime ABI 3 and the source hash are metadata of the
 separate `web-module-manifest-v3.json`, where the Vite plugin validates them;
 they are not locale-artifact members. Import `/dynamic`, call
 `decodeLocaleArtifact` once after loading JSON, then call
 `formatDynamicMessage`. The decoder enforces artifact, grammar, catalog,
 fingerprint, key, input, selector, node, depth, and size contracts. A decoded
 artifact formats only its own locale. Compiled and dynamic modes return the same
-plain or structured result shapes.
+plain or structured result shapes. A document message returns a
+`LocalizedDocument` (`kind: "localized-document"`); render it with
+`createDocumentRenderer`, which adds a `block` factory to the inline factories,
+or project it with `toPlainText(content, {slots, listMarker})`. Both runtimes
+reject a pack whose document message has a block structure outside the
+generated contract as `RTR0023/document-structure-mismatch`.
 
 JavaScript `number` is accepted only for safe integer inputs; `bigint` covers the
 full signed integer contract. V5 decimal inputs use the exact coefficient/scale

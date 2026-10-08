@@ -68,7 +68,7 @@ internal static class Rmf2SemanticV5SchemaTests
             ("old artifact version", artifact => artifact["artifactVersion"] = 4),
             ("missing content locale", artifact => artifact["messages"]!["Example"]!.AsObject().Remove("contentLocale")),
             ("invalid fingerprint", artifact => artifact["contractFingerprint"] = "sha256:bad"),
-            ("wrong markup version through external reference", artifact => artifact["markupContract"]!["version"] = 2),
+            ("wrong markup version through external reference", artifact => artifact["markupContract"]!["version"] = 1),
             ("missing required markup field through external reference", artifact => artifact["markupContract"]!.AsObject().Remove("contracts")),
             ("unknown envelope property", artifact => artifact["extra"] = true),
         };
@@ -162,7 +162,7 @@ internal static class Rmf2SemanticV5SchemaTests
         return new JsonObject {
             ["webModuleManifestVersion"] = 3,
             ["esmAbiVersion"] = 4,
-            ["rmf2RuntimeAbiVersion"] = 2,
+            ["rmf2RuntimeAbiVersion"] = 3,
             ["messageGrammarVersion"] = 5,
             ["profile"] = "rmf2-execution-v2",
             ["generatedNameVersion"] = 1,

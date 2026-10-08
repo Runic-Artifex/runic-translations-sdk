@@ -95,7 +95,7 @@ interface Change {
 const prefix = "\0virtual:runic-translations/";
 const entryKinds: readonly EntryKind[] = ["messages", "runtime", "server", "transport", "dynamic"];
 const supportedEsmAbiVersion = 4;
-const supportedRmf2RuntimeAbiVersion = 2;
+const supportedRmf2RuntimeAbiVersion = 3;
 const execFileAsync = promisify(execFile);
 
 /** Exposes compiler-generated ESM without coupling messages to Vite or a UI framework. */

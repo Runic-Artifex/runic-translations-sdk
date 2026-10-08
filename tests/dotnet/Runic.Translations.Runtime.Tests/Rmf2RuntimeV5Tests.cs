@@ -10,6 +10,7 @@ internal static class Rmf2RuntimeV5Tests
     public static void Register(TestRunner runner)
     {
         runner.Add("v5 formatted locals inherit then replace metadata without changing carriers", LocalInheritance);
+        runner.Add("markup contract v2 links placement children and bounded integer options exactly", MarkupContractV2);
         runner.Add("v5 literals cover every typed carrier without caller inputs", Literals);
         runner.Add("v5 finite dynamic options validate enums ranges and coupled defaults", DynamicOptions);
         runner.Add("v5 dynamic options follow typed local dependencies", OptionLocals);
@@ -24,7 +25,7 @@ internal static class Rmf2RuntimeV5Tests
         runner.Add("v5 hostile decimal spellings reject overflow underflow and rounding", DecimalDomain);
         runner.Add("v5 output bounds and locale capability errors use public format errors", RuntimeErrors);
         runner.Add("v5 snapshot constant evaluation content locale and contract checking are additive", SnapshotDispatch);
-        runner.Add("v5 immutable arrays and compatibility checks require ABI 2", Compatibility);
+        runner.Add("v5 immutable arrays and compatibility checks require ABI 3", Compatibility);
     }
     private static CompiledRmf2Value Input(string name) => new("input", name);
     private static CompiledRmf2Value Local(string name) => new("local", name);
@@ -265,12 +266,62 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("1,25", Snapshot(french, []).Format(new("test", 0, "Value"), []));
         Assert.Throws<ArgumentException>(() => Snapshot(Simple([new("n", TextArgumentType.Int)], [], Output(Input("n"), TextArgumentType.Int)), [new("n", TextArgumentType.Number)]));
     }
+    private static string MarkupContractJson(int version = 2, string contract = "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"level\":{\"type\":\"integer\",\"values\":[],\"default\":\"1\",\"literalOnly\":true,\"minimum\":1,\"maximum\":6}}")
+        => "{\"version\":" + version + ",\"contracts\":{\"app:step\":{" + contract + "}},\"messages\":{}}";
+    private static void MarkupContractV2()
+    {
+        _ = new Rmf2InlineRenderer(MarkupContractJson());
+        Assert.Throws<ArgumentException>(() => _ = new Rmf2InlineRenderer(MarkupContractJson(version: 1)));
+        Assert.Throws<ArgumentException>(() => _ = new Rmf2InlineRenderer(MarkupContractJson(version: 3)));
+        foreach (string contract in new[]
+        {
+            "\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}",
+            "\"kind\":\"paired\",\"placement\":\"block\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}",
+            "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"none\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}",
+            "\"kind\":\"paired\",\"placement\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}",
+            "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"n\":{\"type\":\"integer\",\"values\":[],\"default\":null,\"literalOnly\":false,\"minimum\":2,\"maximum\":1}}",
+            "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"n\":{\"type\":\"date\",\"values\":[],\"default\":null,\"literalOnly\":false}}",
+        })
+            Assert.Throws<Exception>(() => _ = new Rmf2InlineRenderer(MarkupContractJson(contract: contract)));
+        // Every v2 message requires content, skeletons and contentLocales; a missing member is a malformed contract.
+        const string message = "\"slots\":{},\"structured\":false,\"contentLocales\":{\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]";
+        _ = Rmf2MarkupContract.Link("{\"version\":2,\"contracts\":{},\"messages\":{\"x\":{" + message + "}}}");
+        foreach (string member in new[] { ",\"contentLocales\":{\"en\":\"en\"}", ",\"content\":\"inline\"", ",\"skeletons\":[]" })
+        {
+            ArgumentException missing = Assert.Throws<ArgumentException>(() => _ = Rmf2MarkupContract.Link("{\"version\":2,\"contracts\":{},\"messages\":{\"x\":{" + message.Replace(member, "", StringComparison.Ordinal) + "}}}"));
+            Assert.True(missing.GetType() == typeof(ArgumentException), "Missing " + member + " threw " + missing.GetType().Name);
+        }
+        Assert.Throws<ArgumentException>(() => _ = Rmf2MarkupContract.Link("{\"version\":2,\"contracts\":{},\"messages\":{\"x\":{" + message.Replace("[]", "[\"p\"]", StringComparison.Ordinal) + "}}}"));
+        // Built-ins must have the shape the compiler exports, so a hand-built contract fails at Link and not while projecting.
+        const string ol = "\"kind\":\"paired\",\"placement\":\"block\",\"children\":\"list-items\",\"interactive\":false,\"plainText\":\"children\",\"options\":{";
+        const string start = "\"start\":{\"type\":\"integer\",\"values\":[],\"default\":\"1\",\"literalOnly\":true,\"minimum\":1,\"maximum\":2147483647}";
+        const string marker = "\"marker\":{\"type\":\"enum\",\"values\":[\"decimal\",\"lower-alpha\",\"lower-roman\",\"upper-alpha\",\"upper-roman\"],\"default\":\"decimal\",\"literalOnly\":true}";
+        static string BuiltIn(string name, string body) => "{\"version\":2,\"contracts\":{\"" + name + "\":{" + body + "}},\"messages\":{}}";
+        _ = Rmf2MarkupContract.Link(BuiltIn("runic:ol", ol + marker + "," + start + "}"));
+        foreach ((string name, string body) in new[]
+        {
+            ("runic:ol", ol + start + "}"),
+            ("runic:ol", ol + marker.Replace(",\"upper-roman\"", "", StringComparison.Ordinal) + "," + start + "}"),
+            ("runic:ol", ol + marker + "," + start.Replace("\"minimum\":1", "\"minimum\":0", StringComparison.Ordinal) + "}"),
+            ("runic:link", "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}"),
+            ("runic:unknown", "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{}"),
+        })
+            Assert.Throws<ArgumentException>(() => _ = Rmf2MarkupContract.Link(BuiltIn(name, body)));
+        // The pack-level literal forms are pinned by the shared rmf2-document-v1 corpus; these are the
+        // negative and empty forms that no built-in option bound can reach.
+        foreach (string text in new[] { "0", "-1", "-2147483648" })
+            Assert.True(Rmf2MarkupContract.AcceptsInteger(text, int.MinValue, int.MaxValue), "Integer text rejected: " + text);
+        foreach (string text in new[] { "", "-", "-2147483649" })
+            Assert.False(Rmf2MarkupContract.AcceptsInteger(text, int.MinValue, int.MaxValue), "Integer text accepted: " + text);
+        Assert.False(Rmf2MarkupContract.AcceptsInteger("7", 1, 6), "Integer above maximum accepted");
+        Assert.False(Rmf2MarkupContract.AcceptsInteger("0", 1, 6), "Integer below minimum accepted");
+    }
     private static void Compatibility()
     {
-        Assert.Equal(2, TranslationsCompatibility.Rmf2RuntimeAbiVersion); Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion); Assert.Equal(2, TranslationsCompatibility.MessageGrammarVersion);
-        Assert.False(TranslationsCompatibility.SupportsRmf2RuntimeAbi(1), "Retired ABI 1 must not remain accepted"); Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(2), "ABI 2 is supported");
-        TranslationsCompatibility.EnsureRmf2RuntimeAbi(2);
-        foreach (int version in new[] { -1, 0, 1, 3, int.MaxValue }) Assert.Throws<NotSupportedException>(() => TranslationsCompatibility.EnsureRmf2RuntimeAbi(version));
+        Assert.Equal(3, TranslationsCompatibility.Rmf2RuntimeAbiVersion); Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion); Assert.Equal(2, TranslationsCompatibility.MessageGrammarVersion);
+        Assert.False(TranslationsCompatibility.SupportsRmf2RuntimeAbi(2), "Retired ABI 2 must not remain accepted"); Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(3), "ABI 3 is supported");
+        TranslationsCompatibility.EnsureRmf2RuntimeAbi(3);
+        foreach (int version in new[] { -1, 0, 1, 2, 4, int.MaxValue }) Assert.Throws<NotSupportedException>(() => TranslationsCompatibility.EnsureRmf2RuntimeAbi(version));
         CompiledRmf2Node[] nodes = [new("original")]; var message = Simple([], [], nodes); nodes[0] = new("changed");
         message.Variants.ToArray()[0] = new([], [new("changed")]);
         Assert.Equal("original", message.Format([], "en"));

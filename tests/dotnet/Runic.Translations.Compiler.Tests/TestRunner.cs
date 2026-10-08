@@ -62,6 +62,13 @@ internal static class Assert
         }
     }
 
+    public static void Throws<TException>(Action action, string message) where TException : Exception
+    {
+        try { action(); }
+        catch (TException) { return; }
+        throw new InvalidOperationException(message + ": expected " + typeof(TException).Name + ".");
+    }
+
     public static T Single<T>(IReadOnlyList<T> items, string? message = null)
     {
         if (items.Count != 1)

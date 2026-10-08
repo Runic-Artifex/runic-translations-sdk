@@ -40,7 +40,7 @@ export declare const m: Readonly<{
 }>;
 `);
   await writeFile(join(root, "runtime.js"), `export const esmAbiVersion = 4;
-export const rmf2RuntimeAbiVersion = 2;
+export const rmf2RuntimeAbiVersion = 3;
 export const messageGrammarVersion = 5;
 export const profile = "rmf2-execution-v2";
 export const generatedNameVersion = 1;
@@ -62,7 +62,7 @@ export declare function formatDynamicMessage(value: unknown, key: string, inputs
 `);
   const manifest = join(root, "web-module-manifest-v3.json");
   await writeGeneratedManifest(manifest, {
-    webModuleManifestVersion: 3, esmAbiVersion: 4, rmf2RuntimeAbiVersion: 2,
+    webModuleManifestVersion: 3, esmAbiVersion: 4, rmf2RuntimeAbiVersion: 3,
     messageGrammarVersion: 5, profile: "rmf2-execution-v2", generatedNameVersion: 1,
     sourceHash, catalog: "app",
     entrypoints: { messages: "messages.js", types: "messages.d.ts", runtime: "runtime.js", server: "server.js", transport: "transport.js", dynamic: "dynamic.js" },
@@ -82,7 +82,7 @@ test("accepts only the complete RMF2 v3 contract", async () => {
     for (const [field, value, pattern] of [
       ["webModuleManifestVersion", 2, /Unsupported/],
       ["esmAbiVersion", 3, /ESM ABI/],
-      ["rmf2RuntimeAbiVersion", 1, /execution contract/],
+      ["rmf2RuntimeAbiVersion", 2, /execution contract/],
       ["messageGrammarVersion", 4, /execution contract/],
       ["profile", "future-profile", /execution contract/],
       ["generatedNameVersion", 2, /execution contract/],
@@ -160,7 +160,7 @@ test("rejects hostile, stale, and forged v3 output", async () => {
       }, /invalid generated asset/],
       ["path traversal", document => { document.assets[0].path = "x/../messages.js"; }, /invalid generated asset/],
       ["wrong entrypoint", document => { document.entrypoints.dynamic = "other.js"; }, /invalid entrypoints/],
-      ["runtime ABI marker", document => { document.rmf2RuntimeAbiVersion = 1; }, /execution contract/],
+      ["runtime ABI marker", document => { document.rmf2RuntimeAbiVersion = 2; }, /execution contract/],
     ];
     for (const [label, mutate, pattern] of rejected) {
       const document = JSON.parse(JSON.stringify(valid));

@@ -19,6 +19,7 @@ internal static class Rmf2EsmV5Tests
         runner.Add("RMF2 v5 generated ESM executes exact static dynamic transport and SSR paths", Executes);
         runner.Add("RMF2 v5 ESM preserves exact selection dynamic options aliases and ordered annotations", SemanticParity);
         runner.Add("RMF2 v5 renderers hide annotations and preserve custom plain-text policies", RendererParity);
+        runner.Add("RMF2 markup contract v2 ESM links placement and bounded integer options", IntegerOptions);
         runner.Add("RMF2 v5 ESM manifest is closed versioned and accepted only as the exact shipping Vite contract", ManifestIsolation);
         runner.Add("RMF2 v5 ESM preserves hostile NFC caller names without prototype mutation", HostileNames);
         runner.Add("RMF2 v5 ESM hardens locale dynamic pack and renderer boundaries", RuntimeHardening);
@@ -217,6 +218,42 @@ internal static class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
+    private static void IntegerOptions()
+    {
+        const string contracts = """
+            ,"markup":{"contracts":[
+              {"name":"app:step","kind":"paired","placement":"inline","children":"inline","interactive":false,"plainText":"children","options":{"level":{"type":"integer","minimum":1,"maximum":6,"default":"1"}}}
+            ]}
+            """;
+        const string source = "fixed = {#app:step level=|3|}three{/app:step}\ndefaulted = {#app:step}one{/app:step}\ndynamic =\n  .input {$n :integer}\n  {{{#app:step level=$n}n{/app:step}}}\n";
+        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
+            Rmf2ProjectV5Tests.Project(contracts), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
+        Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
+        string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!));
+        try
+        {
+            string script = Path.Combine(directory, "integer-options.mjs");
+            File.WriteAllText(script, """
+                import { m } from "./app.esm-v5/messages.js";
+                import { bindMarkup, createInlineRenderer, defineMarkup, rmf2Contract, rmf2RuntimeAbiVersion } from "./app.esm-v5/runtime.js";
+                const check=(condition,message)=>{if(!condition)throw new Error(message);};
+                check(rmf2RuntimeAbiVersion===3&&rmf2Contract.version===2,"contract markers");
+                const exported=rmf2Contract.contracts["app:step"];
+                check(exported.placement==="inline"&&exported.children==="inline"&&exported.options.level.minimum===1&&exported.options.level.maximum===6,"exported integer contract");
+                const step=defineMarkup({name:"app:step",kind:"paired",placement:"inline",children:"inline",interactive:false,plainText:"children",options:{level:{type:"integer",values:[],default:"1",literalOnly:false,minimum:1,maximum:6}}});
+                const renderer=createInlineRenderer({text:value=>value,element:element=>element.children.join("")},[bindMarkup(step,({options,children})=>`[${options.level}:${children.join("")}]`)]);
+                check(renderer.render(m.fixed()).join("")==="[3:three]","quoted integer literal");
+                check(renderer.render(m.defaulted()).join("")==="[1:one]","integer default");
+                check(renderer.render(m.dynamic({n:6n})).join("")==="[6:n]","dynamic integer within bounds");
+                for(const value of [0n,7n,-1n]){let rejected=false;try{renderer.render(m.dynamic({n:value}));}catch{rejected=true;}check(rejected,"dynamic integer outside bounds was rendered: "+value);}
+                for(const bad of [{...step,placement:"block"},{...step,options:{level:{...step.options.level,maximum:5}}}]){let rejected=false;try{createInlineRenderer({text:v=>v,element:e=>e.children.join("")},[bindMarkup(bad,()=>"")]);}catch{rejected=true;}check(rejected,"mismatched renderer contract accepted");}
+                let rejected=false;try{defineMarkup({name:"app:block",kind:"paired",placement:"block",children:"inline",interactive:false,plainText:"children",options:{}});}catch{rejected=true;}check(rejected,"custom block placement accepted");
+                """, new UTF8Encoding(false));
+            Run("bun", [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     private static void ManifestIsolation()
     {
         Rmf2ProjectV5 project = Fixture();
@@ -226,7 +263,7 @@ internal static class Rmf2EsmV5Tests
         JsonObject json = JsonNode.Parse(manifest.Text)!.AsObject();
         Assert.Equal(3, json["webModuleManifestVersion"]!.GetValue<int>());
         Assert.Equal(4, json["esmAbiVersion"]!.GetValue<int>());
-        Assert.Equal(2, json["rmf2RuntimeAbiVersion"]!.GetValue<int>());
+        Assert.Equal(3, json["rmf2RuntimeAbiVersion"]!.GetValue<int>());
         Assert.Equal(5, json["messageGrammarVersion"]!.GetValue<int>());
         Assert.Equal("rmf2-execution-v2", json["profile"]!.GetValue<string>());
         Rmf2SemanticV5SchemaTests.AssertValidation(

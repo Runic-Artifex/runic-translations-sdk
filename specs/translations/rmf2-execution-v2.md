@@ -180,8 +180,8 @@ participate in selection, add caller arguments, or affect caller fingerprints.
 
 Normalized markup nodes retain open/close/standalone events, ordered typed
 options, and ordered annotations, including annotations on closing events. The
-balanced-inline constraint is validated separately from grammar. The unchanged
-markup contract v1 still owns names, aliases, option schemas, slots and renderer
+balanced-inline constraint is validated separately from grammar. The
+markup contract (version 2) owns names, aliases, option schemas, slots and renderer
 behavior. The semantic compiler preserves unresolved markup events; project
 contract linking and conversion to renderer plans belong to the backend adapter.
 Semantic compilation alone is not proof that a project markup contract is met.
@@ -362,11 +362,15 @@ linking has already resolved element identities and validated markup option and
 slot schemas. The [v5 project linker](rmf2-project-v5.md) performs that
 validation without converting v5 messages through the v4 model.
 
-`Rmf2RuntimeAbiVersion` is **2**; legacy `RuntimeAbiVersion = 1` and
+`Rmf2RuntimeAbiVersion` is **3**; legacy `RuntimeAbiVersion = 1` and
 `MessageGrammarVersion = 2` remain unchanged. Generated v5 consumers must embed
-the literal requirement **2**, then call `EnsureRmf2RuntimeAbi(2)` or
-`SupportsRmf2RuntimeAbi(2)`. These methods execute against the loaded runtime
-and accept requirement 2. A generated constant that aliases the runtime's
+the literal requirement **3**, then call `EnsureRmf2RuntimeAbi(3)` or
+`SupportsRmf2RuntimeAbi(3)`. These methods execute against the loaded runtime
+and accept requirement 3. ABI 3 is ABI 2 plus markup contract v2: every
+exported contract carries `placement` and `children`, and markup options may use
+the bounded `integer` type. Runtimes accept exactly markup contract version 2;
+an artifact or pack with another markup contract version is rejected as
+`RTR0023/markup-contract-version-mismatch` and must be rebuilt. A generated constant that aliases the runtime's
 constant is not a compatibility check. Missing or unknown ABI markers are
 rejected.
 

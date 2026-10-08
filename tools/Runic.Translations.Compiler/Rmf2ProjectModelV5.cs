@@ -29,7 +29,7 @@ public sealed class Rmf2ProjectCompilationV5
     /// <summary>The normalized message grammar version produced by this compiler.</summary>
     public const int MessageGrammarVersion = 5;
     /// <summary>The required .NET runtime ABI version.</summary>
-    public const int RuntimeAbiVersion = 2;
+    public const int RuntimeAbiVersion = 3;
 
     internal Rmf2ProjectCompilationV5(Rmf2ProjectV5? project, IReadOnlyList<TranslationDiagnostic> diagnostics)
     {
@@ -64,14 +64,19 @@ public sealed class Rmf2ProjectCompilationV5
 internal sealed record Rmf2SlotV5(string Kind, int Min, int Max);
 internal sealed record Rmf2MessageContractV5(int Id, string Key, IReadOnlyList<string> Path,
     IReadOnlyList<Rmf2InputV5> Inputs, IReadOnlyDictionary<string, Rmf2SlotV5> Slots,
-    bool Structured, IReadOnlyList<string> MarkupNames);
+    bool Structured, IReadOnlyList<string> MarkupNames, string Content = Rmf2DocumentProfileV5.Inline, IReadOnlyList<string>? DocumentSkeletons = null)
+{
+    // Distinct base-locale skeletons in ordinal order; empty for inline messages.
+    internal IReadOnlyList<string> Skeletons => DocumentSkeletons ?? Array.Empty<string>();
+}
 internal sealed record Rmf2TranslationV5(string Key, string ContentLocale, Rmf2MessageV5 Message,
     TextSourceLocation SourceLocation, string? Description);
 internal sealed record Rmf2LocaleV5(string Tag, string? FallbackTag,
     IReadOnlyList<Rmf2TranslationV5> DirectResources, IReadOnlyList<Rmf2TranslationV5> ResolvedResources);
-internal sealed record Rmf2MarkupOptionContractV5(string Type, IReadOnlyList<string> Values, string? Default, bool LiteralOnly);
+internal sealed record Rmf2MarkupOptionContractV5(string Type, IReadOnlyList<string> Values, string? Default, bool LiteralOnly,
+    long Minimum = int.MinValue, long Maximum = int.MaxValue);
 internal sealed record Rmf2MarkupContractV5(string Name, bool Standalone, bool Interactive, string PlainText,
-    IReadOnlyDictionary<string, Rmf2MarkupOptionContractV5> Options);
+    IReadOnlyDictionary<string, Rmf2MarkupOptionContractV5> Options, string Placement = "inline", string Children = "inline");
 internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string ClassName, TranslationVisibility Visibility,
     string DefaultLocale, TranslationUnsupportedLocalePolicy UnsupportedLocale, TranslationMissingKeyPolicy MissingKey,
     IReadOnlyList<Rmf2MessageContractV5> CanonicalMessages, IReadOnlyList<Rmf2MessageContractV5> ExtraMessages,
@@ -81,7 +86,8 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
 {
     internal const string Profile = "rmf2-execution-v2";
     internal const int MessageGrammarVersion = 5;
-    internal const int RuntimeAbiVersion = 2;
+    internal const int RuntimeAbiVersion = 3;
+    internal const int MarkupContractVersion = 2;
 }
 
 internal static class Rmf2ProjectV5EmissionEligibility

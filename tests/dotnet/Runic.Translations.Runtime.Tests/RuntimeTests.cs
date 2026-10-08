@@ -372,7 +372,7 @@ internal static class RuntimeTests
     private static void LocaleTagValidation()
     {
         const string fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
-        const string markup = "{\"version\":1,\"contracts\":{},\"messages\":{}}";
+        const string markup = "{\"version\":2,\"contracts\":{},\"messages\":{}}";
         string[] invalid = ["en-a", "en-a-b", "en-a-foo-a-bar", "en-US-Latn", "de-1901-1901"];
         foreach (string locale in invalid)
         {

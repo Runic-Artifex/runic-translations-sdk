@@ -10,8 +10,10 @@ carrier. `CompileRmf2ProjectV5` is the dedicated typed entry point. Failed
 compilations return diagnostics without a project that could accidentally reach
 emission.
 
-Project schema v1 and exported markup contract v1 remain unchanged: artifact v5
-does not imply a project schema version bump. The linker infers direct `.mf2`
+Project schema v1 remains unchanged apart from the additive markup `placement`
+member and `integer` option type; artifact v5 does not imply a project schema
+version bump. The exported markup contract is version 2 (see
+[execution v2](rmf2-execution-v2.md)). The linker infers direct `.mf2`
 versus grouped `.rmf2` sources and rejects mixed representations. It uses the
 existing locale, mount, completeness, extra-key, empty-value and runtime policies.
 
@@ -41,6 +43,12 @@ validates paired/standalone form, nesting and interactive ancestors; supplies
 typed defaults; and checks literal and input/local option types. Numeric
 markup literals are numeric MF2 values, not quoted strings; project-v1 numeric
 defaults remain strings and are converted to exact canonical decimal literals.
+Integer options (`"type": "integer"`, optional `minimum`/`maximum` within the
+int32 range, default the full int32 range) accept a quoted or unquoted literal
+only when its text matches `0|-?[1-9][0-9]*` and lies within the bounds, so
+`01`, `1.0`, `1e1`, `+1` and `-0` are rejected; non-literal-only integer options
+accept `:integer` inputs. `markup.structure` is reserved and rejected with
+RTR0060.
 Closing-event annotations remain intact. Functional refs are static slot IDs.
 Source slots default to exactly one occurrence per variant. Conditional source
 slots require explicit min/max constraints. Every direct locale must obey those
@@ -51,11 +59,13 @@ the already-validated resource.
 
 `CallerFingerprint` is SHA-256 over a deterministic, versioned caller contract:
 
-- caller contract version 1, execution profile, grammar 5, runtime ABI 2, and
+- caller contract version 1, execution profile, grammar 5, runtime ABI 3, and
   generated-name mapping version 1;
 - catalog identity, sorted canonical keys, their logical path segments, and
   sorted NFC caller names/types;
-- canonical slot kinds/cardinalities and app-facing structured/markup contracts.
+- canonical slot kinds/cardinalities, app-facing structured/markup contracts and
+  each message's content kind (`inline` or `document`, see the
+  [document profile](rmf2-document-profile-v1.md)).
 
 It excludes translated text, locals, formatter choices, annotations, selector
 trees, descriptions, source organization, and content-locale/fallback mappings.

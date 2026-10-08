@@ -26,6 +26,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     private const string KindMetadata = "build_metadata.AdditionalFiles.RunicTranslationKind";
     private const string ProjectDirectoryProperty = "build_property.ProjectDir";
     private const string RuntimeAssemblyName = "Runic.Translations";
+    private const int RequiredRmf2Version = Rmf2ProjectV5.RuntimeAbiVersion;
     private const string CompatibilityNamespace = "Runic.Translations";
     private const string CompatibilityType = "TranslationsCompatibility";
     private static readonly TranslationCompilerOptions CompilerOptions = new();
@@ -143,12 +144,12 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     private static Diagnostic CreateAbiDiagnostic(RuntimeAbiState state)
     {
         string message = state.IsMissing
-            ? "Referenced Runic.Translations runtime ABI is missing; generated RMF2 code requires runtime ABI version 1 and RMF2 ABI version 2."
+            ? "Referenced Runic.Translations runtime ABI is missing; generated RMF2 code requires runtime ABI version 1 and RMF2 ABI version " + RequiredRmf2Version + "."
             : state.Version != 1
                 ? "Referenced Runic.Translations runtime ABI version " + state.Version + " is incompatible with generated ABI version 1."
                 : state.Rmf2Version < 0
-                    ? "Referenced Runic.Translations RMF2 runtime ABI is missing; generated RMF2 code requires ABI version 2."
-                    : "Referenced Runic.Translations RMF2 runtime ABI version " + state.Rmf2Version + " is incompatible with generated RMF2 ABI version 2.";
+                    ? "Referenced Runic.Translations RMF2 runtime ABI is missing; generated RMF2 code requires ABI version " + RequiredRmf2Version + "."
+                    : "Referenced Runic.Translations RMF2 runtime ABI version " + state.Rmf2Version + " is incompatible with generated RMF2 ABI version " + RequiredRmf2Version + ".";
         return Diagnostic.Create(TranslationsDiagnostics.RuntimeAbi, Location.None, message);
     }
 
@@ -423,7 +424,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         // Additive capability, not part of the ABI gate: a runtime without it still gets the encoded surface.
         internal int TypedSlotBindingsVersion { get; }
         internal bool IsMissing => Version < 0;
-        internal bool IsCompatible => Version == 1 && Rmf2Version == 2;
+        internal bool IsCompatible => Version == 1 && Rmf2Version == RequiredRmf2Version;
         internal bool SupportsReadableSurface => TypedSlotBindingsVersion >= 1;
 
         public bool Equals(RuntimeAbiState other) => Version == other.Version && Rmf2Version == other.Rmf2Version &&
