@@ -51,7 +51,14 @@ internal static class TranslationPackV5Loader
             if (!string.Equals(fingerprint, contract.ContractFingerprint, StringComparison.Ordinal)) throw Error("The external pack fingerprint does not match the generated contract.", TranslationPackFailureReason.ContractFingerprintMismatch);
             if (root["markupContract"].GetRawText() != contract.Rmf2MarkupContract)
                 throw Error("The RMF2 markup contract differs from the trusted catalog.", TranslationPackFailureReason.ArgumentContractMismatch);
-            Rmf2MarkupContract markup = Rmf2MarkupContract.Link(contract.Rmf2MarkupContract!);
+            // The pack's contract equals the trusted one byte for byte, so a link failure means the
+            // trusted contract itself is not a valid markup contract v2, not that the AST is malformed.
+            Rmf2MarkupContract markup;
+            try { markup = Rmf2MarkupContract.Link(contract.Rmf2MarkupContract!); }
+            catch (ArgumentException exception)
+            {
+                throw Error("The trusted RMF2 markup contract is not a valid markup contract v2: " + exception.Message, TranslationPackFailureReason.ArgumentContractMismatch);
+            }
             if (root["messages"].ValueKind != JsonValueKind.Object) throw Error("The external pack messages value must be an object.");
             var messages = new List<VerifiedTranslationPackMessage>();
             var keys = new HashSet<string>(StringComparer.Ordinal);

@@ -208,7 +208,7 @@ internal static class Program
         Assert(transitions == 1, "one successful swap raises one event");
         Assert(string.Equals(manager.Current.Get(title), "Application", StringComparison.Ordinal), "compiled locale fallback resolves default text");
 
-        const string MarkupContract = "{\"version\":2,\"contracts\":{},\"messages\":{\"title\":{\"slots\":{},\"contentLocales\":{\"de\":\"de\"}}}}";
+        const string MarkupContract = "{\"version\":2,\"contracts\":{},\"messages\":{\"title\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\"},\"content\":\"inline\",\"skeletons\":[]}}}";
         TranslationPackContract contract = TranslationPackContract.CreateRmf2V5(
             "app", "de", Fingerprint, [new TranslationPackMessageContract(title)], MarkupContract);
         byte[] packBytes = Encoding.UTF8.GetBytes(

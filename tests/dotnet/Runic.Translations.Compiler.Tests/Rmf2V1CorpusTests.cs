@@ -173,6 +173,9 @@ internal static class Rmf2V1CorpusTests
     // createDocumentRenderer and document plain text; runtime.d.ts, messages.d.ts, dynamic.d.ts
     // and transport.d.ts gain the LocalizedDocument types; the web manifest changes only in the
     // sha256 and byteLength of those five assets. All C# outputs and locale artifacts are unchanged.
+    // Re-pinned for the #39 review: runtime.js applies custom plain-text bindings only to explicit
+    // and alternateText tags and skips empty blocks; runtime.d.ts gains the toPlainText overload for
+    // LocalizedContent | LocalizedDocument. The web manifest changes only for those two assets.
     private const string EncodedOutputDigest = "996657f32151e4857fe5ae67b46080b477ba311d9562fc987858ee4edfe20160";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
