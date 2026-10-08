@@ -19,7 +19,7 @@ namespace Runic.Translations.Wpf;
 /// <remarks>
 /// Setting <see cref="RichMessageProperty"/> on an element whose own <see cref="SourceProperty"/> is set checks synchronously that
 /// the message exists, has markup and that the source has a renderer (a XAML load fails with the reason); set the source
-/// before it. Otherwise the source is the inherited or default one and everything is checked at the first render. Rendering happens later on the element's dispatcher; a failure there is traced like a binding error and
+/// before it. Otherwise the source is the inherited or default one: the live sources are asked whether any has a matching message (the load fails when none does), and the exact check runs at the first render. Rendering happens later on the element's dispatcher; a failure there is traced like a binding error and
 /// the previous content stays. An element whose message needs inputs renders once <see cref="ArgumentsProperty"/> is set.
 /// In a designer without a source the element stays empty.
 /// </remarks>
@@ -77,6 +77,11 @@ public static class TranslationProperties
         {
             if (source.Renderer is null) throw new InvalidOperationException("Rich messages need a WpfInlineRenderer: pass one to the TranslationSource.");
             source.Validate(key, rich: true);
+        }
+        else if (e.NewValue is string { Length: > 0 } inheritedKey)
+        {
+            // The inherited or default catalog is not known yet; ask the live sources.
+            TranslationSource.CheckLive(inheritedKey, rich: true, inputCount: null, names: null);
         }
         Schedule(block, create: e.NewValue is string { Length: > 0 });
     }

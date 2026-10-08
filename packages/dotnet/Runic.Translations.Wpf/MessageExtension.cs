@@ -27,7 +27,7 @@ public sealed class MessageInput
 /// Inputs are bindings. The short form <see cref="Arg0"/> to <see cref="Arg3"/> follows the generated method's
 /// parameter order: <c>{rt:Message greeting, Arg0={Binding UserName}}</c>. The long form names the parameters and has
 /// no limit: <c>&lt;rt:Message Key="greeting"&gt;&lt;rt:MessageInput Name="name" Value="{Binding UserName}"/&gt;&lt;/rt:Message&gt;</c>.
-/// With an explicit <see cref="Source"/> (or on a Style setter) names, input counts and the message kind are checked when the XAML loads; on an element the catalog is the inherited <c>TranslationProperties.Source</c> or else the default, so checks run when the binding first evaluates and failures are traced and shown as <c>[key]</c>. The property refreshes when a snapshot is published.
+/// With an explicit <see cref="Source"/> names, input counts and the message kind are checked when the XAML loads; on an element or Style setter the catalog is the inherited <c>TranslationProperties.Source</c> or else the default, so load checks ask all live sources (the XAML fails to load when none has a matching message) and the exact check runs when the binding evaluates, where failures are traced and shown as <c>[key]</c>. The property refreshes when a snapshot is published.
 /// In a designer without a source it shows <c>[key]</c>.
 /// </summary>
 [MarkupExtensionReturnType(typeof(string))]
@@ -66,8 +66,9 @@ public sealed class MessageExtension : MarkupExtension
         (List<BindingBase> bindings, List<string>? names) = CollectInputs();
         if (Source is null && IsElementTarget(serviceProvider))
         {
-            // The catalog is chosen per element when the binding evaluates: an inherited
-            // TranslationProperties.Source, else the default. Nothing can be checked at load.
+            // The catalog is chosen per element when the binding evaluates: an inherited TranslationProperties.Source,
+            // else the default. At load only the live sources can be asked whether any of them could be meant.
+            TranslationSource.CheckLive(key, rich: false, bindings.Count, names);
             return InheritedBinding(key, bindings, names).ProvideValue(serviceProvider);
         }
         TranslationSource? source = Source ?? TranslationSource.UseDefault();
@@ -88,12 +89,12 @@ public sealed class MessageExtension : MarkupExtension
     }
 
     /// <summary>
-    /// True for a dependency property of an element, including template content (WPF passes an internal <c>SharedDp</c>
-    /// as target while it parses a template, and the binding is then applied to each instance); false for a Style setter.
+    /// True when the binding will be applied to an element: a dependency property (on the element itself, or on shared template
+    /// content, where WPF reports a non-DependencyObject target) or a Style setter, whose binding is applied to each styled element.
     /// </summary>
     private static bool IsElementTarget(IServiceProvider serviceProvider) =>
-        serviceProvider?.GetService(typeof(IProvideValueTarget)) is IProvideValueTarget { TargetObject: { } target, TargetProperty: DependencyProperty }
-        && (target is DependencyObject || target.GetType().Name == "SharedDp");
+        serviceProvider?.GetService(typeof(IProvideValueTarget)) is IProvideValueTarget { TargetObject: { } target, TargetProperty: { } property }
+        && (property is DependencyProperty || target is Setter);
 
     private static MultiBinding InheritedBinding(string key, List<BindingBase> bindings, List<string>? names)
     {

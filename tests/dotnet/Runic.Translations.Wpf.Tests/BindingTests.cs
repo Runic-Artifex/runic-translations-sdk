@@ -121,9 +121,13 @@ internal static class BindingTests
         Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS}><TextBlock.Text><rt:Message Key='pair' Source='{x:Static t:Catalogs.Primary}' Arg0='{Binding Source=x}'><rt:MessageInput Name='first' Value='{Binding Source=x}'/>" +
             "</rt:Message></TextBlock.Text></TextBlock>"), "Mixed input forms were accepted.");
         Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message nope, Source={x:Static t:Catalogs.Primary}}\"/>"), "An unknown message was accepted.");
-        var inheritedBad = Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message nope}\"/>");
-        Flush(dispatcher);
-        Require(inheritedBad.Text == "[nope]", "An unknown message on an element was not shown as [key]: " + inheritedBad.Text);
+        // Without an explicit source the live sources are asked at load: a typo, a kind mismatch or a wrong input list fails there.
+        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message nope}\"/>"), "A typo was accepted on an element.");
+        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message payment, Arg0={Binding Source=1}}\"/>"), "A rich message was accepted as plain on an element.");
+        Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message pair, Arg0={Binding Source=x}}\"/>"), "A wrong input count was accepted on an element.");
+        Throws<Exception>(() => Parse<DataTemplate>("<DataTemplate {NS}><TextBlock Text=\"{rt:Message nope}\"/></DataTemplate>").LoadContent(), "A typo was accepted in a template.");
+        Throws<ArgumentException>(() => TranslationProperties.SetRichMessage(new TextBlock(), "missing"), "A rich typo was accepted.");
+        Throws<ArgumentException>(() => TranslationProperties.SetRichMessage(new TextBlock(), "application_title"), "A plain message was accepted as rich.");
         Throws<XamlParseException>(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message payment, Source={x:Static t:Catalogs.Primary}, Arg0={Binding Source=1}}\"/>"), "A rich message was accepted as plain.");
     }
 
@@ -349,6 +353,13 @@ internal static class BindingTests
         Flush(dispatcher);
         CheckOther(panel, "Other title", "a|b");
         Require(other.PaymentCalls > 0 && primary.PaymentCalls == primaryCalls, "The rich child did not use the parent's catalog.");
+
+        // A Style setter follows the parent too.
+        var styled = Parse<TextBlock>("<TextBlock {NS}><TextBlock.Style><Style TargetType='TextBlock'><Setter Property='Text' Value=\"{rt:Message application_title}\"/></Style></TextBlock.Style></TextBlock>");
+        panel.Children.Add(styled);
+        Flush(dispatcher);
+        Require(styled.Text == "Other title", "A Style setter did not follow the inherited source: " + styled.Text);
+        panel.Children.Remove(styled);
 
         // The parent's catalog follows its own manager.
         otherManager.Switch("de");

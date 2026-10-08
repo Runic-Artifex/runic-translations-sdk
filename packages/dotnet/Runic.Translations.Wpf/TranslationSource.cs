@@ -39,6 +39,8 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
     private readonly Dictionary<string, MemberInfo> _members = new(StringComparer.Ordinal);
     private readonly ManagerHook _hook;
     private readonly Dispatcher _dispatcher;
+    private static readonly object RegistryGate = new();
+    private static readonly List<WeakReference<TranslationSource>> Registry = [];
     private int _version;
     private int _disposed;
 
@@ -87,6 +89,11 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
             else if (member is MethodInfo { IsSpecialName: false, IsGenericMethodDefinition: false } method && method.DeclaringType != typeof(object)) _members[member.Name] = method;
         }
         _hook = new ManagerHook(this, manager);
+        lock (RegistryGate)
+        {
+            Registry.RemoveAll(item => !item.TryGetTarget(out _));
+            Registry.Add(new(this));
+        }
     }
 
     /// <summary>The manager this source follows.</summary>
@@ -132,6 +139,7 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _hook.Detach();
         lock (_gate) _listeners.Clear();
+        lock (RegistryGate) Registry.RemoveAll(item => !item.TryGetTarget(out TranslationSource? live) || ReferenceEquals(live, this));
         lock (DefaultGate) { if (ReferenceEquals(s_default, this)) { s_default = null; s_defaultUsed = false; } }
     }
 
@@ -183,6 +191,32 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
 
     private static string Signature(string key, ParameterInfo[] parameters) =>
         $"{key}({string.Join(", ", parameters.Select(parameter => parameter.ParameterType.Name + " " + parameter.Name))})";
+
+    /// <summary>
+    /// Load-time check for a binding whose catalog is only known later (inherited or default): throws unless some live source
+    /// has a matching message. With no live source yet (startup order, designers) nothing can be said and it passes.
+    /// </summary>
+    internal static void CheckLive(string key, bool rich, int? inputCount, IReadOnlyList<string>? names)
+    {
+        TranslationSource[] live;
+        lock (RegistryGate)
+        {
+            Registry.RemoveAll(item => !item.TryGetTarget(out _));
+            live = [.. Registry.Select(item => item.TryGetTarget(out TranslationSource? source) ? source : null!).Where(source => source is not null && Volatile.Read(ref source._disposed) == 0)];
+        }
+        if (live.Length == 0) return;
+        ArgumentException? first = null;
+        bool anyHas = false;
+        foreach (TranslationSource source in live)
+        {
+            if (!source._members.ContainsKey(key)) continue;
+            anyHas = true;
+            try { source.Validate(key, rich, inputCount, names); return; }
+            catch (ArgumentException exception) { first ??= exception; }
+        }
+        if (!anyHas) throw new ArgumentException($"No translation source has a message '{key}'. Use the flattened readable name, such as 'checkout_help'.", nameof(key));
+        throw first!;
+    }
 
     /// <summary>The number of inputs of a message.</summary>
     internal int InputCount(string key) => Parameters(Find(key)).Length;

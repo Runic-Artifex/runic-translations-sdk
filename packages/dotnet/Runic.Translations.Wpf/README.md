@@ -177,16 +177,19 @@ list in parameter order or a dictionary by parameter name. A null input becomes
 empty text; other values convert with the invariant culture to the parameter
 type, and a number input that is null or not convertible is an error.
 
-Mistakes surface early where the catalog is certain. A gap in `Arg0..Arg3` or
-mixed input forms fails when the XAML loads. With an explicit `Source=`, a
+Mistakes surface early. A gap in `Arg0..Arg3` or mixed input forms fails when the
+XAML loads. With an explicit `Source=` (or, for a rich message, a
+`rt:TranslationProperties.Source` set on the element before `RichMessage`), a
 mistyped message name, a wrong input name or count, or using a plain message as
-rich (or the reverse) fails then too, with the parameter names in the exception;
-for a rich message that is when `RichMessage` is set on an element that has its
-own `rt:TranslationProperties.Source` (set it first). When the catalog is
-inherited from a parent or is the default (see step 6) it cannot be known at
-load, so those checks, and everything found while binding or rendering (a
-missing slot, an input of the wrong type, a throwing message), are traced like
-any WPF binding error: plain text shows `[key]`, rich content keeps what it had.
+rich (or the reverse) fails then too, with the parameter names in the exception.
+Without one, the catalog is inherited or the default (see step 6) and cannot be
+known at load, so the load asks every live `TranslationSource`: it fails when none
+has a matching message, which catches a typo in a one-catalog app, while a key
+that exists only in a parent's catalog still loads. The exact check, and
+everything found while binding or rendering (a missing slot, an input of the wrong
+type, a throwing message), is traced like any WPF binding error: plain text shows
+`[key]`, rich content keeps what it had. With no source created yet (designers,
+early startup) nothing is checked at load.
 A rich message whose inputs have not been set yet renders once they are.
 
 ### 5. Switch locale
@@ -218,8 +221,8 @@ catalog, create another `TranslationSource` and set it on a parent element with
 resource. Every `{rt:Message}` and `RichMessage` below that element, including
 those in templates instantiated under it, uses that catalog even when the other
 catalog has the same key; elsewhere `TranslationSource.Default` applies. A single
-`{rt:Message Source=...}` overrides both. Style setters have no element when they
-are parsed, so they use the default or an explicit `Source=`. Locale and culture
+`{rt:Message Source=...}` overrides both. Style setters follow the styled element,
+like any other element. Locale and culture
 are separate: the source follows the manager's locale only, so set `CultureInfo` and
 `FrameworkElement.Language` yourself where existing resources need them. There is
 no `.resx` importer and no `FlowDocument` conversion; use `WpfDocumentRenderer`
