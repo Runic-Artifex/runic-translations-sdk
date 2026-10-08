@@ -398,6 +398,9 @@ internal static class BindingTests
         Throws<InvalidOperationException>(() => TranslationSource.Default = other, "Replacing a used default was accepted.");
         TranslationSource.Default = source;
 
+        manager.Switch("de");
+        Flush(dispatcher);
+        Require(title.Text == "Anwendung", "The source stopped following the manager before Dispose: " + title.Text);
         source.Dispose();
         Require(TranslationSource.Default is null, "Dispose did not clear the default.");
         manager.Switch("en");
