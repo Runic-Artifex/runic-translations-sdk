@@ -320,7 +320,9 @@ Explicit `runic.renameInput`, `runic.renameSlot` and `runic.renameResource`
 commands return resource-source transactions.
 
 Document messages get block-aware tooling. Completion offers block tags at the
-message root, only `li` inside a list, and only inline markup inside a
+root of a document message, inline markup at the root of an inline message (a
+translation follows the content kind of its base message, and a message without
+content yet gets both), only `li` inside a list, and only inline markup inside a
 paragraph, heading or list item; it also offers enum values and small integer
 ranges such as heading levels. Hover on a block tag shows its placement, child
 model and plain-text rendering, and hover on a message shows its content kind
@@ -328,9 +330,11 @@ and, for documents, the locked structure (one skeleton per distinct source
 variant). Blocks that span lines fold, and headings appear under their message
 in document symbols. Formatting lays out a plain document message with one block
 per line and two spaces of indentation per list level; leaf text is kept byte
-for byte, and messages with declarations, `.match` or quoted patterns are left
-unchanged. A quick fix for `RTR0078` joins a line break between Thai, Lao, Khmer
-or Myanmar characters. For a document message `runic.renderPreview` returns a
+for byte. Messages with declarations, `.match`, quoted patterns, text between
+blocks or unbalanced tags are left unchanged, and the other messages in the file
+are still formatted. A quick fix for `RTR0078` joins one line break between
+Thai, Lao, Khmer or Myanmar characters; each break of a message has its own fix
+named after its lines. For a document message `runic.renderPreview` returns a
 `blocks` tree (name, options, occurrence, child blocks and inline `runs`); its
 top-level `runs` member holds the plain-text projection as a fallback for
 clients that only render inline runs, such as the VS Code and Visual Studio

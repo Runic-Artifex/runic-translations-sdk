@@ -178,6 +178,11 @@ public static class Rmf2ResourceWriter
         {
             string? layout = Rmf2DocumentSyntax.Layout(node.MessageSyntax!);
             if (layout is null || layout == node.Message!.Replace("\r\n", "\n", StringComparison.Ordinal)) continue;
+            // A layout that does not read back as the same blocks and leaves leaves this message
+            // verbatim; the other messages are still formatted.
+            var single = Rmf2ResourceReader.Read(new TranslationSource(path, Utf8.GetBytes(Entry(node.Path[^1], layout, 0, newline))));
+            if (!single.Success || single.Nodes.Count != 1 || single.Nodes[0].MessageSyntax is not { } laidOutSyntax ||
+                Rmf2DocumentSyntax.Signature(laidOutSyntax) != Rmf2DocumentSyntax.Signature(node.MessageSyntax!)) continue;
             int from = node.NameLocation.StartByte, end = node.Location.StartByte + node.Location.LengthBytes;
             string replacement = Entry(node.Path[^1], layout, node.NameLocation.Column - 1, newline).TrimStart(' ');
             changes.Add((from, end - from, Utf8.GetBytes(replacement)));
