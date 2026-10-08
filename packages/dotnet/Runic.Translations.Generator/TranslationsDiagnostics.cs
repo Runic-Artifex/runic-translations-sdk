@@ -78,6 +78,22 @@ internal static class TranslationsDiagnostics
         "RTR0068", "Referenced runtime lacks the readable C# surface", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0068");
     internal static readonly DiagnosticDescriptor ReadableNameReserved = new(
         "RTR0069", "Readable C# name is reserved or clashes", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0069");
+    internal static readonly DiagnosticDescriptor DocumentContentKind = new(
+        "RTR0070", "Message content kind is invalid", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0070");
+    internal static readonly DiagnosticDescriptor DocumentVariantStructure = new(
+        "RTR0071", "Variant uses another variant's document structure", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0071");
+    internal static readonly DiagnosticDescriptor DocumentChildInvalid = new(
+        "RTR0072", "Document element is in an invalid position", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0072");
+    internal static readonly DiagnosticDescriptor DocumentLimitExceeded = new(
+        "RTR0073", "Document exceeds a structure limit", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0073");
+    internal static readonly DiagnosticDescriptor DocumentStructureMismatch = new(
+        "RTR0074", "Translated document structure does not match the source", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0074");
+    internal static readonly DiagnosticDescriptor DocumentBlockEmpty = new(
+        "RTR0076", "Document block or list is empty", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0076");
+    internal static readonly DiagnosticDescriptor DocumentHeadingLevel = new(
+        "RTR0077", "Document heading skips a level", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0077");
+    internal static readonly DiagnosticDescriptor DocumentLineBreakSpace = new(
+        "RTR0078", "Line break between Southeast Asian characters became a space", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0078");
 
     private static readonly Dictionary<string, DiagnosticDescriptor> ById = Index(
         UnreadableSource, DuplicateInputs, UnsupportedProjectSchema, InvalidLocale, InvalidCodeName, EmptyBaseLocale,
@@ -85,7 +101,8 @@ internal static class TranslationsDiagnostics
         NameCollision, InvalidStructure, EmptyVariant, LimitExceeded, RuntimeAbi, UnsupportedContentLocale,
         InvalidVariableOrFunction, InvalidResourceSyntax, InvalidMetadata, InvalidSourceLayout, ConflictingDeclaration,
         InvalidMarkupContract, InvalidMarkup, InvalidMarkupReference, NotExecutable, SyntaxError, InvalidDataModel,
-        ReadableSurfaceUnsupported, ReadableNameReserved);
+        ReadableSurfaceUnsupported, ReadableNameReserved, DocumentContentKind, DocumentVariantStructure, DocumentChildInvalid,
+        DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace);
 
     private static readonly object UnknownGate = new();
     private static readonly Dictionary<string, DiagnosticDescriptor> Unknown = new(System.StringComparer.Ordinal);

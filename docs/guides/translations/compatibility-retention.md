@@ -35,14 +35,24 @@ packs built with 0.6.0-preview.3 or earlier use ABI 2 and must be rebuilt.
 - Rebuild generated C# and ESM output with the matching compiler. Generated code
   from an earlier release fails its `EnsureRmf2RuntimeAbi` check, and the Vite
   plugin rejects a manifest with `rmf2RuntimeAbiVersion` 2.
+- Every message entry of the contract gains `content` and `skeletons`, so the
+  caller fingerprint, the generated C# `CatalogData` and `Registration`, all
+  generated ESM files, the web module manifest and every locale artifact change,
+  even in projects without documents.
 - Rebuild **every** external pack, including packs for inline-only projects.
   Both pack loaders reject a pack whose `markupContract.version` is not 2 with
   `RTR0023/markup-contract-version-mismatch`
   (`TranslationPackFailureReason.MarkupContractVersionMismatch`).
 - `runic.json` needs no change. Custom contracts may add
   `"placement": "inline"` and integer options; `markup.structure` is reserved.
-  Projects that registered an alias named `p`, `h`, `ul`, `ol` or `li` must
-  rename it when the document profile lands.
+- `p`, `h`, `ul`, `ol` and `li` are now built-in aliases for the
+  [document profile](../../../specs/translations/rmf2-document-profile-v1.md).
+  A project alias with one of these names no longer shadows them and reports
+  `RTR0060`; rename it. Messages that use none of these elements stay inline
+  and format as before, but every message contract gains `content` and
+  `skeletons` members. The caller fingerprint, the generated `CatalogData` and
+  `Registration`, `runtime.js`, `transport.js` and every locale artifact
+  therefore change, so the rebuild above also covers projects without documents.
 
 The ledger is reviewed when a release changes the generated contract or package
 baseline. It is not a telemetry promise and does not add a separate release gate;

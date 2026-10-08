@@ -147,8 +147,8 @@ build/load time, dynamic options again before invoking a renderer factory.
 properties. Applications map allowed options explicitly.
 
 Generated ESM exports `linkBinding`, `actionBinding`, `iconBinding`, `defineMarkup`,
-`enumOption`, `bindMarkup`, `createInlineRenderer`, `createDomInlineRenderer`, and
-`toPlainText`. Message return types carry the union of possible slots;
+`enumOption`, `bindMarkup`, `createInlineRenderer`, `createDocumentRenderer`,
+`createDomInlineRenderer`, and `toPlainText`. Message return types carry the union of possible slots;
 `renderer.render(content, {slots})` checks their typed kinds. Custom contracts and
 the generated registry are deeply frozen. `extend` composes a new renderer and
 rejects duplicate or incompatible registrations.
@@ -203,6 +203,68 @@ The [payment fixture](../../../specs/translations/examples/rmf2/README.md)
 contains two locales, conditional retry, two links, an icon, a dynamic custom badge,
 a feature directory and an executable DOM example.
 
+## Document messages
+
+A message whose top level is made of blocks is a *document*. The block
+vocabulary is built in: `p` (paragraph), `h level=1..6` (heading), `ul` and
+`ol` (flat lists; `ol` takes `start` and `marker`), and `li` (list item). `p`,
+`h` and `li` contain ordinary inline content.
+
+```rmf2
+help =
+  {#h level=1}Getting started{/h}
+  {#p}Open the {#strong}Settings{/strong} page.{/p}
+  {#ol}{#li}Choose a language.{/li}{#li}Restart the app.{/li}{/ol}
+```
+
+The base locale decides whether a message is inline or a document, and every
+translation must keep that kind (`RTR0070`). Translators change text and inline
+markup, but the block structure (which blocks, in which order, with which
+options) must match a source variant (`RTR0074`). Inside a block, line breaks in
+the source become one space, except next to `br`, U+200B, or between CJK wide
+characters; leading and trailing whitespace is removed. Inline messages keep
+their whitespace exactly.
+
+The `p`, `h`, `ul`, `ol` and `li` names cannot be used as project aliases.
+Nested lists, tables, quotes and custom block elements are not part of this
+version. The normative rules are in the
+[document profile](../../../specs/translations/rmf2-document-profile-v1.md).
+
+### Rendering documents
+
+A document message's generated C# accessor returns `LocalizedDocumentContent`
+(readable surface: `LocalizedDocumentContent<AppTextSlots.key>`, bound with
+`Bind(new(...))` like inline content). Render it with `Rmf2DocumentRenderer`,
+constructed once from `Rmf2MarkupContract.Link(...)` over the generated `Rmf2MarkupContract` constant. `Render`
+returns a list of `DocumentBlock` records with the canonical `Name`
+(`runic:p`, `runic:h`, `runic:ul`, `runic:ol`, `runic:li`), the resolved
+`Options` with defaults, the child `Blocks` of a list, the `Inlines` of a
+paragraph, heading or list item, and an `Occurrence` path such as `ul[1]/li[2]`.
+The path is the same in every locale for the same source variant. Inline
+elements inside a document carry `InlineMarkupRun.Occurrence` as
+`<block path>/<index path>`, for example `p[1]/0` or `ul[1]/li[2]/1.0`; text
+runs have none.
+`Rmf2InlineRenderer` rejects document messages and `Rmf2DocumentRenderer`
+rejects inline messages.
+
+Generated ESM returns `LocalizedDocument` for document messages. Create a
+renderer with `createDocumentRenderer({text, element, block})`; the block
+factory is called as `block(name, options, children, {occurrence, locale})`
+after its children. Native WPF, DOM and Svelte document adapters are not part of
+this version.
+
+`ToPlainText` (.NET, with `Rmf2PlainTextOptions`) and `toPlainText` (ESM)
+project documents with fixed rules: top-level blocks are separated by a blank
+line and list items by a line break. Unordered items start with the list marker
+(default `- `, `ListMarker` / `listMarker`); ordered items start with `n. `,
+counted from `start` in the `ol` marker style (decimal, bijective letters, or
+roman numerals for 1 to 3999 with a decimal fallback). Further lines of an item
+are indented by two spaces. Empty blocks are skipped, so the text never starts
+or ends with a line break. `Rmf2PlainTextOptions.Custom` and the ESM `custom`
+bindings supply projections for custom inline tags with `explicit` or
+`alternateText` policies only; `children`, `omit` and `lineBreak` tags keep their
+declared projection even when a binding is supplied.
+
 ## CLI, editor, and language service
 
 New projects use RMF2. Create one with `runic-translations init`, then validate,
@@ -255,7 +317,28 @@ Refactors validate the complete catalog.
 executes the verified .NET plan with inert functional bindings. Hover adds
 compiled input types and content/fallback locales when validation succeeds.
 Explicit `runic.renameInput`, `runic.renameSlot` and `runic.renameResource`
-commands return resource-source transactions. Configuration-changing edits require a client that
+commands return resource-source transactions.
+
+Document messages get block-aware tooling. Completion offers block tags at the
+root of a document message, inline markup at the root of an inline message (a
+translation follows the content kind of its base message, and a message without
+content yet gets both), only `li` inside a list, and only inline markup inside a
+paragraph, heading or list item; it also offers enum values and small integer
+ranges such as heading levels. Hover on a block tag shows its placement, child
+model and plain-text rendering, and hover on a message shows its content kind
+and, for documents, the locked structure (one skeleton per distinct source
+variant). Blocks that span lines fold, and headings appear under their message
+in document symbols. Formatting lays out a plain document message with one block
+per line and two spaces of indentation per list level; leaf text is kept byte
+for byte. Messages with declarations, `.match`, quoted patterns, text between
+blocks or unbalanced tags are left unchanged, and the other messages in the file
+are still formatted. A quick fix for `RTR0078` joins one line break between
+Thai, Lao, Khmer or Myanmar characters; each break of a message has its own fix
+named after its lines. For a document message `runic.renderPreview` returns a
+`blocks` tree (name, options, occurrence, child blocks and inline `runs`); its
+top-level `runs` member holds the plain-text projection as a fallback for
+clients that only render inline runs, such as the VS Code and Visual Studio
+previews. Configuration-changing edits require a client that
 synchronizes `runic.json` through `runicConfigurationSync` initialization options.
 
 The editor discovers recursive resources and mounted namespaces, exposes logical
@@ -263,7 +346,9 @@ rows backed by physical files, edits message values, creates missing translation
 in the corresponding locale file, previews and validates through the shared
 compiler, and preserves physical revisions. Structural create/move/rename/
 duplicate/delete and locale/fallback workflows use shared transactions, and rich
-preview controls render the normalized inline tree. Projects compile with the
+preview controls render the normalized inline tree. Document messages render as
+inert paragraphs, headings and lists, with the pseudo-localization simulation
+applied per block. Projects compile with the
 v5 carrier; AST 5 preview requests execute the verified .NET artifact/pack plan
 on the editor host and return inert semantic runs. The frontend never coerces
 AST 5 into a JavaScript executor.
@@ -272,7 +357,9 @@ Editor changes are resource-only and do not rewrite application call sites.
 Its closed XLIFF 2.1 text profile losslessly round-trips direct plain resources
 for the supported execution contract. Structured declarations, expressions, selectors,
 or markup produce the existing semantic-loss report, and the corresponding
-text-profile import is refused rather than approximated.
+text-profile import is refused rather than approximated. The loss entry of a
+document message (`XLIFF21-STRUCTURED-MESSAGE`) names the document profile;
+segment-level XLIFF for documents is not part of this version.
 
 The version-explicit [RMF2 v1 corpus](../../../specs/translations/corpus/rmf2-v1/README.md)
 is the shared release oracle for the execution-v2 boundary. The compiler,

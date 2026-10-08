@@ -10,8 +10,8 @@ file, a one-based line and column, and UTF-16 columns.
 
 Most diagnostics are errors and stop generation. `RTR0010`, `RTR0011` and
 `RTR0021` follow the project's `validation` policies (`allow`, `warning` or
-`error`), and some `RTR0051` reports are warnings, as are `RTR0068` and
-`RTR0069`.
+`error`), and some `RTR0051` reports are warnings, as are `RTR0068`, `RTR0069`, `RTR0071`,
+`RTR0076`, `RTR0077` and `RTR0078`.
 
 ## RTR0001
 
@@ -244,6 +244,68 @@ the consumer's own code and produce ordinary C# errors instead of RTR0069:
 
 Rename the conflicting type or member, or move it to another namespace.
 
+## RTR0070
+
+Message content kind is invalid. A message is either inline (text and inline
+markup) or a document (block elements such as `p`, `h`, `ul` and `ol` at the
+top level). The kind comes from the base locale; a translation must have the
+same kind, and every non-empty variant of one message must have the same kind.
+Text, placeholders and inline markup cannot sit directly beside blocks at the
+top level of a document; wrap them in `{#p}...{/p}`. A variant that holds only
+whitespace or bidi marks counts as empty and fits either kind. See the
+[RMF2 document profile](../../../specs/translations/rmf2-document-profile-v1.md).
+
+## RTR0071
+
+Variant uses another variant's document structure. A translated variant has a
+valid document structure, but it matches the source structure of a different
+variant rather than the one with the same keys. The translation still builds;
+check that the variants were not swapped.
+
+## RTR0072
+
+Document element is in an invalid position. `li` appears outside `ul` or `ol`,
+something other than `li` appears inside a list, a list is nested inside `li`
+(nested lists are not part of document profile v1), a block element appears
+inside `p`, `h`, `li` or inline markup, or a block element appears in an inline
+message below its top level.
+
+## RTR0073
+
+Document exceeds a structure limit. A document nests more than 16 element
+levels (blocks and inline markup together) or has more than 4096 nodes.
+
+## RTR0074
+
+Translated document structure does not match the source. Translators can
+change text and inline markup, but the block structure of a translated variant
+(the block and list elements, their order and their options) must equal the
+structure of one of the source variants. The message names the first difference,
+for example `ul[1]/li[3]`, against the closest source variant.
+
+## RTR0075
+
+Reserved for a later document profile. The current compiler does not report it.
+
+## RTR0076
+
+Document block or list is empty. A `p`, `h` or `li` has no content after
+whitespace normalization, or a `ul` or `ol` has no items. Empty blocks still
+render, but usually indicate a mistake.
+
+## RTR0077
+
+Document heading skips a level. The first heading of a document is not level 1,
+or a heading is more than one level deeper than the heading before it. Only the
+base locale reports it; translations keep the source heading levels.
+
+## RTR0078
+
+Line break between Southeast Asian characters became a space. In documents a
+line break inside text becomes one space, except next to CJK wide characters or
+U+200B ZERO WIDTH SPACE. Thai, Lao, Khmer and Myanmar text does not separate
+words with spaces, so join the lines or end the first line with U+200B.
+
 ## Other hosts
 
 `RTR0020` is reported by the `runic-translations` tool and MSBuild when a
@@ -252,3 +314,9 @@ runtime's classification of a rejected external translation pack.
 `RTR0023/markup-contract-version-mismatch` means the pack was built for another
 Runic markup contract version (for example by an earlier compiler release);
 rebuild the pack with the current compiler.
+`RTR0023/document-structure-mismatch` means a document message in the pack has
+a block structure that no base-locale variant of the generated contract has;
+rebuild the pack from the same sources as the application. A document message
+that breaks the block rules themselves (text outside a block, a misplaced
+element, or a leaf that starts or ends with whitespace) is
+`RTR0023/malformed-pattern`.

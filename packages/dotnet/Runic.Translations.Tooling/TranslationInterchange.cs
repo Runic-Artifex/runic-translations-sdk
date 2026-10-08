@@ -138,7 +138,9 @@ public static class TranslationInterchange
             {
                 direct.TryGetValue(source.Key, out TranslationInterchangeTargetUnit? target);
                 bool structured = source.Structured || target?.Structured == true;
-                if (structured) losses.Add(new("XLIFF21-STRUCTURED-MESSAGE", "/" + source.Key, "Selectors, formatting, or markup are not losslessly representable by the closed XLIFF text profile.", true));
+                if (structured) losses.Add(new("XLIFF21-STRUCTURED-MESSAGE", "/" + source.Key, source.Document
+                    ? "Document message (RMF2 document profile v1): its block structure and markup are not losslessly representable by the closed XLIFF text profile, and its import is refused."
+                    : "Selectors, formatting, or markup are not losslessly representable by the closed XLIFF text profile.", true));
                 writer.WriteStartElement("unit", XliffNamespace); writer.WriteAttributeString("id", source.Key);
                 WriteNotes(writer, projection, source, structured, reviewByKey.TryGetValue(source.Key, out TranslationInterchangeReviewEntry? entry) ? entry : null);
                 writer.WriteStartElement("segment", XliffNamespace); writer.WriteAttributeString("id", "1"); if (entry is not null) writer.WriteAttributeString("state", SegmentState(entry.State)); writer.WriteStartElement("source", XliffNamespace); writer.WriteString(source.Text); writer.WriteEndElement();

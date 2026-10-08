@@ -179,7 +179,7 @@ internal sealed class Rmf2LanguageServer
             Rmf2DiagnosticQuickFix? fix = Rmf2DiagnosticActions.GetQuickFixes(actionBuffer.Syntax, _requestCancellation)
                 .FirstOrDefault(candidate => candidate.Id == fixId);
             if (fix is null) throw new ContentModifiedException();
-            return QuickFixAction(actionUri, actionBuffer, fix);
+            return QuickFixAction(actionUri, actionBuffer, fix, args["isPreferred"]?.GetValue<bool>() == true);
         }
         if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration")
         {
@@ -283,20 +283,54 @@ internal sealed class Rmf2LanguageServer
             int from = Utf8.GetByteCount(buffer.Text.AsSpan(0, Offset(buffer.Text, requestedRange["start"]!)));
             int to = Utf8.GetByteCount(buffer.Text.AsSpan(0, Offset(buffer.Text, requestedRange["end"]!)));
             if (to < from) throw new ArgumentException("Invalid code-action range.");
-            return new JsonArray(Rmf2DiagnosticActions.GetQuickFixes(buffer.Syntax, _requestCancellation).Where(fix => fix.Location.StartByte <= to &&
-                from <= fix.Location.StartByte + fix.Location.LengthBytes)
-                .Select(fix => (JsonNode)QuickFixAction(uri, buffer, fix)).ToArray());
+            // A fix applies at its diagnostic and at the source it edits (RTR0078 is reported at the
+            // message name, but the line break is further down).
+            bool AtEdit(Rmf2DiagnosticQuickFix fix) => fix.StartByte <= to && from <= fix.StartByte + fix.LengthBytes;
+            Rmf2DiagnosticQuickFix[] fixes = Rmf2DiagnosticActions.GetQuickFixes(buffer.Syntax, _requestCancellation).Where(fix => fix.Location.StartByte <= to &&
+                from <= fix.Location.StartByte + fix.Location.LengthBytes || AtEdit(fix)).ToArray();
+            // Several fixes can share one diagnostic (one RTR0078 join per line break, all reported at
+            // the message name). Only a fix at the requested source, or the only fix for its
+            // diagnostic, is preferred, so a client never auto-applies an arbitrary one of them.
+            return new JsonArray(fixes.Select(fix => (JsonNode)QuickFixAction(uri, buffer, fix, AtEdit(fix) ||
+                fixes.Count(other => other.DiagnosticId == fix.DiagnosticId && other.Location.StartByte == fix.Location.StartByte && other.Location.LengthBytes == fix.Location.LengthBytes) == 1)).ToArray());
         }
         if (method == "textDocument/semanticTokens/full") return SemanticTokens(buffer);
         if (method == "textDocument/documentSymbol")
-            return new JsonArray(buffer.Syntax.Nodes.Select(node => (JsonNode)new JsonObject {
-                ["name"] = node.Path[^1], ["detail"] = string.Join('.', node.Path), ["kind"] = node.IsGroup ? 3 : 13,
-                ["range"] = Range(buffer, node.Location), ["selectionRange"] = Range(buffer, node.NameLocation),
+            return new JsonArray(buffer.Syntax.Nodes.Select(node => {
+                var symbol = new JsonObject {
+                    ["name"] = node.Path[^1], ["detail"] = string.Join('.', node.Path), ["kind"] = node.IsGroup ? 3 : 13,
+                    ["range"] = Range(buffer, node.Location), ["selectionRange"] = Range(buffer, node.NameLocation),
+                };
+                // Document messages list their headings as an outline (kind String, as in Markdown).
+                if (node.MessageSyntax is { } messageSyntax)
+                {
+                    var headings = Rmf2DocumentSyntax.Blocks(messageSyntax).Where(block => block.Name == "runic:h").Select(block => {
+                        string text = Rmf2DocumentSyntax.HeadingText(messageSyntax, block);
+                        return (JsonNode)new JsonObject {
+                            ["name"] = text.Length == 0 ? Rmf2DocumentSyntax.Describe(block) : text, ["detail"] = Rmf2DocumentSyntax.Describe(block), ["kind"] = 15,
+                            ["range"] = Range(buffer, MessageLocation(buffer, node, block.Open.Location.StartByte, block.End)),
+                            ["selectionRange"] = Range(buffer, MessageLocation(buffer, node, block.Open.Location.StartByte, block.ContentStart)),
+                        };
+                    }).ToArray();
+                    if (headings.Length > 0) symbol["children"] = new JsonArray(headings);
+                }
+                return (JsonNode)symbol;
             }).ToArray());
         if (method == "textDocument/foldingRange")
-            return new JsonArray(buffer.Syntax.Nodes.Where(n => n.Location.EndLine > n.NameLocation.Line).Select(node => (JsonNode)new JsonObject {
+        {
+            var ranges = buffer.Syntax.Nodes.Where(n => n.Location.EndLine > n.NameLocation.Line).Select(node => (JsonNode)new JsonObject {
                 ["startLine"] = node.NameLocation.Line - 1, ["endLine"] = node.Location.EndLine - (node.Location.EndColumn == 1 ? 2 : 1), ["kind"] = "region",
-            }).ToArray());
+            }).ToList();
+            // Blocks of document messages that span lines fold from their open tag to their close tag.
+            foreach (Rmf2ResourceNode node in buffer.Syntax.Nodes.Where(n => n.MessageSyntax is not null))
+                foreach (var block in Rmf2DocumentSyntax.Blocks(node.MessageSyntax!))
+                {
+                    int startLine = Range(buffer, MessageLocation(buffer, node, block.Open.Location.StartByte, block.ContentStart))["start"]!["line"]!.GetValue<int>();
+                    int endLine = Range(buffer, MessageLocation(buffer, node, block.ContentEnd, block.End))["start"]!["line"]!.GetValue<int>();
+                    if (endLine > startLine) ranges.Add(new JsonObject { ["startLine"] = startLine, ["endLine"] = endLine, ["kind"] = "region" });
+                }
+            return new JsonArray(ranges.ToArray());
+        }
         if (method == "textDocument/formatting")
         {
             string formatted = Utf8.GetString(Rmf2ResourceWriter.Format(buffer.Syntax.Source));
@@ -358,6 +392,10 @@ internal sealed class Rmf2LanguageServer
                 Rmf2MessageContractV5? contract = project.CanonicalMessages.Concat(project.ExtraMessages).FirstOrDefault(item => item.Key == key);
                 if (value is not null) content += "\nContent locale: " + value.ContentLocale;
                 if (contract is { Inputs.Count: > 0 }) content += "\nInputs: " + string.Join(", ", contract.Inputs.Select(input => "$" + input.Name + ": " + input.Type));
+                if (contract is not null) content += "\nContent: " + contract.Content;
+                // The locked block structure translations must keep, one skeleton per distinct source variant.
+                if (contract is { Content: Rmf2DocumentProfileV5.Document })
+                    content += "\nStructure: " + string.Join(" | ", contract.Skeletons.Select(skeleton => skeleton.Length == 0 ? "(empty)" : skeleton));
                 string? fallback = project.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
                 if (fallback is not null) content += "\nFallback: " + fallback;
             }
@@ -404,6 +442,13 @@ internal sealed class Rmf2LanguageServer
             return new JsonArray(items.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item => (JsonNode)new JsonObject { ["label"] = item.Key, ["detail"] = item.Value, ["kind"] = 14 }).ToArray());
         }
         return null;
+    }
+    // Physical source location of a message byte range.
+    private static TextSourceLocation MessageLocation(Buffer buffer, Rmf2ResourceNode node, int from, int to)
+    {
+        int last = node.MessageByteMap.Count - 1;
+        int start = node.MessageByteMap[Math.Clamp(from, 0, last)], end = node.MessageByteMap[Math.Clamp(to, 0, last)];
+        return new TextSourceLocation(buffer.Syntax.Source.Path, start, Math.Max(0, end - start), 0, 0, 0, 0);
     }
     private static int MessageOffset(Rmf2ResourceNode entry, int physicalByte)
     {
@@ -929,15 +974,15 @@ internal sealed class Rmf2LanguageServer
     }
     private JsonObject Range(Buffer buffer, TextSourceLocation location)
     {
-        Rmf2DiagnosticSpan span = Rmf2DiagnosticActions.GetSpan(new TranslationSource(buffer.Syntax.Source.Path, Utf8.GetBytes(buffer.Text)), location);
+        Rmf2DiagnosticSpan span = Rmf2DiagnosticActions.GetSpan(buffer.Encoded, location);
         return new JsonObject { ["start"] = Position(buffer.Text, span.StartUtf16), ["end"] = Position(buffer.Text, span.StartUtf16 + span.LengthUtf16) };
     }
-    private JsonObject QuickFixAction(string uri, Buffer buffer, Rmf2DiagnosticQuickFix fix)
+    private JsonObject QuickFixAction(string uri, Buffer buffer, Rmf2DiagnosticQuickFix fix, bool preferred)
     {
         // Repairs were authorized by the shared compiler against this immutable buffer syntax.
         var editLocation = new TextSourceLocation(buffer.Syntax.Source.Path, fix.StartByte, fix.LengthBytes, 0, 0, 0, 0);
         return new JsonObject {
-            ["title"] = fix.Title, ["kind"] = "quickfix", ["isPreferred"] = true,
+            ["title"] = fix.Title, ["kind"] = "quickfix", ["isPreferred"] = preferred,
             ["data"] = new JsonObject { ["uri"] = uri, ["version"] = buffer.Version, ["revision"] = fix.ExpectedRevision, ["fixId"] = fix.Id },
             ["edit"] = new JsonObject { ["documentChanges"] = new JsonArray(new JsonObject {
                 ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = buffer.Version },
@@ -988,7 +1033,13 @@ internal sealed class Rmf2LanguageServer
         byte[] bytes = Utf8.GetBytes(message.ToJsonString());
         _output.Write(Encoding.ASCII.GetBytes("Content-Length: " + bytes.Length + "\r\n\r\n")); _output.Write(bytes); _output.Flush();
     }
-    private sealed record Buffer(string Text, int Version, Rmf2ResourceDocument Syntax);
+    private sealed record Buffer(string Text, int Version, Rmf2ResourceDocument Syntax)
+    {
+        private TranslationSource? _encoded;
+        // The UTF-8 source of Text, encoded once per buffer: folding ranges and the outline map
+        // many block locations of one immutable buffer.
+        internal TranslationSource Encoded => _encoded ??= new TranslationSource(Syntax.Source.Path, Utf8.GetBytes(Text));
+    }
     private sealed class PlatformSourcePathComparer : IEqualityComparer<string>
     {
         // Backslash is a legal file-name character on Unix, so only Windows

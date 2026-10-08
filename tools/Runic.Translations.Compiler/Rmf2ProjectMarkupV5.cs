@@ -87,7 +87,8 @@ internal sealed class Rmf2ProjectMarkupV5
                 }
                 if (contract.Standalone != (tag.MarkupKind == "standalone")) Error("Markup '" + name + "' uses the wrong paired/standalone form.");
                 if (contract.Interactive && stack.Any(parent => parent.Interactive)) Error("Interactive markup cannot be nested inside another interactive element.");
-                if (stack.Count >= 16) Error("Inline markup nesting exceeds 16 levels.");
+                // Inline nesting only; the document profile checks the total element depth (RTR0073).
+                if (contract.Placement == "inline" && stack.Count(parent => parent.Placement == "inline") >= 16) Error("Inline markup nesting exceeds 16 levels.");
                 var options = new SortedDictionary<string, Rmf2ValueV5>(StringComparer.Ordinal);
                 foreach (var option in tag.Options) options[option.Name] = option.Value;
                 bool functional = name is "runic:link" or "runic:action" or "runic:icon";
@@ -188,13 +189,15 @@ internal sealed class Rmf2ProjectMarkupV5
         {
             var slots = new SortedDictionary<string, object>(StringComparer.Ordinal);
             foreach (var slot in message.Slots) slots[slot.Key] = new { kind = slot.Value.Kind, min = slot.Value.Min, max = slot.Value.Max };
-            if (locales is null) exportedMessages[message.Key] = new { slots, structured = message.Structured, markup = message.MarkupNames };
+            // The content kind is part of the caller contract; skeletons are not, because
+            // they change no generated API. Packs are checked against them at load time.
+            if (locales is null) exportedMessages[message.Key] = new { slots, structured = message.Structured, markup = message.MarkupNames, content = message.Content };
             else
             {
                 var contentLocales = new SortedDictionary<string, string>(StringComparer.Ordinal);
                 foreach (var locale in locales)
                     if (locale.ResolvedResources.FirstOrDefault(resource => resource.Key == message.Key) is { } resource) contentLocales[locale.Tag] = resource.ContentLocale;
-                exportedMessages[message.Key] = new { slots, structured = message.Structured, contentLocales };
+                exportedMessages[message.Key] = new { slots, structured = message.Structured, contentLocales, content = message.Content, skeletons = message.Skeletons };
             }
         }
         return JsonSerializer.Serialize(new { version = Rmf2ProjectV5.MarkupContractVersion, contracts = exportedContracts, messages = exportedMessages });
