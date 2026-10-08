@@ -10,7 +10,7 @@ namespace Runic.Translations.Wpf;
 
 /// <summary>
 /// Binds a dependency property to a plain generated message: <c>{rt:Message application_title}</c>. Inputs come from
-/// <see cref="Arg0"/> to <see cref="Arg3"/>, in the order of the generated method's parameters, as bindings or constants:
+/// <see cref="Arg0"/> to <see cref="Arg3"/>, in the order of the generated method's parameters:
 /// <c>{rt:Message greeting, Arg0={Binding UserName}}</c>. The property refreshes when the locale changes.
 /// </summary>
 [MarkupExtensionReturnType(typeof(string))]
@@ -29,14 +29,14 @@ public sealed class MessageExtension : MarkupExtension
     /// <summary>The source to use; defaults to <see cref="TranslationSource.Default"/>.</summary>
     public TranslationSource? Source { get; set; }
 
-    /// <summary>First message input: a binding or a constant.</summary>
-    public object? Arg0 { get; set; }
+    /// <summary>First message input, a binding.</summary>
+    public BindingBase? Arg0 { get; set; }
     /// <summary>Second message input.</summary>
-    public object? Arg1 { get; set; }
+    public BindingBase? Arg1 { get; set; }
     /// <summary>Third message input.</summary>
-    public object? Arg2 { get; set; }
+    public BindingBase? Arg2 { get; set; }
     /// <summary>Fourth message input.</summary>
-    public object? Arg3 { get; set; }
+    public BindingBase? Arg3 { get; set; }
 
     /// <inheritdoc />
     public override object ProvideValue(IServiceProvider serviceProvider)
@@ -44,8 +44,8 @@ public sealed class MessageExtension : MarkupExtension
         string key = Key ?? throw new InvalidOperationException("rt:Message needs a message name.");
         TranslationSource source = Source ?? TranslationSource.Default
             ?? throw new InvalidOperationException("No TranslationSource: set TranslationSource.Default at startup or pass Source=.");
-        List<object?> inputs = [];
-        foreach (object? arg in new[] { Arg0, Arg1, Arg2, Arg3 })
+        List<BindingBase> inputs = [];
+        foreach (BindingBase? arg in new[] { Arg0, Arg1, Arg2, Arg3 })
         {
             if (arg is null) break;
             inputs.Add(arg);
@@ -57,7 +57,7 @@ public sealed class MessageExtension : MarkupExtension
         }
         var multi = new MultiBinding { Converter = new MessageConverter(source, key), Mode = BindingMode.OneWay };
         multi.Bindings.Add(new Binding(nameof(TranslationSource.Version)) { Source = source, Mode = BindingMode.OneWay });
-        foreach (object? input in inputs) multi.Bindings.Add(input as BindingBase ?? new Binding { Source = input, Mode = BindingMode.OneTime });
+        foreach (BindingBase input in inputs) multi.Bindings.Add(input);
         return multi.ProvideValue(serviceProvider);
     }
 

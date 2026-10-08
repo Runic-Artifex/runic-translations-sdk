@@ -39,7 +39,7 @@ internal static class BindingTests
         var person = new Person { UserName = "Ada", Count = 3 };
         var greeting = (TextBlock)XamlReader.Parse($"<TextBlock {Namespaces} Text=\"{{rt:Message greeting, Arg0={{Binding UserName}}}}\"/>");
         var items = (TextBlock)XamlReader.Parse($"<TextBlock {Namespaces} Text=\"{{rt:Message items, Arg0={{Binding Count}}}}\"/>");
-        var constant = (TextBlock)XamlReader.Parse($"<TextBlock {Namespaces} Text=\"{{rt:Message greeting, Arg0=Grace}}\"/>");
+        var constant = (TextBlock)XamlReader.Parse($"<TextBlock {Namespaces} Text=\"{{rt:Message greeting, Arg0={{Binding Source=Grace}}}}\"/>");
         greeting.DataContext = items.DataContext = person;
         Flush(dispatcher);
         Require(greeting.Text == "Hallo Ada" && items.Text == "3 Artikel" && constant.Text == "Hallo Grace", $"Inputs: {greeting.Text} | {items.Text} | {constant.Text}");

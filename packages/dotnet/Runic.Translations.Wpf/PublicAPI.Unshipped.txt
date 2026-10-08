@@ -1,12 +1,12 @@
 #nullable enable
 Runic.Translations.Wpf.MessageExtension
-Runic.Translations.Wpf.MessageExtension.Arg0.get -> object?
+Runic.Translations.Wpf.MessageExtension.Arg0.get -> System.Windows.Data.BindingBase?
 Runic.Translations.Wpf.MessageExtension.Arg0.set -> void
-Runic.Translations.Wpf.MessageExtension.Arg1.get -> object?
+Runic.Translations.Wpf.MessageExtension.Arg1.get -> System.Windows.Data.BindingBase?
 Runic.Translations.Wpf.MessageExtension.Arg1.set -> void
-Runic.Translations.Wpf.MessageExtension.Arg2.get -> object?
+Runic.Translations.Wpf.MessageExtension.Arg2.get -> System.Windows.Data.BindingBase?
 Runic.Translations.Wpf.MessageExtension.Arg2.set -> void
-Runic.Translations.Wpf.MessageExtension.Arg3.get -> object?
+Runic.Translations.Wpf.MessageExtension.Arg3.get -> System.Windows.Data.BindingBase?
 Runic.Translations.Wpf.MessageExtension.Arg3.set -> void
 Runic.Translations.Wpf.MessageExtension.Key.get -> string?
 Runic.Translations.Wpf.MessageExtension.Key.set -> void

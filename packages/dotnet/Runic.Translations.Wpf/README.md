@@ -111,7 +111,7 @@ needed only for messages with markup.
     <!-- Plain message. -->
     <TextBlock Text="{rt:Message orders_title}" FontSize="20"/>
 
-    <!-- Inputs come from Arg0..Arg3, in the generated method's parameter order: bindings or constants. -->
+    <!-- Inputs come from Arg0..Arg3, in the generated method's parameter order (a constant is `{Binding Source=text}`). -->
     <TextBlock Text="{rt:Message orders_greeting, Arg0={Binding UserName}}"/>
     <TextBlock Text="{rt:Message orders_count, Arg0={Binding OpenOrders}}"/>
 
