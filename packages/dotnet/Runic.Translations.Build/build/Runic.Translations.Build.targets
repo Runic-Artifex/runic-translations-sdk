@@ -37,6 +37,16 @@
     <ItemGroup Condition="'@(TranslationProject)' != '' and !Exists('$(_Rmf2DiscoveryAssembly)')">
       <_TranslationsDiscoveredSource Include="$(_TranslationsSourceDiscoveryGlobs)" />
     </ItemGroup>
+    <!-- XAML stays optional. Catalog is an explicit per-file assertion; the project
+         default only applies to files without a statically declared source override. -->
+    <ItemGroup Condition="'$(TranslationsValidateXaml)' != 'false'">
+      <TranslationXaml Include="@(Page);@(ApplicationDefinition)" Exclude="@(TranslationXaml)" Condition="'$(UseWPF)' == 'true'" />
+      <AdditionalFiles Include="@(TranslationXaml)" RunicTranslationKind="Xaml"
+                       RunicTranslationCatalog="%(TranslationXaml.Catalog)"
+                       RunicTranslationDefaultCatalog="$(TranslationsXamlCatalog)" />
+      <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationCatalog" />
+      <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationDefaultCatalog" />
+    </ItemGroup>
     <!-- MSBuild globs are case-sensitive on Linux. Match extensions after discovery
          with MSBuild's case-insensitive string comparison, matching the compiler contract. -->
     <ItemGroup Condition="'@(TranslationMf2)' == ''">

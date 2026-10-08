@@ -59,8 +59,9 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             .WithTrackingName("TranslationRuntimeAbi");
 
         context.RegisterSourceOutput(
-            units.Collect().Combine(projects).WithTrackingName("TranslationCompilation").Combine(runtimeAbi),
-            static (productionContext, pair) => Generate(productionContext, pair.Left.Left, pair.Left.Right, pair.Right));
+            units.Collect().Combine(projects).WithTrackingName("TranslationCompilation").Combine(runtimeAbi)
+                .Combine(inputs.Where(static input => input.Kind == InputKind.Xaml).Collect()),
+            static (productionContext, pair) => Generate(productionContext, pair.Left.Left.Left, pair.Left.Left.Right, pair.Left.Right, pair.Right));
     }
 
     // Reads the ABI markers of a referenced Runic.Translations assembly. Other references are
@@ -165,13 +166,16 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         InputKind kind;
         if (string.Equals(kindValue, "Project", StringComparison.Ordinal)) kind = InputKind.Project;
         else if (string.Equals(kindValue, "Rmf2", StringComparison.Ordinal) || string.Equals(kindValue, "Mf2", StringComparison.Ordinal)) kind = InputKind.Mf2;
+        else if (string.Equals(kindValue, "Xaml", StringComparison.Ordinal)) kind = InputKind.Xaml;
         else return default;
 
+        options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationCatalog", out string? catalog);
+        options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationDefaultCatalog", out string? defaultCatalog);
         SourceText? sourceText = additionalText.GetText(cancellationToken);
         string path = NormalizePath(additionalText.Path, optionsProvider.GlobalOptions);
         return sourceText is null
-            ? new GeneratorInput(kind, path, null)
-            : new GeneratorInput(kind, path, sourceText.ToString());
+            ? new GeneratorInput(kind, path, null, catalog, defaultCatalog)
+            : new GeneratorInput(kind, path, sourceText.ToString(), catalog, defaultCatalog);
     }
 
     private static string NormalizePath(string path, AnalyzerConfigOptions globalOptions)
@@ -191,7 +195,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     }
 
     private static void Generate(SourceProductionContext context, ImmutableArray<SourceUnit> units,
-        ImmutableArray<GeneratorInput> projectInputs, RuntimeAbiState runtimeAbi)
+        ImmutableArray<GeneratorInput> projectInputs, RuntimeAbiState runtimeAbi, ImmutableArray<GeneratorInput> xaml)
     {
         var unreadable = new List<GeneratorInput>();
         var projects = new List<GeneratorInput>();
@@ -233,11 +237,11 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         GeneratorInput selected = projects[0];
         sourceTexts[selected.Path] = SourceText.From(selected.Text!, StrictUtf8);
         var project = new TranslationSource(selected.Path, StrictUtf8.GetBytes(selected.Text!));
-        GenerateRmf2V5(context, project, compiled, sourceTexts, runtimeAbi.SupportsReadableSurface);
+        GenerateRmf2V5(context, project, compiled, sourceTexts, runtimeAbi.SupportsReadableSurface, xaml);
     }
 
     private static void GenerateRmf2V5(SourceProductionContext context, TranslationSource project,
-        IReadOnlyList<Rmf2SourceUnitV5> units, Dictionary<string, SourceText> sourceTexts, bool readableSurface)
+        IReadOnlyList<Rmf2SourceUnitV5> units, Dictionary<string, SourceText> sourceTexts, bool readableSurface, ImmutableArray<GeneratorInput> xaml)
     {
         Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, units, CompilerOptions, context.CancellationToken);
         bool hasErrors = false;
@@ -256,6 +260,9 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 Rmf2ProjectV5EmissionEligibility.Message));
             return;
         }
+        foreach (GeneratorInput input in xaml)
+            XamlMessageValidator.Validate(context, input, linked, readableSurface);
+
         var outputs = new List<TranslationGeneratedOutput>(5)
         {
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked),
@@ -326,12 +333,15 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         None,
         Project,
         Mf2,
+        Xaml,
     }
 
     internal readonly struct GeneratorInput : IEquatable<GeneratorInput>
     {
-        internal GeneratorInput(InputKind kind, string path, string? text)
+        internal GeneratorInput(InputKind kind, string path, string? text, string? catalog = null, string? defaultCatalog = null)
         {
+            Catalog = catalog;
+            DefaultCatalog = defaultCatalog;
             Kind = kind;
             Path = path;
             Text = text;
@@ -340,9 +350,13 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         internal InputKind Kind { get; }
         internal string Path { get; }
         internal string? Text { get; }
+        internal string? Catalog { get; }
+        internal string? DefaultCatalog { get; }
 
         public bool Equals(GeneratorInput other) =>
             Kind == other.Kind &&
+            string.Equals(Catalog, other.Catalog, StringComparison.Ordinal) &&
+            string.Equals(DefaultCatalog, other.DefaultCatalog, StringComparison.Ordinal) &&
             string.Equals(Path, other.Path, StringComparison.Ordinal) &&
             string.Equals(Text, other.Text, StringComparison.Ordinal);
 
@@ -355,6 +369,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 int hash = (int)Kind;
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Path ?? string.Empty);
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Text ?? string.Empty);
+                hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Catalog ?? string.Empty);
+                hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(DefaultCatalog ?? string.Empty);
                 return hash;
             }
         }

@@ -238,8 +238,16 @@ the source earlier or pass `Source=` explicitly.
 
 Visual Studio and Blend do not run `OnStartup`, so no default source exists.
 `{rt:Message key}` then shows `[key]` and rich elements stay empty instead of
-failing every view. At run time an element without any source traces a binding error and shows `[key]`. Message names
-are not checked at build time yet.
+failing every view. At run time an element without any source traces a binding error and shows `[key]`.
+
+### Build-time checks
+
+With a local generating catalog, set
+`TranslationsXamlCatalog` to its catalog ID to check static XAML keys, plain/rich
+usage, input counts and readable parameter names during the build. Explicit or
+inherited source declarations require a per-file `TranslationXaml` catalog
+assertion; runtime-valued keys and external catalogs keep runtime checks. See
+[build-time XAML checks](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Build/README.md#check-wpf-xaml-at-build-time).
 
 ## Documents
 

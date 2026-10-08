@@ -13,6 +13,7 @@ Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), whic
 | Editor / hosted RMF2 E2E | `bun run build`, `dotnet apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll validate apps/translations-editor/ExampleWorkspace`, then the commands in [the hosted E2E README](apps/translations-editor/tests/HostedBrowserE2E/README.md) |
 | Editor / packed Translations packages | `bun run verify-editor-packed` |
 | IDE / VS Code extension package | `bun install --frozen-lockfile && bun run --bun check && bun run --bun test && bun run package` in `tools/vscode-runic-translations` |
+| WPF / Windows | `dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests --configuration Release`, then `dotnet run --project tests/dotnet/Runic.Translations.Build.Tests --configuration Release -- --xaml-wpf` |
 | IDE / Windows VSIX package | Windows only; see [the Visual Studio extension README](tools/visualstudio-runic-translations/README.md) |
 
 When a `--check` command reports a stale file, run the same script without `--check` and commit the result. `bun eng/generate-cldr.mjs` also rewrites `specs/translations/capabilities-v1.json`, so run `bun eng/render-capabilities.mjs` after it.
@@ -20,6 +21,14 @@ When a `--check` command reports a stale file, run the same script without `--ch
 `bun run verify-editor-packed` packs the Translations packages under a local-only version (`<version>.editor-packed`), builds the editor against them with `-p:RunicEditorUsePackedTranslations=true`, and checks that NuGet resolved them from `artifacts/packages/nuget`. It removes that version from the NuGet package cache afterwards and leaves the editor restored in packed mode; the next `bun run build` restores project references again. CI also runs the hosted E2E against this packed build.
 
 Packed mode is driven only by this script: it installs `dotnet-runic-translations` from the local feed into `artifacts/editor-packed/tool` and passes it as `TranslationsToolCommand`, so there is no `.config/dotnet-tools.json` and a plain `dotnet build -p:RunicEditorUsePackedTranslations=true` is not supported. Only the NuGet packages are tested in packed form. The editor frontend keeps consuming the npm Translations packages through `workspace:*` links.
+
+The XAML checks can be verified independently with `dotnet run --project
+tests/dotnet/Runic.Translations.Generator.Tests --configuration Release` and
+`dotnet run --project tests/dotnet/Runic.Translations.Build.Tests --configuration
+Release -- --xaml`. `--xaml-wpf` also compiles real WPF `Page` items and requires
+the WPF adapter built in the same configuration first. For locally packed
+Runtime and Build candidates, pass `--xaml-packages <feed> <version>` to the Build
+tests; this exercises the packaged analyzer without project references.
 
 ## Public API
 
