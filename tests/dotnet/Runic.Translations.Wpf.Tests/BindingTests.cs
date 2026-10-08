@@ -117,7 +117,7 @@ internal static class BindingTests
         source.Dispose();
         manager.Switch("en");
         Flush(dispatcher);
-        Require(title.Text == "Anwendung" && manager.Subscribers == 0, "A disposed source still followed the manager.");
+        Require(title.Text == "Anwendung" && manager.Subscribers == 0, $"A disposed source still followed the manager: {title.Text}, {manager.Subscribers} subscribers.");
         TranslationSource.Default = null;
         GC.KeepAlive(messages);
         Console.WriteLine("PASS WPF XAML binding helper: plain, inputs, rich, locale changes, threads and lifetime.");
