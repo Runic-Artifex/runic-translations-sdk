@@ -11,9 +11,18 @@ export type SimulationPreviewNode =
       children: SimulationPreviewNode[];
     };
 
+export type SimulationPreviewBlock = {
+  name: string;
+  occurrence: string;
+  options: Record<string, string>;
+  blocks: SimulationPreviewBlock[];
+  nodes: SimulationPreviewNode[];
+};
+
 export type SimulationPreviewResult =
   | { kind: "text"; value: string }
-  | { kind: "content"; nodes: SimulationPreviewNode[] };
+  | { kind: "content"; nodes: SimulationPreviewNode[] }
+  | { kind: "document"; blocks: SimulationPreviewBlock[] };
 
 export interface SimulationOptions {
   readonly pseudoLocalization: boolean;
@@ -58,11 +67,30 @@ export function simulatePreviewResult(
   if (result.kind === "text") {
     return { kind: "text", value: `[${pseudoLocalizeText(result.value)}]` };
   }
+  if (result.kind === "document") {
+    return { kind: "document", blocks: result.blocks.map(simulateBlock) };
+  }
   return {
     kind: "content",
     nodes: [
       { kind: "text", value: "[" },
       ...result.nodes.map(simulateNode),
+      { kind: "text", value: "]" },
+    ],
+  };
+}
+
+// Each leaf (paragraph, heading or list item) is delimited separately, so a
+// truncated block stays visible. Block names, options and occurrences are data.
+function simulateBlock(block: SimulationPreviewBlock): SimulationPreviewBlock {
+  return {
+    name: block.name,
+    occurrence: block.occurrence,
+    options: { ...block.options },
+    blocks: block.blocks.map(simulateBlock),
+    nodes: block.blocks.length > 0 ? [] : [
+      { kind: "text", value: "[" },
+      ...block.nodes.map(simulateNode),
       { kind: "text", value: "]" },
     ],
   };

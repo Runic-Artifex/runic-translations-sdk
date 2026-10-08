@@ -2,3 +2,84 @@
 *REMOVED*const Runic.Translations.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 2 -> int
 const Runic.Translations.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 3 -> int
 Runic.Translations.TranslationPackFailureReason.MarkupContractVersionMismatch = 15 -> Runic.Translations.TranslationPackFailureReason
+override Runic.Translations.DocumentBlock.Equals(object? obj) -> bool
+override Runic.Translations.DocumentBlock.GetHashCode() -> int
+override Runic.Translations.DocumentBlock.ToString() -> string!
+override Runic.Translations.Rmf2PlainTextElement.Equals(object? obj) -> bool
+override Runic.Translations.Rmf2PlainTextElement.GetHashCode() -> int
+override Runic.Translations.Rmf2PlainTextElement.ToString() -> string!
+Runic.Translations.BoundLocalizedDocumentContent
+Runic.Translations.BoundLocalizedDocumentContent.Content.get -> Runic.Translations.LocalizedDocumentContent!
+Runic.Translations.BoundLocalizedDocumentContent.Key.get -> string!
+Runic.Translations.BoundLocalizedDocumentContent.Slots.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.MarkupBinding!>!
+Runic.Translations.DocumentBlock
+Runic.Translations.DocumentBlock.Binding.get -> Runic.Translations.MarkupBinding?
+Runic.Translations.DocumentBlock.Binding.init -> void
+Runic.Translations.DocumentBlock.Blocks.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.DocumentBlock!>!
+Runic.Translations.DocumentBlock.Blocks.init -> void
+Runic.Translations.DocumentBlock.<Clone>$() -> Runic.Translations.DocumentBlock!
+Runic.Translations.DocumentBlock.Deconstruct(out string! Name, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Options, out System.Collections.Generic.IReadOnlyList<Runic.Translations.DocumentBlock!>! Blocks, out System.Collections.Generic.IReadOnlyList<Runic.Translations.InlineMarkupRun!>! Inlines, out Runic.Translations.MarkupBinding? Binding, out string! Occurrence, out bool Implicit) -> void
+Runic.Translations.DocumentBlock.DocumentBlock(string! Name, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Options, System.Collections.Generic.IReadOnlyList<Runic.Translations.DocumentBlock!>! Blocks, System.Collections.Generic.IReadOnlyList<Runic.Translations.InlineMarkupRun!>! Inlines, Runic.Translations.MarkupBinding? Binding, string! Occurrence, bool Implicit) -> void
+Runic.Translations.DocumentBlock.Equals(Runic.Translations.DocumentBlock? other) -> bool
+Runic.Translations.DocumentBlock.Implicit.get -> bool
+Runic.Translations.DocumentBlock.Implicit.init -> void
+Runic.Translations.DocumentBlock.Inlines.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.InlineMarkupRun!>!
+Runic.Translations.DocumentBlock.Inlines.init -> void
+Runic.Translations.DocumentBlock.Name.get -> string!
+Runic.Translations.DocumentBlock.Name.init -> void
+Runic.Translations.DocumentBlock.Occurrence.get -> string!
+Runic.Translations.DocumentBlock.Occurrence.init -> void
+Runic.Translations.DocumentBlock.Options.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Runic.Translations.DocumentBlock.Options.init -> void
+Runic.Translations.InlineMarkupRun.Occurrence.get -> string?
+Runic.Translations.InlineMarkupRun.Occurrence.init -> void
+Runic.Translations.LocalizedDocumentContent
+Runic.Translations.LocalizedDocumentContent.Locale.get -> string!
+Runic.Translations.LocalizedDocumentContent.LocalizedDocumentContent(Runic.Translations.LocalizedTextContent! content) -> void
+Runic.Translations.LocalizedDocumentContent.Nodes.get -> System.ReadOnlyMemory<Runic.Translations.LocalizedTextContentNode!>
+Runic.Translations.LocalizedDocumentContent<TSlots>
+Runic.Translations.LocalizedDocumentContent<TSlots>.Bind(TSlots! slots) -> Runic.Translations.BoundLocalizedDocumentContent!
+Runic.Translations.LocalizedDocumentContent<TSlots>.Content.get -> Runic.Translations.LocalizedDocumentContent!
+Runic.Translations.LocalizedDocumentContent<TSlots>.Locale.get -> string!
+Runic.Translations.LocalizedDocumentContent<TSlots>.LocalizedDocumentContent(Runic.Translations.LocalizedDocumentContent! content) -> void
+Runic.Translations.LocalizedDocumentContent<TSlots>.Nodes.get -> System.ReadOnlyMemory<Runic.Translations.LocalizedTextContentNode!>
+Runic.Translations.Rmf2DocumentRenderer
+Runic.Translations.Rmf2DocumentRenderer.Render(Runic.Translations.BoundLocalizedDocumentContent! content) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.DocumentBlock!>!
+Runic.Translations.Rmf2DocumentRenderer.Render(string! key, Runic.Translations.LocalizedDocumentContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.MarkupBinding!>? slots = null) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.DocumentBlock!>!
+Runic.Translations.Rmf2DocumentRenderer.Rmf2DocumentRenderer(Runic.Translations.Rmf2MarkupContract! contract) -> void
+Runic.Translations.Rmf2DocumentRenderer.ToPlainText(Runic.Translations.BoundLocalizedDocumentContent! content, Runic.Translations.Rmf2PlainTextOptions? options = null) -> string!
+Runic.Translations.Rmf2DocumentRenderer.ToPlainText(string! key, Runic.Translations.LocalizedDocumentContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.MarkupBinding!>? slots = null, Runic.Translations.Rmf2PlainTextOptions? options = null) -> string!
+Runic.Translations.Rmf2InlineRenderer.Rmf2InlineRenderer(Runic.Translations.Rmf2MarkupContract! contract) -> void
+Runic.Translations.Rmf2InlineRenderer.ToPlainText(Runic.Translations.BoundLocalizedTextContent! content, Runic.Translations.Rmf2PlainTextOptions? options) -> string!
+Runic.Translations.Rmf2InlineRenderer.ToPlainText(string! key, Runic.Translations.LocalizedTextContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.InlineMarkupBinding!>? slots, Runic.Translations.Rmf2PlainTextOptions? options) -> string!
+Runic.Translations.Rmf2MarkupContract
+Runic.Translations.Rmf2PlainTextElement
+Runic.Translations.Rmf2PlainTextElement.<Clone>$() -> Runic.Translations.Rmf2PlainTextElement!
+Runic.Translations.Rmf2PlainTextElement.Deconstruct(out string! Name, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Options, out string! Locale, out string! Text) -> void
+Runic.Translations.Rmf2PlainTextElement.Equals(Runic.Translations.Rmf2PlainTextElement? other) -> bool
+Runic.Translations.Rmf2PlainTextElement.Locale.get -> string!
+Runic.Translations.Rmf2PlainTextElement.Locale.init -> void
+Runic.Translations.Rmf2PlainTextElement.Name.get -> string!
+Runic.Translations.Rmf2PlainTextElement.Name.init -> void
+Runic.Translations.Rmf2PlainTextElement.Options.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Runic.Translations.Rmf2PlainTextElement.Options.init -> void
+Runic.Translations.Rmf2PlainTextElement.Rmf2PlainTextElement(string! Name, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Options, string! Locale, string! Text) -> void
+Runic.Translations.Rmf2PlainTextElement.Text.get -> string!
+Runic.Translations.Rmf2PlainTextElement.Text.init -> void
+Runic.Translations.Rmf2PlainTextOptions
+Runic.Translations.Rmf2PlainTextOptions.AllowActionLabels.get -> bool
+Runic.Translations.Rmf2PlainTextOptions.AllowActionLabels.init -> void
+Runic.Translations.Rmf2PlainTextOptions.AnnotateLinkDestinations.get -> bool
+Runic.Translations.Rmf2PlainTextOptions.AnnotateLinkDestinations.init -> void
+Runic.Translations.Rmf2PlainTextOptions.Custom.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Func<Runic.Translations.Rmf2PlainTextElement!, string!>!>?
+Runic.Translations.Rmf2PlainTextOptions.Custom.init -> void
+Runic.Translations.Rmf2PlainTextOptions.ListMarker.get -> string!
+Runic.Translations.Rmf2PlainTextOptions.ListMarker.init -> void
+Runic.Translations.Rmf2PlainTextOptions.Rmf2PlainTextOptions() -> void
+Runic.Translations.TranslationPackFailureReason.DocumentStructureMismatch = 16 -> Runic.Translations.TranslationPackFailureReason
+static Runic.Translations.DocumentBlock.operator !=(Runic.Translations.DocumentBlock? left, Runic.Translations.DocumentBlock? right) -> bool
+static Runic.Translations.DocumentBlock.operator ==(Runic.Translations.DocumentBlock? left, Runic.Translations.DocumentBlock? right) -> bool
+static Runic.Translations.LocalizedDocumentContent<TSlots>.implicit operator Runic.Translations.LocalizedDocumentContent!(Runic.Translations.LocalizedDocumentContent<TSlots!>! content) -> Runic.Translations.LocalizedDocumentContent!
+static Runic.Translations.Rmf2MarkupContract.Link(string! contractJson) -> Runic.Translations.Rmf2MarkupContract!
+static Runic.Translations.Rmf2PlainTextElement.operator !=(Runic.Translations.Rmf2PlainTextElement? left, Runic.Translations.Rmf2PlainTextElement? right) -> bool
+static Runic.Translations.Rmf2PlainTextElement.operator ==(Runic.Translations.Rmf2PlainTextElement? left, Runic.Translations.Rmf2PlainTextElement? right) -> bool

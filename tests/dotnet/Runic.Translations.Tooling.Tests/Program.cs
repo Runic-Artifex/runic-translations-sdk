@@ -18,6 +18,7 @@ internal static class Program
             SemanticXliffRoundTripsDirectMf2AndReview();
             SemanticXliffAcceptsGroupedRmf2();
             SemanticXliffReportsStructuredLossAndRefusesImport();
+            SemanticXliffNamesTheDocumentProfile();
             XliffRefusesStructuredTextWithStaleMetadata();
             XliffPreflightSeparatesTextContractAndFreshness();
             XliffRequiresSelectedV5ContractIdentity();
@@ -25,7 +26,7 @@ internal static class Program
             ArtifactInspectionRecognizesXliff();
             ToolRequestHasCanonicalShape();
             ToolCommandHasCanonicalInitShape();
-            Console.WriteLine("RESULT 10/10 passed");
+            Console.WriteLine("RESULT 11/11 passed");
             return 0;
         }
         catch (Exception exception)
@@ -86,6 +87,21 @@ internal static class Program
         try { _ = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes); }
         catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
         throw new InvalidOperationException("Structured XLIFF input was accepted.");
+    }
+
+    private static void SemanticXliffNamesTheDocumentProfile()
+    {
+        TranslationXliffExportResult exported = Export(CompileSemantic(
+            "notice = {#p}Read this.{/p}\ninline = See {#strong}this{/strong}.",
+            "notice = {#p}Lies das.{/p}\ninline = Siehe {#strong}das{/strong}.", grouped: true));
+        TranslationInterchangeLoss document = exported.Report.Losses.Single(loss => loss.Location == "/notice");
+        TranslationInterchangeLoss inline = exported.Report.Losses.Single(loss => loss.Location == "/inline");
+        if (document.Code != "XLIFF21-STRUCTURED-MESSAGE" || !document.SemanticLoss || !document.Message.Contains("document profile", StringComparison.Ordinal) ||
+            inline.Code != "XLIFF21-STRUCTURED-MESSAGE" || inline.Message.Contains("document profile", StringComparison.Ordinal))
+            throw new InvalidOperationException("The XLIFF loss report does not name the document profile for document messages only.");
+        try { _ = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes); }
+        catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
+        throw new InvalidOperationException("A document message was imported from the XLIFF text profile.");
     }
 
     private static void XliffRefusesStructuredTextWithStaleMetadata()

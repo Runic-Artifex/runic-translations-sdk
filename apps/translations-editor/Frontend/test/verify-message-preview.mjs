@@ -80,6 +80,44 @@ assert.throws(
   "An active callback field escaped the bounded inert run shape.",
 );
 
+const serverDocument = parseRenderedMessagePreview(JSON.stringify({
+  key: "notice",
+  locale: "en",
+  runs: [{ text: "Read this.\n\n- One" }],
+  blocks: [
+    { name: "runic:p", occurrence: "p[1]", options: {}, blocks: [], runs: [{ text: "Read this." }] },
+    {
+      name: "runic:ul", occurrence: "ul[1]", options: {}, runs: [],
+      blocks: [{ name: "runic:li", occurrence: "ul[1]/li[1]", options: {}, blocks: [], runs: [{
+        name: "runic:link", text: null, options: { ref: "guide" },
+        children: [{ name: "text", text: "One", options: {}, children: [] }],
+      }] }],
+    },
+  ],
+}));
+assert.deepEqual(serverDocument, {
+  kind: "document",
+  blocks: [
+    { name: "runic:p", occurrence: "p[1]", options: {}, blocks: [], nodes: [{ kind: "text", value: "Read this." }] },
+    {
+      name: "runic:ul", occurrence: "ul[1]", options: {}, nodes: [],
+      blocks: [{ name: "runic:li", occurrence: "ul[1]/li[1]", options: {}, blocks: [], nodes: [{
+        kind: "element", name: "runic:link", attributes: { ref: "guide" }, children: [{ kind: "text", value: "One" }],
+      }] }],
+    },
+  ],
+}, "Document previews must keep the block tree, occurrences and inert inline runs.");
+assert.throws(
+  () => parseRenderedMessagePreview('{"key":"bad","locale":"en","runs":[],"blocks":[{"name":"runic:p","occurrence":"p[1]","options":{},"blocks":[],"runs":[],"html":"<b>x</b>"}]}'),
+  /invalid rendered document block/,
+  "An extra block member escaped the bounded inert block shape.",
+);
+assert.throws(
+  () => parseRenderedMessagePreview('{"key":"bad","locale":"en","runs":[],"blocks":[{"name":"runic:ul","occurrence":"ul[1]","options":{},"blocks":[{"name":"runic:li","occurrence":"ul[1]/li[1]","options":{},"blocks":[],"runs":[]}],"runs":[{"text":"x"}]}]}'),
+  /invalid rendered document block/,
+  "A block with both child blocks and inline runs was accepted.",
+);
+
 const selection = { key: "account_title", locale: "en" };
 const rowRequest = createMessagePreviewRequest(
   "de.rmf2",

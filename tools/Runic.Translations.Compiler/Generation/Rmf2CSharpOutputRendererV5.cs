@@ -175,9 +175,11 @@ internal static class Rmf2CSharpOutputRendererV5
         foreach (Rmf2ReadableMessageV1 message in readable)
         {
             Rmf2MessageContractV5 contract = message.Contract;
-            string result = contract.Structured
-                ? "global::Runic.Translations.LocalizedTextContent<" + ns + slots + "." + Verbatim(message.Member) + ">"
-                : "string";
+            string result = contract.Content == Rmf2DocumentProfileV5.Document
+                ? "global::Runic.Translations.LocalizedDocumentContent<" + ns + slots + "." + Verbatim(message.Member) + ">"
+                : contract.Structured
+                    ? "global::Runic.Translations.LocalizedTextContent<" + ns + slots + "." + Verbatim(message.Member) + ">"
+                    : "string";
             string encoded = "this.__text." + Member(contract);
             if (contract.Inputs.Count != 0)
             {
@@ -258,31 +260,35 @@ internal static class Rmf2CSharpOutputRendererV5
 
     private static void WriteAccessor(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageContractV5 message)
     {
-        string member = Member(message), result = message.Structured ? "global::Runic.Translations.LocalizedTextContent" : "string";
-        string format = message.Structured ? "FormatContent" : "Format";
+        bool document = message.Content == Rmf2DocumentProfileV5.Document;
+        string member = Member(message), result = document ? "global::Runic.Translations.LocalizedDocumentContent"
+            : message.Structured ? "global::Runic.Translations.LocalizedTextContent" : "string";
+        string format = message.Structured || document ? "FormatContent" : "Format";
+        // Document messages wrap the formatted node stream; the renderer checks it against the locked skeletons.
+        string open = document ? "new global::Runic.Translations.LocalizedDocumentContent(" : string.Empty, close = document ? ")" : string.Empty;
         writer.Blank();
         writer.Line("/// <summary>Formats <c>" + GenerationSupport.XmlDocumentation(string.Join(".", message.Path)) + "</c>.</summary>");
         if (message.Inputs.Count == 0)
-            writer.Line("public " + result + " " + member + " => __translationManager.Current." + format + "(" + Key(project, message) + ", global::System.ReadOnlySpan<global::Runic.Translations.TextArgument>.Empty);");
+            writer.Line("public " + result + " " + member + " => " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", global::System.ReadOnlySpan<global::Runic.Translations.TextArgument>.Empty)" + close + ";");
         else
         {
             var parameters = new List<string>(message.Inputs.Count);
             foreach (Rmf2InputV5 input in message.Inputs) parameters.Add(ParameterType(input.Type) + " " + Rmf2GeneratedNamesV1.Identifier(input.Name));
             writer.Line("public " + result + " " + member + "(" + string.Join(", ", parameters) + ")");
             writer.Line("{"); writer.Indent();
-            writer.Line("return __translationManager.Current." + format + "(" + Key(project, message) + ", new global::Runic.Translations.TextArgument[]");
+            writer.Line("return " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", new global::Runic.Translations.TextArgument[]");
             writer.Line("{"); writer.Indent();
             foreach (Rmf2InputV5 input in message.Inputs)
             {
                 string parameter = Rmf2GeneratedNamesV1.Identifier(input.Name);
                 writer.Line("global::Runic.Translations.TextArgument.CreateRmf2(" + GenerationSupport.CSharpString(input.Name) + ", new global::Runic.Translations.TextArgument(\"_\", " + parameter + ")),");
             }
-            writer.Unindent(); writer.Line("});");
+            writer.Unindent(); writer.Line("})" + close + ";");
             writer.Unindent(); writer.Line("}");
         }
         // Always retain a span-shaped escape hatch. It keeps the generated API
         // usable if a future C# surface cannot faithfully model a caller name.
-        writer.Line("public " + result + " r_args_" + member + "(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __translationManager.Current." + format + "(" + Key(project, message) + ", arguments);");
+        writer.Line("public " + result + " r_args_" + member + "(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", arguments)" + close + ";");
     }
 
     private static void WriteDefinitions(GenerationWriter writer, Rmf2V5DefinitionTable table, string suffix)

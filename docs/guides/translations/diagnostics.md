@@ -314,3 +314,9 @@ runtime's classification of a rejected external translation pack.
 `RTR0023/markup-contract-version-mismatch` means the pack was built for another
 Runic markup contract version (for example by an earlier compiler release);
 rebuild the pack with the current compiler.
+`RTR0023/document-structure-mismatch` means a document message in the pack has
+a block structure that no base-locale variant of the generated contract has;
+rebuild the pack from the same sources as the application. A document message
+that breaks the block rules themselves (text outside a block, a misplaced
+element, or a leaf that starts or ends with whitespace) is
+`RTR0023/malformed-pattern`.

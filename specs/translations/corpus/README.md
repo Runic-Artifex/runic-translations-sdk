@@ -1,10 +1,13 @@
 # Runic Translations conformance corpora
 
-The current release contract is exercised by three complementary fixtures:
+The current release contract is exercised by four complementary fixtures:
 
 - [`rmf2-v1/index.json`](rmf2-v1/index.json) is the cross-backend release oracle
   for resource syntax `rmf2-v1` executed as `rmf2-execution-v2`, grammar/AST and
   artifact 5, runtime ABI 3, ESM ABI 4, and generated-name mapping 1;
+- [`rmf2-document-v1`](rmf2-document-v1/README.md) is the cross-backend oracle
+  for document profile v1: block structure, skeletons, occurrences, plain-text
+  projection and pack rejection;
 - [`semantic-v5`](semantic-v5/README.md) isolates normalized AST and semantic
   validation cases;
 - [`v5-project`](v5-project/README.md) isolates project linking, caller and

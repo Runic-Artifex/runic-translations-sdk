@@ -25,6 +25,8 @@ internal static class TypedSlotBindingsTests
                 "star": { "kind": "runic:icon", "min": 1, "max": 1 }
               },
               "structured": true,
+              "content": "inline",
+              "skeletons": [],
               "contentLocales": { "en": "en" }
             }
           }

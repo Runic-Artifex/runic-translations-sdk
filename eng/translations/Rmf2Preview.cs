@@ -40,9 +40,39 @@ internal static class Rmf2Preview
         LocalizedTextContent content = message.FormatContent(arguments, locale);
         IReadOnlyDictionary<string, InlineMarkupBinding> bindings = definition.Contract.Slots.ToDictionary(
             slot => slot.Key, slot => PreviewBinding(slot.Key, slot.Value.Kind), StringComparer.Ordinal);
+        if (definition.Contract.Content == Rmf2DocumentProfileV5.Document)
+            return DocumentResult(key, locale, Rmf2MarkupContract.Link(project.MarkupContract), new LocalizedDocumentContent(content), bindings);
         return StructuredResult(
             key, locale, new Rmf2InlineRenderer(project.MarkupContract).Render(key, content, bindings));
     }
+
+    // Document messages return the semantic block tree. "runs" keeps one plain-text run so
+    // clients that only read runs (the VS Code and Visual Studio previews) still show the text.
+    private static JsonObject DocumentResult(string key, string locale, Rmf2MarkupContract contract,
+        LocalizedDocumentContent content, IReadOnlyDictionary<string, InlineMarkupBinding> bindings)
+    {
+        var slots = bindings.ToDictionary(pair => pair.Key, pair => (MarkupBinding)pair.Value, StringComparer.Ordinal);
+        var renderer = new Rmf2DocumentRenderer(contract);
+        IReadOnlyList<DocumentBlock> blocks = renderer.Render(key, content, slots);
+        string text = renderer.ToPlainText(key, content, slots, new Rmf2PlainTextOptions { AllowActionLabels = true });
+        return new JsonObject
+        {
+            ["key"] = key,
+            ["locale"] = locale,
+            ["runs"] = new JsonArray(new JsonObject { ["text"] = text }),
+            ["blocks"] = new JsonArray(blocks.Select(block => (JsonNode)Block(block)).ToArray()),
+        };
+    }
+
+    private static JsonObject Block(DocumentBlock block) => new()
+    {
+        ["name"] = block.Name,
+        ["occurrence"] = block.Occurrence,
+        ["options"] = new JsonObject(block.Options.Select(pair =>
+            KeyValuePair.Create<string, JsonNode?>(pair.Key, JsonValue.Create(pair.Value)))),
+        ["blocks"] = new JsonArray(block.Blocks.Select(child => (JsonNode)Block(child)).ToArray()),
+        ["runs"] = new JsonArray(block.Inlines.Select(run => (JsonNode)Run(run)).ToArray()),
+    };
 
     private static JsonObject TextResult(string key, string locale, string text) => new()
     {

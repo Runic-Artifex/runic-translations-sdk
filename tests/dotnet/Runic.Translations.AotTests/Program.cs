@@ -64,7 +64,7 @@ internal static class Program
         return ValueTask.FromResult(content.Length > 0);
     }
 
-    private const string MarkupContract = "{\"version\":2,\"contracts\":{},\"messages\":{\"greeting\":{\"slots\":{},\"contentLocales\":{\"de\":\"de\"}}}}";
+    private const string MarkupContract = "{\"version\":2,\"contracts\":{},\"messages\":{\"greeting\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\"},\"content\":\"inline\",\"skeletons\":[]}}}";
 
     private static TranslationPackContract CreatePackContract(string locale) => TranslationPackContract.CreateRmf2V5(
         "app", locale, Fingerprint,
