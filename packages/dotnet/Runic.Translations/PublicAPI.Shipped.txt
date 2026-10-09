@@ -220,6 +220,8 @@ Runic.Translations.ITranslationSnapshot.Locale.get -> string!
 Runic.Translations.ITranslationSnapshot.TryGet(Runic.Translations.TranslationKey key, out string! pattern) -> bool
 Runic.Translations.ITranslationSnapshotFactory
 Runic.Translations.ITranslationSnapshotFactory.CreateSnapshotAsync(Runic.Translations.CompiledTranslationCatalog! catalog, string! canonicalLocale, Runic.Translations.ITextValueFormatter! valueFormatter, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Runic.Translations.ITranslationSnapshot!>
+Runic.Translations.ITranslationSnapshotNotifier
+Runic.Translations.ITranslationSnapshotNotifier.SnapshotPublished -> System.EventHandler<Runic.Translations.TranslationSnapshotPublishedEventArgs!>?
 Runic.Translations.InlineActionBinding
 Runic.Translations.InlineActionBinding.Activate.get -> System.Action!
 Runic.Translations.InlineActionBinding.Activate.init -> void
@@ -417,6 +419,7 @@ Runic.Translations.TranslationManager.CurrentLocale.get -> string!
 Runic.Translations.TranslationManager.LocaleChanged -> System.EventHandler<Runic.Translations.TranslationLocaleChangedEventArgs!>?
 Runic.Translations.TranslationManager.RefreshAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Runic.Translations.TranslationManager.SetLocaleAsync(string! locale, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.TranslationManager.SnapshotPublished -> System.EventHandler<Runic.Translations.TranslationSnapshotPublishedEventArgs!>?
 Runic.Translations.TranslationManager.TranslationManager(Runic.Translations.ITranslationProvider! provider, Runic.Translations.ITranslationSnapshot! initialSnapshot) -> void
 Runic.Translations.TranslationNotFoundException
 Runic.Translations.TranslationNotFoundException.TranslationNotFoundException(string! message) -> void
@@ -511,6 +514,13 @@ Runic.Translations.TranslationReferenceArgument.Value.get -> string!
 Runic.Translations.TranslationReferenceJsonContext
 Runic.Translations.TranslationReferenceJsonContext.TranslationReferenceJsonContext() -> void
 Runic.Translations.TranslationReferenceJsonContext.TranslationReferenceJsonContext(System.Text.Json.JsonSerializerOptions! options) -> void
+Runic.Translations.TranslationSnapshotPublishReason
+Runic.Translations.TranslationSnapshotPublishReason.LocaleChanged = 0 -> Runic.Translations.TranslationSnapshotPublishReason
+Runic.Translations.TranslationSnapshotPublishReason.Refresh = 1 -> Runic.Translations.TranslationSnapshotPublishReason
+Runic.Translations.TranslationSnapshotPublishedEventArgs
+Runic.Translations.TranslationSnapshotPublishedEventArgs.Reason.get -> Runic.Translations.TranslationSnapshotPublishReason
+Runic.Translations.TranslationSnapshotPublishedEventArgs.Snapshot.get -> Runic.Translations.ITranslationSnapshot!
+Runic.Translations.TranslationSnapshotPublishedEventArgs.TranslationSnapshotPublishedEventArgs(Runic.Translations.ITranslationSnapshot! snapshot, Runic.Translations.TranslationSnapshotPublishReason reason) -> void
 Runic.Translations.TranslationTransport
 Runic.Translations.TranslationsCompatibility
 Runic.Translations.UnsupportedLocalePolicy

@@ -65,3 +65,14 @@ RTR0074 | Runic.Translations | Error | Translated document structure does not ma
 RTR0076 | Runic.Translations | Warning | Document block or list is empty
 RTR0077 | Runic.Translations | Warning | Document heading skips a level
 RTR0078 | Runic.Translations | Warning | Line break between Southeast Asian characters became a space
+
+## Release 0.6.0.5
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|------
+RTR0080 | Runic.Translations | Error | Translation XAML declaration is invalid
+RTR0081 | Runic.Translations | Error | Translation XAML message key is unknown
+RTR0082 | Runic.Translations | Error | Translation XAML inputs do not match
+RTR0083 | Runic.Translations | Error | Translation XAML message kind does not match

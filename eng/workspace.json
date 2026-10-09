@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "0.6.0-preview.5",
+  "version": "0.6.0-preview.6",
   "nuget": [
     {
       "name": "Runic.Translations",
