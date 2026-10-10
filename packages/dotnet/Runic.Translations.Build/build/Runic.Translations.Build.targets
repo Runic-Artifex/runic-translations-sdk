@@ -38,7 +38,7 @@
       <_TranslationsDiscoveredSource Include="$(_TranslationsSourceDiscoveryGlobs)" />
     </ItemGroup>
     <!-- XAML stays optional. Catalog is an explicit per-file assertion; the project
-         default only applies to files without a statically declared source override.
+         default only applies where no statically declared source override applies (RTR0085).
          TranslationsValidateXaml="false" on a Page, ApplicationDefinition or TranslationXaml
          item skips that file, e.g. when its source is inherited from another file or code. -->
     <ItemGroup Condition="'$(TranslationsValidateXaml)' != 'false'">

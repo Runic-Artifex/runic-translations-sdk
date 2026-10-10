@@ -11,7 +11,7 @@ file, a one-based line and column, and UTF-16 columns.
 Most diagnostics are errors and stop generation. `RTR0010`, `RTR0011` and
 `RTR0021` follow the project's `validation` policies (`allow`, `warning` or
 `error`), and some `RTR0051` reports are warnings, as are `RTR0068`, `RTR0069`, `RTR0071`,
-`RTR0076`, `RTR0077` and `RTR0078`.
+`RTR0076`, `RTR0077`, `RTR0078` and `RTR0084`. `RTR0085` is informational.
 
 ## RTR0001
 
@@ -327,12 +327,35 @@ Translation XAML declaration is invalid. The optional XAML validator found malfo
 
 ## RTR0081
 
-Translation XAML message key is unknown. In a file whose catalog is explicitly declared, a static key does not exist on the generated readable surface. Use the flattened readable name (for example, `application_title`), including its exact case. Encoded-only reserved names are not available to Message. A file without its own source declaration is checked against `TranslationsXamlCatalog`; if its source is inherited at run time from another file, an `App.xaml` style or code-behind, skip it with `<Page Update="Views/OrderSummary.xaml" TranslationsValidateXaml="false" />`. Design-time (`mc:Ignorable`) and `mc:AlternateContent` content is not checked.
+Translation XAML message key is unknown. A static key does not exist on the generated readable surface of the catalog the file is checked against. The message suggests the closest readable key when one differs only in case, in `.`/`-` separators or by a few characters. Use the flattened readable name (for example, `application_title`), including its exact case. Encoded-only reserved names are not available to Message. A file without its own catalog assertion is checked against `TranslationsXamlCatalog`; if its source is inherited at run time from another file, an `App.xaml` style or code-behind, skip it with `<Page Update="Views/OrderSummary.xaml" TranslationsValidateXaml="false" />`. Design-time (`mc:Ignorable`) and `mc:AlternateContent` content is not checked.
 
 ## RTR0082
 
-Translation XAML inputs do not match. Use contiguous Arg0 through Arg3 or unique MessageInput names, never both. Each named input needs a Name and Value. For an asserted catalog, supply exactly the generated method's inputs using its readable C# parameter names; non-identifiers use their encoded fallback. Binding expressions are accepted as values and are checked by WPF at runtime.
+Translation XAML inputs do not match. The message names the problem: positional inputs with a gap (`Arg1` without `Arg0`), positional and named inputs mixed, a `MessageInput` name set twice or without a Name and Value, a name the message does not have, a missing input, or the wrong number of positional inputs. It lists the inputs the message takes; for the positional form it shows which `Arg` binds which input, for example `Arg0=email, Arg1=name`. The names are the generated method's readable C# parameter names; non-identifiers use their encoded fallback. Binding expressions are accepted as values and are checked by WPF at runtime.
 
 ## RTR0083
 
-Translation XAML message kind does not match. Message accepts plain strings; TranslationProperties.RichMessage accepts inline rich content. Document content needs the document renderer. Use the adapter matching the declared message content kind.
+Translation XAML message kind does not match. `{rt:Message}` produces a plain string, so a message with inline markup needs `rt:TranslationProperties.RichMessage` on a `TextBlock`, and a plain message used with `RichMessage` should use `{rt:Message}` instead. Neither renders document messages; use `WpfDocumentRenderer` for those. The message names the adapter to use.
+
+## RTR0084
+
+Translation XAML binds several inputs by position. A message with two or more inputs is bound with `Arg0`..`Arg3`. Positions follow the generated method's parameters, which are sorted by input name, not by their order in the message text: for `edit_heading = Editing {$name} ({$email})`, `Arg0` is `email` and `Arg1` is `name`. The warning shows this mapping. Swapped bindings compile and show the wrong values, so use the named form, which binds each value by name and is checked against the catalog:
+
+```xml
+<rt:Message Key="edit_heading">
+  <rt:MessageInput Name="name" Value="{Binding Name}"/>
+  <rt:MessageInput Name="email" Value="{Binding Email}"/>
+</rt:Message>
+```
+
+A message with a single input can keep `Arg0`. To keep positional bindings you have checked, suppress the warning with `NoWarn` or `.editorconfig`.
+
+## RTR0085
+
+Translation XAML keys under an explicit source are not checked. Static keys are checked against `TranslationsXamlCatalog` only where that catalog applies. An explicit source may select another catalog at run time, so keys under it are skipped, and this information is reported once at the source's declaration with the first skipped key. A `Source=` on a `Message` affects only that message. An attached `rt:TranslationProperties.Source` affects its element's content, and also the file's templates, styles and resources, which may be instantiated under it. A `Setter` for `TranslationProperties.Source` can apply to any element, so it affects the whole file. If the source provides the local catalog, assert it for the file to check every key, including those with an explicit source:
+
+```xml
+<Page Update="Views/Checkout.xaml" Catalog="app" />
+```
+
+Keys of another catalog cannot be checked by the build; the WPF adapter still checks them when the XAML loads. Informational diagnostics appear in the IDE's error list but not in command-line build output; to see them there, raise the severity with `dotnet_diagnostic.RTR0085.severity = warning` in `.editorconfig` or a global analyzer config.

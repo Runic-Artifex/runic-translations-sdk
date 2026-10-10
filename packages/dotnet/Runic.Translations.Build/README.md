@@ -53,16 +53,21 @@ surface: exact key, input count, readable parameter names and plain content kind
 Static `rt:TranslationProperties.RichMessage` keys are checked for inline rich
 content. Namespace aliases and nested/quoted markup-extension arguments work;
 Binding values are not evaluated. Errors `RTR0080`–`RTR0083` include the XAML
-file and line. The check uses the compiler's existing catalog and readable-name
+file and line. A message with two or more inputs bound by position (`Arg0`..`Arg3`)
+gets warning `RTR0084`, which shows the positional order; use named `MessageInput`
+entries instead. The check uses the compiler's existing catalog and readable-name
 policy, with no additional runtime contract or WPF dependency in the generator.
 
 The catalog setting is an assertion about the source your application provides;
-it does not create a source. A file containing an explicit `Message.Source` or
-`TranslationProperties.Source` declaration (including a Setter using its static
-dependency property) is conservatively excluded from the
-project default's catalog checks, since resources/styles/templates may select a
-different catalog. `Binding.Source` selects binding data and does not disable
-catalog checks. To assert a known local catalog for such a file, or to check
+it does not create a source. An explicit source may select a different catalog,
+so the keys it applies to are not checked against the project default: a
+`Message.Source` excludes only that message, an attached
+`TranslationProperties.Source` excludes its element's content and the file's
+templates, styles and resources (which may be instantiated under it), and a
+Setter using its static dependency property excludes the whole file. Each such
+source is reported once as the informational `RTR0085` with its line. The rest of
+the file is still checked. `Binding.Source` selects binding data and does not
+affect catalog checks. To assert a known local catalog for such a file, or to check
 an explicitly selected file outside WPF, use:
 
 ```xml

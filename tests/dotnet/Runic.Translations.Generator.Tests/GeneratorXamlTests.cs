@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 
@@ -15,6 +16,7 @@ internal static class GeneratorXamlTests
         }
         greeting = Hello {$name}
         pair = {$first} and {$second}
+        heading = Editing {$name} ({$email})
         badge = {$user-name}
         help = Read {#link ref=guide}this{/link}.
         notice =
@@ -26,7 +28,11 @@ internal static class GeneratorXamlTests
         runner.Add("XAML accepts positional/named bindings, aliases, namespace scopes and nested markup", ValidDeclarations);
         runner.Add("XAML reports unknown readable keys and exact source locations", UnknownKeys);
         runner.Add("XAML checks named input identifiers, arity, duplicates, gaps and mixed forms", InvalidInputs);
+        runner.Add("XAML warns when several inputs bind by position and names the positional order", PositionalInputs);
+        runner.Add("XAML input diagnostics name the problem and the expected inputs", InputMessages);
+        runner.Add("XAML suggests the closest readable key for an unknown key", KeySuggestions);
         runner.Add("XAML checks plain, inline rich and document content kinds", MessageKinds);
+        runner.Add("XAML narrows explicit sources to their scope and reports what is not checked", SourceNarrowing);
         runner.Add("XAML distinguishes binding data sources from Message and attached catalog sources", SourceScope);
         runner.Add("XAML preserves dynamic keys and external/inherited sources without catalog assumptions", UnresolvedDeclarations);
         runner.Add("XAML validates only the Runic namespace and explicitly marked files", NamespaceAndOptIn);
@@ -92,7 +98,7 @@ internal static class GeneratorXamlTests
             <TextBlock Text="{rt:Message application_title, Arg0={x:Null}}"/>
             <rt:Message Key="application_title"><rt:Message.Arg0><x:Null/></rt:Message.Arg0></rt:Message>
             <TextBlock Text="{rt:MessageExtension Key='greeting', Arg0={Binding Name, FallbackValue='Doe, Ada'}}"/>
-            <TextBlock Text="{rt:Message pair, Arg0={Binding One}, Arg1={Binding Two, ConverterParameter={other:Extension A,B}}}"/>
+            <TextBlock Text="{rt:Message greeting, Arg0={Binding Two, ConverterParameter={other:Extension A,B}}}"/>
             <TextBlock rt:TranslationProperties.RichMessage="help"/>
             <TextBlock Text="{Binding Name, ConverterParameter={rt:Message greeting, Arg0={Binding Name}}}"/>
             <TextBlock><TextBlock.Text><rt:Message Key="pair">
@@ -135,8 +141,129 @@ internal static class GeneratorXamlTests
         Assert.Equal("RTR0082", Run("<TextBlock Text=\"{rt:Message external, Arg2={Binding Name}}\"/>", catalog: null).Single().Id, "provable gap without catalog");
     }
 
+    // An explicit source hides the default-catalog check of its scope and says so once, as information.
+    private static void AssertSkipped(Diagnostic[] diagnostics, string message)
+    {
+        Assert.Equal(1, diagnostics.Length, message + ": " + string.Join("\n", diagnostics.AsEnumerable()));
+        Diagnostic diagnostic = diagnostics[0];
+        Assert.Equal("RTR0085", diagnostic.Id, message + ": " + diagnostic);
+        Assert.Equal(DiagnosticSeverity.Info, diagnostic.Severity, message);
+    }
+
+    private static void PositionalInputs()
+    {
+        // heading = Editing {$name} ({$email}): the generated parameters are (email, name).
+        Diagnostic swapped = Run("<TextBlock Text=\"{rt:Message heading, Arg0={Binding Name}, Arg1={Binding Email}}\"/>").Single();
+        Assert.Equal("RTR0084", swapped.Id, swapped.ToString());
+        Assert.Equal(DiagnosticSeverity.Warning, swapped.Severity, "positional severity");
+        Assert.True(swapped.GetMessage(CultureInfo.InvariantCulture).Contains("Arg0=email, Arg1=name", StringComparison.Ordinal), swapped.GetMessage(CultureInfo.InvariantCulture));
+        Assert.True(swapped.GetMessage(CultureInfo.InvariantCulture).Contains("MessageInput", StringComparison.Ordinal), swapped.GetMessage(CultureInfo.InvariantCulture));
+        Assert.Equal("RTR0084", Run("<rt:Message Key=\"pair\" Arg0=\"{Binding One}\" Arg1=\"{Binding Two}\"/>").Single().Id, "object form");
+        Assert.Equal(0, Run("""
+            <TextBlock><TextBlock.Text><rt:Message Key="heading">
+              <rt:MessageInput Name="name" Value="{Binding Name}"/>
+              <rt:MessageInput Name="email" Value="{Binding Email}"/>
+            </rt:Message></TextBlock.Text></TextBlock>
+            <TextBlock Text="{rt:Message greeting, Arg0={Binding Name}}"/>
+            """).Length, "named form and a single positional input");
+        Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message pair, Arg0={Binding One}, Arg1={Binding Two}}\"/>", catalog: null).Length, "order unknown without a catalog");
+    }
+
+    private static void InputMessages()
+    {
+        (string Content, string Expected)[] cases =
+        [
+            ("<TextBlock Text=\"{rt:Message greeting}\"/>", "Message 'greeting' takes 1 input: Arg0=name, but no Arg is set."),
+            ("<TextBlock Text=\"{rt:Message application_title, Arg0={Binding Name}}\"/>", "Message 'application_title' takes no inputs, but Arg0 is set."),
+            ("<TextBlock Text=\"{rt:Message heading, Arg0={Binding Name}}\"/>", "Message 'heading' takes 2 inputs: Arg0=email, Arg1=name, but Arg0 is set."),
+            ("<TextBlock Text=\"{rt:Message greeting, Arg0={Binding Name}, Arg1={Binding Other}}\"/>", "takes 1 input: Arg0=name, but Arg0..Arg1 are set."),
+            ("<rt:Message Key=\"greeting\"><rt:MessageInput Name=\"nmae\" Value=\"{Binding Name}\"/></rt:Message>", "Message 'greeting' has no input 'nmae' and is missing 'name'; it takes 1 input: name."),
+            ("<rt:Message Key=\"pair\"><rt:MessageInput Name=\"first\" Value=\"{Binding One}\"/></rt:Message>", "Message 'pair' is missing 'second'; it takes 2 inputs: first, second."),
+            ("<rt:Message Key=\"badge\"><rt:MessageInput Name=\"user-name\" Value=\"{Binding Name}\"/></rt:Message>", "has no input 'user-name' (use its readable name 'r_757365722d6e616d65')"),
+            ("<TextBlock Text=\"{rt:Message pair, Arg1={Binding Two}}\"/>", "Positional inputs must start at Arg0 without gaps; Arg0 is not set."),
+            ("<rt:Message Key=\"greeting\" Arg0=\"{Binding Name}\"><rt:MessageInput Name=\"name\" Value=\"{Binding Name}\"/></rt:Message>", "sets both Arg0..Arg3 and MessageInput entries"),
+            ("<rt:Message Key=\"pair\"><rt:MessageInput Name=\"first\" Value=\"{Binding One}\"/><rt:MessageInput Name=\"first\" Value=\"{Binding Two}\"/></rt:Message>", "MessageInput 'first' is set more than once."),
+        ];
+        foreach ((string content, string expected) in cases)
+        {
+            Diagnostic diagnostic = Run(content).Single();
+            Assert.Equal("RTR0082", diagnostic.Id, content);
+            Assert.True(diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains(expected, StringComparison.Ordinal), content + ": " + diagnostic.GetMessage(CultureInfo.InvariantCulture));
+            Assert.True(!diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains(": .", StringComparison.Ordinal), diagnostic.GetMessage(CultureInfo.InvariantCulture));
+        }
+    }
+
+    private static void KeySuggestions()
+    {
+        foreach ((string key, string suggestion) in new[] { ("applicaton_title", "application_title"), ("application.title", "application_title"),
+            ("Application_Title", "application_title"), ("greting", "greeting"), ("pairs", "pair") })
+        {
+            Diagnostic diagnostic = Run("<TextBlock Text=\"{rt:Message " + key + "}\"/>").Single();
+            Assert.Equal("RTR0081", diagnostic.Id, key);
+            Assert.True(diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains("Did you mean '" + suggestion + "'?", StringComparison.Ordinal), diagnostic.GetMessage(CultureInfo.InvariantCulture));
+        }
+        Diagnostic unrelated = Run("<TextBlock Text=\"{rt:Message checkout_summary}\"/>").Single();
+        Assert.True(!unrelated.GetMessage(CultureInfo.InvariantCulture).Contains("Did you mean", StringComparison.Ordinal), unrelated.GetMessage(CultureInfo.InvariantCulture));
+        Assert.True(unrelated.GetMessage(CultureInfo.InvariantCulture).Contains("flattened readable name", StringComparison.Ordinal), unrelated.GetMessage(CultureInfo.InvariantCulture));
+    }
+
+    private static void SourceNarrowing()
+    {
+        // The WPF trial's case: one Message with its own Source no longer hides a typo elsewhere in the file.
+        Diagnostic[] own = Run("""
+            <TextBlock Text="{rt:Message outside, Source={x:Static other:Catalogs.External}}"/>
+            <TextBlock Text="{rt:Message typo}"/>
+            """, catalog: null, defaultCatalog: "app");
+        Assert.Equal("RTR0081", own.Single(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Id, string.Join("\n", own.AsEnumerable()));
+        Diagnostic info = own.Single(static diagnostic => diagnostic.Id == "RTR0085");
+        Assert.Equal(4, info.Location.GetLineSpan().StartLinePosition.Line, "info at the source's line");
+        Assert.True(info.GetMessage(CultureInfo.InvariantCulture).Contains("Message 'outside' sets its own Source", StringComparison.Ordinal) &&
+            info.GetMessage(CultureInfo.InvariantCulture).Contains("Catalog=\"app\"", StringComparison.Ordinal), info.GetMessage(CultureInfo.InvariantCulture));
+
+        // An attached source covers its element's content and the file's reusable content, nothing else.
+        Diagnostic[] attached = Run("""
+            <Window.Resources><DataTemplate x:Key="Row"><TextBlock Text="{rt:Message template_key}"/></DataTemplate></Window.Resources>
+            <StackPanel>
+              <StackPanel rt:TranslationProperties.Source="{StaticResource External}"><TextBlock Text="{rt:Message outside}"/><TextBlock Text="{rt:Message other_outside}"/></StackPanel>
+              <TextBlock Text="{rt:Message typo}"/>
+            </StackPanel>
+            """, catalog: null, defaultCatalog: "app");
+        Assert.Equal(2, attached.Length, string.Join("\n", attached.AsEnumerable()));
+        Assert.True(attached.Single(static diagnostic => diagnostic.Id == "RTR0081").GetMessage(CultureInfo.InvariantCulture).StartsWith("'typo'", StringComparison.Ordinal), "sibling typo is checked");
+        Diagnostic scoped = attached.Single(static diagnostic => diagnostic.Id == "RTR0085");
+        Assert.Equal(6, scoped.Location.GetLineSpan().StartLinePosition.Line, "one info at the attached source");
+        Assert.True(scoped.GetMessage(CultureInfo.InvariantCulture).Contains("this element's content and in this file's templates", StringComparison.Ordinal) &&
+            scoped.GetMessage(CultureInfo.InvariantCulture).Contains("'template_key' at line 5", StringComparison.Ordinal), scoped.GetMessage(CultureInfo.InvariantCulture));
+
+        Diagnostic[] property = Run("""
+            <StackPanel><rt:TranslationProperties.Source><StaticResource ResourceKey="External"/></rt:TranslationProperties.Source><TextBlock Text="{rt:Message outside}"/></StackPanel>
+            <TextBlock Text="{rt:Message typo}"/>
+            """, catalog: null, defaultCatalog: "app");
+        Assert.Equal("RTR0081,RTR0085", string.Join(",", property.Select(static diagnostic => diagnostic.Id).Order(StringComparer.Ordinal)), "property element source");
+
+        // A style setter can apply anywhere, so the whole file stays unchecked and says why.
+        Diagnostic setter = Run("""
+            <Window.Resources><Style TargetType="StackPanel"><Setter Property="rt:TranslationProperties.Source" Value="{StaticResource External}"/></Style></Window.Resources>
+            <TextBlock Text="{rt:Message typo}"/>
+            """, catalog: null, defaultCatalog: "app").Single();
+        Assert.Equal("RTR0085", setter.Id, setter.ToString());
+        Assert.True(setter.GetMessage(CultureInfo.InvariantCulture).Contains("whole file", StringComparison.Ordinal) && setter.GetMessage(CultureInfo.InvariantCulture).Contains("'typo' at line 6", StringComparison.Ordinal), setter.GetMessage(CultureInfo.InvariantCulture));
+
+        Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message outside, Source={StaticResource External}}\"/>", catalog: null).Length, "no default catalog, nothing to report");
+        Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message application_title, Source={StaticResource App}}\"/>", catalog: "app").Length, "file assertion checks explicit sources");
+    }
+
     private static void MessageKinds()
     {
+        (string Content, string Expected)[] wording =
+        [
+            ("<TextBlock Text=\"{rt:Message help}\"/>", "Use rt:TranslationProperties.RichMessage=\"help\""),
+            ("<TextBlock Text=\"{rt:Message notice}\"/>", "Render it with WpfDocumentRenderer."),
+            ("<TextBlock rt:TranslationProperties.RichMessage=\"application_title\"/>", "Use {rt:Message application_title} instead."),
+            ("<TextBlock rt:TranslationProperties.RichMessage=\"notice\"/>", "is a document"),
+        ];
+        foreach ((string content, string expected) in wording)
+            Assert.True(Run(content).Single().GetMessage(CultureInfo.InvariantCulture).Contains(expected, StringComparison.Ordinal), content + ": " + Run(content).Single().GetMessage(CultureInfo.InvariantCulture));
         foreach (string content in new[] { "<TextBlock Text=\"{rt:Message help}\"/>", "<TextBlock Text=\"{rt:Message notice}\"/>",
             "<TextBlock rt:TranslationProperties.RichMessage=\"application_title\"/>", "<TextBlock rt:TranslationProperties.RichMessage=\"notice\"/>" })
             Assert.Equal("RTR0083", Run(content).Single().Id, content);
@@ -145,9 +272,9 @@ internal static class GeneratorXamlTests
     private static void UnresolvedDeclarations()
     {
         Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message outside}\"/>", catalog: null).Length, "unknown catalog");
-        Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message outside, Source={StaticResource External}}\"/>", catalog: null, defaultCatalog: "app").Length, "external resource source");
-        Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message outside, Source = {Binding Catalog}}\"/>", catalog: null, defaultCatalog: "app").Length, "dynamic source");
-        Assert.Equal(0, Run("<StackPanel rt:TranslationProperties.Source=\"{StaticResource External}\"><TextBlock Text=\"{rt:Message outside}\"/></StackPanel>", catalog: null, defaultCatalog: "app").Length, "inherited source");
+        AssertSkipped(Run("<TextBlock Text=\"{rt:Message outside, Source={StaticResource External}}\"/>", catalog: null, defaultCatalog: "app"), "external resource source");
+        AssertSkipped(Run("<TextBlock Text=\"{rt:Message outside, Source = {Binding Catalog}}\"/>", catalog: null, defaultCatalog: "app"), "dynamic source");
+        AssertSkipped(Run("<StackPanel rt:TranslationProperties.Source=\"{StaticResource External}\"><TextBlock Text=\"{rt:Message outside}\"/></StackPanel>", catalog: null, defaultCatalog: "app"), "inherited source");
         Assert.Equal(0, Run("<rt:Message Key=\"{x:Static other:Keys.Greeting}\"/>").Length, "static C# key remains unresolved");
         Assert.Equal(0, Run("<rt:Message Key=\"greeting\"><rt:MessageInput Value=\"{Binding Name}\"><rt:MessageInput.Name><x:Static Member=\"other:Keys.Name\"/></rt:MessageInput.Name></rt:MessageInput></rt:Message>").Length, "runtime-valued input name");
         Assert.Equal(0, Run("<TextBlock rt:TranslationProperties.RichMessage=\"{Binding Key}\"/>").Length, "bound rich key");
@@ -175,25 +302,25 @@ internal static class GeneratorXamlTests
         })
         {
             string content = "<Style><Setter Property=\"" + property + "\" Value=\"{StaticResource External}\"/></Style><TextBlock Text=\"{rt:Message outside}\"/>";
-            Assert.Equal(0, Run(content, catalog: null, defaultCatalog: "app").Length, content);
+            AssertSkipped(Run(content, catalog: null, defaultCatalog: "app"), content);
             Assert.Equal("RTR0081", Run(content).Single().Id, "per-file assertion still checks " + property);
         }
-        Assert.Equal(0, Run("""
+        AssertSkipped(Run("""
             <Style><Setter Value="{StaticResource External}"><Setter.Property><x:Static Member="rt:TranslationProperties.SourceProperty"/></Setter.Property></Setter></Style>
             <TextBlock Text="{rt:Message outside}"/>
-            """, catalog: null, defaultCatalog: "app").Length, "object x:Static source setter");
-        Assert.Equal(0, Run("""
+            """, catalog: null, defaultCatalog: "app"), "object x:Static source setter");
+        AssertSkipped(Run("""
             <TextBlock xmlns:y="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:t="clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf">
               <TextBlock.Style><Style><Setter Property="{y:Static Member='t:TranslationProperties.SourceProperty'}" Value="{StaticResource External}"/></Style></TextBlock.Style>
               <TextBlock.Text><rt:Message Key="outside"/></TextBlock.Text>
             </TextBlock>
-            """, catalog: null, defaultCatalog: "app").Length, "namespace aliases on x:Static source setter");
-        Assert.Equal(0, Run("""
+            """, catalog: null, defaultCatalog: "app"), "namespace aliases on x:Static source setter");
+        AssertSkipped(Run("""
             <p:Style xmlns:p="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns="http://schemas.microsoft.com/winfx/2006/xaml">
               <p:Setter Property="{Static rt:TranslationProperties.SourceProperty}" Value="{p:StaticResource External}"/>
             </p:Style><TextBlock Text="{rt:Message outside}"/>
-            """, catalog: null, defaultCatalog: "app").Length, "default XAML namespace on static source setter");
-        Assert.Equal(0, Run("""<TextBlock Text="{ rt:Message outside, Source = '{StaticResource External}' }"/>""", catalog: null, defaultCatalog: "app").Length, "quoted and spaced Message.Source");
+            """, catalog: null, defaultCatalog: "app"), "default XAML namespace on static source setter");
+        AssertSkipped(Run("""<TextBlock Text="{ rt:Message outside, Source = '{StaticResource External}' }"/>""", catalog: null, defaultCatalog: "app"), "quoted and spaced Message.Source");
         Assert.Equal("RTR0081", Run("""<Setter Property="{x:Static other:Properties.BackgroundProperty}"/><TextBlock Text="{rt:Message typo}"/>""", catalog: null, defaultCatalog: "app").Single().Id, "unrelated dependency property");
     }
 
