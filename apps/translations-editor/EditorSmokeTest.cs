@@ -7,6 +7,8 @@ using System.Text.Json;
 using Runic.Translations.Internal;
 using Runic.Application.Views;
 using Runic.Application.Views.ReactiveUI;
+using Runic.Navigation;
+using Runic.Navigation.ReactiveUI;
 using System.Xml.Linq;
 
 namespace Runic.Translations.Editor;

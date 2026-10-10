@@ -3,6 +3,7 @@ using ReactiveUI;
 using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Concurrency;
 using Runic.Application.Views;
+using Runic.Navigation;
 
 namespace Runic.Translations.Editor;
 
