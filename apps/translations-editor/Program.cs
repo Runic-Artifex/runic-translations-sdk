@@ -11,6 +11,8 @@ using Runic.Application.Views;
 using Runic.Application.Views.CsWebUi;
 using Runic.Application.Views.ReactiveUI;
 using Runic.CommandLine;
+using Runic.Navigation;
+using Runic.Navigation.ReactiveUI;
 using Splat;
 
 namespace Runic.Translations.Editor;
