@@ -80,10 +80,40 @@ input collections, retain runtime validation. For rich messages, argument/slot
 values remain runtime checks or typed C# checks. This scan does not type-check
 Binding results or arbitrary XAML; WPF continues to compile and load it.
 
+The scan only sees one file at a time. A file without its own source
+declaration is checked against `TranslationsXamlCatalog`, even if at runtime it
+inherits `TranslationProperties.Source` from a parent in another file (for
+example a `UserControl` placed in a window that selects an external catalog), an
+`App.xaml` style, or code-behind. Skip such a file with item metadata on the
+item that selects it:
+
+```xml
+<ItemGroup>
+  <Page Update="Views/OrderSummary.xaml" TranslationsValidateXaml="false" />
+  <!-- or, for an explicitly selected file -->
+  <TranslationXaml Include="Views/Report.xaml" TranslationsValidateXaml="false" />
+</ItemGroup>
+```
+
+A `Catalog` other than the local one is reported as `RTR0080` rather than
+skipped, so that a misspelled assertion is not silently ignored.
+
+Design-time content is not checked: attributes and elements in namespaces listed
+by `mc:Ignorable` (such as `d:`) are skipped, as is everything inside
+`mc:AlternateContent`, because the branch WPF compiles depends on the namespaces
+it understands. The Runic and WPF namespaces stay checked even when listed.
+Runic declarations are recognized through the
+`clr-namespace:Runic.Translations.Wpf` mapping, with or without
+`;assembly=Runic.Translations.Wpf`; the package defines no `XmlnsDefinition` URI.
+
 Set `TranslationsValidateXaml=false` to disable the optional scan. It requires
 neither artifact emission nor the CLI tool. The translation sources and XAML
 must be in the same generating C# project; a precompiled catalog from a library
-is an unresolved external catalog.
+is an unresolved external catalog. XAML is checked only after the catalog links:
+it is skipped while the translation sources have errors (those are reported
+instead), when the project does not supply exactly one `TranslationProject`, and
+when the referenced runtime lacks the readable surface (`RTR0068`). XAML edits
+revalidate only the edited file; they do not regenerate C# sources.
 
 ## Select generated artifacts
 

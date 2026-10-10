@@ -33,7 +33,56 @@ internal static class GeneratorIncrementalityTests
         runner.Add("C# edits do not rerun translation or runtime ABI work", CSharpEditsAreCached);
         runner.Add("reference changes inspect only the changed references", ReferenceChangesInspectOnlyNewReferences);
         runner.Add("a changed runtime ABI reruns only the link", RuntimeAbiChangeRelinks);
+        runner.Add("editing one XAML file revalidates only that file without relinking or rendering", XamlEditRevalidatesOnlyThatFile);
     }
+
+    private const string MainXamlPath = "C:/repo/Views/Main.xaml";
+    private const string OtherXamlPath = "C:/repo/Views/Other.xaml";
+
+    private static string Xaml(string key) => """
+        <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                xmlns:rt="clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf">
+          <TextBlock Text="{rt:Message
+        """ + " " + key + "}\"/>\n</Window>";
+
+    private static void XamlEditRevalidatesOnlyThatFile()
+    {
+        GeneratorRun run = GeneratorTestHost.Run(
+            new TestInput(ProjectPath, "Project", Project),
+            new TestInput(EnglishPath, "Rmf2", English),
+            new TestInput(GermanPath, "Rmf2", German),
+            new TestInput(MainXamlPath, "Xaml", Xaml("title"), DefaultCatalog: "app"),
+            new TestInput(OtherXamlPath, "Xaml", Xaml("title"), DefaultCatalog: "app"));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        string before = Generated(run);
+
+        GeneratorRun edited = GeneratorTestHost.Edit(run, MainXamlPath, Xaml("titel"));
+        foreach (string step in new[] { "TranslationSourceUnits", "TranslationProjects", "TranslationRuntimeAbi", "TranslationCompilation", "TranslationLink", "TranslationXamlCatalog" })
+            AssertAll(edited, step, IncrementalStepRunReason.Cached);
+        IncrementalStepRunReason[] emit = OutputReasons(edited, "TranslationLink");
+        Assert.True(emit.Length > 0 && emit.All(static reason => reason == IncrementalStepRunReason.Cached), "source rendering reran: " + string.Join(", ", emit));
+        IncrementalStepRunReason[] validated = OutputReasons(edited, "TranslationXamlValidation");
+        Assert.Equal(1, validated.Count(static reason => reason == IncrementalStepRunReason.Modified), "XAML validation outputs: " + string.Join(", ", validated));
+        var validation = new Dictionary<string, IncrementalStepRunReason>(StringComparer.Ordinal);
+        foreach ((object value, IncrementalStepRunReason reason) in edited.SingleResult.TrackedSteps["TranslationXamlValidation"].SelectMany(step => step.Outputs))
+            validation[(((TranslationsGenerator.GeneratorInput, XamlCatalog?))value).Item1.Path] = reason;
+        Assert.Equal(IncrementalStepRunReason.Modified, validation[Normalize(MainXamlPath)], "edited XAML");
+        Assert.Equal(IncrementalStepRunReason.Cached, validation[Normalize(OtherXamlPath)], "unchanged XAML");
+        Assert.Equal("RTR0081", edited.SingleResult.Diagnostics.Single().Id, "edited XAML is revalidated");
+        Assert.Equal(before, Generated(edited), "generated sources after a XAML edit");
+
+        // A translation edit relinks and revalidates every XAML file against the new catalog.
+        GeneratorRun relinked = GeneratorTestHost.Edit(edited, EnglishPath, English.Replace("Shop", "Store", StringComparison.Ordinal));
+        AssertAll(relinked, "TranslationLink", IncrementalStepRunReason.Modified);
+        AssertAll(relinked, "TranslationXamlValidation", IncrementalStepRunReason.Modified);
+        Assert.Equal("RTR0081", relinked.SingleResult.Diagnostics.Single().Id, "relinked diagnostics");
+    }
+
+    // Source output steps fed by the named step (the source rendering output reads TranslationLink).
+    private static IncrementalStepRunReason[] OutputReasons(GeneratorRun run, string input) =>
+        run.SingleResult.TrackedOutputSteps.SelectMany(pair => pair.Value)
+            .Where(step => step.Inputs.Any(source => source.Source.Name == input))
+            .SelectMany(step => step.Outputs).Select(output => output.Reason).ToArray();
 
     private static GeneratorRun Initial() => GeneratorTestHost.Run(
         new TestInput(ProjectPath, "Project", Project),

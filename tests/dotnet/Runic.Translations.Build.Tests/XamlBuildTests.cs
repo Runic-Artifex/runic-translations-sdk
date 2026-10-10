@@ -24,7 +24,7 @@ internal static class XamlBuildTests
             <Project>
               <Import Project="{{Xml(Path.Combine(PackageDirectory, "build", "Runic.Translations.Build.props"))}}" />
               <PropertyGroup><UseWPF>true</UseWPF><TranslationsXamlCatalog>app</TranslationsXamlCatalog></PropertyGroup>
-              <ItemGroup><Page Include="View.xaml"/><ApplicationDefinition Include="App.xaml"/><TranslationXaml Include="Declared.xaml" Catalog="other"/></ItemGroup>
+              <ItemGroup><Page Include="View.xaml"/><Page Include="Inherited.xaml" TranslationsValidateXaml="false"/><ApplicationDefinition Include="App.xaml"/><TranslationXaml Include="Declared.xaml" Catalog="other"/><TranslationXaml Include="External.xaml" Catalog="other" TranslationsValidateXaml="false"/></ItemGroup>
               <Import Project="{{Xml(Path.Combine(PackageDirectory, "build", "Runic.Translations.Build.targets"))}}" />
               <Target Name="Dump" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources">
                 <WriteLinesToFile File="dump.txt" Overwrite="true" Lines="@(AdditionalFiles->'%(Filename)|%(RunicTranslationKind)|%(RunicTranslationCatalog)|%(RunicTranslationDefaultCatalog)')"/>
@@ -35,6 +35,7 @@ internal static class XamlBuildTests
         Assert.Equal(0, result.ExitCode, result.Combined);
         string dump = File.ReadAllText(temporary.Resolve("dump.txt"));
         Assert.Contains("View|Xaml||app", dump); Assert.Contains("App|Xaml||app", dump); Assert.Contains("Declared|Xaml|other|app", dump);
+        Assert.False(dump.Contains("Inherited", StringComparison.Ordinal) || dump.Contains("External", StringComparison.Ordinal), "per-file opt-out: " + dump);
         result = Processes.DotNet(temporary.Path, "msbuild", "Probe.proj", "/t:Dump", "/p:TranslationsValidateXaml=false", "/nologo");
         Assert.Equal(0, result.ExitCode, result.Combined);
         Assert.Equal(string.Empty, File.ReadAllText(temporary.Resolve("dump.txt")), "disabled validator");
@@ -90,8 +91,13 @@ internal static class XamlBuildTests
         WriteView("{rt:Message typo}");
         ProcessResult disabled = Processes.DotNet(temporary.Path, "build", "Consumer.csproj", "--no-restore", "/p:TranslationsValidateXaml=false", "/nologo");
         Assert.Equal(0, disabled.ExitCode, disabled.Combined);
-        // A per-file assertion checks even explicit Source declarations.
+        // Per-file opt-out for a file whose source is inherited from another file or set in code.
         string project = File.ReadAllText(temporary.Resolve("Consumer.csproj"));
+        File.WriteAllText(temporary.Resolve("Consumer.csproj"), wpf
+            ? project.Replace("</Project>", "<ItemGroup><Page Update=\"View.xaml\" TranslationsValidateXaml=\"false\"/></ItemGroup></Project>", StringComparison.Ordinal)
+            : project.Replace("<TranslationXaml Include=\"View.xaml\"/>", "<TranslationXaml Include=\"View.xaml\" TranslationsValidateXaml=\"false\"/>", StringComparison.Ordinal));
+        ProcessResult optedOut = Build(noRestore: true); Assert.Equal(0, optedOut.ExitCode, optedOut.Combined);
+        // A per-file assertion checks even explicit Source declarations.
         File.WriteAllText(temporary.Resolve("Consumer.csproj"), project.Replace("</Project>", "<ItemGroup><TranslationXaml Include=\"View.xaml\" Catalog=\"app\"/></ItemGroup></Project>", StringComparison.Ordinal).Replace("<TranslationXaml Include=\"View.xaml\"/>", string.Empty, StringComparison.Ordinal));
         WriteView("{rt:Message external, Source={StaticResource App}}");
         ProcessResult asserted = Build(noRestore: true); Assert.True(asserted.ExitCode != 0, asserted.Combined); Assert.Contains("RTR0081", asserted.Combined);
