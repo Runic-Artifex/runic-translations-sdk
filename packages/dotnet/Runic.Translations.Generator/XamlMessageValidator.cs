@@ -38,7 +38,11 @@ internal sealed class XamlMessageValidator
     private readonly TranslationsGenerator.GeneratorInput _input;
     private readonly SourceText _text;
     private readonly XamlCatalog _catalog;
-    private bool _defaultCatalogKnown;
+    // Explicit catalog sources that keep the project default from applying: a style setter
+    // can apply to any element, an attached source to its element's content.
+    private XObject? _fileSource;
+    private readonly Dictionary<XElement, XObject> _scopedSources = [];
+    private readonly HashSet<XObject> _reportedSources = [];
 
     private XamlMessageValidator(SourceProductionContext context, TranslationsGenerator.GeneratorInput input, XamlCatalog catalog)
     {
@@ -76,9 +80,14 @@ internal sealed class XamlMessageValidator
         // depends on the namespaces it understands, so neither branch is known statically.
         var elements = new List<XElement>();
         CollectCompiledElements(document.Root, elements);
-        // A source in a resource/style/template may flow to another element. Without
-        // a per-file catalog assertion, stay conservative for the entire file.
-        _defaultCatalogKnown = !elements.Any(HasSourceOverride);
+        // A Message's own Source only affects that Message (see Check). An attached source
+        // affects its element's content, and also templates, styles and resources of this file,
+        // which may be instantiated under it. A style setter may apply to any element.
+        foreach (XElement element in elements)
+        {
+            if (SetterSource(element) is { } setter) _fileSource ??= setter;
+            else if (AttachedSource(element) is { } attached) _scopedSources.TryAdd(attached.Scope, attached.Site);
+        }
         foreach (XElement element in elements)
         {
             _context.CancellationToken.ThrowIfCancellationRequested();
@@ -123,28 +132,43 @@ internal sealed class XamlMessageValidator
         return false;
     }
 
-    private static bool HasSourceOverride(XElement element) =>
-        (IsRunic(element.Name.NamespaceName) && element.Name.LocalName is "TranslationProperties.Source" or "Message.Source" or "MessageExtension.Source") ||
-        CompiledAttributes(element).Any(attribute =>
-            (IsRunic(attribute.Name.NamespaceName) && attribute.Name.LocalName == "TranslationProperties.Source") ||
-            (IsRunic(element.Name.NamespaceName) && IsMessage(element.Name.LocalName) && attribute.Name.LocalName == "Source") ||
-            (attribute.Name.LocalName == "Property" && IsSourceProperty(element, attribute.Value)) ||
-            HasMessageSourceMarkup(element, attribute.Value)) ||
-        (element.Name.LocalName == "Setter.Property" && element.Elements().Any(child =>
-            child.Name.NamespaceName == "http://schemas.microsoft.com/winfx/2006/xaml" && (child.Name.LocalName is "Static" or "StaticExtension") &&
-            Resolves(child, StaticValue(child.Attribute("Member")?.Value) ?? string.Empty, "TranslationProperties.SourceProperty")));
-
-    private static bool HasMessageSourceMarkup(XElement element, string value)
+    // A Setter (or trigger) on TranslationProperties.Source; returns where it is declared.
+    private static XObject? SetterSource(XElement element)
     {
-        if (!TryReadMarkup(value, out string type, out List<string> parts, out _)) return false;
-        foreach (string part in parts)
+        if (CompiledAttributes(element).FirstOrDefault(attribute => attribute.Name.LocalName == "Property" && IsSourceProperty(element, attribute.Value)) is { } property)
+            return property;
+        return element.Name.LocalName == "Setter.Property" && element.Elements().Any(child =>
+            child.Name.NamespaceName == XamlNamespace && (child.Name.LocalName is "Static" or "StaticExtension") &&
+            Resolves(child, StaticValue(child.Attribute("Member")?.Value) ?? string.Empty, "TranslationProperties.SourceProperty")) ? element : null;
+    }
+
+    // An attached TranslationProperties.Source: the element it is set on and where it is declared.
+    private static (XElement Scope, XObject Site)? AttachedSource(XElement element)
+    {
+        if (IsRunic(element.Name.NamespaceName) && element.Name.LocalName == "TranslationProperties.Source" && element.Parent is { } parent)
+            return (parent, element);
+        if (CompiledAttributes(element).FirstOrDefault(static attribute =>
+                IsRunic(attribute.Name.NamespaceName) && attribute.Name.LocalName == "TranslationProperties.Source") is { } attribute)
+            return (element, attribute);
+        return null;
+    }
+
+    // The explicit source that may select another catalog for this element, if any.
+    private XObject? InheritedSource(XElement element)
+    {
+        if (_fileSource is not null) return _fileSource;
+        if (_scopedSources.Count == 0) return null;
+        for (XElement? current = element; current is not null; current = current.Parent)
+            if (_scopedSources.TryGetValue(current, out XObject? site)) return site;
+        // Reusable content may be instantiated under any attached source of this file.
+        for (XElement? current = element; current is not null; current = current.Parent)
         {
-            if (!TrySplit(part, '=', out List<string> assignment)) continue;
-            if (IsMessageMarkup(element, type) && assignment.Count > 1 && assignment[0] == "Source") return true;
-            string nested = assignment.Count == 1 ? part : string.Join("=", assignment.Skip(1));
-            if (HasMessageSourceMarkup(element, nested)) return true;
+            string name = current.Name.LocalName;
+            if (name is "ResourceDictionary" or "Style" || name.EndsWith("Template", StringComparison.Ordinal) ||
+                name.EndsWith(".Resources", StringComparison.Ordinal))
+                return _scopedSources.Values.First();
         }
-        return false;
+        return null;
     }
 
     private static bool IsSourceProperty(XElement element, string value)
@@ -280,9 +304,20 @@ internal sealed class XamlMessageValidator
         var args = new HashSet<int>();
         foreach (string property in properties.Keys)
             if (property is "Arg0" or "Arg1" or "Arg2" or "Arg3" && !IsNullValue(element, properties[property])) args.Add(property[3] - '0');
-        if ((hasInputs && args.Count > 0) || (args.Count > 0 && args.Max() + 1 != args.Count) || names.Distinct(StringComparer.Ordinal).Count() != names.Count)
+        if (hasInputs && args.Count > 0)
         {
-            Report(TranslationsDiagnostics.XamlInputs, location, "Message inputs must use contiguous Arg0..Arg3 or unique named MessageInput entries; do not mix the forms.");
+            Report(TranslationsDiagnostics.XamlInputs, location, "Message sets both Arg0..Arg3 and MessageInput entries; use one form. Named MessageInput entries are preferred.");
+            return;
+        }
+        if (args.Count > 0 && args.Max() + 1 != args.Count)
+        {
+            int gap = Enumerable.Range(0, 4).First(index => !args.Contains(index));
+            Report(TranslationsDiagnostics.XamlInputs, location, "Positional inputs must start at Arg0 without gaps; Arg" + gap + " is not set.");
+            return;
+        }
+        if (names.GroupBy(static name => name, StringComparer.Ordinal).FirstOrDefault(static group => group.Count() > 1) is { } duplicate)
+        {
+            Report(TranslationsDiagnostics.XamlInputs, location, "MessageInput '" + duplicate.Key + "' is set more than once.");
             return;
         }
         bool explicitSource = properties.ContainsKey("Source");
@@ -294,9 +329,18 @@ internal sealed class XamlMessageValidator
     private void Check(XElement element, XObject location, string? key, bool rich, int? count, List<string>? names, bool explicitSource = false)
     {
         if (key is null) return; // Binding, x:Static, resource or other runtime key.
-        string? catalog = !string.IsNullOrWhiteSpace(_input.Catalog) ? _input.Catalog :
-            _defaultCatalogKnown && !explicitSource ? _input.DefaultCatalog : null;
-        if (string.IsNullOrWhiteSpace(catalog)) return;
+        string? catalog = _input.Catalog;
+        if (string.IsNullOrWhiteSpace(catalog))
+        {
+            catalog = _input.DefaultCatalog;
+            if (string.IsNullOrWhiteSpace(catalog)) return;
+            XObject? source = explicitSource ? location : InheritedSource(element);
+            if (source is not null)
+            {
+                ReportSkipped(source, key, location, catalog!);
+                return;
+            }
+        }
         if (catalog != _catalog.Id)
         {
             Report(TranslationsDiagnostics.XamlDeclaration, location, "XAML catalog '" + catalog + "' is not the local TranslationProject catalog '" + _catalog.Id +
@@ -305,24 +349,111 @@ internal sealed class XamlMessageValidator
         }
         if (!_catalog.Messages.TryGetValue(key, out Rmf2ReadableMessageV1? message))
         {
-            Report(TranslationsDiagnostics.XamlKey, location, "'" + key + "' is not a readable message of catalog '" + catalog + "'. Use its flattened readable name." +
+            string? suggestion = Suggest(key);
+            Report(TranslationsDiagnostics.XamlKey, location, "'" + key + "' is not a readable message of catalog '" + catalog + "'." +
+                (suggestion is null ? " Use its flattened readable name." : " Did you mean '" + suggestion + "'?") +
                 (string.IsNullOrWhiteSpace(_input.Catalog)
                     ? " The file was checked against TranslationsXamlCatalog; if its source comes from another file or code, set TranslationsValidateXaml=\"false\" on its Page item."
                     : string.Empty));
             return;
         }
         // RichMessage's WPF inline adapter does not accept document content.
-        bool inlineRich = message.Contract.Structured && message.Contract.Content != Rmf2DocumentProfileV5.Document;
+        bool document = message.Contract.Content == Rmf2DocumentProfileV5.Document;
+        bool inlineRich = message.Contract.Structured && !document;
         if (rich ? !inlineRich : message.Contract.Structured)
         {
-            Report(TranslationsDiagnostics.XamlKind, location, "Message '" + key + "' cannot be used with " + (rich ? "TranslationProperties.RichMessage" : "Message") + "; choose the adapter for its plain, inline or document content.");
+            Report(TranslationsDiagnostics.XamlKind, location, document
+                ? "Message '" + key + "' is a document; neither {rt:Message} nor TranslationProperties.RichMessage renders documents. Render it with WpfDocumentRenderer."
+                : rich
+                    ? "Message '" + key + "' is plain text, but TranslationProperties.RichMessage needs inline markup. Use {rt:Message " + key + "} instead."
+                    : "Message '" + key + "' contains inline markup, which {rt:Message} cannot show as a string. Use rt:TranslationProperties.RichMessage=\"" + key + "\" on a TextBlock.");
             return;
         }
-        if (count is { } actual && (actual != message.Inputs.Count ||
-            names is not null && names.Any(name => !message.Inputs.Any(input => input.Identifier == name))))
-            Report(TranslationsDiagnostics.XamlInputs, location, "Message '" + key + "' requires " + message.Inputs.Count + " input(s): " +
-                string.Join(", ", message.Inputs.Select(static input => input.Identifier)) + ".");
+        if (count is not { } actual) return;
+        IReadOnlyList<Rmf2ReadableNameV1> inputs = message.Inputs;
+        if (names is null)
+        {
+            if (actual != inputs.Count)
+                Report(TranslationsDiagnostics.XamlInputs, location, "Message '" + key + "' " + DescribeInputs(inputs, positional: true) + ", but " +
+                    (actual == 0 ? "no Arg is set." : "Arg0" + (actual > 1 ? "..Arg" + (actual - 1) : string.Empty) + " " + (actual == 1 ? "is" : "are") + " set."));
+            else if (actual > 1)
+                Report(TranslationsDiagnostics.XamlPositionalInputs, location, "Message '" + key + "' binds " + actual + " inputs by position: " + Positional(inputs) +
+                    ". Positions follow the generated parameters, sorted by name rather than by their order in the text; use named MessageInput entries so each value binds by name.");
+            return;
+        }
+        string[] unknown = names.Where(name => !inputs.Any(input => input.Identifier == name)).ToArray();
+        string[] missing = inputs.Select(static input => input.Identifier).Where(name => !names.Contains(name, StringComparer.Ordinal)).ToArray();
+        if (unknown.Length == 0 && missing.Length == 0) return;
+        var problems = new List<string>();
+        if (unknown.Length > 0) problems.Add("has no input " + string.Join(", ", unknown.Select(name =>
+            "'" + name + "'" + (inputs.FirstOrDefault(input => input.Source == name && input.Identifier != name) is { Identifier: { } readable } ? " (use its readable name '" + readable + "')" : string.Empty))));
+        if (missing.Length > 0) problems.Add("is missing " + string.Join(", ", missing.Select(static name => "'" + name + "'")));
+        Report(TranslationsDiagnostics.XamlInputs, location, "Message '" + key + "' " + string.Join(" and ", problems) + "; it " + DescribeInputs(inputs, positional: false) + ".");
     }
+
+    private static string DescribeInputs(IReadOnlyList<Rmf2ReadableNameV1> inputs, bool positional) => inputs.Count switch
+    {
+        0 => "takes no inputs",
+        _ => "takes " + inputs.Count + (inputs.Count == 1 ? " input: " : " inputs: ") +
+            (positional ? Positional(inputs) : string.Join(", ", inputs.Select(static input => input.Identifier))) +
+            (positional && inputs.Count > 4 ? " (more than four need named MessageInput entries)" : string.Empty),
+    };
+
+    private static string Positional(IReadOnlyList<Rmf2ReadableNameV1> inputs) =>
+        string.Join(", ", inputs.Select(static (input, index) => index < 4 ? "Arg" + index + "=" + input.Identifier : input.Identifier));
+
+    // The closest readable key: same name ignoring case or separators, else a small edit distance.
+    private string? Suggest(string key)
+    {
+        string Normalize(string value) => value.Replace('.', '_').Replace('-', '_').ToLowerInvariant();
+        string normalized = Normalize(key);
+        string? best = null;
+        int bestDistance = Math.Max(1, Math.Min(3, key.Length / 3)) + 1;
+        foreach (string candidate in _catalog.Messages.Keys.OrderBy(static candidate => candidate, StringComparer.Ordinal))
+        {
+            int distance = Normalize(candidate) == normalized ? 0 : Distance(normalized, Normalize(candidate), bestDistance);
+            if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+        }
+        return best;
+    }
+
+    // Levenshtein distance, or at least limit when it is limit or more.
+    private static int Distance(string left, string right, int limit)
+    {
+        if (Math.Abs(left.Length - right.Length) >= limit) return limit;
+        int[] previous = Enumerable.Range(0, right.Length + 1).ToArray();
+        int[] current = new int[right.Length + 1];
+        for (int i = 1; i <= left.Length; i++)
+        {
+            current[0] = i;
+            int rowMinimum = i;
+            for (int j = 1; j <= right.Length; j++)
+            {
+                current[j] = Math.Min(Math.Min(current[j - 1], previous[j]) + 1, previous[j - 1] + (left[i - 1] == right[j - 1] ? 0 : 1));
+                rowMinimum = Math.Min(rowMinimum, current[j]);
+            }
+            if (rowMinimum >= limit) return limit;
+            (previous, current) = (current, previous);
+        }
+        return Math.Min(previous[right.Length], limit);
+    }
+
+    // One informational report per explicit source, at its declaration, when it hides a static key.
+    private void ReportSkipped(XObject source, string key, XObject location, string catalog)
+    {
+        if (!_reportedSources.Add(source)) return;
+        string text = source == location
+            ? "Message '" + key + "' sets its own Source, so it is not checked against catalog '" + catalog + "'. If that Source provides catalog '" + catalog +
+                "', set Catalog=\"" + catalog + "\" on the file's Page or TranslationXaml item to check it."
+            : (source == _fileSource
+                ? "TranslationProperties.Source is set by a style Setter here, which can apply to any element, so keys in this whole file are"
+                : "TranslationProperties.Source is set here, so keys in this element's content and in this file's templates, styles and resources are") +
+              " not checked against catalog '" + catalog + "' (first: '" + key + "' at line " + Line(location) + "). If this source provides catalog '" + catalog +
+              "', set Catalog=\"" + catalog + "\" on the file's Page or TranslationXaml item to check them; keys of another catalog cannot be checked.";
+        Report(TranslationsDiagnostics.XamlSourceNotChecked, source, text);
+    }
+
+    private static int Line(XObject source) => source is IXmlLineInfo { } info && info.HasLineInfo() ? info.LineNumber : 1;
 
     private static string? ElementValue(XElement? element)
     {

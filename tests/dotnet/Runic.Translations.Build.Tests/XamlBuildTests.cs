@@ -48,7 +48,7 @@ internal static class XamlBuildTests
         File.WriteAllText(temporary.Resolve("translations", "runic.json"), """
             {"schemaVersion":1,"catalog":"app","code":{"namespace":"Consumer","className":"AppText"},"baseLocale":"en"}
             """);
-        File.WriteAllText(temporary.Resolve("translations", "en.rmf2"), "title = App\ngreeting = Hi {$name}\nhelp = {#link ref=guide}Guide{/link}\n");
+        File.WriteAllText(temporary.Resolve("translations", "en.rmf2"), "title = App\ngreeting = Hi {$name}\npair = {$first} and {$second}\nhelp = {#link ref=guide}Guide{/link}\n");
         File.WriteAllText(temporary.Resolve("Program.cs"), "using Consumer; internal static class Program { static void Main() { _ = typeof(AppText); } }\n");
         string wpfReference = wpf ? "<Reference Include=\"Runic.Translations.Wpf\" HintPath=\"" + Xml(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Wpf", "bin", Configuration, "net10.0-windows", "Runic.Translations.Wpf.dll")) + "\"/>" : string.Empty;
         string references = feed is null ? $$"""
@@ -79,7 +79,7 @@ internal static class XamlBuildTests
                 """);
         WriteView("{rt:Message greeting, Arg0={Binding Name, FallbackValue='Doe, Ada'}}");
         ProcessResult valid = Build(); Assert.Equal(0, valid.ExitCode, valid.Combined);
-        foreach ((string value, string diagnostic) in new[] { ("{rt:Message greetng, Arg0={Binding Name}}", "RTR0081"), ("{rt:Message greetng, Arg0={Binding Source={StaticResource User}, Path=Name}}", "RTR0081"), ("{rt:Message greeting}", "RTR0082"), ("{rt:Message help}", "RTR0083") })
+        foreach ((string value, string diagnostic) in new[] { ("{rt:Message greetng, Arg0={Binding Name}}", "RTR0081"), ("{rt:Message greetng, Arg0={Binding Source={StaticResource User}, Path=Name}}", "RTR0081"), ("{rt:Message greeting}", "RTR0082"), ("{rt:Message help}", "RTR0083"), ("{rt:Message pair, Arg0={Binding Two}, Arg1={Binding One}}", "RTR0084") })
         {
             WriteView(value); ProcessResult invalid = Build(noRestore: true);
             Assert.True(invalid.ExitCode != 0, "Invalid XAML compiled: " + value); Assert.Contains(diagnostic, invalid.Combined); Assert.Contains("View.xaml(1,", invalid.Combined);
@@ -88,6 +88,12 @@ internal static class XamlBuildTests
         ProcessResult external = Build(noRestore: true); Assert.Equal(0, external.ExitCode, external.Combined);
         WriteView("{rt:Message external}", """<TextBlock.Style><Style TargetType="TextBlock"><Setter Property="{x:Static Member='rt:TranslationProperties.SourceProperty'}" Value="{StaticResource External}"/></Style></TextBlock.Style>""");
         ProcessResult styledExternal = Build(noRestore: true); Assert.Equal(0, styledExternal.ExitCode, styledExternal.Combined);
+        // The skipped keys are reported as information (RTR0085); raised to a warning, the build shows it.
+        string unconfigured = File.ReadAllText(temporary.Resolve("Consumer.csproj"));
+        File.WriteAllText(temporary.Resolve("info.globalconfig"), "is_global = true\ndotnet_diagnostic.RTR0085.severity = warning\n");
+        File.WriteAllText(temporary.Resolve("Consumer.csproj"), unconfigured.Replace("</Project>", "<ItemGroup><GlobalAnalyzerConfigFiles Include=\"info.globalconfig\"/></ItemGroup></Project>", StringComparison.Ordinal));
+        ProcessResult skipped = Build(noRestore: true); Assert.True(skipped.ExitCode != 0, skipped.Combined); Assert.Contains("RTR0085", skipped.Combined); Assert.Contains("View.xaml(1,", skipped.Combined);
+        File.WriteAllText(temporary.Resolve("Consumer.csproj"), unconfigured);
         WriteView("{rt:Message typo}");
         ProcessResult disabled = Processes.DotNet(temporary.Path, "build", "Consumer.csproj", "--no-restore", "/p:TranslationsValidateXaml=false", "/nologo");
         Assert.Equal(0, disabled.ExitCode, disabled.Combined);

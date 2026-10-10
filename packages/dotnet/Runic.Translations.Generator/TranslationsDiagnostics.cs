@@ -103,6 +103,10 @@ internal static class TranslationsDiagnostics
         "RTR0082", "Translation XAML inputs do not match", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0082");
     internal static readonly DiagnosticDescriptor XamlKind = new(
         "RTR0083", "Translation XAML message kind does not match", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0083");
+    internal static readonly DiagnosticDescriptor XamlPositionalInputs = new(
+        "RTR0084", "Translation XAML binds several inputs by position", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0084");
+    internal static readonly DiagnosticDescriptor XamlSourceNotChecked = new(
+        "RTR0085", "Translation XAML keys under an explicit source are not checked", "{0}", Category, DiagnosticSeverity.Info, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0085");
 
     private static readonly Dictionary<string, DiagnosticDescriptor> ById = Index(
         UnreadableSource, DuplicateInputs, UnsupportedProjectSchema, InvalidLocale, InvalidCodeName, EmptyBaseLocale,
@@ -111,7 +115,8 @@ internal static class TranslationsDiagnostics
         InvalidVariableOrFunction, InvalidResourceSyntax, InvalidMetadata, InvalidSourceLayout, ConflictingDeclaration,
         InvalidMarkupContract, InvalidMarkup, InvalidMarkupReference, NotExecutable, SyntaxError, InvalidDataModel,
         ReadableSurfaceUnsupported, ReadableNameReserved, DocumentContentKind, DocumentVariantStructure, DocumentChildInvalid,
-        DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace, XamlDeclaration, XamlKey, XamlInputs, XamlKind);
+        DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace, XamlDeclaration, XamlKey, XamlInputs, XamlKind,
+        XamlPositionalInputs, XamlSourceNotChecked);
 
     private static readonly object UnknownGate = new();
     private static readonly Dictionary<string, DiagnosticDescriptor> Unknown = new(System.StringComparer.Ordinal);

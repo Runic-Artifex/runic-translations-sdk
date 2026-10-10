@@ -36,8 +36,9 @@ dotnet tool run runic-translations -- generate \
 When no emit option is present, projects default to typed C#, locale-v5 JSON plus
 its asset manifest, and the cohesive ESM-v5 package. When any option is present,
 only that group is rendered. V5 supports `--emit-csharp`, `--emit-json`, and
-`--emit-esm`; `--emit-typescript`, `--emit-template-manifest`, and `--emit-cpp`
-fail with `RTR0065` because no version-correct standalone v5 renderer exists.
+`--emit-esm`. `--emit-typescript`, `--emit-template-manifest`, and `--emit-cpp`
+are not listed in help: they fail with `RTR0065` because no version-correct
+standalone v5 renderer exists.
 Validation permits an empty v5 project as a scaffold, but `generate` and `verify`
 fail with `RTR0009` until the effective default locale defines a canonical key.
 

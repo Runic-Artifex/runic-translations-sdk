@@ -86,6 +86,19 @@ internal static class CliIntegrationTests
         Assert.Equal(0, commandHelp.ExitCode, commandHelp.Combined);
         Assert.Contains("runic-translations validate", commandHelp.StandardOutput);
         Assert.Contains("--project", commandHelp.StandardOutput);
+        // Emitters without a renderer fail with RTR0065, so help and usage list only working ones.
+        foreach (string command in new[] { "generate", "verify" })
+        {
+            ProcessResult emitHelp = TestFixture.RunTool(temporary, "help", command);
+            Assert.Equal(0, emitHelp.ExitCode, emitHelp.Combined);
+            ProcessResult usage = TestFixture.RunTool(temporary, command, "--bogus");
+            foreach (string text in new[] { emitHelp.StandardOutput, usage.Combined })
+            {
+                Assert.Contains("--emit-esm", text);
+                foreach (string unsupported in new[] { "--emit-typescript", "--emit-template-manifest", "--emit-cpp" })
+                    Assert.False(text.Contains(unsupported, StringComparison.Ordinal), command + " help advertises " + unsupported + ":\n" + text);
+            }
+        }
         ProcessResult empty = TestFixture.RunTool(temporary);
         Assert.Equal(0, empty.ExitCode, empty.Combined);
         Assert.Equal(help.StandardOutput, empty.StandardOutput);

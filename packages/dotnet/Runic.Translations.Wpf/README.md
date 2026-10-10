@@ -132,7 +132,7 @@ and `Show()` fails.
     <!-- Plain message. -->
     <TextBlock Text="{rt:Message orders_title}" FontSize="20"/>
 
-    <!-- Inputs: Arg0..Arg3 in the generated method's parameter order (a constant is {Binding Source=text}). -->
+    <!-- One input: Arg0 (a constant is {Binding Source=text}). Use MessageInput for two or more. -->
     <TextBlock Text="{rt:Message orders_greeting, Arg0={Binding UserName}}"/>
     <TextBlock Text="{rt:Message orders_count, Arg0={Binding OpenOrders}}"/>
 
@@ -159,7 +159,10 @@ public AppTextSlots.orders_help HelpSlots { get; } =
 An `IReadOnlyDictionary<string, InlineMarkupBinding>` by slot ID is accepted for
 dynamic use, without compile-time checks.
 
-More than four inputs, or inputs you want checked by name, use the long form. The
+With two or more inputs, use the long form. `Arg0`..`Arg3` follow the generated
+method's parameters, which are sorted by input name rather than by their order in
+the text, so for `Editing {$name} ({$email})` `Arg0` is `email`; the build warns
+(`RTR0084`) when several inputs are bound by position. The long form binds by name. The
 names are the generated method's parameter names:
 
 ```xml

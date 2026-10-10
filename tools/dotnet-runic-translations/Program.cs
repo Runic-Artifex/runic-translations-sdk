@@ -441,7 +441,7 @@ internal static class Program
         writer.WriteLine("Arguments may be read from a UTF-8 response file with @<file>.");
         writer.WriteLine("Framework transport uses --runic-output human|json; --output remains the tool destination option.");
         writer.WriteLine("Init options: --locale <tag>[:<fallback>] (repeatable) --no-starter.");
-        writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-typescript --emit-template-manifest --emit-esm --emit-cpp.");
+        writer.WriteLine("Emit switches: --emit-csharp --emit-json --emit-esm.");
         writer.WriteLine("With no emit switches, generate and verify use the semantic translation contract's default output groups.");
         writer.WriteLine("Exit codes: 0 success; 1 validation or verification diagnostics; 2 invocation or operational failure.");
     }
