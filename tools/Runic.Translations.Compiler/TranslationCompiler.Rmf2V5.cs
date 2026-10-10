@@ -110,6 +110,17 @@ public static partial class TranslationCompiler
         if (Failed()) return Result();
 
         var entries = locales.ToDictionary(locale => locale.Tag, _ => new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal), StringComparer.OrdinalIgnoreCase);
+        // Keys each locale declares, compiled or not: a message that failed to compile has reported
+        // its own error, so RTR0010 and RTR0011 do not report it again as missing or extra.
+        var declaredKeys = locales.ToDictionary(locale => locale.Tag, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.OrdinalIgnoreCase);
+        foreach (var source in extracted)
+            if (declaredKeys.TryGetValue(source.Locale, out var keys)) keys.Add(source.Key);
+        // RTR0010 points at the locale's grouped file beside the base-locale file of the message.
+        var groupedFiles = new Dictionary<string, TranslationSource>(StringComparer.OrdinalIgnoreCase);
+        foreach (var source in extracted)
+            if (source.Source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+                groupedFiles.TryAdd(ProjectDirectory(source.Source.Path) + "\0" + source.Locale, source.Source);
+        string[] baseKeys = extracted.Where(source => source.Locale == manifest.DefaultLocale).Select(source => string.Join(".", source.Path)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var canonical = new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal);
         var extras = new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal);
         foreach (var source in extracted.Where(source => source.Locale == manifest.DefaultLocale))
@@ -118,7 +129,14 @@ public static partial class TranslationCompiler
         {
             cancellationToken.ThrowIfCancellationRequested();
             canonical.TryGetValue(source.Key, out var origin);
-            if (origin is null) AddPolicyDiagnostic("RTR0011", manifest.ExtraKeys, "Locale '" + source.Locale + "' defines non-canonical key '" + source.Key + "'.", source.Source, new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes), diagnostics);
+            // A base message that failed to compile reported its own error; the key is not extra.
+            if (origin is null && manifest.ExtraKeys != TranslationPolicy.Allow && !declaredKeys[manifest.DefaultLocale].Contains(source.Key))
+            {
+                string logical = string.Join(".", source.Path);
+                string? suggestion = SuggestKey(logical, baseKeys);
+                AddPolicyDiagnostic("RTR0011", manifest.ExtraKeys, "Locale '" + source.Locale + "' defines '" + logical + "', which base locale '" + manifest.DefaultLocale + "' does not define." +
+                    (suggestion is null ? "" : " Did you mean '" + suggestion + "'?"), source.Source, new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes), diagnostics);
+            }
             if (origin is null) extras.TryGetValue(source.Key, out origin);
             if (Compile(source, origin?.Linked.Message.Inputs) is { } entry)
             {
@@ -151,8 +169,14 @@ public static partial class TranslationCompiler
                     if (!ReferenceEquals(translated, pair.Value)) ValidateStructure(pair.Value, translated);
                     names.UnionWith(translated.Linked.Names);
                 }
-                else if (locale.Tag != manifest.DefaultLocale)
-                    AddPolicyDiagnostic("RTR0010", manifest.Completeness, "Locale '" + locale.Tag + "' lacks direct translation for key '" + pair.Key + "'.", project, locale.Span, diagnostics);
+                else if (locale.Tag != manifest.DefaultLocale && !declaredKeys[locale.Tag].Contains(pair.Key))
+                {
+                    string message = "Locale '" + locale.Tag + "' does not translate '" + string.Join(".", pair.Value.Source.Path) + "' from base locale '" + manifest.DefaultLocale + "'.";
+                    if (groupedFiles.TryGetValue(ProjectDirectory(pair.Value.Source.Source.Path) + "\0" + locale.Tag, out var file))
+                        AddPolicyDiagnostic("RTR0010", manifest.Completeness, message, file, new(0, 0), diagnostics);
+                    else
+                        AddPolicyDiagnostic("RTR0010", manifest.Completeness, message, project, locale.Span, diagnostics);
+                }
             }
             contracts.Add(new(contracts.Count, pair.Key, Array.AsReadOnly(pair.Value.Source.Path), pair.Value.Linked.Message.Inputs,
                 requirements, names.Count != 0, names.ToArray(), profiles[pair.Value].Kind, profiles[pair.Value].Skeletons));

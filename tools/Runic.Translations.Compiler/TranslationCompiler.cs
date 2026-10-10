@@ -355,6 +355,44 @@ public static partial class TranslationCompiler
         diagnostics.Add(id, policy == TranslationPolicy.Warning ? TranslationDiagnosticSeverity.Warning : TranslationDiagnosticSeverity.Error, message, source, span);
     }
 
+    // The closest base-locale path for RTR0011: the same path ignoring case and separators, else
+    // a small edit distance. Returns null when nothing is close enough to be a likely typo.
+    private static string? SuggestKey(string path, IReadOnlyList<string> candidates)
+    {
+        static string Normalize(string value) => value.Replace('.', '_').Replace('-', '_').ToLowerInvariant();
+        string normalized = Normalize(path);
+        string? best = null;
+        int bestDistance = Math.Max(1, Math.Min(3, path.Length / 3)) + 1;
+        foreach (string candidate in candidates)
+        {
+            int distance = Normalize(candidate) == normalized ? 0 : EditDistance(normalized, Normalize(candidate), bestDistance);
+            if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+        }
+        return best;
+    }
+
+    // Levenshtein distance, or limit when it is limit or more.
+    private static int EditDistance(string left, string right, int limit)
+    {
+        if (Math.Abs(left.Length - right.Length) >= limit) return limit;
+        int[] previous = new int[right.Length + 1];
+        int[] current = new int[right.Length + 1];
+        for (int j = 0; j <= right.Length; j++) previous[j] = j;
+        for (int i = 1; i <= left.Length; i++)
+        {
+            current[0] = i;
+            int rowMinimum = i;
+            for (int j = 1; j <= right.Length; j++)
+            {
+                current[j] = Math.Min(Math.Min(current[j - 1], previous[j]) + 1, previous[j - 1] + (left[i - 1] == right[j - 1] ? 0 : 1));
+                rowMinimum = Math.Min(rowMinimum, current[j]);
+            }
+            if (rowMinimum >= limit) return limit;
+            (previous, current) = (current, previous);
+        }
+        return Math.Min(previous[right.Length], limit);
+    }
+
     private static JsonProperty? Required(JsonValue parent, string name, JsonKind kind, TranslationSource source, DiagnosticBag diagnostics)
     {
         JsonProperty? property = parent.Property(name);

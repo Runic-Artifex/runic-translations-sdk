@@ -15,6 +15,7 @@ internal static class BuildIntegrationTests
         runner.Add("build discovers mounted grouped RMF2 sources and membership changes", MountedRmf2MembershipIsIncremental);
         runner.Add("build emit properties select v5 groups and reject retired outputs", EmitFlagsAreExact);
         runner.Add("build rejects an output path outside the intermediate root", OutputContainmentIsEnforced);
+        runner.Add("build reports each translation diagnostic once, with its help link", DiagnosticsAppearOnce);
     }
 
     private static void ImportsExposeSentinels()
@@ -95,6 +96,31 @@ internal static class BuildIntegrationTests
     {
         using TemporaryDirectory temporary = CreateConsumer(true, "escaped-output/"); ProcessResult result = Build(temporary);
         Assert.True(result.ExitCode != 0, "Build unexpectedly accepted an output path outside IntermediateOutputPath."); Assert.Contains("RTR0020", result.Combined); Assert.False(Directory.Exists(temporary.Resolve("escaped-output")), "Rejected output path was created.");
+    }
+
+    private static void DiagnosticsAppearOnce()
+    {
+        using TemporaryDirectory temporary = CreateConsumer(true);
+        // With the source generator present, as in a package consumer, it owns the compilation diagnostics.
+        string generator = Path.Combine(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build"), "bin", BuildConfiguration, "net10.0");
+        string items = $"""<ItemGroup><Reference Include="Runic.Translations" HintPath="{XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations", "bin", BuildConfiguration, "net10.0", "Runic.Translations.dll"))}" /><Analyzer Include="{XmlPath(Path.Combine(generator, "Runic.Translations.Generator.dll"))}" /><Analyzer Include="{XmlPath(Path.Combine(generator, "Runic.Translations.Compiler.dll"))}" /></ItemGroup><Import Project="{XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets"))}" />""";
+        string project = File.ReadAllText(temporary.Resolve("Consumer.csproj"));
+        File.WriteAllText(temporary.Resolve("Consumer.csproj"), project.Replace("<Import Project=\"" + XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets")) + "\" />", items, StringComparison.Ordinal), new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "en", "Hello.mf2"), ".local $a = {$name}\n.input {$name :string}\n{{Hello {$a}}}\n", new UTF8Encoding(false));
+
+        ProcessResult failed = Build(temporary);
+        Assert.True(failed.ExitCode != 0, failed.Combined);
+        string[] errors = failed.Combined.Split('\n').Select(line => line.Trim()).Where(line => line.Contains(": error ", StringComparison.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
+        Assert.True(errors.Length == 1, "Expected one distinct translation error:\n" + failed.Combined);
+        Assert.Contains("error RTR0067:", errors[0]);
+        Assert.Contains("Hello.mf2(", errors[0]);
+        Assert.Contains("docs/guides/translations/diagnostics.md#rtr0067", errors[0]);
+        Assert.False(failed.Combined.Contains("RCLI9012", StringComparison.Ordinal) || failed.Combined.Contains("MSB3073", StringComparison.Ordinal), failed.Combined);
+
+        File.WriteAllText(temporary.Resolve("translations", "en", "Hello.mf2"), "Hello {$name}\n", new UTF8Encoding(false));
+        ProcessResult fixedBuild = Build(temporary, true);
+        Assert.Equal(0, fixedBuild.ExitCode, fixedBuild.Combined);
+        Assert.True(File.Exists(Path.Combine(FindGeneratedDirectory(temporary, "minimal.en.locale-v5.json"), "minimal.asset-manifest-v1.json")), "The fixed build did not generate.");
     }
 
     private static TemporaryDirectory CreateConsumer(bool generationEnabled, string? outputPath = null, string? extraProperties = null)

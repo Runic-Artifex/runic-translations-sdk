@@ -82,8 +82,9 @@ export async function verifyPackages(version = workspace.version) {
     const templateHome = join(directory, "template-home");
     run("dotnet", ["new", "install", `Runic.Translations.Templates@${version}`, "--nuget-source", nuget, "--force"], directory,
       { ...environment, DOTNET_CLI_HOME: templateHome });
+    // The namespace follows --name; --emit-esm exercises the packaged tool during the build.
     run("dotnet", ["new", "runic-translations-project", "--name", "GeneratedTranslations",
-      "--catalog", "app", "--namespace", "GeneratedTranslations", "--className", "AppText"], directory,
+      "--catalog", "app", "--class-name", "AppText", "--emit-esm"], directory,
       { ...environment, DOTNET_CLI_HOME: templateHome });
     const generatedProject = join(directory, "GeneratedTranslations", "GeneratedTranslations.csproj");
     assert.ok(existsSync(generatedProject), "Template did not create its project");
@@ -96,6 +97,17 @@ export async function verifyPackages(version = workspace.version) {
     run("dotnet", ["tool", "restore", "--configfile", join(directory, "NuGet.config")], join(directory, "GeneratedTranslations"), environment);
     run("dotnet", ["build", generatedProject, "--configuration", "Release", "--no-restore"], directory, environment);
     assertNoSourceReferences(join(directory, "GeneratedTranslations"));
+    const generatedRunic = JSON.parse(readFileSync(join(directory, "GeneratedTranslations", "translations", "runic.json"), "utf8"));
+    assert.equal(generatedRunic.code.namespace, "GeneratedTranslations", "Template namespace does not follow --name");
+    assert.ok(existsSync(join(directory, "GeneratedTranslations", "obj", "Release", "net10.0", "translations", "app.esm-v5", "web-module-manifest-v3.json")),
+      "Template --emit-esm did not emit ESM output");
+    // The camelCase options of earlier previews remain hidden aliases.
+    const legacyItem = join(directory, "legacy-item");
+    mkdirSync(legacyItem);
+    run("dotnet", ["new", "runic-translations", "--output", ".", "--defaultLocale", "de", "--className", "LegacyText", "--locales", "en"], legacyItem,
+      { ...environment, DOTNET_CLI_HOME: templateHome });
+    const legacyRunic = JSON.parse(readFileSync(join(legacyItem, "translations", "runic.json"), "utf8"));
+    assert.deepEqual([legacyRunic.baseLocale, legacyRunic.code.className, legacyRunic.locales], ["de", "LegacyText", ["de", "en"]]);
 
     // Exercise the documented typed API from an application's own library
     // reference. Runic dependencies must still come entirely from the feed.

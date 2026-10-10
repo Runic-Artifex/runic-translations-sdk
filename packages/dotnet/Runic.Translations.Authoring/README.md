@@ -52,7 +52,7 @@ This package is a public preview for .NET 10. Preview APIs and workspace operati
 - [Project creation example](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.Authoring.Tests/ProjectCreationTests.cs)
 - [Workspace authoring examples](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/dotnet/Runic.Translations.Authoring.Tests)
 - [RMF2 project guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md)
-- [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/apps/translations-editor)
+- [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/apps/translations-editor): built from source; standalone Editor downloads are not part of this preview.
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations-sdk/issues)
 
 Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for attribution.

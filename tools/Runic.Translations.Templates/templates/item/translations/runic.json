@@ -7,7 +7,12 @@
     "className": "__CLASS_NAME__"
   },
   "baseLocale": "__DEFAULT_LOCALE__",
+//#if (hasLocales)
+  "validation": {
+    "translationCompleteness": "warning"
+  },
+//#endif
   "locales": [
-    "__DEFAULT_LOCALE__"
+    "__DEFAULT_LOCALE__"__EXTRA_LOCALES__
   ]
 }

@@ -4,8 +4,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
-    <TranslationsGenerateOnBuild>true</TranslationsGenerateOnBuild>
+<!--#if (emitEsm) -->
+    <!-- The ESM package and web-module manifest for a web front end; C# comes from the source generator. -->
     <TranslationsEmitEsm>true</TranslationsEmitEsm>
+<!--#endif -->
   </PropertyGroup>
 
   <ItemGroup>

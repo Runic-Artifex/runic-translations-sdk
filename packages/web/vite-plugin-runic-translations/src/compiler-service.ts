@@ -9,6 +9,14 @@ export interface CompilerDiagnostic {
   readonly code: string;
   readonly severity: "error" | "warning" | "info";
   readonly message: string;
+  /** Source location of an RTR translation diagnostic; absent for RCLI diagnostics. */
+  readonly path?: string;
+  readonly line?: number;
+  readonly column?: number;
+  readonly endLine?: number;
+  readonly endColumn?: number;
+  /** Documentation of an RTR translation diagnostic. */
+  readonly helpUri?: string;
 }
 
 /** A compiler request that ran and failed, with the same text a one-shot invocation prints. */

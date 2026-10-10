@@ -35,7 +35,8 @@ internal sealed record ToolInvocation(
     ToolEmission Emission,
     TranslationProjectCreationRequest? ProjectCreation,
     string? ProjectPath = null,
-    bool DryRun = false);
+    bool DryRun = false,
+    bool OmitSourceDiagnostics = false);
 
 internal static class CommandLine
 {

@@ -58,7 +58,12 @@ internal static class ServeModeTests
         Assert.False(failed.GetProperty("ok").GetBoolean(), failed.ToString());
         Assert.Equal(1, failed.GetProperty("exitCode").GetInt32());
         Assert.Contains("error RTR", failed.GetProperty("message").GetString() ?? string.Empty);
-        Assert.True(failed.GetProperty("diagnostics").EnumerateArray().Any(item => item.GetProperty("code").GetString() == "RCLI9012"), failed.ToString());
+        JsonElement translation = failed.GetProperty("diagnostics").EnumerateArray().First(item => item.GetProperty("code").GetString()!.StartsWith("RTR", StringComparison.Ordinal) && (item.GetProperty("path").GetString() ?? string.Empty).EndsWith("en.rmf2", StringComparison.Ordinal));
+        Assert.Equal("error", translation.GetProperty("severity").GetString());
+        Assert.True((translation.GetProperty("path").GetString() ?? string.Empty).EndsWith("en.rmf2", StringComparison.Ordinal), translation.ToString());
+        Assert.Equal(1, translation.GetProperty("line").GetInt32());
+        Assert.Contains("docs/guides/translations/diagnostics.md#rtr", translation.GetProperty("helpUri").GetString() ?? string.Empty);
+        Assert.False(failed.GetProperty("diagnostics").EnumerateArray().Any(item => item.GetProperty("code").GetString() == "RCLI9012"), failed.ToString());
         Assert.False(Directory.Exists(temporary.Resolve("out")), "A failed compilation wrote output.");
 
         JsonElement malformed = server.Send("not json");

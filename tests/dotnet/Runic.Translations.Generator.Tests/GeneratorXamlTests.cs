@@ -107,6 +107,7 @@ internal static class GeneratorXamlTests
             </rt:Message></TextBlock.Text></TextBlock>
             <TextBlock><TextBlock.Text><rt:Message Key="badge"><rt:Message.Inputs><rt:MessageInput Name="r_757365722d6e616d65" Value="{Binding Name}"/></rt:Message.Inputs></rt:Message></TextBlock.Text></TextBlock>
             <TextBlock xmlns:t="clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf" Text="{t:Message application_title}"/>
+            <TextBlock xmlns:u="https://runic-artifex.eu/xaml/translations" Text="{u:Message application_title}"/>
             <rt:Message><rt:Message.Key><x:String>greeting</x:String></rt:Message.Key><rt:Message.Arg0><Binding Path="Name"/></rt:Message.Arg0></rt:Message>
             <rt:MessageExtension Key="greeting"><rt:Message.Arg0><Binding Path="Name"/></rt:Message.Arg0></rt:MessageExtension>
             """);

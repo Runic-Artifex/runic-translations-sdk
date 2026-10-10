@@ -75,7 +75,7 @@ internal static class CliIntegrationTests
         using TemporaryDirectory temporary = new();
         ProcessResult help = TestFixture.RunTool(temporary, "--help");
         Assert.Equal(0, help.ExitCode);
-        Assert.Contains("validate  Validate catalogs", help.StandardOutput);
+        AssertHelpEntry(help.StandardOutput, "validate", "Validate catalogs and report translation diagnostics.");
         Assert.False(help.StandardOutput.Contains("--documents", StringComparison.Ordinal), "Help still advertises removed document inputs.");
 
         ProcessResult namedHelp = TestFixture.RunTool(temporary, "help");
@@ -85,7 +85,10 @@ internal static class CliIntegrationTests
         ProcessResult commandHelp = TestFixture.RunTool(temporary, "help", "validate");
         Assert.Equal(0, commandHelp.ExitCode, commandHelp.Combined);
         Assert.Contains("runic-translations validate", commandHelp.StandardOutput);
-        Assert.Contains("--project", commandHelp.StandardOutput);
+        // --project is optional and described, in the same aligned help as every other command.
+        string? project = commandHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith("--project <directory>", StringComparison.Ordinal));
+        Assert.True(project is not null && project.Contains("Translations directory or its runic.json.", StringComparison.Ordinal) && !project.Contains("[required]", StringComparison.Ordinal), commandHelp.StandardOutput);
+        Assert.Contains("Defaults to ./runic.json", commandHelp.StandardOutput);
         // Emitters without a renderer fail with RTR0065, so help and usage list only working ones.
         foreach (string command in new[] { "generate", "verify" })
         {
@@ -119,14 +122,17 @@ internal static class CliIntegrationTests
         using TemporaryDirectory temporary = new();
         ProcessResult help = TestFixture.RunTool(temporary, "--help");
         Assert.Equal(0, help.ExitCode, help.Combined);
-        Assert.Contains("generate  Generate translation artifacts.", help.StandardOutput);
-        Assert.Contains("init  Create an RMF2 translation project and starter resources.", help.StandardOutput);
-        Assert.Contains("lsp  Run the RMF2 language server over standard input/output.", help.StandardOutput);
-        Assert.Contains("serve  Run a persistent compiler for development servers over standard input/output.", help.StandardOutput);
+        AssertHelpEntry(help.StandardOutput, "generate", "Generate translation artifacts.");
+        AssertHelpEntry(help.StandardOutput, "init", "Create an RMF2 translation project and starter resources.");
+        AssertHelpEntry(help.StandardOutput, "lsp", "Run the RMF2 language server over standard input/output.");
+        AssertHelpEntry(help.StandardOutput, "serve", "Run a persistent compiler for development servers");
+        // One aligned column: every command description starts at the same offset.
+        Assert.True(help.StandardOutput.Split('\n').SkipWhile(line => line != "Commands:").Skip(1).TakeWhile(line => line.Length != 0).Where(line => !line.StartsWith("   ", StringComparison.Ordinal))
+            .Select(line => line.Length - line[line.IndexOf("  ", 2, StringComparison.Ordinal)..].TrimStart().Length).Distinct().Count() == 1, "Command descriptions are not aligned:\n" + help.StandardOutput);
 
         ProcessResult initHelp = TestFixture.RunTool(temporary, "help", "init");
         Assert.Equal(0, initHelp.ExitCode, initHelp.Combined);
-        foreach (string option in new[] { "--directory <directory>", "--catalog <catalog>", "--default-locale <default-locale>", "--namespace <code-namespace>", "--class <class-name>" })
+        foreach (string option in new[] { "--directory <directory>", "--catalog <catalog>", "--default-locale <locale>", "--namespace <namespace>", "--class <name>" })
         {
             string? line = initHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith(option, StringComparison.Ordinal));
             Assert.True(line?.Contains("[required]", StringComparison.Ordinal) == true, $"init help does not mark {option} as required.");
@@ -151,7 +157,47 @@ internal static class CliIntegrationTests
         Assert.Equal("validate", root.GetProperty("command").GetString());
         Assert.True(root.GetProperty("success").GetBoolean(), validate.StandardOutput);
         Assert.Equal("runic.translations.tool/1", root.GetProperty("payloadType").GetString());
-        Assert.Contains("1 source document(s)", root.GetProperty("payload").GetProperty("Output").GetString() ?? string.Empty);
+        Assert.Contains("1 source document(s)", root.GetProperty("payload").GetProperty("output").GetString() ?? string.Empty);
+        Assert.Equal(0, root.GetProperty("payload").GetProperty("diagnostics").GetArrayLength());
+
+        // Without --project the conventional ./translations directory is used.
+        ProcessResult defaulted = TestFixture.RunTool(temporary, "validate");
+        Assert.Equal(0, defaulted.ExitCode, defaulted.Combined);
+        Assert.Contains("1 source document(s)", defaulted.StandardOutput);
+
+        // Translation diagnostics are native RTR entries: in fault.data of a failure, never RCLI9012 strings.
+        File.WriteAllText(temporary.Resolve("translations", "en", "application_title.mf2"), ".local $a = {$n}\n.input {$n :number}\n{{{$a}}}\n", new UTF8Encoding(false));
+        ProcessResult failed = TestFixture.RunTool(temporary, "validate", "--runic-output", "json");
+        Assert.Equal(1, failed.ExitCode, failed.Combined);
+        Assert.False(failed.StandardOutput.Contains("RCLI9012", StringComparison.Ordinal), failed.StandardOutput);
+        using JsonDocument failure = JsonDocument.Parse(failed.StandardOutput);
+        JsonElement data = failure.RootElement.GetProperty("fault").GetProperty("data");
+        Assert.Equal("runic.translations.tool/1", data.GetProperty("type").GetString());
+        JsonElement diagnostic = data.GetProperty("payload").GetProperty("diagnostics").EnumerateArray().Single();
+        Assert.Equal("RTR0067", diagnostic.GetProperty("code").GetString());
+        Assert.Equal("error", diagnostic.GetProperty("severity").GetString());
+        Assert.Equal("translations/en/application_title.mf2", (diagnostic.GetProperty("path").GetString() ?? string.Empty).Replace('\\', '/'));
+        Assert.Equal(2, diagnostic.GetProperty("line").GetInt32());
+        Assert.Contains("diagnostics.md#rtr0067", diagnostic.GetProperty("helpUri").GetString() ?? string.Empty);
+
+        // Human output prints each diagnostic once, in the canonical file(line,col): form, without a prefix.
+        ProcessResult human = TestFixture.RunTool(temporary, "validate");
+        Assert.Equal(1, human.ExitCode, human.Combined);
+        string[] lines = human.StandardError.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.True(lines.Length == 1 && lines[0].Replace('\\', '/').StartsWith("translations/en/application_title.mf2(2,", StringComparison.Ordinal) && lines[0].Contains("): error RTR0067: ", StringComparison.Ordinal), human.Combined);
+        Assert.Equal(string.Empty, human.StandardOutput.Trim());
+
+        // Outside a translations project, the missing default is a usage error.
+        Directory.CreateDirectory(temporary.Resolve("empty"));
+        ProcessResult missing = Processes.DotNet(temporary.Resolve("empty"), RepositoryPaths.ToolAssembly, "validate");
+        Assert.Equal(2, missing.ExitCode, missing.Combined);
+        Assert.Contains("no runic.json in the current directory or in ./translations; pass --project <directory>.", missing.StandardError);
+    }
+
+    private static void AssertHelpEntry(string help, string command, string description)
+    {
+        string? line = help.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith(command + " ", StringComparison.Ordinal));
+        Assert.True(line is not null && line.Contains("  " + description, StringComparison.Ordinal), $"Help has no entry '{command}  {description}':\n{help}");
     }
 
     private static void MissingRequiredOptionIsUsageFailure()

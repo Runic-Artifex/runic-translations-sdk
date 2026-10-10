@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using Runic.CommandLine;
 using Runic.Translations.Compiler;
+using Runic.Translations.Tooling;
 
 namespace Runic.Translations.Tool;
 
@@ -21,7 +22,8 @@ namespace Runic.Translations.Tool;
 /// with methods <c>generate</c>, <c>validate</c> and <c>shutdown</c>. Requests run one at a time and each
 /// receives exactly one response line with the same <c>id</c>:
 /// <c>{"id":1,"ok":true,"exitCode":0,"output":"...","message":"","diagnostics":[],"elapsedMs":12}</c>.
-/// <c>exitCode</c> and <c>diagnostics</c> match the one-shot command. The server exits when standard input
+/// <c>exitCode</c> and <c>diagnostics</c> match the one-shot command; a translation diagnostic (<c>RTR</c> code) also carries
+/// <c>path</c>, <c>line</c>, <c>column</c>, <c>endLine</c>, <c>endColumn</c> and <c>helpUri</c>. The server exits when standard input
 /// closes or after answering <c>shutdown</c>. A request line over 1 MiB is dropped while it is read and answered with
 /// a null <c>id</c>.</para>
 /// <para>Trust: requests come only from the parent process through standard input, and may name any project and
@@ -195,6 +197,20 @@ internal sealed class CompileServer
             writer.WriteString("message", diagnostic.Message);
             writer.WriteEndObject();
         }
+        foreach (TranslationsToolDiagnostic diagnostic in result.TranslationDiagnostics)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("code", diagnostic.Code);
+            writer.WriteString("severity", diagnostic.Severity);
+            writer.WriteString("message", diagnostic.Message);
+            writer.WriteString("path", diagnostic.Path);
+            writer.WriteNumber("line", diagnostic.Line);
+            writer.WriteNumber("column", diagnostic.Column);
+            writer.WriteNumber("endLine", diagnostic.EndLine);
+            writer.WriteNumber("endColumn", diagnostic.EndColumn);
+            writer.WriteString("helpUri", diagnostic.HelpUri);
+            writer.WriteEndObject();
+        }
         writer.WriteEndArray();
         writer.WriteNumber("elapsedMs", elapsedMilliseconds);
     });
@@ -204,7 +220,7 @@ internal sealed class CompileServer
     {
         if (result.ExitCode == 0) return string.Empty;
         if (result.HumanOutput is { Length: > 0 } human) return human.TrimEnd();
-        var builder = new StringBuilder();
+        var builder = new StringBuilder(ToolOperationResult.FormatHuman(result.TranslationDiagnostics));
         foreach (CommandDiagnostic diagnostic in result.Diagnostics)
             builder.Append(diagnostic.Message).Append('\n');
         return builder.ToString().TrimEnd();

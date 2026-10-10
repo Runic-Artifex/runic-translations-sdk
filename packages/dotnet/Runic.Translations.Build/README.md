@@ -108,8 +108,10 @@ by `mc:Ignorable` (such as `d:`) are skipped, as is everything inside
 `mc:AlternateContent`, because the branch WPF compiles depends on the namespaces
 it understands. The Runic and WPF namespaces stay checked even when listed.
 Runic declarations are recognized through the
+`https://runic-artifex.eu/xaml/translations` URI that Runic.Translations.Wpf
+defines with `XmlnsDefinition`, or through the
 `clr-namespace:Runic.Translations.Wpf` mapping, with or without
-`;assembly=Runic.Translations.Wpf`; the package defines no `XmlnsDefinition` URI.
+`;assembly=Runic.Translations.Wpf`.
 
 Set `TranslationsValidateXaml=false` to disable the optional scan. It requires
 neither artifact emission nor the CLI tool. The translation sources and XAML
@@ -147,6 +149,7 @@ Choose this package for generated C# and whenever MSBuild owns input classificat
 - Incremental generation tracks inputs, settings, the tool manifest, declared outputs, and an owned-output inventory.
 - Clean and changed-output reconciliation remove only validated files owned by the integration; unrelated files are preserved.
 - Generated files are exposed as `@(TranslationsGeneratedFile)` and default beneath `$(IntermediateOutputPath)translations`.
+- Each translation diagnostic appears once, with its help link. In a C# project the source generator reports them during compilation, so the tool run that emits JSON or ESM omits them (it is started with `RUNIC_TRANSLATIONS_OMIT_SOURCE_DIAGNOSTICS=true`), writes no artifacts when they include errors, and leaves the failure to the compilation instead of adding `MSB3073`. In other projects the tool's own `file(line,col): error RTR....` lines are the diagnostics. Any other tool failure is reported as one error naming its exit code.
 
 ## Compatibility and status
 

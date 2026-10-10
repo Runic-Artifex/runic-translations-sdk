@@ -54,15 +54,22 @@ message to the base locale.
 
 ## RTR0010
 
-Locale lacks a translation for a base-locale message. A locale does not
-translate a message of the base locale. Translate it, or relax
-`validation.translationCompleteness` to `warning` or `allow` to fall back.
+Locale lacks a translation for a base-locale message. For example: `Locale 'de'
+does not translate 'commands.remove' from base locale 'en'.` The diagnostic
+points at the locale's file beside the base-locale file of the message, or at
+the locale in `runic.json` when the locale has no such file. A translation that
+exists but fails to compile reports its own error instead. Translate the
+message, or relax `validation.translationCompleteness` to `warning` or `allow`
+to fall back.
 
 ## RTR0011
 
-Locale defines a message the base locale does not have. Translations may only
-use keys of the base locale. Remove or rename the message, add it to the base
-locale, or set `validation.extraLocaleKeys`.
+Locale defines a message the base locale does not have. For example: `Locale
+'de' defines 'commands.remov', which base locale 'en' does not define. Did you
+mean 'commands.remove'?` Translations may only use keys of the base locale; the
+closest base-locale key is suggested when one is similar. Remove or rename the
+message, add it to the base locale, or set `validation.extraLocaleKeys`
+(`allow` turns the check off).
 
 ## RTR0012
 
