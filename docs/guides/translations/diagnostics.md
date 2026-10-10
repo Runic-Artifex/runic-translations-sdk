@@ -323,11 +323,11 @@ element, or a leaf that starts or ends with whitespace) is
 
 ## RTR0080
 
-Translation XAML declaration is invalid. The optional XAML validator found malformed XML, an invalid Message declaration (missing/duplicate Key or properties), or a catalog assertion that does not name the local TranslationProject. Fix the declaration or remove the assertion for an external catalog. Runtime-valued keys and sources are allowed; they are not evaluated during the build.
+Translation XAML declaration is invalid. The optional XAML validator found malformed XML, an invalid Message declaration (missing/duplicate Key or properties), or a catalog assertion that does not name the local TranslationProject. Fix the declaration. External catalogs are not checked: remove the assertion, or set `TranslationsValidateXaml="false"` on the file's `Page` or `TranslationXaml` item to skip the file. Runtime-valued keys and sources are allowed; they are not evaluated during the build.
 
 ## RTR0081
 
-Translation XAML message key is unknown. In a file whose catalog is explicitly declared, a static key does not exist on the generated readable surface. Use the flattened readable name (for example, `application_title`), including its exact case. Encoded-only reserved names are not available to Message.
+Translation XAML message key is unknown. In a file whose catalog is explicitly declared, a static key does not exist on the generated readable surface. Use the flattened readable name (for example, `application_title`), including its exact case. Encoded-only reserved names are not available to Message. A file without its own source declaration is checked against `TranslationsXamlCatalog`; if its source is inherited at run time from another file, an `App.xaml` style or code-behind, skip it with `<Page Update="Views/OrderSummary.xaml" TranslationsValidateXaml="false" />`. Design-time (`mc:Ignorable`) and `mc:AlternateContent` content is not checked.
 
 ## RTR0082
 

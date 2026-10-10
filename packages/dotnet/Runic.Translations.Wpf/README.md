@@ -244,9 +244,12 @@ failing every view. At run time an element without any source traces a binding e
 
 With a local generating catalog, set
 `TranslationsXamlCatalog` to its catalog ID to check static XAML keys, plain/rich
-usage, input counts and readable parameter names during the build. Explicit or
-inherited source declarations require a per-file `TranslationXaml` catalog
-assertion; runtime-valued keys and external catalogs keep runtime checks. See
+usage, input counts and readable parameter names during the build. Files with
+explicit source declarations require a per-file `TranslationXaml` catalog
+assertion. A file whose source is inherited from another file or set in code is
+checked against the default; skip it with
+`<Page Update="Views/OrderSummary.xaml" TranslationsValidateXaml="false" />`.
+Runtime-valued keys and external catalogs keep runtime checks. See
 [build-time XAML checks](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Build/README.md#check-wpf-xaml-at-build-time).
 
 ## Documents

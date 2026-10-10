@@ -58,10 +58,23 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             .Select(static (references, _) => SelectRuntimeAbi(references))
             .WithTrackingName("TranslationRuntimeAbi");
 
+        // The link and its diagnostics are computed once per change to the translation sources,
+        // project file or runtime ABI. Source rendering and XAML validation are separate outputs,
+        // so a XAML edit revalidates only that file and never relinks or re-renders sources.
+        IncrementalValueProvider<LinkResult> link = units.Collect().Combine(projects).WithTrackingName("TranslationCompilation").Combine(runtimeAbi)
+            .Select(static (pair, cancellationToken) => Link(pair.Left.Left, pair.Left.Right, pair.Right, cancellationToken))
+            .WithTrackingName("TranslationLink");
+        context.RegisterSourceOutput(link, static (productionContext, result) => Emit(productionContext, result));
+
+        IncrementalValueProvider<XamlCatalog?> xamlCatalog = link
+            .Select(static (result, _) => result.XamlCatalog)
+            .WithTrackingName("TranslationXamlCatalog");
         context.RegisterSourceOutput(
-            units.Collect().Combine(projects).WithTrackingName("TranslationCompilation").Combine(runtimeAbi)
-                .Combine(inputs.Where(static input => input.Kind == InputKind.Xaml).Collect()),
-            static (productionContext, pair) => Generate(productionContext, pair.Left.Left.Left, pair.Left.Left.Right, pair.Left.Right, pair.Right));
+            inputs.Where(static input => input.Kind == InputKind.Xaml).Combine(xamlCatalog).WithTrackingName("TranslationXamlValidation"),
+            static (productionContext, pair) =>
+            {
+                if (pair.Right is { } catalog) XamlMessageValidator.Validate(productionContext, pair.Left, catalog);
+            });
     }
 
     // Reads the ABI markers of a referenced Runic.Translations assembly. Other references are
@@ -194,9 +207,12 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         return normalized.Length == 0 ? "." : normalized;
     }
 
-    private static void Generate(SourceProductionContext context, ImmutableArray<SourceUnit> units,
-        ImmutableArray<GeneratorInput> projectInputs, RuntimeAbiState runtimeAbi, ImmutableArray<GeneratorInput> xaml)
+    // Links the catalog and collects that step's diagnostics. It runs in a cached Select step;
+    // the outputs only report, render or validate.
+    private static LinkResult Link(ImmutableArray<SourceUnit> units, ImmutableArray<GeneratorInput> projectInputs,
+        RuntimeAbiState runtimeAbi, CancellationToken cancellationToken)
     {
+        var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         var unreadable = new List<GeneratorInput>();
         var projects = new List<GeneratorInput>();
         var compiled = new List<Rmf2SourceUnitV5>(units.Length);
@@ -219,49 +235,49 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             return comparison != 0 ? comparison : left.Kind.CompareTo(right.Kind);
         });
         foreach (GeneratorInput input in unreadable)
-            context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.UnreadableSource, Location.Create(input.Path, default, default), "Source text could not be read."));
+            diagnostics.Add(Diagnostic.Create(TranslationsDiagnostics.UnreadableSource, Location.Create(input.Path, default, default), "Source text could not be read."));
 
-        if (projects.Count == 0 && compiled.Count == 0) return;
+        if (projects.Count == 0 && compiled.Count == 0) return new LinkResult(diagnostics.ToImmutable(), null, false);
         if (projects.Count != 1)
         {
-            context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.DuplicateInputs, Location.None,
+            diagnostics.Add(Diagnostic.Create(TranslationsDiagnostics.DuplicateInputs, Location.None,
                 "Exactly one Runic translation project must be supplied."));
-            return;
+            return new LinkResult(diagnostics.ToImmutable(), null, false);
         }
         if (!runtimeAbi.IsCompatible)
         {
-            context.ReportDiagnostic(CreateAbiDiagnostic(runtimeAbi));
-            return;
+            diagnostics.Add(CreateAbiDiagnostic(runtimeAbi));
+            return new LinkResult(diagnostics.ToImmutable(), null, false);
         }
 
         GeneratorInput selected = projects[0];
         sourceTexts[selected.Path] = SourceText.From(selected.Text!, StrictUtf8);
         var project = new TranslationSource(selected.Path, StrictUtf8.GetBytes(selected.Text!));
-        GenerateRmf2V5(context, project, compiled, sourceTexts, runtimeAbi.SupportsReadableSurface, xaml);
-    }
-
-    private static void GenerateRmf2V5(SourceProductionContext context, TranslationSource project,
-        IReadOnlyList<Rmf2SourceUnitV5> units, Dictionary<string, SourceText> sourceTexts, bool readableSurface, ImmutableArray<GeneratorInput> xaml)
-    {
-        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, units, CompilerOptions, context.CancellationToken);
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, compiled, CompilerOptions, cancellationToken);
         bool hasErrors = false;
         for (int index = 0; index < compilation.Diagnostics.Count; index++)
         {
             TranslationDiagnostic diagnostic = compilation.Diagnostics[index];
-            context.ReportDiagnostic(CreateDiagnostic(diagnostic, sourceTexts));
+            diagnostics.Add(CreateDiagnostic(diagnostic, sourceTexts));
             if (diagnostic.Severity == TranslationDiagnosticSeverity.Error) hasErrors = true;
         }
-        if (hasErrors || compilation.Project is null) return;
+        if (hasErrors || compilation.Project is null) return new LinkResult(diagnostics.ToImmutable(), null, false);
 
         Rmf2ProjectV5 linked = compilation.Project;
         if (!Rmf2ProjectV5EmissionEligibility.CanEmit(linked))
         {
-            context.ReportDiagnostic(Diagnostic.Create(TranslationsDiagnostics.Get(Rmf2ProjectV5EmissionEligibility.DiagnosticId), Location.None,
+            diagnostics.Add(Diagnostic.Create(TranslationsDiagnostics.Get(Rmf2ProjectV5EmissionEligibility.DiagnosticId), Location.None,
                 Rmf2ProjectV5EmissionEligibility.Message));
-            return;
+            return new LinkResult(diagnostics.ToImmutable(), null, false);
         }
-        foreach (GeneratorInput input in xaml)
-            XamlMessageValidator.Validate(context, input, linked, readableSurface);
+        return new LinkResult(diagnostics.ToImmutable(), linked, runtimeAbi.SupportsReadableSurface);
+    }
+
+    private static void Emit(SourceProductionContext context, LinkResult result)
+    {
+        foreach (Diagnostic diagnostic in result.Diagnostics) context.ReportDiagnostic(diagnostic);
+        if (result.Project is not { } linked) return;
+        bool readableSurface = result.ReadableSurface;
 
         var outputs = new List<TranslationGeneratedOutput>(5)
         {
@@ -374,6 +390,30 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 return hash;
             }
         }
+    }
+
+    // The linked catalog and the diagnostics of linking it. Reference equality: every rerun of the
+    // link (a translation source, project or runtime ABI change) reaches both outputs.
+    internal sealed class LinkResult
+    {
+        internal LinkResult(ImmutableArray<Diagnostic> diagnostics, Rmf2ProjectV5? project, bool readableSurface)
+        {
+            Diagnostics = diagnostics;
+            Project = project;
+            ReadableSurface = readableSurface;
+            // XAML keys name readable members. Without the readable surface (an old runtime or a
+            // reserved class name, both reported once already) there is nothing to check XAML against.
+            XamlCatalog = project is not null && readableSurface && Rmf2ReadableNamesV1.SupportsClassName(project.ClassName)
+                ? new XamlCatalog(project)
+                : null;
+        }
+
+        internal ImmutableArray<Diagnostic> Diagnostics { get; }
+
+        /// <summary>The linked, emittable project; null when linking failed or was not possible.</summary>
+        internal Rmf2ProjectV5? Project { get; }
+        internal bool ReadableSurface { get; }
+        internal XamlCatalog? XamlCatalog { get; }
     }
 
     // One parsed translation source. Equality is the input's, so an unchanged file keeps its cached

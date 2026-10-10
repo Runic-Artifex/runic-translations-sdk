@@ -13,31 +13,43 @@ namespace Runic.Translations.Generator;
 // Presentation-specific parsing only. Message names, parameter order and content kind
 // come from the same compiler contracts that emit the readable surface; no reflection
 // or separately maintained message schema is involved.
+// The readable messages of the linked local catalog, built once per link and shared by every XAML file.
+internal sealed class XamlCatalog
+{
+    internal XamlCatalog(Rmf2ProjectV5 project)
+    {
+        Id = project.Id;
+        foreach (Rmf2MessageContractV5 contract in project.CanonicalMessages)
+            if (Rmf2ReadableNamesV1.TryCreate(project.ClassName, contract, out Rmf2ReadableMessageV1? names, out _))
+                Messages.Add(names!.Member, names);
+    }
+
+    internal string Id { get; }
+    internal Dictionary<string, Rmf2ReadableMessageV1> Messages { get; } = new(StringComparer.Ordinal);
+}
+
 internal sealed class XamlMessageValidator
 {
     private const string NullValue = "{__runic:null}";
+    private const string XamlNamespace = "http://schemas.microsoft.com/winfx/2006/xaml";
+    private const string PresentationNamespace = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+    private const string MarkupCompatibilityNamespace = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private readonly SourceProductionContext _context;
     private readonly TranslationsGenerator.GeneratorInput _input;
     private readonly SourceText _text;
-    private readonly Dictionary<string, Rmf2ReadableMessageV1> _messages = new(StringComparer.Ordinal);
-    private readonly Rmf2ProjectV5 _project;
+    private readonly XamlCatalog _catalog;
     private bool _defaultCatalogKnown;
 
-    private XamlMessageValidator(SourceProductionContext context, TranslationsGenerator.GeneratorInput input,
-        Rmf2ProjectV5 project, bool readableSurface)
+    private XamlMessageValidator(SourceProductionContext context, TranslationsGenerator.GeneratorInput input, XamlCatalog catalog)
     {
         _context = context;
         _input = input;
         _text = SourceText.From(input.Text ?? string.Empty);
-        _project = project;
-        if (readableSurface && Rmf2ReadableNamesV1.SupportsClassName(project.ClassName))
-            foreach (Rmf2MessageContractV5 contract in project.CanonicalMessages)
-                if (Rmf2ReadableNamesV1.TryCreate(project.ClassName, contract, out Rmf2ReadableMessageV1? names, out _))
-                    _messages.Add(names!.Member, names);
+        _catalog = catalog;
     }
 
-    internal static void Validate(SourceProductionContext context, TranslationsGenerator.GeneratorInput input,
-        Rmf2ProjectV5 project, bool readableSurface) => new XamlMessageValidator(context, input, project, readableSurface).Run();
+    internal static void Validate(SourceProductionContext context, TranslationsGenerator.GeneratorInput input, XamlCatalog catalog) =>
+        new XamlMessageValidator(context, input, catalog).Run();
 
     private void Run()
     {
@@ -59,14 +71,19 @@ internal sealed class XamlMessageValidator
             return;
         }
         if (document.Root is null) return;
+        // Design-time content (mc:Ignorable namespaces such as d:) and mc:AlternateContent are
+        // never checked: WPF drops the former, and which AlternateContent branch it compiles
+        // depends on the namespaces it understands, so neither branch is known statically.
+        var elements = new List<XElement>();
+        CollectCompiledElements(document.Root, elements);
         // A source in a resource/style/template may flow to another element. Without
         // a per-file catalog assertion, stay conservative for the entire file.
-        _defaultCatalogKnown = !document.Descendants().Any(HasSourceOverride);
-        foreach (XElement element in document.Descendants())
+        _defaultCatalogKnown = !elements.Any(HasSourceOverride);
+        foreach (XElement element in elements)
         {
             _context.CancellationToken.ThrowIfCancellationRequested();
             if (IsRunic(element.Name.NamespaceName) && IsMessage(element.Name.LocalName)) ValidateObject(element);
-            foreach (XAttribute attribute in element.Attributes().Where(static attribute => !attribute.IsNamespaceDeclaration))
+            foreach (XAttribute attribute in CompiledAttributes(element))
             {
                 if (IsRunic(attribute.Name.NamespaceName) && attribute.Name.LocalName == "TranslationProperties.RichMessage")
                     Check(element, attribute, StaticValue(attribute.Value), rich: true, null, null);
@@ -78,9 +95,37 @@ internal sealed class XamlMessageValidator
         }
     }
 
+    private static void CollectCompiledElements(XElement element, List<XElement> elements)
+    {
+        if (IsIgnored(element)) return;
+        elements.Add(element);
+        foreach (XElement child in element.Elements()) CollectCompiledElements(child, elements);
+    }
+
+    private static IEnumerable<XAttribute> CompiledAttributes(XElement element) =>
+        element.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration && !IsIgnorable(element, attribute.Name.NamespaceName));
+
+    private static bool IsIgnored(XElement element) =>
+        element.Name.NamespaceName == MarkupCompatibilityNamespace || IsIgnorable(element, element.Name.NamespaceName);
+
+    // A namespace listed by mc:Ignorable on this element or an ancestor, resolved where it is declared.
+    // Namespaces that WPF understands (its own and Runic's) are compiled even when listed.
+    private static bool IsIgnorable(XElement scope, string ns)
+    {
+        if (ns.Length == 0 || ns is XamlNamespace or PresentationNamespace || IsRunic(ns)) return false;
+        if (ns == MarkupCompatibilityNamespace) return true;
+        for (XElement? element = scope; element is not null; element = element.Parent)
+        {
+            if (element.Attribute(XName.Get("Ignorable", MarkupCompatibilityNamespace)) is not { } ignorable) continue;
+            foreach (string prefix in ignorable.Value.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+                if (element.GetNamespaceOfPrefix(prefix)?.NamespaceName == ns) return true;
+        }
+        return false;
+    }
+
     private static bool HasSourceOverride(XElement element) =>
         (IsRunic(element.Name.NamespaceName) && element.Name.LocalName is "TranslationProperties.Source" or "Message.Source" or "MessageExtension.Source") ||
-        element.Attributes().Any(attribute =>
+        CompiledAttributes(element).Any(attribute =>
             (IsRunic(attribute.Name.NamespaceName) && attribute.Name.LocalName == "TranslationProperties.Source") ||
             (IsRunic(element.Name.NamespaceName) && IsMessage(element.Name.LocalName) && attribute.Name.LocalName == "Source") ||
             (attribute.Name.LocalName == "Property" && IsSourceProperty(element, attribute.Value)) ||
@@ -148,7 +193,7 @@ internal sealed class XamlMessageValidator
         var names = new List<string>();
         bool unresolved = false;
         bool invalid = false;
-        foreach (XElement child in element.Elements())
+        foreach (XElement child in element.Elements().Where(static child => !IsIgnored(child)))
         {
             int dot = child.Name.LocalName.IndexOf('.');
             if (IsRunic(child.Name.NamespaceName) && dot > 0 && IsMessage(child.Name.LocalName.Substring(0, dot)))
@@ -252,14 +297,18 @@ internal sealed class XamlMessageValidator
         string? catalog = !string.IsNullOrWhiteSpace(_input.Catalog) ? _input.Catalog :
             _defaultCatalogKnown && !explicitSource ? _input.DefaultCatalog : null;
         if (string.IsNullOrWhiteSpace(catalog)) return;
-        if (catalog != _project.Id)
+        if (catalog != _catalog.Id)
         {
-            Report(TranslationsDiagnostics.XamlDeclaration, location, "XAML catalog '" + catalog + "' is not the local TranslationProject catalog '" + _project.Id + "'. Remove the assertion for an external catalog.");
+            Report(TranslationsDiagnostics.XamlDeclaration, location, "XAML catalog '" + catalog + "' is not the local TranslationProject catalog '" + _catalog.Id +
+                "'. External catalogs are not checked; set TranslationsValidateXaml=\"false\" on the file's Page or TranslationXaml item to skip it.");
             return;
         }
-        if (!_messages.TryGetValue(key, out Rmf2ReadableMessageV1? message))
+        if (!_catalog.Messages.TryGetValue(key, out Rmf2ReadableMessageV1? message))
         {
-            Report(TranslationsDiagnostics.XamlKey, location, "'" + key + "' is not a readable message of catalog '" + catalog + "'. Use its flattened readable name.");
+            Report(TranslationsDiagnostics.XamlKey, location, "'" + key + "' is not a readable message of catalog '" + catalog + "'. Use its flattened readable name." +
+                (string.IsNullOrWhiteSpace(_input.Catalog)
+                    ? " The file was checked against TranslationsXamlCatalog; if its source comes from another file or code, set TranslationsValidateXaml=\"false\" on its Page item."
+                    : string.Empty));
             return;
         }
         // RichMessage's WPF inline adapter does not accept document content.

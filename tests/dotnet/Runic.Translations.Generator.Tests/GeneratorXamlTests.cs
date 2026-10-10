@@ -31,6 +31,44 @@ internal static class GeneratorXamlTests
         runner.Add("XAML preserves dynamic keys and external/inherited sources without catalog assumptions", UnresolvedDeclarations);
         runner.Add("XAML validates only the Runic namespace and explicitly marked files", NamespaceAndOptIn);
         runner.Add("XAML reports malformed XML and declarations without crashing or resolving entities", InvalidDeclarations);
+        runner.Add("XAML skips mc:Ignorable design-time content and mc:AlternateContent", DesignTimeContent);
+        runner.Add("XAML is not checked without the readable surface; only RTR0068 is reported", WithoutReadableSurface);
+    }
+
+    private static void DesignTimeContent()
+    {
+        const string Compatibility = """xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" """;
+        Assert.Equal(0, Run("<StackPanel " + Compatibility + """
+            d:Tag="{rt:Message typo}" d:DataContext="{d:DesignInstance other:Model}">
+              <TextBlock d:Text="{rt:Message typo}" Text="{rt:Message application_title}"/>
+              <d:Designer><TextBlock Text="{rt:Message typo}"/><rt:Message Key="typo"/></d:Designer>
+              <rt:Message Key="greeting" Arg0="{Binding Name}"><d:Note>design</d:Note></rt:Message>
+              <mc:AlternateContent>
+                <mc:Choice Requires="d"><TextBlock Text="{rt:Message typo}"/></mc:Choice>
+                <mc:Fallback><TextBlock Text="{rt:Message typo}"/></mc:Fallback>
+              </mc:AlternateContent>
+            </StackPanel>
+            """, catalog: null, defaultCatalog: "app").Length, "design-time content");
+        Assert.Equal("RTR0081", Run("<StackPanel " + Compatibility + """
+            d:Tag="{rt:Message outside, Source={StaticResource External}}"><TextBlock Text="{rt:Message typo}"/></StackPanel>
+            """, catalog: null, defaultCatalog: "app").Single().Id, "a design-time source does not disable default-catalog checks");
+        Assert.Equal("RTR0081", Run("""
+            <TextBlock xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="rt" Text="{rt:Message typo}"/>
+            """).Single().Id, "the Runic namespace is understood and stays checked");
+        Assert.Equal("RTR0081", Run("""<TextBlock xmlns:o="urn:other" o:Tag="{rt:Message typo}"/>""").Single().Id, "non-ignorable attached namespaces stay checked");
+    }
+
+    private static void WithoutReadableSurface()
+    {
+        GeneratorRun run = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3, new TestInput("C:/repo/translations/runic.json", "Project", Project),
+            new TestInput("C:/repo/translations/en.rmf2", "Rmf2", English),
+            new TestInput("C:/repo/Views/Main.xaml", "Xaml", """
+                <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:rt="clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf">
+                  <TextBlock Text="{rt:Message application_title}"/><TextBlock Text="{rt:Message greeting, Arg0={Binding Name}}"/>
+                </Window>
+                """, "app"));
+        Diagnostic diagnostic = run.SingleResult.Diagnostics.Single();
+        Assert.Equal("RTR0068", diagnostic.Id, diagnostic.ToString());
     }
 
     private static Diagnostic[] Run(string content, string? catalog = "app", string? defaultCatalog = null, bool raw = false)
