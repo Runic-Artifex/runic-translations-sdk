@@ -1,0 +1,11 @@
+commands {
+  greet = Grüßt eine Person
+}
+arguments {
+  name = Name der Person
+}
+app {
+  greeting =
+    .input {$name :string}
+    {{Hallo {$name}}}
+}

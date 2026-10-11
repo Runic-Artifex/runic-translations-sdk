@@ -7,7 +7,7 @@ namespace Runic.Translations.Compiler.Generation;
 // Typed generated-code backend over the selected RMF2 project carrier.
 internal static class Rmf2CSharpOutputRendererV5
 {
-    internal static TranslationGeneratedOutput RenderKeys(Rmf2ProjectV5 project)
+    internal static TranslationGeneratedOutput RenderKeys(Rmf2ProjectV5 project, bool readableSurface = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -17,6 +17,7 @@ internal static class Rmf2CSharpOutputRendererV5
         foreach (Rmf2MessageContractV5 message in Canonical(project))
         {
             writer.Line("/// <summary>Key for <c>" + GenerationSupport.XmlDocumentation(string.Join(".", message.Path)) + "</c>.</summary>");
+            if (readableSurface && HasReadable(project, message)) writer.Line(HiddenAttribute);
             writer.Line("public static global::Runic.Translations.TranslationKey " + Member(message) + " { get; } = new global::Runic.Translations.TranslationKey(" +
                 GenerationSupport.CSharpString(project.Id) + ", " + message.Id + ", " + GenerationSupport.CSharpString(message.Key) + ");");
         }
@@ -24,7 +25,7 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpKeys, project.ClassName + ".Keys.g.cs", writer);
     }
 
-    internal static TranslationGeneratedOutput RenderAccessors(Rmf2ProjectV5 project)
+    internal static TranslationGeneratedOutput RenderAccessors(Rmf2ProjectV5 project, bool readableSurface = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -37,7 +38,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("{"); writer.Indent();
         writer.Line("__translationManager = manager ?? throw new global::System.ArgumentNullException(nameof(manager));");
         writer.Unindent(); writer.Line("}");
-        foreach (Rmf2MessageContractV5 message in Canonical(project)) WriteAccessor(writer, project, message);
+        foreach (Rmf2MessageContractV5 message in Canonical(project)) WriteAccessor(writer, project, message, readableSurface);
         writer.Unindent(); writer.Line("}");
         return Output(TranslationGeneratedOutputKind.CSharpAccessors, project.ClassName + ".Accessors.g.cs", writer);
     }
@@ -261,6 +262,9 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpReadable, project.ClassName + ".Readable.g.cs", writer);
     }
 
+    private const string HiddenAttribute = "[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]";
+    private static bool HasReadable(Rmf2ProjectV5 project, Rmf2MessageContractV5 message) =>
+        Rmf2ReadableNamesV1.SupportsClassName(project.ClassName) && Rmf2ReadableNamesV1.TryCreate(project.ClassName, message, out _, out _);
     private static string Verbatim(string identifier) => "@" + identifier;
     private static string SlotType(string kind) => kind switch
     {
@@ -270,7 +274,7 @@ internal static class Rmf2CSharpOutputRendererV5
         _ => throw new InvalidOperationException("Unknown functional slot kind '" + kind + "'."),
     };
 
-    private static void WriteAccessor(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageContractV5 message)
+    private static void WriteAccessor(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageContractV5 message, bool readableSurface)
     {
         bool document = message.Content == Rmf2DocumentProfileV5.Document;
         string member = Member(message), result = document ? "global::Runic.Translations.LocalizedDocumentContent"
@@ -278,8 +282,11 @@ internal static class Rmf2CSharpOutputRendererV5
         string format = message.Structured || document ? "FormatContent" : "Format";
         // Document messages wrap the formatted node stream; the renderer checks it against the locked skeletons.
         string open = document ? "new global::Runic.Translations.LocalizedDocumentContent(" : string.Empty, close = document ? ")" : string.Empty;
+        // Encoded members stay callable but leave completion lists to the readable surface when it has the message.
+        bool hidden = readableSurface && HasReadable(project, message);
         writer.Blank();
         writer.Line("/// <summary>Formats <c>" + GenerationSupport.XmlDocumentation(string.Join(".", message.Path)) + "</c>.</summary>");
+        if (hidden) writer.Line(HiddenAttribute);
         if (message.Inputs.Count == 0)
             writer.Line("public " + result + " " + member + " => " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", global::System.ReadOnlySpan<global::Runic.Translations.TextArgument>.Empty)" + close + ";");
         else
@@ -300,6 +307,8 @@ internal static class Rmf2CSharpOutputRendererV5
         }
         // Always retain a span-shaped escape hatch. It keeps the generated API
         // usable if a future C# surface cannot faithfully model a caller name.
+        // Beside the readable surface it also leaves completion lists.
+        if (readableSurface) writer.Line(HiddenAttribute);
         writer.Line("public " + result + " r_args_" + member + "(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", arguments)" + close + ";");
     }
 

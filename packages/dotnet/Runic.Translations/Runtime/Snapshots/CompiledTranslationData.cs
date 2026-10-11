@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace Runic.Translations;
 
@@ -15,6 +16,7 @@ public sealed class CompiledTranslationDefinition
     private readonly TranslationPlaceholderDescriptor[] _placeholders;
 
     /// <summary>Creates a v5 caller definition with NFC input names and type-only formatting contracts.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static CompiledTranslationDefinition FromRmf2Inputs(string name, IReadOnlyList<CompiledRmf2Input> inputs, bool isCanonical = true)
     {
         ArgumentNullException.ThrowIfNull(inputs);

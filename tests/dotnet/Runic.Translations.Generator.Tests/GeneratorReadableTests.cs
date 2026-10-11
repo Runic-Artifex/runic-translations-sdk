@@ -486,11 +486,27 @@ internal sealed class GeneratorReadableTests
             !readable.Contains("Activator", StringComparison.Ordinal), "The readable output uses reflection.");
         Assert.Equal("AppText.Accessors.g.cs|AppText.CatalogData.g.cs|AppText.Keys.g.cs|AppText.Readable.g.cs|AppText.Registration.g.cs",
             string.Join("|", run.SingleResult.GeneratedSources.Select(static item => item.HintName).Order(StringComparer.Ordinal)), "hint files");
-        // The encoded files are the same with and without the readable surface.
+        // The encoded files are the same with and without the readable surface, except that encoded members with a
+        // readable counterpart leave completion lists. Without the readable surface they stay visible.
         GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3, ProjectInput(), EnglishInput(), GermanInput());
         foreach (GeneratedSourceResult encoded in old.SingleResult.GeneratedSources)
-            Assert.Equal(encoded.SourceText.ToString(), run.SingleResult.GeneratedSources.Single(item => item.HintName == encoded.HintName).SourceText.ToString(), encoded.HintName);
+            Assert.Equal(WithoutHidden(encoded.SourceText.ToString()),
+                WithoutHidden(run.SingleResult.GeneratedSources.Single(item => item.HintName == encoded.HintName).SourceText.ToString()), encoded.HintName);
+        Assert.Equal(0, CountHidden(old.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Keys.g.cs").SourceText.ToString()),
+            "hidden keys without the readable surface");
+        Assert.Equal(5, CountHidden(run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Keys.g.cs").SourceText.ToString()),
+            "hidden keys with the readable surface");
+        // Each accessor and its r_args_ escape hatch are hidden; without the readable surface neither is.
+        Assert.Equal(10, CountHidden(run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Accessors.g.cs").SourceText.ToString()),
+            "hidden accessors with the readable surface");
+        Assert.Equal(0, CountHidden(old.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Accessors.g.cs").SourceText.ToString()),
+            "hidden accessors without the readable surface");
     }
+
+    private const string HiddenAttribute = "[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]";
+    private static string WithoutHidden(string source) =>
+        string.Join("\n", source.Split('\n').Where(static line => line.Trim() != HiddenAttribute));
+    private static int CountHidden(string source) => source.Split('\n').Count(static line => line.Trim() == HiddenAttribute);
 
     private static void AssertClean(GeneratorRun run)
     {

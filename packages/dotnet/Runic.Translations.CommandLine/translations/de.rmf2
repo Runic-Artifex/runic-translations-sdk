@@ -1,0 +1,142 @@
+help {
+  usage = Aufruf
+  commandPlaceholder = Befehl
+  optionsPlaceholder = Optionen
+  defaultCommand = Standard
+  completion = Vervollständigungen für bash, zsh, fish oder PowerShell erzeugen
+  commands = Befehle
+  arguments = Argumente
+  options = Optionen
+  showHelp = Hilfe anzeigen
+  showVersion = Version anzeigen
+  outputFormat = Ausgabeformat wählen
+  examples = Beispiele
+  required = erforderlich
+  default = Standard
+  choices = Auswahl
+  environment = Umgebung
+  existing = vorhanden
+  pathKind {
+    file = Datei
+    directory = Verzeichnis
+  }
+  minimum = min
+  maximum = max
+  requires = erfordert
+  conflicts = schließt aus
+}
+completion {
+  invalidShell = Wählen Sie eine Shell für die Vervollständigung: bash, zsh, fish oder powershell.
+}
+faults {
+  RCLI4000 = Der Befehl wurde abgebrochen.
+  RCLI5000 = Der Befehl konnte nicht abgeschlossen werden.
+}
+hints {
+  RCLI5000 = Mit RUNIC_COMMANDLINE_DEBUG=1 wird die Ausnahme auf stderr ausgegeben.
+}
+diagnostics {
+  unknownOption =
+    .input {$option :string}
+    {{Unbekannte Option. ({$option})}}
+  unknownOptionSuggestion =
+    .input {$option :string}
+    .input {$suggestion :string}
+    {{Unbekannte Option. ({$option}) Meinten Sie '{$suggestion}'?}}
+  unknownCommand = Unbekannter Befehl.
+  unknownCommandSuggestion =
+    .input {$suggestion :string}
+    {{Unbekannter Befehl. Meinten Sie '{$suggestion}'?}}
+  missingOptionValue =
+    .input {$option :string}
+    {{Der Wert einer Option fehlt. ({$option})}}
+  unexpectedOptionValue =
+    .input {$option :string}
+    {{Ein Schalter akzeptiert keinen Wert. ({$option})}}
+  missingArgument =
+    .input {$argument :string}
+    {{Ein erforderliches Argument fehlt. ({$argument})}}
+  unexpectedArgument = Unerwartetes Argument.
+  duplicateOption =
+    .input {$option :string}
+    {{Eine Option wurde mehrfach angegeben. ({$option})}}
+  unsupportedShortBundle = Gebündelte Kurzoptionen werden nicht unterstützt.
+  invalidOutputMode =
+    .input {$option :string}
+    {{{$option} muss human oder json sein.}}
+  transportOutputOptionCollision = Die Befehlszeile ist ungültig.
+  missingRequiredOption =
+    .input {$option :string}
+    .input {$command :string}
+    {{Eine erforderliche Option fehlt. ({$option})}}
+  unexpectedRootHelpArgument = Die Hilfe auf oberster Ebene akzeptiert keine weiteren Argumente.
+  invalidEnvironmentValue =
+    .input {$option :string}
+    .input {$variable :string}
+    {{{$variable} muss für {$option} true/false, yes/no oder 1/0 sein.}}
+  invalidChoice =
+    .input {$parameter :string}
+    .input {$choices :string}
+    {{{$parameter} muss einer dieser Werte sein: {$choices}.}}
+  invalidChoiceHidden =
+    .input {$parameter :string}
+    {{{$parameter} muss einer der in --help gezeigten Werte sein.}}
+  invalidInteger =
+    .input {$parameter :string}
+    {{{$parameter} erfordert eine ganze Zahl.}}
+  invalidNumber =
+    .input {$parameter :string}
+    {{{$parameter} erfordert eine Zahl.}}
+  invalidGuid =
+    .input {$parameter :string}
+    {{{$parameter} erfordert eine GUID wie 0f8fad5b-d9cb-469f-a165-70867728950e.}}
+  invalidBoolean =
+    .input {$parameter :string}
+    {{{$parameter} erfordert true oder false.}}
+  invalidValue =
+    .input {$parameter :string}
+    {{{$parameter} hat einen ungültigen Wert.}}
+  validationFailed =
+    .input {$parameter :string}
+    {{Der Wert von {$parameter} hat die Prüfung nicht bestanden.}}
+  missingValue =
+    .input {$parameter :string}
+    {{{$parameter} erfordert einen Wert.}}
+  outOfRange =
+    .input {$parameter :string}
+    .input {$minimum :string}
+    .input {$maximum :string}
+    {{{$parameter} erfordert eine Zahl zwischen {$minimum} und {$maximum}.}}
+  belowMinimum =
+    .input {$parameter :string}
+    .input {$minimum :string}
+    {{{$parameter} erfordert eine Zahl von mindestens {$minimum}.}}
+  aboveMaximum =
+    .input {$parameter :string}
+    .input {$maximum :string}
+    {{{$parameter} erfordert eine Zahl von höchstens {$maximum}.}}
+  optionRequires =
+    .input {$option :string}
+    .input {$required :string}
+    {{{$option} erfordert {$required}.}}
+  optionConflict =
+    .input {$option :string}
+    .input {$conflict :string}
+    {{{$option} kann nicht mit {$conflict} kombiniert werden.}}
+  invalidFilePath =
+    .input {$parameter :string}
+    {{{$parameter} erfordert einen gültigen Dateipfad.}}
+  invalidDirectoryPath =
+    .input {$parameter :string}
+    {{{$parameter} erfordert einen gültigen Verzeichnispfad.}}
+  fileNotFound =
+    .input {$parameter :string}
+    {{{$parameter} erfordert eine vorhandene Datei; prüfen Sie Pfad und Berechtigungen.}}
+  directoryNotFound =
+    .input {$parameter :string}
+    {{{$parameter} erfordert ein vorhandenes Verzeichnis; prüfen Sie Pfad und Berechtigungen.}}
+  environmentValueSource =
+    .input {$parameter :string}
+    .input {$variable :string}
+    {{Der Wert für {$parameter} stammt aus der Umgebungsvariablen {$variable}.}}
+}

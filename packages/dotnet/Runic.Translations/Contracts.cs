@@ -20,6 +20,25 @@ public interface ITranslationSnapshot
     /// <summary>Formats safe structured localized content without interpreting it as HTML.</summary>
     LocalizedTextContent FormatContent(TranslationKey key, ReadOnlySpan<TextArgument> arguments) =>
         throw new NotSupportedException("This snapshot does not support structured localized content.");
+    /// <summary>Attempts to find a message by name, such as <c>help.usage</c>.</summary>
+    /// <remarks>
+    /// Compiled snapshots accept the key name (<see cref="TranslationKey.Name"/>) or, for RMF2 catalogs, the message path with
+    /// its segments joined by dots, as written in the source (<c>help.usage</c> for the key name <c>help_usage</c>).
+    /// Typed generated members remain the way to reach a known message. Name lookup serves integrations that receive
+    /// message names at run time, such as a command-line text resolver. Snapshots that cannot look up names return false.
+    /// </remarks>
+    bool TryGetKey(string name, out TranslationKey key)
+    {
+        key = default;
+        return false;
+    }
+    /// <summary>Attempts to get the typed placeholders a message declares, ordered by name.</summary>
+    /// <remarks>Use it to build the arguments for a message found by <see cref="TryGetKey"/>. Snapshots that cannot describe messages return false.</remarks>
+    bool TryGetPlaceholders(TranslationKey key, out ReadOnlyMemory<TranslationPlaceholderDescriptor> placeholders)
+    {
+        placeholders = default;
+        return false;
+    }
 }
 
 /// <summary>Creates immutable snapshots for requested locales.</summary>

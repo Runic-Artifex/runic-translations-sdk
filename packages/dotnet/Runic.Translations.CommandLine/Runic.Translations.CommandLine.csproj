@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../../eng/build/translations.props" />
+  <!-- The built-in en/de catalogs are compiled by this repository's generator, as in the readable-consumer fixture. -->
+  <Import Project="../Runic.Translations.Build/build/Runic.Translations.Build.props" />
+  <PropertyGroup>
+    <TargetFramework>$(RunicTranslationsCompatibilityTargetFramework)</TargetFramework>
+    <AssemblyName>Runic.Translations.CommandLine</AssemblyName>
+    <RootNamespace>Runic.Translations.CommandLine</RootNamespace>
+    <PackageId>Runic.Translations.CommandLine</PackageId>
+    <RunicTranslationsShippingProject>true</RunicTranslationsShippingProject>
+    <!-- Packed under lib/; its public API is tracked in PublicAPI.*.txt. -->
+    <RunicTrackPublicApi>true</RunicTrackPublicApi>
+    <!-- New in 0.6.0-preview.6: there is no published package to validate against yet. -->
+    <RunicTranslationsPackageValidationBaselineVersion></RunicTranslationsPackageValidationBaselineVersion>
+    <Description>Translates Runic.CommandLine help, errors and faults with Runic Translations, with built-in English and German text.</Description>
+    <PackageTags>runic-artifex;i18n;localization;command-line;cli;dotnet;nativeaot</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Runic.Translations.CommandLine.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Runic.CommandLine" />
+    <ProjectReference Include="../Runic.Translations/Runic.Translations.csproj" />
+    <!-- Register the compiler first so Roslyn resolves the generator's dependency from this source tree.
+         The generator always builds for the SDK, also when an app publishes for a runtime with NativeAOT. -->
+    <Analyzer Include="../Runic.Translations.Generator/bin/$(Configuration)/net10.0/Runic.Translations.Compiler.dll" />
+    <ProjectReference Include="../Runic.Translations.Generator/Runic.Translations.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishAot;IlcTreatWarningsAsErrors"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+  <Import Project="../Runic.Translations.Build/build/Runic.Translations.Build.targets" />
+  <Import Project="../../../eng/build/translations.targets" />
+</Project>

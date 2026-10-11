@@ -163,6 +163,22 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         return CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter);
     }
 
+    /// <inheritdoc />
+    public bool TryGetKey(string name, out TranslationKey key) => _catalog.TryGetKey(name, out key);
+
+    /// <inheritdoc />
+    public bool TryGetPlaceholders(TranslationKey key, out ReadOnlyMemory<TranslationPlaceholderDescriptor> placeholders)
+    {
+        if (TryGetKeyIndex(key, out int index))
+        {
+            placeholders = _definitions[index].Placeholders;
+            return true;
+        }
+
+        placeholders = default;
+        return false;
+    }
+
     private static string?[] BuildNoArgumentText(
         CompiledTextMessage?[] messages,
         CompiledTranslationDefinition[] definitions)

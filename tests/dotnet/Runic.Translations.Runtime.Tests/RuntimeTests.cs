@@ -56,6 +56,7 @@ internal static class RuntimeTests
         runner.Add("compiled public memory cannot mutate snapshot state", PublicMemoryIsolation);
         runner.Add("provider abandons canceled blocked factory and retries independently", ProviderAbandonsCanceledFactory);
         runner.Add("compiled catalog WithOptions captures immutable policies", CatalogWithOptions);
+        runner.Add("snapshot finds keys by name and describes their placeholders", NameLookup);
     }
 
     private static void InitialState()
@@ -570,6 +571,57 @@ internal static class RuntimeTests
             [new CompiledTranslationLocale("en", null, [new(0, "Hello")])]));
         Assert.Throws<ArgumentException>(() => _ = new CompiledTranslationCatalog("app", "en", [extra, canonical],
             [new CompiledTranslationLocale("en", null, [new(1, "Hello")])]));
+    }
+
+    private static void NameLookup()
+    {
+        CompiledTranslationCatalog catalog = new(
+            "app", "en",
+            [
+                new CompiledTranslationDefinition("help_usage", []),
+                new CompiledTranslationDefinition("help_with_count",
+                    [
+                        new TranslationPlaceholderDescriptor("command", TextArgumentType.String, TextArgumentFormat.None),
+                        new TranslationPlaceholderDescriptor("count", TextArgumentType.Int, TextArgumentFormat.Plain),
+                    ]),
+                new CompiledTranslationDefinition("zeta_extra", [], isCanonical: false),
+            ],
+            [
+                new CompiledTranslationLocale("de", "en", [new(0, "Aufruf"), new(2, "Nur Deutsch")]),
+                new CompiledTranslationLocale("en", null, [new(0, "Usage"), new(1, "{command} {count}")]),
+            ]);
+        ITranslationSnapshot snapshot = new CompiledTranslationSnapshot(catalog, "de");
+
+        // The key name and the dotted message path both find the canonical key.
+        Assert.True(snapshot.TryGetKey("help_usage", out TranslationKey byName), "The key name was not found.");
+        Assert.True(snapshot.TryGetKey("help.usage", out TranslationKey byPath), "The dotted path was not found.");
+        Assert.Equal(new TranslationKey("app", 0, "help_usage"), byName);
+        Assert.Equal(byName, byPath);
+        Assert.Equal("Aufruf", snapshot.Get(byPath));
+        Assert.True(snapshot.TryGetKey("help.with_count", out TranslationKey withCount), "A mixed path was not found.");
+        Assert.Equal(1, withCount.Id);
+        // Locale extras resolve through the dynamic key.
+        Assert.True(snapshot.TryGetKey("zeta.extra", out TranslationKey extra), "The extra was not found.");
+        Assert.Equal(CompiledTranslationCatalog.DynamicKeyId, extra.Id);
+        Assert.Equal("Nur Deutsch", snapshot.Get(extra));
+        Assert.False(snapshot.TryGetKey("help.missing", out TranslationKey missing), "An unknown name was found.");
+        Assert.Equal(default, missing);
+        Assert.False(snapshot.TryGetKey("Help.Usage", out _), "Name lookup ignored case.");
+
+        // Placeholders come back ordered by name for building arguments.
+        Assert.True(snapshot.TryGetPlaceholders(withCount, out ReadOnlyMemory<TranslationPlaceholderDescriptor> placeholders), "No placeholders.");
+        Assert.Equal("command:String|count:Int",
+            string.Join("|", placeholders.ToArray().Select(static item => item.Name + ":" + item.Type)));
+        Assert.Equal("Usage 3", new CompiledTranslationSnapshot(catalog, "en").Format(withCount,
+            [new TextArgument("command", "Usage"), new TextArgument("count", 3)]));
+        Assert.True(snapshot.TryGetPlaceholders(byName, out placeholders) && placeholders.IsEmpty, "help_usage declares placeholders.");
+        Assert.False(snapshot.TryGetPlaceholders(new TranslationKey("app", 7, "nope"), out _), "An unknown key has placeholders.");
+        Assert.False(snapshot.TryGetPlaceholders(new TranslationKey("other", 0, "help_usage"), out _), "A foreign key has placeholders.");
+
+        // Other snapshots keep the default: no name lookup.
+        ITranslationSnapshot fake = new FakeSnapshot("app", "en");
+        Assert.False(fake.TryGetKey("help.usage", out _), "The default implementation found a key.");
+        Assert.False(fake.TryGetPlaceholders(byName, out _), "The default implementation described a key.");
     }
 
     private static void PublicMemoryIsolation()
