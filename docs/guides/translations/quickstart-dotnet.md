@@ -71,7 +71,16 @@ method with one parameter per input otherwise.
   `r_` followed by its UTF-8 bytes in hexadecimal). They are the stable
   machine-facing contract and never change; use them where a name must stay
   fixed across SDK releases, such as in generated code. The readable names
-  follow a versioned policy (`AppTextMessages.ReadableNameVersion`).
+  follow a versioned policy (`AppTextMessages.ReadableNameVersion`). Encoded
+  members whose message has a readable member are marked
+  `[EditorBrowsable(Never)]`, so completion lists show the readable surface;
+  they stay callable.
+- **Lookup by name.** Integrations that receive message names at run time,
+  such as a command-line text resolver, call
+  `snapshot.TryGetKey("application.title", out TranslationKey key)` with the
+  dotted path (or the flattened key `application_title`), then
+  `snapshot.TryGetPlaceholders(key, out var inputs)` to build the arguments
+  for `snapshot.Format`. Prefer the typed members for messages your code knows.
 - **Non-identifier names.** An input name or slot ID that is not an ASCII
   identifier, such as `user-name` or `café`, keeps its encoded name for that
   parameter only: a message with `$user-name` is called as

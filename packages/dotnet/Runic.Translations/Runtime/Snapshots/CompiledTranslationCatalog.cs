@@ -211,6 +211,26 @@ public sealed class CompiledTranslationCatalog
     internal CompiledTextMessage?[] GetResolvedMessages(string canonicalLocale) =>
         _localeByTag[canonicalLocale].ResolvedMessages;
 
+    /// <summary>Attempts to find a message by name, such as <c>help.usage</c>.</summary>
+    /// <remarks>
+    /// The name is either the key name (<see cref="TranslationKey.Name"/>) or, for RMF2 catalogs, the message path with
+    /// its segments joined by dots, as written in the source (<c>help.usage</c> for the key name <c>help_usage</c>).
+    /// A permitted locale extra returns a key with <see cref="DynamicKeyId"/>.
+    /// </remarks>
+    public bool TryGetKey(string name, out TranslationKey key)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (_idByName.TryGetValue(name, out int id) ||
+            (name.Contains('.', StringComparison.Ordinal) && _idByName.TryGetValue(name.Replace('.', '_'), out id)))
+        {
+            key = new TranslationKey(Catalog, _definitions[id].IsCanonical ? id : DynamicKeyId, _definitions[id].Name);
+            return true;
+        }
+
+        key = default;
+        return false;
+    }
+
     internal bool TryResolveKey(TranslationKey key, out int id)
     {
         id = key.Id;

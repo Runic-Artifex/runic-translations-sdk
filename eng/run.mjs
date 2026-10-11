@@ -128,6 +128,7 @@ function testManaged() {
   const projects = [
     "tests/dotnet/Runic.Translations.Authoring.Tests/Runic.Translations.Authoring.Tests.csproj",
     "tests/dotnet/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj",
+    "tests/dotnet/Runic.Translations.CommandLine.Tests/Runic.Translations.CommandLine.Tests.csproj",
     "tests/dotnet/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj",
     "tests/dotnet/Runic.Translations.Generator.Tests/Runic.Translations.Generator.Tests.csproj",
     "tests/dotnet/Runic.Translations.Runtime.Tests/Runic.Translations.Runtime.Tests.csproj",
@@ -158,6 +159,25 @@ function testNativeAot() {
   run("dotnet", ["publish", "tests/dotnet/Runic.Translations.Rmf2AotTests/Runic.Translations.Rmf2AotTests.csproj", "--configuration", configuration,
     "--runtime", "linux-x64", "--self-contained", "true", "-p:PublishAot=true", "-p:IlcTreatWarningsAsErrors=true", "--output", output]);
   run(resolve(output, "Runic.Translations.Rmf2AotTests"), []);
+
+  // The localized command-line example: Runic.Translations.CommandLine with no key mapping.
+  const example = resolve(root, "artifacts/command-line-localized-aot");
+  rmSync(example, { recursive: true, force: true });
+  run("dotnet", ["publish", "examples/command-line/localized/LocalizedCli.csproj", "--configuration", configuration,
+    "--runtime", "linux-x64", "--self-contained", "true", "-p:PublishAot=true", "-p:IlcTreatWarningsAsErrors=true", "--output", example]);
+  const invoke = (culture, ...args) => {
+    const result = spawnSync(resolve(example, "LocalizedCli"), args, { encoding: "utf8", env: { ...process.env, RCLI_EXAMPLE_CULTURE: culture } });
+    if (result.error) throw result.error;
+    return { status: result.status, text: result.stdout + result.stderr };
+  };
+  assert.deepEqual(invoke("de", "greet", "Ada"), { status: 0, text: "Hallo Ada\n" });
+  assert.deepEqual(invoke("de", "greet", "--unknown"), { status: 2, text: "RCLI1001: Unbekannte Option. (--unknown)\n" });
+  const help = invoke("de", "greet", "--help");
+  assert.equal(help.status, 0);
+  for (const text of ["Aufruf: localized greet", "Grüßt eine Person", "Argumente:", "Optionen:", "Hilfe anzeigen"])
+    assert.ok(help.text.includes(text), `German help lacks ${text}:\n${help.text}`);
+  assert.deepEqual(invoke("en", "greet", "--unknown"), { status: 2, text: "RCLI1001: An unrecognized option was supplied. (--unknown)\n" });
+  rmSync(example, { recursive: true, force: true });
 }
 
 function testWeb() {

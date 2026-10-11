@@ -324,8 +324,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
 
         var outputs = new List<TranslationGeneratedOutput>(5)
         {
-            TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked),
-            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked),
+            TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked, readableSurface),
+            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(linked),
             TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked),
         };

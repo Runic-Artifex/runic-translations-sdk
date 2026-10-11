@@ -1,0 +1,13 @@
+# Keyed by the DescriptionKey values in Program.cs. Framework text comes from
+# Runic.Translations.CommandLine; add a key such as help.usage here to override it.
+commands {
+  greet = Greet a person
+}
+arguments {
+  name = Name of the person to greet
+}
+app {
+  greeting =
+    .input {$name :string}
+    {{Hello {$name}}}
+}

@@ -11,6 +11,10 @@
       "project": "packages/dotnet/Runic.Translations.Build/Runic.Translations.Build.csproj"
     },
     {
+      "name": "Runic.Translations.CommandLine",
+      "project": "packages/dotnet/Runic.Translations.CommandLine/Runic.Translations.CommandLine.csproj"
+    },
+    {
       "name": "Runic.Translations.Tooling",
       "project": "packages/dotnet/Runic.Translations.Tooling/Runic.Translations.Tooling.csproj"
     },
