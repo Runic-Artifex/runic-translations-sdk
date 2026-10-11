@@ -1,1 +1,40 @@
 #nullable enable
+*REMOVED*static Runic.Translations.Tooling.TranslationsToolCommandModule.Generate(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string! project, string! output, bool csharp, bool json, bool typescript, bool manifest, bool esm, bool cpp) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
+static Runic.Translations.Tooling.TranslationsToolCommandModule.Generate(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project, string! output, bool csharp, bool json, bool typescript, bool manifest, bool esm, bool cpp) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
+*REMOVED*static Runic.Translations.Tooling.TranslationsToolCommandModule.Validate(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string! project) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
+static Runic.Translations.Tooling.TranslationsToolCommandModule.Validate(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
+*REMOVED*static Runic.Translations.Tooling.TranslationsToolCommandModule.Verify(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string! project, string! output, bool csharp, bool json, bool typescript, bool manifest, bool esm, bool cpp) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
+static Runic.Translations.Tooling.TranslationsToolCommandModule.Verify(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project, string! output, bool csharp, bool json, bool typescript, bool manifest, bool esm, bool cpp) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
+override Runic.Translations.Tooling.TranslationsToolDiagnostic.Equals(object? obj) -> bool
+override Runic.Translations.Tooling.TranslationsToolDiagnostic.GetHashCode() -> int
+override Runic.Translations.Tooling.TranslationsToolDiagnostic.ToString() -> string!
+~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.Int32.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<int>
+~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.IReadOnlyListTranslationsToolDiagnostic.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.TranslationsToolDiagnostic>>
+~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.TranslationsToolDiagnostic.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Runic.Translations.Tooling.TranslationsToolDiagnostic>
+Runic.Translations.Tooling.TranslationsToolCommandResult.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.TranslationsToolDiagnostic!>!
+Runic.Translations.Tooling.TranslationsToolCommandResult.Diagnostics.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic
+Runic.Translations.Tooling.TranslationsToolDiagnostic.<Clone>$() -> Runic.Translations.Tooling.TranslationsToolDiagnostic!
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Code.get -> string!
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Code.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Column.get -> int
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Column.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Deconstruct(out string! Code, out string! Severity, out string! Message, out string! Path, out int Line, out int Column, out int EndLine, out int EndColumn, out string! HelpUri) -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.EndColumn.get -> int
+Runic.Translations.Tooling.TranslationsToolDiagnostic.EndColumn.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.EndLine.get -> int
+Runic.Translations.Tooling.TranslationsToolDiagnostic.EndLine.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Equals(Runic.Translations.Tooling.TranslationsToolDiagnostic? other) -> bool
+Runic.Translations.Tooling.TranslationsToolDiagnostic.HelpUri.get -> string!
+Runic.Translations.Tooling.TranslationsToolDiagnostic.HelpUri.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Line.get -> int
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Line.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Message.get -> string!
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Message.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Path.get -> string!
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Path.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Severity.get -> string!
+Runic.Translations.Tooling.TranslationsToolDiagnostic.Severity.init -> void
+Runic.Translations.Tooling.TranslationsToolDiagnostic.TranslationsToolDiagnostic(string! Code, string! Severity, string! Message, string! Path, int Line, int Column, int EndLine, int EndColumn, string! HelpUri) -> void
+static Runic.Translations.Tooling.TranslationsToolDiagnostic.operator !=(Runic.Translations.Tooling.TranslationsToolDiagnostic? left, Runic.Translations.Tooling.TranslationsToolDiagnostic? right) -> bool
+static Runic.Translations.Tooling.TranslationsToolDiagnostic.operator ==(Runic.Translations.Tooling.TranslationsToolDiagnostic? left, Runic.Translations.Tooling.TranslationsToolDiagnostic? right) -> bool

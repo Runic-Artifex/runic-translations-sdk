@@ -206,29 +206,61 @@
     <Error Condition="'@(TranslationProject->Count())' &gt; '1'"
            Text="RTR0002: At most one TranslationProject item is supported." />
 
+    <!-- In a C# build the source generator reports the same compilation diagnostics, with their
+         help links, during CoreCompile. The tool then omits them so each appears once, and a
+         compilation failure (exit code 1) is left to CoreCompile instead of failing here as MSB3073. -->
+    <PropertyGroup>
+      <_TranslationsGeneratorReportsDiagnostics>false</_TranslationsGeneratorReportsDiagnostics>
+      <_TranslationsGeneratorReportsDiagnostics Condition="'$(Language)' == 'C#' and '@(Analyzer->AnyHaveMetadataValue('Filename', 'Runic.Translations.Generator'))' == 'true'">true</_TranslationsGeneratorReportsDiagnostics>
+      <_TranslationsToolEnvironment Condition="'$(_TranslationsGeneratorReportsDiagnostics)' == 'true'">RUNIC_TRANSLATIONS_OMIT_SOURCE_DIAGNOSTICS=true</_TranslationsToolEnvironment>
+      <_TranslationsToolExitCode>0</_TranslationsToolExitCode>
+    </PropertyGroup>
     <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
-          Command="$(TranslationsToolCommand) &quot;@$(_TranslationsResponseFilePath)&quot;" />
-    <ItemGroup>
+          Command="$(TranslationsToolCommand) &quot;@$(_TranslationsResponseFilePath)&quot;"
+          EnvironmentVariables="$(_TranslationsToolEnvironment)"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_TranslationsToolExitCode" />
+      <Output TaskParameter="ConsoleOutput" ItemName="_TranslationsToolOutputLine" />
+    </Exec>
+    <!-- Exit code 1 means translation diagnostics: either already logged as canonical errors, or
+         left to the source generator. Anything else gets one error instead of MSB3073. -->
+    <PropertyGroup>
+      <_TranslationsToolReportedError Condition="$([System.String]::Copy('%(_TranslationsToolOutputLine.Identity)').Contains(': error '))">true</_TranslationsToolReportedError>
+    </PropertyGroup>
+    <Error Condition="'$(_TranslationsToolExitCode)' != '0' and !('$(_TranslationsToolExitCode)' == '1' and ('$(_TranslationsGeneratorReportsDiagnostics)' == 'true' or '$(_TranslationsToolReportedError)' == 'true'))"
+           Text="The Runic Translations tool exited with code $(_TranslationsToolExitCode)." />
+    <ItemGroup Condition="'$(_TranslationsToolExitCode)' == '0'">
       <_TranslationsStagedArtifact Include="$(_TranslationsStagingRoot)**\*" />
       <_TranslationsGeneratedArtifact Include="@(_TranslationsStagedArtifact->'$(_TranslationsOutputRoot)%(RecursiveDir)%(Filename)%(Extension)')" />
       <_TranslationsStaleArtifact Include="@(_TranslationsOwnedInventoryEntry->'%(_OwnedFullPath)')" />
       <_TranslationsStaleArtifact Remove="@(_TranslationsGeneratedArtifact)" />
     </ItemGroup>
     <!-- Same-volume per-file moves replace current names before stale owned names are deleted. -->
-    <Move SourceFiles="@(_TranslationsStagedArtifact)"
+    <Move Condition="'$(_TranslationsToolExitCode)' == '0'"
+          SourceFiles="@(_TranslationsStagedArtifact)"
           DestinationFiles="@(_TranslationsGeneratedArtifact)"
           OverwriteReadOnlyFiles="false" />
-    <Delete Files="@(_TranslationsStaleArtifact)" />
-    <WriteLinesToFile File="$(_TranslationsGenerationInventoryPath)"
+    <Delete Files="@(_TranslationsStaleArtifact)" Condition="'$(_TranslationsToolExitCode)' == '0'" />
+    <WriteLinesToFile Condition="'$(_TranslationsToolExitCode)' == '0'"
+                      File="$(_TranslationsGenerationInventoryPath)"
                       Lines="@(_TranslationsGeneratedArtifact->'%(FullPath)')"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true"
                       Encoding="UTF-8" />
     <RemoveDir Directories="$(_TranslationsStagingDirectory)" />
-    <Touch Files="$(_TranslationsOutputStampPath)" AlwaysCreate="true" />
-    <ItemGroup>
+    <Touch Condition="'$(_TranslationsToolExitCode)' == '0'" Files="$(_TranslationsOutputStampPath)" AlwaysCreate="true" />
+    <ItemGroup Condition="'$(_TranslationsToolExitCode)' == '0'">
       <FileWrites Include="$(_TranslationsOutputStampPath);$(_TranslationsGenerationInventoryPath);$(_TranslationsResponseFilePath);@(_TranslationsGeneratedArtifact)" />
     </ItemGroup>
+  </Target>
+
+  <!-- Backstop: CoreCompile succeeded although the tool reported translation errors it left to the
+       source generator, so nothing else would fail the build. -->
+  <Target Name="_RunicTranslationsVerifyDeferredFailure"
+          AfterTargets="CoreCompile"
+          Condition="'$(_TranslationsToolExitCode)' == '1' and '$(_TranslationsGeneratorReportsDiagnostics)' == 'true'">
+    <Error Text="The Runic Translations tool reported translation errors; run 'runic-translations validate --project @(TranslationProject->'%(RootDir)%(Directory)')' for details." />
   </Target>
 
   <Target Name="RunicTranslationsCollectTranslationArtifacts"

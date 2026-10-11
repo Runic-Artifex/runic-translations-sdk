@@ -126,7 +126,7 @@ and `Show()` fails.
 ### 4. Bind the screen
 
 ```xml
-<Window xmlns:rt="clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf"
+<Window xmlns:rt="https://runic-artifex.eu/xaml/translations"
         xmlns:res="clr-namespace:MyApp.Properties" ...>
   <StackPanel>
     <!-- Plain message. -->
@@ -145,6 +145,10 @@ and `Show()` fails.
   </StackPanel>
 </Window>
 ```
+
+The `https://runic-artifex.eu/xaml/translations` namespace (prefix `rt`) maps to
+`Runic.Translations.Wpf`; the CLR form
+`clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf` still works.
 
 `{rt:Message}` works on any dependency property (`Content`, `Header`, `ToolTip`,
 `Title`, ...), in styles and in templates. The slots are the generated typed

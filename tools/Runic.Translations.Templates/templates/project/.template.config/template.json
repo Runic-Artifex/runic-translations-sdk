@@ -1,11 +1,16 @@
 {
   "$schema": "http://json.schemastore.org/template",
   "author": "RunicArtifex",
-  "classifications": ["Class Library", "Localization", "Resources", "Runic"],
+  "classifications": [
+    "Class Library",
+    "Localization",
+    "Resources",
+    "Runic"
+  ],
   "identity": "RunicArtifex.Translations.Project",
   "name": "Runic Translations project",
   "shortName": "runic-translations-project",
-  "description": "Creates a .NET class library with a conventional runic.json and RMF2 locale files containing MF2 messages, generated C# APIs, and ESM output.",
+  "description": "Creates a .NET class library with a conventional runic.json and RMF2 locale files containing MF2 messages and generated C# APIs; --emit-esm adds ESM output for web front ends.",
   "sourceName": "RunicTranslationsProject",
   "preferNameDirectory": true,
   "tags": {
@@ -21,34 +26,119 @@
       "replaces": "__CATALOG__",
       "fileRename": "_catalog_"
     },
+    "defaultLocaleOption": {
+      "type": "parameter",
+      "datatype": "string",
+      "description": "Default BCP-47 locale tag. Default: en."
+    },
     "defaultLocale": {
       "type": "parameter",
       "datatype": "string",
       "defaultValue": "en",
-      "description": "Default BCP-47 locale tag.",
+      "description": "Deprecated alias of --default-locale."
+    },
+    "defaultLocaleValue": {
+      "type": "generated",
+      "generator": "coalesce",
+      "parameters": {
+        "sourceVariableName": "defaultLocaleOption",
+        "fallbackVariableName": "defaultLocale"
+      },
       "replaces": "__DEFAULT_LOCALE__",
       "fileRename": "_defaultLocale_"
+    },
+    "locales": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "",
+      "description": "Additional locale tags, comma-separated, such as de,fr. Add a translations/<locale>.rmf2 file for each; until then the build warns about untranslated messages."
+    },
+    "extraLocales": {
+      "type": "generated",
+      "generator": "regex",
+      "parameters": {
+        "source": "locales",
+        "steps": [
+          {
+            "regex": "\\s*,\\s*",
+            "replacement": "\", \""
+          },
+          {
+            "regex": "^\\s*(.+?)\\s*$",
+            "replacement": ", \"$1\""
+          }
+        ]
+      },
+      "replaces": "__EXTRA_LOCALES__"
+    },
+    "hasLocales": {
+      "type": "computed",
+      "value": "(locales != \"\")"
     },
     "namespace": {
       "type": "parameter",
       "datatype": "string",
-      "defaultValue": "RunicTranslationsProject",
-      "description": "Namespace for generated C# APIs.",
+      "description": "Namespace for generated C# APIs. Default: the name, as a namespace."
+    },
+    "nameNamespace": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "safe_namespace"
+    },
+    "namespaceValue": {
+      "type": "generated",
+      "generator": "coalesce",
+      "parameters": {
+        "sourceVariableName": "namespace",
+        "fallbackVariableName": "nameNamespace"
+      },
       "replaces": "__NAMESPACE__"
+    },
+    "classNameOption": {
+      "type": "parameter",
+      "datatype": "string",
+      "description": "Class name for generated C# APIs. Default: ProductText."
     },
     "className": {
       "type": "parameter",
       "datatype": "string",
       "defaultValue": "ProductText",
-      "description": "Class name for generated C# APIs.",
+      "description": "Deprecated alias of --class-name."
+    },
+    "classNameValue": {
+      "type": "generated",
+      "generator": "coalesce",
+      "parameters": {
+        "sourceVariableName": "classNameOption",
+        "fallbackVariableName": "className"
+      },
       "replaces": "__CLASS_NAME__"
+    },
+    "packageVersionOption": {
+      "type": "parameter",
+      "datatype": "string",
+      "description": "Matching Runic Translations package and tool version. Default: this template's version."
     },
     "packageVersion": {
       "type": "parameter",
       "datatype": "string",
       "defaultValue": "0.1.0",
-      "description": "Matching Runic Translations package and tool version.",
+      "description": "Deprecated alias of --package-version."
+    },
+    "packageVersionValue": {
+      "type": "generated",
+      "generator": "coalesce",
+      "parameters": {
+        "sourceVariableName": "packageVersionOption",
+        "fallbackVariableName": "packageVersion"
+      },
       "replaces": "__PACKAGE_VERSION__"
+    },
+    "emitEsm": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Also generate the ESM package and web-module manifest on build, for a web front end that consumes this project's output. .NET consumers need only the generated C#."
     }
   }
 }

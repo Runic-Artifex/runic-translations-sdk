@@ -494,7 +494,8 @@ internal sealed class XamlMessageValidator
         return colon >= 0 ? name.Substring(colon + 1) == localName && IsRunic(element.GetNamespaceOfPrefix(name.Substring(0, colon))?.NamespaceName) :
             name == localName && IsRunic(element.GetDefaultNamespace().NamespaceName);
     }
-    private static bool IsRunic(string? ns) => ns is "clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf" or "clr-namespace:Runic.Translations.Wpf";
+    // The XmlnsDefinition URI of Runic.Translations.Wpf, or its CLR namespace.
+    private static bool IsRunic(string? ns) => ns is "https://runic-artifex.eu/xaml/translations" or "clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf" or "clr-namespace:Runic.Translations.Wpf";
 
     private static int MatchingBrace(string value)
     {

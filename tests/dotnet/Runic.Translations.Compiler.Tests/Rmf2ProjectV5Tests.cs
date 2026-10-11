@@ -32,6 +32,7 @@ internal static class Rmf2ProjectV5Tests
         runner.Add("RMF2 readable C# names report reserved keys slots and clashes as RTR0069", ReadableReserved);
         runner.Add("RMF2 readable C# names are stable and leave fingerprints unchanged", ReadableStability);
         runner.Add("RMF2 v5 metadata spans limits and cancellation retain project validation", Validation);
+        runner.Add("RMF2 v5 locale key diagnostics name paths, suggest keys and point at the locale file", LocaleKeyDiagnostics);
     }
 
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
@@ -415,6 +416,37 @@ internal static class Rmf2ProjectV5Tests
         var invalid = TranslationCompiler.CompileRmf2ProjectV5(Project(settings),
             [Source("translations/en.rmf2", "x = X"), Source("translations/de.rmf2", "x = X\nextra = {$n :integer}"), Source("translations/fr.rmf2", "x = X\nextra = {$other}")]);
         Assert.True(!invalid.Success && invalid.Diagnostics.Any(d => d.Id == "RTR0016"), "Allowed extra keys lost caller validation.");
+    }
+    private static void LocaleKeyDiagnostics()
+    {
+        const string locales = ",\"locales\":[\"en\",\"de\"]";
+        var typo = Compile("commands {\n  remove = Remove\n  add = Add\n}", "commands {\n  remov = Entfernen\n  add = Hinzufügen\n}", locales);
+        var extra = typo.Diagnostics.Single(d => d.Id == "RTR0011");
+        Assert.Equal("Locale 'de' defines 'commands.remov', which base locale 'en' does not define. Did you mean 'commands.remove'?", extra.Message);
+        Assert.Equal("translations/de.rmf2", extra.Location.Path);
+        Assert.Equal(2, extra.Location.Line);
+        var missing = typo.Diagnostics.Single(d => d.Id == "RTR0010");
+        Assert.Equal("Locale 'de' does not translate 'commands.remove' from base locale 'en'.", missing.Message);
+        Assert.Equal("translations/de.rmf2", missing.Location.Path);
+        Assert.Equal(1, missing.Location.Line);
+
+        var unrelated = Compile("title = Title", "title = Titel\nfarewell = Tschüss", locales);
+        Assert.Equal("Locale 'de' defines 'farewell', which base locale 'en' does not define.", unrelated.Diagnostics.Single(d => d.Id == "RTR0011").Message);
+
+        // A locale without a file of its own keeps the runic.json anchor.
+        var absent = Compile("title = Title", null, locales);
+        var absentMissing = absent.Diagnostics.Single(d => d.Id == "RTR0010");
+        Assert.Equal("translations/runic.json", absentMissing.Location.Path);
+
+        // A translation that fails to compile reports RTR0067 only, not RTR0010 as well.
+        var invalid = Compile("count = {$n :number}", "count =\n  .local $a = {$n}\n  .input {$n :number}\n  {{{$a}}}", locales);
+        Assert.True(invalid.Diagnostics.Any(d => d.Id == "RTR0067"), Errors(invalid));
+        Assert.True(!invalid.Diagnostics.Any(d => d.Id == "RTR0010"), "RTR0067 cascaded into RTR0010:\n" + Errors(invalid));
+
+        // A base message that fails to compile does not make the translations of its key extra (RTR0011).
+        var invalidBase = Compile("count =\n  .local $a = {$n}\n  .input {$n :number}\n  {{{$a}}}", "count = {$n :number}", locales);
+        Assert.True(invalidBase.Diagnostics.Any(d => d.Id == "RTR0067"), Errors(invalidBase));
+        Assert.True(!invalidBase.Diagnostics.Any(d => d.Id == "RTR0011"), "RTR0067 cascaded into RTR0011:\n" + Errors(invalidBase));
     }
     private static void Validation()
     {

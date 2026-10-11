@@ -11,14 +11,15 @@ tree's candidate version is not a promise that those packages are published.
 ```sh
 dotnet new install Runic.Translations.Templates@<VERSION>
 dotnet new runic-translations-project --name Example.Translations \
-  --catalog app --namespace Example.Translations --className AppText
+  --catalog app --class-name AppText
 cd Example.Translations
 dotnet tool restore
 dotnet build
 ```
 
-The template creates a class library, an English RMF2 catalog, pinned package and
-tool references, generated C# APIs, and build-time ESM output. No SDK source
+The template creates a class library in the `Example.Translations` namespace, an
+English RMF2 catalog, pinned package and tool references, and generated C# APIs;
+`--emit-esm` adds build-time ESM output for a web front end. No SDK source
 checkout is needed. Continue with the [.NET consumer quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md)
 to print the first message from a console application.
 

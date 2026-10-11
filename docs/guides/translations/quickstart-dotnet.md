@@ -12,8 +12,7 @@ Start in an empty application directory:
 ```sh
 dotnet new install Runic.Translations.Templates@<VERSION>
 dotnet new runic-translations-project --name Example.Translations \
-  --catalog app --defaultLocale en \
-  --namespace Example.Translations --className AppText
+  --catalog app --default-locale en --class-name AppText
 cd Example.Translations
 dotnet tool restore
 dotnet build
@@ -30,8 +29,11 @@ application {
 }
 ```
 
-The build generates `AppText` and `AppTextCatalog` in `Example.Translations`.
-It also emits the ESM package at
+The build generates `AppText` and `AppTextCatalog` in `Example.Translations`,
+the namespace that follows `--name` unless you pass `--namespace`. Add
+`--locales de,fr` to declare more locales, then add a `translations/<locale>.rmf2`
+file for each. For a web front end that consumes this project's output, pass
+`--emit-esm` to also emit the ESM package at
 `obj/Debug/net10.0/translations/app.esm-v5/web-module-manifest-v3.json`.
 C# belongs to the bundled source generator and is not a file to copy into the
 application. See [build integration](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Build/README.md)
@@ -123,7 +125,7 @@ project's directory:
 
 ```sh
 dotnet new runic-translations --output . --catalog app \
-  --defaultLocale en --namespace Example.App --className AppText
+  --default-locale en --namespace Example.App --class-name AppText
 dotnet add package Runic.Translations --version <VERSION>
 dotnet add package Runic.Translations.Build --version <VERSION>
 dotnet build

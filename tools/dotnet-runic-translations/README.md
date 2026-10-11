@@ -19,6 +19,9 @@ dotnet tool run runic-translations -- validate \
 ```
 
 The project path may name the conventional directory or its `runic.json`.
+Without `--project`, `validate`, `generate` and `verify` use `./runic.json`, then
+`./translations/runic.json`, so `runic-translations validate` works from the
+project directory. `runic-translations help <command>` describes every option.
 New projects use grouped RMF2 resources in sibling files such as `en.rmf2` and
 `de.rmf2`. Direct locale-directory `.mf2` messages are also supported; the
 representation is inferred from source files and cannot be mixed.
@@ -60,6 +63,32 @@ runic-translations serve
 
 Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`. Exit code `0` means success, `1` means catalog or verification diagnostics, and `2` means invalid invocation or an operational failure.
 
+## Diagnostics
+
+Translation diagnostics are printed to standard error, one per line, in the
+form editors and MSBuild recognize:
+
+```text
+translations/de.rmf2(2,3,2,8): error RTR0011: Locale 'de' defines 'commands.remov', which base locale 'en' does not define. Did you mean 'commands.remove'?
+```
+
+With `--runic-output json` they are structured entries rather than text. A
+success carries them in `payload.diagnostics`; a failure carries the same
+`runic.translations.tool/1` payload in `fault.data.payload`:
+
+```json
+{"code":"RTR0011","severity":"error","message":"Locale 'de' defines ...","path":"translations/de.rmf2","line":2,"column":3,"endLine":2,"endColumn":8,"helpUri":"https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md#rtr0011"}
+```
+
+The envelope's own `diagnostics` array holds only Runic.CommandLine `RCLI`
+diagnostics, such as usage errors. See the
+[diagnostics reference](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md).
+
+The [Translations Editor](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/apps/translations-editor/README.md)
+is built from source; standalone Editor downloads are not part of this preview.
+Its `validate <path>` takes the workspace as a positional argument; the
+equivalent tool command is `runic-translations validate --project <path>`.
+
 ## Serve protocol
 
 `serve` speaks line-delimited JSON (`runic-translations-serve/1`) over standard input and output; diagnostics never go to standard output. It first writes `{"protocol":"runic-translations-serve/1","event":"ready","version":"..."}`. Each request is one line and gets exactly one response line with the same `id`, in order:
@@ -69,7 +98,7 @@ Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`.
 {"id":1,"ok":true,"exitCode":0,"output":"generated 12 artifact(s).","message":"","diagnostics":[],"elapsedMs":9}
 ```
 
-Methods are `generate` (`project`, `output`, optional `emit` with `csharp`, `json`, `typescript`, `template-manifest`, `esm` or `cpp`), `validate` (`project`) and `shutdown`. `exitCode` and `diagnostics` match the one-shot command; `message` is the text it would print on failure. Paths resolve against the server's working directory. The server exits after `shutdown` or when standard input closes. A request line longer than 1 MiB is discarded without being buffered; its reply has `"id":null` and answers the oldest outstanding request, because requests are answered in order.
+Methods are `generate` (`project`, `output`, optional `emit` with `csharp`, `json`, `typescript`, `template-manifest`, `esm` or `cpp`), `validate` (`project`) and `shutdown`. `exitCode` and `diagnostics` match the one-shot command, and a translation diagnostic (an `RTR` code) also carries `path`, `line`, `column`, `endLine`, `endColumn` and `helpUri`; `message` is the text it would print on failure. Paths resolve against the server's working directory. The server exits after `shutdown` or when standard input closes. A request line longer than 1 MiB is discarded without being buffered; its reply has `"id":null` and answers the oldest outstanding request, because requests are answered in order.
 
 Trust model: `serve` has the same authority as the one-shot commands run by the same user. It reads requests only from its standard input, so only the parent process that started it can send them; it opens no socket or port. A request may name any `project` and `output` the process can access, and `generate` writes there, exactly like `runic-translations generate --project ... --output ...`. Start it only from trusted tooling, and do not forward untrusted input into its standard input.
 
