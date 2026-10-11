@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
+import { assertReleaseLinks, releaseLinks } from "./readme-links.mjs";
 
 // A candidate is built in a sibling directory on the same filesystem and
 // renamed over the target only after every package exists. An interrupted run
@@ -68,7 +69,9 @@ const text = (header, start, length) => {
 
 // Merges fields into package/package.json of a gzipped ustar archive and copies
 // every other entry byte-for-byte, so packing never writes the source manifest.
-export function stampNpmManifest(archive, fields) {
+// With links ({ repository, tag, directory }), the README and homepage link to
+// the release tag, and a remaining main-branch link fails the pack.
+export function stampNpmManifest(archive, fields, links) {
   const tar = gunzipSync(readFileSync(archive));
   const output = [];
   let offset = 0, stamped = 0, extended = false;
@@ -80,17 +83,27 @@ export function stampNpmManifest(archive, fields) {
     const size = parseInt(text(header, 124, 12).trim() || "0", 8);
     const type = String.fromCharCode(header[156] || 48);
     const end = offset + 512 + Math.ceil(size / 512) * 512;
+    const content = () => tar.subarray(offset + 512, offset + 512 + size).toString("utf8");
+    let bytes;
     if (type === "0" && path === "package/package.json") {
       assert.ok(!extended, "package.json must not use an extended tar header");
-      const manifest = JSON.parse(tar.subarray(offset + 512, offset + 512 + size).toString("utf8"));
-      const bytes = Buffer.from(`${JSON.stringify({ ...manifest, ...fields }, null, 2)}\n`);
+      const manifest = JSON.parse(content());
+      const homepage = links && manifest.homepage !== undefined ? { homepage: releaseLinks(manifest.homepage, links) } : {};
+      bytes = Buffer.from(`${JSON.stringify({ ...manifest, ...homepage, ...fields }, null, 2)}\n`);
+      stamped++;
+    } else if (links && type === "0" && path === "package/README.md") {
+      assert.ok(!extended, "README.md must not use an extended tar header");
+      const readme = releaseLinks(content(), links);
+      assertReleaseLinks(readme, `${basename(archive)} README.md`);
+      bytes = Buffer.from(readme);
+    }
+    if (bytes) {
       const updated = Buffer.from(header);
       updated.write(`${bytes.length.toString(8).padStart(11, "0")}\0`, 124, 12, "latin1");
       updated.fill(0x20, 148, 156);
       const checksum = updated.reduce((sum, byte) => sum + byte, 0);
       updated.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148, 8, "latin1");
       output.push(updated, bytes, Buffer.alloc((512 - bytes.length % 512) % 512));
-      stamped++;
     } else {
       output.push(tar.subarray(offset, end));
     }

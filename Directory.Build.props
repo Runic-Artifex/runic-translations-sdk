@@ -4,6 +4,8 @@
     <RunicTranslationsRoot>$(MSBuildThisFileDirectory)</RunicTranslationsRoot>
     <RepositoryUrl>https://github.com/Runic-Artifex/runic-translations-sdk</RepositoryUrl>
     <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
+    <!-- Diagnostic help links point at this catalog at the release tag; see eng/build/release-links.targets. -->
+    <RunicDiagnosticsCatalog>docs/guides/translations/diagnostics.md</RunicDiagnosticsCatalog>
     <RunicBridgeInstallFrontend>false</RunicBridgeInstallFrontend>
   </PropertyGroup>
 </Project>

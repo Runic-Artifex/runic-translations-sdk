@@ -16,6 +16,8 @@
          builds that use it) and IDE language servers on .NET 10. A host on .NET Framework, or on an older
          .NET, cannot load it and reports CS8032 instead of generating code; see README. -->
     <NoWarn>$(NoWarn);RS1041</NoWarn>
+    <!-- Help links name the release tag; see eng/build/release-links.targets. -->
+    <RunicGenerateReleaseLinks>true</RunicGenerateReleaseLinks>
   </PropertyGroup>
 
   <ItemGroup>
