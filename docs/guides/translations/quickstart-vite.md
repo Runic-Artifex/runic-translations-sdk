@@ -165,3 +165,14 @@ diagnostics, and `2` represents invalid invocation or an operational failure.
 For SvelteKit locale routing and request-scoped SSR, continue with the
 [SvelteKit quick start](quickstart-sveltekit.md). It passes the generated
 `/server` context to the Runic SvelteKit adapter.
+
+## Troubleshooting
+
+- **An edited `.rmf2` file does not change the page in manifest mode.** With
+  `manifest`, the plugin treats the generated directory as owned by another
+  build. A change to `sourceFiles` refreshes Vite, but the plugin cannot
+  recompile, so it reloads the old manifest. Run the `generate` command from
+  [Retain generated output](#retain-generated-output-when-another-build-owns-it)
+  again, or remove `manifest` so the plugin compiles the project itself.
+- **The build reports an `RTR` diagnostic.** See its entry in
+  [Diagnostics](diagnostics.md).

@@ -45,6 +45,8 @@ profile, and ABI versions fail explicitly.
 
 This package is a public preview for .NET 10. Preview releases may contain documented breaking API changes. Keep the runtime and generated source on the same Runic Translations release; runtime ABI mismatches fail explicitly.
 
+Generated code and the retained pre-v5 message model use public runtime plumbing such as the `CompiledRmf2*` message model, `TranslationsCompatibility`, `CompiledTextMessage.Rmf2V5` and `TextArgumentFormat.Fixed0`–`Fixed6`/`Percent0`–`Percent4`. These are marked `[EditorBrowsable(Never)]`, so they stay out of completion lists; they are not application API.
+
 - [Runtime and generated C# example](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.PackageTests/Program.cs)
 - [NativeAOT example](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/dotnet/Runic.Translations.AotTests)
 - [RMF2 project guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md)

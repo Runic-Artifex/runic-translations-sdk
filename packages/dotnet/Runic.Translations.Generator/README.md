@@ -34,6 +34,10 @@ var text = new AppText(manager);
 Console.WriteLine(text.Messages.application_title);
 ```
 
+For startup code that cannot await, such as a WPF application with `StartupUri`,
+`AppTextCatalog.CreateManager()` returns the same manager synchronously; the
+embedded catalog needs no I/O.
+
 `text.Messages` is the readable surface. It names each message by its
 flattened key, as ESM does (`application_title`), and returns
 `LocalizedTextContent<AppTextSlots.key>` for messages with markup; bind their

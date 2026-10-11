@@ -1,6 +1,9 @@
+using System.ComponentModel;
+
 namespace Runic.Translations;
 
 /// <summary>Version numbers shared by generated code and the runtime.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public static class TranslationsCompatibility
 {
     /// <summary>The portable message grammar version supported by this release.</summary>

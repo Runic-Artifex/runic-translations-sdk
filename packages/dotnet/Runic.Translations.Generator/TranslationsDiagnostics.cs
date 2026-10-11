@@ -6,7 +6,7 @@ namespace Runic.Translations.Generator;
 /// <summary>
 /// The diagnostics the generator reports: its own and every compiler diagnostic it forwards. Each
 /// diagnostic ID has one descriptor with a specific title and a help link to its entry in
-/// <c>docs/guides/translations/diagnostics.md</c>. The message is the compiler's message, and the
+/// <c>docs/guides/translations/diagnostics.md</c> at the release tag. The message is the compiler's message, and the
 /// severity of each report is the compiler's, so project policies such as
 /// <c>translationCompleteness</c> still choose between warnings and errors.
 /// Release tracking: AnalyzerReleases.Shipped.md and AnalyzerReleases.Unshipped.md.
@@ -14,7 +14,8 @@ namespace Runic.Translations.Generator;
 internal static class TranslationsDiagnostics
 {
     internal const string Category = "Runic.Translations";
-    internal const string HelpLinkBase = "https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md#";
+    /// <summary>The diagnostics catalog at the release tag this generator ships in, ending in <c>#</c>.</summary>
+    internal const string HelpLinkBase = RunicReleaseLinks.DiagnosticsHelpBase;
 
     internal static readonly DiagnosticDescriptor UnreadableSource = new(
         "RTR0001", "Translation source is unreadable or malformed", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0001");

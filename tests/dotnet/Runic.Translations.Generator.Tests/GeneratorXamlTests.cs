@@ -39,6 +39,7 @@ internal static class GeneratorXamlTests
         runner.Add("XAML reports malformed XML and declarations without crashing or resolving entities", InvalidDeclarations);
         runner.Add("XAML skips mc:Ignorable design-time content and mc:AlternateContent", DesignTimeContent);
         runner.Add("XAML is not checked without the readable surface; only RTR0068 is reported", WithoutReadableSurface);
+        runner.Add("XAML checks keys against the catalogs of referenced projects without generating them", ReferencedCatalogs);
     }
 
     private static void DesignTimeContent()
@@ -62,6 +63,49 @@ internal static class GeneratorXamlTests
             <TextBlock xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="rt" Text="{rt:Message typo}"/>
             """).Single().Id, "the Runic namespace is understood and stays checked");
         Assert.Equal("RTR0081", Run("""<TextBlock xmlns:o="urn:other" o:Tag="{rt:Message typo}"/>""").Single().Id, "non-ignorable attached namespaces stay checked");
+    }
+
+    private static void ReferencedCatalogs()
+    {
+        const string CoreProject = "C:/core/translations/runic.json", SharedProject = "C:/shared/translations/runic.json";
+        const string Shared = """
+            { "schemaVersion": 1, "catalog": "shared", "code": { "namespace": "Shared", "className": "SharedText" }, "baseLocale": "en" }
+            """;
+        TestInput[] referenced =
+        [
+            new(CoreProject, "XamlCatalogProject", Project), new("C:/core/translations/en.rmf2", "XamlCatalogSource", English, Owner: CoreProject),
+            new(SharedProject, "XamlCatalogProject", Shared), new("C:/shared/translations/en.rmf2", "XamlCatalogSource", "ok = OK\n", Owner: SharedProject),
+        ];
+        GeneratorRun Check(string content, string? catalog = null, params TestInput[] extra) => GeneratorTestHost.Run([.. referenced, .. extra,
+            new TestInput("C:/repo/Views/Main.xaml", "Xaml", """
+                <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:rt="clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf">
+                """ + content + "</Window>", catalog, DefaultCatalog: "app")]);
+
+        GeneratorRun valid = Check("<TextBlock Text=\"{rt:Message application_title}\"/><TextBlock Text=\"{rt:Message greeting, Arg0={Binding Name}}\"/>");
+        Assert.Equal(0, valid.SingleResult.Diagnostics.Length, string.Join("\n", valid.SingleResult.Diagnostics));
+        Assert.Equal(0, valid.SingleResult.GeneratedSources.Length, "referenced catalogs generate no code");
+        Diagnostic typo = Check("<TextBlock Text=\"{rt:Message applicaton_title}\"/>").SingleResult.Diagnostics.Single();
+        Assert.Equal("RTR0081", typo.Id, typo.ToString());
+        Assert.True(typo.GetMessage(CultureInfo.InvariantCulture).Contains("Did you mean 'application_title'", StringComparison.Ordinal), typo.ToString());
+        Assert.Equal("RTR0082", Check("<TextBlock Text=\"{rt:Message greeting}\"/>").SingleResult.Diagnostics.Single().Id, "inputs");
+        Assert.Equal(0, Check("<TextBlock Text=\"{rt:Message ok}\"/>", catalog: "shared").SingleResult.Diagnostics.Length, "per-file referenced catalog");
+        Diagnostic unknown = Check("<TextBlock Text=\"{rt:Message ok}\"/>", catalog: "other").SingleResult.Diagnostics.Single();
+        Assert.Equal("RTR0080", unknown.Id, unknown.ToString());
+        Assert.True(unknown.GetMessage(CultureInfo.InvariantCulture).Contains("('app', 'shared')", StringComparison.Ordinal), unknown.ToString());
+
+        // The local catalog wins over a referenced one with the same ID; it alone is generated.
+        GeneratorRun local = Check("<TextBlock Text=\"{rt:Message ok}\"/>", null,
+            new TestInput("C:/repo/translations/runic.json", "Project", Project), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "ok = Local\n"));
+        Assert.Equal(5, local.SingleResult.GeneratedSources.Length, "local catalog generated");
+        Assert.Equal(0, local.SingleResult.Diagnostics.Length, string.Join("\n", local.SingleResult.Diagnostics));
+        Assert.Equal("RTR0081", Check("<TextBlock Text=\"{rt:Message greeting, Arg0={Binding Name}}\"/>", null,
+            new TestInput("C:/repo/translations/runic.json", "Project", Project), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "ok = Local\n")).SingleResult.Diagnostics.Single().Id, "local catalog wins");
+
+        // A referenced catalog that does not link is left to its own build: nothing is reported here.
+        GeneratorRun broken = GeneratorTestHost.Run(new TestInput(CoreProject, "XamlCatalogProject", Project),
+            new TestInput("C:/core/translations/en.rmf2", "XamlCatalogSource", "broken = {$\n", Owner: CoreProject),
+            new TestInput("C:/repo/Views/Main.xaml", "Xaml", "<TextBlock xmlns:rt=\"clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf\" Text=\"{rt:Message typo}\"/>", DefaultCatalog: "app"));
+        Assert.Equal(0, broken.SingleResult.Diagnostics.Length, string.Join("\n", broken.SingleResult.Diagnostics));
     }
 
     private static void WithoutReadableSurface()

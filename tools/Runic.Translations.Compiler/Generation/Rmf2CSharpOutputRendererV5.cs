@@ -106,6 +106,18 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.ITranslationSnapshot snapshot = await provider.GetSnapshotAsync(initialLocale ?? DefaultLocale, cancellationToken).ConfigureAwait(false);");
         writer.Line("return new global::Runic.Translations.TranslationManager(provider, snapshot);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
+        // The embedded catalog composes its snapshot without I/O, so startup code that cannot await
+        // (a WPF StartupUri application, a constructor) can install the manager before views load.
+        writer.Line("/// <summary>Creates a manager for the embedded catalog without awaiting, for startup code that must set it before views load.</summary>");
+        writer.Line("public static global::Runic.Translations.ITranslationManager CreateManager("); writer.Indent();
+        writer.Line("string? initialLocale = null,");
+        writer.Line("global::Runic.Translations.ITextValueFormatter? valueFormatter = null,");
+        writer.Line("global::Runic.Translations.TranslationOptions? options = null)"); writer.Unindent();
+        writer.Line("{"); writer.Indent();
+        writer.Line("global::Runic.Translations.ITranslationProvider provider = CreateProvider(valueFormatter, null, options);");
+        writer.Line("global::Runic.Translations.ITranslationSnapshot snapshot = provider.GetSnapshotAsync(initialLocale ?? DefaultLocale).AsTask().GetAwaiter().GetResult();");
+        writer.Line("return new global::Runic.Translations.TranslationManager(provider, snapshot);");
+        writer.Unindent(); writer.Line("}"); writer.Blank();
         writer.Line("public static global::Runic.Translations.TranslationPackContract CreateExternalPackContract(string locale) => " + className + "CatalogData.CreateExternalPackContract(locale);"); writer.Blank();
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateExternalProvider("); writer.Indent();
         writer.Line("global::Runic.Translations.IExternalTranslationSource externalSource,");

@@ -46,12 +46,15 @@ internal static partial class GeneratorDiagnosticsTests
             File.ReadAllText(Path.Combine(root, "packages", "dotnet", "Runic.Translations.Generator", "AnalyzerReleases.Unshipped.md"));
         Assert.True(reference.StartsWith("# Diagnostics\n", StringComparison.Ordinal), "The diagnostics reference must keep its #diagnostics anchor.");
         var titles = new HashSet<string>(StringComparer.Ordinal);
+        string releaseVersion = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(
+            typeof(TranslationsDiagnostics).Assembly)!.InformationalVersion.Split('+')[0];
         foreach (DiagnosticDescriptor descriptor in TranslationsDiagnostics.All)
         {
             string title = descriptor.Title.ToString(System.Globalization.CultureInfo.InvariantCulture);
             Assert.True(titles.Add(title), $"{descriptor.Id} reuses the title '{title}'.");
             Assert.True(title != "Text resource compilation" && !title.EndsWith('.'), $"{descriptor.Id} has a generic or punctuated title.");
-            Assert.Equal("https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md#" + descriptor.Id.ToLowerInvariant(),
+            // Help links name the release tag of the generator, never the main branch.
+            Assert.Equal($"https://github.com/Runic-Artifex/runic-translations-sdk/blob/v{releaseVersion}/docs/guides/translations/diagnostics.md#" + descriptor.Id.ToLowerInvariant(),
                 descriptor.HelpLinkUri, descriptor.Id + " help link");
             Assert.True(reference.Contains("\n## " + descriptor.Id + "\n", StringComparison.Ordinal), $"The diagnostics reference has no '## {descriptor.Id}' entry.");
             Assert.True(reference.Contains("\n## " + descriptor.Id + "\n\n" + title + ".", StringComparison.Ordinal), $"The {descriptor.Id} reference entry does not start with its title.");

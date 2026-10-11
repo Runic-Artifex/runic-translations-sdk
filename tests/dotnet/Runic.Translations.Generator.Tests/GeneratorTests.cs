@@ -33,6 +33,7 @@ internal static class GeneratorTests
         runner.Add("generated C# always selects the RMF2 v5 carrier", V5GenerationCompiles);
         runner.Add("generated C# requires the exact base and RMF2 runtime ABI", ExactRuntimeAbiRequirement);
         runner.Add("generated C# executes the selected semantic surface", GeneratedExecution);
+        runner.Add("generated CreateManager returns a ready manager without awaiting", SynchronousManager);
         runner.Add("generator input enumeration is deterministic", DeterministicInputOrder);
         runner.Add("unchanged generator inputs stay incrementally cached", IncrementalTrackingIsEnabled);
         runner.Add("multiple project declarations are rejected", MultipleProjects);
@@ -120,6 +121,40 @@ internal static class GeneratorTests
         Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
         Assert.Equal("12.50%|exact|100|3|rmf2-execution-v2|5",
             Execute(run, "Example.Localization.ExecutionProbe", "Run"), "generated execution");
+    }
+
+    // For startup code that cannot await, such as a WPF StartupUri application: no continuation is posted.
+    private static void SynchronousManager()
+    {
+        string title = PathMember("title");
+        string source = $$"""
+            namespace Example.Localization;
+            public static class SynchronousProbe
+            {
+                private sealed class Refusing : global::System.Threading.SynchronizationContext
+                {
+                    public override void Post(global::System.Threading.SendOrPostCallback d, object? state) => throw new global::System.InvalidOperationException("posted");
+                    public override void Send(global::System.Threading.SendOrPostCallback d, object? state) => throw new global::System.InvalidOperationException("sent");
+                }
+
+                public static string Run()
+                {
+                    global::System.Threading.SynchronizationContext? previous = global::System.Threading.SynchronizationContext.Current;
+                    global::System.Threading.SynchronizationContext.SetSynchronizationContext(new Refusing());
+                    try
+                    {
+                        global::Runic.Translations.ITranslationManager german = AppTextCatalog.CreateManager("de-AT");
+                        global::Runic.Translations.ITranslationManager initial = AppTextCatalog.CreateManager();
+                        return german.CurrentLocale + "|" + new AppText(german).{{title}} + "|" + initial.CurrentLocale + "|" + new AppText(initial).{{title}};
+                    }
+                    finally { global::System.Threading.SynchronizationContext.SetSynchronizationContext(previous); }
+                }
+            }
+            """;
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, ProjectInput(Project.Replace("[ \"en\" ]", "[ \"en\", \"de\" ]", StringComparison.Ordinal)),
+            new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "title = Title\n"), new TestInput("C:/repo/translations/de.rmf2", "Rmf2", "title = Titel\n"));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Assert.Equal("de|Titel|en|Title", Execute(run, "Example.Localization.SynchronousProbe", "Run"), "synchronous managers");
     }
 
     private static void DeterministicInputOrder()

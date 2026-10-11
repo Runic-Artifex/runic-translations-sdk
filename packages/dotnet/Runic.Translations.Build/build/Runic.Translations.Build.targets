@@ -61,6 +61,47 @@
     </ItemGroup>
   </Target>
 
+  <!-- Returns this project's catalog declaration and sources, so a project that references it can
+       check its XAML against the catalog without generating it again. -->
+  <Target Name="RunicTranslationsGetXamlCatalogSources"
+          DependsOnTargets="_RunicTranslationsDiscoverTranslationSources"
+          Returns="@(_TranslationsXamlCatalogSource)">
+    <PropertyGroup>
+      <_TranslationsXamlCatalogProject>@(TranslationProject->'%(FullPath)')</_TranslationsXamlCatalogProject>
+    </PropertyGroup>
+    <ItemGroup Condition="'@(TranslationProject->Count())' == '1'">
+      <_TranslationsXamlCatalogSource Include="$(_TranslationsXamlCatalogProject)" RunicTranslationKind="XamlCatalogProject" />
+      <_TranslationsXamlCatalogSource Include="@(TranslationMf2->'%(FullPath)')" RunicTranslationKind="XamlCatalogSource"
+                                      RunicTranslationProject="$(_TranslationsXamlCatalogProject)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- XAML can use the catalog of a directly referenced project, for example Views in the WPF
+       application and translations beside the ViewModels in a class library. The referenced
+       catalogs are only linked to check XAML; their projects generate and report them. -->
+  <Target Name="_RunicTranslationsCollectReferencedXamlCatalogs"
+          DependsOnTargets="_RunicTranslationsDiscoverTranslationSources;PrepareProjectReferences"
+          BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun;CoreCompile"
+          Condition="'$(TranslationsValidateXaml)' != 'false' and '$(TranslationsXamlReferencedCatalogs)' != 'false'">
+    <PropertyGroup>
+      <_TranslationsHasXaml>false</_TranslationsHasXaml>
+      <_TranslationsHasXaml Condition="'@(TranslationXaml)' != ''">true</_TranslationsHasXaml>
+    </PropertyGroup>
+    <MSBuild Projects="@(_MSBuildProjectReferenceExistent)"
+             Targets="RunicTranslationsGetXamlCatalogSources"
+             BuildInParallel="$(BuildInParallel)"
+             Properties="%(_MSBuildProjectReferenceExistent.SetConfiguration); %(_MSBuildProjectReferenceExistent.SetPlatform); %(_MSBuildProjectReferenceExistent.SetTargetFramework)"
+             RemoveProperties="%(_MSBuildProjectReferenceExistent.GlobalPropertiesToRemove)$(_GlobalPropertiesToRemoveFromProjectReferences)"
+             SkipNonexistentTargets="true"
+             Condition="'$(_TranslationsHasXaml)' == 'true' and '@(_MSBuildProjectReferenceExistent)' != ''">
+      <Output TaskParameter="TargetOutputs" ItemName="_TranslationsReferencedXamlCatalogSource" />
+    </MSBuild>
+    <ItemGroup>
+      <AdditionalFiles Include="@(_TranslationsReferencedXamlCatalogSource)" />
+      <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationProject" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="_RunicTranslationsValidateTranslationSources"
           DependsOnTargets="_RunicTranslationsDiscoverTranslationSources"
           BeforeTargets="CoreCompile;RunicTranslationsGenerateTranslationArtifacts">

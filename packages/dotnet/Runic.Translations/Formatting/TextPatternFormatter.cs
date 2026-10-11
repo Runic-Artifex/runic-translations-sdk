@@ -1,10 +1,12 @@
 using System;
+using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 
 namespace Runic.Translations;
 
 /// <summary>Renders the reflection-free version 1 named-placeholder message grammar.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public static class TextPatternFormatter
 {
     /// <summary>The maximum argument count admitted by the version 1 grammar.</summary>

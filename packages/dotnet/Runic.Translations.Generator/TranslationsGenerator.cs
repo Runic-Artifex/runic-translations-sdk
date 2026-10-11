@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Reflection.Metadata;
 using System.Text;
 using System.Threading;
@@ -66,8 +67,21 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             .WithTrackingName("TranslationLink");
         context.RegisterSourceOutput(link, static (productionContext, result) => Emit(productionContext, result));
 
-        IncrementalValueProvider<XamlCatalog?> xamlCatalog = link
+        // Catalogs of referenced projects, linked only to check XAML against: their own build emits and reports them.
+        IncrementalValuesProvider<SourceUnit> referencedUnits = inputs
+            .Where(static input => input.Kind == InputKind.ReferencedMf2)
+            .Select(static (input, cancellationToken) => SourceUnit.Create(input, cancellationToken))
+            .WithTrackingName("TranslationReferencedSourceUnits");
+        IncrementalValueProvider<ImmutableArray<XamlCatalog>> referencedCatalogs = referencedUnits.Collect()
+            .Combine(inputs.Where(static input => input.Kind == InputKind.ReferencedProject).Collect())
+            .Combine(runtimeAbi)
+            .Select(static (pair, cancellationToken) => LinkReferenced(pair.Left.Left, pair.Left.Right, pair.Right, cancellationToken))
+            .WithTrackingName("TranslationReferencedCatalogs");
+
+        IncrementalValueProvider<XamlCatalogs?> xamlCatalog = link
             .Select(static (result, _) => result.XamlCatalog)
+            .Combine(referencedCatalogs)
+            .Select(static (pair, _) => XamlCatalogs.Create(pair.Left, pair.Right))
             .WithTrackingName("TranslationXamlCatalog");
         context.RegisterSourceOutput(
             inputs.Where(static input => input.Kind == InputKind.Xaml).Combine(xamlCatalog).WithTrackingName("TranslationXamlValidation"),
@@ -180,15 +194,20 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         if (string.Equals(kindValue, "Project", StringComparison.Ordinal)) kind = InputKind.Project;
         else if (string.Equals(kindValue, "Rmf2", StringComparison.Ordinal) || string.Equals(kindValue, "Mf2", StringComparison.Ordinal)) kind = InputKind.Mf2;
         else if (string.Equals(kindValue, "Xaml", StringComparison.Ordinal)) kind = InputKind.Xaml;
+        else if (string.Equals(kindValue, "XamlCatalogProject", StringComparison.Ordinal)) kind = InputKind.ReferencedProject;
+        else if (string.Equals(kindValue, "XamlCatalogSource", StringComparison.Ordinal)) kind = InputKind.ReferencedMf2;
         else return default;
 
         options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationCatalog", out string? catalog);
         options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationDefaultCatalog", out string? defaultCatalog);
+        // A referenced catalog source names its project declaration, so several referenced catalogs link separately.
+        string? owner = kind == InputKind.ReferencedMf2 && options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationProject", out string? ownerPath) &&
+            !string.IsNullOrWhiteSpace(ownerPath) ? NormalizePath(ownerPath, optionsProvider.GlobalOptions) : null;
         SourceText? sourceText = additionalText.GetText(cancellationToken);
         string path = NormalizePath(additionalText.Path, optionsProvider.GlobalOptions);
         return sourceText is null
-            ? new GeneratorInput(kind, path, null, catalog, defaultCatalog)
-            : new GeneratorInput(kind, path, sourceText.ToString(), catalog, defaultCatalog);
+            ? new GeneratorInput(kind, path, null, catalog, defaultCatalog, owner)
+            : new GeneratorInput(kind, path, sourceText.ToString(), catalog, defaultCatalog, owner);
     }
 
     private static string NormalizePath(string path, AnalyzerConfigOptions globalOptions)
@@ -273,6 +292,30 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         return new LinkResult(diagnostics.ToImmutable(), linked, runtimeAbi.SupportsReadableSurface);
     }
 
+    // Links each referenced project's catalog for XAML checks only. The referenced project's own
+    // build reports its diagnostics and emits its code, so a catalog that does not link is left out.
+    private static ImmutableArray<XamlCatalog> LinkReferenced(ImmutableArray<SourceUnit> units, ImmutableArray<GeneratorInput> projects,
+        RuntimeAbiState runtimeAbi, CancellationToken cancellationToken)
+    {
+        if (projects.IsEmpty || !runtimeAbi.IsCompatible || !runtimeAbi.SupportsReadableSurface) return ImmutableArray<XamlCatalog>.Empty;
+        var catalogs = ImmutableArray.CreateBuilder<XamlCatalog>();
+        foreach (GeneratorInput project in projects.OrderBy(static project => project.Path, StringComparer.Ordinal))
+        {
+            if (project.Text is null) continue;
+            var compiled = new List<Rmf2SourceUnitV5>();
+            foreach (SourceUnit unit in units.OrderBy(static unit => unit.Input.Path, StringComparer.Ordinal))
+                if (unit.Compiled is not null && string.Equals(unit.Input.Owner, project.Path, StringComparison.Ordinal)) compiled.Add(unit.Compiled);
+            Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
+                new TranslationSource(project.Path, StrictUtf8.GetBytes(project.Text)), compiled, CompilerOptions, cancellationToken);
+            if (compilation.Project is not { } linked ||
+                compilation.Diagnostics.Any(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error) ||
+                !Rmf2ProjectV5EmissionEligibility.CanEmit(linked) || !Rmf2ReadableNamesV1.SupportsClassName(linked.ClassName))
+                continue;
+            catalogs.Add(new XamlCatalog(linked));
+        }
+        return catalogs.ToImmutable();
+    }
+
     private static void Emit(SourceProductionContext context, LinkResult result)
     {
         foreach (Diagnostic diagnostic in result.Diagnostics) context.ReportDiagnostic(diagnostic);
@@ -350,12 +393,15 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         Project,
         Mf2,
         Xaml,
+        ReferencedProject,
+        ReferencedMf2,
     }
 
     internal readonly struct GeneratorInput : IEquatable<GeneratorInput>
     {
-        internal GeneratorInput(InputKind kind, string path, string? text, string? catalog = null, string? defaultCatalog = null)
+        internal GeneratorInput(InputKind kind, string path, string? text, string? catalog = null, string? defaultCatalog = null, string? owner = null)
         {
+            Owner = owner;
             Catalog = catalog;
             DefaultCatalog = defaultCatalog;
             Kind = kind;
@@ -368,11 +414,13 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         internal string? Text { get; }
         internal string? Catalog { get; }
         internal string? DefaultCatalog { get; }
+        internal string? Owner { get; }
 
         public bool Equals(GeneratorInput other) =>
             Kind == other.Kind &&
             string.Equals(Catalog, other.Catalog, StringComparison.Ordinal) &&
             string.Equals(DefaultCatalog, other.DefaultCatalog, StringComparison.Ordinal) &&
+            string.Equals(Owner, other.Owner, StringComparison.Ordinal) &&
             string.Equals(Path, other.Path, StringComparison.Ordinal) &&
             string.Equals(Text, other.Text, StringComparison.Ordinal);
 
@@ -387,6 +435,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Text ?? string.Empty);
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Catalog ?? string.Empty);
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(DefaultCatalog ?? string.Empty);
+                hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Owner ?? string.Empty);
                 return hash;
             }
         }

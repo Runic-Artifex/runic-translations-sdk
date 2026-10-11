@@ -164,6 +164,16 @@ failed or interrupted pack keeps the previous set. The version and `gitHead` are
 written into the packed npm archives; tracked `package.json` files are not modified.
 It does not run `bun run verify-editor-packed`, which CI runs separately.
 
+Packed READMEs, and npm `homepage` fields, link to the release tag `v<version>`
+instead of `main`. This repository's `blob/main` and `tree/main` links are
+rewritten, relative links resolve against the tag, and a remaining main-branch
+link to any Runic Artifex repository fails the pack. Link to another repository
+through its package page or the documentation portal.
+`eng/build/release-links.targets` does this for NuGet packages and
+`eng/release/readme-links.mjs` for npm packages; runic-sdk keeps the same files.
+The C# generator's diagnostic help links also name the tag
+(`RunicDiagnosticsCatalog` in `Directory.Build.props`).
+
 Because the npm archives are now re-gzipped after stamping, their bytes differ from
 archives packed by the earlier flow. Rerunning publish (or a dry run) for a version that was
 already published with that flow reports a content mismatch; new versions are unaffected.

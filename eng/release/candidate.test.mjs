@@ -57,3 +57,30 @@ test("stamping rewrites only the archived manifest", () => scratch(directory => 
   expect(execFileSync("tar", ["-xzOf", archive, "package/dist/index.js"], { encoding: "utf8" }))
     .toBe("export const value = 1;\n".repeat(100));
 }));
+
+test("stamping points the README and homepage at the release tag and rejects main-branch links", () => scratch(directory => {
+  const source = join(directory, "source");
+  mkdirSync(source);
+  const manifest = { name: "@runic-artifex/candidate-test", version: "1.0.0", files: ["README.md"],
+    homepage: "https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/candidate-test#readme" };
+  writeFileSync(join(source, "package.json"), JSON.stringify(manifest));
+  const readme = "[Guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/README.md) and [notes](docs/notes.md)\n";
+  writeFileSync(join(source, "README.md"), readme);
+  const links = { repository: "Runic-Artifex/runic-translations-sdk", tag: "v1.0.0-local", directory: "packages/web/candidate-test" };
+  const pack = () => {
+    execFileSync("bun", ["pm", "pack", "--quiet", "--destination", directory], { cwd: source, stdio: "ignore" });
+    return join(directory, "runic-artifex-candidate-test-1.0.0.tgz");
+  };
+  const archive = pack();
+  stampNpmManifest(archive, { version: "1.0.0-local" }, links);
+  expect(readFileSync(join(source, "README.md"), "utf8")).toBe(readme);
+  expect(execFileSync("tar", ["-xzOf", archive, "package/README.md"], { encoding: "utf8" })).toBe(
+    "[Guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/v1.0.0-local/docs/guides/translations/README.md) and " +
+    "[notes](https://github.com/Runic-Artifex/runic-translations-sdk/blob/v1.0.0-local/packages/web/candidate-test/docs/notes.md)\n");
+  expect(JSON.parse(execFileSync("tar", ["-xzOf", archive, "package/package.json"], { encoding: "utf8" })).homepage)
+    .toBe("https://github.com/Runic-Artifex/runic-translations-sdk/tree/v1.0.0-local/packages/web/candidate-test#readme");
+
+  writeFileSync(join(source, "README.md"), "[Views](https://github.com/Runic-Artifex/runic-sdk/tree/main/packages/web/views)\n");
+  expect(() => stampNpmManifest(pack(), { version: "1.0.0-local" }, links))
+    .toThrow("runic-artifex-candidate-test-1.0.0.tgz README.md links to a main branch (github.com/Runic-Artifex/runic-sdk/tree/main/packages/web/views)");
+}));

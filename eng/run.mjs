@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageAndPromote, stampNpmManifest } from "./release/candidate.mjs";
 
@@ -242,7 +242,9 @@ function packNpm(directory, destination, version, source) {
   const archive = resolve(destination, npmArchiveName(manifest.name, version));
   // Bun's summary would report the integrity of the unstamped archive.
   run("bun", ["pm", "pack", "--quiet", "--destination", destination], directory);
-  stampNpmManifest(packed, { version, gitHead: source });
+  // Links name the release tag of the candidate version.
+  stampNpmManifest(packed, { version, gitHead: source },
+    { repository: "Runic-Artifex/runic-translations-sdk", tag: `v${version}`, directory: relative(root, directory) });
   if (packed !== archive) renameSync(packed, archive);
   console.log(`Packed ${archive}`);
 }

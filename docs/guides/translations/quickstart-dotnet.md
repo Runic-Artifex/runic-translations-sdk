@@ -111,6 +111,13 @@ typed property prints the new text. Your application's reference to its own
 translations library is an ordinary project reference; all Runic dependencies
 come from packages.
 
+Startup code that cannot await, such as a WPF application that opens its window
+with `StartupUri`, can call `AppTextCatalog.CreateManager()` instead: the embedded
+catalog is ready without I/O. A WPF application can keep this layout. Its XAML
+is checked against the referenced `Example.Translations` catalog when it sets
+`TranslationsXamlCatalog` (see the
+[Runic.Translations.Wpf README](../../../packages/dotnet/Runic.Translations.Wpf/README.md#build-time-checks)).
+
 ## 3. Restore and build in CI
 
 Commit both projects, the authoring files, and the generated tool manifest. Keep
@@ -147,3 +154,15 @@ If you also enable JSON or ESM output, install the matching project-local
 [template guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tools/Runic.Translations.Templates/README.md)
 for template parameters, or the [RMF2 guide](rmf2.md) for additional locales and
 message syntax.
+
+## Troubleshooting
+
+- **The build reports `CS8032` and generates no translation code.** The
+  generator runs the .NET 10 translations compiler, so it needs a Roslyn host
+  on .NET 10: `dotnet build` with the .NET 10 SDK, or an IDE whose language
+  server runs on .NET 10. MSBuild or an IDE on .NET Framework or an older .NET
+  cannot load it. See the
+  [generator README](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Generator/README.md).
+- **The build reports an `RTR` diagnostic.** The message names the problem,
+  and the diagnostic links to its entry in [Diagnostics](diagnostics.md) for
+  the release you use.
