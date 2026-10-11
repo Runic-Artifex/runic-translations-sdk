@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace Runic.Translations;
 
 /// <summary>A normalized v5 value: input, local, string-literal or number-literal.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Value
 {
     /// <summary>Creates a value, verifying exact authored/canonical numeric agreement.</summary>
@@ -29,6 +31,7 @@ public sealed class CompiledRmf2Value
 }
 
 /// <summary>An ordered typed formatter or markup option.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Option
 {
     /// <summary>Creates an option.</summary>
@@ -41,6 +44,7 @@ public sealed class CompiledRmf2Option
 }
 
 /// <summary>An inert v5 annotation; absent and empty literal values remain distinct.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Annotation
 {
     /// <summary>Creates an inert annotation with an optional literal value.</summary>
@@ -57,6 +61,7 @@ public sealed class CompiledRmf2Annotation
 }
 
 /// <summary>A v5 expression over an underlying typed carrier and independent formatting metadata.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Expression
 {
     /// <summary>Creates an expression. A missing function inherits operand formatting.</summary>
@@ -87,6 +92,7 @@ public sealed class CompiledRmf2Expression
 }
 
 /// <summary>A v5 caller input, independently of locale formatting choices.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Input
 {
     /// <summary>Creates a caller contract entry.</summary>
@@ -99,6 +105,7 @@ public sealed class CompiledRmf2Input
 }
 
 /// <summary>An ordered input or local declaration.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Declaration
 {
     /// <summary>Creates a declaration with kind input or local.</summary>
@@ -117,6 +124,7 @@ public sealed class CompiledRmf2Declaration
 }
 
 /// <summary>A resolved selector identity and selection function.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Selector
 {
     /// <summary>Creates a selector with exact, plural or ordinal selection.</summary>
@@ -137,6 +145,7 @@ public sealed class CompiledRmf2Selector
 }
 
 /// <summary>A tagged wildcard or literal key, preserving literal stars.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Key
 {
     /// <summary>Creates a wildcard when value is null, otherwise an exact or category literal.</summary>
@@ -153,6 +162,7 @@ public sealed class CompiledRmf2Key
 }
 
 /// <summary>A closed v5 pattern node containing text, an expression, or a linked markup event.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Node
 {
     /// <summary>Creates literal authored text.</summary>
@@ -189,6 +199,7 @@ public sealed class CompiledRmf2Node
 }
 
 /// <summary>A v5 authored variant with a structural key vector.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Variant
 {
     /// <summary>Creates a variant, or a simple pattern with no keys.</summary>
@@ -203,6 +214,7 @@ public sealed class CompiledRmf2Variant
 }
 
 /// <summary>A validated executable v5 message, distinct from the v4 runtime model.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Message
 {
     /// <summary>Creates a message after normalized v5 lowering and project markup linking.</summary>

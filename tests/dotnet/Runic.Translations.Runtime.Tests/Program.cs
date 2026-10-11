@@ -14,6 +14,7 @@ internal static class Program
         Rmf2RuntimeV5Tests.Register(runner);
         TypedSlotBindingsTests.Register(runner);
         TranslationReferenceTests.Register(runner);
+        EditorBrowsableTests.Register(runner);
         return await runner.RunAsync().ConfigureAwait(false);
     }
 }
