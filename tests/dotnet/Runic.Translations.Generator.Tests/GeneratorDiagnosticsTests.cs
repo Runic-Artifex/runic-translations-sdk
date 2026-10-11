@@ -4,10 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
+using TUnit.Core;
 
 namespace Runic.Translations.Generator.Tests;
 
-internal static partial class GeneratorDiagnosticsTests
+internal sealed partial class GeneratorDiagnosticsTests
 {
     private const string Project = """
         {
@@ -20,13 +21,8 @@ internal static partial class GeneratorDiagnosticsTests
         }
         """;
 
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("every compiler diagnostic ID has a tracked descriptor, a specific title and a reference entry", DescriptorsCoverCompilerDiagnostics);
-        runner.Add("reported diagnostics use the static descriptor and keep the compiler's severity", ReportsUseStaticDescriptors);
-    }
-
-    private static void DescriptorsCoverCompilerDiagnostics()
+    [Test, DisplayName("every compiler diagnostic ID has a tracked descriptor, a specific title and a reference entry")]
+    public void DescriptorsCoverCompilerDiagnostics()
     {
         string root = RepositoryRoot();
         var used = new SortedSet<string>(StringComparer.Ordinal);
@@ -62,7 +58,8 @@ internal static partial class GeneratorDiagnosticsTests
         }
     }
 
-    private static void ReportsUseStaticDescriptors()
+    [Test, DisplayName("reported diagnostics use the static descriptor and keep the compiler's severity")]
+    public void ReportsUseStaticDescriptors()
     {
         GeneratorRun missing = GeneratorTestHost.Run(RuntimeReferenceMode.Missing, ProjectInput(), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "title = Shop\n"));
         Assert.True(ReferenceEquals(TranslationsDiagnostics.RuntimeAbi, missing.SingleResult.Diagnostics.Single().Descriptor), "RTR0024 does not use its static descriptor.");

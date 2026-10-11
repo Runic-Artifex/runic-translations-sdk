@@ -23,12 +23,25 @@ When a `--check` command reports a stale file, run the same script without `--ch
 Packed mode is driven only by this script: it installs `dotnet-runic-translations` from the local feed into `artifacts/editor-packed/tool` and passes it as `TranslationsToolCommand`, so there is no `.config/dotnet-tools.json` and a plain `dotnet build -p:RunicEditorUsePackedTranslations=true` is not supported. Only the NuGet packages are tested in packed form. The editor frontend keeps consuming the npm Translations packages through `workspace:*` links.
 
 The XAML checks can be verified independently with `dotnet run --project
-tests/dotnet/Runic.Translations.Generator.Tests --configuration Release` and
-`dotnet run --project tests/dotnet/Runic.Translations.Build.Tests --configuration
-Release -- --xaml`. `--xaml-wpf` also compiles real WPF `Page` items and requires
-the WPF adapter built in the same configuration first. For locally packed
-Runtime and Build candidates, pass `--xaml-packages <feed> <version>` to the Build
-tests; this exercises the packaged analyzer without project references.
+tests/dotnet/Runic.Translations.Generator.Tests --configuration Release --
+--treenode-filter "/*/*/GeneratorXamlTests/*"` and `dotnet run --project
+tests/dotnet/Runic.Translations.Build.Tests --configuration Release -- --xaml`.
+`--xaml-wpf` also compiles real WPF `Page` items and requires the WPF adapter
+built in the same configuration first. For locally packed Runtime and Build
+candidates, pass `--xaml-packages <feed> <version>` to the Build tests; this
+exercises the packaged analyzer without project references.
+
+## Test suites
+
+The managed suites under `tests/dotnet` are executables run with `dotnet run --project <suite> --configuration Release`. Most still use a small suite-local `TestRunner`. `Runic.Translations.Generator.Tests` uses [TUnit](https://tunit.dev) on Microsoft.Testing.Platform (MTP); move further suites to the same pattern one at a time:
+
+- **Project.** Keep `OutputType` `Exe`. Reference `TUnit.Core`, `TUnit.Engine`, `Microsoft.Testing.Extensions.TrxReport` and `Microsoft.Testing.Extensions.CodeCoverage`, whose versions are pinned in `Directory.Packages.props`. The `TUnit` metapackage is not used: it adds TUnit's assertion library and the MTP telemetry extension, and the suites keep their own assertions. Set `TUnitImplicitUsings` to `false` and write `using TUnit.Core;`, as the repository does not use implicit usings. TUnit generates the entry point, so delete `Program.cs`.
+- **Lock file.** Set `RestorePackagesWithLockFile` to `true` and `RestoreLockedMode` to `true` when `CI` is `true`, and commit `packages.lock.json`. CI then fails with NU1004 if the lock file is stale, for example after a package version or a referenced project's dependency changes. Update it with `dotnet restore <suite> --force-evaluate` in the development shell.
+- **Cases.** Each case is a non-static `[Test]` method in a non-static class. `[DisplayName]` keeps the case's readable name in console output, TRX and the IDE. A case fails when it throws, so suite-local `Assert` helpers keep working.
+- **Running and filtering.** Arguments after `--` go to the test application: `--list-tests` lists the cases, and `--treenode-filter "/<assembly>/<namespace>/<class>/<method>"` selects them, with `*` as a wildcard, for example `--treenode-filter "/*/*/GeneratorTests/SynchronousManager"`. `--filter` is not supported. The exit code is 0 when all selected cases pass, 2 when one fails and 8 when none ran. `dotnet test` is not supported yet: `global.json` does not opt in to the MTP mode of `dotnet test`, and the VSTest mode fails on .NET 10.
+- **Reports.** `bun eng/run.mjs test` passes `--report-trx --coverage --coverage-output-format cobertura` and writes `<suite>.trx` and `<suite>.cobertura.xml` to `artifacts/test-results/<suite>`, which CI uploads as `runic-translations-test-results`. Without `--results-directory`, TUnit writes its HTML and JSON reports to `bin/<configuration>/net10.0/TestResults`.
+- **Parallelism.** TUnit runs cases in parallel. Before you allow this for a suite, make sure no case shares mutable static state, the current directory, environment variables, ports or files with another case. The generator cases are isolated and CPU-bound, so `AssemblyInfo.cs` limits them to one case per processor with `ParallelLimiter<ProcessorCountParallelLimit>`. Pass `--maximum-parallel-tests 1` to run cases one at a time while debugging; mark a case or class that cannot run alongside others with `[NotInParallel]`.
+- **IDE.** Visual Studio, Rider and the C# Dev Kit discover MTP test projects when their Microsoft.Testing.Platform support is enabled. See [running TUnit tests](https://tunit.dev/docs/getting-started/running-your-tests/).
 
 ## Public API
 

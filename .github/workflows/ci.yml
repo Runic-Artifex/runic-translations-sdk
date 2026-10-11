@@ -65,6 +65,13 @@ jobs:
           if-no-files-found: ignore
           # Publish preview reuses this artifact of a successful push run on main.
           retention-days: 30
+      # TRX and Cobertura coverage of the TUnit suites (see CONTRIBUTING.md).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: runic-translations-test-results
+          path: artifacts/test-results
+          if-no-files-found: ignore
   inline-browser:
     name: Svelte inline SSR and browser hydration
     runs-on: ubuntu-24.04

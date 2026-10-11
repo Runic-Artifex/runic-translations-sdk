@@ -2,10 +2,11 @@ using System;
 using System.Globalization;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using TUnit.Core;
 
 namespace Runic.Translations.Generator.Tests;
 
-internal static class GeneratorXamlTests
+internal sealed class GeneratorXamlTests
 {
     private const string Project = """
         { "schemaVersion": 1, "catalog": "app", "code": { "namespace": "Example", "className": "AppText" }, "baseLocale": "en" }
@@ -23,26 +24,8 @@ internal static class GeneratorXamlTests
           {#p}Document{/p}
         """;
 
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("XAML accepts positional/named bindings, aliases, namespace scopes and nested markup", ValidDeclarations);
-        runner.Add("XAML reports unknown readable keys and exact source locations", UnknownKeys);
-        runner.Add("XAML checks named input identifiers, arity, duplicates, gaps and mixed forms", InvalidInputs);
-        runner.Add("XAML warns when several inputs bind by position and names the positional order", PositionalInputs);
-        runner.Add("XAML input diagnostics name the problem and the expected inputs", InputMessages);
-        runner.Add("XAML suggests the closest readable key for an unknown key", KeySuggestions);
-        runner.Add("XAML checks plain, inline rich and document content kinds", MessageKinds);
-        runner.Add("XAML narrows explicit sources to their scope and reports what is not checked", SourceNarrowing);
-        runner.Add("XAML distinguishes binding data sources from Message and attached catalog sources", SourceScope);
-        runner.Add("XAML preserves dynamic keys and external/inherited sources without catalog assumptions", UnresolvedDeclarations);
-        runner.Add("XAML validates only the Runic namespace and explicitly marked files", NamespaceAndOptIn);
-        runner.Add("XAML reports malformed XML and declarations without crashing or resolving entities", InvalidDeclarations);
-        runner.Add("XAML skips mc:Ignorable design-time content and mc:AlternateContent", DesignTimeContent);
-        runner.Add("XAML is not checked without the readable surface; only RTR0068 is reported", WithoutReadableSurface);
-        runner.Add("XAML checks keys against the catalogs of referenced projects without generating them", ReferencedCatalogs);
-    }
-
-    private static void DesignTimeContent()
+    [Test, DisplayName("XAML skips mc:Ignorable design-time content and mc:AlternateContent")]
+    public void DesignTimeContent()
     {
         const string Compatibility = """xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d" """;
         Assert.Equal(0, Run("<StackPanel " + Compatibility + """
@@ -65,7 +48,8 @@ internal static class GeneratorXamlTests
         Assert.Equal("RTR0081", Run("""<TextBlock xmlns:o="urn:other" o:Tag="{rt:Message typo}"/>""").Single().Id, "non-ignorable attached namespaces stay checked");
     }
 
-    private static void ReferencedCatalogs()
+    [Test, DisplayName("XAML checks keys against the catalogs of referenced projects without generating them")]
+    public void ReferencedCatalogs()
     {
         const string CoreProject = "C:/core/translations/runic.json", SharedProject = "C:/shared/translations/runic.json";
         const string Shared = """
@@ -108,7 +92,8 @@ internal static class GeneratorXamlTests
         Assert.Equal(0, broken.SingleResult.Diagnostics.Length, string.Join("\n", broken.SingleResult.Diagnostics));
     }
 
-    private static void WithoutReadableSurface()
+    [Test, DisplayName("XAML is not checked without the readable surface; only RTR0068 is reported")]
+    public void WithoutReadableSurface()
     {
         GeneratorRun run = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3, new TestInput("C:/repo/translations/runic.json", "Project", Project),
             new TestInput("C:/repo/translations/en.rmf2", "Rmf2", English),
@@ -135,7 +120,8 @@ internal static class GeneratorXamlTests
         return run.SingleResult.Diagnostics.Where(static diagnostic => diagnostic.Id.StartsWith("RTR008", StringComparison.Ordinal)).ToArray();
     }
 
-    private static void ValidDeclarations()
+    [Test, DisplayName("XAML accepts positional/named bindings, aliases, namespace scopes and nested markup")]
+    public void ValidDeclarations()
     {
         Diagnostic[] diagnostics = Run("""
             <TextBlock Text="{rt:Message application_title}"/>
@@ -158,7 +144,8 @@ internal static class GeneratorXamlTests
         Assert.Equal(0, diagnostics.Length, string.Join("\n", diagnostics.Select(static diagnostic => diagnostic.ToString())));
     }
 
-    private static void UnknownKeys()
+    [Test, DisplayName("XAML reports unknown readable keys and exact source locations")]
+    public void UnknownKeys()
     {
         Diagnostic diagnostic = Run("<TextBlock Text=\"{rt:Message applicaton_title}\"/>").Single();
         Assert.Equal("RTR0081", diagnostic.Id, diagnostic.ToString());
@@ -169,7 +156,8 @@ internal static class GeneratorXamlTests
         Assert.Equal("RTR0081", Run("<TextBlock Text=\"{rt:Message application.title}\"/>").Single().Id, "flattened name");
     }
 
-    private static void InvalidInputs()
+    [Test, DisplayName("XAML checks named input identifiers, arity, duplicates, gaps and mixed forms")]
+    public void InvalidInputs()
     {
         foreach (string content in new[]
         {
@@ -195,7 +183,8 @@ internal static class GeneratorXamlTests
         Assert.Equal(DiagnosticSeverity.Info, diagnostic.Severity, message);
     }
 
-    private static void PositionalInputs()
+    [Test, DisplayName("XAML warns when several inputs bind by position and names the positional order")]
+    public void PositionalInputs()
     {
         // heading = Editing {$name} ({$email}): the generated parameters are (email, name).
         Diagnostic swapped = Run("<TextBlock Text=\"{rt:Message heading, Arg0={Binding Name}, Arg1={Binding Email}}\"/>").Single();
@@ -214,7 +203,8 @@ internal static class GeneratorXamlTests
         Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message pair, Arg0={Binding One}, Arg1={Binding Two}}\"/>", catalog: null).Length, "order unknown without a catalog");
     }
 
-    private static void InputMessages()
+    [Test, DisplayName("XAML input diagnostics name the problem and the expected inputs")]
+    public void InputMessages()
     {
         (string Content, string Expected)[] cases =
         [
@@ -238,7 +228,8 @@ internal static class GeneratorXamlTests
         }
     }
 
-    private static void KeySuggestions()
+    [Test, DisplayName("XAML suggests the closest readable key for an unknown key")]
+    public void KeySuggestions()
     {
         foreach ((string key, string suggestion) in new[] { ("applicaton_title", "application_title"), ("application.title", "application_title"),
             ("Application_Title", "application_title"), ("greting", "greeting"), ("pairs", "pair") })
@@ -252,7 +243,8 @@ internal static class GeneratorXamlTests
         Assert.True(unrelated.GetMessage(CultureInfo.InvariantCulture).Contains("flattened readable name", StringComparison.Ordinal), unrelated.GetMessage(CultureInfo.InvariantCulture));
     }
 
-    private static void SourceNarrowing()
+    [Test, DisplayName("XAML narrows explicit sources to their scope and reports what is not checked")]
+    public void SourceNarrowing()
     {
         // The WPF trial's case: one Message with its own Source no longer hides a typo elsewhere in the file.
         Diagnostic[] own = Run("""
@@ -298,7 +290,8 @@ internal static class GeneratorXamlTests
         Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message application_title, Source={StaticResource App}}\"/>", catalog: "app").Length, "file assertion checks explicit sources");
     }
 
-    private static void MessageKinds()
+    [Test, DisplayName("XAML checks plain, inline rich and document content kinds")]
+    public void MessageKinds()
     {
         (string Content, string Expected)[] wording =
         [
@@ -314,7 +307,8 @@ internal static class GeneratorXamlTests
             Assert.Equal("RTR0083", Run(content).Single().Id, content);
     }
 
-    private static void UnresolvedDeclarations()
+    [Test, DisplayName("XAML preserves dynamic keys and external/inherited sources without catalog assumptions")]
+    public void UnresolvedDeclarations()
     {
         Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message outside}\"/>", catalog: null).Length, "unknown catalog");
         AssertSkipped(Run("<TextBlock Text=\"{rt:Message outside, Source={StaticResource External}}\"/>", catalog: null, defaultCatalog: "app"), "external resource source");
@@ -328,7 +322,8 @@ internal static class GeneratorXamlTests
         Assert.Equal("RTR0080", Run("<TextBlock Text=\"{rt:Message greeting}\"/>", catalog: "external").Single().Id, "incorrect local catalog assertion");
     }
 
-    private static void SourceScope()
+    [Test, DisplayName("XAML distinguishes binding data sources from Message and attached catalog sources")]
+    public void SourceScope()
     {
         foreach (string content in new[]
         {
@@ -369,7 +364,8 @@ internal static class GeneratorXamlTests
         Assert.Equal("RTR0081", Run("""<Setter Property="{x:Static other:Properties.BackgroundProperty}"/><TextBlock Text="{rt:Message typo}"/>""", catalog: null, defaultCatalog: "app").Single().Id, "unrelated dependency property");
     }
 
-    private static void NamespaceAndOptIn()
+    [Test, DisplayName("XAML validates only the Runic namespace and explicitly marked files")]
+    public void NamespaceAndOptIn()
     {
         Assert.Equal(0, Run("<TextBlock Text=\"{other:Message typo}\"/><TextBlock Text=\"{}{rt:Message typo}\"/><TextBlock xmlns:rt=\"clr-namespace:Other;assembly=Other\" Text=\"{rt:Message typo}\"/>").Length, "namespace/escaped literals");
         GeneratorRun run = GeneratorTestHost.Run(new TestInput("C:/repo/translations/runic.json", "Project", Project),
@@ -377,7 +373,8 @@ internal static class GeneratorXamlTests
         Assert.Equal(0, run.SingleResult.Diagnostics.Length, "unmarked input ignored");
     }
 
-    private static void InvalidDeclarations()
+    [Test, DisplayName("XAML reports malformed XML and declarations without crashing or resolving entities")]
+    public void InvalidDeclarations()
     {
         foreach (string content in new[] { "<rt:Message/>", "<TextBlock Text=\"{rt:Message greeting, Key=application_title}\"/>",
             "<TextBlock Text=\"{rt:Message greeting, Arg0={Binding Name}\"/>", "<rt:Message Key=\"\"/>",

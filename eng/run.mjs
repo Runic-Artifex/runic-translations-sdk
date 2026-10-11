@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageAndPromote, stampNpmManifest } from "./release/candidate.mjs";
 
@@ -139,7 +139,22 @@ function testManaged() {
   ];
   for (const project of projects)
     run("dotnet", ["run", "--project", project, "--configuration", configuration,
-      ...(project.includes("Rmf2AotTests") || project.includes("readable-consumer") ? [] : ["--no-build"])]);
+      ...(project.includes("Rmf2AotTests") || project.includes("readable-consumer") ? [] : ["--no-build"]),
+      ...(tunitProjects.has(project) ? tunitReportArguments(project) : [])]);
+}
+
+// TUnit test applications run on Microsoft.Testing.Platform; the other suites keep their own executables.
+const tunitProjects = new Set([
+  "tests/dotnet/Runic.Translations.Generator.Tests/Runic.Translations.Generator.Tests.csproj",
+]);
+
+// Writes a TRX report and Cobertura coverage per suite to artifacts/test-results/<suite>, which CI uploads.
+function tunitReportArguments(project) {
+  const name = basename(project, ".csproj");
+  const results = resolve(root, "artifacts/test-results", name);
+  rmSync(results, { recursive: true, force: true });
+  return ["--", "--results-directory", results, "--report-trx", "--report-trx-filename", `${name}.trx`,
+    "--coverage", "--coverage-output-format", "cobertura", "--coverage-output", `${name}.cobertura.xml`];
 }
 
 function testPackagedManaged(version = workspace.version) {
