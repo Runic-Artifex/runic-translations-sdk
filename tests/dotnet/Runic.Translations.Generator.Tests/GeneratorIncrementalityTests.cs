@@ -65,7 +65,7 @@ internal static class GeneratorIncrementalityTests
         Assert.Equal(1, validated.Count(static reason => reason == IncrementalStepRunReason.Modified), "XAML validation outputs: " + string.Join(", ", validated));
         var validation = new Dictionary<string, IncrementalStepRunReason>(StringComparer.Ordinal);
         foreach ((object value, IncrementalStepRunReason reason) in edited.SingleResult.TrackedSteps["TranslationXamlValidation"].SelectMany(step => step.Outputs))
-            validation[(((TranslationsGenerator.GeneratorInput, XamlCatalog?))value).Item1.Path] = reason;
+            validation[(((TranslationsGenerator.GeneratorInput, XamlCatalogs?))value).Item1.Path] = reason;
         Assert.Equal(IncrementalStepRunReason.Modified, validation[Normalize(MainXamlPath)], "edited XAML");
         Assert.Equal(IncrementalStepRunReason.Cached, validation[Normalize(OtherXamlPath)], "unchanged XAML");
         Assert.Equal("RTR0081", edited.SingleResult.Diagnostics.Single().Id, "edited XAML is revalidated");

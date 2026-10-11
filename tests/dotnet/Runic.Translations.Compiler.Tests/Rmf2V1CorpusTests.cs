@@ -179,7 +179,8 @@ internal static class Rmf2V1CorpusTests
     // Re-pinned for the DOM document adapter (W220-005): runtime.js gains createDomDocumentRenderer and
     // runtime.d.ts its declaration (Element | DocumentFragment targets); the web manifest changes only
     // for those two assets. Re-pinned for a comment in runtime.js that states the empty-block rule precisely.
-    private const string EncodedOutputDigest = "495d98c94192b42cac4305cc223e5a5cfed999f54bb73c7e0d0da36bc591325c";
+    // Re-pinned for W250-016: the C# registration gains the synchronous CreateManager. Every other output is unchanged.
+    private const string EncodedOutputDigest = "e995151c2219307c10b041420ae74cf316836e388b9e503f78b43a1eebd749b6";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     private static void EncodedOutputs()

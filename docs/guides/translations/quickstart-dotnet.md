@@ -102,6 +102,13 @@ typed property prints the new text. Your application's reference to its own
 translations library is an ordinary project reference; all Runic dependencies
 come from packages.
 
+Startup code that cannot await, such as a WPF application that opens its window
+with `StartupUri`, can call `AppTextCatalog.CreateManager()` instead: the embedded
+catalog is ready without I/O. A WPF application can keep this layout. Its XAML
+is checked against the referenced `Example.Translations` catalog when it sets
+`TranslationsXamlCatalog` (see the
+[Runic.Translations.Wpf README](../../../packages/dotnet/Runic.Translations.Wpf/README.md#build-time-checks)).
+
 ## 3. Restore and build in CI
 
 Commit both projects, the authoring files, and the generated tool manifest. Keep

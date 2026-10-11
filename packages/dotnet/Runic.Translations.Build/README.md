@@ -46,6 +46,15 @@ its default source (the `catalog` value from `runic.json`):
 </PropertyGroup>
 ```
 
+The catalog can also come from a project the WPF project references directly,
+for example a class library that holds the ViewModels and the
+`translations/runic.json` they use. The referenced project generates and owns
+`AppText`, and the build checks the application's XAML against that catalog
+without generating it again. That project must import these build targets as
+well, as it does to generate the catalog. A local catalog takes precedence over a
+referenced catalog with the same ID. Set `TranslationsXamlReferencedCatalogs` to
+`false` to skip the referenced catalogs.
+
 `Page` and `ApplicationDefinition` items in `UseWPF=true` projects are scanned
 automatically. Static `{rt:Message application_title}` and long-form
 `Message`/`MessageInput` declarations are checked against the generated readable
@@ -77,8 +86,8 @@ an explicitly selected file outside WPF, use:
 ```
 
 A per-file `Catalog` assertion also covers explicit sources in that file. The
-catalog must be the local `TranslationProject` catalog; external catalogs are
-not loaded by this check. Without a catalog assertion, only declaration mistakes
+catalog must be the local `TranslationProject` catalog or a directly referenced
+project's catalog; external catalogs are not loaded by this check. Without a catalog assertion, only declaration mistakes
 that do not require a catalog (missing Key, duplicate/mixed/gapped inputs) are
 checked. Keys and input names from bindings, resources or `x:Static`, and dynamic
 input collections, retain runtime validation. For rich messages, argument/slot

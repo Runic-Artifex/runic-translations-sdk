@@ -123,6 +123,26 @@ If you await in `OnStartup`, keep the default context: `ConfigureAwait(false)`
 would continue on a thread-pool thread, where the source cannot find a dispatcher
 and `Show()` fails.
 
+> [!IMPORTANT]
+> **Using `StartupUri` in `App.xaml`?** WPF loads that window right after
+> `OnStartup` returns, which is before an awaited `CreateManagerAsync` has
+> finished. The window would then show `[key]` texts and skip the load check,
+> and its bindings do not pick up the source once it exists. Create the manager
+> synchronously instead. The embedded catalog needs no I/O, so `CreateManager` returns at once:
+>
+> ```csharp
+> protected override void OnStartup(StartupEventArgs e)
+> {
+>     base.OnStartup(e);
+>     ITranslationManager manager = AppTextCatalog.CreateManager("en");
+>     TranslationSource.Default = new TranslationSource(manager, new AppText(manager).Messages, renderer);
+> }
+> ```
+>
+> Alternatively, remove `StartupUri` and show the window yourself after the
+> await, as above. External catalogs (`CreateExternalManagerAsync`) load packs
+> and stay asynchronous.
+
 ### 4. Bind the screen
 
 ```xml
@@ -249,9 +269,10 @@ failing every view. At run time an element without any source traces a binding e
 
 ### Build-time checks
 
-With a local generating catalog, set
-`TranslationsXamlCatalog` to its catalog ID to check static XAML keys, plain/rich
-usage, input counts and readable parameter names during the build. Files with
+Set `TranslationsXamlCatalog` to the catalog ID of the local generating catalog,
+or of a directly referenced project's catalog (for example translations beside
+the ViewModels in a class library), to check static XAML keys, plain/rich usage,
+input counts and readable parameter names during the build. Files with
 explicit source declarations require a per-file `TranslationXaml` catalog
 assertion. A file whose source is inherited from another file or set in code is
 checked against the default; skip it with

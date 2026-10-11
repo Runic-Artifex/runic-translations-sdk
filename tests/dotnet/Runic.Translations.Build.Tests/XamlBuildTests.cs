@@ -11,6 +11,7 @@ internal static class XamlBuildTests
     {
         runner.Add("XAML items include WPF pages/application and catalog metadata", ItemWiring);
         runner.Add("XAML consumer builds valid bindings and fails for changed keys/inputs/kinds", () => ConsumerBuild(feed, version, wpf));
+        runner.Add("XAML is checked against the catalog of a referenced project", () => ReferencedCatalog(feed, version, wpf));
     }
 
     private static string Xml(string path) => new XAttribute("p", path).ToString()[3..^1];
@@ -50,19 +51,7 @@ internal static class XamlBuildTests
             """);
         File.WriteAllText(temporary.Resolve("translations", "en.rmf2"), "title = App\ngreeting = Hi {$name}\npair = {$first} and {$second}\nhelp = {#link ref=guide}Guide{/link}\n");
         File.WriteAllText(temporary.Resolve("Program.cs"), "using Consumer; internal static class Program { static void Main() { _ = typeof(AppText); } }\n");
-        string wpfReference = wpf ? "<Reference Include=\"Runic.Translations.Wpf\" HintPath=\"" + Xml(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Wpf", "bin", Configuration, "net10.0-windows", "Runic.Translations.Wpf.dll")) + "\"/>" : string.Empty;
-        string references = feed is null ? $$"""
-            <Import Project="{{Xml(Path.Combine(PackageDirectory, "build", "Runic.Translations.Build.props"))}}"/>
-            <ItemGroup>
-              {{wpfReference}}
-              <Reference Include="Runic.Translations" HintPath="{{Xml(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations", "bin", Configuration, "net10.0", "Runic.Translations.dll"))}}"/>
-              <Analyzer Include="{{Xml(Path.Combine(PackageDirectory, "bin", Configuration, "net10.0", "Runic.Translations.Generator.dll"))}}"/>
-              <Analyzer Include="{{Xml(Path.Combine(PackageDirectory, "bin", Configuration, "net10.0", "Runic.Translations.Compiler.dll"))}}"/>
-            </ItemGroup>
-            <Import Project="{{Xml(Path.Combine(PackageDirectory, "build", "Runic.Translations.Build.targets"))}}"/>
-            """ : $$"""
-            <ItemGroup><PackageReference Include="Runic.Translations" Version="[{{version}}]"/><PackageReference Include="Runic.Translations.Build" Version="[{{version}}]"/></ItemGroup>
-            """;
+        string references = References(feed, version, wpf);
         string framework = wpf ? "net10.0-windows" : "net10.0";
         string wpfProperties = wpf ? "<UseWPF>true</UseWPF><EnableWindowsTargeting>true</EnableWindowsTargeting>" : string.Empty;
         string xamlItem = wpf ? string.Empty : "<TranslationXaml Include=\"View.xaml\"/>";
@@ -111,5 +100,69 @@ internal static class XamlBuildTests
 
         void WriteView(string value, string? content = null) => File.WriteAllText(temporary.Resolve("View.xaml"), "<TextBlock xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\" xmlns:rt=\"clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf\" Text=\"" + value + "\"" + (content is null ? "/>" : ">" + content + "</TextBlock>"), new UTF8Encoding(false));
         ProcessResult Build(bool noRestore = false) => Processes.DotNet(temporary.Path, noRestore ? ["build", "Consumer.csproj", "--no-restore", "/nologo"] : ["build", "Consumer.csproj", "/nologo"]);
+    }
+
+    // Runic.Translations references for a test project: the repository build, or a candidate package feed.
+    private static string References(string? feed, string? version, bool wpf)
+    {
+        string wpfReference = wpf ? "<Reference Include=\"Runic.Translations.Wpf\" HintPath=\"" + Xml(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Wpf", "bin", Configuration, "net10.0-windows", "Runic.Translations.Wpf.dll")) + "\"/>" : string.Empty;
+        return feed is null ? $$"""
+            <Import Project="{{Xml(Path.Combine(PackageDirectory, "build", "Runic.Translations.Build.props"))}}"/>
+            <ItemGroup>
+              {{wpfReference}}
+              <Reference Include="Runic.Translations" HintPath="{{Xml(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations", "bin", Configuration, "net10.0", "Runic.Translations.dll"))}}"/>
+              <Analyzer Include="{{Xml(Path.Combine(PackageDirectory, "bin", Configuration, "net10.0", "Runic.Translations.Generator.dll"))}}"/>
+              <Analyzer Include="{{Xml(Path.Combine(PackageDirectory, "bin", Configuration, "net10.0", "Runic.Translations.Compiler.dll"))}}"/>
+            </ItemGroup>
+            <Import Project="{{Xml(Path.Combine(PackageDirectory, "build", "Runic.Translations.Build.targets"))}}"/>
+            """ : $$"""
+            <ItemGroup><PackageReference Include="Runic.Translations" Version="[{{version}}]"/><PackageReference Include="Runic.Translations.Build" Version="[{{version}}]"/></ItemGroup>
+            """;
+    }
+
+    // The catalog lives in a class library beside the ViewModels; the application's XAML is checked against it.
+    private static void ReferencedCatalog(string? feed, string? version, bool wpf)
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("Core", "translations"));
+        Directory.CreateDirectory(temporary.Resolve("App"));
+        File.WriteAllText(temporary.Resolve("Core", "translations", "runic.json"), """
+            {"schemaVersion":1,"catalog":"app","code":{"namespace":"Core","className":"AppText","visibility":"public"},"baseLocale":"en"}
+            """);
+        File.WriteAllText(temporary.Resolve("Core", "translations", "en.rmf2"), "title = App\ngreeting = Hi {$name}\n");
+        File.WriteAllText(temporary.Resolve("Core", "Core.csproj"), $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup>
+              {{References(feed, version, wpf: false)}}
+            </Project>
+            """);
+        string framework = wpf ? "net10.0-windows" : "net10.0";
+        string wpfProperties = wpf ? "<UseWPF>true</UseWPF><EnableWindowsTargeting>true</EnableWindowsTargeting>" : string.Empty;
+        string xamlItem = wpf ? string.Empty : "<TranslationXaml Include=\"View.xaml\"/>";
+        // The application declares no TranslationProject and uses the referenced project's generated catalog.
+        File.WriteAllText(temporary.Resolve("App", "Program.cs"), "internal static class Program { static void Main() { _ = Core.AppTextCatalog.CreateManager(); } }\n");
+        File.WriteAllText(temporary.Resolve("App", "App.csproj"), $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>{{framework}}</TargetFramework>{{wpfProperties}}<OutputType>Exe</OutputType><TreatWarningsAsErrors>true</TreatWarningsAsErrors><TranslationsXamlCatalog>app</TranslationsXamlCatalog></PropertyGroup>
+              <ItemGroup>{{xamlItem}}<ProjectReference Include="../Core/Core.csproj"/></ItemGroup>
+              {{References(feed, version, wpf)}}
+            </Project>
+            """);
+        if (feed is not null)
+            File.WriteAllText(temporary.Resolve("NuGet.config"), $$"""
+                <configuration><packageSources><clear/><add key="candidate" value="{{Xml(feed)}}"/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources><packageSourceMapping><packageSource key="candidate"><package pattern="Runic.Translations*"/></packageSource><packageSource key="nuget.org"><package pattern="*"/></packageSource></packageSourceMapping></configuration>
+                """);
+        WriteView("{rt:Message greeting, Arg0={Binding Name}}");
+        ProcessResult valid = Build(); Assert.Equal(0, valid.ExitCode, valid.Combined);
+        WriteView("{rt:Message greetng, Arg0={Binding Name}}");
+        ProcessResult typo = Build(noRestore: true);
+        Assert.True(typo.ExitCode != 0, "A key missing from the referenced catalog compiled."); Assert.Contains("RTR0081", typo.Combined); Assert.Contains("View.xaml(1,", typo.Combined);
+        WriteView("{rt:Message greeting}");
+        ProcessResult inputs = Build(noRestore: true); Assert.True(inputs.ExitCode != 0, inputs.Combined); Assert.Contains("RTR0082", inputs.Combined);
+        ProcessResult optedOut = Processes.DotNet(temporary.Resolve("App"), "build", "App.csproj", "--no-restore", "/p:TranslationsXamlReferencedCatalogs=false", "/nologo");
+        Assert.Equal(0, optedOut.ExitCode, optedOut.Combined);
+
+        void WriteView(string value) => File.WriteAllText(temporary.Resolve("App", "View.xaml"), "<TextBlock xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" xmlns:rt=\"clr-namespace:Runic.Translations.Wpf;assembly=Runic.Translations.Wpf\" Text=\"" + value + "\"/>", new UTF8Encoding(false));
+        ProcessResult Build(bool noRestore = false) => Processes.DotNet(temporary.Resolve("App"), noRestore ? ["build", "App.csproj", "--no-restore", "/nologo"] : ["build", "App.csproj", "/nologo"]);
     }
 }
