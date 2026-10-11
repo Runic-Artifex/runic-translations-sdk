@@ -6,7 +6,8 @@ messages appear in every host: the C# source generator in
 `runic-translations` tool (`validate`, `generate`, `verify`, `serve`), the
 language server and the editor. Each message names the specific problem; this
 page explains what each ID covers and how to fix it. Locations use the source
-file, a one-based line and column, and UTF-16 columns.
+file, a one-based line and column, and UTF-16 columns. The generator's help
+links open this page at the release tag of the package you use.
 
 Most diagnostics are errors and stop generation. `RTR0010`, `RTR0011` and
 `RTR0021` follow the project's `validation` policies (`allow`, `warning` or
@@ -315,9 +316,21 @@ words with spaces, so join the lines or end the first line with U+200B.
 
 ## Other hosts
 
-`RTR0020` is reported by the `runic-translations` tool and MSBuild when a
-generated output path is invalid or escapes the output root. `RTR0023` is the
-runtime's classification of a rejected external translation pack.
+The C# source generator does not report `RTR0020` and `RTR0023`.
+
+## RTR0020
+
+Generated output path is invalid. The `runic-translations` tool and MSBuild
+report it when a generated output path is invalid or escapes the output root,
+or when a translation source, the output directory or the staging directory is
+a symbolic link or reparse point. Keep generated paths inside the output root
+(for MSBuild, `TranslationsOutputPath` beneath `IntermediateOutputPath`) and
+replace links with real files or directories.
+
+## RTR0023
+
+External translation pack is rejected. This is the runtime's classification of
+a rejected external translation pack.
 `RTR0023/markup-contract-version-mismatch` means the pack was built for another
 Runic markup contract version (for example by an earlier compiler release);
 rebuild the pack with the current compiler.
@@ -366,3 +379,59 @@ Translation XAML keys under an explicit source are not checked. Static keys are 
 ```
 
 Keys of another catalog cannot be checked by the build; the WPF adapter still checks them when the XAML loads. Informational diagnostics appear in the IDE's error list but not in command-line build output; to see them there, raise the severity with `dotnet_diagnostic.RTR0085.severity = warning` in `.editorconfig` or a global analyzer config.
+
+## runic-translations tool codes
+
+The `runic-translations` tool (`dotnet-runic-translations`) reports these codes
+in the `runic.commandline/1` envelope. Exit code `1` means catalog or
+verification diagnostics, `2` an invalid invocation or an operational failure.
+
+## RCLI9000
+
+The translations command could not be completed. The fault of a failed command;
+its diagnostics name the cause.
+
+## RCLI9001
+
+The requested output could not be written, for example because of an
+`RTR0020` path problem. Fix the reported path and run the command again.
+
+## RCLI9002
+
+The translations operation reported diagnostics. Fix the `RTR` diagnostics it
+lists.
+
+## RCLI9003
+
+The command arguments are invalid. The message names the argument, and human
+output prints the usage.
+
+## RCLI9004
+
+A translations project could not be created, for example because the project
+already exists; no files were written. The message names the problem.
+
+## RCLI9005
+
+A translations input or output could not be accessed. Check that the paths
+exist and that you can read and write them.
+
+## RCLI9006
+
+The command failed internally. Report it with the command and project that
+trigger it.
+
+## RCLI9011
+
+`verify` found a difference between the retained output and freshly generated
+output. Regenerate the output with `generate` and commit it.
+
+## RCLI9012
+
+A translation diagnostic, reported once per `RTR` diagnostic with the `RTR` ID
+in its message. Fix the `RTR` diagnostic.
+
+## RCLI9013
+
+The project cannot produce the requested output, for example an emit switch
+the project's sources do not support. The message names the output.

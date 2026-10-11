@@ -409,6 +409,19 @@ Commit `package.json`, `package-lock.json`, `.config/dotnet-tools.json`, the
 Vite and TypeScript configuration, `src/`, and `translations/`. `npm run build`
 generates `.runic/` before `npm run check` reads its declarations.
 
+## Troubleshooting
+
+- **The server fails to import `node:async_hooks` or `AsyncLocalStorage`.** The
+  generated `/server` module scopes each request's locale with
+  `AsyncLocalStorage`. Use an adapter whose runtime provides
+  `node:async_hooks`, such as `adapter-node`. On Cloudflare and other edge
+  platforms, enable Node.js compatibility (`nodejs_compat`). Runtimes without
+  `AsyncLocalStorage` are not supported.
+- **`npm run check` cannot find the generated declarations.** Run
+  `npm run build` first; it generates `.runic/`.
+- **The build reports an `RTR` diagnostic.** See its entry in
+  [Diagnostics](diagnostics.md).
+
 ## Next steps
 
 - [Vite quick start](quickstart-vite.md): retain generated output and verify it
