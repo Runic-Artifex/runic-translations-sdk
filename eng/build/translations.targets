@@ -5,4 +5,5 @@
   </PropertyGroup>
   <Import Project="common.targets" />
   <Import Project="public-api.targets" />
+  <Import Project="release-links.targets" />
 </Project>

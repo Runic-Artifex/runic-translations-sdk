@@ -1,0 +1,109 @@
+<Project>
+  <!-- Keep in sync with runic-sdk eng/build/release-links.targets. -->
+  <!-- Links that leave a package point at the release tag, v$(PackageVersion),
+       never at the main branch: the packed README, diagnostic help links and
+       experimental API links. runic-sdk keeps the same file and documents it in
+       its eng/build/README.md. -->
+  <PropertyGroup>
+    <RunicReleaseTag Condition="'$(RunicReleaseTag)' == ''">v$(PackageVersion)</RunicReleaseTag>
+    <RunicReleaseSourceUrl Condition="'$(RunicReleaseSourceUrl)' == ''">$(RepositoryUrl)/blob/$(RunicReleaseTag)/</RunicReleaseSourceUrl>
+    <RunicDiagnosticsCatalog Condition="'$(RunicDiagnosticsCatalog)' == ''">docs/diagnostics.md</RunicDiagnosticsCatalog>
+    <RunicDiagnosticsHelpLinkBase>$(RunicReleaseSourceUrl)$(RunicDiagnosticsCatalog)#</RunicDiagnosticsHelpLinkBase>
+    <_RunicRepositoryRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..'))</_RunicRepositoryRoot>
+    <RunicExperimentalHelpLinkBase Condition="'$(RunicExperimentalHelpLinkBase)' == ''">$(RunicReleaseSourceUrl)docs/experimental.md#</RunicExperimentalHelpLinkBase>
+    <RunicReleaseLinksNamespace Condition="'$(RunicReleaseLinksNamespace)' == ''">$(RootNamespace)</RunicReleaseLinksNamespace>
+  </PropertyGroup>
+
+  <!-- RunicGenerateReleaseLinks=true compiles an internal RunicReleaseLinks class
+       with the release's documentation links, so attributes can use them.
+       Diagnostic(id) is the ID's entry in RunicDiagnosticsCatalog, derived from
+       the ID, so a new diagnostic needs only its catalog entry. -->
+  <Target Name="RunicGenerateReleaseLinks" BeforeTargets="CoreCompile" Condition="'$(RunicGenerateReleaseLinks)' == 'true'">
+    <PropertyGroup>
+      <!-- Named per project: a nested build, such as the Bridge bootstrap pass, can give
+           several projects one IntermediateOutputPath. Set here, where IntermediateOutputPath
+           is known even when this file is imported before the SDK targets. -->
+      <_RunicReleaseLinksFile>$(IntermediateOutputPath)$(MSBuildProjectName).RunicReleaseLinks.g.cs</_RunicReleaseLinksFile>
+      <_RunicReleaseLinksSource>
+// &lt;auto-generated/&gt;
+namespace $(RunicReleaseLinksNamespace)%3B
+
+/// &lt;summary&gt;Documentation links for the release this assembly ships in.&lt;/summary&gt;
+internal static class RunicReleaseLinks
+{
+    /// &lt;summary&gt;The release tag.&lt;/summary&gt;
+    internal const string Tag = "$(RunicReleaseTag)"%3B
+
+    /// &lt;summary&gt;An ExperimentalAttribute.UrlFormat for docs/experimental.md at the release tag: {0} is the ID, which has an anchor of the same case.&lt;/summary&gt;
+    internal const string ExperimentalUrlFormat = "$(RunicExperimentalHelpLinkBase){0}"%3B
+
+    /// &lt;summary&gt;The diagnostics catalog at the release tag, ending in the fragment separator.&lt;/summary&gt;
+    internal const string DiagnosticsHelpBase = "$(RunicDiagnosticsHelpLinkBase)"%3B
+
+    /// &lt;summary&gt;The catalog entry of a diagnostic ID: its lowercase heading anchor.&lt;/summary&gt;
+    internal static string Diagnostic(string id) => DiagnosticsHelpBase + id.ToLowerInvariant()%3B
+}
+</_RunicReleaseLinksSource>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_RunicReleaseLinksFile)" Lines="$(_RunicReleaseLinksSource)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(_RunicReleaseLinksFile)" />
+      <FileWrites Include="$(_RunicReleaseLinksFile)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- RunicPackDiagnosticsHelpLinks=true packs buildTransitive/$(PackageId).props,
+       which gives package consumers RunicDiagnosticsHelpLinkBase at this release,
+       for the HelpLink of the Error and Warning tasks in the package's targets:
+       HelpLink="$(RunicDiagnosticsHelpLinkBase)runicbridge014". Repository
+       builds get the property from this file. -->
+  <Target Name="RunicPackDiagnosticsHelpLinks" BeforeTargets="_GetPackageFiles" Condition="'$(RunicPackDiagnosticsHelpLinks)' == 'true'">
+    <PropertyGroup>
+      <_RunicHelpLinksProps>$(IntermediateOutputPath)runic-help-links/$(PackageId).props</_RunicHelpLinksProps>
+      <_RunicHelpLinksPropsText><![CDATA[<Project>
+  <!-- Generated when $(PackageId) $(PackageVersion) was packed. -->
+  <PropertyGroup>
+    <RunicDiagnosticsHelpLinkBase Condition="'%24(RunicDiagnosticsHelpLinkBase)' == ''">$(RunicDiagnosticsHelpLinkBase)</RunicDiagnosticsHelpLinkBase>
+  </PropertyGroup>
+</Project>]]></_RunicHelpLinksPropsText>
+    </PropertyGroup>
+    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName($(_RunicHelpLinksProps)))" />
+    <WriteLinesToFile File="$(_RunicHelpLinksProps)" Lines="$(_RunicHelpLinksPropsText)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <None Include="$(_RunicHelpLinksProps)" Pack="true" PackagePath="buildTransitive/" />
+      <FileWrites Include="$(_RunicHelpLinksProps)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Packs a copy of the package README whose links name the release tag:
+       this repository's blob/main and tree/main links, and relative links,
+       which nuget.org cannot resolve. A remaining main-branch link of any
+       Runic Artifex repository fails the pack. eng/release/readme-links.mjs
+       applies the same rules to npm packages. -->
+  <Target Name="RunicStampPackageReadme" BeforeTargets="_GetPackageFiles" Condition="'$(PackageReadmeFile)' != '' and '$(IsPackable)' != 'false'">
+    <ItemGroup>
+      <_RunicPackageReadme Include="@(None)" Condition="'%(None.Pack)' == 'true' and '%(Filename)%(Extension)' == '$(PackageReadmeFile)' and ('%(None.PackagePath)' == '' or '%(None.PackagePath)' == '/' or '%(None.PackagePath)' == '\')" />
+      <_RunicPackageReadme Include="@(Content)" Condition="'%(Content.Pack)' == 'true' and '%(Filename)%(Extension)' == '$(PackageReadmeFile)' and ('%(Content.PackagePath)' == '' or '%(Content.PackagePath)' == '/' or '%(Content.PackagePath)' == '\')" />
+    </ItemGroup>
+    <Error Condition="'@(_RunicPackageReadme->Count())' != '1'" Text="Expected one packed $(PackageReadmeFile) at the package root, found '@(_RunicPackageReadme)'." />
+    <PropertyGroup>
+      <_RunicReadmeSource>@(_RunicPackageReadme->'%(FullPath)')</_RunicReadmeSource>
+      <_RunicReadmeOutput>$(IntermediateOutputPath)runic-readme/$(PackageReadmeFile)</_RunicReadmeOutput>
+      <_RunicReadmeDirectory>$([MSBuild]::MakeRelative('$(_RunicRepositoryRoot)', '$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetDirectoryName($(_RunicReadmeSource)))))').Replace('\', '/'))</_RunicReadmeDirectory>
+      <_RunicReadmeText>$([System.IO.File]::ReadAllText('$(_RunicReadmeSource)').TrimEnd())</_RunicReadmeText>
+      <_RunicReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(_RunicReadmeText)', '$([System.Text.RegularExpressions.Regex]::Escape('$(RepositoryUrl)'))/(blob|tree)/main(?=[/#?)\s&gt;"]|$)', '$(RepositoryUrl)/$1/$(RunicReleaseTag)'))</_RunicReadmeText>
+      <_RunicReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(_RunicReadmeText)', '\]\((?![A-Za-z][A-Za-z0-9+.-]*:|#|/)([^)\s]+)\)', ']($(RunicReleaseSourceUrl)$(_RunicReadmeDirectory)$1)'))</_RunicReadmeText>
+      <_RunicReadmeMainLink>$([System.Text.RegularExpressions.Regex]::Match('$(_RunicReadmeText)', 'github\.com/Runic-Artifex/[\w.-]+/(?:blob|tree)/main(?=[/#?)\s&gt;"]|$)[^\s)]*').Value)</_RunicReadmeMainLink>
+    </PropertyGroup>
+    <Error Condition="'$(_RunicReadmeMainLink)' != ''" File="$(_RunicReadmeSource)"
+           Text="The packed $(PackageReadmeFile) links to a main branch ($(_RunicReadmeMainLink)). Link to a file of this repository, which packing rewrites to the release tag, or to the package registry or documentation portal." />
+    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName($(_RunicReadmeOutput)))" />
+    <WriteLinesToFile File="$(_RunicReadmeOutput)" Lines="$(_RunicReadmeText)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <None Remove="@(_RunicPackageReadme)" />
+      <Content Remove="@(_RunicPackageReadme)" />
+      <None Include="$(_RunicReadmeOutput)" Pack="true" PackagePath="/" />
+      <FileWrites Include="$(_RunicReadmeOutput)" />
+    </ItemGroup>
+  </Target>
+</Project>
