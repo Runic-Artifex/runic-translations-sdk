@@ -49,8 +49,8 @@ diagnostics {
 }
 ```
 
-The [framework text key table](https://github.com/Runic-Artifex/runic-cli-sdk/blob/main/docs/guides/command-line/text-keys.md)
-lists every key and its argument names. A message may use only some of the
+The [`Runic.CommandLine`](https://www.nuget.org/packages/Runic.CommandLine) README links the framework text key
+table, which lists every key and its argument names. A message may use only some of the
 arguments; `{$arg0}`, `{$arg1}` and so on name them by position, which also
 covers diagnostics your app creates. A message is skipped, and the next source
 of text is used, when it declares an input the framework does not supply or
