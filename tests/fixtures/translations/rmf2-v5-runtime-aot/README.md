@@ -9,7 +9,9 @@ The probe is a TUnit test application published with NativeAOT. It links the
 `Assert` helpers from `tests/dotnet/Runic.Translations.Runtime.Tests`, and keeps
 that suite's assembly name because the cases use runtime internals.
 
-From the SDK root, in the locked development environment:
+`bun eng/run.mjs native-aot`, which the CI `RMF2 NativeAOT / linux-x64` job
+runs, publishes and runs the probe for `linux-x64`. To run it by hand from the
+SDK root, in the locked development environment:
 
 ```sh
 dotnet publish tests/fixtures/translations/rmf2-v5-runtime-aot/Probe.csproj \

@@ -6,37 +6,14 @@ using System.Text;
 using System.Threading;
 using Runic.Translations.Compiler;
 using Runic.Translations.Tooling;
+using TUnit.Core;
 
 namespace Runic.Translations.Tooling.Tests;
 
-internal static class Program
+internal sealed class ToolingTests
 {
-    public static int Main()
-    {
-        try
-        {
-            SemanticXliffRoundTripsDirectMf2AndReview();
-            SemanticXliffAcceptsGroupedRmf2();
-            SemanticXliffReportsStructuredLossAndRefusesImport();
-            SemanticXliffNamesTheDocumentProfile();
-            XliffRefusesStructuredTextWithStaleMetadata();
-            XliffPreflightSeparatesTextContractAndFreshness();
-            XliffRequiresSelectedV5ContractIdentity();
-            PublicCompilationOverloadsHonorCancellation();
-            ArtifactInspectionRecognizesXliff();
-            ToolRequestHasCanonicalShape();
-            ToolCommandHasCanonicalInitShape();
-            Console.WriteLine("RESULT 11/11 passed");
-            return 0;
-        }
-        catch (Exception exception)
-        {
-            Console.Error.WriteLine(exception);
-            return 1;
-        }
-    }
-
-    private static void SemanticXliffRoundTripsDirectMf2AndReview()
+    [Test]
+    public void SemanticXliffRoundTripsDirectMf2AndReview()
     {
         Rmf2ProjectCompilationV5 compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
         object preflight = Preflight(compilation);
@@ -56,7 +33,8 @@ internal static class Program
             throw new InvalidOperationException("Direct MF2 semantic XLIFF did not round-trip translator text and review evidence.");
     }
 
-    private static void SemanticXliffAcceptsGroupedRmf2()
+    [Test]
+    public void SemanticXliffAcceptsGroupedRmf2()
     {
         Rmf2ProjectCompilationV5 compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: true);
         TranslationXliffExportResult exported = Export(compilation);
@@ -64,7 +42,8 @@ internal static class Program
             throw new InvalidOperationException("Grouped RMF2 input did not reach the semantic interchange path.");
     }
 
-    private static void SemanticXliffReportsStructuredLossAndRefusesImport()
+    [Test]
+    public void SemanticXliffReportsStructuredLossAndRefusesImport()
     {
         const string english = """
             hello =
@@ -89,7 +68,8 @@ internal static class Program
         throw new InvalidOperationException("Structured XLIFF input was accepted.");
     }
 
-    private static void SemanticXliffNamesTheDocumentProfile()
+    [Test]
+    public void SemanticXliffNamesTheDocumentProfile()
     {
         TranslationXliffExportResult exported = Export(CompileSemantic(
             "notice = {#p}Read this.{/p}\ninline = See {#strong}this{/strong}.",
@@ -104,7 +84,8 @@ internal static class Program
         throw new InvalidOperationException("A document message was imported from the XLIFF text profile.");
     }
 
-    private static void XliffRefusesStructuredTextWithStaleMetadata()
+    [Test]
+    public void XliffRefusesStructuredTextWithStaleMetadata()
     {
         byte[] exported = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single().Bytes;
         string text = Encoding.UTF8.GetString(exported);
@@ -117,7 +98,8 @@ internal static class Program
         throw new InvalidOperationException("Structured XLIFF text bypassed refusal through stale runic:unit metadata.");
     }
 
-    private static void XliffPreflightSeparatesTextContractAndFreshness()
+    [Test]
+    public void XliffPreflightSeparatesTextContractAndFreshness()
     {
         Rmf2ProjectCompilationV5 first = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
         Rmf2ProjectCompilationV5 changed = CompileSemantic("hello = Hello again", "hello = Hallo", grouped: false);
@@ -138,7 +120,8 @@ internal static class Program
             throw new InvalidOperationException("XLIFF preflight conflated caller compatibility, source freshness, or the closed text profile.");
     }
 
-    private static void XliffRequiresSelectedV5ContractIdentity()
+    [Test]
+    public void XliffRequiresSelectedV5ContractIdentity()
     {
         byte[] exported = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single().Bytes;
         string metadata = UnitMetadata(exported);
@@ -155,7 +138,8 @@ internal static class Program
         RejectContractMutation(exported, "\"interchangeProfileVersion\":2", "\"interchangeProfileVersion\":1", "XLIFF21-PROFILE");
     }
 
-    private static void PublicCompilationOverloadsHonorCancellation()
+    [Test]
+    public void PublicCompilationOverloadsHonorCancellation()
     {
         TranslationSource project = Source("translations/runic.json", """
             {"schemaVersion":1,"catalog":"app","code":{"namespace":"App","className":"Text"},"baseLocale":"en"}
@@ -201,7 +185,8 @@ internal static class Program
         return Encoding.UTF8.GetBytes(xml[..start] + replacement + xml[end..]);
     }
 
-    private static void ArtifactInspectionRecognizesXliff()
+    [Test]
+    public void ArtifactInspectionRecognizesXliff()
     {
         TranslationXliffDocument xliff = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single();
         ArtifactInspection inspection = ArtifactInspector.Inspect(xliff.Bytes);
@@ -209,7 +194,8 @@ internal static class Program
             throw new InvalidOperationException("Artifact inspection did not recognize the generated XLIFF document.");
     }
 
-    private static void ToolRequestHasCanonicalShape()
+    [Test]
+    public void ToolRequestHasCanonicalShape()
     {
         var request = new TranslationsToolCommandRequest("init");
         request.Deconstruct(out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _);
@@ -217,7 +203,8 @@ internal static class Program
             throw new InvalidOperationException("TranslationsToolCommandRequest changed its positional constructor shape.");
     }
 
-    private static void ToolCommandHasCanonicalInitShape()
+    [Test]
+    public void ToolCommandHasCanonicalInitShape()
     {
         Type[] expected =
         [

@@ -5,32 +5,16 @@ using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
 using Runic.Translations.Compiler;
+using TUnit.Core;
 
 namespace Runic.Translations.Authoring.Tests;
 
-internal static class Rmf2AuthoringTests
+internal sealed class Rmf2AuthoringTests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 syntax cache reuses only unchanged bounded source snapshots", SyntaxCache);
-        runner.Add("RMF2 locale mutations validate fallback graphs and preserve physical namespaces", Locales);
-        runner.Add("RMF2 resource renames and duplicates retain conditional slot contracts", SlotContracts);
-        runner.Add("RMF2 input rename updates parameter and example metadata without altering literal text", InputRename);
-        runner.Add("RMF2 message mutations retain metadata and validate the complete catalog", ResourceMutations);
-        runner.Add("RMF2 mounted namespace rename preserves configuration trivia and physical roots", MountedRename);
-        runner.Add("RMF2 input references follow logical resources without capturing translation locals", References);
-        runner.Add("RMF2 local rename changes semantic references without touching literal text", LocalRename);
-        runner.Add("RMF2 formatting and value edits preserve comments and exact message text", Format);
-        runner.Add("RMF2 formatter lays out document messages canonically and keeps leaves byte for byte", FormatDocuments);
-        runner.Add("RMF2 formatter leaves document messages without a canonical layout verbatim and formats the rest", FormatDocumentRefusals);
-        runner.Add("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers", Refactors);
-        runner.Add("RMF2 locale plans preserve mounted projects and commit atomically", ExecutionV2Locales);
-        runner.Add("Direct MF2 workspaces expose semantic authoring and filename transactions", DirectSources);
-        runner.Add("RMF2 workspaces tolerate malformed source roots so validation can report them", MalformedSourceRoots);
-    }
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     private static TranslationSource Project() => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}");
-    private static void SyntaxCache()
+    [Test, DisplayName("RMF2 syntax cache reuses only unchanged bounded source snapshots")]
+    public void SyntaxCache()
     {
         var cache = new Rmf2WorkspaceCache(1);
         var original = cache.Create(Path.GetTempPath(), Project(), [Source("en.rmf2", "x = One\n")]).Documents[0];
@@ -41,7 +25,8 @@ internal static class Rmf2AuthoringTests
         cache.Create(Path.GetTempPath(), Project(), [Source("de.rmf2", "x = Zwei\n")]);
         Assert.True(!ReferenceEquals(changed, cache.Create(Path.GetTempPath(), Project(), [Source("en.rmf2", "x = Two\n")]).Documents[0]), "Syntax cache exceeded its capacity.");
     }
-    private static void MalformedSourceRoots()
+    [Test, DisplayName("RMF2 workspaces tolerate malformed source roots so validation can report them")]
+    public void MalformedSourceRoots()
     {
         // An unsaved runic.json is often incomplete. Construction must not fail
         // with a raw dictionary error; the compiler reports the located problem.
@@ -85,7 +70,8 @@ internal static class Rmf2AuthoringTests
             Assert.Throws<TranslationAuthoringException>(() => mistyped.RenameSlot("en.rmf2", "x", "help", "docs"), expected);
         }
     }
-    private static void DirectSources()
+    [Test, DisplayName("Direct MF2 workspaces expose semantic authoring and filename transactions")]
+    public void DirectSources()
     {
         const string english = ".input {$name :string}\n{{Hello {$name}}}\n";
         const string german = ".input {$name :string}\n{{Hallo {$name}}}\n";
@@ -149,7 +135,8 @@ internal static class Rmf2AuthoringTests
             .Single().RelativePath == "z-specific/en/new_message.mf2",
             "Direct creation selected a broader namespace mount instead of the exact source-root namespace.");
     }
-    private static void Locales()
+    [Test, DisplayName("RMF2 locale mutations validate fallback graphs and preserve physical namespaces")]
+    public void Locales()
     {
         var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [Source("shop/en.rmf2", "title = Shop\n")]);
         var add = workspace.AddLocale("de", copyFrom: "en");
@@ -162,7 +149,8 @@ internal static class Rmf2AuthoringTests
         Assert.Throws<TranslationAuthoringException>(() => updated.RemoveLocale("en"), "fallback");
         Assert.Throws<TranslationAuthoringException>(() => updated.SetFallback("de", "de"), "fallback");
     }
-    private static void SlotContracts()
+    [Test, DisplayName("RMF2 resource renames and duplicates retain conditional slot contracts")]
+    public void SlotContracts()
     {
         string config = Encoding.UTF8.GetString(Project().GetUtf8Bytes()).TrimEnd('}') + ",\"markup\":{\"slots\":{\"shop_payment\":{\"retry\":{\"min\":0,\"max\":1}}}}}";
         const string message = "shop {\n  payment =\n    .input {$state :string}\n    .match $state\n    yes {{{#action ref=retry}Retry{/action}}}\n    * {{Ready}}\n}\n";
@@ -172,7 +160,8 @@ internal static class Rmf2AuthoringTests
         Assert.True(workspace.MutateResource(["shop", "payment"], ["checkout"], true).IsValid, "Duplicate lost a conditional slot contract.");
         Assert.True(workspace.MutateResource(["shop", "payment"], ["checkout"]).IsValid, "Move lost a conditional slot contract.");
     }
-    private static void InputRename()
+    [Test, DisplayName("RMF2 input rename updates parameter and example metadata without altering literal text")]
+    public void InputRename()
     {
         const string text = "# 😀 Greeting\r\n@param $name - Person\r\n@example { \"name\" : \"$name\" }\r\nx = Hello {$name} {|$name|}\r\nother = {$name}\r\n";
         var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [Source("en.rmf2", text), Source("de.rmf2", "x = Hallo {$name}\nother = {$name}\n")]);
@@ -183,7 +172,8 @@ internal static class Rmf2AuthoringTests
         Assert.True(changed.Contains("{ \"person\" : \"$name\" }", StringComparison.Ordinal), "Example key or literal value was changed incorrectly.");
         Assert.True(changed.Contains("Hello {$person} {|$name|}\r\nother = {$name}", StringComparison.Ordinal), "Input rename changed literal text or another resource.");
     }
-    private static void ResourceMutations()
+    [Test, DisplayName("RMF2 message mutations retain metadata and validate the complete catalog")]
+    public void ResourceMutations()
     {
         var source = Source("en.rmf2", "shop {\n  # Greeting\n  @param $name - Person\n  title = Hello {$name}\n}\nother = Keep\n");
         var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [source]);
@@ -210,7 +200,8 @@ internal static class Rmf2AuthoringTests
         Assert.True(created.Edits.All(edit => Encoding.UTF8.GetString(edit.GetUtf8Bytes()!).Contains("new {", StringComparison.Ordinal)),
             "RMF2 message creation missed a locale document.");
     }
-    private static void MountedRename()
+    [Test, DisplayName("RMF2 mounted namespace rename preserves configuration trivia and physical roots")]
+    public void MountedRename()
     {
         string config = Encoding.UTF8.GetString(Project().GetUtf8Bytes()).TrimEnd('}') + ",\r\n  \"sourceRoots\":[{\"path\":\"base\",\"namespace\":[\"shop\"]},{\"path\":\"localized\",\"namespace\":[\"shop\"]}]}";
         var workspace = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", config), [Source("base/cart/en.rmf2", "title = Cart\n"), Source("localized/cart/de.rmf2", "title = Warenkorb\n")]);
@@ -222,7 +213,8 @@ internal static class Rmf2AuthoringTests
         var directory = workspace.Rename(["shop", "cart"], "basket");
         Assert.True(directory.Edits.Any(e => e.RelativePath == "base/basket/en.rmf2") && directory.Edits.Any(e => e.RelativePath == "localized/basket/de.rmf2"), "Mounted directory rename moved the wrong roots.");
     }
-    private static void References()
+    [Test, DisplayName("RMF2 input references follow logical resources without capturing translation locals")]
+    public void References()
     {
         var en = Source("en.rmf2", "shop {\n  title =\n    .input {$name :string}\n    {{Hello {$name}}}\n}\nother = {$name}\n");
         var de = Source("shop/de.rmf2", "title = 😀 {$name} {|$name|}\nother = {$name}\n");
@@ -246,7 +238,8 @@ internal static class Rmf2AuthoringTests
         var mounted = new Rmf2Workspace(Path.GetTempPath(), Source("runic.json", config.ToJsonString()), [Source("base/en.rmf2", "title = {$name}\n"), Source("localized/de.rmf2", "title = {$name}\n")]);
         Assert.Equal(2, mounted.VariableReferences("base/en.rmf2", "title", "name").Count);
     }
-    private static void LocalRename()
+    [Test, DisplayName("RMF2 local rename changes semantic references without touching literal text")]
+    public void LocalRename()
     {
         const string text = "message =\n  .input {$input :string}\n  .local $alias = {$input}\n  {{Hello {$alias}, literal {|$alias|} and plain $alias}}\nother = {$alias}\n";
         var renamed = Rmf2ResourceWriter.RenameLocal(Source("en.rmf2", text), "message", "alias", "display");
@@ -255,7 +248,8 @@ internal static class Rmf2AuthoringTests
         Assert.True(result.Contains("{|$alias|} and plain $alias", StringComparison.Ordinal) && result.Contains("other = {$alias}", StringComparison.Ordinal), "Local rename changed unrelated text.");
         Assert.Throws<TranslationAuthoringException>(() => Rmf2ResourceWriter.RenameLocal(Source("en.rmf2", text), "message", "alias", "input"), "capture");
     }
-    private static void Format()
+    [Test, DisplayName("RMF2 formatting and value edits preserve comments and exact message text")]
+    public void Format()
     {
         var source = Source("en.rmf2", "shop {\n    # Translator context\n    title =\n        {{First\n          Indented\n        }}\n}\n");
         byte[] formatted = Rmf2ResourceWriter.Format(source);
@@ -265,7 +259,8 @@ internal static class Rmf2AuthoringTests
         byte[] edited = Rmf2ResourceWriter.SetMessage(new TranslationSource("en.rmf2", formatted), "shop_title", "New\nMessage");
         Assert.Equal("Translator context", Rmf2ResourceReader.Read(new TranslationSource("en.rmf2", edited)).Nodes[1].Comments[0]);
     }
-    private static void FormatDocuments()
+    [Test, DisplayName("RMF2 formatter lays out document messages canonically and keeps leaves byte for byte")]
+    public void FormatDocuments()
     {
         const string text = "shop {\r\n  notice =\r\n    {#h level=2}Title{/h}   {#ol start=3}{#li}One\r\n    and more{/li}{#li}{#strong}Two{/strong}{/li}{/ol}\r\n  inline = Keep {#strong}this{/strong}   spacing\r\n  plain =\r\n    .input {$n :integer}\r\n    {{{#p}{$n}{/p} {#p}x{/p}}}\r\n}\r\n";
         byte[] formatted = Rmf2ResourceWriter.Format(Source("en.rmf2", text));
@@ -273,7 +268,8 @@ internal static class Rmf2AuthoringTests
             "  inline = Keep {#strong}this{/strong}   spacing\r\n  plain =\r\n    .input {$n :integer}\r\n    {{{#p}{$n}{/p} {#p}x{/p}}}\r\n}\r\n", Encoding.UTF8.GetString(formatted));
         Assert.Equal(Encoding.UTF8.GetString(formatted), Encoding.UTF8.GetString(Rmf2ResourceWriter.Format(new TranslationSource("en.rmf2", formatted))), "Formatting is not idempotent.");
     }
-    private static void FormatDocumentRefusals()
+    [Test, DisplayName("RMF2 formatter leaves document messages without a canonical layout verbatim and formats the rest")]
+    public void FormatDocumentRefusals()
     {
         // Selections, text between blocks, unbalanced tags and quoted patterns have no canonical
         // layout: each stays byte for byte, and the plain document message beside them is laid out.
@@ -282,7 +278,8 @@ internal static class Rmf2AuthoringTests
         string formatted = Encoding.UTF8.GetString(Rmf2ResourceWriter.Format(Source("en.rmf2", refused + "plain = {#p}A{/p}   {#p}B{/p}\n")));
         Assert.Equal(refused + "plain =\n  {#p}A{/p}\n  {#p}B{/p}\n", formatted);
     }
-    private static void Refactors()
+    [Test, DisplayName("RMF2 revisioned workspace renames extracts inlines and rejects stale buffers")]
+    public void Refactors()
     {
         string root = Path.Combine(Path.GetTempPath(), "runic-rmf2-authoring-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -305,7 +302,8 @@ internal static class Rmf2AuthoringTests
         }
         finally { Directory.Delete(root, true); }
     }
-    private static void ExecutionV2Locales()
+    [Test, DisplayName("RMF2 locale plans preserve mounted projects and commit atomically")]
+    public void ExecutionV2Locales()
     {
         var planType = typeof(TranslationWorkspaceTransactionPlan);
         Assert.True(planType.GetNestedType("ValidationReceipt", System.Reflection.BindingFlags.NonPublic)?.IsNestedPrivate == true,

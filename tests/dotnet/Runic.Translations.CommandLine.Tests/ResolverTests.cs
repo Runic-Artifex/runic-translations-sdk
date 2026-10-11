@@ -8,10 +8,11 @@ using Runic.CommandLine;
 using Runic.CommandLine.Generated;
 using Runic.Translations.CommandLine.Tests.Translations;
 using Runic.Translations.CommandLine.Translations;
+using TUnit.Core;
 
 namespace Runic.Translations.CommandLine.Tests;
 
-internal static class ResolverTests
+internal sealed class ResolverTests
 {
     // Invocations that reach help, parse errors, value errors and the unknown-command path.
     private static readonly string[][] Invocations =
@@ -28,19 +29,8 @@ internal static class ResolverTests
         ["frobnicate"],
     ];
 
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("message names drop hyphens and capitalize the next letter", MessageNames);
-        runner.Add("the argument table matches CommandTextKeys.All when Runic.CommandLine provides it", TableMatchesCommandLine);
-        runner.Add("built-in catalogs translate every framework key in English and German", BuiltInCoverage);
-        runner.Add("built-in English matches the framework's own English output", EnglishMatchesFramework);
-        runner.Add("German invocations show no English framework text", GermanHasNoEnglish);
-        runner.Add("the application catalog comes first and binds arguments by name or position", ApplicationCatalogFirst);
-        runner.Add("a manager-backed resolver follows locale switches", ManagerFollowsLocale);
-        runner.Add("unsupported cultures and unknown keys fall back", Fallbacks);
-    }
-
-    private static void MessageNames()
+    [Test, DisplayName("message names drop hyphens and capitalize the next letter")]
+    public void MessageNames()
     {
         Assert.Equal("help.showHelp", TranslationCommandTextResolver.GetMessageName("help.show-help"));
         Assert.Equal("help.pathKind.file", TranslationCommandTextResolver.GetMessageName("help.path-kind.file"));
@@ -54,7 +44,8 @@ internal static class ResolverTests
     private static readonly Type? TextKeys = typeof(CommandApp).Assembly.GetType("Runic.CommandLine.CommandTextKeys");
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The test runs on the JIT and reads a public property.")]
-    private static void TableMatchesCommandLine()
+    [Test, DisplayName("the argument table matches CommandTextKeys.All when Runic.CommandLine provides it")]
+    public void TableMatchesCommandLine()
     {
         if (TextKeys is null)
         {
@@ -76,7 +67,8 @@ internal static class ResolverTests
         Assert.Equal(FrameworkTextArguments.ByKey.Count, keys.Count, "framework key count");
     }
 
-    private static void BuiltInCoverage()
+    [Test, DisplayName("built-in catalogs translate every framework key in English and German")]
+    public void BuiltInCoverage()
     {
         // The catalogs hold exactly one message per framework key, with inputs the framework supplies.
         CompiledTranslationDefinition[] definitions = CommandLineTextCatalogData.CreateDefinition().Definitions.ToArray();
@@ -103,7 +95,8 @@ internal static class ResolverTests
         }
     }
 
-    private static async Task EnglishMatchesFramework()
+    [Test, DisplayName("built-in English matches the framework's own English output")]
+    public async Task EnglishMatchesFramework()
     {
         foreach (string[] invocation in Invocations)
         {
@@ -116,7 +109,8 @@ internal static class ResolverTests
         }
     }
 
-    private static async Task GermanHasNoEnglish()
+    [Test, DisplayName("German invocations show no English framework text")]
+    public async Task GermanHasNoEnglish()
     {
         var resolver = new TranslationCommandTextResolver();
         // Every English framework sentence and label of more than one word.
@@ -150,7 +144,8 @@ internal static class ResolverTests
         Assert.True(unknown.Error.Contains("Unbekannte Option. (--bogus)", StringComparison.Ordinal), unknown.Error);
     }
 
-    private static async Task ApplicationCatalogFirst()
+    [Test, DisplayName("the application catalog comes first and binds arguments by name or position")]
+    public async Task ApplicationCatalogFirst()
     {
         ITranslationSnapshot snapshot = await TestTextCatalog.CreateProvider().GetSnapshotAsync("de");
         var resolver = new TranslationCommandTextResolver(snapshot);
@@ -178,7 +173,8 @@ internal static class ResolverTests
         Assert.Equal("Optionen", resolver.Resolve("help.options", CultureInfo.GetCultureInfo("en"), []));
     }
 
-    private static async Task ManagerFollowsLocale()
+    [Test, DisplayName("a manager-backed resolver follows locale switches")]
+    public async Task ManagerFollowsLocale()
     {
         ITranslationManager manager = await TestTextCatalog.CreateManagerAsync("en");
         var resolver = new TranslationCommandTextResolver(manager);
@@ -192,7 +188,8 @@ internal static class ResolverTests
         Assert.Throws<ArgumentNullException>(() => _ = new TranslationCommandTextResolver((ITranslationSnapshot)null!));
     }
 
-    private static void Fallbacks()
+    [Test, DisplayName("unsupported cultures and unknown keys fall back")]
+    public void Fallbacks()
     {
         var resolver = new TranslationCommandTextResolver();
         Assert.Equal("Usage", resolver.Resolve("help.usage", CultureInfo.GetCultureInfo("fr"), []));

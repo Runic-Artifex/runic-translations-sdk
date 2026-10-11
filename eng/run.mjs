@@ -145,8 +145,11 @@ function testManaged() {
 
 // TUnit test applications run on Microsoft.Testing.Platform; the other suites keep their own executables.
 const tunitProjects = new Set([
+  "tests/dotnet/Runic.Translations.Authoring.Tests/Runic.Translations.Authoring.Tests.csproj",
+  "tests/dotnet/Runic.Translations.CommandLine.Tests/Runic.Translations.CommandLine.Tests.csproj",
   "tests/dotnet/Runic.Translations.Generator.Tests/Runic.Translations.Generator.Tests.csproj",
   "tests/dotnet/Runic.Translations.Runtime.Tests/Runic.Translations.Runtime.Tests.csproj",
+  "tests/dotnet/Runic.Translations.Tooling.Tests/Runic.Translations.Tooling.Tests.csproj",
 ]);
 
 // Writes a TRX report and Cobertura coverage per suite to artifacts/test-results/<suite>, which CI uploads.
@@ -175,6 +178,13 @@ function testNativeAot() {
   run("dotnet", ["publish", "tests/dotnet/Runic.Translations.Rmf2AotTests/Runic.Translations.Rmf2AotTests.csproj", "--configuration", configuration,
     "--runtime", "linux-x64", "--self-contained", "true", "-p:PublishAot=true", "-p:IlcTreatWarningsAsErrors=true", "--output", output]);
   run(resolve(output, "Runic.Translations.Rmf2AotTests"), []);
+
+  // The runtime's RMF2 v5 and typed-slot cases as a NativeAOT TUnit application (tests/fixtures/translations/rmf2-v5-runtime-aot).
+  const runtimeProbe = resolve(root, "artifacts/rmf2-v5-runtime-aot");
+  rmSync(runtimeProbe, { recursive: true, force: true });
+  run("dotnet", ["publish", "tests/fixtures/translations/rmf2-v5-runtime-aot/Probe.csproj", "--configuration", configuration,
+    "--runtime", "linux-x64", "--self-contained", "true", "-p:TreatWarningsAsErrors=true", "-p:IlcTreatWarningsAsErrors=true", "--output", runtimeProbe]);
+  run(resolve(runtimeProbe, "Runic.Translations.Runtime.Tests"), ["--results-directory", resolve(runtimeProbe, "TestResults")]);
 
   // The localized command-line example: Runic.Translations.CommandLine with no key mapping.
   const example = resolve(root, "artifacts/command-line-localized-aot");

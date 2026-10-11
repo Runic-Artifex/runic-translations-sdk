@@ -5,20 +5,14 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Runic.Translations.Authoring;
+using TUnit.Core;
 
 namespace Runic.Translations.Authoring.Tests;
 
-internal static class EditorStateTests
+internal sealed class EditorStateTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("Editor state is optional deterministic and revision checked", RoundTrip);
-        runner.Add("Malformed editor state is isolated from compiler inputs", Malformed);
-        runner.Add("Editor state bounds and paths reject hostile data", Hostile);
-        runner.Add("Editor state handles 50000 key-locale reviews within its budget", Scale);
-    }
-
-    private static void RoundTrip()
+    [Test, DisplayName("Editor state is optional deterministic and revision checked")]
+    public void RoundTrip()
     {
         using TemporaryDirectory directory = new();
         TranslationEditorStateLoadResult missing = TranslationEditorStateStore.Load(directory.Path, "product");
@@ -43,7 +37,8 @@ internal static class EditorStateTests
             () => TranslationEditorStateStore.Save(directory.Path, state, null), "changed on disk");
     }
 
-    private static void Malformed()
+    [Test, DisplayName("Malformed editor state is isolated from compiler inputs")]
+    public void Malformed()
     {
         using TemporaryDirectory directory = new();
         string sidecar = System.IO.Path.Combine(directory.Path, ".runic-translations", "product.editor-state.json");
@@ -58,7 +53,8 @@ internal static class EditorStateTests
             "Malformed optional state did not remain isolated from MF2 project inputs.");
     }
 
-    private static void Hostile()
+    [Test, DisplayName("Editor state bounds and paths reject hostile data")]
+    public void Hostile()
     {
         using TemporaryDirectory directory = new();
         Assert.Throws<TranslationEditorStateException>(
@@ -81,7 +77,9 @@ internal static class EditorStateTests
             "Duplicate sidecar properties were not isolated as malformed editor state.");
     }
 
-    private static void Scale()
+    // The case measures a 15-second budget, so it does not share the processors with other cases.
+    [Test, NotInParallel, DisplayName("Editor state handles 50000 key-locale reviews within its budget")]
+    public void Scale()
     {
         using TemporaryDirectory directory = new();
         var entries = new List<TranslationEditorStateEntry>(TranslationEditorStateStore.MaximumEntries);
