@@ -146,6 +146,7 @@ function testManaged() {
 // TUnit test applications run on Microsoft.Testing.Platform; the other suites keep their own executables.
 const tunitProjects = new Set([
   "tests/dotnet/Runic.Translations.Generator.Tests/Runic.Translations.Generator.Tests.csproj",
+  "tests/dotnet/Runic.Translations.Runtime.Tests/Runic.Translations.Runtime.Tests.csproj",
 ]);
 
 // Writes a TRX report and Cobertura coverage per suite to artifacts/test-results/<suite>, which CI uploads.

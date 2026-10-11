@@ -2,21 +2,14 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using TUnit.Core;
 
 namespace Runic.Translations.Runtime.Tests;
 
-internal static class CompiledMessageTests
+internal sealed class CompiledMessageTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("snapshot executes generated message AST without parsing compatibility patterns", DirectAst);
-        runner.Add("snapshot formats a zero-input compiled variant without a literal cache entry", ZeroInputVariant);
-        runner.Add("compiled AST executes multiple selectors formats relative time and safe markup", StructuredAst);
-        runner.Add("plural selector matches the shared v2 cross-runtime corpus", PluralCorpus);
-        runner.Add("relative-time formatter matches the shared v2 cross-runtime corpus", RelativeTimeCorpus);
-    }
-
-    private static void DirectAst()
+    [Test, DisplayName("snapshot executes generated message AST without parsing compatibility patterns")]
+    public void DirectAst()
     {
         var message = new CompiledTextMessage(
             Array.Empty<CompiledTextMessageNode>(),
@@ -43,7 +36,8 @@ internal static class CompiledMessageTests
         Assert.Equal("3 files", snapshot.Format(key, [new TextArgument("count", 3)]));
     }
 
-    private static void ZeroInputVariant()
+    [Test, DisplayName("snapshot formats a zero-input compiled variant without a literal cache entry")]
+    public void ZeroInputVariant()
     {
         var message = new CompiledTextMessage([], [],
             [new CompiledTextMessageVariant([], [new CompiledTextMessageNode(CompiledTextMessageNodeKind.Text, "Payment details")])]);
@@ -53,7 +47,8 @@ internal static class CompiledMessageTests
         Assert.Equal("Payment details", new CompiledTranslationSnapshot(catalog, "en").Format(new TranslationKey("ast", 0, "Plain"), []));
     }
 
-    private static void StructuredAst()
+    [Test, DisplayName("compiled AST executes multiple selectors formats relative time and safe markup")]
+    public void StructuredAst()
     {
         var message = new CompiledTextMessage(
             Array.Empty<CompiledTextMessageNode>(),
@@ -99,7 +94,8 @@ internal static class CompiledMessageTests
             [new TextArgument("count", 2), new TextArgument("delta", -1m), new TextArgument("owner", "guest")]));
     }
 
-    private static void PluralCorpus()
+    [Test, DisplayName("plural selector matches the shared v2 cross-runtime corpus")]
+    public void PluralCorpus()
     {
         string path = Path.Combine(FindRepositoryRoot(), "specs", "translations", "corpus", "v2-plural-conformance.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
@@ -113,7 +109,8 @@ internal static class CompiledMessageTests
         }
     }
 
-    private static void RelativeTimeCorpus()
+    [Test, DisplayName("relative-time formatter matches the shared v2 cross-runtime corpus")]
+    public void RelativeTimeCorpus()
     {
         string path = Path.Combine(FindRepositoryRoot(), "specs", "translations", "corpus", "v2-relative-time-conformance.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));

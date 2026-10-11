@@ -1,18 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using TUnit.Core;
 
 namespace Runic.Translations.Runtime.Tests;
 
-internal static class TranslationReferenceTests
+internal sealed class TranslationReferenceTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("text references validate versioned catalog identity and bounds", Validate);
-        runner.Add("text references serialize the exact AOT-safe ESM wire contract", JsonWire);
-    }
-
-    private static void Validate()
+    [Test, DisplayName("text references validate versioned catalog identity and bounds")]
+    public void Validate()
     {
         const string fingerprint = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         var reference = new TranslationReference(
@@ -34,7 +30,8 @@ internal static class TranslationReferenceTests
         Assert.Throws<ArgumentException>(() => _ = new TranslationReference("app", "sha256:" + new string('z', 64), "Key"));
     }
 
-    private static void JsonWire()
+    [Test, DisplayName("text references serialize the exact AOT-safe ESM wire contract")]
+    public void JsonWire()
     {
         const string fingerprint = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         var reference = new TranslationReference(

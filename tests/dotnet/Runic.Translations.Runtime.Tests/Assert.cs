@@ -5,45 +5,7 @@ using System.Threading.Tasks;
 
 namespace Runic.Translations.Runtime.Tests;
 
-internal sealed class TestRunner
-{
-    private readonly List<(string Name, Func<Task> Test)> _tests = new();
-
-    public void Add(string name, Action test) =>
-        Add(name, () => { test(); return Task.CompletedTask; });
-
-    public void Add(string name, Func<Task> test)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentNullException.ThrowIfNull(test);
-        _tests.Add((name, test));
-    }
-
-    public bool HasTest(string name) => _tests.Exists(test => string.Equals(test.Name, name, StringComparison.Ordinal));
-
-    public async Task<int> RunAsync()
-    {
-        int failed = 0;
-        foreach ((string name, Func<Task> test) in _tests)
-        {
-            try
-            {
-                await test().ConfigureAwait(false);
-                Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"PASS {name}"));
-            }
-            catch (Exception exception)
-            {
-                failed++;
-                Console.Error.WriteLine(string.Create(CultureInfo.InvariantCulture, $"FAIL {name}"));
-                Console.Error.WriteLine(exception);
-            }
-        }
-
-        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"RESULT {_tests.Count - failed}/{_tests.Count} passed"));
-        return failed == 0 ? 0 : 1;
-    }
-}
-
+// The suite's original assertions; TUnit reports the exception message and stack trace of a failing case.
 internal static class Assert
 {
     public static void True(bool condition, string message)
