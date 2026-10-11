@@ -72,7 +72,7 @@ export async function verifyPackages(version = workspace.version) {
       "using Runic.Translations.Tooling; Console.WriteLine(typeof(ArtifactInspector).Assembly.GetName().Name);", environment);
     // Runic.CommandLine itself restores from nuget.org; the built-in German text proves the bundled catalog loads.
     dotnetConsumer(directory, "Runic.Translations.CommandLine", version, {},
-      "using System.Globalization; using Runic.Translations.CommandLine; string? text = new TranslationCommandTextResolver().Resolve(\"help.usage\", CultureInfo.GetCultureInfo(\"de\"), []); if (text != \"Aufruf\") throw new InvalidOperationException(text); Console.WriteLine(text);", environment);
+      "using System.Globalization; using Runic.Translations.CommandLine; var text = new TranslationCommandTextResolver().Resolve(\"help.usage\", CultureInfo.GetCultureInfo(\"de\"), []); if (text != \"Aufruf\") throw new InvalidOperationException(text); Console.WriteLine(text);", environment);
     dotnetConsumer(directory, "Runic.Translations.Build", version, { build: true },
       "Console.WriteLine(\"Build package restored.\");", environment);
     dotnetConsumer(directory, "Runic.Translations.Wpf", version, { framework: "net10.0-windows", wpf: true },
