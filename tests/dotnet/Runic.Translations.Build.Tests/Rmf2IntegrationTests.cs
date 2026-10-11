@@ -7,35 +7,14 @@ using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Runic.Translations.Tool;
+using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
-internal static class Rmf2IntegrationTests
+internal sealed class Rmf2IntegrationTests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 payment fixture generates and verifies all supported outputs", PaymentExample);
-        runner.Add("RMF2 --emit-cpp fails before creating output", CppEmissionIsUnsupported);
-        runner.Add("RMF2 CLI discovers feature mounts and produces cohesive packs", MountedCli);
-        runner.Add("RMF2 CLI accepts symlinked ancestors but rejects links below the project", LinkedAncestorCli);
-        runner.Add("RMF2 CLI emits and verifies the cohesive contract", ActivatedV5Cli);
-        runner.Add("RMF2 CLI reports a non-object runic.json as a configuration diagnostic", NonObjectConfigurationCli);
-        runner.Add("RMF2 manifest reader reports malformed source layouts without throwing", ManifestReaderLayouts);
-        runner.Add("RMF2 CLI rejects a mount path the compiler accepts but discovery cannot use", UnusableMountPathCli);
-        runner.Add("RMF2 v5 validate permits empty scaffolds while generate and verify reject them", EmptyV5CliBoundary);
-        runner.Add("RMF2 CLI re-discovers mounted add, change, rename, and delete", MountedCliMembership);
-        runner.Add("RMF2 MSBuild discovers mounted sources and membership", MountedBuild);
-        runner.Add("RMF2 MSBuild reports a non-object runic.json as RTR0052", NonObjectConfigurationBuild);
-        runner.Add("RMF2 LSP negotiates Unicode positions and returns versioned rename edits", Lsp);
-        runner.Add("RMF2 LSP rescans watched files and configuration with unsaved overlays", LspWatchRescan);
-        runner.Add("RMF2 LSP isolates watched diagnostics by project", LspWatchProjectIsolation);
-        runner.Add("RMF2 workspace project indexing is entry-bounded, cancellable, and atomic", ProjectIndexBounds);
-        runner.Add("RMF2 LSP overlays buffers on projects outside or above the workspace root", LspLooseFileBuffers);
-        runner.Add("RMF2 LSP regroups open buffers when a nested project appears without a watch", LspNestedProjectWithoutWatch);
-        runner.Add("RMF2 LSP project identity follows platform path case rules", ProjectIdentityCase);
-    }
-
-    private static void LspLooseFileBuffers()
+    [Test, DisplayName("RMF2 LSP overlays buffers on projects outside or above the workspace root")]
+    public void LspLooseFileBuffers()
     {
         // Visual Studio loose-file mode sends no root, or a root that does not
         // contain the opened file; an editor may also open a feature folder
@@ -115,7 +94,8 @@ internal static class Rmf2IntegrationTests
         }
     }
 
-    private static void LspNestedProjectWithoutWatch()
+    [Test, DisplayName("RMF2 LSP regroups open buffers when a nested project appears without a watch")]
+    public void LspNestedProjectWithoutWatch()
     {
         // Loose-file clients may never send didChangeWatchedFiles. A nested
         // runic.json created on disk must still regroup open buffers for the
@@ -147,7 +127,8 @@ internal static class Rmf2IntegrationTests
         }
     }
 
-    private static void ProjectIdentityCase()
+    [Test, DisplayName("RMF2 LSP project identity follows platform path case rules")]
+    public void ProjectIdentityCase()
     {
         var sourcePaths = Rmf2LanguageServer.SourcePathComparer;
         if (!OperatingSystem.IsWindows())
@@ -199,7 +180,8 @@ internal static class Rmf2IntegrationTests
         foreach (string directory in Directory.EnumerateDirectories(source)) CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)));
     }
     private const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"AppText"},"baseLocale":"en"}""";
-    private static void PaymentExample()
+    [Test, DisplayName("RMF2 payment fixture generates and verifies all supported outputs")]
+    public void PaymentExample()
     {
         using TemporaryDirectory temporary = new();
         string project = RepositoryPaths.Resolve("specs/translations/examples/rmf2");
@@ -210,7 +192,8 @@ internal static class Rmf2IntegrationTests
         string german = File.ReadAllText(temporary.Resolve("generated/checkout.de.locale-v5.json"));
         Assert.Contains("account_heading", german); Assert.Contains("runic:action", german);
     }
-    private static void CppEmissionIsUnsupported()
+    [Test, DisplayName("RMF2 --emit-cpp fails before creating output")]
+    public void CppEmissionIsUnsupported()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations"));
@@ -222,7 +205,8 @@ internal static class Rmf2IntegrationTests
         Assert.Contains("semantic translation contract does not support --emit-cpp", result.Combined);
         Assert.False(Directory.Exists(temporary.Resolve("generated")), "Unsupported RMF2 output created artifacts.");
     }
-    private static void MountedCli()
+    [Test, DisplayName("RMF2 CLI discovers feature mounts and produces cohesive packs")]
+    public void MountedCli()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
@@ -235,7 +219,8 @@ internal static class Rmf2IntegrationTests
         Assert.Contains("shop_title", json); Assert.Contains("runic:strong", json);
         Assert.False(json.Contains("stray", StringComparison.Ordinal), "CLI discovery included a project-directory source outside explicit sourceRoots.");
     }
-    private static void LinkedAncestorCli()
+    [Test, DisplayName("RMF2 CLI accepts symlinked ancestors but rejects links below the project")]
+    public void LinkedAncestorCli()
     {
         if (OperatingSystem.IsWindows()) return;
         using TemporaryDirectory temporary = new();
@@ -256,7 +241,8 @@ internal static class Rmf2IntegrationTests
         Assert.False(rejected.ExitCode == 0, rejected.Combined);
         Assert.Contains("symbolic link", rejected.Combined);
     }
-    private static void ManifestReaderLayouts()
+    [Test, DisplayName("RMF2 manifest reader reports malformed source layouts without throwing")]
+    public void ManifestReaderLayouts()
     {
         string directory = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "runic-manifest-reader"));
         Runic.Translations.Internal.TranslationManifestLayout Read(string json) =>
@@ -280,7 +266,8 @@ internal static class Rmf2IntegrationTests
             Assert.Equal(0, layout.SourceRoots.Count, "A malformed manifest must not expose partial source roots.");
         }
     }
-    private static void UnusableMountPathCli()
+    [Test, DisplayName("RMF2 CLI rejects a mount path the compiler accepts but discovery cannot use")]
+    public void UnusableMountPathCli()
     {
         // A whitespace path is diagnosed by the compiler at the path itself. A
         // path that the file system cannot resolve compiles cleanly with no
@@ -303,7 +290,8 @@ internal static class Rmf2IntegrationTests
             Assert.False(result.Combined.Contains("validated", StringComparison.Ordinal), "An unusable mount validated: " + result.Combined);
         }
     }
-    private static void NonObjectConfigurationCli()
+    [Test, DisplayName("RMF2 CLI reports a non-object runic.json as a configuration diagnostic")]
+    public void NonObjectConfigurationCli()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations"));
@@ -314,7 +302,8 @@ internal static class Rmf2IntegrationTests
         Assert.Contains("RTR0019", result.Combined);
         Assert.Contains("Runic project root must be an object.", result.Combined);
     }
-    private static void ActivatedV5Cli()
+    [Test, DisplayName("RMF2 CLI emits and verifies the cohesive contract")]
+    public void ActivatedV5Cli()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations"));
@@ -376,7 +365,8 @@ internal static class Rmf2IntegrationTests
         Assert.Equal(1, invalid.ExitCode, invalid.Combined);
         Assert.Contains("RTR0019", invalid.Combined);
     }
-    private static void EmptyV5CliBoundary()
+    [Test, DisplayName("RMF2 v5 validate permits empty scaffolds while generate and verify reject them")]
+    public void EmptyV5CliBoundary()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations"));
@@ -397,7 +387,8 @@ internal static class Rmf2IntegrationTests
             Assert.False(Directory.Exists(temporary.Resolve(output)), "empty v5 project emitted " + output);
         }
     }
-    private static void MountedCliMembership()
+    [Test, DisplayName("RMF2 CLI re-discovers mounted add, change, rename, and delete")]
+    public void MountedCliMembership()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
@@ -418,7 +409,8 @@ internal static class Rmf2IntegrationTests
         File.Delete(french);
         Assert.Equal(0, TestFixture.RunTool(temporary, "validate", "--project", "translations").ExitCode);
     }
-    private static void NonObjectConfigurationBuild()
+    [Test, DisplayName("RMF2 MSBuild reports a non-object runic.json as RTR0052")]
+    public void NonObjectConfigurationBuild()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations"));
@@ -439,7 +431,8 @@ internal static class Rmf2IntegrationTests
         Assert.Contains("runic.json must contain a JSON object.", result.Combined);
         Assert.False(result.Combined.Contains("requires an element of type", StringComparison.Ordinal), "MSBuild leaked a raw JSON access error: " + result.Combined);
     }
-    private static void MountedBuild()
+    [Test, DisplayName("RMF2 MSBuild discovers mounted sources and membership")]
+    public void MountedBuild()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations")); Directory.CreateDirectory(temporary.Resolve("feature"));
@@ -468,7 +461,8 @@ internal static class Rmf2IntegrationTests
         var third = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
         Assert.Equal(0, third.ExitCode, third.Combined); Assert.False(File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/').Contains("feature/de.rmf2", StringComparison.Ordinal), "Deleted mounted source remained in MSBuild discovery.");
     }
-    private static void Lsp()
+    [Test, DisplayName("RMF2 LSP negotiates Unicode positions and returns versioned rename edits")]
+    public void Lsp()
     {
         foreach (string encoding in new[] { "utf-8", "utf-16", "utf-32" })
         {
@@ -650,7 +644,8 @@ internal static class Rmf2IntegrationTests
         }
     }
 
-    private static void LspWatchRescan()
+    [Test, DisplayName("RMF2 LSP rescans watched files and configuration with unsaved overlays")]
+    public void LspWatchRescan()
     {
         using TemporaryDirectory temporary = new();
         File.WriteAllText(temporary.Resolve("runic.json"), Project);
@@ -737,7 +732,8 @@ internal static class Rmf2IntegrationTests
         Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
     }
 
-    private static void LspWatchProjectIsolation()
+    [Test, DisplayName("RMF2 LSP isolates watched diagnostics by project")]
+    public void LspWatchProjectIsolation()
     {
         using TemporaryDirectory temporary = new();
         using TemporaryDirectory external = new();
@@ -920,7 +916,8 @@ internal static class Rmf2IntegrationTests
         Task.WaitAll(output, errors); Assert.Equal(0, process.ExitCode, errors.Result);
     }
 
-    private static void ProjectIndexBounds()
+    [Test, DisplayName("RMF2 workspace project indexing is entry-bounded, cancellable, and atomic")]
+    public void ProjectIndexBounds()
     {
         using TemporaryDirectory temporary = new();
         string stableProject = temporary.Resolve("middle-stable"), partialProject = temporary.Resolve("aaa-partial");

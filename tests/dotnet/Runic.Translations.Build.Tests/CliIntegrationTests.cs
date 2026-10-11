@@ -3,27 +3,14 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
-internal static class CliIntegrationTests
+internal sealed class CliIntegrationTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("CLI help and invalid invocation use stable exit codes", HelpAndUsageExitCodes);
-        runner.Add("CLI help lists the command descriptions and required options", HelpListsCommandContract);
-        runner.Add("CLI JSON output carries the tool payload type", JsonOutputCarriesPayloadType);
-        runner.Add("CLI rejects a missing required option as a usage failure", MissingRequiredOptionIsUsageFailure);
-        runner.Add("CLI init creates and validates a one-locale RMF2 project", InitCreatesOneLocaleProject);
-        runner.Add("CLI init creates canonical locale files and explicit fallbacks", InitCreatesMultipleLocales);
-        runner.Add("CLI init rejects conflicts without changing the target", InitConflictDoesNotWrite);
-        runner.Add("CLI init supports an empty RMF2 project", InitWithoutStarterIsValid);
-        runner.Add("CLI project mode validates and generates direct MF2", ProjectModeValidatesAndGenerates);
-        runner.Add("CLI schema writes exact bundled versioned schemas", SchemaWritesExactSchemas);
-        runner.Add("CLI response files keep backslashes unless they precede a quote", ResponseFilesUseMsvcrtBackslashRules);
-    }
-
-    private static void ResponseFilesUseMsvcrtBackslashRules()
+    [Test, DisplayName("CLI response files keep backslashes unless they precede a quote")]
+    public void ResponseFilesUseMsvcrtBackslashRules()
     {
         using TemporaryDirectory temporary = new();
         string responseFile = temporary.Resolve("arguments.rsp");
@@ -50,7 +37,8 @@ internal static class CliIntegrationTests
         Assert.Equal(string.Join('|', expected), string.Join('|', expanded));
     }
 
-    private static void ProjectModeValidatesAndGenerates()
+    [Test, DisplayName("CLI project mode validates and generates direct MF2")]
+    public void ProjectModeValidatesAndGenerates()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations", "en"));
@@ -70,7 +58,8 @@ internal static class CliIntegrationTests
         Assert.True(File.Exists(temporary.Resolve("generated", "app.esm-v5", "server.js")), "Project mode did not generate the server entrypoint.");
     }
 
-    private static void HelpAndUsageExitCodes()
+    [Test, DisplayName("CLI help and invalid invocation use stable exit codes")]
+    public void HelpAndUsageExitCodes()
     {
         using TemporaryDirectory temporary = new();
         ProcessResult help = TestFixture.RunTool(temporary, "--help");
@@ -117,7 +106,8 @@ internal static class CliIntegrationTests
 
     // The command attributes in TranslationsToolCommandModule are the CLI contract: descriptions,
     // required options and the payload type.
-    private static void HelpListsCommandContract()
+    [Test, DisplayName("CLI help lists the command descriptions and required options")]
+    public void HelpListsCommandContract()
     {
         using TemporaryDirectory temporary = new();
         ProcessResult help = TestFixture.RunTool(temporary, "--help");
@@ -141,7 +131,8 @@ internal static class CliIntegrationTests
         Assert.True(locale is not null && !locale.Contains("[required]", StringComparison.Ordinal), "init help must list --locale as optional.");
     }
 
-    private static void JsonOutputCarriesPayloadType()
+    [Test, DisplayName("CLI JSON output carries the tool payload type")]
+    public void JsonOutputCarriesPayloadType()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations", "en"));
@@ -200,7 +191,8 @@ internal static class CliIntegrationTests
         Assert.True(line is not null && line.Contains("  " + description, StringComparison.Ordinal), $"Help has no entry '{command}  {description}':\n{help}");
     }
 
-    private static void MissingRequiredOptionIsUsageFailure()
+    [Test, DisplayName("CLI rejects a missing required option as a usage failure")]
+    public void MissingRequiredOptionIsUsageFailure()
     {
         using TemporaryDirectory temporary = new();
         AssertUsageFailure(temporary, "generate requires --output <directory>.", "generate", "--project", "translations");
@@ -223,7 +215,8 @@ internal static class CliIntegrationTests
         Assert.Equal(string.Empty, result.StandardOutput);
     }
 
-    private static void InitCreatesOneLocaleProject()
+    [Test, DisplayName("CLI init creates and validates a one-locale RMF2 project")]
+    public void InitCreatesOneLocaleProject()
     {
         using TemporaryDirectory temporary = new();
         ProcessResult create = TestFixture.RunTool(
@@ -268,7 +261,8 @@ internal static class CliIntegrationTests
         Assert.Equal(0, verify.ExitCode, verify.Combined);
     }
 
-    private static void InitCreatesMultipleLocales()
+    [Test, DisplayName("CLI init creates canonical locale files and explicit fallbacks")]
+    public void InitCreatesMultipleLocales()
     {
         using TemporaryDirectory temporary = new();
         ProcessResult create = TestFixture.RunTool(
@@ -298,7 +292,8 @@ internal static class CliIntegrationTests
         Assert.Contains("\"fallback\": \"en-US\"", manifest);
     }
 
-    private static void InitConflictDoesNotWrite()
+    [Test, DisplayName("CLI init rejects conflicts without changing the target")]
+    public void InitConflictDoesNotWrite()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("Resources"));
@@ -323,7 +318,8 @@ internal static class CliIntegrationTests
         Assert.Equal("keep", File.ReadAllText(temporary.Resolve("Resources", "customer.txt"), Encoding.UTF8));
     }
 
-    private static void InitWithoutStarterIsValid()
+    [Test, DisplayName("CLI init supports an empty RMF2 project")]
+    public void InitWithoutStarterIsValid()
     {
         using TemporaryDirectory temporary = new();
         ProcessResult create = TestFixture.RunTool(
@@ -346,7 +342,8 @@ internal static class CliIntegrationTests
         Assert.Equal(0, validate.ExitCode, validate.Combined);
     }
 
-    private static void SchemaWritesExactSchemas()
+    [Test, DisplayName("CLI schema writes exact bundled versioned schemas")]
+    public void SchemaWritesExactSchemas()
     {
         using TemporaryDirectory temporary = new();
         ProcessResult result = TestFixture.RunTool(temporary, "schema", "--output", "schemas");

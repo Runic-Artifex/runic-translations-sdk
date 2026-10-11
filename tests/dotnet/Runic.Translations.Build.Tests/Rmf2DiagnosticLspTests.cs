@@ -8,22 +8,14 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Runic.Translations.Compiler;
+using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
-internal static class Rmf2DiagnosticLspTests
+internal sealed class Rmf2DiagnosticLspTests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("LSP mounted Unicode diagnostic quick fixes share compiler edits and refuse stale resolution", CodeActions);
-        runner.Add("LSP adds unsaved project-directory buffers only where source discovery would", SourceRootOverlays);
-        runner.Add("LSP reports malformed unsaved source roots as configuration diagnostics", MalformedSourceRoots);
-        runner.Add("LSP mounted-buffer ownership follows the shared manifest reader", PartialSourceRoots);
-        runner.Add("LSP reports a non-object runic.json as a configuration diagnostic", NonObjectConfiguration);
-        runner.Add("LSP refuses renames with a clear error when runic.json markup is mistyped", MistypedMarkupRename);
-    }
-
-    private static void CodeActions()
+    [Test, DisplayName("LSP mounted Unicode diagnostic quick fixes share compiler edits and refuse stale resolution")]
+    public void CodeActions()
     {
         foreach (string encoding in new[] { "utf-8", "utf-16", "utf-32" })
         {
@@ -82,7 +74,8 @@ internal static class Rmf2DiagnosticLspTests
     }
     private const string MountedProject = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","sourceRoots":[{"path":"../feature","namespace":["shop"]}]}""";
 
-    private static void SourceRootOverlays()
+    [Test, DisplayName("LSP adds unsaved project-directory buffers only where source discovery would")]
+    public void SourceRootOverlays()
     {
         // With sourceRoots configured, discovery ignores resources in the
         // project directory itself. An open buffer there must not join the
@@ -111,7 +104,8 @@ internal static class Rmf2DiagnosticLspTests
         Assert.Contains("Ungespeichert", german.ToJsonString());
     }
 
-    private static void MalformedSourceRoots()
+    [Test, DisplayName("LSP reports malformed unsaved source roots as configuration diagnostics")]
+    public void MalformedSourceRoots()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("project"));
@@ -136,7 +130,8 @@ internal static class Rmf2DiagnosticLspTests
             "The open runic.json did not receive the located mount diagnostic: " + config.ToJsonString());
     }
 
-    private static void PartialSourceRoots()
+    [Test, DisplayName("LSP mounted-buffer ownership follows the shared manifest reader")]
+    public void PartialSourceRoots()
     {
         // Ownership of mounted buffers uses the same manifest reader as the CLI
         // and the Editor: one unusable entry (here a path still being typed)
@@ -171,7 +166,8 @@ internal static class Rmf2DiagnosticLspTests
         Assert.Contains("Unsaved", fixedPreview["result"]!["runs"]!.ToJsonString());
     }
 
-    private static void NonObjectConfiguration()
+    [Test, DisplayName("LSP reports a non-object runic.json as a configuration diagnostic")]
+    public void NonObjectConfiguration()
     {
         // An unsaved runic.json whose root is an array must surface the
         // compiler's configuration diagnostic, not a raw JSON access error.
@@ -198,7 +194,8 @@ internal static class Rmf2DiagnosticLspTests
             "The open runic.json did not receive the root-kind diagnostic: " + config.ToJsonString());
     }
 
-    private static void MistypedMarkupRename()
+    [Test, DisplayName("LSP refuses renames with a clear error when runic.json markup is mistyped")]
+    public void MistypedMarkupRename()
     {
         // "markup": [] (or a non-object slots member) must not surface a raw
         // JsonNode type error through either rename route; the edited catalog

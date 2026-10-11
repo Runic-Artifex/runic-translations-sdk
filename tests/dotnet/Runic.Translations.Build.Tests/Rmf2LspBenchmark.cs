@@ -11,14 +11,17 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Runic.Translations.Tool;
+using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
-internal static class Rmf2LspBenchmark
+// The opt-in transport-level LSP measurement. [Explicit] keeps it out of normal runs; select it by name to run it.
+internal sealed class Rmf2LspBenchmark
 {
     private const string BaselinePath = "tests/benchmarks/translations/rmf2-lsp/baseline-v2.json";
 
-    internal static int Run()
+    [Test, Explicit, NotInParallel, DisplayName("RMF2 LSP benchmark stays within its bounded baseline")]
+    public void Run()
     {
         JsonObject baseline = JsonNode.Parse(File.ReadAllText(RepositoryPaths.Resolve(BaselinePath)))!.AsObject();
         int messageCount = baseline["catalogMessages"]!.GetValue<int>();
@@ -118,7 +121,6 @@ internal static class Rmf2LspBenchmark
             ["runtime"] = Environment.Version.ToString(),
         };
         Console.WriteLine(report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-        return 0;
     }
 
     private static TemporaryDirectory CreateWorkspace(string project, string source)

@@ -151,7 +151,7 @@ jobs:
           global-json-file: global.json
       - run: dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests/Runic.Translations.Wpf.Tests.csproj --configuration Release
       - name: Verify real WPF Page translation diagnostics
-        run: dotnet run --project tests/dotnet/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj --configuration Release -- --xaml-wpf
+        run: dotnet run --project tests/dotnet/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj --configuration Release -- --treenode-filter "/*/*/XamlBuildTests/*" --test-parameter xaml-wpf=true --minimum-expected-tests 3
   editor-e2e:
     name: Editor / hosted RMF2 E2E
     runs-on: ubuntu-24.04

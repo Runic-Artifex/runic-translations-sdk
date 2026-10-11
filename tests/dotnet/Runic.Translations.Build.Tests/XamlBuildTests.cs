@@ -2,23 +2,32 @@ using System;
 using System.IO;
 using System.Text;
 using System.Xml.Linq;
+using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
-internal static class XamlBuildTests
+internal sealed class XamlBuildTests
 {
-    public static void Register(TestRunner runner, string? feed = null, string? version = null, bool wpf = false)
-    {
-        runner.Add("XAML items include WPF pages/application and catalog metadata", ItemWiring);
-        runner.Add("XAML consumer builds valid bindings and fails for changed keys/inputs/kinds", () => ConsumerBuild(feed, version, wpf));
-        runner.Add("XAML is checked against the catalog of a referenced project", () => ReferencedCatalog(feed, version, wpf));
-    }
+    // The consumer cases build against the repository by default. --test-parameter xaml-wpf=true compiles real WPF Page
+    // items (Windows only); xaml-package-feed=<feed> with xaml-package-version=<version> uses packed candidates instead.
+    private static string? Feed => Parameter("xaml-package-feed");
+    private static string? Version => Parameter("xaml-package-version");
+    private static bool Wpf => Parameter("xaml-wpf") == "true";
+
+    private static string? Parameter(string name) => TestContext.Parameters.TryGetValue(name, out var values) && values.Count > 0 ? values[^1] : null;
+
+    [Test, DisplayName("XAML consumer builds valid bindings and fails for changed keys/inputs/kinds")]
+    public void ConsumerBuild() => ConsumerBuild(Feed, Version, Wpf);
+
+    [Test, DisplayName("XAML is checked against the catalog of a referenced project")]
+    public void ReferencedCatalog() => ReferencedCatalog(Feed, Version, Wpf);
 
     private static string Xml(string path) => new XAttribute("p", path).ToString()[3..^1];
     private static string PackageDirectory => RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build");
     private static string Configuration => new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
 
-    private static void ItemWiring()
+    [Test, DisplayName("XAML items include WPF pages/application and catalog metadata")]
+    public void ItemWiring()
     {
         using TemporaryDirectory temporary = new();
         File.WriteAllText(temporary.Resolve("Probe.proj"), $$"""

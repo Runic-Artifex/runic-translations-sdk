@@ -7,23 +7,17 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using Runic.Translations.Tool;
+using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
 // `runic-translations serve` is the persistent compiler behind the Vite plugin's dev loop.
-internal static class ServeModeTests
+internal sealed class ServeModeTests
 {
     private static readonly string[] EsmOnly = ["esm"];
 
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("Serve mode generates the same bytes as one-shot generation across edits", ServeMatchesOneShotAcrossEdits);
-        runner.Add("Serve mode reports diagnostics and malformed requests without stopping", ServeReportsFailures);
-        runner.Add("Generation leaves byte-identical artifacts untouched", GenerationKeepsUnchangedArtifacts);
-        runner.Add("Serve mode runs as a process and exits on shutdown or closed input", ServeProcessLifecycle);
-    }
-
-    private static void ServeMatchesOneShotAcrossEdits()
+    [Test, DisplayName("Serve mode generates the same bytes as one-shot generation across edits")]
+    public void ServeMatchesOneShotAcrossEdits()
     {
         using TemporaryDirectory temporary = new();
         string project = WriteProject(temporary);
@@ -47,7 +41,8 @@ internal static class ServeModeTests
         }
     }
 
-    private static void ServeReportsFailures()
+    [Test, DisplayName("Serve mode reports diagnostics and malformed requests without stopping")]
+    public void ServeReportsFailures()
     {
         using TemporaryDirectory temporary = new();
         string project = WriteProject(temporary);
@@ -85,7 +80,8 @@ internal static class ServeModeTests
         Assert.True(validated.GetProperty("ok").GetBoolean(), validated.ToString());
     }
 
-    private static void GenerationKeepsUnchangedArtifacts()
+    [Test, DisplayName("Generation leaves byte-identical artifacts untouched")]
+    public void GenerationKeepsUnchangedArtifacts()
     {
         using TemporaryDirectory temporary = new();
         string project = WriteProject(temporary);
@@ -106,7 +102,8 @@ internal static class ServeModeTests
         Assert.Equal(0, verify.ExitCode, verify.Combined);
     }
 
-    private static void ServeProcessLifecycle()
+    [Test, DisplayName("Serve mode runs as a process and exits on shutdown or closed input")]
+    public void ServeProcessLifecycle()
     {
         using TemporaryDirectory temporary = new();
         string project = WriteProject(temporary);

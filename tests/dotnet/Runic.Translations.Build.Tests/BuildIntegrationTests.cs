@@ -2,23 +2,14 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text;
+using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
-internal static class BuildIntegrationTests
+internal sealed class BuildIntegrationTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("build props and targets expose stable import sentinels", ImportsExposeSentinels);
-        runner.Add("build tracks the nearest tool manifest above the project", RepositoryToolManifestIsTracked);
-        runner.Add("build discovers direct MF2 sources and generates semantic artifacts", DirectMf2GenerationIsIncremental);
-        runner.Add("build discovers mounted grouped RMF2 sources and membership changes", MountedRmf2MembershipIsIncremental);
-        runner.Add("build emit properties select v5 groups and reject retired outputs", EmitFlagsAreExact);
-        runner.Add("build rejects an output path outside the intermediate root", OutputContainmentIsEnforced);
-        runner.Add("build reports each translation diagnostic once, with its help link", DiagnosticsAppearOnce);
-    }
-
-    private static void ImportsExposeSentinels()
+    [Test, DisplayName("build props and targets expose stable import sentinels")]
+    public void ImportsExposeSentinels()
     {
         using TemporaryDirectory temporary = CreateConsumer(false);
         ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Consumer.csproj", "/nologo", "/t:DumpTranslationItems", "/v:minimal");
@@ -27,7 +18,8 @@ internal static class BuildIntegrationTests
         Assert.Contains("PropsImported=true", dump); Assert.Contains("TargetsImported=true", dump); Assert.Contains("Hello|Mf2", dump);
     }
 
-    private static void RepositoryToolManifestIsTracked()
+    [Test, DisplayName("build tracks the nearest tool manifest above the project")]
+    public void RepositoryToolManifestIsTracked()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve(".config")); Directory.CreateDirectory(temporary.Resolve("src", "App"));
@@ -39,7 +31,8 @@ internal static class BuildIntegrationTests
         Assert.Contains(temporary.Path.Replace('\\', '/') + "/.config/dotnet-tools.json", result.StandardOutput.Replace("\\\\", "/").Replace('\\', '/'));
     }
 
-    private static void DirectMf2GenerationIsIncremental()
+    [Test, DisplayName("build discovers direct MF2 sources and generates semantic artifacts")]
+    public void DirectMf2GenerationIsIncremental()
     {
         using TemporaryDirectory temporary = CreateConsumer(true);
         byte[] projectBefore = File.ReadAllBytes(temporary.Resolve("translations", "runic.json"));
@@ -59,7 +52,8 @@ internal static class BuildIntegrationTests
         Assert.Contains("Hello again", File.ReadAllText(Path.Combine(output, "minimal.en.locale-v5.json")));
     }
 
-    private static void MountedRmf2MembershipIsIncremental()
+    [Test, DisplayName("build discovers mounted grouped RMF2 sources and membership changes")]
+    public void MountedRmf2MembershipIsIncremental()
     {
         using TemporaryDirectory temporary = CreateConsumer(true);
         Directory.Delete(temporary.Resolve("translations", "en"), true); Directory.CreateDirectory(temporary.Resolve("feature"));
@@ -74,7 +68,8 @@ internal static class BuildIntegrationTests
         Assert.False(File.Exists(Path.Combine(output, "minimal.de.locale-v5.json")), "Deleted mounted RMF2 artifact survived.");
     }
 
-    private static void EmitFlagsAreExact()
+    [Test, DisplayName("build emit properties select v5 groups and reject retired outputs")]
+    public void EmitFlagsAreExact()
     {
         foreach ((string property, string expected) in new[] { ("<TranslationsEmitJson>true</TranslationsEmitJson>", "minimal.en.locale-v5.json"), ("<TranslationsEmitEsm>true</TranslationsEmitEsm>", "web-module-manifest-v3.json") })
         {
@@ -92,13 +87,15 @@ internal static class BuildIntegrationTests
         }
     }
 
-    private static void OutputContainmentIsEnforced()
+    [Test, DisplayName("build rejects an output path outside the intermediate root")]
+    public void OutputContainmentIsEnforced()
     {
         using TemporaryDirectory temporary = CreateConsumer(true, "escaped-output/"); ProcessResult result = Build(temporary);
         Assert.True(result.ExitCode != 0, "Build unexpectedly accepted an output path outside IntermediateOutputPath."); Assert.Contains("RTR0020", result.Combined); Assert.False(Directory.Exists(temporary.Resolve("escaped-output")), "Rejected output path was created.");
     }
 
-    private static void DiagnosticsAppearOnce()
+    [Test, DisplayName("build reports each translation diagnostic once, with its help link")]
+    public void DiagnosticsAppearOnce()
     {
         using TemporaryDirectory temporary = CreateConsumer(true);
         // With the source generator present, as in a package consumer, it owns the compilation diagnostics.

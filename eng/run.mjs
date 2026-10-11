@@ -143,9 +143,10 @@ function testManaged() {
       ...(tunitProjects.has(project) ? tunitReportArguments(project) : [])]);
 }
 
-// TUnit test applications run on Microsoft.Testing.Platform; the other suites keep their own executables.
+// TUnit test applications run on Microsoft.Testing.Platform; the NativeAOT probe and the consumer fixture are plain executables.
 const tunitProjects = new Set([
   "tests/dotnet/Runic.Translations.Authoring.Tests/Runic.Translations.Authoring.Tests.csproj",
+  "tests/dotnet/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj",
   "tests/dotnet/Runic.Translations.CommandLine.Tests/Runic.Translations.CommandLine.Tests.csproj",
   "tests/dotnet/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj",
   "tests/dotnet/Runic.Translations.Generator.Tests/Runic.Translations.Generator.Tests.csproj",
@@ -170,7 +171,8 @@ function testPackagedManaged(version = workspace.version) {
   const packageArguments = [`-p:TranslationsPackageVersion=${version}`, `-p:TranslationsPackageFeed=${feed}`];
   run("dotnet", ["run", "--project", "tests/dotnet/Runic.Translations.AotTests/Runic.Translations.AotTests.csproj", "--configuration", configuration, ...packageArguments], root, environment);
   run("dotnet", ["run", "--project", "tests/dotnet/Runic.Translations.PackageTests/Runic.Translations.PackageTests.csproj", "--configuration", configuration, ...packageArguments, "--", "--feed", feed], root, environment);
-  run("dotnet", ["run", "--project", "tests/dotnet/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj", "--configuration", configuration, "--no-build", "--", "--xaml-packages", feed, version], root, environment);
+  run("dotnet", ["run", "--project", "tests/dotnet/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj", "--configuration", configuration, "--no-build", "--",
+    "--treenode-filter", "/*/*/XamlBuildTests/*", "--test-parameter", `xaml-package-feed=${feed}`, "--test-parameter", `xaml-package-version=${version}`], root, environment);
 }
 
 function testNativeAot() {
