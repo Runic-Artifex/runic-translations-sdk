@@ -1,4 +1,5 @@
 <Project>
+  <!-- Keep in sync with runic-sdk eng/build/release-links.targets. -->
   <!-- Links that leave a package point at the release tag, v$(PackageVersion),
        never at the main branch: the packed README, diagnostic help links and
        experimental API links. runic-sdk keeps the same file and documents it in
