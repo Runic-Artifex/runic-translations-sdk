@@ -3,11 +3,12 @@ using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
 using Session = Runic.Translations.Build.Tests.Rmf2DiagnosticLspTests.Session;
+using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
 // Document profile v1 authoring features of the language server.
-internal static class Rmf2DocumentLspTests
+internal sealed class Rmf2DocumentLspTests
 {
     private const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en"}""";
     private const string Text = """
@@ -35,13 +36,6 @@ internal static class Rmf2DocumentLspTests
 
     private static readonly string[] HeadingLevels = ["1", "2", "3", "4", "5", "6"];
 
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("LSP document messages get block completion, hover, outline, folding and canonical formatting", Authoring);
-        runner.Add("LSP joins Southeast Asian document line breaks and previews document blocks", FixAndPreview);
-        runner.Add("LSP document folding, outline and line-break fixes keep CRLF and surrogate-pair positions", CrlfPositions);
-    }
-
     private static (TemporaryDirectory Directory, Session Session, string Uri) Open(string text = Text)
     {
         var temporary = new TemporaryDirectory();
@@ -54,7 +48,8 @@ internal static class Rmf2DocumentLspTests
         return (temporary, session, uri);
     }
 
-    private static void Authoring()
+    [Test, DisplayName("LSP document messages get block completion, hover, outline, folding and canonical formatting")]
+    public void Authoring()
     {
         (TemporaryDirectory temporary, Session session, string uri) = Open();
         using (temporary)
@@ -98,7 +93,8 @@ internal static class Rmf2DocumentLspTests
         }
     }
 
-    private static void FixAndPreview()
+    [Test, DisplayName("LSP joins Southeast Asian document line breaks and previews document blocks")]
+    public void FixAndPreview()
     {
         (TemporaryDirectory temporary, Session session, string uri) = Open();
         using (temporary)
@@ -130,7 +126,8 @@ internal static class Rmf2DocumentLspTests
         }
     }
 
-    private static void CrlfPositions()
+    [Test, DisplayName("LSP document folding, outline and line-break fixes keep CRLF and surrogate-pair positions")]
+    public void CrlfPositions()
     {
         (TemporaryDirectory temporary, Session session, string uri) = Open(CrlfText);
         using (temporary)

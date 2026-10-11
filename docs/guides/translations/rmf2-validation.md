@@ -20,7 +20,7 @@ Run these in the locked project development shell:
 ```sh
 dotnet run --project tests/dotnet/Runic.Translations.Compiler.Tests
 dotnet run --project tests/dotnet/Runic.Translations.Authoring.Tests
-dotnet run --project tests/dotnet/Runic.Translations.Build.Tests -- rmf2
+dotnet run --project tests/dotnet/Runic.Translations.Build.Tests -- --treenode-filter "/*/*/(XamlBuildTests)|(Rmf2*Tests)/*"
 dotnet run --project apps/translations-editor -- --smoke-test
 cd packages/web/translations-svelte
 bun run check
@@ -191,10 +191,11 @@ pass/fail limits checked into
 `tests/benchmarks/translations/rmf2-lsp/baseline-v2.json`:
 
 ```sh
-dotnet run -c Release --project tests/dotnet/Runic.Translations.Build.Tests -- --rmf2-lsp-benchmark
+dotnet run -c Release --project tests/dotnet/Runic.Translations.Build.Tests -- --treenode-filter "/*/*/Rmf2LspBenchmark/*" --output detailed
 ```
 
-It measures a v5 2,000-message catalog and a ranged
+The benchmark is an `[Explicit]` case of the Build test suite, so other runs of
+the suite skip it; `--output detailed` prints its JSON report. It measures a v5 2,000-message catalog and a ranged
 incremental edit through the real child-process stdio entry point (three samples,
 reporting medians). Queued cancellation uses the same framed protocol over
 in-process streams with internal worker and cancellation-observed hooks, so the

@@ -1,38 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 
 namespace Runic.Translations.Build.Tests;
-
-internal sealed class TestRunner
-{
-    private readonly List<(string Name, Action Test)> _tests = [];
-
-    public void Add(string name, Action test) => _tests.Add((name, test));
-
-    public int Run()
-    {
-        int failed = 0;
-        foreach ((string name, Action test) in _tests)
-        {
-            try
-            {
-                test();
-                Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"PASS {name}"));
-            }
-            catch (Exception exception)
-            {
-                failed++;
-                Console.Error.WriteLine(string.Create(CultureInfo.InvariantCulture, $"FAIL {name}"));
-                Console.Error.WriteLine(exception);
-            }
-        }
-
-        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"RESULT {_tests.Count - failed}/{_tests.Count} passed"));
-        return failed == 0 ? 0 : 1;
-    }
-}
 
 internal static class Assert
 {
