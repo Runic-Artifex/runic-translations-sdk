@@ -330,7 +330,7 @@ element, or a leaf that starts or ends with whitespace) is
 
 ## RTR0080
 
-Translation XAML declaration is invalid. The optional XAML validator found malformed XML, an invalid Message declaration (missing/duplicate Key or properties), or a catalog assertion that does not name the local TranslationProject. Fix the declaration. External catalogs are not checked: remove the assertion, or set `TranslationsValidateXaml="false"` on the file's `Page` or `TranslationXaml` item to skip the file. Runtime-valued keys and sources are allowed; they are not evaluated during the build.
+Translation XAML declaration is invalid. The optional XAML validator found malformed XML, an invalid Message declaration (missing/duplicate Key or properties), or a catalog assertion that names neither the local TranslationProject nor a directly referenced project's catalog. Fix the declaration. External catalogs are not checked: remove the assertion, or set `TranslationsValidateXaml="false"` on the file's `Page` or `TranslationXaml` item to skip the file. Runtime-valued keys and sources are allowed; they are not evaluated during the build.
 
 ## RTR0081
 

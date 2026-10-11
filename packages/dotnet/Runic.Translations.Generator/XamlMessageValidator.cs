@@ -13,7 +13,7 @@ namespace Runic.Translations.Generator;
 // Presentation-specific parsing only. Message names, parameter order and content kind
 // come from the same compiler contracts that emit the readable surface; no reflection
 // or separately maintained message schema is involved.
-// The readable messages of the linked local catalog, built once per link and shared by every XAML file.
+// The readable messages of one linked catalog, built once per link and shared by every XAML file.
 internal sealed class XamlCatalog
 {
     internal XamlCatalog(Rmf2ProjectV5 project)
@@ -28,6 +28,29 @@ internal sealed class XamlCatalog
     internal Dictionary<string, Rmf2ReadableMessageV1> Messages { get; } = new(StringComparer.Ordinal);
 }
 
+// The catalogs XAML can be checked against: the local TranslationProject's, then those of referenced projects.
+// A local catalog wins over a referenced one with the same ID.
+internal sealed class XamlCatalogs
+{
+    private readonly Dictionary<string, XamlCatalog> _byId = new(StringComparer.Ordinal);
+
+    private XamlCatalogs(XamlCatalog? local, IEnumerable<XamlCatalog> referenced)
+    {
+        LocalId = local?.Id;
+        if (local is not null) _byId.Add(local.Id, local);
+        foreach (XamlCatalog catalog in referenced)
+            _byId.TryAdd(catalog.Id, catalog);
+    }
+
+    internal string? LocalId { get; }
+    internal IEnumerable<string> Ids => _byId.Keys.OrderBy(static id => id, StringComparer.Ordinal);
+
+    internal static XamlCatalogs? Create(XamlCatalog? local, IReadOnlyCollection<XamlCatalog> referenced) =>
+        local is null && referenced.Count == 0 ? null : new XamlCatalogs(local, referenced);
+
+    internal bool TryGet(string id, out XamlCatalog catalog) => _byId.TryGetValue(id, out catalog!);
+}
+
 internal sealed class XamlMessageValidator
 {
     private const string NullValue = "{__runic:null}";
@@ -37,23 +60,23 @@ internal sealed class XamlMessageValidator
     private readonly SourceProductionContext _context;
     private readonly TranslationsGenerator.GeneratorInput _input;
     private readonly SourceText _text;
-    private readonly XamlCatalog _catalog;
+    private readonly XamlCatalogs _catalogs;
     // Explicit catalog sources that keep the project default from applying: a style setter
     // can apply to any element, an attached source to its element's content.
     private XObject? _fileSource;
     private readonly Dictionary<XElement, XObject> _scopedSources = [];
     private readonly HashSet<XObject> _reportedSources = [];
 
-    private XamlMessageValidator(SourceProductionContext context, TranslationsGenerator.GeneratorInput input, XamlCatalog catalog)
+    private XamlMessageValidator(SourceProductionContext context, TranslationsGenerator.GeneratorInput input, XamlCatalogs catalogs)
     {
         _context = context;
         _input = input;
         _text = SourceText.From(input.Text ?? string.Empty);
-        _catalog = catalog;
+        _catalogs = catalogs;
     }
 
-    internal static void Validate(SourceProductionContext context, TranslationsGenerator.GeneratorInput input, XamlCatalog catalog) =>
-        new XamlMessageValidator(context, input, catalog).Run();
+    internal static void Validate(SourceProductionContext context, TranslationsGenerator.GeneratorInput input, XamlCatalogs catalogs) =>
+        new XamlMessageValidator(context, input, catalogs).Run();
 
     private void Run()
     {
@@ -341,15 +364,15 @@ internal sealed class XamlMessageValidator
                 return;
             }
         }
-        if (catalog != _catalog.Id)
+        if (!_catalogs.TryGet(catalog!, out XamlCatalog target))
         {
-            Report(TranslationsDiagnostics.XamlDeclaration, location, "XAML catalog '" + catalog + "' is not the local TranslationProject catalog '" + _catalog.Id +
-                "'. External catalogs are not checked; set TranslationsValidateXaml=\"false\" on the file's Page or TranslationXaml item to skip it.");
+            Report(TranslationsDiagnostics.XamlDeclaration, location, "XAML catalog '" + catalog + "' is not the catalog of the local TranslationProject or of a referenced project (" +
+                string.Join(", ", _catalogs.Ids.Select(static id => "'" + id + "'")) + "). External catalogs are not checked; set TranslationsValidateXaml=\"false\" on the file's Page or TranslationXaml item to skip it.");
             return;
         }
-        if (!_catalog.Messages.TryGetValue(key, out Rmf2ReadableMessageV1? message))
+        if (!target.Messages.TryGetValue(key, out Rmf2ReadableMessageV1? message))
         {
-            string? suggestion = Suggest(key);
+            string? suggestion = Suggest(target, key);
             Report(TranslationsDiagnostics.XamlKey, location, "'" + key + "' is not a readable message of catalog '" + catalog + "'." +
                 (suggestion is null ? " Use its flattened readable name." : " Did you mean '" + suggestion + "'?") +
                 (string.IsNullOrWhiteSpace(_input.Catalog)
@@ -403,13 +426,13 @@ internal sealed class XamlMessageValidator
         string.Join(", ", inputs.Select(static (input, index) => index < 4 ? "Arg" + index + "=" + input.Identifier : input.Identifier));
 
     // The closest readable key: same name ignoring case or separators, else a small edit distance.
-    private string? Suggest(string key)
+    private static string? Suggest(XamlCatalog catalog, string key)
     {
         string Normalize(string value) => value.Replace('.', '_').Replace('-', '_').ToLowerInvariant();
         string normalized = Normalize(key);
         string? best = null;
         int bestDistance = Math.Max(1, Math.Min(3, key.Length / 3)) + 1;
-        foreach (string candidate in _catalog.Messages.Keys.OrderBy(static candidate => candidate, StringComparer.Ordinal))
+        foreach (string candidate in catalog.Messages.Keys.OrderBy(static candidate => candidate, StringComparer.Ordinal))
         {
             int distance = Normalize(candidate) == normalized ? 0 : Distance(normalized, Normalize(candidate), bestDistance);
             if (distance < bestDistance) { best = candidate; bestDistance = distance; }

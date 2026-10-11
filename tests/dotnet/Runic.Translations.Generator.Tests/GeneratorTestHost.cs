@@ -170,6 +170,7 @@ internal static class GeneratorTestHost
                     ["build_metadata.AdditionalFiles.RunicTranslationKind"] = input.Kind,
                     ["build_metadata.AdditionalFiles.RunicTranslationCatalog"] = input.Catalog ?? string.Empty,
                     ["build_metadata.AdditionalFiles.RunicTranslationDefaultCatalog"] = input.DefaultCatalog ?? string.Empty,
+                    ["build_metadata.AdditionalFiles.RunicTranslationProject"] = input.Owner ?? string.Empty,
                 });
             }
         }
@@ -190,7 +191,7 @@ internal static class GeneratorTestHost
     }
 }
 
-internal readonly record struct TestInput(string Path, string Kind, string Text, string? Catalog = null, string? DefaultCatalog = null);
+internal readonly record struct TestInput(string Path, string Kind, string Text, string? Catalog = null, string? DefaultCatalog = null, string? Owner = null);
 
 internal enum RuntimeReferenceMode
 {
