@@ -5,18 +5,15 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Json.Schema;
 using Runic.Translations.Compiler;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2SemanticV5SchemaTests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2SemanticV5SchemaTests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 v5 emitted ASTs and golden envelope validate against Draft 2020-12", ValidInstances);
-        runner.Add("RMF2 v5 Draft 2020-12 schemas reject malformed AST, envelope, and manifest mutations", InvalidInstances);
-    }
-
-    private static void ValidInstances()
+    [Test, DisplayName("RMF2 v5 emitted ASTs and golden envelope validate against Draft 2020-12")]
+    public void ValidInstances()
     {
         var astSchema = ReadSchema("message-ast-v5.schema.json");
         var artifactSchema = ReadSchema("locale-artifact-v5.schema.json");
@@ -39,7 +36,8 @@ internal static class Rmf2SemanticV5SchemaTests
         AssertValidation(artifactSchema, GoldenArtifact(), true, "Hand-authored golden envelope");
     }
 
-    private static void InvalidInstances()
+    [Test, DisplayName("RMF2 v5 Draft 2020-12 schemas reject malformed AST, envelope, and manifest mutations")]
+    public void InvalidInstances()
     {
         var astSchema = ReadSchema("message-ast-v5.schema.json");
         var artifactSchema = ReadSchema("locale-artifact-v5.schema.json");

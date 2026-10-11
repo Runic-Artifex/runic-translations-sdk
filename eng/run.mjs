@@ -147,6 +147,7 @@ function testManaged() {
 const tunitProjects = new Set([
   "tests/dotnet/Runic.Translations.Authoring.Tests/Runic.Translations.Authoring.Tests.csproj",
   "tests/dotnet/Runic.Translations.CommandLine.Tests/Runic.Translations.CommandLine.Tests.csproj",
+  "tests/dotnet/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj",
   "tests/dotnet/Runic.Translations.Generator.Tests/Runic.Translations.Generator.Tests.csproj",
   "tests/dotnet/Runic.Translations.Runtime.Tests/Runic.Translations.Runtime.Tests.csproj",
   "tests/dotnet/Runic.Translations.Tooling.Tests/Runic.Translations.Tooling.Tests.csproj",

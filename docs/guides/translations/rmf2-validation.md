@@ -165,13 +165,8 @@ This completes the native interaction evidence for Visual Studio 2026.
 
 ## Representative measurements
 
-Reproduce the bounded, warm-loop measurements with:
-
-```sh
-dotnet run -c Release --project tests/dotnet/Runic.Translations.Compiler.Tests -- --rmf2-benchmark
-```
-
-On this Linux development machine, 2026-09-11, .NET runtime 10.0.11 and Bun 1.4.2:
+These bounded, warm-loop measurements were taken with a harness that the
+compiler test suite no longer contains. On this Linux development machine, 2026-09-11, .NET runtime 10.0.11 and Bun 1.4.2:
 
 | Operation                            | Mean µs/op | .NET allocated bytes/op |
 | ------------------------------------ | ---------: | ----------------------: |

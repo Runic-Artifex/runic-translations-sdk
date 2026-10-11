@@ -2,22 +2,18 @@ using System;
 using System.Linq;
 using System.Text;
 using Runic.Translations.Compiler;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2AuthoringTests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2AuthoringTests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 authoring projects quoted branches and pinned CLDR categories", Projection);
-        runner.Add("RMF2 authoring patches patterns and references with revision guards", Patches);
-        runner.Add("RMF2 authoring persists declarations selectors and branches without legacy JSON", Structure);
-        runner.Add("RMF2 semantic review excludes syntax and storage framing but preserves boundaries", Semantic);
-    }
     private static TranslationSource Source(string text) => new("sample.mf2", Encoding.UTF8.GetBytes(text));
     private static TranslationSource Apply(TranslationSource source, Rmf2AuthoringOperation operation) => Rmf2AuthoringService.Apply(source, Rmf2AuthoringService.Revision(source), operation);
     private static string Text(TranslationSource source) => Encoding.UTF8.GetString(source.Bytes);
-    private static void Projection()
+    [Test, DisplayName("RMF2 authoring projects quoted branches and pinned CLDR categories")]
+    public void Projection()
     {
         var source = Source(".input {$count :number minimumFractionDigits=0}\n.match $count\none {{One 🦊}}\n* {{Many {$count}}}\n");
         var projection = Rmf2AuthoringService.Project(source, "en-US");
@@ -34,7 +30,8 @@ internal static class Rmf2AuthoringTests
         Assert.Equal("one,two,few,other", string.Join(',', mixed.SelectorPluralCategories[1]));
         Assert.True(!Rmf2AuthoringService.Project(Source("{:future}"), "en").Supported, "Unknown functions must have an explicit source-only fallback.");
     }
-    private static void Patches()
+    [Test, DisplayName("RMF2 authoring patches patterns and references with revision guards")]
+    public void Patches()
     {
         var source = Source(".input {$count :number}\n.local $value = {$count :number}\n.match $count\none {{One 🦊}}\n* {{|count| {$value} {$count @note=|unchanged|}}}\n");
         var changed = Apply(source, new("set-pattern", "0", "Exactly one 🦊"));
@@ -46,7 +43,8 @@ internal static class Rmf2AuthoringTests
         try { Rmf2AuthoringService.Apply(changed, Rmf2AuthoringService.Revision(source), new("set-pattern", "0", "Stale")); throw new InvalidOperationException("Stale edit accepted."); }
         catch (ArgumentException) { }
     }
-    private static void Structure()
+    [Test, DisplayName("RMF2 authoring persists declarations selectors and branches without legacy JSON")]
+    public void Structure()
     {
         var source = Source("Hello 🦊\n");
         source = Apply(source, new("add-input", Name: "count", Function: "integer"));
@@ -68,7 +66,8 @@ internal static class Rmf2AuthoringTests
         try { Apply(source, new("remove-variant", "0")); throw new InvalidOperationException("Fallback removed."); } catch (ArgumentException) { }
         try { Apply(source, new("set-pattern", "0", "Broken }} pattern")); throw new InvalidOperationException("Broken pattern accepted."); } catch (ArgumentException) { }
     }
-    private static void Semantic()
+    [Test, DisplayName("RMF2 semantic review excludes syntax and storage framing but preserves boundaries")]
+    public void Semantic()
     {
         var plain = Rmf2AuthoringService.Semantic(Source("Hello {$name}\n"));
         Assert.Equal("Hello ", plain.Text.Single());

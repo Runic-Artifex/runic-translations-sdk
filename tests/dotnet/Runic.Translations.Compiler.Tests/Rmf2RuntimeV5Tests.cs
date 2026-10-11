@@ -2,19 +2,15 @@ using System;
 using System.Linq;
 using System.Text;
 using Runic.Translations.Compiler;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2RuntimeV5Tests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2RuntimeV5Tests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 v5 normalized compiler values execute without a v4 adapter", CompilerValues);
-        runner.Add("RMF2 v5 locale grammars execute against the same typed caller contract", CallerContracts);
-        runner.Add("RMF2 v5 normalized annotation and markup ordering survives runtime lowering", Annotations);
-        runner.Add("RMF2 v5 declaration rebinding cannot reach runtime execution", DeclarationRebinding);
-    }
-    private static void CompilerValues()
+    [Test, DisplayName("RMF2 v5 normalized compiler values execute without a v4 adapter")]
+    public void CompilerValues()
     {
         var message = Compile(".input {$n :number}\n.input {$digits :integer}\n.local $percent = {$n :number style=percent maximumFractionDigits=$digits}\n.local $alias = {$percent}\n.local $decimal = {$alias :number style=decimal}\n{{{$alias} / {$decimal} / {1e+2 :number}}}");
         Assert.Equal("12.35% / 0.123456 / 100", message.Format([new("n", .123456m), new("digits", 2L)], "en"));
@@ -26,7 +22,8 @@ internal static class Rmf2RuntimeV5Tests
         var unscaled = Compile(".local $n = {42 :number style=percent}\n.local $a = {$n}\n.match $a\n42 {{exact}}\n* {{fallback}}");
         Assert.Equal("fallback", unscaled.Format([], "en"));
     }
-    private static void CallerContracts()
+    [Test, DisplayName("RMF2 v5 locale grammars execute against the same typed caller contract")]
+    public void CallerContracts()
     {
         var english = Compile(".input {$n :integer}\n.match $n\none {{one}}\n* {{{$n} files}}");
         var french = Compile(".input {$n :integer}\n.local $display = {$n :number minimumFractionDigits=2}\n{{{$display} fichiers}}");
@@ -37,7 +34,8 @@ internal static class Rmf2RuntimeV5Tests
         var exact = Compile(".input {$n :number select=exact}\n.match $n\n|9007199254740993| {{exact}}\n* {{other}}");
         Assert.Equal("exact", exact.Format([new("n", 9007199254740993m)], "en"));
     }
-    private static void Annotations()
+    [Test, DisplayName("RMF2 v5 normalized annotation and markup ordering survives runtime lowering")]
+    public void Annotations()
     {
         var message = Compile("{{{#strong @open=||}{|ok| @flag @n=1e2}{/strong @close=||}}}");
         var content = message.FormatContent([], "en");
@@ -46,7 +44,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("100", content.Nodes.Span[1].Annotations.Span[1].Value!.Canonical);
         Assert.Equal("close", content.Nodes.Span[2].Annotations.Span[0].Name);
     }
-    private static void DeclarationRebinding()
+    [Test, DisplayName("RMF2 v5 declaration rebinding cannot reach runtime execution")]
+    public void DeclarationRebinding()
     {
         foreach (string selector in new[] { "n", "a" })
         {

@@ -7,25 +7,17 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2EsmV5Tests
+[Category("rmf2-semantic-v5"), NotInParallel]
+internal sealed class Rmf2EsmV5Tests
 {
     private static readonly JsonSerializerOptions ProjectJsonOptions = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
 
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 v5 generated ESM executes exact static dynamic transport and SSR paths", Executes);
-        runner.Add("RMF2 v5 ESM preserves exact selection dynamic options aliases and ordered annotations", SemanticParity);
-        runner.Add("RMF2 v5 renderers hide annotations and preserve custom plain-text policies", RendererParity);
-        runner.Add("RMF2 markup contract v2 ESM links placement and bounded integer options", IntegerOptions);
-        runner.Add("RMF2 v5 ESM manifest is closed versioned and accepted only as the exact shipping Vite contract", ManifestIsolation);
-        runner.Add("RMF2 v5 ESM preserves hostile NFC caller names without prototype mutation", HostileNames);
-        runner.Add("RMF2 v5 ESM hardens locale dynamic pack and renderer boundaries", RuntimeHardening);
-    }
-
-    private static void Executes()
+    [Test, DisplayName("RMF2 v5 generated ESM executes exact static dynamic transport and SSR paths")]
+    public void Executes()
     {
         Rmf2ProjectV5 project = Fixture();
         IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(project);
@@ -125,7 +117,8 @@ internal static class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
-    private static void SemanticParity()
+    [Test, DisplayName("RMF2 v5 ESM preserves exact selection dynamic options aliases and ordered annotations")]
+    public void SemanticParity()
     {
         string semantic = File.ReadAllText(RepositoryPaths.Resolve("specs", "translations", "corpus", "semantic-v5", "message.mf2"));
         string indented = string.Join('\n', semantic.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n').Select(line => "  " + line));
@@ -162,7 +155,8 @@ internal static class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
-    private static void RendererParity()
+    [Test, DisplayName("RMF2 v5 renderers hide annotations and preserve custom plain-text policies")]
+    public void RendererParity()
     {
         const string contracts = """
             ,"markup":{"contracts":[
@@ -218,7 +212,8 @@ internal static class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
-    private static void IntegerOptions()
+    [Test, DisplayName("RMF2 markup contract v2 ESM links placement and bounded integer options")]
+    public void IntegerOptions()
     {
         const string contracts = """
             ,"markup":{"contracts":[
@@ -254,7 +249,8 @@ internal static class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
-    private static void ManifestIsolation()
+    [Test, DisplayName("RMF2 v5 ESM manifest is closed versioned and accepted only as the exact shipping Vite contract")]
+    public void ManifestIsolation()
     {
         Rmf2ProjectV5 project = Fixture();
         IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(project);
@@ -281,7 +277,8 @@ internal static class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
-    private static void HostileNames()
+    [Test, DisplayName("RMF2 v5 ESM preserves hostile NFC caller names without prototype mutation")]
+    public void HostileNames()
     {
         const string message = "__proto__ = Proto\nconstructor = Constructor\nx =\n  .input {$__proto__ :string}\n  .input {$constructor :string}\n  .input {$user-name :string}\n  .input {$用户 :string}\n  {{ {$__proto__} {$constructor} {$user-name} {$用户} }}";
         Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
@@ -307,7 +304,8 @@ internal static class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
-    private static void RuntimeHardening()
+    [Test, DisplayName("RMF2 v5 ESM hardens locale dynamic pack and renderer boundaries")]
+    public void RuntimeHardening()
     {
         Rmf2ProjectV5 european = CompileProject("numbers", "en", ["en", "nl"], false,
             ("en", "hello = Hello\namount =\n  .input {$value :number}\n  {{ {$value :number minimumFractionDigits=2 maximumFractionDigits=2} }}"),

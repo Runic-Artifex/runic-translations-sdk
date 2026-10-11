@@ -7,19 +7,15 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2ArtifactV5Tests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2ArtifactV5Tests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 locale artifact round-trips typed fallback content", RoundTrip);
-        runner.Add("RMF2 v5 locale outputs produce a schema-valid deterministic asset manifest", AssetManifest);
-        runner.Add("RMF2 v5 external pack rejects hostile envelope and AST mutations", HostileMatrix);
-    }
-
-    private static void AssetManifest()
+    [Test, DisplayName("RMF2 v5 locale outputs produce a schema-valid deterministic asset manifest")]
+    public void AssetManifest()
     {
         (Rmf2ProjectV5 project, _) = Fixture("en");
         TranslationGeneratedOutput[] locales = project.Locales
@@ -44,7 +40,8 @@ internal static class Rmf2ArtifactV5Tests
         Assert.Equal(manifest.Text, TranslationOutputRenderer.RenderRmf2V5AssetManifestJson(project, locales.Reverse()).Text);
     }
 
-    private static void RoundTrip()
+    [Test, DisplayName("RMF2 locale artifact round-trips typed fallback content")]
+    public void RoundTrip()
     {
         (Rmf2ProjectV5 project, TranslationGeneratedOutput artifact) = Fixture("de");
         TranslationPackContract contract = Contract(project, "de");
@@ -101,7 +98,8 @@ internal static class Rmf2ArtifactV5Tests
         }
     }
 
-    private static void HostileMatrix()
+    [Test, DisplayName("RMF2 v5 external pack rejects hostile envelope and AST mutations")]
+    public void HostileMatrix()
     {
         (Rmf2ProjectV5 project, TranslationGeneratedOutput artifact) = Fixture("de");
         TranslationPackContract contract = Contract(project, "de");

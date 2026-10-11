@@ -3,25 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2DocumentProfileTests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2DocumentProfileTests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 document profile infers the content kind and exports kinds and skeletons", Kinds);
-        runner.Add("RMF2 document profile encodes skeletons canonically with defaults and escapes", Skeletons);
-        runner.Add("RMF2 document profile normalizes leaf whitespace at compile time", Whitespace);
-        runner.Add("RMF2 document profile rejects content-kind violations as RTR0070", KindViolations);
-        runner.Add("RMF2 document profile rejects invalid children as RTR0072", InvalidChildren);
-        runner.Add("RMF2 document profile enforces depth and node limits as RTR0073", Limits);
-        runner.Add("RMF2 document profile locks translated structure with RTR0074 and RTR0071", LockedStructure);
-        runner.Add("RMF2 document profile warns about empty blocks and skipped headings", Warnings);
-        runner.Add("RMF2 document profile validates block options and default alias collisions", Options);
-        runner.Add("RMF2 document profile artifacts validate against locale-artifact-v5", Artifact);
-    }
-
     private const string Example = "backup =\n    {#p}{#strong}Before continuing{/strong}, save a copy of {$fileName}.{/p}\n    {#ul}\n      {#li}Read the {#link ref=guide}guide{/link}.{/li}\n      {#li}{#action ref=check}Check{/action} the result.{/li}\n    {/ul}\n    {#p}You can continue when the check finishes.{/p}\n";
 
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
@@ -60,7 +48,8 @@ internal static class Rmf2DocumentProfileTests
     private static string Texts(IReadOnlyList<Rmf2NodeV5> nodes) => string.Join("|", nodes.OfType<Rmf2TextV5>().Select(text => text.Value));
     private static string Skeleton(string message) => string.Join(" ; ", Contract(Good("x = " + message)).Skeletons);
 
-    private static void Kinds()
+    [Test, DisplayName("RMF2 document profile infers the content kind and exports kinds and skeletons")]
+    public void Kinds()
     {
         var project = Good(Example);
         var contract = Contract(project, "backup");
@@ -105,7 +94,8 @@ internal static class Rmf2DocumentProfileTests
         Assert.Equal(0, translatedEmpty.Locales.Single(locale => locale.Tag == "de").DirectResources[0].Message.Variants[0].Nodes.Count);
     }
 
-    private static void Artifact()
+    [Test, DisplayName("RMF2 document profile artifacts validate against locale-artifact-v5")]
+    public void Artifact()
     {
         var project = Good("x =\n  .input {$n :integer}\n  .match $n\n  0 {{}}\n  * {{{#h level=1}T{/h}{#p}{$n}{/p}{#ol start=2}{#li}a{/li}{/ol}}}\n" + Example);
         Assert.Equal(" ; h[level=1],p,ol[marker=decimal;start=2](li)", string.Join(" ; ", Contract(project).Skeletons));
@@ -114,7 +104,8 @@ internal static class Rmf2DocumentProfileTests
             System.Text.Json.Nodes.JsonNode.Parse(artifact.Text)!.AsObject(), true, "Document locale artifact");
     }
 
-    private static void Skeletons()
+    [Test, DisplayName("RMF2 document profile encodes skeletons canonically with defaults and escapes")]
+    public void Skeletons()
     {
         Assert.Equal("h[level=1],ol[marker=lower-alpha;start=3](li,li)", Skeleton("{#h level=1}T{/h}{#ol start=3 marker=lower-alpha}{#li}a{/li}{#li}b{/li}{/ol}"));
         Assert.Equal("ol[marker=decimal;start=1](li)", Skeleton("{#ol}{#li}a{/li}{/ol}"));
@@ -126,7 +117,8 @@ internal static class Rmf2DocumentProfileTests
         Assert.Equal("level=$n", Rmf2DocumentProfileV5.EncodeOptions([new("level", new("input", "n"))]));
     }
 
-    private static void Whitespace()
+    [Test, DisplayName("RMF2 document profile normalizes leaf whitespace at compile time")]
+    public void Whitespace()
     {
         string P(string body) => Texts(Nodes(Good("x =\n  {#p}" + body.Replace("\n", "\n  ", StringComparison.Ordinal) + "{/p}")));
         // Leading and trailing runs go, even across tag boundaries; inner runs without a line break stay.
@@ -160,7 +152,8 @@ internal static class Rmf2DocumentProfileTests
         Assert.Equal("ภาษา ไทย", P("ภาษา\nไทย"));
     }
 
-    private static void KindViolations()
+    [Test, DisplayName("RMF2 document profile rejects content-kind violations as RTR0070")]
+    public void KindViolations()
     {
         Bad("x = Text {#p}a{/p}", "RTR0070", contains: "document root");
         Bad("x =\n  .input {$n :string}\n  {{{$n}{#p}a{/p}}}", "RTR0070", contains: "placeholder");
@@ -171,7 +164,8 @@ internal static class Rmf2DocumentProfileTests
         Bad("x = Inline", "RTR0070", german: "x = {#p}Doc{/p}", contains: "base locale");
     }
 
-    private static void InvalidChildren()
+    [Test, DisplayName("RMF2 document profile rejects invalid children as RTR0072")]
+    public void InvalidChildren()
     {
         Bad("x = {#li}orphan{/li}", "RTR0072", contains: "directly inside ul or ol");
         Bad("x = {#p}{#li}a{/li}{/p}", "RTR0072");
@@ -184,7 +178,8 @@ internal static class Rmf2DocumentProfileTests
         Bad("x =\n  .input {$n :string}\n  {{{#ul}{$n}{/ul}}}", "RTR0072");
     }
 
-    private static void Limits()
+    [Test, DisplayName("RMF2 document profile enforces depth and node limits as RTR0073")]
+    public void Limits()
     {
         string nested = string.Concat(Enumerable.Repeat("{#em}", 15)) + "x" + string.Concat(Enumerable.Repeat("{/em}", 15));
         Good("x = {#p}" + nested + "{/p}");
@@ -195,7 +190,8 @@ internal static class Rmf2DocumentProfileTests
         Bad("x = " + string.Concat(Enumerable.Repeat("{#p}x{/p}", 1366)), "RTR0065");
     }
 
-    private static void LockedStructure()
+    [Test, DisplayName("RMF2 document profile locks translated structure with RTR0074 and RTR0071")]
+    public void LockedStructure()
     {
         Good(Example, Example.Replace("Before continuing", "Bevor Sie fortfahren", StringComparison.Ordinal));
         var result = Bad(Example, "RTR0074", german: Example.Replace("{/ul}", "  {#li}Extra.{/li}\n    {/ul}", StringComparison.Ordinal), contains: "'ul[1]/li[3]'");
@@ -217,7 +213,8 @@ internal static class Rmf2DocumentProfileTests
         Good("x =\n  .input {$n :integer}\n  .match $n\n  0 {{}}\n  * {{{#p}Many{/p}}}", "x =\n  .input {$n :integer}\n  .match $n\n  0 {{}}\n  * {{{#p}Viele{/p}}}");
     }
 
-    private static void Warnings()
+    [Test, DisplayName("RMF2 document profile warns about empty blocks and skipped headings")]
+    public void Warnings()
     {
         Warns("x = {#p}a{/p}{#p}{/p}", "RTR0076", contains: "p[2]");
         Warns("x =\n  {#p}a{/p}{#p} {#strong}\n  {/strong} {/p}", "RTR0076");
@@ -233,7 +230,8 @@ internal static class Rmf2DocumentProfileTests
         Silent("x = {#h level=1}a{/h}{#h level=2}b{/h}{#h level=2}c{/h}{#h level=1}d{/h}{#h level=2}e{/h}", "RTR0077");
     }
 
-    private static void Options()
+    [Test, DisplayName("RMF2 document profile validates block options and default alias collisions")]
+    public void Options()
     {
         // The accepted and rejected integer literal forms are pinned by the shared rmf2-document-v1 corpus.
         Bad("x = {#h}a{/h}", "RTR0061", contains: "level");

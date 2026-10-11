@@ -2,21 +2,14 @@ using System;
 using System.IO;
 using System.Text.Json;
 using Json.Schema;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class SchemaTests
+internal sealed class SchemaTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("schemas contain only resolvable local references", LocalReferencesResolve);
-        runner.Add("published schema identifiers match their bundled file names", CanonicalIdentifiersMatchFiles);
-        runner.Add("semantic schemas publish closed v5 profile boundaries", V3SchemaBoundaries);
-        runner.Add("project schema rejects retired RMF2 selectors", ProjectExecutionProfileBoundary);
-        runner.Add("valid corpus sources are strict JSON", ValidCorpusSourcesAreStrictJson);
-    }
-
-    private static void ProjectExecutionProfileBoundary()
+    [Test, DisplayName("project schema rejects retired RMF2 selectors")]
+    public void ProjectExecutionProfileBoundary()
     {
         JsonSchema schema = JsonSchema.FromFile(ReadSchemaPath("project-v1.schema.json"),
             new BuildOptions { Dialect = Dialect.Draft202012 });
@@ -34,7 +27,8 @@ internal static class SchemaTests
         }
     }
 
-    private static void LocalReferencesResolve()
+    [Test, DisplayName("schemas contain only resolvable local references")]
+    public void LocalReferencesResolve()
     {
         AssertReferencesResolve(ReadSchemaPath("message-ast-v5.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("web-module-manifest-v3.schema.json"));
@@ -42,7 +36,8 @@ internal static class SchemaTests
         AssertReferencesResolve(ReadSchemaPath("project-v1.schema.json"));
     }
 
-    private static void ValidCorpusSourcesAreStrictJson()
+    [Test, DisplayName("valid corpus sources are strict JSON")]
+    public void ValidCorpusSourcesAreStrictJson()
     {
         string validRoot = RepositoryPaths.Resolve("specs", "translations", "corpus", "valid");
         Assert.True(Directory.Exists(validRoot), "The version 1 valid corpus directory is missing.");
@@ -66,7 +61,8 @@ internal static class SchemaTests
         }
     }
 
-    private static void V3SchemaBoundaries()
+    [Test, DisplayName("semantic schemas publish closed v5 profile boundaries")]
+    public void V3SchemaBoundaries()
     {
         using JsonDocument ast = ReadSchema("message-ast-v5.schema.json");
         using JsonDocument artifact = ReadSchema("locale-artifact-v5.schema.json");
@@ -77,7 +73,8 @@ internal static class SchemaTests
         Assert.Equal(4, manifest.RootElement.GetProperty("properties").GetProperty("esmAbiVersion").GetProperty("const").GetInt32());
     }
 
-    private static void CanonicalIdentifiersMatchFiles()
+    [Test, DisplayName("published schema identifiers match their bundled file names")]
+    public void CanonicalIdentifiersMatchFiles()
     {
         string directory = RepositoryPaths.Resolve("specs", "translations", "schemas");
         string[] paths = Directory.GetFiles(directory, "*.schema.json", SearchOption.TopDirectoryOnly);

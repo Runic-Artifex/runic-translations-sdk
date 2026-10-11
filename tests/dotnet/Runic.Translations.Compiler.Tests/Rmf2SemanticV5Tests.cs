@@ -7,30 +7,13 @@ using System.Text;
 using System.Text.Json;
 using Runic.Translations.Compiler;
 using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2SemanticV5Tests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2SemanticV5Tests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 v5 keeps typed formatted local chains and literal formatting", LocalsAndLiterals);
-        runner.Add("RMF2 v5 infers through aliases and preserves underlying types across formatter overrides", LocalValueTypes);
-        runner.Add("RMF2 v5 rejects late bindings and input self-options before inference", DeclarationOrder);
-        runner.Add("RMF2 v5 UUID literals require exactly 36 D-format characters", UuidLiterals);
-        runner.Add("RMF2 v5 dynamic options require declared typed caller inputs", DynamicOptions);
-        runner.Add("RMF2 v5 finite option table validates enums ranges defaults and runtime errors", Options);
-        runner.Add("RMF2 v5 annotations retain order absence empty and numeric values without inputs", Annotations);
-        runner.Add("RMF2 v5 distinguishes wildcard and quoted star and preserves NFC source", WildcardAndNfc);
-        runner.Add("RMF2 v5 ranks numeric exact above categories and selectors lexicographically", Selection);
-        runner.Add("RMF2 v5 rejects malformed and normalized duplicate key vectors", InvalidKeys);
-        runner.Add("RMF2 v5 decimal canonicalization is exact bounded and culture independent", Numbers);
-        runner.Add("RMF2 project sources lower through the selected semantic contract", V4Boundary);
-        runner.Add("RMF2 v5 normalized AST equals the golden schema instance", Golden);
-        runner.Add("RMF2 v5 schemas are versioned closed and mirrored", Schemas);
-        runner.Add("RMF2 v2 registry agrees with its frozen execution profile", Registry);
-    }
-
     private static Rmf2SemanticResultV5 Compile(string text) => Rmf2SemanticCompilerV5.Compile(new TranslationSource("message.mf2", Encoding.UTF8.GetBytes(text)));
     private static Rmf2MessageV5 Message(string text)
     {
@@ -43,7 +26,8 @@ internal static class Rmf2SemanticV5Tests
         var result = Compile(text);
         Assert.True(!result.Success && result.Diagnostics.Any(d => d.Severity == TranslationDiagnosticSeverity.Error && (id is null || id == d.Id)), "Unexpectedly accepted: " + text);
     }
-    private static void LocalsAndLiterals()
+    [Test, DisplayName("RMF2 v5 keeps typed formatted local chains and literal formatting")]
+    public void LocalsAndLiterals()
     {
         var message = Message(".input {$n :number}\n.local $formatted = {$n :number style=percent}\n.local $alias = {$formatted}\n.local $again = {$alias :number style=decimal}\n{{{$again} {1e+2 :number} {|text| :string} {42 :integer}}}");
         Assert.Equal(1, message.Inputs.Count);
@@ -71,7 +55,8 @@ internal static class Rmf2SemanticV5Tests
         Reject("{1.1 :integer}", "RTR0065");
         Reject("{:number}", "RTR0065");
     }
-    private static void DeclarationOrder()
+    [Test, DisplayName("RMF2 v5 rejects late bindings and input self-options before inference")]
+    public void DeclarationOrder()
     {
         foreach (string source in new[] {
             ".local $a = {$n} .input {$n} {{ {$a :number} }}",
@@ -97,7 +82,8 @@ internal static class Rmf2SemanticV5Tests
         Message(".input {$n :number maximumFractionDigits=2 @note=|$n|} .input {$s :string select=exact} {{ {$n} {$s} }}");
         Message(".local $a = {|$n| :string @note=|$n|} .input {$n :number} {{ {$a} {$n} }}");
     }
-    private static void DynamicOptions()
+    [Test, DisplayName("RMF2 v5 dynamic options require declared typed caller inputs")]
+    public void DynamicOptions()
     {
         var message = Message(".input {$n :number}\n.input {$digits :integer}\n.input {$style :string}\n.local $d = {$digits}\n{{{$n :number style=$style minimumFractionDigits=$d maximumFractionDigits=$digits}}}");
         Assert.Equal("digits:int64,n:decimal,style:string", string.Join(',', message.Inputs.Select(input => input.Name + ":" + input.Type)));
@@ -111,7 +97,8 @@ internal static class Rmf2SemanticV5Tests
         Reject(".local $style = {$implicit} {{ {1 :number style=$style} }}", "RTR0065");
         Message(".local $style = {|percent|} {{ {1 :number style=$style} }}");
     }
-    private static void LocalValueTypes()
+    [Test, DisplayName("RMF2 v5 infers through aliases and preserves underlying types across formatter overrides")]
+    public void LocalValueTypes()
     {
         foreach (string declaration in new[] { "", ".input {$n} ", ".input {$n :number} " })
         {
@@ -145,7 +132,8 @@ internal static class Rmf2SemanticV5Tests
         Reject(".input {$n :string} .local $a = {$n} {{ {$a :number} }}", "RTR0065");
         Reject(".local $a = {$n} {{ {$a :number} {$a :string} }}", "RTR0065");
     }
-    private static void UuidLiterals()
+    [Test, DisplayName("RMF2 v5 UUID literals require exactly 36 D-format characters")]
+    public void UuidLiterals()
     {
         const string uuid = "00112233-4455-6677-8899-aAbBcCdDeEfF";
         var message = Message(".local $id = {|" + uuid + "| :runic:uuid} .local $alias = {$id} {{ {$alias :runic:uuid style=n} }}");
@@ -154,7 +142,8 @@ internal static class Rmf2SemanticV5Tests
         foreach (string invalid in new[] { " " + uuid, uuid + " ", " " + uuid + " ", "\t" + uuid, uuid + "\n", uuid[..^1], "{" + uuid + "}", uuid.Replace("-", "", StringComparison.Ordinal) })
             Reject("{|" + invalid + "| :runic:uuid}", "RTR0065");
     }
-    private static void Options()
+    [Test, DisplayName("RMF2 v5 finite option table validates enums ranges defaults and runtime errors")]
+    public void Options()
     {
         foreach (string source in new[] {
             "{1 :number minimumFractionDigits=2 maximumFractionDigits=4}", "{1 :number style=percent maximumFractionDigits=4}",
@@ -171,7 +160,8 @@ internal static class Rmf2SemanticV5Tests
             ["style"] = new("string-literal", "percent"), ["maximumFractionDigits"] = new("number-literal", "5", "5") };
         Assert.True(Rmf2FunctionRegistryV2.ValidateResolvedOptions("number", options) is not null, "Resolved dynamic options must fail instead of clamping.");
     }
-    private static void Annotations()
+    [Test, DisplayName("RMF2 v5 annotations retain order absence empty and numeric values without inputs")]
+    public void Annotations()
     {
         var message = Message(".local $n = {1 @declaration} {{ {1 :number @flag @empty=|| @numeric=1.0 @looks=|$notInput|} {#strong @open}x{/strong @close=0} }}");
         Assert.Equal(0, message.Inputs.Count);
@@ -188,7 +178,8 @@ internal static class Rmf2SemanticV5Tests
         Reject("{1 @note=$name}", "RTR0066");
         Reject("{#strong}{#em}x{/strong}{/em}", "RTR0061");
     }
-    private static void WildcardAndNfc()
+    [Test, DisplayName("RMF2 v5 distinguishes wildcard and quoted star and preserves NFC source")]
+    public void WildcardAndNfc()
     {
         const string source = ".input {$name :string}\n.match $name\n* {{fallback}}\n|*| {{star}}\n|e\u0301| {{accent}}";
         var message = Message(source);
@@ -202,7 +193,8 @@ internal static class Rmf2SemanticV5Tests
         var boolean = Message(".input {$flag :runic:boolean} .match $flag * {{other}} true {{yes}} false {{no}}");
         Assert.Equal(1, Choose(boolean, new("boolean", "true")));
     }
-    private static void Selection()
+    [Test, DisplayName("RMF2 v5 ranks numeric exact above categories and selectors lexicographically")]
+    public void Selection()
     {
         var numeric = Message(".input {$n :number} .match $n one {{category}} * {{fallback}} 1.0 {{exact}}");
         Assert.Equal(2, Choose(numeric, new("decimal", "1e0", "one")));
@@ -222,7 +214,8 @@ internal static class Rmf2SemanticV5Tests
     }
     private static int Choose(Rmf2MessageV5 message, Rmf2SelectorValueV5 value) => Rmf2SelectionV5.Select(message.Variants, message.Selectors, new[] { value });
     private static int Choose(Rmf2MessageV5 message, Rmf2SelectorValueV5 first, Rmf2SelectorValueV5 second) => Rmf2SelectionV5.Select(message.Variants, message.Selectors, new[] { first, second });
-    private static void InvalidKeys()
+    [Test, DisplayName("RMF2 v5 rejects malformed and normalized duplicate key vectors")]
+    public void InvalidKeys()
     {
         foreach (string source in new[] {
             ".match $x |é| {{a}} |e\u0301| {{b}} * {{other}}", ".match $x |*| {{only literal}}",
@@ -239,7 +232,8 @@ internal static class Rmf2SemanticV5Tests
         var vector = Message(".match $x $y |a:b| c {{a}} a |b:c| {{b}} * * {{other}}");
         Assert.Equal(3, vector.Variants.Count);
     }
-    private static void Numbers()
+    [Test, DisplayName("RMF2 v5 decimal canonicalization is exact bounded and culture independent")]
+    public void Numbers()
     {
         var culture = CultureInfo.CurrentCulture;
         try
@@ -257,7 +251,8 @@ internal static class Rmf2SemanticV5Tests
         Reject("{1e100 :number}", "RTR0065");
         Reject("{1 @note=1e100}", "RTR0065");
     }
-    private static void V4Boundary()
+    [Test, DisplayName("RMF2 project sources lower through the selected semantic contract")]
+    public void V4Boundary()
     {
         var project = new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes("{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}"));
         var selected = TranslationCompiler.CompileRmf2ProjectV5(project, [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("x = {42 :number}"))]);
@@ -266,14 +261,16 @@ internal static class Rmf2SemanticV5Tests
         Assert.Equal(5, artifact.RootElement.GetProperty("artifactVersion").GetInt32());
         Message("{42 :number}");
     }
-    private static void Golden()
+    [Test, DisplayName("RMF2 v5 normalized AST equals the golden schema instance")]
+    public void Golden()
     {
         string source = File.ReadAllText(RepositoryPaths.Resolve("specs", "translations", "corpus", "semantic-v5", "message.mf2"));
         using var actual = JsonDocument.Parse(Rmf2MessageJsonV5.Serialize(Message(source)));
         using var golden = JsonDocument.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "corpus", "semantic-v5", "locale-artifact.json")));
         Assert.True(JsonElement.DeepEquals(golden.RootElement.GetProperty("messages").GetProperty("Example").GetProperty("ast"), actual.RootElement), "Normalized AST changed from the v5 golden instance.");
     }
-    private static void Schemas()
+    [Test, DisplayName("RMF2 v5 schemas are versioned closed and mirrored")]
+    public void Schemas()
     {
         foreach (string file in new[] { "message-ast-v5.schema.json", "locale-artifact-v5.schema.json" })
         {
@@ -303,7 +300,8 @@ internal static class Rmf2SemanticV5Tests
             }
         }
     }
-    private static void Registry()
+    [Test, DisplayName("RMF2 v2 registry agrees with its frozen execution profile")]
+    public void Registry()
     {
         using var profile = JsonDocument.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "rmf2-execution-v2.json")));
         Assert.Equal("project-activated", profile.RootElement.GetProperty("implementationStage").GetString());

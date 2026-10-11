@@ -2,18 +2,16 @@ using System;
 using System.Linq;
 using System.Text;
 using Runic.Translations.Compiler;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2DiagnosticActionTests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2DiagnosticActionTests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("Diagnostic selections map mounted Unicode multiline source to physical UTF16", PhysicalSpans);
-        runner.Add("Empty-assignment quick fix preserves source and refuses stale or altered evidence", EmptyAssignmentFix);
-    }
     private static TranslationSource Source(string text) => new("../feature/en.rmf2", Encoding.UTF8.GetBytes(text));
-    private static void PhysicalSpans()
+    [Test, DisplayName("Diagnostic selections map mounted Unicode multiline source to physical UTF16")]
+    public void PhysicalSpans()
     {
         const string text = "# 😀 context\r\nblock =\r\n    😀 }\r\n";
         TranslationSource source = Source(text);
@@ -42,7 +40,8 @@ internal static class Rmf2DiagnosticActionTests
         int emoji = Encoding.UTF8.GetByteCount(text.AsSpan(0, text.IndexOf("😀", StringComparison.Ordinal)));
         Refuses(() => Rmf2DiagnosticActions.GetSpan(source, new TextSourceLocation(source.Path, emoji + 1, 1, 1, 1, 1, 2)));
     }
-    private static void EmptyAssignmentFix()
+    [Test, DisplayName("Empty-assignment quick fix preserves source and refuses stale or altered evidence")]
+    public void EmptyAssignmentFix()
     {
         const string before = "# 😀 preserved\r\nsection {\r\n    empty =   \r\n    other = Keep {$name}\r\n}\r\n";
         TranslationSource source = Source(before);

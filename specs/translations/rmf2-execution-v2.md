@@ -385,5 +385,5 @@ and locally registered schema references to check emitted ASTs, complete
 envelopes and malformed mutations. Focused verification runs with:
 
 ```sh
-dotnet run --project tests/dotnet/Runic.Translations.Compiler.Tests -- --rmf2-semantic-v5
+dotnet run --project tests/dotnet/Runic.Translations.Compiler.Tests -- --treenode-filter "/*/*/*/*[Category=rmf2-semantic-v5]"
 ```
