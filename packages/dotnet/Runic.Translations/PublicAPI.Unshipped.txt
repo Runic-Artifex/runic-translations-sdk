@@ -1,1 +1,6 @@
 #nullable enable
+Runic.Translations.CompiledTranslationCatalog.TryGetKey(string! name, out Runic.Translations.TranslationKey key) -> bool
+Runic.Translations.CompiledTranslationSnapshot.TryGetKey(string! name, out Runic.Translations.TranslationKey key) -> bool
+Runic.Translations.CompiledTranslationSnapshot.TryGetPlaceholders(Runic.Translations.TranslationKey key, out System.ReadOnlyMemory<Runic.Translations.TranslationPlaceholderDescriptor> placeholders) -> bool
+Runic.Translations.ITranslationSnapshot.TryGetKey(string! name, out Runic.Translations.TranslationKey key) -> bool
+Runic.Translations.ITranslationSnapshot.TryGetPlaceholders(Runic.Translations.TranslationKey key, out System.ReadOnlyMemory<Runic.Translations.TranslationPlaceholderDescriptor> placeholders) -> bool

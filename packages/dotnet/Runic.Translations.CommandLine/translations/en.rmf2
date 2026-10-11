@@ -1,0 +1,145 @@
+# Built-in English text for Runic.CommandLine framework keys. Each message is named
+# after its CommandTextKeys key: hyphens are removed and the next letter is capitalized.
+# The text matches the English the framework writes without a resolver.
+help {
+  usage = Usage
+  commandPlaceholder = command
+  optionsPlaceholder = options
+  defaultCommand = default
+  completion = Generate bash, zsh, fish or PowerShell completions
+  commands = Commands
+  arguments = Arguments
+  options = Options
+  showHelp = Show help
+  showVersion = Show version
+  outputFormat = Select output format
+  examples = Examples
+  required = required
+  default = default
+  choices = choices
+  environment = env
+  existing = existing
+  pathKind {
+    file = file
+    directory = directory
+  }
+  minimum = min
+  maximum = max
+  requires = requires
+  conflicts = conflicts
+}
+completion {
+  invalidShell = Choose a completion shell: bash, zsh, fish or powershell.
+}
+faults {
+  RCLI4000 = The command was cancelled.
+  RCLI5000 = The command could not be completed.
+}
+hints {
+  RCLI5000 = Set RUNIC_COMMANDLINE_DEBUG=1 to write the exception to stderr.
+}
+diagnostics {
+  unknownOption =
+    .input {$option :string}
+    {{An unrecognized option was supplied. ({$option})}}
+  unknownOptionSuggestion =
+    .input {$option :string}
+    .input {$suggestion :string}
+    {{An unrecognized option was supplied. ({$option}) Did you mean '{$suggestion}'?}}
+  unknownCommand = An unrecognized command was supplied.
+  unknownCommandSuggestion =
+    .input {$suggestion :string}
+    {{An unrecognized command was supplied. Did you mean '{$suggestion}'?}}
+  missingOptionValue =
+    .input {$option :string}
+    {{A required option value is missing. ({$option})}}
+  unexpectedOptionValue =
+    .input {$option :string}
+    {{A flag does not accept a value. ({$option})}}
+  missingArgument =
+    .input {$argument :string}
+    {{A required command argument is missing. ({$argument})}}
+  unexpectedArgument = An unexpected command argument was supplied.
+  duplicateOption =
+    .input {$option :string}
+    {{An option was specified more than once. ({$option})}}
+  unsupportedShortBundle = Bundled short options are not supported.
+  invalidOutputMode =
+    .input {$option :string}
+    {{{$option} must be human or json.}}
+  transportOutputOptionCollision = The command line is invalid.
+  missingRequiredOption =
+    .input {$option :string}
+    .input {$command :string}
+    {{A required option was not supplied. ({$option})}}
+  unexpectedRootHelpArgument = Root help does not accept additional arguments.
+  invalidEnvironmentValue =
+    .input {$option :string}
+    .input {$variable :string}
+    {{{$variable} must be true/false, yes/no or 1/0 for {$option}.}}
+  invalidChoice =
+    .input {$parameter :string}
+    .input {$choices :string}
+    {{{$parameter} must be one of: {$choices}.}}
+  invalidChoiceHidden =
+    .input {$parameter :string}
+    {{{$parameter} must be one of the choices shown in --help.}}
+  invalidInteger =
+    .input {$parameter :string}
+    {{{$parameter} requires a whole number.}}
+  invalidNumber =
+    .input {$parameter :string}
+    {{{$parameter} requires a number.}}
+  invalidGuid =
+    .input {$parameter :string}
+    {{{$parameter} requires a GUID such as 0f8fad5b-d9cb-469f-a165-70867728950e.}}
+  invalidBoolean =
+    .input {$parameter :string}
+    {{{$parameter} requires true or false.}}
+  invalidValue =
+    .input {$parameter :string}
+    {{{$parameter} has an invalid value.}}
+  validationFailed =
+    .input {$parameter :string}
+    {{{$parameter} has a value that failed validation.}}
+  missingValue =
+    .input {$parameter :string}
+    {{{$parameter} requires a value.}}
+  outOfRange =
+    .input {$parameter :string}
+    .input {$minimum :string}
+    .input {$maximum :string}
+    {{{$parameter} requires a number between {$minimum} and {$maximum}.}}
+  belowMinimum =
+    .input {$parameter :string}
+    .input {$minimum :string}
+    {{{$parameter} requires a number of at least {$minimum}.}}
+  aboveMaximum =
+    .input {$parameter :string}
+    .input {$maximum :string}
+    {{{$parameter} requires a number of at most {$maximum}.}}
+  optionRequires =
+    .input {$option :string}
+    .input {$required :string}
+    {{{$option} requires {$required}.}}
+  optionConflict =
+    .input {$option :string}
+    .input {$conflict :string}
+    {{{$option} cannot be combined with {$conflict}.}}
+  invalidFilePath =
+    .input {$parameter :string}
+    {{{$parameter} requires a valid file path.}}
+  invalidDirectoryPath =
+    .input {$parameter :string}
+    {{{$parameter} requires a valid directory path.}}
+  fileNotFound =
+    .input {$parameter :string}
+    {{{$parameter} requires an existing file; check the path and permissions.}}
+  directoryNotFound =
+    .input {$parameter :string}
+    {{{$parameter} requires an existing directory; check the path and permissions.}}
+  environmentValueSource =
+    .input {$parameter :string}
+    .input {$variable :string}
+    {{The value for {$parameter} came from environment variable {$variable}.}}
+}

@@ -10,11 +10,11 @@ internal static class TranslationOutputRenderer
     internal const int EsmAbiVersion = 4;
     internal const int WebModuleManifestVersion = 3;
 
-    internal static TranslationGeneratedOutput RenderRmf2V5CSharpKeys(Rmf2ProjectV5 project) =>
-        Rmf2CSharpOutputRendererV5.RenderKeys(RequireProject(project));
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpKeys(Rmf2ProjectV5 project, bool readableSurface = true) =>
+        Rmf2CSharpOutputRendererV5.RenderKeys(RequireProject(project), readableSurface);
 
-    internal static TranslationGeneratedOutput RenderRmf2V5CSharpAccessors(Rmf2ProjectV5 project) =>
-        Rmf2CSharpOutputRendererV5.RenderAccessors(RequireProject(project));
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpAccessors(Rmf2ProjectV5 project, bool readableSurface = true) =>
+        Rmf2CSharpOutputRendererV5.RenderAccessors(RequireProject(project), readableSurface);
 
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpCatalogData(Rmf2ProjectV5 project) =>
         Rmf2CSharpOutputRendererV5.RenderCatalogData(RequireProject(project));

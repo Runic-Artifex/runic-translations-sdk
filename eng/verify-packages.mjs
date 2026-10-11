@@ -70,6 +70,9 @@ export async function verifyPackages(version = workspace.version) {
       "using Runic.Translations; Console.WriteLine(new TranslationReference(\"catalog\", \"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\", \"greeting\").Catalog);", environment);
     dotnetConsumer(directory, "Runic.Translations.Tooling", version, {},
       "using Runic.Translations.Tooling; Console.WriteLine(typeof(ArtifactInspector).Assembly.GetName().Name);", environment);
+    // Runic.CommandLine itself restores from nuget.org; the built-in German text proves the bundled catalog loads.
+    dotnetConsumer(directory, "Runic.Translations.CommandLine", version, {},
+      "using System.Globalization; using Runic.Translations.CommandLine; string? text = new TranslationCommandTextResolver().Resolve(\"help.usage\", CultureInfo.GetCultureInfo(\"de\"), []); if (text != \"Aufruf\") throw new InvalidOperationException(text); Console.WriteLine(text);", environment);
     dotnetConsumer(directory, "Runic.Translations.Build", version, { build: true },
       "Console.WriteLine(\"Build package restored.\");", environment);
     dotnetConsumer(directory, "Runic.Translations.Wpf", version, { framework: "net10.0-windows", wpf: true },
@@ -202,7 +205,7 @@ export default defineConfig({ plugins: [runicTranslations({
     run("dotnet", ["tool", "run", "runic-translations", "--", "verify", ...compilerArguments], frontend, environment);
 
     await verifySvelteKitQuickStart({ directory, npmArchives, nugetConfig: join(directory, "NuGet.config"), version, environment });
-    console.log("All six NuGet and three npm package consumers passed.");
+    console.log("All seven NuGet and three npm package consumers passed.");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

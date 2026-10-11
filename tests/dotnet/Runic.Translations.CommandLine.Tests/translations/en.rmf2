@@ -1,0 +1,28 @@
+# Application text, keyed by DescriptionKey, plus overrides of framework text.
+commands {
+  greet = Greet a person
+}
+arguments {
+  name = Name of the person to greet
+}
+options {
+  times = How often to greet
+}
+help {
+  usage = Synopsis
+}
+diagnostics {
+  # Binds the framework argument by position.
+  unknownOption =
+    .input {$arg0 :string}
+    {{No such option: {$arg0}}}
+  # Declares an input the framework never supplies, so the built-in text is used.
+  missingArgument =
+    .input {$person :string}
+    {{Missing {$person}}}
+  # An application diagnostic with positional arguments.
+  quotaExceeded =
+    .input {$arg0 :string}
+    .input {$arg1 :integer}
+    {{{$arg0} exceeded its quota of {$arg1}.}}
+}

@@ -1,0 +1,7 @@
+#nullable enable
+Runic.Translations.CommandLine.TranslationCommandTextResolver
+Runic.Translations.CommandLine.TranslationCommandTextResolver.Resolve(string! key, System.Globalization.CultureInfo! culture, System.Collections.Generic.IReadOnlyList<string!>! arguments) -> string?
+Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver() -> void
+Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver(Runic.Translations.ITranslationManager! manager) -> void
+Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver(Runic.Translations.ITranslationSnapshot! snapshot) -> void
+static Runic.Translations.CommandLine.TranslationCommandTextResolver.GetMessageName(string! key) -> string!

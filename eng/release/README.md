@@ -1,7 +1,7 @@
 # Releasing Runic Translations SDK
 
-Runic Translations releases six NuGet packages together: `Runic.Translations`,
-`Runic.Translations.Build`, `Runic.Translations.Tooling`,
+Runic Translations releases seven NuGet packages together: `Runic.Translations`,
+`Runic.Translations.Build`, `Runic.Translations.CommandLine`, `Runic.Translations.Tooling`,
 `Runic.Translations.Wpf`, `Runic.Translations.Templates`, and
 `dotnet-runic-translations`. It also releases the Vite, Svelte, and SvelteKit
 packages listed in `eng/workspace.json`, and attaches the VS Code and Visual Studio

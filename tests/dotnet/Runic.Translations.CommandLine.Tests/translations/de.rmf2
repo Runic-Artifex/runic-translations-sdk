@@ -1,0 +1,24 @@
+commands {
+  greet = Grüßt eine Person
+}
+arguments {
+  name = Name der Person
+}
+options {
+  times = Wie oft gegrüßt wird
+}
+help {
+  usage = Übersicht
+}
+diagnostics {
+  unknownOption =
+    .input {$arg0 :string}
+    {{Keine solche Option: {$arg0}}}
+  missingArgument =
+    .input {$person :string}
+    {{Es fehlt {$person}}}
+  quotaExceeded =
+    .input {$arg0 :string}
+    .input {$arg1 :integer}
+    {{{$arg0} hat sein Kontingent von {$arg1} überschritten.}}
+}

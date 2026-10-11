@@ -27,6 +27,7 @@ to print the first message from a console application.
 - [SvelteKit quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-sveltekit.md): add localized routes, a language switcher, and request-scoped SSR to a SvelteKit app.
 - [Translations Editor](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/apps/translations-editor/README.md): build and launch the companion desktop editor from source. Standalone Editor downloads are not part of this preview.
 - [RMF2 guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md): source syntax, compiler contracts, and supported execution profile.
+- [Command-line apps](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/command-line.md): translate Runic.CommandLine help and errors with `Runic.Translations.CommandLine`, with built-in English and German text.
 
 ## Contribute from source
 

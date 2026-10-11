@@ -20,7 +20,7 @@ internal static class Rmf2V1CorpusTests
         runner.Add("RMF2 v1 corpus freezes the linked contract layouts fingerprints and artifacts", Contract);
         runner.Add("RMF2 v1 corpus agrees across linked .NET loaded packs generated ESM and dynamic ESM packs", Execution);
         runner.Add("RMF2 v1 corpus pack rejection taxonomy agrees across .NET and ESM", InvalidPacks);
-        runner.Add("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical beside the readable surface", EncodedOutputs);
+        runner.Add("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface", EncodedOutputs);
     }
 
     private static void Contract()
@@ -179,26 +179,34 @@ internal static class Rmf2V1CorpusTests
     // Re-pinned for the DOM document adapter (W220-005): runtime.js gains createDomDocumentRenderer and
     // runtime.d.ts its declaration (Element | DocumentFragment targets); the web manifest changes only
     // for those two assets. Re-pinned for a comment in runtime.js that states the empty-block rule precisely.
+    // EncodedOutputDigest covers output without the readable surface, so it is unchanged by W250-017. With the readable
+    // surface, W250-017 adds [EditorBrowsable(Never)] to each encoded key and accessor that has a readable member.
     private const string EncodedOutputDigest = "495d98c94192b42cac4305cc223e5a5cfed999f54bb73c7e0d0da36bc591325c";
+    private const string HiddenEncodedOutputDigest = "64b4bf016321f7c88248ccdf9dc238bff7a4fe2c874b15d80e31ac035257ace5";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     private static void EncodedOutputs()
     {
         Rmf2ProjectV5 project = Compile();
+        Assert.Equal(EncodedOutputDigest, Digest(project, readableSurface: false), "Encoded C# and ESM output digest");
+        Assert.Equal(HiddenEncodedOutputDigest, Digest(project, readableSurface: true), "Encoded C# and ESM output digest beside the readable surface");
+        Assert.True(TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(Root, "runic.json"))),
+            CorpusSources.Select(path => new TranslationSource("translations/" + path, File.ReadAllBytes(Path.Combine(Root, path)))))
+            .Diagnostics.All(diagnostic => diagnostic.Id != "RTR0069"), "The corpus reported a readable-name warning.");
+    }
+
+    private static string Digest(Rmf2ProjectV5 project, bool readableSurface)
+    {
         TranslationGeneratedOutput[] outputs =
         [
-            TranslationOutputRenderer.RenderRmf2V5CSharpKeys(project),
-            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(project),
+            TranslationOutputRenderer.RenderRmf2V5CSharpKeys(project, readableSurface),
+            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(project, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(project),
             TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project),
             .. TranslationOutputRenderer.RenderRmf2V5EsmModules(project),
         ];
-        string digest = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
             string.Join("\n", outputs.Select(output => output.RelativePath + " " + output.Sha256)))));
-        Assert.Equal(EncodedOutputDigest, digest, "Encoded C# and ESM output digest");
-        Assert.True(TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(Root, "runic.json"))),
-            CorpusSources.Select(path => new TranslationSource("translations/" + path, File.ReadAllBytes(Path.Combine(Root, path)))))
-            .Diagnostics.All(diagnostic => diagnostic.Id != "RTR0069"), "The corpus reported a readable-name warning.");
     }
 
     private static Rmf2ProjectV5 Compile(bool reverse = false)
