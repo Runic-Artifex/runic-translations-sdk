@@ -4,22 +4,17 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
 // Runtime API boundaries of the document profile that the shared corpus does not cover:
 // contract linking, custom plain-text projections, option validation and slot checks.
-internal static class Rmf2DocumentRuntimeTests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2DocumentRuntimeTests
 {
     private const string Config = ",\"markup\":{\"contracts\":[{\"name\":\"app:term\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"explicit\"}],\"aliases\":{\"term\":\"app:term\"}}";
     private const string Source = "term = See {#term}API{/term}.\nnotice =\n  {#p}Open the {#link ref=guide}guide{/link}.{/p}\n  {#ul}{#li}One{/li}{/ul}\n";
-
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 markup contract linking rejects other versions and custom block placements", Linking);
-        runner.Add("RMF2 plain-text options project custom elements and validate the list marker", PlainTextOptions);
-        runner.Add("RMF2 document renderer checks slot bindings and generated ESM document factories", Boundaries);
-    }
 
     private static Rmf2ProjectV5 Compile()
     {
@@ -35,7 +30,8 @@ internal static class Rmf2DocumentRuntimeTests
         return Rmf2V1CorpusTests.Lower(linked.Message, linked.ContentLocale).FormatContent([], "en");
     }
 
-    private static void Linking()
+    [Test, DisplayName("RMF2 markup contract linking rejects other versions and custom block placements")]
+    public void Linking()
     {
         string contract = Compile().MarkupContract;
         Assert.Throws<ArgumentException>(() => Rmf2MarkupContract.Link(Mutate(contract, "{\"version\":2", "{\"version\":1")), "markup contract v1");
@@ -50,7 +46,8 @@ internal static class Rmf2DocumentRuntimeTests
         return json.Replace(from, to, StringComparison.Ordinal);
     }
 
-    private static void PlainTextOptions()
+    [Test, DisplayName("RMF2 plain-text options project custom elements and validate the list marker")]
+    public void PlainTextOptions()
     {
         Rmf2ProjectV5 project = Compile();
         var renderer = new Rmf2InlineRenderer(Rmf2MarkupContract.Link(project.MarkupContract));
@@ -64,7 +61,8 @@ internal static class Rmf2DocumentRuntimeTests
         Assert.Throws<ArgumentNullException>(() => _ = new Rmf2PlainTextOptions { ListMarker = null! }, "null list marker");
     }
 
-    private static void Boundaries()
+    [Test, NotInParallel, DisplayName("RMF2 document renderer checks slot bindings and generated ESM document factories")]
+    public void Boundaries()
     {
         Rmf2ProjectV5 project = Compile();
         var documents = new Rmf2DocumentRenderer(Rmf2MarkupContract.Link(project.MarkupContract));

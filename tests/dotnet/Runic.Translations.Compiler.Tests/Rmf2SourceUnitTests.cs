@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
 // Per-source units let hosts (the source generator, `runic-translations serve`) recompile only edited
 // files. Linking from units must be indistinguishable from compiling the sources directly.
-internal static class Rmf2SourceUnitTests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2SourceUnitTests
 {
     private const string English = """
         title = Shop
@@ -29,13 +31,8 @@ internal static class Rmf2SourceUnitTests
           * {{Hallo {$name}, {$count} Artikel}}
         """;
 
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 v5 source units link exactly like direct compilation", LinkMatchesDirectCompilation);
-        runner.Add("RMF2 v5 source units relower only edited sources", UnitsReuseUnchangedLowering);
-    }
-
-    private static void LinkMatchesDirectCompilation()
+    [Test, DisplayName("RMF2 v5 source units link exactly like direct compilation")]
+    public void LinkMatchesDirectCompilation()
     {
         var options = new TranslationCompilerOptions();
         foreach (TranslationSource[] sources in new[]
@@ -55,7 +52,8 @@ internal static class Rmf2SourceUnitTests
         }
     }
 
-    private static void UnitsReuseUnchangedLowering()
+    [Test, DisplayName("RMF2 v5 source units relower only edited sources")]
+    public void UnitsReuseUnchangedLowering()
     {
         var options = new TranslationCompilerOptions();
         Rmf2SourceUnitV5 english = Rmf2SourceUnitV5.Create(Source("translations/en.rmf2", English), options);
@@ -93,7 +91,6 @@ internal static class Rmf2SourceUnitTests
         Assert.True(result.Success, string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message)));
         return result.Project!;
     }
-
 
     private static string Describe(Rmf2ProjectCompilationV5 result)
     {

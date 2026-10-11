@@ -8,26 +8,20 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
 // The shared rmf2-document-v1 corpus (W220-004 acceptance): compiler diagnostics, linked and
 // pack-loaded .NET rendering, generated and dynamic ESM rendering, and the pack rejection
 // taxonomy all consume the same index.json.
-internal static class Rmf2DocumentCorpusTests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2DocumentCorpusTests
 {
     private static string Root => RepositoryPaths.Resolve("specs", "translations", "corpus", "rmf2-document-v1");
 
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 document corpus freezes the linked contract skeletons and artifacts", Contract);
-        runner.Add("RMF2 document corpus compiler cases report the expected diagnostics", CompilerCases);
-        runner.Add("RMF2 document corpus agrees across linked .NET loaded packs generated ESM and dynamic ESM packs", Execution);
-        runner.Add("RMF2 document corpus pack rejection taxonomy agrees across .NET and ESM", InvalidPacks);
-        runner.Add("RMF2 document corpus renders the shared HTML oracle through the generated DOM adapter and retires callbacks", DomAdapter);
-    }
-
-    private static void Contract()
+    [Test, DisplayName("RMF2 document corpus freezes the linked contract skeletons and artifacts")]
+    public void Contract()
     {
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();
@@ -55,7 +49,8 @@ internal static class Rmf2DocumentCorpusTests
                 "Locale artifact digest golden for " + locale.Tag);
     }
 
-    private static void CompilerCases()
+    [Test, DisplayName("RMF2 document corpus compiler cases report the expected diagnostics")]
+    public void CompilerCases()
     {
         using JsonDocument index = Index();
         foreach (JsonElement test in index.RootElement.GetProperty("compilerCases").EnumerateArray())
@@ -70,7 +65,8 @@ internal static class Rmf2DocumentCorpusTests
         }
     }
 
-    private static void Execution()
+    [Test, NotInParallel, DisplayName("RMF2 document corpus agrees across linked .NET loaded packs generated ESM and dynamic ESM packs")]
+    public void Execution()
     {
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();
@@ -133,7 +129,8 @@ internal static class Rmf2DocumentCorpusTests
 
     // W220-005: the generated DOM document adapter renders every execution to the canonical HTML in
     // html.json (the Svelte adapter checks the same oracle), and retires links and actions on replace and clear.
-    private static void DomAdapter()
+    [Test, NotInParallel, DisplayName("RMF2 document corpus renders the shared HTML oracle through the generated DOM adapter and retires callbacks")]
+    public void DomAdapter()
     {
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();
@@ -150,7 +147,8 @@ internal static class Rmf2DocumentCorpusTests
         finally { Directory.Delete(directory, true); }
     }
 
-    private static void InvalidPacks()
+    [Test, NotInParallel, DisplayName("RMF2 document corpus pack rejection taxonomy agrees across .NET and ESM")]
+    public void InvalidPacks()
     {
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();

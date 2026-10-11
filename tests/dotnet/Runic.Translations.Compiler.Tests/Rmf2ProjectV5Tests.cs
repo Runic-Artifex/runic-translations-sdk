@@ -6,35 +6,13 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2ProjectV5Tests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2ProjectV5Tests
 {
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 selects the semantic contract when profile is omitted", Dispatch);
-        runner.Add("RMF2 source extensions are matched case-insensitively", ExtensionCase);
-        runner.Add("RMF2 v5 canonical multilingual fixture links and executes typed locals", Fixture);
-        runner.Add("RMF2 v5 target callers inherit canonical carriers and may omit inputs", Callers);
-        runner.Add("RMF2 v5 project composition matches flat split and external mounts", Composition);
-        runner.Add("RMF2 v5 project discovery rejects collisions undeclared locales and invalid fallback", InvalidProjects);
-        runner.Add("RMF2 v5 locale tags enforce structural BCP 47 extension grammar", LocaleTags);
-        runner.Add("RMF2 v5 markup canonicalizes aliases typed defaults locals and annotations", Markup);
-        runner.Add("RMF2 v5 markup validates every variant and functional slot obligation", InvalidMarkup);
-        runner.Add("RMF2 markup contract v2 exports placement children and bounded integer options", MarkupContractV2);
-        runner.Add("RMF2 v5 caller fingerprint excludes content but source hash detects it", Fingerprints);
-        runner.Add("RMF2 v5 caller fingerprint captures inputs slots and renderer contracts", FingerprintChanges);
-        runner.Add("RMF2 v5 fallback changes freshness while preserving caller compatibility", Fallback);
-        runner.Add("RMF2 v5 allowed extra keys retain separate dynamic contracts", ExtraKeys);
-        runner.Add("RMF2 v5 generated names are NFC injective portable and order independent", Names);
-        runner.Add("RMF2 readable C# names use verbatim identifiers and the encoded fallback", ReadableNames);
-        runner.Add("RMF2 readable C# names report reserved keys slots and clashes as RTR0069", ReadableReserved);
-        runner.Add("RMF2 readable C# names are stable and leave fingerprints unchanged", ReadableStability);
-        runner.Add("RMF2 v5 metadata spans limits and cancellation retain project validation", Validation);
-        runner.Add("RMF2 v5 locale key diagnostics name paths, suggest keys and point at the locale file", LocaleKeyDiagnostics);
-    }
-
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     internal static TranslationSource Project(string extra = "") => Source("translations/runic.json",
         "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"" + extra + "}");
@@ -53,7 +31,8 @@ internal static class Rmf2ProjectV5Tests
         Assert.True(!result.Success && (diagnostic is null || result.Diagnostics.Any(d => d.Id == diagnostic)), "Unexpected acceptance/diagnostic: " + english + "\n" + german + "\n" + Errors(result));
         Assert.True(result.Project is null, "An invalid v5 project exposed a usable carrier.");
     }
-    private static void Dispatch()
+    [Test, DisplayName("RMF2 selects the semantic contract when profile is omitted")]
+    public void Dispatch()
     {
         var project = Project();
         TranslationSource[] sources = [Source("translations/en.rmf2", "hello = Hello {$name}")];
@@ -74,7 +53,8 @@ internal static class Rmf2ProjectV5Tests
             "A retired selector was allowed to revive an older contract.");
         Assert.True(selected.Project!.CanonicalMessages.Count == 1, "Selected semantic project did not link.");
     }
-    private static void ExtensionCase()
+    [Test, DisplayName("RMF2 source extensions are matched case-insensitively")]
+    public void ExtensionCase()
     {
         var grouped = TranslationCompiler.CompileRmf2ProjectV5(Project(),
             [Source("translations/en.RMF2", "hello = Hello")]);
@@ -91,7 +71,8 @@ internal static class Rmf2ProjectV5Tests
         Assert.True(!mixed.Success && mixed.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0052"),
             "Mixed direct and grouped source representations escaped rejection through uppercase extensions.");
     }
-    private static void Fixture()
+    [Test, DisplayName("RMF2 v5 canonical multilingual fixture links and executes typed locals")]
+    public void Fixture()
     {
         string root = RepositoryPaths.Resolve("specs", "translations", "corpus", "v5-project");
         var project = new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(root, "runic.json")));
@@ -115,7 +96,8 @@ internal static class Rmf2ProjectV5Tests
         Assert.Equal(linked.SourceHash, reversed.SourceHash);
         Assert.Equal(linked.MarkupContract, reversed.MarkupContract);
     }
-    private static void Callers()
+    [Test, DisplayName("RMF2 v5 target callers inherit canonical carriers and may omit inputs")]
+    public void Callers()
     {
         const string english = "x =\n  .input {$count :integer}\n  .input {$unused :string}\n  {{Count {$count} {$unused}}}";
         foreach (string translated in new[] { "x = Anzahl {$count}", "x =\n  .local $n = {$count}\n  {{{$n}}}", "x =\n  .local $n = {$count :number minimumFractionDigits=2}\n  {{{$n}}}", "x =\n  .input {$count}\n  .match $count\n  one {{Ein}}\n  * {{{$count}}}", "x = Fertig" })
@@ -132,7 +114,8 @@ internal static class Rmf2ProjectV5Tests
         var normalized = Good("x = {$cafe\u0301}", "x = {$café}");
         Assert.Equal("café", normalized.CanonicalMessages[0].Inputs[0].Name);
     }
-    private static void Composition()
+    [Test, DisplayName("RMF2 v5 project composition matches flat split and external mounts")]
+    public void Composition()
     {
         var flat = Good("checkout {\n  cart {\n    title = {$name}\n  }\n}");
         var split = TranslationCompiler.CompileRmf2ProjectV5(Project(), [Source("translations/checkout/cart/en.rmf2", "title = {$name}")]);
@@ -153,7 +136,8 @@ internal static class Rmf2ProjectV5Tests
         Assert.True(flatKey.CallerFingerprint != nestedKey.CallerFingerprint,
             "The caller fingerprint omitted the logical path used by generated APIs.");
     }
-    private static void InvalidProjects()
+    [Test, DisplayName("RMF2 v5 project discovery rejects collisions undeclared locales and invalid fallback")]
+    public void InvalidProjects()
     {
         foreach (string text in new[] { "a = A\na = B", "a = A\na {\n  b = B\n}", "a_b {\n  c = C\n}\na {\n  b_c = C\n}" }) Bad(text);
         Bad("a {\n  b = A\n}", "a = A", diagnostic: "RTR0054");
@@ -166,7 +150,8 @@ internal static class Rmf2ProjectV5Tests
         Assert.True(!caseAlias.Success, "Case-only alias accepted.");
     }
 
-    private static void LocaleTags()
+    [Test, DisplayName("RMF2 v5 locale tags enforce structural BCP 47 extension grammar")]
+    public void LocaleTags()
     {
         foreach (string locale in new[] { "en-a", "en-a-b", "en-a-foo-a-bar", "en-US-Latn", "de-1901-1901" })
         {
@@ -188,7 +173,8 @@ internal static class Rmf2ProjectV5Tests
         }
     }
     private const string Custom = ",\"markup\":{\"contracts\":[{\"name\":\"app:badge\",\"kind\":\"paired\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"amount\":{\"type\":\"number\",\"default\":\"1e2\"},\"enabled\":{\"type\":\"boolean\",\"default\":\"true\"},\"tone\":{\"type\":\"enum\",\"values\":[\"positive\",\"neutral\"],\"default\":\"neutral\"}}}],\"aliases\":{\"badge\":\"app:badge\"}}";
-    private static void Markup()
+    [Test, DisplayName("RMF2 v5 markup canonicalizes aliases typed defaults locals and annotations")]
+    public void Markup()
     {
         var project = Good("x = {#badge @open=||}Yes{/badge @close}", config: Custom);
         var tags = project.Locales[0].DirectResources[0].Message.Variants[0].Nodes.OfType<Rmf2MarkupV5>().ToArray();
@@ -203,7 +189,8 @@ internal static class Rmf2ProjectV5Tests
         Rmf2RuntimeV5Tests.Lower(locals.Locales[0].DirectResources[0].Message).FormatContent([new("n", 42L)], "en");
     }
     private const string IntegerContract = ",\"markup\":{\"contracts\":[{\"name\":\"app:step\",\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"level\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":6,\"default\":\"1\"},\"count\":{\"type\":\"integer\"}}}],\"aliases\":{\"step\":\"app:step\"}}";
-    private static void MarkupContractV2()
+    [Test, DisplayName("RMF2 markup contract v2 exports placement children and bounded integer options")]
+    public void MarkupContractV2()
     {
         var project = Good("x = {#step level=3 count=-2147483648}A{/step}{#br/}{#step level=|6| count=2147483647}B{/step}{#step count=0}C{/step}", config: IntegerContract);
         var tags = project.Locales[0].DirectResources[0].Message.Variants[0].Nodes.OfType<Rmf2MarkupV5>().Where(tag => tag.MarkupKind == "open").ToArray();
@@ -239,7 +226,8 @@ internal static class Rmf2ProjectV5Tests
         Bad("x = Text", config: ",\"markup\":{\"structure\":{}}", diagnostic: "RTR0060");
         Good("x = Text", config: Config(head + ",\"placement\":\"inline\"}"));
     }
-    private static void InvalidMarkup()
+    [Test, DisplayName("RMF2 v5 markup validates every variant and functional slot obligation")]
+    public void InvalidMarkup()
     {
         foreach (string text in new[] { "x = {#badge amount=|100|}X{/badge}", "x = {#badge tone=1}X{/badge}", "x = {#badge enabled=maybe}X{/badge}", "x = {#badge amount=$unknown}X{/badge}", "x = {#badge extra=1}X{/badge}", "x = {#badge/}", "x = {#unknown/}", "x = {#link}{#action}Go{/action}{/link}", "x = {#icon/}", "x = {#link ref=$slot}Go{/link}", "x = {#link}Go{/link}{#link}Go{/link}" }) Bad(text, config: Custom);
         Bad("x = {#link ref=terms}Terms{/link}", "x = Text", diagnostic: "RTR0062");
@@ -254,7 +242,8 @@ internal static class Rmf2ProjectV5Tests
         Bad("x = Plain", config: ",\"markup\":{\"slots\":{\"x\":{\"unknown\":{\"min\":0,\"max\":1}}}}", diagnostic: "RTR0062");
         Bad("x = {#badge}X{/badge}", config: Custom.Replace("\"default\":\"1e2\"", "\"default\":\"NaN\"", StringComparison.Ordinal), diagnostic: "RTR0060");
     }
-    private static void Fingerprints()
+    [Test, DisplayName("RMF2 v5 caller fingerprint excludes content but source hash detects it")]
+    public void Fingerprints()
     {
         string[] changes =
         [
@@ -273,7 +262,8 @@ internal static class Rmf2ProjectV5Tests
         var canonical = Good("x = {#app:badge}X{/app:badge}", config: Custom.Replace("1e2", "100", StringComparison.Ordinal));
         Assert.Equal(alias.CallerFingerprint, canonical.CallerFingerprint);
     }
-    private static void FingerprintChanges()
+    [Test, DisplayName("RMF2 v5 caller fingerprint captures inputs slots and renderer contracts")]
+    public void FingerprintChanges()
     {
         string[] messages = ["x = {$name}", "x = {$other}", "x = {$name :integer}", "y = {$name}", "x = {#strong}{$name}{/strong}", "x = {#link ref=one}{$name}{/link}", "x = {#link ref=two}{$name}{/link}"];
         Assert.Equal(messages.Length, messages.Select(message => Good(message).CallerFingerprint).Distinct().Count());
@@ -282,7 +272,8 @@ internal static class Rmf2ProjectV5Tests
         Assert.True(one.CallerFingerprint != two.CallerFingerprint, "Slot cardinality missing from fingerprint.");
         Assert.True(Good("x = {#badge}X{/badge}", config: Custom).CallerFingerprint != Good("x = {#badge}X{/badge}", config: Custom.Replace("\"plainText\":\"children\"", "\"plainText\":\"explicit\"", StringComparison.Ordinal)).CallerFingerprint, "Renderer obligation missing from fingerprint.");
     }
-    private static void Fallback()
+    [Test, DisplayName("RMF2 v5 fallback changes freshness while preserving caller compatibility")]
+    public void Fallback()
     {
         const string settings = ",\"validation\":{\"translationCompleteness\":\"allow\"},\"locales\":[\"en\",\"de\",{\"tag\":\"fr\",\"fallback\":\"de\"}]";
         var german = Good("x = English {$name}", "x = Deutsch {$name}", settings);
@@ -296,7 +287,8 @@ internal static class Rmf2ProjectV5Tests
         Assert.Equal(0, noInputs.Locales.Single(locale => locale.Tag == "de").DirectResources[0].Message.Inputs.Count);
         Assert.Equal(1, noInputs.CanonicalMessages[0].Inputs.Count);
     }
-    private static void Names()
+    [Test, DisplayName("RMF2 v5 generated names are NFC injective portable and order independent")]
+    public void Names()
     {
         string[] names = ["class", "default", "await", "arguments", "a-b", "a+b", "a.b", "a_b", "1lead", "A", "a", "r_61", "用户", "café", "🌍", "namespace"];
         string[] generated = names.Select(Rmf2GeneratedNamesV1.Identifier).ToArray();
@@ -316,7 +308,8 @@ internal static class Rmf2ProjectV5Tests
         return readable!;
     }
     private static string Joined(IEnumerable<Rmf2ReadableNameV1> names) => string.Join(",", names.Select(name => name.Source + "=" + name.Identifier));
-    private static void ReadableNames()
+    [Test, DisplayName("RMF2 readable C# names use verbatim identifiers and the encoded fallback")]
+    public void ReadableNames()
     {
         var hostile = Good("hostile =\n  .input {$__proto__ :string}\n  .input {$constructor :string}\n  .input {$user-name :string}\n  .input {$café :string}\n  .input {$用户 :string}\n  {{{$__proto__}{$constructor}{$user-name}{$café}{$用户}}}");
         Rmf2ReadableMessageV1 message = Readable(hostile, "hostile");
@@ -356,7 +349,8 @@ internal static class Rmf2ProjectV5Tests
         }
         Assert.True(Rmf2ReadableNamesV1.SupportsClassName("AppText") && Rmf2ReadableNamesV1.SupportsClassName("messages"), "Supported class names were rejected.");
     }
-    private static void ReadableReserved()
+    [Test, DisplayName("RMF2 readable C# names report reserved keys slots and clashes as RTR0069")]
+    public void ReadableReserved()
     {
         foreach (string key in new[] { "ToString", "Equals", "GetHashCode", "GetType", "MemberwiseClone", "Finalize", "ReferenceEquals", "__text", "ReadableNameVersion", "AppText", "AppTextMessages", "AppTextSlots" })
             ReadableWarning(key + " = Text\nkept = Kept", key);
@@ -385,7 +379,8 @@ internal static class Rmf2ProjectV5Tests
         Assert.True(!Rmf2ReadableNamesV1.TryCreate(result.Project!.ClassName, result.Project.CanonicalMessages.Single(m => m.Key == key), out _, out _), "Reserved message stayed readable.");
         Assert.True(Rmf2ReadableNamesV1.TryCreate(result.Project.ClassName, result.Project.CanonicalMessages.Single(m => m.Key == "kept"), out _, out _), "An unrelated message was dropped.");
     }
-    private static void ReadableStability()
+    [Test, DisplayName("RMF2 readable C# names are stable and leave fingerprints unchanged")]
+    public void ReadableStability()
     {
         const string english = "greeting = Hello {$name}\nhelp = {#link ref=guide}Guide{/link} {#action ref=retry}Retry{/action}";
         var before = Good(english);
@@ -398,7 +393,8 @@ internal static class Rmf2ProjectV5Tests
         // Readable names add no fingerprint input: the corpus pins its fingerprint, source hash and outputs (Rmf2V1CorpusTests).
         Assert.Equal(1, Rmf2ReadableNamesV1.Version);
     }
-    private static void ExtraKeys()
+    [Test, DisplayName("RMF2 v5 allowed extra keys retain separate dynamic contracts")]
+    public void ExtraKeys()
     {
         const string settings = ",\"validation\":{\"extraLocaleKeys\":\"allow\"}";
         var plain = Good("x = X", "x = X", settings);
@@ -417,7 +413,8 @@ internal static class Rmf2ProjectV5Tests
             [Source("translations/en.rmf2", "x = X"), Source("translations/de.rmf2", "x = X\nextra = {$n :integer}"), Source("translations/fr.rmf2", "x = X\nextra = {$other}")]);
         Assert.True(!invalid.Success && invalid.Diagnostics.Any(d => d.Id == "RTR0016"), "Allowed extra keys lost caller validation.");
     }
-    private static void LocaleKeyDiagnostics()
+    [Test, DisplayName("RMF2 v5 locale key diagnostics name paths, suggest keys and point at the locale file")]
+    public void LocaleKeyDiagnostics()
     {
         const string locales = ",\"locales\":[\"en\",\"de\"]";
         var typo = Compile("commands {\n  remove = Remove\n  add = Add\n}", "commands {\n  remov = Entfernen\n  add = Hinzufügen\n}", locales);
@@ -448,7 +445,8 @@ internal static class Rmf2ProjectV5Tests
         Assert.True(invalidBase.Diagnostics.Any(d => d.Id == "RTR0067"), Errors(invalidBase));
         Assert.True(!invalidBase.Diagnostics.Any(d => d.Id == "RTR0011"), "RTR0067 cascaded into RTR0011:\n" + Errors(invalidBase));
     }
-    private static void Validation()
+    [Test, DisplayName("RMF2 v5 metadata spans limits and cancellation retain project validation")]
+    public void Validation()
     {
         Good("@param $cafe\u0301 - User\n@example {\"café\":\"Ada\"}\nx = {$café}");
         Good("@example {\"n\":9223372036854775807}\nx = {$n :integer}");

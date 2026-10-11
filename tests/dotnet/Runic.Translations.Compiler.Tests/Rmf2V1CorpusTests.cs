@@ -8,22 +8,17 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
-internal static class Rmf2V1CorpusTests
+[Category("rmf2-semantic-v5"), NotInParallel]
+internal sealed class Rmf2V1CorpusTests
 {
     private static string Root => RepositoryPaths.Resolve("specs", "translations", "corpus", "rmf2-v1");
 
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 v1 corpus freezes the linked contract layouts fingerprints and artifacts", Contract);
-        runner.Add("RMF2 v1 corpus agrees across linked .NET loaded packs generated ESM and dynamic ESM packs", Execution);
-        runner.Add("RMF2 v1 corpus pack rejection taxonomy agrees across .NET and ESM", InvalidPacks);
-        runner.Add("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface", EncodedOutputs);
-    }
-
-    private static void Contract()
+    [Test, DisplayName("RMF2 v1 corpus freezes the linked contract layouts fingerprints and artifacts")]
+    public void Contract()
     {
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();
@@ -85,7 +80,8 @@ internal static class Rmf2V1CorpusTests
         }
     }
 
-    private static void Execution()
+    [Test, DisplayName("RMF2 v1 corpus agrees across linked .NET loaded packs generated ESM and dynamic ESM packs")]
+    public void Execution()
     {
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();
@@ -120,7 +116,8 @@ internal static class Rmf2V1CorpusTests
         RunEsm(project, index.RootElement);
     }
 
-    private static void InvalidPacks()
+    [Test, DisplayName("RMF2 v1 corpus pack rejection taxonomy agrees across .NET and ESM")]
+    public void InvalidPacks()
     {
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();
@@ -186,7 +183,8 @@ internal static class Rmf2V1CorpusTests
     private const string HiddenEncodedOutputDigest = "fd3b1e428e30bf6a0edfc4b5f2d6fa5ab4f4ae9e031f0723f8bb1026b9d612ea";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
-    private static void EncodedOutputs()
+    [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
+    public void EncodedOutputs()
     {
         Rmf2ProjectV5 project = Compile();
         Assert.Equal(EncodedOutputDigest, Digest(project, readableSurface: false), "Encoded C# and ESM output digest");

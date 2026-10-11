@@ -7,20 +7,16 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
 
 // The selection vectors in rmf2-execution-v2.json are the shared .NET/ESM oracle
 // for plural, ordinal and exact selection on the visible decimal.
-internal static class Rmf2SelectionVectorTests
+[Category("rmf2-semantic-v5")]
+internal sealed class Rmf2SelectionVectorTests
 {
     private sealed record Vector(string Id, string Locale, string Message, JsonObject Arguments, string Expected);
-
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("RMF2 v5 selection vectors select on the visible decimal in .NET", DotNet);
-        runner.Add("RMF2 v5 selection vectors select on the visible decimal in generated ESM", Esm);
-    }
 
     private static List<Vector> Vectors()
     {
@@ -33,7 +29,8 @@ internal static class Rmf2SelectionVectorTests
         return vectors;
     }
 
-    private static void DotNet()
+    [Test, DisplayName("RMF2 v5 selection vectors select on the visible decimal in .NET")]
+    public void DotNet()
     {
         foreach (Vector vector in Vectors())
         {
@@ -50,7 +47,8 @@ internal static class Rmf2SelectionVectorTests
         }
     }
 
-    private static void Esm()
+    [Test, NotInParallel, DisplayName("RMF2 v5 selection vectors select on the visible decimal in generated ESM")]
+    public void Esm()
     {
         foreach (var group in Vectors().GroupBy(vector => vector.Locale, StringComparer.Ordinal))
         {
