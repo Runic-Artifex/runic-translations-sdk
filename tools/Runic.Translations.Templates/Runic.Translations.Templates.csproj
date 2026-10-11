@@ -21,18 +21,28 @@
     <None Update="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <UsingTask TaskName="WriteVersionedTemplate" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <File ParameterType="System.String" Required="true" />
+      <Content ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(File));
+        if (!System.IO.File.Exists(File) || System.IO.File.ReadAllText(File) != Content)
+            System.IO.File.WriteAllText(File, Content, new System.Text.UTF8Encoding(false));
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
   <Target Name="PrepareVersionedProjectTemplate">
     <PropertyGroup>
       <_ProjectTemplateSource>$(MSBuildProjectDirectory)/templates/project/.template.config/template.json</_ProjectTemplateSource>
       <_ProjectTemplateDestination>$(IntermediateOutputPath)versioned-project-template.json</_ProjectTemplateDestination>
       <_ProjectTemplateContent>$([System.IO.File]::ReadAllText('$(_ProjectTemplateSource)').Replace('&quot;defaultValue&quot;: &quot;0.1.0&quot;', '&quot;defaultValue&quot;: &quot;$(PackageVersion)&quot;'))</_ProjectTemplateContent>
     </PropertyGroup>
-    <WriteLinesToFile
-      File="$(_ProjectTemplateDestination)"
-      Lines="$(_ProjectTemplateContent)"
-      Overwrite="true"
-      WriteOnlyWhenDifferent="true"
-      Encoding="UTF-8" />
+    <!-- WriteLinesToFile would turn the template's regex backslashes into slashes on Unix. -->
+    <WriteVersionedTemplate File="$(_ProjectTemplateDestination)" Content="$(_ProjectTemplateContent)" />
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(_ProjectTemplateDestination)">
         <PackagePath>content/templates/project/.template.config/template.json</PackagePath>
