@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Runic.Translations;
@@ -34,28 +35,40 @@ public enum TextArgumentFormat
     /// <summary>Grouped numeric text.</summary>
     Grouped,
     /// <summary>Fixed-point with zero fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Fixed0,
     /// <summary>Fixed-point with one fractional digit.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Fixed1,
     /// <summary>Fixed-point with two fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Fixed2,
     /// <summary>Fixed-point with three fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Fixed3,
     /// <summary>Fixed-point with four fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Fixed4,
     /// <summary>Fixed-point with five fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Fixed5,
     /// <summary>Fixed-point with six fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Fixed6,
     /// <summary>Percent with zero fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Percent0,
     /// <summary>Percent with one fractional digit.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Percent1,
     /// <summary>Percent with two fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Percent2,
     /// <summary>Percent with three fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Percent3,
     /// <summary>Percent with four fractional digits.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     Percent4,
     /// <summary>Lowercase Boolean text.</summary>
     Lower,
@@ -127,6 +140,7 @@ public readonly struct TextArgument
     }
 
     /// <summary>Copies a closed carrier under an NFC RMF2 identity, independently of legacy ASCII placeholder names.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static TextArgument CreateRmf2(string name, TextArgument value)
     {
         Rmf2RuntimeValidation.Name(name);

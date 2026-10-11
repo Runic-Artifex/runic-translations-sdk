@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -93,6 +94,7 @@ public sealed class TranslationPackMessageContract
     }
 
     /// <summary>Creates a v5 message contract from NFC RMF2 caller inputs.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static TranslationPackMessageContract FromRmf2Inputs(
         TranslationKey key,
         IReadOnlyList<CompiledRmf2Input> inputs)
@@ -160,6 +162,7 @@ public sealed class TranslationPackContract
     private readonly Dictionary<string, TranslationPackMessageContract> _messagesByName;
 
     /// <summary>Creates an RMF2 execution-v2 contract for one resolved locale artifact v5.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static TranslationPackContract CreateRmf2V5(string catalog, string locale, string contractFingerprint,
         IReadOnlyList<TranslationPackMessageContract> messages, string rmf2MarkupContract) =>
         new(catalog, locale, contractFingerprint, messages, 5,

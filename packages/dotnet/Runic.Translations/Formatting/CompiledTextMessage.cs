@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 
@@ -150,6 +151,7 @@ public sealed class CompiledTextMessage
     private readonly CompiledTextMessageVariant[] _variants;
 
     /// <summary>Wraps a validated v5 message without lowering it to the v4 model or changing legacy constructor overload resolution.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static CompiledTextMessage FromRmf2(CompiledRmf2Message message) => new(message);
 
     private CompiledTextMessage(CompiledRmf2Message message)
@@ -160,6 +162,7 @@ public sealed class CompiledTextMessage
     }
 
     /// <summary>The separate v5 model, or null for legacy constructors.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public CompiledRmf2Message? Rmf2V5 { get; }
 
     /// <summary>Creates a simple compiled pattern.</summary>

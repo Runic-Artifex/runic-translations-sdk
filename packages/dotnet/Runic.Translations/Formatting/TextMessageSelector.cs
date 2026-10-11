@@ -1,8 +1,10 @@
 using System;
+using System.ComponentModel;
 
 namespace Runic.Translations;
 
 /// <summary>Portable selector primitives used by generated schema version 2 accessors.</summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
 public static class TextMessageSelector
 {
     /// <summary>Selects a CLDR plural category for the currently supported built-in locale families.</summary>
