@@ -7,11 +7,12 @@ using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using TUnit.Core;
 
 namespace Runic.Translations.Generator.Tests;
 
 /// <summary>The readable C# surface and typed slots (W220-002, design note W220-001 sections 3 to 9).</summary>
-internal static class GeneratorReadableTests
+internal sealed class GeneratorReadableTests
 {
     private const string Project = """
         {
@@ -139,19 +140,6 @@ internal static class GeneratorReadableTests
         }
         """;
 
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("readable surface snapshot matches the design shape", ReadableSnapshot);
-        runner.Add("readable surface forwards to the encoded surface in every locale", ReadableEqualsEncoded);
-        runner.Add("readable surface compiles identifier edge cases under warnings as errors", IdentifierEdgeCases);
-        runner.Add("document messages generate document content accessors that render in every locale", DocumentAccessors);
-        runner.Add("typed slots reject wrong kinds, missing (including min:0), misspelled and foreign slots at the Bind argument", CompileFailures);
-        runner.Add("readable surface needs the runtime capability and reports RTR0068 otherwise", RuntimeCapability);
-        runner.Add("RTR0068 can be suppressed or kept as a warning through SpecificDiagnosticOptions", RuntimeCapabilityOptions);
-        runner.Add("readable surface leaves reserved messages encoded-only with RTR0069", ReservedMessages);
-        runner.Add("readable surface stays reflection-free and keeps the encoded files", ReflectionFreeAndAdditive);
-    }
-
     private static TestInput ProjectInput(string text = Project) => new("C:/repo/translations/runic.json", "Project", text);
     private static TestInput EnglishInput(string text = English) => new("C:/repo/translations/en.rmf2", "Rmf2", text);
     private static TestInput GermanInput(string text = German) => new("C:/repo/translations/de.rmf2", "Rmf2", text);
@@ -159,14 +147,16 @@ internal static class GeneratorReadableTests
     private static string Readable(GeneratorRun run) =>
         run.SingleResult.GeneratedSources.Single(source => source.HintName == "AppText.Readable.g.cs").SourceText.ToString();
 
-    private static void ReadableSnapshot()
+    [Test, DisplayName("readable surface snapshot matches the design shape")]
+    public void ReadableSnapshot()
     {
         GeneratorRun run = GeneratorTestHost.Run(ProjectInput(), EnglishInput(), GermanInput());
         Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
         Assert.Equal(Snapshot + "\n", Readable(run), "readable snapshot");
     }
 
-    private static void ReadableEqualsEncoded()
+    [Test, DisplayName("readable surface forwards to the encoded surface in every locale")]
+    public void ReadableEqualsEncoded()
     {
         string title = Path("application", "title"), greeting = Path("greeting"), badge = Path("profile", "badge");
         string items = Path("cart", "items"), help = Path("checkout", "help");
@@ -220,7 +210,8 @@ internal static class GeneratorReadableTests
             Execute(run, "Example.Consumer.Probe"), "readable execution");
     }
 
-    private static void DocumentAccessors()
+    [Test, DisplayName("document messages generate document content accessors that render in every locale")]
+    public void DocumentAccessors()
     {
         const string english = "notice =\n  {#h level=1}Backup{/h}\n  {#p}Read the {#link ref=guide}guide{/link}.{/p}\n  {#ol start=3}{#li}Save{/li}{#li}Check{/li}{/ol}\n";
         const string german = "notice =\n  {#h level=1}Sicherung{/h}\n  {#p}Lies die {#link ref=guide}Anleitung{/link}.{/p}\n  {#ol start=3}{#li}Speichern{/li}{#li}Pr\u00FCfen{/li}{/ol}\n";
@@ -274,7 +265,8 @@ internal static class GeneratorReadableTests
             Execute(run, "Example.Consumer.Probe"), "document execution");
     }
 
-    private static void IdentifierEdgeCases()
+    [Test, DisplayName("readable surface compiles identifier edge cases under warnings as errors")]
+    public void IdentifierEdgeCases()
     {
         const string resources = """
             help = {#link}Go{/link}
@@ -326,7 +318,8 @@ internal static class GeneratorReadableTests
         Assert.Equal("Go/v dx/Field|c/AB/HelpX/p|c|u|e|y/Bold", Execute(run, "Example.Consumer.Probe"), "edge-case execution");
     }
 
-    private static void CompileFailures()
+    [Test, DisplayName("typed slots reject wrong kinds, missing (including min:0), misspelled and foreign slots at the Bind argument")]
+    public void CompileFailures()
     {
         const string resources = """
             help = {#link ref=guide}Guide{/link} {#action ref=retry}Retry{/action}
@@ -365,7 +358,8 @@ internal static class GeneratorReadableTests
         }
     }
 
-    private static void RuntimeCapability()
+    [Test, DisplayName("readable surface needs the runtime capability and reports RTR0068 otherwise")]
+    public void RuntimeCapability()
     {
         const string consumer = """
             namespace Example.Consumer;
@@ -403,7 +397,8 @@ internal static class GeneratorReadableTests
         }
     }
 
-    private static void RuntimeCapabilityOptions()
+    [Test, DisplayName("RTR0068 can be suppressed or kept as a warning through SpecificDiagnosticOptions")]
+    public void RuntimeCapabilityOptions()
     {
         const string consumer = """
             namespace Example.Consumer;
@@ -438,7 +433,8 @@ internal static class GeneratorReadableTests
         }
     }
 
-    private static void ReservedMessages()
+    [Test, DisplayName("readable surface leaves reserved messages encoded-only with RTR0069")]
+    public void ReservedMessages()
     {
         string source = $$"""
             namespace Example.Consumer;
@@ -481,7 +477,8 @@ internal static class GeneratorReadableTests
         Assert.Equal(0, classNameProblems.Length, string.Join("\n", classNameProblems.Select(static item => item.ToString())));
     }
 
-    private static void ReflectionFreeAndAdditive()
+    [Test, DisplayName("readable surface stays reflection-free and keeps the encoded files")]
+    public void ReflectionFreeAndAdditive()
     {
         GeneratorRun run = GeneratorTestHost.Run(ProjectInput(), EnglishInput(), GermanInput());
         string readable = Readable(run);

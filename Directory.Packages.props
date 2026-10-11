@@ -17,5 +17,10 @@
     <PackageVersion Include="Runic.Platform.Linux" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Platform.Windows" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Platform.MacOS" Version="$(RunicSdkDependencyVersion)" />
+    <!-- TUnit test projects (see CONTRIBUTING.md); keep TUnit.Core and TUnit.Engine on one version. -->
+    <PackageVersion Include="TUnit.Core" Version="1.73.19" />
+    <PackageVersion Include="TUnit.Engine" Version="1.73.19" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
   </ItemGroup>
 </Project>

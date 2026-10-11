@@ -5,12 +5,13 @@ using System.IO;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using TUnit.Core;
 
 namespace Runic.Translations.Generator.Tests;
 
 // Cached-step tests: each assertion names the incremental step and the IncrementalStepRunReason that
 // proves work was or was not repeated.
-internal static class GeneratorIncrementalityTests
+internal sealed class GeneratorIncrementalityTests
 {
     private const string Project = """
         {
@@ -27,15 +28,6 @@ internal static class GeneratorIncrementalityTests
     private const string English = "title = Shop\ngreeting =\n  .input {$name :string}\n  {{Hello {$name}!}}\n";
     private const string German = "title = Laden\ngreeting =\n  .input {$name :string}\n  {{Hallo {$name}!}}\n";
 
-    internal static void Register(TestRunner runner)
-    {
-        runner.Add("editing one translation source reparses only that source", EditReparsesOnlyThatSource);
-        runner.Add("C# edits do not rerun translation or runtime ABI work", CSharpEditsAreCached);
-        runner.Add("reference changes inspect only the changed references", ReferenceChangesInspectOnlyNewReferences);
-        runner.Add("a changed runtime ABI reruns only the link", RuntimeAbiChangeRelinks);
-        runner.Add("editing one XAML file revalidates only that file without relinking or rendering", XamlEditRevalidatesOnlyThatFile);
-    }
-
     private const string MainXamlPath = "C:/repo/Views/Main.xaml";
     private const string OtherXamlPath = "C:/repo/Views/Other.xaml";
 
@@ -45,7 +37,8 @@ internal static class GeneratorIncrementalityTests
           <TextBlock Text="{rt:Message
         """ + " " + key + "}\"/>\n</Window>";
 
-    private static void XamlEditRevalidatesOnlyThatFile()
+    [Test, DisplayName("editing one XAML file revalidates only that file without relinking or rendering")]
+    public void XamlEditRevalidatesOnlyThatFile()
     {
         GeneratorRun run = GeneratorTestHost.Run(
             new TestInput(ProjectPath, "Project", Project),
@@ -89,7 +82,8 @@ internal static class GeneratorIncrementalityTests
         new TestInput(EnglishPath, "Rmf2", English),
         new TestInput(GermanPath, "Rmf2", German));
 
-    private static void EditReparsesOnlyThatSource()
+    [Test, DisplayName("editing one translation source reparses only that source")]
+    public void EditReparsesOnlyThatSource()
     {
         GeneratorRun run = Initial();
         Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
@@ -114,7 +108,8 @@ internal static class GeneratorIncrementalityTests
         AssertOutputs(same, IncrementalStepRunReason.Cached);
     }
 
-    private static void CSharpEditsAreCached()
+    [Test, DisplayName("C# edits do not rerun translation or runtime ABI work")]
+    public void CSharpEditsAreCached()
     {
         GeneratorRun run = Initial();
         string before = Generated(run);
@@ -130,7 +125,8 @@ internal static class GeneratorIncrementalityTests
         Assert.Equal(before, Generated(edited), "generated sources after a C# edit");
     }
 
-    private static void ReferenceChangesInspectOnlyNewReferences()
+    [Test, DisplayName("reference changes inspect only the changed references")]
+    public void ReferenceChangesInspectOnlyNewReferences()
     {
         GeneratorRun run = Initial();
         MetadataReference unrelated = UnrelatedReference();
@@ -143,7 +139,8 @@ internal static class GeneratorIncrementalityTests
         AssertOutputs(edited, IncrementalStepRunReason.Cached);
     }
 
-    private static void RuntimeAbiChangeRelinks()
+    [Test, DisplayName("a changed runtime ABI reruns only the link")]
+    public void RuntimeAbiChangeRelinks()
     {
         GeneratorRun run = Initial();
         MetadataReference runtime = run.InputCompilation.References.Single(reference =>
