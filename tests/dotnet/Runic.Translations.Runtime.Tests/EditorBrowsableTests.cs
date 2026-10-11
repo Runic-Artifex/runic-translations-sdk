@@ -1,13 +1,15 @@
 using System;
 using System.ComponentModel;
 using System.Reflection;
+using TUnit.Core;
+using DisplayNameAttribute = TUnit.Core.DisplayNameAttribute;
 
 namespace Runic.Translations.Runtime.Tests;
 
 // Runtime plumbing that only generated catalogs and the runtime itself call stays
 // public, because generated code in application assemblies calls it, but stays
 // out of completion lists.
-internal static class EditorBrowsableTests
+internal sealed class EditorBrowsableTests
 {
     private static readonly Type[] HiddenTypes =
     [
@@ -50,10 +52,8 @@ internal static class EditorBrowsableTests
         (typeof(TextArgumentFormat), nameof(TextArgumentFormat.Percent4)),
     ];
 
-    public static void Register(TestRunner runner) =>
-        runner.Add("generated-code plumbing stays public but hidden from completion", Hidden);
-
-    private static void Hidden()
+    [Test, DisplayName("generated-code plumbing stays public but hidden from completion")]
+    public void Hidden()
     {
         foreach (Type type in HiddenTypes)
             Assert.True(type.IsPublic && IsHidden(type), $"{type.FullName} must stay public and carry [EditorBrowsable(Never)].");

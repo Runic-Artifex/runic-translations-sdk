@@ -2,31 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Runic.Translations;
+using TUnit.Core;
 
 namespace Runic.Translations.Runtime.Tests;
 
-internal static class Rmf2RuntimeV5Tests
+internal sealed class Rmf2RuntimeV5Tests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("v5 formatted locals inherit then replace metadata without changing carriers", LocalInheritance);
-        runner.Add("markup contract v2 links placement children and bounded integer options exactly", MarkupContractV2);
-        runner.Add("v5 literals cover every typed carrier without caller inputs", Literals);
-        runner.Add("v5 finite dynamic options validate enums ranges and coupled defaults", DynamicOptions);
-        runner.Add("v5 dynamic options follow typed local dependencies", OptionLocals);
-        runner.Add("v5 exact numeric keys outrank categories independent of source order", NumericRanking);
-        runner.Add("v5 selector ranks compare lexicographically and preserve literal stars", LexicographicRanking);
-        runner.Add("v5 declarations reject rebinding earlier operand and dynamic option references", DeclarationRebinding);
-        runner.Add("v5 explicit input annotations establish carriers before expression widening", InputAnnotationCarriers);
-        runner.Add("v5 canonical decimals preserve exact precision and CLDR operands", DecimalSelection);
-        runner.Add("v5 annotations remain inert ordered and separate on closing markup", Annotations);
-        runner.Add("v5 caller contracts preserve NFC identities and ignore presentation hints", CallerContracts);
-        runner.Add("v5 hostile model construction rejects malformed reference and option graphs", InvalidModels);
-        runner.Add("v5 hostile decimal spellings reject overflow underflow and rounding", DecimalDomain);
-        runner.Add("v5 output bounds and locale capability errors use public format errors", RuntimeErrors);
-        runner.Add("v5 snapshot constant evaluation content locale and contract checking are additive", SnapshotDispatch);
-        runner.Add("v5 immutable arrays and compatibility checks require ABI 3", Compatibility);
-    }
     private static CompiledRmf2Value Input(string name) => new("input", name);
     private static CompiledRmf2Value Local(string name) => new("local", name);
     private static CompiledRmf2Value Text(string value) => new("string-literal", value);
@@ -35,7 +16,8 @@ internal static class Rmf2RuntimeV5Tests
     private static CompiledRmf2Declaration Declare(string name, TextArgumentType type, string? function = null) => new("input", name, Expr(Input(name), type, function));
     private static CompiledRmf2Message Simple(CompiledRmf2Input[] inputs, CompiledRmf2Declaration[] declarations, params CompiledRmf2Node[] nodes) => new(inputs, declarations, [], [new([], nodes)]);
     private static CompiledRmf2Node Output(CompiledRmf2Value value, TextArgumentType type, string? function = null, params CompiledRmf2Option[] options) => new(Expr(value, type, function, options));
-    private static void LocalInheritance()
+    [Test, DisplayName("v5 formatted locals inherit then replace metadata without changing carriers")]
+    public void LocalInheritance()
     {
         var message = Simple([new("amount", TextArgumentType.Number)], [Declare("amount", TextArgumentType.Number, "number"),
             new("local", "percent", Expr(Input("amount"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Text("percent")))),
@@ -48,7 +30,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("2", integer.Format([new("n", 2L)], "en"));
         Assert.Throws<ArgumentException>(() => Expr(Input("n"), TextArgumentType.Number, "integer"));
     }
-    private static void Literals()
+    [Test, DisplayName("v5 literals cover every typed carrier without caller inputs")]
+    public void Literals()
     {
         (CompiledRmf2Value Value, TextArgumentType Type, string? Function, string Expected)[] cases =
         [
@@ -68,7 +51,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("-1", Simple([], [], Output(Number("-1"), TextArgumentType.Int, "integer")).Format([], "sv"));
         Assert.Equal("7922816251426433759354395033500%", Simple([], [], Output(Number("79228162514264337593543950335"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Text("percent")))).Format([], "en"));
     }
-    private static void DynamicOptions()
+    [Test, DisplayName("v5 finite dynamic options validate enums ranges and coupled defaults")]
+    public void DynamicOptions()
     {
         var message = Simple([new("digits", TextArgumentType.Int), new("style", TextArgumentType.String)], [Declare("digits", TextArgumentType.Int), Declare("style", TextArgumentType.String)],
             Output(Number("1.234567"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Input("style")), new CompiledRmf2Option("minimumFractionDigits", Input("digits"))));
@@ -93,7 +77,8 @@ internal static class Rmf2RuntimeV5Tests
             Assert.Throws<TranslationFormatException>(() => dynamic.Format([new("option", item.Invalid), value], "en"));
         }
     }
-    private static void OptionLocals()
+    [Test, DisplayName("v5 dynamic options follow typed local dependencies")]
+    public void OptionLocals()
     {
         var message = Simple([new("digits", TextArgumentType.Int)], [Declare("digits", TextArgumentType.Int),
             new("local", "alias", Expr(Input("digits"), TextArgumentType.Int, "number", new CompiledRmf2Option("style", Text("percent"))))], Output(Number("1.234"), TextArgumentType.Number, "number", new CompiledRmf2Option("maximumFractionDigits", Local("alias"))));
@@ -103,7 +88,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("1.23", constant.Format([], "en"));
     }
     private static CompiledRmf2Message NumericMessage(params CompiledRmf2Variant[] variants) => new([new("n", TextArgumentType.Number)], [], [new(Input("n"), TextArgumentType.Number, "plural")], variants);
-    private static void NumericRanking()
+    [Test, DisplayName("v5 exact numeric keys outrank categories independent of source order")]
+    public void NumericRanking()
     {
         var message = NumericMessage(new CompiledRmf2Variant([new("one")], [new("category")]), new([new("1e0", "1")], [new("exact")]), new([new()], [new("fallback")]));
         Assert.Equal("exact", message.Format([new("n", 1.000m)], "en"));
@@ -114,7 +100,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("1%", percent.Format([new("n", 0.01m)], "en"));
         Assert.Equal("other", percent.Format([new("n", 1m)], "en"));
     }
-    private static void LexicographicRanking()
+    [Test, DisplayName("v5 selector ranks compare lexicographically and preserve literal stars")]
+    public void LexicographicRanking()
     {
         var message = new CompiledRmf2Message([new("a", TextArgumentType.Number), new("b", TextArgumentType.String)], [],
             [new(Input("a"), TextArgumentType.Number, "plural"), new(Input("b"), TextArgumentType.String, "exact")],
@@ -124,7 +111,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("star", stars.Format([new("s", "*")], "en"));
         Assert.Equal("NFC", stars.Format([new("s", "e\u0301")], "en"));
     }
-    private static void DecimalSelection()
+    [Test, DisplayName("v5 canonical decimals preserve exact precision and CLDR operands")]
+    public void DecimalSelection()
     {
         var message = NumericMessage(new CompiledRmf2Variant([new("9007199254740993", "9007199254740993")], [new("exact")]), new([new("one")], [new("one")]), new([new()], [new("other")]));
         Assert.Equal("exact", message.Format([new("n", 9007199254740993m)], "en"));
@@ -137,7 +125,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("rd", ordinal.Format([new("n", 23L)], "en"));
         Assert.Equal("th", ordinal.Format([new("n", 13L)], "en"));
     }
-    private static void DeclarationRebinding()
+    [Test, DisplayName("v5 declarations reject rebinding earlier operand and dynamic option references")]
+    public void DeclarationRebinding()
     {
         foreach (string selection in new[] { "exact", "ordinal" })
         {
@@ -168,7 +157,8 @@ internal static class Rmf2RuntimeV5Tests
             new("input", "n", Expr(Input("n"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Input("style")))),
             Declare("style", TextArgumentType.String, "string")], Output(Input("n"), TextArgumentType.Number)), "Duplicate v5 declaration");
     }
-    private static void Annotations()
+    [Test, DisplayName("v5 annotations remain inert ordered and separate on closing markup")]
+    public void Annotations()
     {
         CompiledRmf2Annotation[] annotations = [new("flag"), new("empty", Text("")), new("number", Number("1e2", "100"))];
         var expression = new CompiledRmf2Expression(Text("ok"), TextArgumentType.String, annotations: annotations);
@@ -183,7 +173,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("ok", content.Nodes.Span[1].Value);
         Assert.Throws<TranslationFormatException>(() => message.Format([], "en"));
     }
-    private static void InputAnnotationCarriers()
+    [Test, DisplayName("v5 explicit input annotations establish carriers before expression widening")]
+    public void InputAnnotationCarriers()
     {
         foreach (string function in new[] { "number", "runic:relative-time" })
         {
@@ -197,7 +188,8 @@ internal static class Rmf2RuntimeV5Tests
             Assert.Equal(expected, local.Format([new("n", 2L)], "en"));
         }
     }
-    private static void CallerContracts()
+    [Test, DisplayName("v5 caller contracts preserve NFC identities and ignore presentation hints")]
+    public void CallerContracts()
     {
         var message = Simple([new("é", TextArgumentType.Number)], [], Output(Input("é"), TextArgumentType.Number));
         var value = TextArgument.CreateRmf2("é", new("_", 1.25m, TextArgumentFormat.Percent4));
@@ -210,7 +202,8 @@ internal static class Rmf2RuntimeV5Tests
         var snapshot = Snapshot(message, [new("é", TextArgumentType.Number)]);
         Assert.Equal("1.25", snapshot.Format(new("test", 0, "Value"), [value]));
     }
-    private static void InvalidModels()
+    [Test, DisplayName("v5 hostile model construction rejects malformed reference and option graphs")]
+    public void InvalidModels()
     {
         Assert.Throws<ArgumentException>(() => _ = new CompiledRmf2Value("bogus", "x"));
         foreach (string name in new[] { "*", "0start", "input:namespace", "a/b", "\ud800" })
@@ -237,7 +230,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Throws<ArgumentException>(() => _ = new CompiledRmf2Message([new("s", TextArgumentType.String)], [], [new(Input("s"), TextArgumentType.String, "exact")],
             [new([new("é")], []), new([new("e\u0301")], []), new([new()], [])]));
     }
-    private static void DecimalDomain()
+    [Test, DisplayName("v5 hostile decimal spellings reject overflow underflow and rounding")]
+    public void DecimalDomain()
     {
         string[] invalid = ["1e29", "1e-29", "79228162514264337593543950336", "0.12345678901234567890123456789", "01", "+1", "NaN", "1e2147483648", "0e2147483648", new string('1', 4097)];
         foreach (string value in invalid) Assert.Throws<ArgumentException>(() => Number(value, "0"));
@@ -246,7 +240,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.Equal("0.0123", Number("1.2300e-2", "0.0123").Canonical);
         Assert.Throws<ArgumentException>(() => Number("1.2300", "1.2300"));
     }
-    private static void RuntimeErrors()
+    [Test, DisplayName("v5 output bounds and locale capability errors use public format errors")]
+    public void RuntimeErrors()
     {
         Assert.Throws<TranslationFormatException>(() => Simple([], [], new CompiledRmf2Node("12345")).Format([], "en", 4));
         Assert.Throws<TranslationFormatException>(() => NumericMessage(new CompiledRmf2Variant([new()], [])).Format([new("n", 2m)], "zz"));
@@ -254,7 +249,8 @@ internal static class Rmf2RuntimeV5Tests
     }
     private static CompiledTranslationSnapshot Snapshot(CompiledRmf2Message message, CompiledRmf2Input[] inputs) => new(new("test", "en",
         [CompiledTranslationDefinition.FromRmf2Inputs("Value", inputs)], [new("en", null, [new(0, "compatibility", CompiledTextMessage.FromRmf2(message))])]), "en");
-    private static void SnapshotDispatch()
+    [Test, DisplayName("v5 snapshot constant evaluation content locale and contract checking are additive")]
+    public void SnapshotDispatch()
     {
         Assert.Equal("1.25", Snapshot(Simple([], [], Output(Number("1.25"), TextArgumentType.Number)), []).Format(new("test", 0, "Value"), []));
         LocalizedTextContent plainV5 = Snapshot(Simple([], [], new CompiledRmf2Node("Plain")), []).FormatContent(new("test", 0, "Value"), []);
@@ -268,7 +264,8 @@ internal static class Rmf2RuntimeV5Tests
     }
     private static string MarkupContractJson(int version = 2, string contract = "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"level\":{\"type\":\"integer\",\"values\":[],\"default\":\"1\",\"literalOnly\":true,\"minimum\":1,\"maximum\":6}}")
         => "{\"version\":" + version + ",\"contracts\":{\"app:step\":{" + contract + "}},\"messages\":{}}";
-    private static void MarkupContractV2()
+    [Test, DisplayName("markup contract v2 links placement children and bounded integer options exactly")]
+    public void MarkupContractV2()
     {
         _ = new Rmf2InlineRenderer(MarkupContractJson());
         Assert.Throws<ArgumentException>(() => _ = new Rmf2InlineRenderer(MarkupContractJson(version: 1)));
@@ -316,7 +313,8 @@ internal static class Rmf2RuntimeV5Tests
         Assert.False(Rmf2MarkupContract.AcceptsInteger("7", 1, 6), "Integer above maximum accepted");
         Assert.False(Rmf2MarkupContract.AcceptsInteger("0", 1, 6), "Integer below minimum accepted");
     }
-    private static void Compatibility()
+    [Test, DisplayName("v5 immutable arrays and compatibility checks require ABI 3")]
+    public void Compatibility()
     {
         Assert.Equal(3, TranslationsCompatibility.Rmf2RuntimeAbiVersion); Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion); Assert.Equal(2, TranslationsCompatibility.MessageGrammarVersion);
         Assert.False(TranslationsCompatibility.SupportsRmf2RuntimeAbi(2), "Retired ABI 2 must not remain accepted"); Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(3), "ABI 3 is supported");

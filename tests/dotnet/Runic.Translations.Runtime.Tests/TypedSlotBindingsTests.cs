@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Runic.Translations;
+using TUnit.Core;
 
 namespace Runic.Translations.Runtime.Tests;
 
 /// <summary>Typed slot bindings (W220-002). Also linked into the NativeAOT runtime probe fixture.</summary>
-internal static class TypedSlotBindingsTests
+internal sealed class TypedSlotBindingsTests
 {
     internal const string MarkupContract = """
         {
@@ -33,16 +34,6 @@ internal static class TypedSlotBindingsTests
         }
         """;
 
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("typed slots render and project like the string-key overloads", BoundMatchesDictionary);
-        runner.Add("typed slots bind once into a reusable read-only ordinal value", BindShape);
-        runner.Add("typed slots wrapper forwards content and converts implicitly", WrapperShape);
-        runner.Add("typed slots hand-wrapped content is validated against the slot contract", HandWrapped);
-        runner.Add("typed slots keep every runtime binding rule", RuntimeRules);
-        runner.Add("typed slots bound values are a snapshot of CopyTo", BoundIsSnapshot);
-    }
-
     internal static LocalizedTextContent Content(bool includeRetry = true, bool includeStar = true, string guide = "guide") =>
         Message(includeRetry, includeStar, guide).FormatContent([], "en");
 
@@ -62,7 +53,8 @@ internal static class TypedSlotBindingsTests
         retry: new InlineActionBinding(retry ?? (() => { })),
         star: new InlineIconBinding(new object(), false, locale => "Star (" + locale + ")"));
 
-    private static void BoundMatchesDictionary()
+    [Test, DisplayName("typed slots render and project like the string-key overloads")]
+    public void BoundMatchesDictionary()
     {
         var renderer = new Rmf2InlineRenderer(MarkupContract);
         HelpSlots slots = Slots();
@@ -78,7 +70,8 @@ internal static class TypedSlotBindingsTests
         Assert.Throws<ArgumentNullException>(() => renderer.ToPlainText((BoundLocalizedTextContent)null!));
     }
 
-    private static void BoundIsSnapshot()
+    [Test, DisplayName("typed slots bound values are a snapshot of CopyTo")]
+    public void BoundIsSnapshot()
     {
         var slots = new RetainingSlots();
         BoundLocalizedTextContent bound = new LocalizedTextContent<RetainingSlots>(Content()).Bind(slots);
@@ -86,7 +79,8 @@ internal static class TypedSlotBindingsTests
         Assert.Equal(0, bound.Slots.Count);
     }
 
-    private static void BindShape()
+    [Test, DisplayName("typed slots bind once into a reusable read-only ordinal value")]
+    public void BindShape()
     {
         var renderer = new Rmf2InlineRenderer(MarkupContract);
         int calls = 0;
@@ -102,7 +96,8 @@ internal static class TypedSlotBindingsTests
         Assert.Throws<ArgumentNullException>(() => typed.Bind(null!));
     }
 
-    private static void WrapperShape()
+    [Test, DisplayName("typed slots wrapper forwards content and converts implicitly")]
+    public void WrapperShape()
     {
         LocalizedTextContent content = Content();
         var typed = new LocalizedTextContent<HelpSlots>(content);
@@ -114,7 +109,8 @@ internal static class TypedSlotBindingsTests
         Assert.Throws<ArgumentNullException>(() => { LocalizedTextContent ignored = (LocalizedTextContent<HelpSlots>)null!; });
     }
 
-    private static void HandWrapped()
+    [Test, DisplayName("typed slots hand-wrapped content is validated against the slot contract")]
+    public void HandWrapped()
     {
         var renderer = new Rmf2InlineRenderer(MarkupContract);
         // Another message's content that satisfies the help contract (optional retry absent) renders.
@@ -131,7 +127,8 @@ internal static class TypedSlotBindingsTests
             renderer.Render(new LocalizedTextContent<UnknownSlots>(Content()).Bind(new UnknownSlots())), "Unknown RMF2 message contract");
     }
 
-    private static void RuntimeRules()
+    [Test, DisplayName("typed slots keep every runtime binding rule")]
+    public void RuntimeRules()
     {
         var renderer = new Rmf2InlineRenderer(MarkupContract);
         var typed = new LocalizedTextContent<HelpSlots>(Content());

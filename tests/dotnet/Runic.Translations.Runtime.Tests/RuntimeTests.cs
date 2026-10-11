@@ -5,61 +5,14 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using TUnit.Core;
 
 namespace Runic.Translations.Runtime.Tests;
 
-internal static class RuntimeTests
+internal sealed class RuntimeTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("manager publishes snapshots on switch and refresh, never on no-ops", SnapshotPublications);
-        runner.Add("manager exposes initial immutable reference", InitialState);
-        runner.Add("manager validates initial snapshot", InitialValidation);
-        runner.Add("manager same locale is no-op", SameLocaleNoOp);
-        runner.Add("manager swaps atomically and raises exactly once", SuccessfulSwap);
-        runner.Add("manager provider failure preserves old snapshot", FailurePreservesCurrent);
-        runner.Add("manager rejects null replacement", NullReplacement);
-        runner.Add("manager rejects cross-catalog replacement", CrossCatalogReplacement);
-        runner.Add("manager rejects blank replacement locale", BlankLocaleReplacement);
-        runner.Add("manager rejects noncanonical replacement locale", NoncanonicalLocaleReplacement);
-        runner.Add("manager coalesces identical in-flight requests", CoalescesRequests);
-        runner.Add("manager isolates one caller cancellation", IsolatesCallerCancellation);
-        runner.Add("manager cancels provider after all waiters cancel", CancelsAfterAllWaiters);
-        runner.Add("manager serializes different locale loads", SerializesDifferentLocales);
-        runner.Add("manager concurrent transitions have exactly-once event chain", ConcurrentTransitions);
-        runner.Add("manager canceled transition preserves current", CancellationPreservesCurrent);
-        runner.Add("manager resolved active locale is no-op", ResolvedActiveLocaleNoOp);
-        runner.Add("manager notification permits synchronous reentrant switch", ReentrantNotification);
-        runner.Add("manager isolates throwing notification handlers", ThrowingNotificationHandler);
-        runner.Add("manager cancellation wins before commit", CancellationWinsBeforeCommit);
-        runner.Add("manager commit wins before caller cancellation", CommitWinsBeforeCancellation);
-        runner.Add("manager synchronous wait does not capture caller context", SynchronousWaitDoesNotDeadlock);
-        runner.Add("compiled catalog defensively copies inputs", CatalogImmutability);
-        runner.Add("compiled catalog validates sorted canonical data", CatalogValidation);
-        runner.Add("runtime and external packs share structural BCP 47 validation", LocaleTagValidation);
-        runner.Add("compiled catalog validates fallback graph", FallbackValidation);
-        runner.Add("snapshot resolves fallback values", SnapshotFallback);
-        runner.Add("snapshot lookup validates complete O(1) key identity", SnapshotKeyIdentity);
-        runner.Add("snapshot formats only exact compiled descriptors", SnapshotFormattingContract);
-        runner.Add("snapshot applies throw missing policy", SnapshotMissingThrow);
-        runner.Add("snapshot applies return-key missing policy", SnapshotMissingKey);
-        runner.Add("snapshot applies marker missing policy", SnapshotMissingMarker);
-        runner.Add("snapshot layers validated replacement values", SnapshotReplacement);
-        runner.Add("provider resolves parents then default", ProviderParentResolution);
-        runner.Add("provider applies exact unsupported policy", ProviderExactResolution);
-        runner.Add("provider applies default unsupported policy", ProviderDefaultResolution);
-        runner.Add("provider caches and coalesces canonical locale", ProviderCoalescing);
-        runner.Add("provider isolates a canceled coalesced caller", ProviderCancellationIsolation);
-        runner.Add("provider retries after factory failure", ProviderFailureRetry);
-        runner.Add("provider rejects invalid factory snapshot", ProviderFactoryValidation);
-        runner.Add("snapshot resolves allowed extras only through dynamic keys", AllowedExtraDynamicLookup);
-        runner.Add("compiled public memory cannot mutate snapshot state", PublicMemoryIsolation);
-        runner.Add("provider abandons canceled blocked factory and retries independently", ProviderAbandonsCanceledFactory);
-        runner.Add("compiled catalog WithOptions captures immutable policies", CatalogWithOptions);
-        runner.Add("snapshot finds keys by name and describes their placeholders", NameLookup);
-    }
-
-    private static void InitialState()
+    [Test, DisplayName("manager exposes initial immutable reference")]
+    public void InitialState()
     {
         FakeSnapshot initial = new("app", "en-US");
         TranslationManager manager = new(new ImmediateProvider(locale => new FakeSnapshot("app", locale)), initial);
@@ -67,7 +20,8 @@ internal static class RuntimeTests
         Assert.Equal("en-US", manager.CurrentLocale);
     }
 
-    private static void InitialValidation()
+    [Test, DisplayName("manager validates initial snapshot")]
+    public void InitialValidation()
     {
         ImmediateProvider provider = new(locale => new FakeSnapshot("app", locale));
         Assert.Throws<ArgumentNullException>(() => _ = new TranslationManager(null!, new FakeSnapshot("app", "en-US")));
@@ -77,7 +31,8 @@ internal static class RuntimeTests
         Assert.Throws<ArgumentException>(() => _ = new TranslationManager(provider, new FakeSnapshot("app", "EN-us")));
     }
 
-    private static async Task SameLocaleNoOp()
+    [Test, DisplayName("manager same locale is no-op")]
+    public async Task SameLocaleNoOp()
     {
         ImmediateProvider provider = new(locale => new FakeSnapshot("app", locale));
         TranslationManager manager = new(provider, new FakeSnapshot("app", "en-US"));
@@ -85,7 +40,8 @@ internal static class RuntimeTests
         Assert.Equal(0, provider.CallCount);
     }
 
-    private static async Task SuccessfulSwap()
+    [Test, DisplayName("manager swaps atomically and raises exactly once")]
+    public async Task SuccessfulSwap()
     {
         FakeSnapshot initial = new("app", "en-US");
         FakeSnapshot replacement = new("app", "de-DE");
@@ -104,7 +60,8 @@ internal static class RuntimeTests
         Assert.Equal(1, events);
     }
 
-    private static async Task FailurePreservesCurrent()
+    [Test, DisplayName("manager provider failure preserves old snapshot")]
+    public async Task FailurePreservesCurrent()
     {
         FakeSnapshot initial = new("app", "en-US");
         TranslationManager manager = new(new ThrowingProvider(new InvalidOperationException("load failed")), initial);
@@ -112,7 +69,8 @@ internal static class RuntimeTests
         Assert.Same(initial, manager.Current);
     }
 
-    private static async Task NullReplacement()
+    [Test, DisplayName("manager rejects null replacement")]
+    public async Task NullReplacement()
     {
         FakeSnapshot initial = new("app", "en-US");
         TranslationManager manager = new(new NullProvider(), initial);
@@ -120,11 +78,14 @@ internal static class RuntimeTests
         Assert.Same(initial, manager.Current);
     }
 
-    private static Task CrossCatalogReplacement() => InvalidReplacement(new FakeSnapshot("other", "de-DE"), "different catalog");
+    [Test, DisplayName("manager rejects cross-catalog replacement")]
+    public Task CrossCatalogReplacement() => InvalidReplacement(new FakeSnapshot("other", "de-DE"), "different catalog");
 
-    private static Task BlankLocaleReplacement() => InvalidReplacement(new FakeSnapshot("app", ""), "canonical locale");
+    [Test, DisplayName("manager rejects blank replacement locale")]
+    public Task BlankLocaleReplacement() => InvalidReplacement(new FakeSnapshot("app", ""), "canonical locale");
 
-    private static Task NoncanonicalLocaleReplacement() => InvalidReplacement(new FakeSnapshot("app", "EN-us"), "canonical locale");
+    [Test, DisplayName("manager rejects noncanonical replacement locale")]
+    public Task NoncanonicalLocaleReplacement() => InvalidReplacement(new FakeSnapshot("app", "EN-us"), "canonical locale");
 
     private static async Task InvalidReplacement(FakeSnapshot replacement, string message)
     {
@@ -134,7 +95,8 @@ internal static class RuntimeTests
         Assert.Same(initial, manager.Current);
     }
 
-    private static async Task CoalescesRequests()
+    [Test, DisplayName("manager coalesces identical in-flight requests")]
+    public async Task CoalescesRequests()
     {
         BlockingProvider provider = new();
         TranslationManager manager = new(provider, new FakeSnapshot("app", "en-US"));
@@ -147,7 +109,8 @@ internal static class RuntimeTests
         Assert.Equal(1, provider.CallCount);
     }
 
-    private static async Task IsolatesCallerCancellation()
+    [Test, DisplayName("manager isolates one caller cancellation")]
+    public async Task IsolatesCallerCancellation()
     {
         BlockingProvider provider = new();
         TranslationManager manager = new(provider, new FakeSnapshot("app", "en-US"));
@@ -163,7 +126,8 @@ internal static class RuntimeTests
         Assert.Equal("de-DE", manager.CurrentLocale);
     }
 
-    private static async Task CancelsAfterAllWaiters()
+    [Test, DisplayName("manager cancels provider after all waiters cancel")]
+    public async Task CancelsAfterAllWaiters()
     {
         BlockingProvider provider = new();
         TranslationManager manager = new(provider, new FakeSnapshot("app", "en-US"));
@@ -180,7 +144,8 @@ internal static class RuntimeTests
         Assert.Equal("en-US", manager.CurrentLocale);
     }
 
-    private static async Task SerializesDifferentLocales()
+    [Test, DisplayName("manager serializes different locale loads")]
+    public async Task SerializesDifferentLocales()
     {
         SerialProbeProvider provider = new();
         TranslationManager manager = new(provider, new FakeSnapshot("app", "en-US"));
@@ -194,7 +159,8 @@ internal static class RuntimeTests
         Assert.Equal(3, provider.CallCount);
     }
 
-    private static async Task ConcurrentTransitions()
+    [Test, DisplayName("manager concurrent transitions have exactly-once event chain")]
+    public async Task ConcurrentTransitions()
     {
         ImmediateProvider provider = new(locale => new FakeSnapshot("app", locale));
         TranslationManager manager = new(provider, new FakeSnapshot("app", "en-US"));
@@ -210,7 +176,8 @@ internal static class RuntimeTests
         Assert.Same(events[^1].NewSnapshot, manager.Current);
     }
 
-    private static async Task CancellationPreservesCurrent()
+    [Test, DisplayName("manager canceled transition preserves current")]
+    public async Task CancellationPreservesCurrent()
     {
         FakeSnapshot initial = new("app", "en-US");
         BlockingProvider provider = new();
@@ -223,7 +190,8 @@ internal static class RuntimeTests
         Assert.Same(initial, manager.Current);
     }
 
-    private static async Task ResolvedActiveLocaleNoOp()
+    [Test, DisplayName("manager resolved active locale is no-op")]
+    public async Task ResolvedActiveLocaleNoOp()
     {
         FakeSnapshot initial = new("app", "en-US");
         TranslationManager manager = new(new ImmediateProvider(_ => initial), initial);
@@ -234,7 +202,8 @@ internal static class RuntimeTests
         Assert.Equal(0, events);
     }
 
-    private static async Task SnapshotPublications()
+    [Test, DisplayName("manager publishes snapshots on switch and refresh, never on no-ops")]
+    public async Task SnapshotPublications()
     {
         FakeSnapshot initial = new("app", "en-US");
         TranslationManager manager = new(new ImmediateProvider(locale => new FakeSnapshot("app", locale)), initial);
@@ -258,7 +227,8 @@ internal static class RuntimeTests
         Assert.True(order.SequenceEqual(["locale", "published", "published"]), "LocaleChanged precedes SnapshotPublished: " + string.Join(",", order));
     }
 
-    private static async Task ReentrantNotification()
+    [Test, DisplayName("manager notification permits synchronous reentrant switch")]
+    public async Task ReentrantNotification()
     {
         TranslationManager manager = new(
             new ImmediateProvider(locale => new FakeSnapshot("app", locale)),
@@ -276,7 +246,8 @@ internal static class RuntimeTests
         Assert.Equal(2, events);
     }
 
-    private static async Task ThrowingNotificationHandler()
+    [Test, DisplayName("manager isolates throwing notification handlers")]
+    public async Task ThrowingNotificationHandler()
     {
         TranslationManager manager = new(
             new ImmediateProvider(locale => new FakeSnapshot("app", locale)),
@@ -290,7 +261,8 @@ internal static class RuntimeTests
         Assert.Equal(1, laterHandlers);
     }
 
-    private static async Task CancellationWinsBeforeCommit()
+    [Test, DisplayName("manager cancellation wins before commit")]
+    public async Task CancellationWinsBeforeCommit()
     {
         FakeSnapshot initial = new("app", "en-US");
         CommitBarrierSnapshot replacement = new("app", "de-DE");
@@ -306,7 +278,8 @@ internal static class RuntimeTests
         Assert.Same(initial, manager.Current);
     }
 
-    private static async Task CommitWinsBeforeCancellation()
+    [Test, DisplayName("manager commit wins before caller cancellation")]
+    public async Task CommitWinsBeforeCancellation()
     {
         using CancellationTokenSource cancellation = new();
         TranslationManager manager = new(
@@ -318,7 +291,8 @@ internal static class RuntimeTests
         Assert.Equal("de-DE", manager.CurrentLocale);
     }
 
-    private static void SynchronousWaitDoesNotDeadlock()
+    [Test, DisplayName("manager synchronous wait does not capture caller context")]
+    public void SynchronousWaitDoesNotDeadlock()
     {
         Exception? failure = null;
         Thread thread = new(() =>
@@ -353,7 +327,8 @@ internal static class RuntimeTests
             throw new InvalidOperationException("The synchronous locale switch failed.", failure);
     }
 
-    private static void CatalogImmutability()
+    [Test, DisplayName("compiled catalog defensively copies inputs")]
+    public void CatalogImmutability()
     {
         TranslationPlaceholderDescriptor[] descriptors =
             [new("count", TextArgumentType.Int, TextArgumentFormat.Grouped)];
@@ -375,7 +350,8 @@ internal static class RuntimeTests
         Assert.Equal("en", catalog.Locales.Span[0].Locale);
     }
 
-    private static void CatalogValidation()
+    [Test, DisplayName("compiled catalog validates sorted canonical data")]
+    public void CatalogValidation()
     {
         Assert.Throws<ArgumentException>(() => _ = new CompiledTranslationDefinition("bad-name", []));
         Assert.Throws<ArgumentException>(() => _ = new CompiledTranslationDefinition("alpha.greeting",
@@ -395,7 +371,8 @@ internal static class RuntimeTests
             [new CompiledTranslationLocale("en", null, [])]), "does not define");
     }
 
-    private static void LocaleTagValidation()
+    [Test, DisplayName("runtime and external packs share structural BCP 47 validation")]
+    public void LocaleTagValidation()
     {
         const string fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
         const string markup = "{\"version\":2,\"contracts\":{},\"messages\":{}}";
@@ -414,7 +391,8 @@ internal static class RuntimeTests
         }
     }
 
-    private static void FallbackValidation()
+    [Test, DisplayName("compiled catalog validates fallback graph")]
+    public void FallbackValidation()
     {
         CompiledTranslationDefinition[] definitions = [new("alpha.greeting", [])];
         Assert.Throws<ArgumentException>(() => _ = new CompiledTranslationCatalog("app", "en", definitions,
@@ -427,7 +405,8 @@ internal static class RuntimeTests
             [new CompiledTranslationLocale("en", "de", [new(0, "Hello")])]), "default locale cannot");
     }
 
-    private static void SnapshotFallback()
+    [Test, DisplayName("snapshot resolves fallback values")]
+    public void SnapshotFallback()
     {
         CompiledTranslationCatalog catalog = CreateCatalog();
         CompiledTranslationSnapshot de = new(catalog, "de-DE");
@@ -438,7 +417,8 @@ internal static class RuntimeTests
         Assert.Equal("Total {count}", us.Get(Key(1, "beta.count")));
     }
 
-    private static void SnapshotKeyIdentity()
+    [Test, DisplayName("snapshot lookup validates complete O(1) key identity")]
+    public void SnapshotKeyIdentity()
     {
         CompiledTranslationSnapshot snapshot = new(CreateCatalog(), "en");
         Assert.True(snapshot.TryGet(Key(0, "alpha.greeting"), out string pattern), "Known key missing.");
@@ -449,7 +429,8 @@ internal static class RuntimeTests
         Assert.False(snapshot.TryGet(Key(-1, "alpha.greeting"), out _), "Negative ID accepted.");
     }
 
-    private static void SnapshotFormattingContract()
+    [Test, DisplayName("snapshot formats only exact compiled descriptors")]
+    public void SnapshotFormattingContract()
     {
         CompiledTranslationSnapshot snapshot = new(CreateCatalog(), "en-US");
         string expected = "Total " + 1234L.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("en-US"));
@@ -460,16 +441,20 @@ internal static class RuntimeTests
         Assert.Throws<TranslationFormatException>(() => snapshot.Format(Key(1, "beta.count"), [new TextArgument("count", 1L)]), "does not match");
     }
 
-    private static void SnapshotMissingThrow() => Assert.Throws<TranslationNotFoundException>(
+    [Test, DisplayName("snapshot applies throw missing policy")]
+    public void SnapshotMissingThrow() => Assert.Throws<TranslationNotFoundException>(
         () => new CompiledTranslationSnapshot(CreateCatalog(missingKey: MissingTranslationPolicy.Throw), "en").Get(Key(9, "missing.key")), "missing.key");
 
-    private static void SnapshotMissingKey() => Assert.Equal("missing.key",
+    [Test, DisplayName("snapshot applies return-key missing policy")]
+    public void SnapshotMissingKey() => Assert.Equal("missing.key",
         new CompiledTranslationSnapshot(CreateCatalog(missingKey: MissingTranslationPolicy.ReturnKey), "en").Get(Key(9, "missing.key")));
 
-    private static void SnapshotMissingMarker() => Assert.Equal("⟦missing.key⟧",
+    [Test, DisplayName("snapshot applies marker missing policy")]
+    public void SnapshotMissingMarker() => Assert.Equal("⟦missing.key⟧",
         new CompiledTranslationSnapshot(CreateCatalog(missingKey: MissingTranslationPolicy.ReturnMarker), "en").Format(Key(9, "missing.key"), []));
 
-    private static void SnapshotReplacement()
+    [Test, DisplayName("snapshot layers validated replacement values")]
+    public void SnapshotReplacement()
     {
         CompiledTranslationValue[] replacements = [new(0, "Howdy")];
         CompiledTranslationSnapshot snapshot = new(CreateCatalog(), "en-US", replacements);
@@ -480,7 +465,8 @@ internal static class RuntimeTests
         Assert.Throws<ArgumentException>(() => _ = new CompiledTranslationSnapshot(CreateCatalog(), "en", [new(1, "wrong {name}")]));
     }
 
-    private static async Task ProviderParentResolution()
+    [Test, DisplayName("provider resolves parents then default")]
+    public async Task ProviderParentResolution()
     {
         CompiledTranslationProvider provider = new(CreateCatalog());
         ITranslationSnapshot snapshot = await provider.GetSnapshotAsync("en-AU");
@@ -488,19 +474,22 @@ internal static class RuntimeTests
         Assert.Same(snapshot, await provider.GetSnapshotAsync("EN-au"));
     }
 
-    private static async Task ProviderExactResolution()
+    [Test, DisplayName("provider applies exact unsupported policy")]
+    public async Task ProviderExactResolution()
     {
         CompiledTranslationProvider provider = new(CreateCatalog(UnsupportedLocalePolicy.Exact));
         await Assert.ThrowsAsync<TranslationNotFoundException>(() => provider.GetSnapshotAsync("en-AU").AsTask(), "not declared");
     }
 
-    private static async Task ProviderDefaultResolution()
+    [Test, DisplayName("provider applies default unsupported policy")]
+    public async Task ProviderDefaultResolution()
     {
         CompiledTranslationProvider provider = new(CreateCatalog(UnsupportedLocalePolicy.Default));
         Assert.Equal("en", (await provider.GetSnapshotAsync("zh-Hant-TW")).Locale);
     }
 
-    private static async Task ProviderCoalescing()
+    [Test, DisplayName("provider caches and coalesces canonical locale")]
+    public async Task ProviderCoalescing()
     {
         SnapshotFactoryProbe factory = new(block: true);
         CompiledTranslationProvider provider = new(CreateCatalog(), snapshotFactory: factory);
@@ -515,7 +504,8 @@ internal static class RuntimeTests
         Assert.Equal(1, factory.CallCount);
     }
 
-    private static async Task ProviderCancellationIsolation()
+    [Test, DisplayName("provider isolates a canceled coalesced caller")]
+    public async Task ProviderCancellationIsolation()
     {
         SnapshotFactoryProbe factory = new(block: true);
         CompiledTranslationProvider provider = new(CreateCatalog(), snapshotFactory: factory);
@@ -531,7 +521,8 @@ internal static class RuntimeTests
         Assert.Equal(1, factory.CallCount);
     }
 
-    private static async Task ProviderFailureRetry()
+    [Test, DisplayName("provider retries after factory failure")]
+    public async Task ProviderFailureRetry()
     {
         SnapshotFactoryProbe factory = new(failFirst: true);
         CompiledTranslationProvider provider = new(CreateCatalog(), snapshotFactory: factory);
@@ -540,13 +531,15 @@ internal static class RuntimeTests
         Assert.Equal(2, factory.CallCount);
     }
 
-    private static async Task ProviderFactoryValidation()
+    [Test, DisplayName("provider rejects invalid factory snapshot")]
+    public async Task ProviderFactoryValidation()
     {
         CompiledTranslationProvider provider = new(CreateCatalog(), snapshotFactory: new InvalidSnapshotFactory());
         await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetSnapshotAsync("en").AsTask(), "different catalog or locale");
     }
 
-    private static void AllowedExtraDynamicLookup()
+    [Test, DisplayName("snapshot resolves allowed extras only through dynamic keys")]
+    public void AllowedExtraDynamicLookup()
     {
         CompiledTranslationDefinition canonical = new("alpha.greeting", []);
         CompiledTranslationDefinition extra = new("gamma.extra", [], isCanonical: false);
@@ -573,7 +566,8 @@ internal static class RuntimeTests
             [new CompiledTranslationLocale("en", null, [new(1, "Hello")])]));
     }
 
-    private static void NameLookup()
+    [Test, DisplayName("snapshot finds keys by name and describes their placeholders")]
+    public void NameLookup()
     {
         CompiledTranslationCatalog catalog = new(
             "app", "en",
@@ -624,7 +618,8 @@ internal static class RuntimeTests
         Assert.False(fake.TryGetPlaceholders(byName, out _), "The default implementation described a key.");
     }
 
-    private static void PublicMemoryIsolation()
+    [Test, DisplayName("compiled public memory cannot mutate snapshot state")]
+    public void PublicMemoryIsolation()
     {
         CompiledTranslationCatalog catalog = CreateCatalog();
 
@@ -659,7 +654,8 @@ internal static class RuntimeTests
         Assert.Equal("Count {count}", snapshot.Get(Key(1, "beta.count")));
     }
 
-    private static async Task ProviderAbandonsCanceledFactory()
+    [Test, DisplayName("provider abandons canceled blocked factory and retries independently")]
+    public async Task ProviderAbandonsCanceledFactory()
     {
         AbandoningFactory factory = new();
         CompiledTranslationProvider provider = new(CreateCatalog(), snapshotFactory: factory);
@@ -676,7 +672,8 @@ internal static class RuntimeTests
         factory.ReleaseFirst();
     }
 
-    private static async Task CatalogWithOptions()
+    [Test, DisplayName("compiled catalog WithOptions captures immutable policies")]
+    public async Task CatalogWithOptions()
     {
         CompiledTranslationCatalog original = CreateCatalog();
         Assert.Same(original, original.WithOptions(null));

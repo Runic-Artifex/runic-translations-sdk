@@ -1,16 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="../../../../eng/build/translations.props" />
   <PropertyGroup>
+    <!-- A NativeAOT TUnit test application: the linked runtime cases run from the published executable. -->
     <OutputType>Exe</OutputType>
+    <!-- The linked cases use runtime internals, which Runic.Translations exposes to this assembly name only. -->
+    <AssemblyName>Runic.Translations.Runtime.Tests</AssemblyName>
     <TargetFramework>net10.0</TargetFramework>
     <PublishAot>true</PublishAot>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <TUnitImplicitUsings>false</TUnitImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="TUnit.Core" />
+    <PackageReference Include="TUnit.Engine" />
     <ProjectReference Include="../../../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" />
-    <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/TestRunner.cs" Link="TestRunner.cs" />
+    <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/Assert.cs" Link="Assert.cs" />
     <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/Rmf2RuntimeV5Tests.cs" Link="Rmf2RuntimeV5Tests.cs" />
     <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/TypedSlotBindingsTests.cs" Link="TypedSlotBindingsTests.cs" />
   </ItemGroup>

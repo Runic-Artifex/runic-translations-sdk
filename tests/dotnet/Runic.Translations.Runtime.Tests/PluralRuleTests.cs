@@ -3,19 +3,14 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using TUnit.Core;
 
 namespace Runic.Translations.Runtime.Tests;
 
-internal static class PluralRuleTests
+internal sealed class PluralRuleTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("generated CLDR selectors match every pinned @integer and @decimal sample", CldrSamples);
-        runner.Add("visible decimal applies percent halfExpand rounding and fraction padding", VisibleDecimals);
-        runner.Add("legacy selector and relative time use canonical or displayed operands", LegacyOperands);
-    }
-
-    private static void CldrSamples()
+    [Test, DisplayName("generated CLDR selectors match every pinned @integer and @decimal sample")]
+    public void CldrSamples()
     {
         string path = Path.Combine(RepositoryRoot(), "specs", "translations", "cldr", "runic-subset-48.2.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
@@ -47,7 +42,8 @@ internal static class PluralRuleTests
         Assert.Equal(null, GeneratedLocaleData.SelectPlural("pl", false, in one));
     }
 
-    private static void VisibleDecimals()
+    [Test, DisplayName("visible decimal applies percent halfExpand rounding and fraction padding")]
+    public void VisibleDecimals()
     {
         Assert.Equal("1.0", Visible(1m, false, 1, 6));
         Assert.Equal("1", Visible(1.4m, false, 0, 0));
@@ -74,7 +70,8 @@ internal static class PluralRuleTests
         Assert.Equal((UInt128)9223372036854775808UL, VisibleDecimal.FromInteger(long.MinValue).Operands.I);
     }
 
-    private static void LegacyOperands()
+    [Test, DisplayName("legacy selector and relative time use canonical or displayed operands")]
+    public void LegacyOperands()
     {
         // The public decimal selector keeps canonical semantics: scale is not significant.
         Assert.Equal("one", TextMessageSelector.SelectPlural(1.0m, "en", false));
