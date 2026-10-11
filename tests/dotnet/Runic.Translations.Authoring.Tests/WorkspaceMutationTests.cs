@@ -6,28 +6,14 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
+using TUnit.Core;
 
 namespace Runic.Translations.Authoring.Tests;
 
-internal static class WorkspaceMutationTests
+internal sealed class WorkspaceMutationTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("Locale addition previews and commits a compiler-valid transaction", AddLocale);
-        runner.Add("Locale removal deletes documents and repairs fallback edges", RemoveLocale);
-        runner.Add("Fallback mutation rejects cycles before writing", FallbackCycle);
-        runner.Add("Key lifecycle mutations preserve values across locales", KeyLifecycle);
-        runner.Add("Transaction plans snapshot validated edits and expose immutable bytes", ImmutablePlan);
-        runner.Add("Transaction rejects stale revisions without partial writes", StaleRevision);
-        runner.Add("Interrupted transaction can complete from its journal", CompleteRecovery);
-        runner.Add("Interrupted transaction can roll back byte-exactly", RollbackRecovery);
-        runner.Add("Recovery works after the final edit boundary", FinalBoundaryRecovery);
-        runner.Add("Recovery refuses to overwrite post-interruption edits", RecoveryConflict);
-        runner.Add("Transaction and recovery journals reject path escapes", PathEscapes);
-        runner.Add("Workspace mutations refuse a non-object runic.json with a clear error", NonObjectManifest);
-    }
-
-    private static void NonObjectManifest()
+    [Test, DisplayName("Workspace mutations refuse a non-object runic.json with a clear error")]
+    public void NonObjectManifest()
     {
         using ProjectWorkspace project = new();
         string direct = System.IO.Path.Combine(project.Path, "runic.json");
@@ -41,7 +27,8 @@ internal static class WorkspaceMutationTests
             "runic.json must contain an object.");
     }
 
-    private static void AddLocale()
+    [Test, DisplayName("Locale addition previews and commits a compiler-valid transaction")]
+    public void AddLocale()
     {
         using ProjectWorkspace project = new();
         TranslationWorkspaceTransactionPlan plan = TranslationWorkspaceMutation.AddLocale(
@@ -56,7 +43,8 @@ internal static class WorkspaceMutationTests
         Assert.True(manifest["locales"]!.AsArray().Any(node => LocaleTag(node) == "fr-FR"), "The locale declaration is missing.");
     }
 
-    private static void RemoveLocale()
+    [Test, DisplayName("Locale removal deletes documents and repairs fallback edges")]
+    public void RemoveLocale()
     {
         using ProjectWorkspace project = new(additionalLocales: [new("en", "de"), new("fr", "en")]);
         TranslationWorkspaceTransactionPlan plan = TranslationWorkspaceMutation.RemoveLocale(
@@ -70,7 +58,8 @@ internal static class WorkspaceMutationTests
         Assert.Equal("de", LocaleFallback(french, "de"));
     }
 
-    private static void FallbackCycle()
+    [Test, DisplayName("Fallback mutation rejects cycles before writing")]
+    public void FallbackCycle()
     {
         using ProjectWorkspace project = new(additionalLocales: [new("en", "de"), new("fr", "de")]);
         TranslationWorkspaceTransaction.Commit(TranslationWorkspaceMutation.SetFallback(
@@ -83,7 +72,8 @@ internal static class WorkspaceMutationTests
         Assert.True(before.AsSpan().SequenceEqual(File.ReadAllBytes(System.IO.Path.Combine(project.Path, "runic.json"))), "Rejected fallback mutation changed the config.");
     }
 
-    private static void KeyLifecycle()
+    [Test, DisplayName("Key lifecycle mutations preserve values across locales")]
+    public void KeyLifecycle()
     {
         using ProjectWorkspace project = new(additionalLocales: [new("en", "de")]);
         TranslationWorkspaceTransaction.Commit(TranslationWorkspaceMutation.CreateKey(
@@ -103,7 +93,8 @@ internal static class WorkspaceMutationTests
         }
     }
 
-    private static void ImmutablePlan()
+    [Test, DisplayName("Transaction plans snapshot validated edits and expose immutable bytes")]
+    public void ImmutablePlan()
     {
         using ProjectWorkspace project = new();
         TranslationWorkspaceTransactionPlan validated = TranslationWorkspaceMutation.AddLocale(
@@ -132,7 +123,8 @@ internal static class WorkspaceMutationTests
             "Commit did not apply the snapshotted validated edit bytes.");
     }
 
-    private static void StaleRevision()
+    [Test, DisplayName("Transaction rejects stale revisions without partial writes")]
+    public void StaleRevision()
     {
         using ProjectWorkspace project = new();
         TranslationWorkspaceTransactionPlan plan = TranslationWorkspaceMutation.AddLocale(
@@ -145,7 +137,8 @@ internal static class WorkspaceMutationTests
         Assert.True(TranslationWorkspaceTransaction.GetPending(project.Path) is null, "A stale transaction left a journal.");
     }
 
-    private static void CompleteRecovery()
+    [Test, DisplayName("Interrupted transaction can complete from its journal")]
+    public void CompleteRecovery()
     {
         using ProjectWorkspace project = new();
         TranslationWorkspaceTransactionPlan plan = TranslationWorkspaceMutation.AddLocale(
@@ -158,7 +151,8 @@ internal static class WorkspaceMutationTests
         Assert.True(TranslationWorkspaceTransaction.GetPending(project.Path) is null, "Completed recovery left a journal.");
     }
 
-    private static void RollbackRecovery()
+    [Test, DisplayName("Interrupted transaction can roll back byte-exactly")]
+    public void RollbackRecovery()
     {
         using ProjectWorkspace project = new();
         byte[] manifest = File.ReadAllBytes(System.IO.Path.Combine(project.Path, "runic.json"));
@@ -172,7 +166,8 @@ internal static class WorkspaceMutationTests
         Assert.True(!File.Exists(System.IO.Path.Combine(project.Path, "fr", "application_title.mf2")), "Rollback retained the created locale message.");
     }
 
-    private static void FinalBoundaryRecovery()
+    [Test, DisplayName("Recovery works after the final edit boundary")]
+    public void FinalBoundaryRecovery()
     {
         using (var completed = new ProjectWorkspace())
         {
@@ -192,7 +187,8 @@ internal static class WorkspaceMutationTests
         }
     }
 
-    private static void RecoveryConflict()
+    [Test, DisplayName("Recovery refuses to overwrite post-interruption edits")]
+    public void RecoveryConflict()
     {
         using ProjectWorkspace project = new();
         string manifestPath = System.IO.Path.Combine(project.Path, "runic.json");
@@ -209,7 +205,8 @@ internal static class WorkspaceMutationTests
         TranslationWorkspaceTransaction.Recover(project.Path, TranslationWorkspaceRecoveryMode.Rollback);
     }
 
-    private static void PathEscapes()
+    [Test, DisplayName("Transaction and recovery journals reject path escapes")]
+    public void PathEscapes()
     {
         using ProjectWorkspace project = new();
         TranslationWorkspaceTransactionPlan valid = TranslationWorkspaceMutation.AddLocale(

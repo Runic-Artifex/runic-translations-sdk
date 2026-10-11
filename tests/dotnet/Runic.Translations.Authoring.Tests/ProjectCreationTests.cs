@@ -3,27 +3,14 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Runic.Translations.Authoring;
+using TUnit.Core;
 
 namespace Runic.Translations.Authoring.Tests;
 
-internal static class ProjectCreationTests
+internal sealed class ProjectCreationTests
 {
-    public static void Register(TestRunner runner)
-    {
-        runner.Add("German-only project is compiler-valid", GermanOnlyIsValid);
-        runner.Add("Three-locale project canonicalizes tags and fallbacks", ThreeLocalesAreCanonical);
-        runner.Add("Equivalent project requests render byte-identically", RenderingIsDeterministic);
-        runner.Add("Unknown and cyclic fallbacks are rejected", InvalidFallbacksAreRejected);
-        runner.Add("Creation commits the complete rendered project", CreationCommitsCompleteProject);
-        runner.Add("Conflicting target remains unchanged", ConflictDoesNotWrite);
-        runner.Add("Creation permits a real parent beneath an ancestor alias", AncestorAliasIsAllowed);
-        runner.Add("Creation rejects a linked target parent", LinkedParentIsRejected);
-        runner.Add("Project without starter messages remains compiler-valid", NoStarterIsValid);
-        runner.Add("Project config carries its editor schema declaration", ProjectConfigDeclaresSchema);
-        runner.Add("Explicit RMF2 project is compiler-valid", Rmf2ProjectIsValid);
-    }
-
-    private static void GermanOnlyIsValid()
+    [Test, DisplayName("German-only project is compiler-valid")]
+    public void GermanOnlyIsValid()
     {
         TranslationProjectPlan plan = TranslationProjectScaffolder.Render(Request("unused", "de"));
         Assert.True(plan.IsValid, "Generated project did not compile.");
@@ -32,7 +19,8 @@ internal static class ProjectCreationTests
         Assert.True(Utf8(plan, "de.rmf2").Contains("ProductText", StringComparison.Ordinal), "Starter message is missing.");
     }
 
-    private static void ThreeLocalesAreCanonical()
+    [Test, DisplayName("Three-locale project canonicalizes tags and fallbacks")]
+    public void ThreeLocalesAreCanonical()
     {
         TranslationProjectPlan plan = TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
             "unused",
@@ -49,7 +37,8 @@ internal static class ProjectCreationTests
             string.Join('|', plan.Files.Select(file => file.RelativePath)));
     }
 
-    private static void RenderingIsDeterministic()
+    [Test, DisplayName("Equivalent project requests render byte-identically")]
+    public void RenderingIsDeterministic()
     {
         TranslationProjectPlan first = TranslationProjectScaffolder.Render(Request("first", "en"));
         TranslationProjectPlan second = TranslationProjectScaffolder.Render(Request("second", "EN"));
@@ -63,7 +52,8 @@ internal static class ProjectCreationTests
         }
     }
 
-    private static void InvalidFallbacksAreRejected()
+    [Test, DisplayName("Unknown and cyclic fallbacks are rejected")]
+    public void InvalidFallbacksAreRejected()
     {
         Assert.Throws<TranslationAuthoringException>(
             () => TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
@@ -75,7 +65,8 @@ internal static class ProjectCreationTests
             "Fallback cycle");
     }
 
-    private static void CreationCommitsCompleteProject()
+    [Test, DisplayName("Creation commits the complete rendered project")]
+    public void CreationCommitsCompleteProject()
     {
         using TemporaryDirectory temporary = new();
         string target = Path.Combine(temporary.Path, "Resources");
@@ -94,7 +85,8 @@ internal static class ProjectCreationTests
         }
     }
 
-    private static void ConflictDoesNotWrite()
+    [Test, DisplayName("Conflicting target remains unchanged")]
+    public void ConflictDoesNotWrite()
     {
         using TemporaryDirectory temporary = new();
         string target = Path.Combine(temporary.Path, "Resources");
@@ -107,7 +99,8 @@ internal static class ProjectCreationTests
         Assert.Equal("customer.txt", string.Join('|', Directory.EnumerateFiles(target).Select(Path.GetFileName)));
     }
 
-    private static void AncestorAliasIsAllowed()
+    [Test, DisplayName("Creation permits a real parent beneath an ancestor alias")]
+    public void AncestorAliasIsAllowed()
     {
         using TemporaryDirectory temporary = new();
         string real = Path.Combine(temporary.Path, "real");
@@ -121,7 +114,8 @@ internal static class ProjectCreationTests
         Assert.True(File.Exists(Path.Combine(real, "projects", "Resources", "en.rmf2")), "Project was not created beneath the resolved ancestor.");
     }
 
-    private static void LinkedParentIsRejected()
+    [Test, DisplayName("Creation rejects a linked target parent")]
+    public void LinkedParentIsRejected()
     {
         using TemporaryDirectory temporary = new();
         string real = Path.Combine(temporary.Path, "real");
@@ -136,7 +130,8 @@ internal static class ProjectCreationTests
         Assert.False(Directory.Exists(Path.Combine(real, "Resources")), "Rejected creation wrote through the linked parent.");
     }
 
-    private static void NoStarterIsValid()
+    [Test, DisplayName("Project without starter messages remains compiler-valid")]
+    public void NoStarterIsValid()
     {
         TranslationProjectPlan plan = TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
             "unused",
@@ -149,7 +144,8 @@ internal static class ProjectCreationTests
         Assert.Equal("de.rmf2|runic.json", string.Join('|', plan.Files.Select(file => file.RelativePath)));
     }
 
-    private static void ProjectConfigDeclaresSchema()
+    [Test, DisplayName("Project config carries its editor schema declaration")]
+    public void ProjectConfigDeclaresSchema()
     {
         TranslationProjectPlan plan = TranslationProjectScaffolder.Render(new TranslationProjectCreationRequest(
             "unused",
@@ -162,7 +158,8 @@ internal static class ProjectCreationTests
         Assert.True(!config.Contains("sourceLayout", StringComparison.Ordinal), "New projects must not retain a source-layout selector.");
     }
 
-    private static void Rmf2ProjectIsValid()
+    [Test, DisplayName("Explicit RMF2 project is compiler-valid")]
+    public void Rmf2ProjectIsValid()
     {
         TranslationProjectPlan plan = TranslationProjectPlanBuilder.Build();
         Assert.True(plan.IsValid, "Generated RMF2 project did not compile.");

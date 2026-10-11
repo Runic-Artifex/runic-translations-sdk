@@ -1,15 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="../../../eng/build/translations.props" />
   <PropertyGroup>
+    <!-- A TUnit test application on Microsoft.Testing.Platform: run it with dotnet run or the built executable. -->
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Runic.Translations.Authoring.Tests</AssemblyName>
     <RootNamespace>Runic.Translations.Authoring.Tests</RootNamespace>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <TUnitImplicitUsings>false</TUnitImplicitUsings>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="TUnit.Core" />
+    <PackageReference Include="TUnit.Engine" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
     <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />

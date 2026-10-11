@@ -4,35 +4,7 @@ using System.Globalization;
 
 namespace Runic.Translations.Authoring.Tests;
 
-internal sealed class TestRunner
-{
-    private readonly List<(string Name, Action Test)> _tests = [];
-
-    public void Add(string name, Action test) => _tests.Add((name, test));
-
-    public int Run()
-    {
-        int failed = 0;
-        foreach ((string name, Action test) in _tests)
-        {
-            try
-            {
-                test();
-                Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"PASS {name}"));
-            }
-            catch (Exception exception)
-            {
-                failed++;
-                Console.Error.WriteLine(string.Create(CultureInfo.InvariantCulture, $"FAIL {name}"));
-                Console.Error.WriteLine(exception);
-            }
-        }
-
-        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"RESULT {_tests.Count - failed}/{_tests.Count} passed"));
-        return failed == 0 ? 0 : 1;
-    }
-}
-
+// The suite's original assertions; TUnit reports the exception message and stack trace of a failing case.
 internal static class Assert
 {
     public static void True(bool condition, string message)
