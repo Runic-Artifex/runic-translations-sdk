@@ -40,19 +40,14 @@ internal sealed class ResolverTests
         Assert.Throws<ArgumentNullException>(() => TranslationCommandTextResolver.GetMessageName(null!));
     }
 
-    // CommandTextKeys is new after Runic.CommandLine 0.6.0-preview.3, which this repository builds against.
-    private static readonly Type? TextKeys = typeof(CommandApp).Assembly.GetType("Runic.CommandLine.CommandTextKeys");
+    // CommandTextKeys is new in Runic.CommandLine 0.6.0-preview.4, the floor of the adapter package.
+    private static readonly Type TextKeys = typeof(CommandApp).Assembly.GetType("Runic.CommandLine.CommandTextKeys")
+        ?? throw new InvalidOperationException("Runic.CommandLine has no CommandTextKeys; the adapter requires 0.6.0-preview.4 or later.");
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The test runs on the JIT and reads a public property.")]
-    [Test, DisplayName("the argument table matches CommandTextKeys.All when Runic.CommandLine provides it")]
+    [Test, DisplayName("the argument table matches CommandTextKeys.All")]
     public void TableMatchesCommandLine()
     {
-        if (TextKeys is null)
-        {
-            Console.WriteLine("  (Runic.CommandLine " + typeof(CommandApp).Assembly.GetName().Version + " has no CommandTextKeys; skipped)");
-            return;
-        }
-
         var all = (System.Collections.IEnumerable)TextKeys.GetProperty("All")!.GetValue(null)!;
         var keys = new List<string>();
         foreach (object item in all)
@@ -122,9 +117,7 @@ internal sealed class ResolverTests
             .Distinct(StringComparer.Ordinal).ToArray();
         Assert.True(english.Length > 40, "Too few English fragments: " + english.Length);
         int checkedFragments = 0;
-        // Runic.CommandLine 0.6.0-preview.3 reports value errors as faults.RCLI2xxx without arguments; releases with
-        // CommandTextKeys ask for diagnostics.invalid-integer and diagnostics.out-of-range instead.
-        foreach (string[] invocation in Invocations.Where(static item => TextKeys is not null || (!item.Contains("9") && !item.Contains("x"))))
+        foreach (string[] invocation in Invocations)
         {
             Result german = await Run(resolver, "de", invocation);
             string text = german.Output + german.Error;

@@ -25,6 +25,9 @@ internal static class Program
         typeof(Program).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
             .Cast<System.Reflection.AssemblyMetadataAttribute>()
             .Single(attribute => attribute.Key == "RunicPackageVersion").Value!;
+    private static readonly string CommandLineVersion = typeof(Program).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+        .Cast<System.Reflection.AssemblyMetadataAttribute>()
+        .Single(attribute => attribute.Key == "RunicCommandLineVersion").Value!;
     private static int _passed;
 
     public static async Task<int> Main(string[] args)
@@ -154,7 +157,11 @@ internal static class Program
             "content/templates/project/RunicTranslationsProject.csproj");
 
         AssertDependencies(runtime, Array.Empty<string>());
+        AssertDependencies(commandLine, ["Runic.CommandLine", "Runic.Translations"]);
         AssertDependencies(tooling, ["Runic.CommandLine"]);
+        // A project that adds only the adapter or the tooling must restore the fixed command-line runtime.
+        AssertDependencyFloor(commandLine, "Runic.CommandLine", CommandLineVersion);
+        AssertDependencyFloor(tooling, "Runic.CommandLine", CommandLineVersion);
         AssertDependencies(build, Array.Empty<string>());
         AssertDependencies(wpf, ["Runic.Translations"]);
         AssertDependencies(tool, Array.Empty<string>());
@@ -322,6 +329,25 @@ internal static class Program
         string[] approved = approvedDependencies.OrderBy(identity => identity, StringComparer.Ordinal).ToArray();
         Assert(actual.SequenceEqual(approved, StringComparer.Ordinal),
             $"{Path.GetFileName(package)} has exactly the approved dependency set");
+    }
+
+    private static void AssertDependencyFloor(string package, string dependency, string version)
+    {
+        using ZipArchive archive = ZipFile.OpenRead(package);
+        ZipArchiveEntry nuspec = archive.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+        XDocument document;
+        using (Stream stream = nuspec.Open())
+        {
+            document = XDocument.Load(stream, LoadOptions.None);
+        }
+
+        // NuGet writes a minimum-inclusive range as the bare version.
+        string[] ranges = document.Descendants()
+            .Where(element => string.Equals(element.Name.LocalName, "dependency", StringComparison.Ordinal) && (string?)element.Attribute("id") == dependency)
+            .Select(element => (string?)element.Attribute("version") ?? string.Empty)
+            .ToArray();
+        Assert(ranges.SequenceEqual([version], StringComparer.Ordinal),
+            $"{Path.GetFileName(package)} requires {dependency} {version} or later (found {string.Join(", ", ranges)})");
     }
 
     private static void AssertToolingSchemaClosure(string package)

@@ -11,6 +11,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>runic-translations</ToolCommandName>
     <RunicTranslationsShippingProject>true</RunicTranslationsShippingProject>
+    <!-- JSON help links name the release tag; see eng/build/release-links.targets. -->
+    <RunicGenerateReleaseLinks>true</RunicGenerateReleaseLinks>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <CopyDocumentationFilesFromPackages>true</CopyDocumentationFilesFromPackages>
   </PropertyGroup>

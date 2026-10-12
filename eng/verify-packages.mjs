@@ -73,6 +73,15 @@ export async function verifyPackages(version = workspace.version) {
     // Runic.CommandLine itself restores from nuget.org; the built-in German text proves the bundled catalog loads.
     dotnetConsumer(directory, "Runic.Translations.CommandLine", version, {},
       "using System.Globalization; using Runic.Translations.CommandLine; var text = new TranslationCommandTextResolver().Resolve(\"help.usage\", CultureInfo.GetCultureInfo(\"de\"), []); if (text != \"Aufruf\") throw new InvalidOperationException(text); Console.WriteLine(text);", environment);
+    // A project that adds only the adapter or the tooling must restore the fixed Runic.CommandLine, not an older one.
+    // The consumers build with warnings as errors, so a floor below the restored version (NU1603) fails above.
+    const commandLineFloor = readFileSync(join(root, "eng/Versions.props"), "utf8").match(/<RunicCommandLineVersion>([^<]+)</)?.[1];
+    assert.ok(commandLineFloor, "eng/Versions.props has no RunicCommandLineVersion");
+    for (const consumer of ["runic-translations-commandline", "runic-translations-tooling"]) {
+      const assets = JSON.parse(readFileSync(join(directory, consumer, "obj", "project.assets.json"), "utf8"));
+      const resolved = Object.keys(assets.libraries).filter(name => name.startsWith("Runic.CommandLine/"));
+      assert.deepEqual(resolved, [`Runic.CommandLine/${commandLineFloor}`], `${consumer} must restore the Runic.CommandLine floor`);
+    }
     dotnetConsumer(directory, "Runic.Translations.Build", version, { build: true },
       "Console.WriteLine(\"Build package restored.\");", environment);
     dotnetConsumer(directory, "Runic.Translations.Wpf", version, { framework: "net10.0-windows", wpf: true },

@@ -129,6 +129,12 @@ internal static class Processes
 
 internal static class TestFixture
 {
+    /// <summary>A diagnostic help link names a release tag of the diagnostics reference, never the main branch.</summary>
+    public static void AssertReleaseHelpUri(string? helpUri, string code) => Assert.True(
+        System.Text.RegularExpressions.Regex.IsMatch(helpUri ?? string.Empty,
+            "^https://github\\.com/Runic-Artifex/runic-translations-sdk/blob/v\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.]+)?/docs/guides/translations/diagnostics\\.md#" + code.ToLowerInvariant() + "$"),
+        $"The help link of {code} does not name a release tag: {helpUri}");
+
     public static ProcessResult RunTool(TemporaryDirectory temporary, params string[] arguments)
     {
         Assert.True(File.Exists(RepositoryPaths.ToolAssembly), $"Tool assembly is missing: {RepositoryPaths.ToolAssembly}");

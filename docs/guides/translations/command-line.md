@@ -85,8 +85,11 @@ only the built-in text in the invocation culture.
 ## Packages and versions
 
 The adapter depends on `Runic.CommandLine` through `ICommandTextResolver`
-only, so it works with Runic.CommandLine 0.6.0-preview.3 and later. Releases
-before the one that adds `CommandTextKeys` report value errors as
-`faults.RCLI2xxx` without arguments; later releases ask for
-`diagnostics.invalid-integer`, `diagnostics.out-of-range` and the other keys,
-which the built-in catalogs translate.
+only, but `Runic.Translations.CommandLine` and `Runic.Translations.Tooling`
+require Runic.CommandLine 0.6.0-preview.4 or later, so a project that adds only
+the adapter restores a Runic.CommandLine that names the cause of a command
+catalog error instead of aborting at startup. Releases before the one that adds
+`CommandTextKeys` report value errors as `faults.RCLI2xxx` without arguments;
+preview.4 and later ask for `diagnostics.invalid-integer`,
+`diagnostics.out-of-range` and the other keys, which the built-in catalogs
+translate.

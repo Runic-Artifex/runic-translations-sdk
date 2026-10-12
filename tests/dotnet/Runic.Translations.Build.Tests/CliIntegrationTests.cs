@@ -169,7 +169,7 @@ internal sealed class CliIntegrationTests
         Assert.Equal("error", diagnostic.GetProperty("severity").GetString());
         Assert.Equal("translations/en/application_title.mf2", (diagnostic.GetProperty("path").GetString() ?? string.Empty).Replace('\\', '/'));
         Assert.Equal(2, diagnostic.GetProperty("line").GetInt32());
-        Assert.Contains("diagnostics.md#rtr0067", diagnostic.GetProperty("helpUri").GetString() ?? string.Empty);
+        TestFixture.AssertReleaseHelpUri(diagnostic.GetProperty("helpUri").GetString(), "RTR0067");
 
         // Human output prints each diagnostic once, in the canonical file(line,col): form, without a prefix.
         ProcessResult human = TestFixture.RunTool(temporary, "validate");

@@ -7,7 +7,9 @@ so a German invocation shows no English framework text and you write no key
 mapping.
 
 ```csharp
+using System.Globalization;
 using Runic.CommandLine;
+using Runic.CommandLine.Generated;
 using Runic.Translations;
 using Runic.Translations.CommandLine;
 

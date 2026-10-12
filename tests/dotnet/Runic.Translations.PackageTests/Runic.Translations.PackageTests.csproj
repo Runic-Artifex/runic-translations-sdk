@@ -19,6 +19,7 @@
     <PackageReference Include="Runic.Translations" Version="$(TranslationsPackageVersion)" />
     <PackageReference Include="Runic.Translations.Build" Version="$(TranslationsPackageVersion)" PrivateAssets="all" />
     <AssemblyMetadata Include="RunicPackageVersion" Value="$(TranslationsPackageVersion)" />
+    <AssemblyMetadata Include="RunicCommandLineVersion" Value="$(RunicCommandLineVersion)" />
   </ItemGroup>
 
   <Import Project="../../../eng/build/translations.targets" />
