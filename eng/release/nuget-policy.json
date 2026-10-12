@@ -1,5 +1,5 @@
 {
   "owner": "runic-artifex",
-  "packageGlobs": ["*"],
+  "packageGlobs": ["Runic.Translations*", "dotnet-runic-translations"],
   "pushNewPackages": true
 }
