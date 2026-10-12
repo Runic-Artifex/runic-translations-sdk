@@ -99,10 +99,7 @@ internal sealed class BuildIntegrationTests
     {
         using TemporaryDirectory temporary = CreateConsumer(true);
         // With the source generator present, as in a package consumer, it owns the compilation diagnostics.
-        string generator = Path.Combine(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build"), "bin", BuildConfiguration, "net10.0");
-        string items = $"""<ItemGroup><Reference Include="Runic.Translations" HintPath="{XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations", "bin", BuildConfiguration, "net10.0", "Runic.Translations.dll"))}" /><Analyzer Include="{XmlPath(Path.Combine(generator, "Runic.Translations.Generator.dll"))}" /><Analyzer Include="{XmlPath(Path.Combine(generator, "Runic.Translations.Compiler.dll"))}" /></ItemGroup><Import Project="{XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets"))}" />""";
-        string project = File.ReadAllText(temporary.Resolve("Consumer.csproj"));
-        File.WriteAllText(temporary.Resolve("Consumer.csproj"), project.Replace("<Import Project=\"" + XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets")) + "\" />", items, StringComparison.Ordinal), new UTF8Encoding(false));
+        AddSourceGenerator(temporary);
         File.WriteAllText(temporary.Resolve("translations", "en", "Hello.mf2"), ".local $a = {$name}\n.input {$name :string}\n{{Hello {$a}}}\n", new UTF8Encoding(false));
 
         ProcessResult failed = Build(temporary);
@@ -118,6 +115,48 @@ internal sealed class BuildIntegrationTests
         ProcessResult fixedBuild = Build(temporary, true);
         Assert.Equal(0, fixedBuild.ExitCode, fixedBuild.Combined);
         Assert.True(File.Exists(Path.Combine(FindGeneratedDirectory(temporary, "minimal.en.locale-v5.json"), "minimal.asset-manifest-v1.json")), "The fixed build did not generate.");
+    }
+
+    [Test, DisplayName("build fails when the tool reports translation errors without the source generator")]
+    public void ToolErrorsFailWithoutGenerator()
+    {
+        using TemporaryDirectory temporary = CreateConsumer(true);
+        File.WriteAllText(temporary.Resolve("translations", "en", "Hello.mf2"), ".local $a = {$name}\n.input {$name :string}\n{{Hello {$a}}}\n", new UTF8Encoding(false));
+        ProcessResult failed = Build(temporary);
+        Assert.True(failed.ExitCode != 0, "Build succeeded although the tool reported a translation error:\n" + failed.Combined);
+        Assert.Contains("error RTR0067:", failed.Combined);
+        Assert.False(failed.Combined.Contains("exited with code", StringComparison.Ordinal) || failed.Combined.Contains("MSB3073", StringComparison.Ordinal), failed.Combined);
+        Assert.False(Directory.EnumerateFiles(temporary.Path, ".generate.stamp", SearchOption.AllDirectories).Any(), "A failed generation wrote its stamp.");
+    }
+
+    // A tool that fails without logging a canonical error must not leave a successful build, whether or
+    // not the source generator is present to report deferred diagnostics.
+    [Test, DisplayName("build fails when the tool exits with $exitCode and logs no error (generator: $withGenerator)")]
+    [Arguments(1, false)]
+    [Arguments(3, false)]
+    [Arguments(1, true)]
+    [Arguments(3, true)]
+    public void SilentToolFailureFailsTheBuild(int exitCode, bool withGenerator)
+    {
+        bool windows = OperatingSystem.IsWindows();
+        string tool = windows ? "cmd /d /c &quot;$(MSBuildProjectDirectory)\\failing-tool.cmd&quot;" : "sh &quot;$(MSBuildProjectDirectory)/failing-tool.sh&quot;";
+        using TemporaryDirectory temporary = CreateConsumer(true, extraProperties: $"<TranslationsToolCommand>{tool}</TranslationsToolCommand>");
+        File.WriteAllText(temporary.Resolve(windows ? "failing-tool.cmd" : "failing-tool.sh"), windows ? $"@exit /b {exitCode}\r\n" : $"exit {exitCode}\n", new UTF8Encoding(false));
+        if (withGenerator) AddSourceGenerator(temporary);
+        ProcessResult failed = Build(temporary);
+        Assert.True(failed.ExitCode != 0, $"Build succeeded although the tool exited with {exitCode}:\n" + failed.Combined);
+        Assert.Contains(withGenerator && exitCode == 1 ? "The Runic Translations tool reported translation errors" : $"The Runic Translations tool exited with code {exitCode}.", failed.Combined);
+        Assert.False(failed.Combined.Contains("MSB3073", StringComparison.Ordinal), failed.Combined);
+    }
+
+    private static void AddSourceGenerator(TemporaryDirectory temporary)
+    {
+        string generator = Path.Combine(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build"), "bin", BuildConfiguration, "net10.0");
+        string import = "<Import Project=\"" + XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets")) + "\" />";
+        string items = $"""<ItemGroup><Reference Include="Runic.Translations" HintPath="{XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations", "bin", BuildConfiguration, "net10.0", "Runic.Translations.dll"))}" /><Analyzer Include="{XmlPath(Path.Combine(generator, "Runic.Translations.Generator.dll"))}" /><Analyzer Include="{XmlPath(Path.Combine(generator, "Runic.Translations.Compiler.dll"))}" /></ItemGroup>{import}""";
+        string project = File.ReadAllText(temporary.Resolve("Consumer.csproj"));
+        Assert.Contains(import, project);
+        File.WriteAllText(temporary.Resolve("Consumer.csproj"), project.Replace(import, items, StringComparison.Ordinal), new UTF8Encoding(false));
     }
 
     private static TemporaryDirectory CreateConsumer(bool generationEnabled, string? outputPath = null, string? extraProperties = null)
