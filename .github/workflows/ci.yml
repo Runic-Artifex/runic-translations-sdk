@@ -150,11 +150,12 @@ jobs:
         with:
           global-json-file: global.json
       # The WPF TUnit suite on its STA dispatcher thread, with TRX and Cobertura coverage like the other suites.
+      # The results directory is absolute: MTP resolves a relative one for TRX against the output directory.
       - name: Run the WPF adapter tests
         run: >-
           dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests/Runic.Translations.Wpf.Tests.csproj --configuration Release --
           --minimum-expected-tests 49
-          --results-directory artifacts/test-results/Runic.Translations.Wpf.Tests
+          --results-directory "${{ github.workspace }}/artifacts/test-results/Runic.Translations.Wpf.Tests"
           --report-trx --report-trx-filename Runic.Translations.Wpf.Tests.trx
           --coverage --coverage-output-format cobertura --coverage-output Runic.Translations.Wpf.Tests.cobertura.xml
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
