@@ -106,7 +106,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           overwrite: true
-      - name: Check registries without publishing
+      # Also fails for a NuGet package ID the trusted-publishing key could not push (eng/release/nuget-policy.json).
+      - name: Check registries and the NuGet push policy without publishing
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: bun eng/release/publish.mjs publish "$VERSION" --dry-run
       - name: Check tag and release without creating them
