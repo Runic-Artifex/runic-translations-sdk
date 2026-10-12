@@ -418,8 +418,6 @@ internal static class Program
         return DiagnosticFailure;
     }
 
-    private const string HelpLinkBase = "https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md#";
-
     private static void WriteDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics, ToolOperationResult result)
     {
         // Reported under their own RTR codes with structured locations, not as RCLI diagnostics.
@@ -436,7 +434,7 @@ internal static class Program
                 location.Column,
                 location.EndLine,
                 location.EndColumn,
-                HelpLinkBase + diagnostic.Id.ToLowerInvariant()));
+                RunicReleaseLinks.Diagnostic(diagnostic.Id)));
         }
     }
 }

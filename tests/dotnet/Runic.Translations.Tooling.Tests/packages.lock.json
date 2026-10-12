@@ -84,14 +84,14 @@
       "runic.translations.tooling": {
         "type": "Project",
         "dependencies": {
-          "Runic.CommandLine": "[0.6.0-preview.3, )"
+          "Runic.CommandLine": "[0.6.0-preview.4, )"
         }
       },
       "Runic.CommandLine": {
         "type": "CentralTransitive",
-        "requested": "[0.6.0-preview.3, )",
-        "resolved": "0.6.0-preview.3",
-        "contentHash": "+KlGBnMO82iqiKLkzEr7VWGo6u+DWXYRjKW2/VPx0eHrtrnyyz+62BFhSV0EInmnjN6baQwnMit/XwXjn9CD/g=="
+        "requested": "[0.6.0-preview.4, )",
+        "resolved": "0.6.0-preview.4",
+        "contentHash": "4iUAnmnnKkHbzjaM0UbTlVy4Htzal+I2b3LtANgIPtV31J2yBTXlZRRQIyaABDEyPM+QC0S8nfsHeC+kTnzfAA=="
       }
     }
   }

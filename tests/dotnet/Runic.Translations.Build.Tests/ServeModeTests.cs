@@ -57,7 +57,7 @@ internal sealed class ServeModeTests
         Assert.Equal("error", translation.GetProperty("severity").GetString());
         Assert.True((translation.GetProperty("path").GetString() ?? string.Empty).EndsWith("en.rmf2", StringComparison.Ordinal), translation.ToString());
         Assert.Equal(1, translation.GetProperty("line").GetInt32());
-        Assert.Contains("docs/guides/translations/diagnostics.md#rtr", translation.GetProperty("helpUri").GetString() ?? string.Empty);
+        TestFixture.AssertReleaseHelpUri(translation.GetProperty("helpUri").GetString(), translation.GetProperty("code").GetString()!);
         Assert.False(failed.GetProperty("diagnostics").EnumerateArray().Any(item => item.GetProperty("code").GetString() == "RCLI9012"), failed.ToString());
         Assert.False(Directory.Exists(temporary.Resolve("out")), "A failed compilation wrote output.");
 
