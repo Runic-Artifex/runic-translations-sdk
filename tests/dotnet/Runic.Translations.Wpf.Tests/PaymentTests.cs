@@ -8,27 +8,21 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using Runic.Translations;
 using Runic.Translations.Wpf;
+using TUnit.Core;
 
-internal static class Program
+namespace Runic.Translations.Wpf.Tests;
+
+/// <summary>The WPF payment consumer: custom badge, icon accessibility and callback lifetime of the inline renderer.</summary>
+internal sealed class PaymentTests
 {
-    [STAThread]
-    private static int Main(string[] args)
+    [Test, DisplayName("payment: invalid selected content reaches no WPF renderer, asset or theme callback"), NotInParallel(WpfSuite.Key, Order = 101)]
+    public void InvalidSelectedContent()
     {
-        if (args.Contains("--sample", StringComparer.Ordinal)) return DocumentSample.Run();
-        CompiledTranslationSnapshot snapshot = PaymentFixture.CreateSnapshot();
-        LocalizedTextContent content = snapshot.FormatContent(PaymentFixture.Key,
-            [new TextArgument("count", 1), new TextArgument("tone", "positive")]);
-        int calls = 0;
-        var slots = new Dictionary<string, InlineMarkupBinding> {
-            ["terms"] = new InlineLinkBinding(new Uri("https://example.test/terms")), ["privacy"] = new InlineLinkBinding(new Uri("https://example.test/privacy")),
-            ["retry"] = new InlineActionBinding(() => calls++), ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock { Text = "★" }), false, _ => "Star"),
-        };
-        var renderer = new WpfInlineRenderer(PaymentFixture.MarkupContract, _ => { }, new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (run, children) => { Require(run.Options["tone"] == "positive", "Badge lost its options."); Require(!run.Options.ContainsKey("@note"), "Annotation leaked into WPF markup options."); var span = new Span(); span.Inlines.AddRange(children); return span; } });
-        var target = new TextBlock();
+        var payment = new Payment();
         JsonObject strictContract = JsonNode.Parse(PaymentFixture.MarkupContract)!.AsObject();
         strictContract["messages"]!["payment"]!["slots"]!["retry"]!["min"] = 1;
         int prematureFactories = 0;
-        var guardedSlots = new Dictionary<string, InlineMarkupBinding>(slots) {
+        var guardedSlots = new Dictionary<string, InlineMarkupBinding>(payment.Slots) {
             ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => { prematureFactories++; return new TextBlock(); }), false,
                 _ => { prematureFactories++; return "Star"; }),
         };
@@ -36,56 +30,132 @@ internal static class Program
             new Dictionary<string, WpfMarkupFactory> { ["shop:badge"] = (_, _) => { prematureFactories++; return new Span(); } },
             (_, _) => prematureFactories++);
         bool rejectedSelectedTree = false;
-        try { guardedRenderer.SetContent(target, "payment", snapshot.FormatContent(PaymentFixture.Key, [new TextArgument("count", 0), new TextArgument("tone", "positive")]), guardedSlots); }
+        try { guardedRenderer.SetContent(payment.Target, "payment", payment.Snapshot.FormatContent(PaymentFixture.Key, [new TextArgument("count", 0), new TextArgument("tone", "positive")]), guardedSlots); }
         catch (TranslationFormatException) { rejectedSelectedTree = true; }
-        Require(rejectedSelectedTree && prematureFactories == 0 && target.Inlines.Count == 0,
+        Require(rejectedSelectedTree && prematureFactories == 0 && payment.Target.Inlines.Count == 0,
             "Invalid selected content reached a WPF renderer, asset or theme callback.");
-        renderer.SetContent(target, "payment", content, slots);
-        Require(calls == 0 && target.Language.IetfLanguageTag == "en", "Rendering activated an action or lost locale.");
-        var containers = target.Inlines.OfType<InlineUIContainer>().ToArray();
-        var button = containers.Select(item => item.Child).OfType<Button>().Single();
-        var icon = containers.Select(item => item.Child).OfType<Decorator>().Single();
+    }
+
+    [Test, DisplayName("payment: rendering keeps the locale and badge options and activates no action"), NotInParallel(WpfSuite.Key, Order = 102)]
+    public void Render()
+    {
+        var payment = new Payment();
+        payment.Render();
+        Require(payment.Calls == 0 && payment.Target.Language.IetfLanguageTag == "en", "Rendering activated an action or lost locale.");
+        Require(payment.BadgeRenders > 0, "The custom badge factory did not run.");
+    }
+
+    [Test, DisplayName("payment: a meaningful icon keeps its accessible name"), NotInParallel(WpfSuite.Key, Order = 103)]
+    public void IconAccessibility()
+    {
+        var payment = new Payment();
+        payment.Render();
+        var icon = payment.Target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Decorator>().Single();
         var peer = UIElementAutomationPeer.CreatePeerForElement(icon)!;
         Require(peer.GetName() == "Star" && peer.IsContentElement(), "Meaningful icon accessibility was lost.");
-        var blankLabelSlots = new Dictionary<string, InlineMarkupBinding>(slots) {
+    }
+
+    [Test, DisplayName("payment: whitespace icon alternate text is rejected and keeps the active action control"), NotInParallel(WpfSuite.Key, Order = 104)]
+    public void BlankIconLabel()
+    {
+        var payment = new Payment();
+        payment.Render();
+        Button button = payment.Button();
+        var blankLabelSlots = new Dictionary<string, InlineMarkupBinding>(payment.Slots) {
             ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock()), false, _ => " \t "),
         };
         bool rejectedBlankLabel = false;
-        try { renderer.SetContent(target, "payment", content, blankLabelSlots); }
+        try { payment.Renderer.SetContent(payment.Target, "payment", payment.Content, blankLabelSlots); }
         catch (TranslationFormatException) { rejectedBlankLabel = true; }
         Require(rejectedBlankLabel, "Whitespace meaningful icon alternate text was accepted.");
-        Require(ReferenceEquals(button, target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Button>().Single()),
-            "A rejected render replaced the active action control.");
-        var firstButton = button;
-        renderer.SetContent(target, "payment", content, slots);
-        button = target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Button>().Single();
+        Require(ReferenceEquals(button, payment.Button()), "A rejected render replaced the active action control.");
+    }
+
+    [Test, DisplayName("payment: a rerender replaces the action control and retires the previous action"), NotInParallel(WpfSuite.Key, Order = 105)]
+    public void RerenderRetiresAction()
+    {
+        var payment = new Payment();
+        payment.Render();
+        Button firstButton = payment.Button();
+        payment.Render();
+        Button button = payment.Button();
         Require(!ReferenceEquals(firstButton, button), "A successful rerender did not replace the action control.");
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Action did not fire once.");
-        renderer.SetContent(target, "payment", content, slots);
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Detached action remained active.");
-        // Typed bound content: same tree as the dictionary overload, build-before-replace and callback teardown.
-        var typed = new LocalizedTextContent<PaymentSlots>(content);
-        BoundLocalizedTextContent bound = typed.Bind(new PaymentSlots(
-            privacy: (InlineLinkBinding)slots["privacy"], retry: (InlineActionBinding)slots["retry"],
-            star: (InlineIconBinding)slots["star"], terms: (InlineLinkBinding)slots["terms"]));
-        string dictionaryShape = Shape(target);
-        renderer.SetContent(target, bound);
-        Require(Shape(target) == dictionaryShape && target.Language.IetfLanguageTag == "en", "Typed bound content rendered a different WPF tree.");
-        var boundButton = target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Button>().Single();
-        BoundLocalizedTextContent rejected = typed.Bind(new PaymentSlots((InlineLinkBinding)slots["privacy"], (InlineActionBinding)slots["retry"],
-            new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock()), false, _ => " "), (InlineLinkBinding)slots["terms"]));
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(payment.Calls == 1, "Action did not fire once.");
+        payment.Render();
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(payment.Calls == 1, "Detached action remained active.");
+    }
+
+    [Test, DisplayName("payment: typed bound content renders the same WPF tree as the dictionary overload"), NotInParallel(WpfSuite.Key, Order = 106)]
+    public void TypedBoundContent()
+    {
+        var payment = new Payment();
+        payment.Render();
+        string dictionaryShape = Shape(payment.Target);
+        payment.Renderer.SetContent(payment.Target, payment.Bound());
+        Require(Shape(payment.Target) == dictionaryShape && payment.Target.Language.IetfLanguageTag == "en", "Typed bound content rendered a different WPF tree.");
+    }
+
+    [Test, DisplayName("payment: a rejected typed render keeps the active content and a rerender retires its action"), NotInParallel(WpfSuite.Key, Order = 107)]
+    public void RejectedTypedRender()
+    {
+        var payment = new Payment();
+        BoundLocalizedTextContent bound = payment.Bound();
+        payment.Renderer.SetContent(payment.Target, bound);
+        Button boundButton = payment.Button();
+        BoundLocalizedTextContent rejected = new LocalizedTextContent<PaymentSlots>(payment.Content).Bind(new PaymentSlots(
+            (InlineLinkBinding)payment.Slots["privacy"], (InlineActionBinding)payment.Slots["retry"],
+            new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock()), false, _ => " "), (InlineLinkBinding)payment.Slots["terms"]));
         bool rejectedBound = false;
-        try { renderer.SetContent(target, rejected); }
+        try { payment.Renderer.SetContent(payment.Target, rejected); }
         catch (TranslationFormatException) { rejectedBound = true; }
-        Require(rejectedBound && ReferenceEquals(boundButton, target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Button>().Single()),
-            "A rejected typed render replaced the active content.");
-        renderer.SetContent(target, bound);
-        boundButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(calls == 1, "Detached typed action remained active.");
-        WpfInlineRenderer.ClearContent(target); Require(target.Inlines.Count == 0, "Clear did not dispose content.");
-        Console.WriteLine("PASS WPF payment consumer, custom badge, icon accessibility and callback lifetime.");
-        DocumentTests.Run();
-        BindingTests.Run();
-        return 0;
+        Require(rejectedBound && ReferenceEquals(boundButton, payment.Button()), "A rejected typed render replaced the active content.");
+        payment.Renderer.SetContent(payment.Target, bound);
+        boundButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Require(payment.Calls == 0, "Detached typed action remained active.");
+    }
+
+    [Test, DisplayName("payment: ClearContent removes the rendered content"), NotInParallel(WpfSuite.Key, Order = 108)]
+    public void Clear()
+    {
+        var payment = new Payment();
+        payment.Renderer.SetContent(payment.Target, payment.Bound());
+        WpfInlineRenderer.ClearContent(payment.Target); Require(payment.Target.Inlines.Count == 0, "Clear did not dispose content.");
+    }
+
+    /// <summary>A fresh payment consumer: snapshot, content for one item, slots, a renderer with the custom badge and a target.</summary>
+    private sealed class Payment
+    {
+        internal Payment()
+        {
+            Content = Snapshot.FormatContent(PaymentFixture.Key, [new TextArgument("count", 1), new TextArgument("tone", "positive")]);
+            Slots = new Dictionary<string, InlineMarkupBinding> {
+                ["terms"] = new InlineLinkBinding(new Uri("https://example.test/terms")), ["privacy"] = new InlineLinkBinding(new Uri("https://example.test/privacy")),
+                ["retry"] = new InlineActionBinding(() => Calls++), ["star"] = new InlineIconBinding((Func<FrameworkElement>)(() => new TextBlock { Text = "★" }), false, _ => "Star"),
+            };
+            Renderer = new WpfInlineRenderer(PaymentFixture.MarkupContract, _ => { }, new Dictionary<string, WpfMarkupFactory> {
+                ["shop:badge"] = (run, children) =>
+                {
+                    Require(run.Options["tone"] == "positive", "Badge lost its options.");
+                    Require(!run.Options.ContainsKey("@note"), "Annotation leaked into WPF markup options.");
+                    BadgeRenders++;
+                    var span = new Span(); span.Inlines.AddRange(children); return span;
+                } });
+        }
+
+        internal CompiledTranslationSnapshot Snapshot { get; } = PaymentFixture.CreateSnapshot();
+        internal LocalizedTextContent Content { get; }
+        internal Dictionary<string, InlineMarkupBinding> Slots { get; }
+        internal WpfInlineRenderer Renderer { get; }
+        internal TextBlock Target { get; } = new();
+        internal int Calls { get; private set; }
+        internal int BadgeRenders { get; private set; }
+
+        internal void Render() => Renderer.SetContent(Target, "payment", Content, Slots);
+
+        internal Button Button() => Target.Inlines.OfType<InlineUIContainer>().Select(item => item.Child).OfType<Button>().Single();
+
+        internal BoundLocalizedTextContent Bound() => new LocalizedTextContent<PaymentSlots>(Content).Bind(new PaymentSlots(
+            privacy: (InlineLinkBinding)Slots["privacy"], retry: (InlineActionBinding)Slots["retry"],
+            star: (InlineIconBinding)Slots["star"], terms: (InlineLinkBinding)Slots["terms"]));
     }
 
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }

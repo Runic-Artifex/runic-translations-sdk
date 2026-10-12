@@ -5,6 +5,8 @@ using System.Windows;
 using System.Windows.Controls;
 using Runic.Translations;
 
+namespace Runic.Translations.Wpf.Tests;
+
 /// <summary>
 /// Document messages built like compiler output: the bounded #15 example ("backup") and a heading with lists ("lists").
 /// </summary>

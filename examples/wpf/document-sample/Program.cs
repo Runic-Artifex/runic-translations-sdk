@@ -4,14 +4,17 @@ using System.Windows;
 using System.Windows.Controls;
 using Runic.Translations;
 using Runic.Translations.Wpf;
+using Runic.Translations.Wpf.Tests;
 
 /// <summary>
 /// The interactive Windows sample: renders the #15 example in a FlowDocumentScrollViewer.
-/// Run with <c>dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests -- --sample</c>.
+/// Its messages are the document fixture of the WPF tests. Run with
+/// <c>dotnet run --project examples/wpf/document-sample</c>.
 /// </summary>
-internal static class DocumentSample
+internal static class Program
 {
-    internal static int Run()
+    [STAThread]
+    private static int Main()
     {
         CompiledTranslationSnapshot snapshot = DocumentFixture.CreateSnapshot(), rightToLeft = DocumentFixture.CreateSnapshot("he");
         var status = new TextBlock { Margin = new Thickness(8), Text = "Tab to the link and the action, press Enter, select text and copy it." };
