@@ -96,10 +96,10 @@
         "dependencies": {
           "Runic.CommandLine": "[0.6.0-preview.4, )",
           "Runic.CommandLine.Spectre": "[0.6.0-preview.4, )",
-          "Runic.Translations": "[0.6.0-preview.6, )",
-          "Runic.Translations.Authoring": "[0.6.0-preview.6, )",
-          "Runic.Translations.Compiler": "[0.6.0-preview.6, )",
-          "Runic.Translations.Tooling": "[0.6.0-preview.6, )"
+          "Runic.Translations": "[0.6.0-preview.7, )",
+          "Runic.Translations.Authoring": "[0.6.0-preview.7, )",
+          "Runic.Translations.Compiler": "[0.6.0-preview.7, )",
+          "Runic.Translations.Tooling": "[0.6.0-preview.7, )"
         }
       },
       "runic.translations": {
@@ -108,7 +108,7 @@
       "runic.translations.authoring": {
         "type": "Project",
         "dependencies": {
-          "Runic.Translations.Compiler": "[0.6.0-preview.6, )"
+          "Runic.Translations.Compiler": "[0.6.0-preview.7, )"
         }
       },
       "runic.translations.compiler": {

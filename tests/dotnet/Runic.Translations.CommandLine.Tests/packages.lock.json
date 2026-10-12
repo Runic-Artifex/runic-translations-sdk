@@ -114,7 +114,7 @@
         "type": "Project",
         "dependencies": {
           "Runic.CommandLine": "[0.6.0-preview.4, )",
-          "Runic.Translations": "[0.6.0-preview.6, )"
+          "Runic.Translations": "[0.6.0-preview.7, )"
         }
       }
     }
