@@ -96,15 +96,17 @@ environment) runs `eng/release/ci-artifact.mjs`:
   are uploaded as the `release-candidate-<run id>` artifact, and their `sha256sum`
   lines are passed to `publish` as the job output `release-sha256`.
 - `publish.mjs publish --dry-run` reports which versions are missing and fails if a
-  published version has different contents; `release-check` fails if the tag (looked
+  published version has different contents or if the NuGet trusted-publishing key
+  could not push a missing package (see [New NuGet package IDs](#new-nuget-package-ids));
+  `release-check` fails if the tag (looked
   up exactly, annotated tags followed) or an existing GitHub release points at
   another commit, or a lookup fails for any reason other than not found (a release
   or draft of this exact commit is kept); `publish.mjs tag-latest
   --dry-run` reports where npm `latest` would move.
 
 A dry run ends there, without OIDC, an attestation, a registry write, a tag or a
-release. It cannot detect missing trusted-publisher configuration, such as the first
-publication of a new npm package name (W120-023). Otherwise the `publish` job, the
+release. Apart from the NuGet push check, it cannot detect missing trusted-publisher
+configuration, such as the first publication of a new npm package name (W120-023). Otherwise the `publish` job, the
 only one in the `preview` environment and the only one with `id-token: write`,
 `attestations: write` and `contents: write`, downloads the same artifacts and
 candidate files, checks the files against `release-sha256` and the packages and
@@ -112,7 +114,8 @@ VSIX files against the candidate inventory, requested version and CI run
 (`ci-artifact.mjs verify`). Before anything is published it attests those verified
 bytes: `actions/attest-build-provenance` covers every `.nupkg`, npm `.tgz`, both
 VSIX files and the SBOM, and `actions/attest` attaches the SBOM to the packages and
-VSIX files. It then publishes missing package versions (npm also with
+VSIX files. It repeats every registry lookup and the NuGet push check before the
+first push, then publishes missing package versions (npm also with
 `--provenance`), creates the GitHub prerelease at the dispatched commit from those
 same packages, the VSIX files and the SBOM (`ci-artifact.mjs release`; a rerun after a partial
 publication keeps a release of this tag and commit, and for a draft uploads only
@@ -124,6 +127,43 @@ assets: if it lacks an asset (for example a release created before the SBOM
 existed), the release step keeps it unchanged and reports the missing files as a
 workflow warning instead of failing, so `latest` still moves. The attestations still
 cover those files. `eng/release/ci-artifact.test.mjs` and `sbom.test.mjs` pin this contract.
+
+## New NuGet package IDs
+
+NuGet packages are pushed with the short-lived key that `NuGet/login` gets from the
+nuget.org trusted-publishing policy of the `runic-artifex` account. The key can push
+only IDs that match the policy's package glob, a new ID only if the policy may push
+new packages, and an existing ID only if `runic-artifex` owns it. Otherwise nuget.org
+answers 403 during `dotnet nuget push`: 0.6.0-preview.6 stopped that way after two
+of its packages were published, because the glob did not cover the new
+`Runic.Translations.CommandLine`.
+
+[`nuget-policy.json`](nuget-policy.json) mirrors the policy: the owner, its package
+globs (`*` matches any run of characters, case-insensitively, as on nuget.org) and
+whether it may push new packages. `publish.mjs publish`, in the dry run and in the
+publish job before the first push, checks every NuGet package that is not published
+yet: its ID must match a glob; a new ID (one nuget.org does not know) needs
+`pushNewPackages`; an existing ID must list `runic-artifex` among its owners. These
+lookups use the public service index, search and flat-container endpoints and need
+no key. A failure names each package ID and the remedy, and nothing is published.
+The dry run notes every new ID it lets through. `publish.test.mjs` also fails when a
+package in `eng/workspace.json` matches none of the mirrored globs.
+
+Before releasing a new NuGet package ID:
+
+1. Sign in to nuget.org as an administrator of `runic-artifex`, open
+   **Trusted Publishing**, and edit the policy for `Runic-Artifex/runic-translations-sdk`,
+   `publish-preview.yml` and the `preview` environment: allow pushing new packages and
+   make the package glob match the new ID (it is `*` since 2026-10-12).
+2. Update `nuget-policy.json` in the same pull request that adds the package, so it
+   stays an exact copy of the policy.
+3. Run **Publish preview** with **dry-run**; it reports the new ID with a notice.
+
+The mirror is the only source the check has: nuget.org does not publish a policy,
+and no request tells whether a key may push a version that does not exist yet (the
+`verifykey` endpoint answers 404 for it). Pushing a throwaway package to probe the
+key would itself publish, and a step after `NuGet/login` could only try the real
+push. Keep the mirror honest when the policy changes.
 
 ## Verifying a release
 

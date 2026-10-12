@@ -77,6 +77,67 @@ async function publishedMatches(candidate, version) {
   }
 }
 
+// The nuget.org trusted-publishing policy, mirrored by hand: nuget.org does not
+// publish it, and no request can test a key's push permission for a version that
+// does not exist yet (README "New NuGet package IDs").
+export const nugetPolicy = JSON.parse(readFileSync(resolve(root, "eng/release/nuget-policy.json"), "utf8"));
+
+// nuget.org package globs: `*` matches any run of characters, case-insensitively.
+export function globMatches(pattern, id) {
+  const expression = pattern.split("*").map(part => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+  return new RegExp(`^${expression}$`, "i").test(id);
+}
+
+async function nugetJson(url, fetchImpl) {
+  const value = await fetchImpl(url, { signal: AbortSignal.timeout(30_000) });
+  assert.ok(value.ok || value.status === 404, `Registry lookup failed: ${value.status} ${url}`);
+  if (value.status === 404) {
+    await value.body?.cancel();
+    return undefined;
+  }
+  return value.json();
+}
+
+// Read-only and keyless: the owners of an ID nuget.org knows (undefined when the
+// search index lists none of its versions), or `exists: false` for a new ID.
+export async function nugetOwnership(id, { fetchImpl = fetch } = {}) {
+  const index = await nugetJson("https://api.nuget.org/v3/index.json", fetchImpl);
+  const search = index?.resources?.find(resource => String(resource["@type"]).startsWith("SearchQueryService"))?.["@id"];
+  assert.equal(typeof search, "string", "nuget.org service index has no SearchQueryService");
+  const query = new URLSearchParams({ q: `packageid:${id}`, prerelease: "true", semVerLevel: "2.0.0", take: "1" });
+  const result = await nugetJson(`${search}?${query}`, fetchImpl);
+  const entry = result?.data?.find(value => value.id.toLowerCase() === id.toLowerCase());
+  if (entry) return { exists: true, owners: [entry.owners ?? []].flat() };
+  // Search omits an ID whose versions are all unlisted; the flat container keeps them.
+  const versions = await nugetJson(`https://api.nuget.org/v3-flatcontainer/${id.toLowerCase()}/index.json`, fetchImpl);
+  return versions ? { exists: true, owners: undefined } : { exists: false };
+}
+
+// Fails, naming every ID and the remedy, when the trusted-publishing key could not
+// push one of these IDs. Runs before the first push and in the dry run.
+export async function checkNugetPush(ids, { policy = nugetPolicy, ownership = nugetOwnership, log = console.log } = {}) {
+  const problems = [];
+  for (const id of ids) {
+    const glob = policy.packageGlobs.find(pattern => globMatches(pattern, id));
+    const state = await ownership(id);
+    if (!glob)
+      problems.push(`${id} matches none of the policy's package globs (${policy.packageGlobs.join(", ")}).`);
+    if (state.exists && state.owners && !state.owners.some(owner => owner.toLowerCase() === policy.owner.toLowerCase()))
+      problems.push(`${id} is owned on nuget.org by ${state.owners.join(", ") || "nobody listed"}, not by ${policy.owner}, so the policy cannot push it; add ${policy.owner} as an owner or choose another ID.`);
+    else if (!state.exists && !policy.pushNewPackages)
+      problems.push(`${id} is a new nuget.org package ID, but the policy may only push new versions of existing packages.`);
+    else if (glob && !state.exists)
+      log(`::notice::${id} is a new nuget.org package ID; the mirrored policy of ${policy.owner} covers it (glob ${glob}).`);
+    else if (glob && !state.owners)
+      log(`::warning::${id} has no listed version on nuget.org, so its owners could not be checked.`);
+  }
+  if (problems.length) throw new Error([
+    "The NuGet trusted-publishing key cannot push every package of this release; nothing was published.",
+    ...problems.map(problem => `- ${problem}`),
+    `Before releasing, edit the trusted-publishing policy of ${policy.owner} on nuget.org so that it may push new packages and its package glob matches each ID, then update eng/release/nuget-policy.json to match (eng/release/README.md, "New NuGet package IDs").`,
+  ].join("\n"));
+}
+
 function run(command, args, { redact = [] } = {}) {
   console.log(`> ${command} ${args.map(value => redact.includes(value) ? "[redacted]" : value).join(" ")}`);
   execFileSync(command, args, { cwd: root, stdio: "inherit" });
@@ -140,16 +201,21 @@ async function main() {
   if (command === "tag-latest") return tagLatest(version, dryRun);
   const candidates = packageFiles(version);
   for (const candidate of candidates) assert.ok(readdirSync(resolve(candidate.file, "..")).includes(candidate.file.split("/").at(-1)), `Missing ${candidate.file}`);
+  await publishCandidates(candidates, version, { dryRun });
+}
+
+// Every registry read and the NuGet push check finish before the first push, so a
+// refused package ID stops the release before anything is published.
+export async function publishCandidates(candidates, version, { dryRun, published = publishedMatches, checkPush = checkNugetPush, push = publish, log = console.log }) {
+  const pending = [];
   for (const candidate of candidates) {
-    if (await publishedMatches(candidate, version)) {
-      console.log(`Already published with matching contents: ${candidate.name}@${version}`);
-      continue;
-    }
-    if (dryRun) {
-      console.log(`Would publish ${candidate.name}@${version}`);
-      continue;
-    }
-    await publish(candidate, version);
+    if (await published(candidate, version)) log(`Already published with matching contents: ${candidate.name}@${version}`);
+    else pending.push(candidate);
+  }
+  await checkPush(pending.filter(candidate => candidate.registry === "nuget").map(candidate => candidate.name));
+  for (const candidate of pending) {
+    if (dryRun) log(`Would publish ${candidate.name}@${version}`);
+    else await push(candidate, version);
   }
 }
 
