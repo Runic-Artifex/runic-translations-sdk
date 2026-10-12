@@ -17,11 +17,17 @@ function packageFiles(version) {
   ];
 }
 
-function zipContent(path) {
-  const names = execFileSync("unzip", ["-Z1", path], { encoding: "utf8" }).split("\n").filter(Boolean)
-    .filter(name => name !== ".signature.p7s");
-  assert.equal(new Set(names).size, names.length, `Archive contains duplicate entries: ${path}`);
-  return Object.fromEntries(names.sort().map(name => [name, sha256(execFileSync("unzip", ["-p", path, name]))]));
+// Reads entries by exact name: unzip treats names as wildcard patterns, so it
+// cannot extract a NuGet package's `[Content_Types].xml`.
+const zipEntries = `import hashlib, json, sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    print(json.dumps([[entry.filename, hashlib.sha256(archive.read(entry)).hexdigest()] for entry in archive.infolist()]))`;
+
+export function zipContent(path) {
+  const entries = JSON.parse(execFileSync("python3", ["-I", "-c", zipEntries, path], { encoding: "utf8" }))
+    .filter(([name]) => name !== ".signature.p7s");
+  assert.equal(new Set(entries.map(([name]) => name)).size, entries.length, `Archive contains duplicate entries: ${path}`);
+  return Object.fromEntries(entries.sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
 }
 
 async function response(url) {
