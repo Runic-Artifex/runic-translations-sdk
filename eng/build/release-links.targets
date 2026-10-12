@@ -75,10 +75,28 @@ internal static class RunicReleaseLinks
     </ItemGroup>
   </Target>
 
+  <!-- Writes text exactly. WriteLinesToFile takes its lines as task items, and
+       MSBuild turns every backslash of an item into a slash on Unix, which broke
+       the shell line continuations and escapes of a README. -->
+  <UsingTask TaskName="RunicWritePackageReadme" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <File ParameterType="System.String" Required="true" />
+      <Content ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(File));
+        if (!System.IO.File.Exists(File) || System.IO.File.ReadAllText(File) != Content)
+            System.IO.File.WriteAllText(File, Content, new System.Text.UTF8Encoding(false));
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
   <!-- Packs a copy of the package README whose links name the release tag:
        this repository's blob/main and tree/main links, and relative links,
        which nuget.org cannot resolve. A remaining main-branch link of any
-       Runic Artifex repository fails the pack. eng/release/readme-links.mjs
+       Runic Artifex repository fails the pack. Nothing else changes: the copy
+       is the source text with those links rewritten. eng/release/readme-links.mjs
        applies the same rules to npm packages. -->
   <Target Name="RunicStampPackageReadme" BeforeTargets="_GetPackageFiles" Condition="'$(PackageReadmeFile)' != '' and '$(IsPackable)' != 'false'">
     <ItemGroup>
@@ -90,15 +108,14 @@ internal static class RunicReleaseLinks
       <_RunicReadmeSource>@(_RunicPackageReadme->'%(FullPath)')</_RunicReadmeSource>
       <_RunicReadmeOutput>$(IntermediateOutputPath)runic-readme/$(PackageReadmeFile)</_RunicReadmeOutput>
       <_RunicReadmeDirectory>$([MSBuild]::MakeRelative('$(_RunicRepositoryRoot)', '$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetDirectoryName($(_RunicReadmeSource)))))').Replace('\', '/'))</_RunicReadmeDirectory>
-      <_RunicReadmeText>$([System.IO.File]::ReadAllText('$(_RunicReadmeSource)').TrimEnd())</_RunicReadmeText>
+      <_RunicReadmeText>$([System.IO.File]::ReadAllText('$(_RunicReadmeSource)'))</_RunicReadmeText>
       <_RunicReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(_RunicReadmeText)', '$([System.Text.RegularExpressions.Regex]::Escape('$(RepositoryUrl)'))/(blob|tree)/main(?=[/#?)\s&gt;"]|$)', '$(RepositoryUrl)/$1/$(RunicReleaseTag)'))</_RunicReadmeText>
       <_RunicReadmeText>$([System.Text.RegularExpressions.Regex]::Replace('$(_RunicReadmeText)', '\]\((?![A-Za-z][A-Za-z0-9+.-]*:|#|/)([^)\s]+)\)', ']($(RunicReleaseSourceUrl)$(_RunicReadmeDirectory)$1)'))</_RunicReadmeText>
       <_RunicReadmeMainLink>$([System.Text.RegularExpressions.Regex]::Match('$(_RunicReadmeText)', 'github\.com/Runic-Artifex/[\w.-]+/(?:blob|tree)/main(?=[/#?)\s&gt;"]|$)[^\s)]*').Value)</_RunicReadmeMainLink>
     </PropertyGroup>
     <Error Condition="'$(_RunicReadmeMainLink)' != ''" File="$(_RunicReadmeSource)"
            Text="The packed $(PackageReadmeFile) links to a main branch ($(_RunicReadmeMainLink)). Link to a file of this repository, which packing rewrites to the release tag, or to the package registry or documentation portal." />
-    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName($(_RunicReadmeOutput)))" />
-    <WriteLinesToFile File="$(_RunicReadmeOutput)" Lines="$(_RunicReadmeText)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <RunicWritePackageReadme File="$(_RunicReadmeOutput)" Content="$(_RunicReadmeText)" />
     <ItemGroup>
       <None Remove="@(_RunicPackageReadme)" />
       <Content Remove="@(_RunicPackageReadme)" />

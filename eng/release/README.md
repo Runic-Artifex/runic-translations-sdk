@@ -168,7 +168,9 @@ Packed READMEs, and npm `homepage` fields, link to the release tag `v<version>`
 instead of `main`. This repository's `blob/main` and `tree/main` links are
 rewritten, relative links resolve against the tag, and a remaining main-branch
 link to any Runic Artifex repository fails the pack. Link to another repository
-through its package page or the documentation portal.
+through its package page or the documentation portal. Nothing else in a README
+changes; `eng/release/readme-pack.test.mjs` packs READMEs and compares them with
+their source, so shell line continuations survive on Linux.
 `eng/build/release-links.targets` does this for NuGet packages and
 `eng/release/readme-links.mjs` for npm packages; runic-sdk keeps the same files.
 The C# generator's diagnostic help links also name the tag
