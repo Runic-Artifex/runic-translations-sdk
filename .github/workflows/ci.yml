@@ -149,7 +149,22 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-      - run: dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests/Runic.Translations.Wpf.Tests.csproj --configuration Release
+      # The WPF TUnit suite on its STA dispatcher thread, with TRX and Cobertura coverage like the other suites.
+      - name: Run the WPF adapter tests
+        run: >-
+          dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests/Runic.Translations.Wpf.Tests.csproj --configuration Release --
+          --minimum-expected-tests 49
+          --results-directory artifacts/test-results/Runic.Translations.Wpf.Tests
+          --report-trx --report-trx-filename Runic.Translations.Wpf.Tests.trx
+          --coverage --coverage-output-format cobertura --coverage-output Runic.Translations.Wpf.Tests.cobertura.xml
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: runic-translations-wpf-test-results
+          path: artifacts/test-results
+          if-no-files-found: ignore
+      - name: Build the interactive WPF document sample
+        run: dotnet build examples/wpf/document-sample/Runic.Translations.Wpf.DocumentSample.csproj --configuration Release
       - name: Verify real WPF Page translation diagnostics
         run: dotnet run --project tests/dotnet/Runic.Translations.Build.Tests/Runic.Translations.Build.Tests.csproj --configuration Release -- --treenode-filter "/*/*/XamlBuildTests/*" --test-parameter xaml-wpf=true --minimum-expected-tests 3
   editor-e2e:

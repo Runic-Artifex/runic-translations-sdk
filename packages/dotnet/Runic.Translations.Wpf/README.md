@@ -307,11 +307,11 @@ endings, and without link destinations or rich formats. See the
 The repository has an interactive Windows sample: a window with the bounded
 example of issue #15 in a `FlowDocumentScrollViewer`, buttons to render again,
 clear the document and show the clipboard text. Its source is
-[`DocumentSample.cs`](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.Wpf.Tests/DocumentSample.cs).
+[`examples/wpf/document-sample`](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/examples/wpf/document-sample/Program.cs).
 In a clone of the repository, run it with:
 
 ```powershell
-dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests -- --sample
+dotnet run --project examples/wpf/document-sample
 ```
 
 Cross-compilation is supported through `EnableWindowsTargeting`. Runtime and

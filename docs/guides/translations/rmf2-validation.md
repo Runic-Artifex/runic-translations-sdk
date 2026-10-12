@@ -35,10 +35,10 @@ options, meaningful icon naming, text escaping and callback teardown. It does
 not substitute a DOM emulator for browser parsing of escaped text and hydration
 markers.
 
-On Windows, run the maintained WPF payment consumer:
+On Windows, run the WPF adapter tests (payment consumer, document adapter and XAML bindings) with TUnit:
 
 ```sh
-dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests
+dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests --configuration Release
 ```
 
 The native test passed on Windows 11 build 26200 with .NET SDK 10.0.400
