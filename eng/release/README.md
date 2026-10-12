@@ -154,7 +154,9 @@ Before releasing a new NuGet package ID:
 1. Sign in to nuget.org as an administrator of `runic-artifex`, open
    **Trusted Publishing**, and edit the policy for `Runic-Artifex/runic-translations-sdk`,
    `publish-preview.yml` and the `preview` environment: allow pushing new packages and
-   make the package glob match the new ID (it is `*` since 2026-10-12).
+   make a package glob match the new ID. Since 2026-10-12 the globs are
+   `Runic.Translations*` and `dotnet-runic-translations`, which cover every ID the
+   repository publishes; an ID outside them needs a new glob.
 2. Update `nuget-policy.json` in the same pull request that adds the package, so it
    stays an exact copy of the policy.
 3. Run **Publish preview** with **dry-run**; it reports the new ID with a notice.
