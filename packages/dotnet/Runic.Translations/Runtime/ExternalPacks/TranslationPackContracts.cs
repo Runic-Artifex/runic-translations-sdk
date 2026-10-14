@@ -141,7 +141,7 @@ public sealed class TranslationPackMessageContract
 
     private static TextArgumentFormat DefaultFormat(TextArgumentType type) => type switch
     {
-        TextArgumentType.String => TextArgumentFormat.None,
+        TextArgumentType.String or TextArgumentType.List => TextArgumentFormat.None,
         TextArgumentType.Int or TextArgumentType.Number => TextArgumentFormat.Plain,
         TextArgumentType.Bool => TextArgumentFormat.Lower,
         TextArgumentType.Guid => TextArgumentFormat.D,

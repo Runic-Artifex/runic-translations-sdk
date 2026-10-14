@@ -51,6 +51,38 @@ internal sealed class Rmf2RuntimeV5Tests
         Assert.Equal("-1", Simple([], [], Output(Number("-1"), TextArgumentType.Int, "integer")).Format([], "sv"));
         Assert.Equal("7922816251426433759354395033500%", Simple([], [], Output(Number("79228162514264337593543950335"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Text("percent")))).Format([], "en"));
     }
+    [Test, DisplayName("v5 lists join snapshot items with CLDR list patterns")]
+    public void Lists()
+    {
+        var items = new List<string> { "Juan", "Luis" };
+        var argument = new TextArgument("items", items);
+        items.Add("Inés");
+        Assert.Equal(TextArgumentType.List, argument.Type);
+        Assert.Equal(TextArgumentFormat.None, argument.Format);
+        Assert.True(argument.TryGetValue(out IReadOnlyList<string>? copy) && copy!.Count == 2, "The list argument is not a snapshot.");
+        Assert.True(!argument.TryGetValue(out string[]? _) && !argument.TryGetValue(out List<string>? _), "The list argument exposes a mutable collection.");
+        Assert.Throws<ArgumentException>(() => _ = Items("a", null!));
+        Assert.Throws<ArgumentNullException>(() => _ = new TextArgument("items", (IReadOnlyList<string>)null!));
+
+        var plain = Simple([new("items", TextArgumentType.List)], [], Output(Input("items"), TextArgumentType.List));
+        var unit = Simple([new("items", TextArgumentType.List), new("style", TextArgumentType.String)], [Declare("items", TextArgumentType.List, "runic:list"), Declare("style", TextArgumentType.String)],
+            Output(Input("items"), TextArgumentType.List, "runic:list", new CompiledRmf2Option("type", Text("unit")), new CompiledRmf2Option("style", Input("style"))));
+        Assert.Equal("Juan y Luis", plain.Format([argument], "es"));
+        Assert.Equal("Juan, Luis e Inés", plain.Format([new("items", items)], "es-ES"));
+        Assert.Equal("Juan, Luis, and Inés", plain.Format([new("items", items)], "en"));
+        Assert.Equal("", plain.Format([Items()], "en"));
+        Assert.Equal("りんご、なし", plain.Format([Items("りんご", "なし")], "ja"));
+        Assert.Equal("3 h 5 min", unit.Format([Items("3 h", "5 min"), new("style", "narrow")], "fr"));
+        Assert.Throws<TranslationFormatException>(() => unit.Format([Items("a"), new("style", "wide")], "en"));
+        Assert.Throws<TranslationFormatException>(() => plain.Format([Items("a")], "pl"));
+        Assert.Throws<TranslationFormatException>(() => plain.Format([new("items", "a")], "en"));
+        // Transport version 1 has no list value.
+        Assert.Throws<ArgumentException>(() => _ = new TranslationReferenceArgument(TextArgumentType.List, "a"));
+        static TextArgument Items(params string[] values) => new("items", values);
+        // A list never comes from a literal and cannot select a variant.
+        Assert.Throws<ArgumentException>(() => Simple([], [], Output(Text("a"), TextArgumentType.List, "runic:list")));
+        Assert.Throws<ArgumentException>(() => _ = new CompiledRmf2Message([new("items", TextArgumentType.List)], [], [new(Input("items"), TextArgumentType.List, "exact")], [new([new(null)], [new("x")])]));
+    }
     [Test, DisplayName("v5 finite dynamic options validate enums ranges and coupled defaults")]
     public void DynamicOptions()
     {

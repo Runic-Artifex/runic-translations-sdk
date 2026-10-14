@@ -219,6 +219,34 @@
           ]
         }
       }
+    },
+    "runic:list": {
+      "inputType": "list",
+      "selection": "none",
+      "options": {
+        "type": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "conjunction",
+          "values": [
+            "conjunction",
+            "disjunction",
+            "unit"
+          ]
+        },
+        "style": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "long",
+          "values": [
+            "long",
+            "short",
+            "narrow"
+          ]
+        }
+      }
     }
   },
   "optionErrors": {
@@ -246,6 +274,16 @@
     "overflow": "reject",
     "underflow": "reject nonzero values outside the exact domain",
     "rounding": "none"
+  },
+  "listFormat": {
+    "patterns": "CLDR listPatterns of the content locale family: conjunction = standard, disjunction = or, unit = unit; long, short and narrow styles",
+    "items": "strings inserted verbatim, in caller order, without sorting",
+    "zeroItems": "empty string",
+    "oneItem": "the item",
+    "twoItems": "the 2 pattern",
+    "moreItems": "start pattern for the first two items, middle pattern for each inner item, end pattern for the last item",
+    "contextual": "es, case-insensitive: a y separator of the 2 or end pattern becomes e before a last item starting with i, or with hi not followed by a or e; otherwise an o separator becomes u before a last item starting with o, ho or 8, or equal to 11 or starting with 11 and a space (ICU)",
+    "conformance": "corpus/rmf2-list-conformance.json"
   },
   "selection": {
     "numericRank": [

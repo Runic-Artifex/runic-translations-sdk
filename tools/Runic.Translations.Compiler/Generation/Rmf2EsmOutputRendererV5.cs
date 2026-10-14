@@ -199,7 +199,7 @@ internal static class Rmf2EsmOutputRendererV5
     private static string TypeScriptType(string type) => type switch
     {
         "string" or "date" or "time" or "datetime" or "guid" => "string",
-        "boolean" => "boolean", "int64" => "bigint | number", "decimal" => "Rmf2Decimal | string",
+        "boolean" => "boolean", "int64" => "bigint | number", "decimal" => "Rmf2Decimal | string", "list" => "readonly string[]",
         _ => throw new InvalidOperationException("Unknown RMF2 v5 input type."),
     };
 

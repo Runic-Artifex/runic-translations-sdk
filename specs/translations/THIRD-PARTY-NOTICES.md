@@ -12,4 +12,4 @@ Locale Data Repository (CLDR) 48.2 data.
   `licenses/LICENSE` in packages that embed the generated data or compiler
 
 The generated subset is used for portable plural rules, locale capability
-declarations, and selected relative-time patterns.
+declarations, selected relative-time patterns, and list patterns.

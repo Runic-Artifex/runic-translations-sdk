@@ -4,3 +4,5 @@ Runic.Translations.CompiledTranslationSnapshot.TryGetKey(string! name, out Runic
 Runic.Translations.CompiledTranslationSnapshot.TryGetPlaceholders(Runic.Translations.TranslationKey key, out System.ReadOnlyMemory<Runic.Translations.TranslationPlaceholderDescriptor> placeholders) -> bool
 Runic.Translations.ITranslationSnapshot.TryGetKey(string! name, out Runic.Translations.TranslationKey key) -> bool
 Runic.Translations.ITranslationSnapshot.TryGetPlaceholders(Runic.Translations.TranslationKey key, out System.ReadOnlyMemory<Runic.Translations.TranslationPlaceholderDescriptor> placeholders) -> bool
+Runic.Translations.TextArgument.TextArgument(string! name, System.Collections.Generic.IReadOnlyList<string!>! value) -> void
+Runic.Translations.TextArgumentType.List = 8 -> Runic.Translations.TextArgumentType

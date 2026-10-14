@@ -29,7 +29,7 @@ public sealed class CompiledTranslationDefinition
             if (previous is not null && string.CompareOrdinal(previous, input.Name) >= 0) throw new ArgumentException("Inputs must be unique and ordinally sorted.", nameof(inputs));
             TextArgumentFormat format = input.Type switch
             {
-                TextArgumentType.String => TextArgumentFormat.None, TextArgumentType.Int or TextArgumentType.Number => TextArgumentFormat.Plain,
+                TextArgumentType.String or TextArgumentType.List => TextArgumentFormat.None, TextArgumentType.Int or TextArgumentType.Number => TextArgumentFormat.Plain,
                 TextArgumentType.Bool => TextArgumentFormat.Lower, TextArgumentType.Guid => TextArgumentFormat.D, _ => TextArgumentFormat.Iso,
             };
             descriptors[index] = new(input.Name, input.Type, format); previous = input.Name;
@@ -263,6 +263,7 @@ internal static class TranslationDataValidation
         TextArgumentType.Time => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium,
         TextArgumentType.DateTime => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium or TextArgumentFormat.Long,
         TextArgumentType.Guid => format is TextArgumentFormat.D or TextArgumentFormat.N,
+        TextArgumentType.List => format == TextArgumentFormat.None,
         _ => false,
     };
 

@@ -29,7 +29,7 @@ public sealed class Rmf2LanguageService
     public IReadOnlyList<Rmf2Completion> Complete(Mf2SyntaxDocument? syntax, int byteOffset, Mf2SyntaxDocument? baseSyntax)
     {
         var items = new SortedDictionary<string, string>(StringComparer.Ordinal);
-        foreach (string function in new[] { "string", "integer", "number", "date", "time", "datetime", "runic:uuid", "runic:boolean", "runic:relative-time" })
+        foreach (string function in new[] { "string", "integer", "number", "date", "time", "datetime", "runic:uuid", "runic:boolean", "runic:relative-time", "runic:list" })
             items[":" + function] = Rmf2ProjectV5.Profile + " · options: " + Mf2MessageParser.FunctionOptions(function);
         // Document profile v1 positions: the root of a document message takes blocks, the root of
         // an inline message takes inline content, a list takes only list items, and paragraphs,

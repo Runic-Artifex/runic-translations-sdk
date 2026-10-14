@@ -53,80 +53,100 @@
   "messageProfile": {
     "cardinal": "exact",
     "ordinal": "exact",
-    "relativeTime": "semantic"
+    "relativeTime": "semantic",
+    "list": "exact"
   },
   "locales": [
     {
       "tag": "cs",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false
+      "relativeTime": false,
+      "list": true
     },
     {
       "tag": "da",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false
+      "relativeTime": false,
+      "list": true
     },
     {
       "tag": "de",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": true
+      "relativeTime": true,
+      "list": true
     },
     {
       "tag": "en",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": true
+      "relativeTime": true,
+      "list": true
     },
     {
       "tag": "es",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": true
+      "relativeTime": true,
+      "list": true
     },
     {
       "tag": "fr",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": true
+      "relativeTime": true,
+      "list": true
     },
     {
       "tag": "it",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": true
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ja",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false,
+      "list": true
     },
     {
       "tag": "nb",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false
+      "relativeTime": false,
+      "list": true
     },
     {
       "tag": "nl",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false
+      "relativeTime": false,
+      "list": true
     },
     {
       "tag": "nn",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false
+      "relativeTime": false,
+      "list": true
     },
     {
       "tag": "no",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false
+      "relativeTime": false,
+      "list": true
     },
     {
       "tag": "sv",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false
+      "relativeTime": false,
+      "list": true
     }
   ]
 }

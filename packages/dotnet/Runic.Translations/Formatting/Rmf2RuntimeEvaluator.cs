@@ -39,6 +39,8 @@ internal sealed class Rmf2ResolvedFormat
             ("runic:uuid", "style") => text is "d" or "n" or "b" or "p",
             ("runic:relative-time", "unit") => text is "second" or "minute" or "hour" or "day" or "week" or "month" or "year",
             ("runic:relative-time", "numeric") => text is "always" or "auto",
+            ("runic:list", "type") => text is "conjunction" or "disjunction" or "unit",
+            ("runic:list", "style") => text is "long" or "short" or "narrow",
             _ => false,
         };
         if (!valid) throw new ArgumentException("Invalid option '" + name + "' for '" + function + "'.", nameof(value));
@@ -67,6 +69,7 @@ internal sealed class Rmf2ResolvedFormat
                 DateTimeOffset instant = Get<DateTimeOffset>(value).ToUniversalTime();
                 return instant.ToString(style == "iso" ? "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'" : style == "short" ? "g" : "F", style == "iso" ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(locale));
             case "runic:uuid": return Get<Guid>(value).ToString(String("style", "d"), CultureInfo.InvariantCulture);
+            case "runic:list": return TextListFormatter.Format(Get<IReadOnlyList<string>>(value), String("type", "conjunction"), String("style", "long"), locale);
             case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), locale);
             default: throw new TranslationFormatException("Unknown v5 formatter.");
         }
@@ -88,7 +91,9 @@ internal sealed class Rmf2ResolvedFormat
         TextArgumentType.Date => Get<DateOnly>(value).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         TextArgumentType.Time => Get<TimeOnly>(value).ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture),
         TextArgumentType.DateTime => Get<DateTimeOffset>(value).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", CultureInfo.InvariantCulture),
-        TextArgumentType.Guid => Get<Guid>(value).ToString("D", CultureInfo.InvariantCulture), _ => throw new TranslationFormatException("Invalid v5 carrier."),
+        TextArgumentType.Guid => Get<Guid>(value).ToString("D", CultureInfo.InvariantCulture),
+        // Lists never select or become option values; this only proves the carrier.
+        TextArgumentType.List => string.Join(", ", Get<IReadOnlyList<string>>(value)), _ => throw new TranslationFormatException("Invalid v5 carrier."),
     };
 }
 

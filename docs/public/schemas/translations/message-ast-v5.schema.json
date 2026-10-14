@@ -176,7 +176,8 @@
             "date",
             "time",
             "datetime",
-            "guid"
+            "guid",
+            "list"
           ]
         },
         "function": {
@@ -189,7 +190,8 @@
             "datetime",
             "runic:uuid",
             "runic:boolean",
-            "runic:relative-time"
+            "runic:relative-time",
+            "runic:list"
           ]
         },
         "options": {
@@ -229,7 +231,8 @@
             "date",
             "time",
             "datetime",
-            "guid"
+            "guid",
+            "list"
           ]
         }
       },

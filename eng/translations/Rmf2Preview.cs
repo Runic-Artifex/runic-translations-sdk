@@ -112,8 +112,17 @@ internal static class Rmf2Preview
 
     private static TextArgument Argument(Rmf2InputV5 input, JsonObject samples)
     {
-        string value = samples[input.Name]?.ToString()
+        JsonNode sample = samples[input.Name]
             ?? throw new ArgumentException("A sample is required for " + input.Name + ".");
+        if (input.Type == "list")
+        {
+            // A list sample is a JSON array of strings.
+            string[] items = sample is JsonArray array && array.All(static item => item is JsonValue value && value.TryGetValue(out string? _))
+                ? array.Select(static item => item!.GetValue<string>()).ToArray()
+                : throw new ArgumentException("The sample for " + input.Name + " must be an array of strings.");
+            return TextArgument.CreateRmf2(input.Name, new TextArgument("_", items));
+        }
+        string value = sample.ToString();
         TextArgument carrier = input.Type switch
         {
             "string" => new TextArgument("_", value),
@@ -140,6 +149,7 @@ internal static class Rmf2Preview
         "time" => TextArgumentType.Time,
         "datetime" => TextArgumentType.DateTime,
         "guid" => TextArgumentType.Guid,
+        "list" => TextArgumentType.List,
         _ => throw new ArgumentException("Unsupported preview input type."),
     };
 }

@@ -96,7 +96,7 @@ internal sealed class Rmf2RuntimeV5Tests
     private static TextArgumentType Type(string type) => type switch
     {
         "string" => TextArgumentType.String, "int64" => TextArgumentType.Int, "decimal" => TextArgumentType.Number, "boolean" => TextArgumentType.Bool,
-        "date" => TextArgumentType.Date, "time" => TextArgumentType.Time, "datetime" => TextArgumentType.DateTime, "guid" => TextArgumentType.Guid,
+        "date" => TextArgumentType.Date, "time" => TextArgumentType.Time, "datetime" => TextArgumentType.DateTime, "guid" => TextArgumentType.Guid, "list" => TextArgumentType.List,
         _ => throw new InvalidOperationException("Unexpected normalized carrier."),
     };
 }

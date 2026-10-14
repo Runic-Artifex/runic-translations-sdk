@@ -321,8 +321,12 @@ public static partial class TranslationCompiler
             foreach (var selector in resource.Message.Selectors)
                 if (selector.Function is "plural" or "ordinal" && !SupportsBuiltInPlural(resource.ContentLocale, selector.Function == "ordinal"))
                     diagnostics.Add("RTR0031", TranslationDiagnosticSeverity.Error, "The built-in plural registry does not support content locale '" + resource.ContentLocale + "'.", resource.SourceLocation);
-            if (resource.Message.Declarations.Select(d => d.Expression).Concat(resource.Message.Variants.SelectMany(v => v.Nodes).OfType<Rmf2ExpressionNodeV5>().Select(n => n.Expression)).Any(expression => expression.Function == "runic:relative-time") && !SupportsRelativeTime(resource.ContentLocale))
+            var expressions = resource.Message.Declarations.Select(d => d.Expression).Concat(resource.Message.Variants.SelectMany(v => v.Nodes).OfType<Rmf2ExpressionNodeV5>().Select(n => n.Expression)).ToArray();
+            if (expressions.Any(expression => expression.Function == "runic:relative-time") && !SupportsRelativeTime(resource.ContentLocale))
                 diagnostics.Add("RTR0031", TranslationDiagnosticSeverity.Error, "The built-in relative-time registry does not support content locale '" + resource.ContentLocale + "'.", resource.SourceLocation);
+            // A list value formats with the list patterns even without an explicit :runic:list.
+            if (expressions.Any(expression => expression.Function == "runic:list" || expression.ValueType == "list") && !TranslationCapabilityRegistry.SupportsList(resource.ContentLocale))
+                diagnostics.Add("RTR0031", TranslationDiagnosticSeverity.Error, "The built-in list registry does not support content locale '" + resource.ContentLocale + "'.", resource.SourceLocation);
         }
         void Error(string message, TranslationSource source, ByteSpan span) => diagnostics.Add("RTR0062", TranslationDiagnosticSeverity.Error, message, source, span);
     }
@@ -487,6 +491,7 @@ public static partial class TranslationCompiler
                             "int64" => item.ValueKind == JsonValueKind.Number && item.TryGetInt64(out _),
                             "decimal" => item.ValueKind == JsonValueKind.Number && Rmf2DecimalV5.TryCanonicalize(item.GetRawText(), out _),
                             "boolean" => item.ValueKind is JsonValueKind.True or JsonValueKind.False,
+                            "list" => item.ValueKind == JsonValueKind.Array && item.EnumerateArray().All(element => element.ValueKind == JsonValueKind.String),
                             _ => item.ValueKind == JsonValueKind.String,
                         };
                         if (!valid) throw new JsonException();

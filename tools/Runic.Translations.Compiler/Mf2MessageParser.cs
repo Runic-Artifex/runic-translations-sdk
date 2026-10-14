@@ -104,11 +104,13 @@ internal static partial class Mf2MessageParser
                     "style" => name switch {
                         "number" => option.Value is "decimal" or "percent",
                         "runic:uuid" => option.Value is "d" or "n" or "b" or "p",
+                        "runic:list" => option.Value is "long" or "short" or "narrow",
                         _ => option.Value is "iso" or "short" or "long",
                     },
                     "minimumFractionDigits" or "maximumFractionDigits" => int.TryParse(option.Value, out int digits) && digits >= 0 && digits <= (values.GetValueOrDefault("style") == "percent" ? 4 : 6),
                     "unit" => option.Value is "second" or "minute" or "hour" or "day" or "week" or "month" or "year",
-                    "numeric" => option.Value is "always" or "auto", _ => false,
+                    "numeric" => option.Value is "always" or "auto",
+                    "type" => option.Value is "conjunction" or "disjunction" or "unit", _ => false,
                 };
                 if (!valid) Unsupported("Unsupported value for option '" + option.Key + "'.");
             }
@@ -120,7 +122,7 @@ internal static partial class Mf2MessageParser
     }
     internal static string FunctionOptions(string name) => name switch {
         "string" => "select", "integer" => "select useGrouping", "number" => "select style minimumFractionDigits maximumFractionDigits",
-        "date" or "time" or "datetime" or "runic:uuid" => "style", "runic:boolean" => "select", "runic:relative-time" => "unit numeric", _ => "",
+        "date" or "time" or "datetime" or "runic:uuid" => "style", "runic:boolean" => "select", "runic:relative-time" => "unit numeric", "runic:list" => "type style", _ => "",
     };
 
     private static CompiledMessageNode? ParseExpression(
@@ -204,6 +206,8 @@ internal static partial class Mf2MessageParser
                 unit = OptionValue(options, "unit") ?? "day";
                 numeric = OptionValue(options, "numeric") ?? "always";
                 break;
+            // This analysis model has no list carrier; the v5 compiler types and executes lists.
+            case "runic:list": type = TranslationArgumentType.String; format = "none"; normalizedFunction = "string"; break;
             default:
                 Error(diagnostics, source, "RTR0041", "Unsupported MF2 function ':" + function + "'.");
                 type = TranslationArgumentType.String;

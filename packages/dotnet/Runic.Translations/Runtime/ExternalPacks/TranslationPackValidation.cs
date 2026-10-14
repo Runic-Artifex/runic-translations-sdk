@@ -87,6 +87,7 @@ internal static class TranslationPackValidation
         TextArgumentType.Time => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium,
         TextArgumentType.DateTime => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium or TextArgumentFormat.Long,
         TextArgumentType.Guid => format is TextArgumentFormat.D or TextArgumentFormat.N,
+        TextArgumentType.List => format == TextArgumentFormat.None,
         _ => false,
     };
 

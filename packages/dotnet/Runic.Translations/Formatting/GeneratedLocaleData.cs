@@ -4,6 +4,8 @@ namespace Runic.Translations;
 
 internal sealed record GeneratedRelativeTimeUnit(string Name, string One, string Other);
 internal sealed record GeneratedRelativeTimeLocale(string Language, string[] AutoDay, string Past, string Future, GeneratedRelativeTimeUnit[] Units);
+/// <summary>CLDR list separators: for each type (conjunction, disjunction, unit) and style (long, short, narrow), the start, middle, end and two-item separators.</summary>
+internal sealed record GeneratedListLocale(string Language, string[] Separators);
 
 internal static class GeneratedLocaleData
 {
@@ -15,6 +17,22 @@ internal static class GeneratedLocaleData
         new("es", ["ayer", "hoy", "mañana"], "hace {0} {unit}", "dentro de {0} {unit}", [new("second", "segundo", "segundos"), new("minute", "minuto", "minutos"), new("hour", "hora", "horas"), new("day", "día", "días"), new("week", "semana", "semanas"), new("month", "mes", "meses"), new("year", "año", "años")]),
         new("fr", ["hier", "aujourd’hui", "demain"], "il y a {0} {unit}", "dans {0} {unit}", [new("second", "seconde", "secondes"), new("minute", "minute", "minutes"), new("hour", "heure", "heures"), new("day", "jour", "jours"), new("week", "semaine", "semaines"), new("month", "mois", "mois"), new("year", "an", "ans")]),
         new("it", ["ieri", "oggi", "domani"], "{0} {unit} fa", "tra {0} {unit}", [new("second", "secondo", "secondi"), new("minute", "minuto", "minuti"), new("hour", "ora", "ore"), new("day", "giorno", "giorni"), new("week", "settimana", "settimane"), new("month", "mese", "mesi"), new("year", "anno", "anni")]),
+    ];
+    internal static readonly GeneratedListLocale[] ListLocales =
+    [
+        new("cs", [", ", ", ", " a\u00a0", " a\u00a0", ", ", ", ", " a\u00a0", " a\u00a0", ", ", ", ", ", ", ", ", ", ", ", ", " nebo ", " nebo ", ", ", ", ", " nebo ", " nebo ", ", ", ", ", " nebo ", " nebo ", ", ", ", ", " a\u00a0", " a\u00a0", ", ", ", ", " a\u00a0", ", ", " ", " ", " ", " "]),
+        new("da", [", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " eller ", " eller ", ", ", ", ", " el. ", " el. ", ", ", ", ", " el. ", " el. ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og "]),
+        new("de", [", ", ", ", " und ", " und ", ", ", ", ", " und ", " und ", ", ", ", ", " und ", " und ", ", ", ", ", " oder ", " oder ", ", ", ", ", " oder ", " oder ", ", ", ", ", " oder ", " oder ", ", ", ", ", " und ", ", ", ", ", ", ", " und ", ", ", ", ", ", ", " und ", ", "]),
+        new("en", [", ", ", ", ", and ", " and ", ", ", ", ", ", & ", " & ", ", ", ", ", ", ", ", ", ", ", ", ", ", or ", " or ", ", ", ", ", ", or ", " or ", ", ", ", ", ", or ", " or ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", " ", " ", " ", " "]),
+        new("es", [", ", ", ", " y ", " y ", ", ", ", ", " y ", " y ", ", ", ", ", " y ", " y ", ", ", ", ", " o ", " o ", ", ", ", ", " o ", " o ", ", ", ", ", " o ", " o ", ", ", ", ", " y ", " y ", ", ", ", ", ", ", " y ", " ", " ", " ", " "]),
+        new("fr", [", ", ", ", " et ", " et ", ", ", ", ", " et ", " et ", ", ", ", ", ", ", ", ", ", ", ", ", " ou ", " ou ", ", ", ", ", " ou ", " ou ", ", ", ", ", " ou ", " ou ", ", ", ", ", " et ", " et ", ", ", ", ", " et ", " et ", " ", " ", " ", " "]),
+        new("it", [", ", ", ", " e ", " e ", ", ", ", ", " e ", " e ", ", ", ", ", " e ", " e ", ", ", ", ", " o ", " o ", ", ", ", ", " o ", " o ", ", ", ", ", " o ", " o ", ", ", ", ", " e ", " e ", ", ", ", ", " e ", " e ", " ", " ", " ", " "]),
+        new("ja", ["、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、または", "または", "、", "、", "、または", "または", "、", "、", "、または", "または", " ", " ", " ", " ", " ", " ", " ", " ", "", "", "", ""]),
+        new("nb", [", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " og ", " og ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", "]),
+        new("nl", [", ", ", ", " en ", " en ", ", ", ", ", " & ", " & ", ", ", ", ", ", ", ", ", ", ", ", ", " of ", " of ", ", ", ", ", " of ", " of ", ", ", ", ", " of ", " of ", ", ", ", ", " en ", " en ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", "]),
+        new("nn", [", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", " ", " ", " ", " "]),
+        new("no", [", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " og ", " og ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", "]),
+        new("sv", [", ", ", ", " och ", " och ", ", ", ", ", " och ", " och ", ", ", ", ", ", ", ", ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", " ", " ", " ", " "]),
     ];
 
     // POSIX-style tags such as en_US select the same language family as en-US.
@@ -30,6 +48,7 @@ internal static class GeneratedLocaleData
         "es" => ordinal ? AlwaysOther(in operands) : CardinalEs(in operands),
         "fr" => ordinal ? OrdinalFr(in operands) : CardinalFr(in operands),
         "it" => ordinal ? OrdinalIt(in operands) : CardinalIt(in operands),
+        "ja" => ordinal ? AlwaysOther(in operands) : AlwaysOther(in operands),
         "nb" => ordinal ? AlwaysOther(in operands) : CardinalNb(in operands),
         "nl" => ordinal ? AlwaysOther(in operands) : CardinalDe(in operands),
         "nn" => ordinal ? AlwaysOther(in operands) : CardinalNb(in operands),
@@ -42,6 +61,13 @@ internal static class GeneratedLocaleData
     {
         for (int index = 0; index < RelativeTimeLocales.Length; index++)
             if (RelativeTimeLocales[index].Language == language) return RelativeTimeLocales[index];
+        return null;
+    }
+
+    internal static GeneratedListLocale? FindList(string language)
+    {
+        for (int index = 0; index < ListLocales.Length; index++)
+            if (ListLocales[index].Language == language) return ListLocales[index];
         return null;
     }
 
