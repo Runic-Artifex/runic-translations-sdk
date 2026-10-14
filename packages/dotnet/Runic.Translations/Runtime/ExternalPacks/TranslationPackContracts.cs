@@ -130,7 +130,7 @@ public sealed class TranslationPackMessageContract
                 throw new ArgumentException("An argument name is invalid.", nameof(arguments));
             if (previousName is not null && string.CompareOrdinal(previousName, argument.Name) >= 0)
                 throw new ArgumentException("Argument contracts must be unique and ordinal-sorted.", nameof(arguments));
-            if (!TranslationPackValidation.IsFormatAllowed(argument.Type, argument.Format))
+            if (!TranslationPackValidation.IsFormatAllowed(argument.Type, argument.Format, rmf2))
                 throw new ArgumentException("An argument type and format combination is invalid.", nameof(arguments));
             copy[i] = argument;
             previousName = argument.Name;

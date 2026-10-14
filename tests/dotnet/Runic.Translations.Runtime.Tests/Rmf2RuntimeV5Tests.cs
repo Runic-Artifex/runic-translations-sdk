@@ -83,6 +83,22 @@ internal sealed class Rmf2RuntimeV5Tests
         Assert.Throws<ArgumentException>(() => Simple([], [], Output(Text("a"), TextArgumentType.List, "runic:list")));
         Assert.Throws<ArgumentException>(() => _ = new CompiledRmf2Message([new("items", TextArgumentType.List)], [], [new(Input("items"), TextArgumentType.List, "exact")], [new([new(null)], [new("x")])]));
     }
+    [Test, DisplayName("v5 list placeholders are accepted only in RMF2 contracts")]
+    public void ListContracts()
+    {
+        // A compatibility-pattern message has no list formatter, so its public
+        // constructors reject a list placeholder up front instead of at first format.
+        Assert.Throws<ArgumentException>(() => _ = new CompiledTranslationDefinition("app.names",
+            [new TranslationPlaceholderDescriptor("names", TextArgumentType.List, TextArgumentFormat.None)]));
+        var key = new TranslationKey("app", 0, "app.names");
+        Assert.Throws<ArgumentException>(() => _ = new TranslationPackMessageContract(key,
+            [new TranslationPackArgumentContract("names", TextArgumentType.List, TextArgumentFormat.None)]));
+        CompiledRmf2Input[] inputs = [new("names", TextArgumentType.List)];
+        CompiledTranslationDefinition definition = CompiledTranslationDefinition.FromRmf2Inputs("app.names", inputs);
+        Assert.Equal(new TranslationPlaceholderDescriptor("names", TextArgumentType.List, TextArgumentFormat.None), definition.Placeholders.Span[0]);
+        TranslationPackMessageContract contract = TranslationPackMessageContract.FromRmf2Inputs(key, inputs);
+        Assert.Equal(new TranslationPackArgumentContract("names", TextArgumentType.List, TextArgumentFormat.None), contract.Arguments[0]);
+    }
     [Test, DisplayName("v5 finite dynamic options validate enums ranges and coupled defaults")]
     public void DynamicOptions()
     {

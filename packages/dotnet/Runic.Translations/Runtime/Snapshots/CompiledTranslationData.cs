@@ -263,7 +263,8 @@ internal static class TranslationDataValidation
         TextArgumentType.Time => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium,
         TextArgumentType.DateTime => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium or TextArgumentFormat.Long,
         TextArgumentType.Guid => format is TextArgumentFormat.D or TextArgumentFormat.N,
-        TextArgumentType.List => format == TextArgumentFormat.None,
+        // List placeholders exist only for RMF2 inputs (FromRmf2Inputs); the
+        // compatibility pattern formatter has no list formatter.
         _ => false,
     };
 

@@ -77,7 +77,8 @@ internal static class TranslationPackValidation
         return true;
     }
 
-    internal static bool IsFormatAllowed(TextArgumentType type, TextArgumentFormat format) => type switch
+    // A list argument exists only in an RMF2 v5 contract; compatibility patterns cannot format it.
+    internal static bool IsFormatAllowed(TextArgumentType type, TextArgumentFormat format, bool rmf2) => type switch
     {
         TextArgumentType.String => format == TextArgumentFormat.None,
         TextArgumentType.Int => format is TextArgumentFormat.Plain or TextArgumentFormat.Grouped,
@@ -87,7 +88,7 @@ internal static class TranslationPackValidation
         TextArgumentType.Time => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium,
         TextArgumentType.DateTime => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium or TextArgumentFormat.Long,
         TextArgumentType.Guid => format is TextArgumentFormat.D or TextArgumentFormat.N,
-        TextArgumentType.List => format == TextArgumentFormat.None,
+        TextArgumentType.List => rmf2 && format == TextArgumentFormat.None,
         _ => false,
     };
 
