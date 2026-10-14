@@ -127,8 +127,8 @@ code, or no runtime at all. Reference `Runic.Translations` at the same version a
 
 ## RTR0031
 
-Built-in formatter does not support the content locale. A plural, ordinal or
-relative-time formatter is used for a locale the built-in data does not cover.
+Built-in formatter does not support the content locale. A plural, ordinal,
+relative-time or list formatter is used for a locale the built-in data does not cover.
 Use a supported locale or avoid the formatter for that locale.
 
 ## RTR0041
