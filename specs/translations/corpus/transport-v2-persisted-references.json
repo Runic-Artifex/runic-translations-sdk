@@ -1,0 +1,1069 @@
+{
+  "corpusVersion": 1,
+  "transportVersion": 2,
+  "catalog": "ops",
+  "baseLocale": "en",
+  "locales": [
+    "en",
+    "de"
+  ],
+  "fingerprints": {
+    "$writer": "The writer catalog's contract fingerprint.",
+    "$reader": "The reader catalog's contract fingerprint."
+  },
+  "writer": {
+    "en": "steps {\n  build = Building {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Downloading one file}}\n    * {{Downloading {$count} files}}\n  cleanup = Cleaning up\n  check = Checking {$target}\n}\noperation {\n  failed = {$step} failed\n  summary = Changed {$names :runic:list}\n  retry = Retry {$attempt} of {$total :integer}\n  notice = Read the {#strong}notes{/strong}\n}\n",
+    "de": "steps {\n  build = {$name} wird gebaut\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Eine Datei wird heruntergeladen}}\n    * {{{$count} Dateien werden heruntergeladen}}\n  cleanup = Aufräumen\n  check = {$target} wird geprüft\n}\noperation {\n  failed = {$step} ist fehlgeschlagen\n  summary = Geändert: {$names :runic:list}\n  retry = Versuch {$attempt} von {$total :integer}\n  notice = Lies die {#strong}Hinweise{/strong}\n}\n"
+  },
+  "reader": {
+    "en": "steps {\n  build = Building package {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Downloading one file}}\n    * {{Downloading {$count} files}}\n  check = Checking {$path}\n  verify = Verifying {$name}\n}\noperation {\n  failed = {$step} failed\n  summary = Changed {$names :runic:list}\n  retry = Retry {$attempt :integer} of {$total :integer}\n  notice = Read the {#strong}notes{/strong}\n}\n",
+    "de": "steps {\n  build = Bau von Paket {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Eine Datei wird heruntergeladen}}\n    * {{{$count} Dateien werden heruntergeladen}}\n  check = {$path} wird geprüft\n  verify = {$name} wird überprüft\n}\noperation {\n  failed = {$step} ist fehlgeschlagen\n  summary = Geändert: {$names :runic:list}\n  retry = Versuch {$attempt :integer} von {$total :integer}\n  notice = Lies die {#strong}Hinweise{/strong}\n}\n"
+  },
+  "cases": [
+    {
+      "id": "same-contract",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "firefox"
+          }
+        },
+        "fallbackText": "Building firefox"
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Bau von Paket firefox",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "contract-changed-translates",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_download",
+        "arguments": {
+          "count": {
+            "type": "int64",
+            "value": "3"
+          }
+        },
+        "fallbackText": "Downloading 3 files"
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "3 Dateien werden heruntergeladen",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "contract-changed-plural-one",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_download",
+        "arguments": {
+          "count": {
+            "type": "int64",
+            "value": "1"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Eine Datei wird heruntergeladen",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "english",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "firefox"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Building package firefox",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-message",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "steps_build",
+              "arguments": {
+                "name": {
+                  "type": "string",
+                  "value": "firefox"
+                }
+              },
+              "fallbackText": "Building firefox"
+            }
+          }
+        },
+        "fallbackText": "Building firefox failed"
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Bau von Paket firefox ist fehlgeschlagen",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-chain",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "operation_failed",
+              "arguments": {
+                "step": {
+                  "type": "message",
+                  "value": {
+                    "key": "steps_build",
+                    "arguments": {
+                      "name": {
+                        "type": "string",
+                        "value": "gimp"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Building package gimp failed failed",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-unknown-key-uses-its-fallback",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "steps_cleanup",
+              "arguments": {},
+              "fallbackText": "Cleaning up"
+            }
+          }
+        },
+        "fallbackText": "Cleaning up failed"
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Cleaning up ist fehlgeschlagen",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$.step",
+            "reason": "unknown-key"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-unknown-key-without-fallback",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "steps_cleanup",
+              "arguments": {}
+            }
+          }
+        },
+        "fallbackText": "Cleaning up failed"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Cleaning up failed",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$.step",
+            "reason": "unknown-key"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-unknown-key-no-fallback-anywhere",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "steps_cleanup",
+              "arguments": {}
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "failed",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$.step",
+            "reason": "unknown-key"
+          }
+        ]
+      }
+    },
+    {
+      "id": "unknown-key",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_cleanup",
+        "arguments": {},
+        "fallbackText": "Cleaning up"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Cleaning up",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$",
+            "reason": "unknown-key"
+          }
+        ]
+      }
+    },
+    {
+      "id": "renamed-input",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_check",
+        "arguments": {
+          "target": {
+            "type": "string",
+            "value": "/etc/nixos"
+          }
+        },
+        "fallbackText": "Checking /etc/nixos"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Checking /etc/nixos",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "changed-input-type",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_retry",
+        "arguments": {
+          "attempt": {
+            "type": "string",
+            "value": "2"
+          },
+          "total": {
+            "type": "int64",
+            "value": "3"
+          }
+        },
+        "fallbackText": "Retry 2 of 3"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Retry 2 of 3",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "message-for-non-string-input",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_retry",
+        "arguments": {
+          "attempt": {
+            "type": "message",
+            "value": {
+              "key": "steps_build",
+              "arguments": {
+                "name": {
+                  "type": "string",
+                  "value": "x"
+                }
+              }
+            }
+          },
+          "total": {
+            "type": "int64",
+            "value": "3"
+          }
+        },
+        "fallbackText": "Retry"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Retry",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "missing-argument",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {},
+        "fallbackText": "Building"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Building",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "extra-argument",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "x"
+          },
+          "version": {
+            "type": "string",
+            "value": "1"
+          }
+        },
+        "fallbackText": "Building x"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Building x",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-incompatible-uses-its-fallback",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "steps_check",
+              "arguments": {
+                "target": {
+                  "type": "string",
+                  "value": "/etc"
+                }
+              },
+              "fallbackText": "Checking /etc"
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Checking /etc ist fehlgeschlagen",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$.step",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "list",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_summary",
+        "arguments": {
+          "names": {
+            "type": "list",
+            "value": [
+              "firefox",
+              "gimp",
+              "vlc"
+            ]
+          }
+        },
+        "fallbackText": "Changed firefox, gimp, and vlc"
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Geändert: firefox, gimp und vlc",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          }
+        ]
+      }
+    },
+    {
+      "id": "list-same-contract",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "operation_summary",
+        "arguments": {
+          "names": {
+            "type": "list",
+            "value": [
+              "firefox",
+              "gimp"
+            ]
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Changed firefox and gimp",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "structured-content",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_notice",
+        "arguments": {},
+        "fallbackText": "Read the notes"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Read the notes",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$",
+            "reason": "structured-content"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nested-structured-content",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "operation_notice",
+              "arguments": {},
+              "fallbackText": "Notes"
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Notes failed",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          },
+          {
+            "path": "$.step",
+            "reason": "structured-content"
+          }
+        ]
+      }
+    },
+    {
+      "id": "other-catalog",
+      "locale": "de",
+      "reference": {
+        "version": 2,
+        "catalog": "other",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "x"
+          }
+        },
+        "fallbackText": "Building x"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Building x",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "catalog-mismatch"
+          }
+        ]
+      }
+    },
+    {
+      "id": "v1-same-contract",
+      "locale": "de",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "operation_retry",
+        "arguments": {
+          "attempt": "2",
+          "total": "3"
+        },
+        "fallbackText": "Retry 2 of 3"
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Versuch 2 von 3",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "v1-contract-changed",
+      "locale": "de",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": "firefox"
+        },
+        "fallbackText": "Building firefox"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Building firefox",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "fingerprint-mismatch"
+          }
+        ]
+      }
+    },
+    {
+      "id": "v1-contract-changed-without-fallback",
+      "locale": "de",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": "firefox"
+        }
+      },
+      "expected": {
+        "outcome": "failed",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "fingerprint-mismatch"
+          }
+        ]
+      }
+    },
+    {
+      "id": "v1-incompatible-value",
+      "locale": "de",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "operation_retry",
+        "arguments": {
+          "attempt": "two",
+          "total": "3"
+        },
+        "fallbackText": "Retry"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "Retry",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "depth-limit",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "operation_failed",
+              "arguments": {
+                "step": {
+                  "type": "message",
+                  "value": {
+                    "key": "operation_failed",
+                    "arguments": {
+                      "step": {
+                        "type": "message",
+                        "value": {
+                          "key": "operation_failed",
+                          "arguments": {
+                            "step": {
+                              "type": "message",
+                              "value": {
+                                "key": "operation_failed",
+                                "arguments": {
+                                  "step": {
+                                    "type": "message",
+                                    "value": {
+                                      "key": "operation_failed",
+                                      "arguments": {
+                                        "step": {
+                                          "type": "message",
+                                          "value": {
+                                            "key": "operation_failed",
+                                            "arguments": {
+                                              "step": {
+                                                "type": "message",
+                                                "value": {
+                                                  "key": "steps_build",
+                                                  "arguments": {
+                                                    "name": {
+                                                      "type": "string",
+                                                      "value": "vlc"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Building package vlc failed failed failed failed failed failed failed",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "contract-changed"
+          }
+        ]
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "id": "depth-exceeded",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "operation_failed",
+              "arguments": {
+                "step": {
+                  "type": "message",
+                  "value": {
+                    "key": "operation_failed",
+                    "arguments": {
+                      "step": {
+                        "type": "message",
+                        "value": {
+                          "key": "operation_failed",
+                          "arguments": {
+                            "step": {
+                              "type": "message",
+                              "value": {
+                                "key": "operation_failed",
+                                "arguments": {
+                                  "step": {
+                                    "type": "message",
+                                    "value": {
+                                      "key": "operation_failed",
+                                      "arguments": {
+                                        "step": {
+                                          "type": "message",
+                                          "value": {
+                                            "key": "operation_failed",
+                                            "arguments": {
+                                              "step": {
+                                                "type": "message",
+                                                "value": {
+                                                  "key": "operation_failed",
+                                                  "arguments": {
+                                                    "step": {
+                                                      "type": "message",
+                                                      "value": {
+                                                        "key": "steps_build",
+                                                        "arguments": {
+                                                          "name": {
+                                                            "type": "string",
+                                                            "value": "vlc"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "reason": "limit-exceeded"
+    },
+    {
+      "id": "unsupported-version",
+      "reference": {
+        "version": 3,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "x"
+          }
+        }
+      },
+      "reason": "unsupported-version"
+    },
+    {
+      "id": "non-canonical-int64",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_download",
+        "arguments": {
+          "count": {
+            "type": "int64",
+            "value": "03"
+          }
+        }
+      },
+      "reason": "invalid-argument:count"
+    },
+    {
+      "id": "negative-zero-decimal",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "decimal",
+            "value": "-0.0"
+          }
+        }
+      },
+      "reason": "invalid-argument:name"
+    },
+    {
+      "id": "unknown-argument-type",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "float",
+            "value": "1"
+          }
+        }
+      },
+      "reason": "invalid-argument:name"
+    },
+    {
+      "id": "null-fallback",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "x"
+          }
+        },
+        "fallbackText": null
+      },
+      "reason": "invalid-fallback"
+    },
+    {
+      "id": "unknown-member",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "x"
+          }
+        },
+        "note": "x"
+      },
+      "reason": "malformed"
+    },
+    {
+      "id": "bad-fingerprint",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "sha256:ABC",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "x"
+          }
+        }
+      },
+      "reason": "malformed"
+    },
+    {
+      "id": "list-of-numbers",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "operation_summary",
+        "arguments": {
+          "names": {
+            "type": "list",
+            "value": [
+              "a",
+              1
+            ]
+          }
+        }
+      },
+      "reason": "invalid-argument:names"
+    }
+  ]
+}
