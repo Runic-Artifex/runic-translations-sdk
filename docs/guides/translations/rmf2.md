@@ -116,8 +116,8 @@ In English, `["Ana", "Bo", "Cy"]` formats as `Invited: Ana, Bo, and Cy.` and
 so `["Juan", "Inés"]` gives `Juan e Inés`. The generated C# method takes an
 `IReadOnlyList<string>` and the generated ESM function a `readonly string[]`.
 Items are inserted as given, in caller order; sort them before formatting if the
-order matters. A list cannot select a variant, has no literal form and is not
-part of the cross-process transport. The
+order matters. A list cannot select a variant and has no literal form. A
+[text reference](transport.md) carries a list argument from transport version 2. The
 [execution profile](../../../specs/translations/rmf2-execution-v2.md#list-formatting)
 specifies the patterns and the Spanish rule.
 

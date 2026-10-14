@@ -1,6 +1,6 @@
 # Runic Translations conformance corpora
 
-The current release contract is exercised by five complementary fixtures:
+The current release contract is exercised by six complementary fixtures:
 
 - [`rmf2-v1/index.json`](rmf2-v1/index.json) is the cross-backend release oracle
   for resource syntax `rmf2-v1` executed as `rmf2-execution-v2`, grammar/AST and
@@ -16,7 +16,15 @@ The current release contract is exercised by five complementary fixtures:
   cross-backend oracle for `:runic:list`: every supported locale family, each
   type and style, and the Spanish `y`/`e` and `o`/`u` forms. Each case must
   format exactly as expected in a linked .NET message, a loaded .NET pack,
-  generated ESM and a dynamically decoded ESM artifact.
+  generated ESM and a dynamically decoded ESM artifact;
+- [`transport-v2-persisted-references.json`](transport-v2-persisted-references.json)
+  is the cross-backend oracle for [persisted text references](../transport-v2.md):
+  references written against the `writer` catalog are resolved by the changed
+  `reader` catalog, with the expected outcome, text and diagnostics. `$writer` and
+  `$reader` stand for the two catalogs' contract fingerprints. The .NET
+  `TranslationReferenceResolver` and the generated ESM `resolveTextReference`
+  must agree with every case, .NET must write each reference back byte for byte,
+  and every `rejected` reference must fail to read.
 
 The name `rmf2-v1` denotes the resource-file syntax. It does not select a retired
 runtime, artifact, or emitter. Current runners compile every fixture through the
