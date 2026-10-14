@@ -3,8 +3,8 @@ import { fileURLToPath } from "node:url";
 import { createTextReference } from "./generated/operations.esm-v5/transport.js";
 import { appendEntry, readHistory, show } from "./history.ts";
 
-const stored = fileURLToPath(new URL("./history/2026-04.jsonl", import.meta.url));
-const current = process.env.HISTORY_FILE ?? fileURLToPath(new URL("./history/current.jsonl", import.meta.url));
+const stored = fileURLToPath(new URL("./history/2026-04.log", import.meta.url));
+const current = process.env.HISTORY_FILE ?? fileURLToPath(new URL("./history/current.log", import.meta.url));
 
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 0),

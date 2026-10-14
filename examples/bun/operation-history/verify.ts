@@ -10,8 +10,8 @@ const example = import.meta.dir;
 const repository = resolve(example, "../../..");
 const generated = join(example, "generated");
 const scratch = mkdtempSync(join(tmpdir(), "runic-bun-history-"));
-const historyFile = join(scratch, "current.jsonl");
-const stored = join(example, "history/2026-04.jsonl");
+const historyFile = join(scratch, "current.log");
+const stored = join(example, "history/2026-04.log");
 const environment = { ...process.env, HISTORY_FILE: historyFile, PORT: "0" };
 
 function run(command: string[], cwd = example): string {

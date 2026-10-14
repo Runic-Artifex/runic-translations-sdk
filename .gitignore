@@ -12,4 +12,4 @@
 *.snupkg
 /tools/*/artifacts/
 /examples/bun/operation-history/generated/
-/examples/bun/operation-history/history/current.jsonl
+/examples/bun/operation-history/history/current.log
