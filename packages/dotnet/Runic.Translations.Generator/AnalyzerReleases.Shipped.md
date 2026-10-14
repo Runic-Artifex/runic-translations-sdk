@@ -76,3 +76,12 @@ RTR0080 | Runic.Translations | Error | Translation XAML declaration is invalid
 RTR0081 | Runic.Translations | Error | Translation XAML message key is unknown
 RTR0082 | Runic.Translations | Error | Translation XAML inputs do not match
 RTR0083 | Runic.Translations | Error | Translation XAML message kind does not match
+
+## Release 0.6.0.7
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|------
+RTR0084 | Runic.Translations | Warning | Translation XAML binds several inputs by position
+RTR0085 | Runic.Translations | Info | Translation XAML keys under an explicit source are not checked

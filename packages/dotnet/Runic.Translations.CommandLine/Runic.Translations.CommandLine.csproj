@@ -10,8 +10,6 @@
     <RunicTranslationsShippingProject>true</RunicTranslationsShippingProject>
     <!-- Packed under lib/; its public API is tracked in PublicAPI.*.txt. -->
     <RunicTrackPublicApi>true</RunicTrackPublicApi>
-    <!-- New in 0.6.0-preview.7: there is no published package to validate against yet. -->
-    <RunicTranslationsPackageValidationBaselineVersion></RunicTranslationsPackageValidationBaselineVersion>
     <Description>Translates Runic.CommandLine help, errors and faults with Runic Translations, with built-in English and German text.</Description>
     <PackageTags>runic-artifex;i18n;localization;command-line;cli;dotnet;nativeaot</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
