@@ -19,5 +19,6 @@
     <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/Assert.cs" Link="Assert.cs" />
     <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/Rmf2RuntimeV5Tests.cs" Link="Rmf2RuntimeV5Tests.cs" />
     <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/TypedSlotBindingsTests.cs" Link="TypedSlotBindingsTests.cs" />
+    <Compile Include="../../../dotnet/Runic.Translations.Runtime.Tests/TranslationReferenceTests.cs" Link="TranslationReferenceTests.cs" />
   </ItemGroup>
 </Project>

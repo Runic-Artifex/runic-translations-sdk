@@ -181,8 +181,10 @@ internal sealed class Rmf2V1CorpusTests
     // surface, W250-017 adds [EditorBrowsable(Never)] to each encoded key and accessor that has a readable member.
     // Re-pinned for W300-009: runtime.js gains :runic:list, the generated CLDR list patterns and the Japanese
     // plural rules, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "d0b5ba1fd34cd121336ad160c35d4ca0f1b49c0d3f6e529c14ad947ff8ada77b";
-    private const string HiddenEncodedOutputDigest = "26ad8ea12f07388079e8e0f031176f2e913394e4c0b059bd9fa11d2c5db1062a";
+    // Re-pinned for W300-010: transport.js gains transport version 2 (createTextReference, resolveTextReference) and
+    // transport.d.ts its types, in both digests. Every other output is unchanged.
+    private const string EncodedOutputDigest = "b5e8fea3847358c55cb38bec51ee96df095db63364eee1dd4a3e9742327283e5";
+    private const string HiddenEncodedOutputDigest = "50dd361a172ffcdedf44ce2ec67cf75c75a8f9334a999696eebc84b033e1fcec";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

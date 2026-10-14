@@ -23,6 +23,28 @@ The optional Vite package maps `virtual:runic-translations/{catalog}`, `/runtime
 `/transport`, and `/dynamic` to these ordinary modules and invalidates them on
 watched changes.
 
+`transport.js` writes, decodes and resolves [text references](transport.md):
+`createTextReference`, `decodeTextReference`, `formatTextReference` and
+`resolveTextReference`, which shows a stored reference after the catalog has
+changed.
+
+## Without Vite
+
+The generated directory is a set of ordinary ES modules with relative imports and
+`.d.ts` declarations; it uses no `import.meta.glob`, virtual module, file read or
+bundler transform. The `virtual:runic-translations/...` names exist only in the
+Vite plugin, which re-exports these files. Bun imports the generated files
+directly, for example `import { m } from "./generated/app.esm-v5/messages.js"`,
+from JavaScript or TypeScript, and `bun build` bundles them; Node.js also loads
+them as ES modules. Generate the directory with `dotnet tool run
+runic-translations -- generate --emit-esm` or the build package, and point the
+Vite plugin's `manifest` option at its `web-module-manifest-v3.json` so a
+frontend, a server and other processes share one catalogue. The
+[Bun operation-history example](../../../examples/bun/operation-history/README.md)
+runs a Bun server and a separate process this way; CI runs it.
+
+## Messages
+
 Import `m` from the generated or virtual messages entrypoint. A single-segment
 key is available through normal property access. Dotted keys retain their exact
 catalog identity and use bracket access:

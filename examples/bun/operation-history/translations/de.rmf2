@@ -1,0 +1,13 @@
+steps {
+  build = Bau von {$name}
+  switch = Wechsel zu Generation {$generation :integer}
+}
+operation {
+  failed = {$step} ist fehlgeschlagen
+  finished =
+    .input {$count :integer}
+    .match $count
+    one {{Ein Schritt abgeschlossen}}
+    * {{{$count} Schritte abgeschlossen}}
+  changed = Geändert: {$packages :runic:list}
+}

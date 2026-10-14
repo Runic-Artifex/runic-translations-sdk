@@ -196,9 +196,9 @@ expectations.
 
 The C# API takes `IReadOnlyList<string>` and the ESM API `readonly string[]`;
 both copy the items when the message is formatted (.NET when the argument is
-created), and reject a null or non-string item. The transport contract v1 has
-no list value, so a message with a list input cannot be carried in a
-`TranslationReference`.
+created), and reject a null or non-string item. Transport version 1 has
+no list value; [transport version 2](transport-v2.md) carries a list argument as
+an array of strings.
 
 A variable used as a dynamic option must refer to an explicitly declared input
 of the option's type, or to a previously declared local of that type whose

@@ -9,7 +9,7 @@ Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), whic
 | CI job | Local command |
 | --- | --- |
 | Source checks | `bun eng/generate-cldr.mjs --check`, `bun eng/render-capabilities.mjs --check`, and `actionlint` (available in the runic-sdk development shell) |
-| Build and test | `bun run test` (heavy; prefer the focused commands in the README while iterating) |
+| Build and test | `bun run test` (heavy; prefer the focused commands in the README while iterating), then `bun examples/bun/operation-history/verify.ts` |
 | Editor / hosted RMF2 E2E | `bun run build`, `dotnet apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll validate apps/translations-editor/ExampleWorkspace`, then the commands in [the hosted E2E README](apps/translations-editor/tests/HostedBrowserE2E/README.md) |
 | Editor / packed Translations packages | `bun run verify-editor-packed` |
 | IDE / VS Code extension package | `bun install --frozen-lockfile && bun run --bun check && bun run --bun test && bun run package` in `tools/vscode-runic-translations` |

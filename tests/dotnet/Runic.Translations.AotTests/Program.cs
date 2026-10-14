@@ -36,7 +36,9 @@ internal static class Program
             var reference = new TranslationReference("app", Fingerprint, "greeting",
                 new Dictionary<string, TranslationReferenceArgument> { ["name"] = new(TextArgumentType.String, "Ada") });
             string referenceJson = JsonSerializer.Serialize(reference, TranslationReferenceJsonContext.Default.TranslationReference);
-            Require(referenceJson.Contains("\"arguments\":{\"name\":\"Ada\"}", StringComparison.Ordinal), "text-reference JSON");
+            Require(referenceJson.Contains("\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"Ada\"}}", StringComparison.Ordinal), "text-reference JSON");
+            TranslationReference stored = JsonSerializer.Deserialize(referenceJson, TranslationReferenceJsonContext.Default.TranslationReference)!;
+            Require(TranslationReferenceResolver.Resolve(manager.Current, Fingerprint, stored).Text == "Hello Ada", "text-reference resolution");
             Task[] swaps = new Task[16];
             for (int index = 0; index < swaps.Length; index++)
             {

@@ -16,7 +16,7 @@ execution profiles and cannot be mixed in one project.
 | Resolved locale artifact | 5 |
 | Runtime/generated-code ABI | RMF2 ABI 3 (markup contract v2) |
 | ESM ABI | 4 (`web-module-manifest-v3`) |
-| Transport contract | 1 |
+| Transport contract | 2 ([text references](transport-v2.md); reads 1) |
 
 Package versions are independent from these integers. New cross-runtime schemas
 use canonical `https://runic-artifex.eu/schemas/translations/` identifiers. An
