@@ -23,8 +23,11 @@ The current release contract is exercised by six complementary fixtures:
   `reader` catalog, with the expected outcome, text and diagnostics. `$writer` and
   `$reader` stand for the two catalogs' contract fingerprints. The .NET
   `TranslationReferenceResolver` and the generated ESM `resolveTextReference`
-  must agree with every case, .NET must write each reference back byte for byte,
-  and every `rejected` reference must fail to read.
+  must agree with every case, and every `rejected` reference must fail to read.
+  `written` references must be written byte for byte as `expected` by .NET and
+  by `JSON.stringify` of the ESM `createTextReference` result. `json` gives a
+  case as raw text (duplicate members, a `2.0` version); `$text`, `$items` and
+  `$arguments` macros spell the large limit cases (see the .NET runner).
 
 The name `rmf2-v1` denotes the resource-file syntax. It does not select a retired
 runtime, artifact, or emitter. Current runners compile every fixture through the

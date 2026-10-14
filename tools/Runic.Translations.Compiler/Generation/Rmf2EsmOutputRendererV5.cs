@@ -262,7 +262,9 @@ internal static class Rmf2EsmOutputRendererV5
         export type TextReferenceResolution =
           | { readonly outcome: "translated" | "fallback"; readonly text: string; readonly diagnostics: readonly TextReferenceDiagnostic[] }
           | { readonly outcome: "failed"; readonly text: undefined; readonly diagnostics: readonly TextReferenceDiagnostic[] };
-        export declare function createTextReference(key: string, inputs?: Readonly<Record<string, unknown>>, options?: { readonly fallbackText?: string }): TextReferenceWireV2;
+        export declare function createTextReference(key: string, inputs?: Readonly<Record<string, unknown>>, options?: { readonly fallbackText?: string; readonly version?: 2 }): TextReferenceWireV2;
+        export declare function createTextReference(key: string, inputs: Readonly<Record<string, unknown>>, options: { readonly fallbackText?: string; readonly version: 1 }): TextReferenceWireV1;
+        export declare function parseTextReference(json: string): { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly reason: string };
         export declare function decodeTextReference(value: unknown): DecodeResult;
         export declare function formatTextReference(reference: DecodedTextReference, handlers: TextReferenceHandlers, options?: MessageOptions): string | LocalizedContent | LocalizedDocument;
         export declare function resolveTextReference(value: unknown, handlers: TextReferenceHandlers, options?: MessageOptions): TextReferenceResolution;

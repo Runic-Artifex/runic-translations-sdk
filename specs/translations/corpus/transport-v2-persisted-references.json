@@ -12,12 +12,12 @@
     "$reader": "The reader catalog's contract fingerprint."
   },
   "writer": {
-    "en": "steps {\n  build = Building {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Downloading one file}}\n    * {{Downloading {$count} files}}\n  cleanup = Cleaning up\n  check = Checking {$target}\n}\noperation {\n  failed = {$step} failed\n  summary = Changed {$names :runic:list}\n  retry = Retry {$attempt} of {$total :integer}\n  notice = Read the {#strong}notes{/strong}\n}\n",
-    "de": "steps {\n  build = {$name} wird gebaut\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Eine Datei wird heruntergeladen}}\n    * {{{$count} Dateien werden heruntergeladen}}\n  cleanup = Aufräumen\n  check = {$target} wird geprüft\n}\noperation {\n  failed = {$step} ist fehlgeschlagen\n  summary = Geändert: {$names :runic:list}\n  retry = Versuch {$attempt} von {$total :integer}\n  notice = Lies die {#strong}Hinweise{/strong}\n}\n"
+    "en": "values {\n  flag = Flag {$on :runic:boolean}\n  day = Day {$day :date}\n  clock = At {$at :time}\n  moment = At {$at :datetime}\n  id = Id {$id :runic:uuid}\n  big = Count {$n :integer}\n  amount = Amount {$x :number}\n}\nsteps {\n  build = Building {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Downloading one file}}\n    * {{Downloading {$count} files}}\n  cleanup = Cleaning up\n  check = Checking {$target}\n}\noperation {\n  failed = {$step} failed\n  summary = Changed {$names :runic:list}\n  retry = Retry {$attempt} of {$total :integer}\n  notice = Read the {#strong}notes{/strong}\n}\n",
+    "de": "values {\n  flag = Flag {$on :runic:boolean}\n  day = Day {$day :date}\n  clock = At {$at :time}\n  moment = At {$at :datetime}\n  id = Id {$id :runic:uuid}\n  big = Count {$n :integer}\n  amount = Amount {$x :number}\n}\nsteps {\n  build = {$name} wird gebaut\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Eine Datei wird heruntergeladen}}\n    * {{{$count} Dateien werden heruntergeladen}}\n  cleanup = Aufräumen\n  check = {$target} wird geprüft\n}\noperation {\n  failed = {$step} ist fehlgeschlagen\n  summary = Geändert: {$names :runic:list}\n  retry = Versuch {$attempt} von {$total :integer}\n  notice = Lies die {#strong}Hinweise{/strong}\n}\n"
   },
   "reader": {
-    "en": "steps {\n  build = Building package {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Downloading one file}}\n    * {{Downloading {$count} files}}\n  check = Checking {$path}\n  verify = Verifying {$name}\n}\noperation {\n  failed = {$step} failed\n  summary = Changed {$names :runic:list}\n  retry = Retry {$attempt :integer} of {$total :integer}\n  notice = Read the {#strong}notes{/strong}\n}\n",
-    "de": "steps {\n  build = Bau von Paket {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Eine Datei wird heruntergeladen}}\n    * {{{$count} Dateien werden heruntergeladen}}\n  check = {$path} wird geprüft\n  verify = {$name} wird überprüft\n}\noperation {\n  failed = {$step} ist fehlgeschlagen\n  summary = Geändert: {$names :runic:list}\n  retry = Versuch {$attempt :integer} von {$total :integer}\n  notice = Lies die {#strong}Hinweise{/strong}\n}\n"
+    "en": "values {\n  flag = Flag {$on :runic:boolean}\n  day = Day {$day :date}\n  clock = At {$at :time}\n  moment = At {$at :datetime}\n  id = Id {$id :runic:uuid}\n  big = Count {$n :integer}\n  amount = Amount {$x :number}\n}\nsteps {\n  build = Building package {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Downloading one file}}\n    * {{Downloading {$count} files}}\n  check = Checking {$path}\n  verify = Verifying {$name}\n}\noperation {\n  failed = {$step} failed\n  summary = Changed {$names :runic:list}\n  retry = Retry {$attempt :integer} of {$total :integer}\n  notice = Read the {#strong}notes{/strong}\n}\n",
+    "de": "values {\n  flag = Flag {$on :runic:boolean}\n  day = Day {$day :date}\n  clock = At {$at :time}\n  moment = At {$at :datetime}\n  id = Id {$id :runic:uuid}\n  big = Count {$n :integer}\n  amount = Amount {$x :number}\n}\nsteps {\n  build = Bau von Paket {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Eine Datei wird heruntergeladen}}\n    * {{{$count} Dateien werden heruntergeladen}}\n  check = {$path} wird geprüft\n  verify = {$name} wird überprüft\n}\noperation {\n  failed = {$step} ist fehlgeschlagen\n  summary = Geändert: {$names :runic:list}\n  retry = Versuch {$attempt :integer} von {$total :integer}\n  notice = Lies die {#strong}Hinweise{/strong}\n}\n"
   },
   "cases": [
     {
@@ -849,6 +849,638 @@
           }
         ]
       }
+    },
+    {
+      "id": "type-boolean",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_flag",
+        "arguments": {
+          "on": {
+            "type": "boolean",
+            "value": true
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Flag true",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "type-date",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_day",
+        "arguments": {
+          "day": {
+            "type": "date",
+            "value": "2026-10-14"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Day 2026-10-14",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "type-time",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_clock",
+        "arguments": {
+          "at": {
+            "type": "time",
+            "value": "08:30:00"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "At 08:30:00",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "type-datetime",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_moment",
+        "arguments": {
+          "at": {
+            "type": "datetime",
+            "value": "2026-10-14T08:30:00Z"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "At 2026-10-14T08:30:00Z",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "type-guid",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_id",
+        "arguments": {
+          "id": {
+            "type": "guid",
+            "value": "0f8fad5b-d9cb-469f-a165-70867728950e"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Id 0f8fad5b-d9cb-469f-a165-70867728950e",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "int64-beyond-2-53",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_big",
+        "arguments": {
+          "n": {
+            "type": "int64",
+            "value": "9007199254740993"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Count 9007199254740993",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "int64-minimum",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_big",
+        "arguments": {
+          "n": {
+            "type": "int64",
+            "value": "-9223372036854775808"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Count -9223372036854775808",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "decimal-scale",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_amount",
+        "arguments": {
+          "x": {
+            "type": "decimal",
+            "value": "1.50"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Amount 1.5",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "decimal-28-digit-fraction",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_amount",
+        "arguments": {
+          "x": {
+            "type": "decimal",
+            "value": "0.0000000000000000000000000001"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Amount 0",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "decimal-maximum",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_amount",
+        "arguments": {
+          "x": {
+            "type": "decimal",
+            "value": "79228162514264337593543950335"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Amount 79228162514264337593543950335",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "v1-boolean",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_flag",
+        "arguments": {
+          "on": true
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Flag true",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "v1-boolean-as-string",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_flag",
+        "arguments": {
+          "on": "true"
+        },
+        "fallbackText": "stored"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "stored",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "v1-null-fallback",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$writer",
+        "key": "steps_build",
+        "arguments": {
+          "name": "x"
+        },
+        "fallbackText": null
+      },
+      "expected": {
+        "outcome": "failed",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "fingerprint-mismatch"
+          }
+        ]
+      }
+    },
+    {
+      "id": "v1-null-fallback-same-contract",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "name": "x"
+        },
+        "fallbackText": null
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Building package x",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "v1-negative-zero-integer",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_big",
+        "arguments": {
+          "n": "-0"
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Count 0",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "v1-decimal-exponent",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_amount",
+        "arguments": {
+          "x": "1.5e1"
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Amount 15",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "v1-decimal-trailing-zeros-beyond-28",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_amount",
+        "arguments": {
+          "x": "1.00000000000000000000000000000"
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Amount 1",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "v1-uppercase-guid",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_id",
+        "arguments": {
+          "id": "0F8FAD5B-D9CB-469F-A165-70867728950E"
+        }
+      },
+      "expected": {
+        "outcome": "translated",
+        "text": "Id 0f8fad5b-d9cb-469f-a165-70867728950e",
+        "diagnostics": []
+      }
+    },
+    {
+      "id": "v1-legacy-fractional-time",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_clock",
+        "arguments": {
+          "at": "08:30:00.5"
+        },
+        "fallbackText": "At 08:30:00.5"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "At 08:30:00.5",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "v1-legacy-offset-datetime",
+      "locale": "en",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_moment",
+        "arguments": {
+          "at": "2026-10-14T08:30:00+02:00"
+        },
+        "fallbackText": "stored"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "stored",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "limit-32-references",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "$arguments": {
+            "type": "message",
+            "value": {
+              "key": "steps_cleanup",
+              "arguments": {}
+            }
+          },
+          "count": 31,
+          "prefix": "a"
+        },
+        "fallbackText": "x"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "x",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "limit-32-arguments",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "$arguments": {
+            "type": "string",
+            "value": "v"
+          },
+          "count": 32,
+          "prefix": "a"
+        },
+        "fallbackText": "x"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "x",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "limit-256-list-items",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "names": {
+            "type": "list",
+            "value": {
+              "$items": "i",
+              "count": 256
+            }
+          }
+        },
+        "fallbackText": "x"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "x",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "limit-16-kib-value",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16384
+            }
+          },
+          "extra": {
+            "type": "string",
+            "value": ""
+          }
+        },
+        "fallbackText": "x"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "x",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "limit-key-length",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        "arguments": {},
+        "fallbackText": "x"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "x",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "unknown-key"
+          }
+        ]
+      }
+    },
+    {
+      "id": "limit-total-text",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "a": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16384
+            }
+          },
+          "b": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16384
+            }
+          },
+          "c": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16384
+            }
+          },
+          "d": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16384
+            }
+          }
+        }
+      },
+      "expected": {
+        "outcome": "failed",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "incompatible-arguments"
+          }
+        ]
+      }
+    },
+    {
+      "id": "byte-order-mark-is-not-blank",
+      "locale": "en",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "﻿",
+        "arguments": {},
+        "fallbackText": "x"
+      },
+      "expected": {
+        "outcome": "fallback",
+        "text": "x",
+        "diagnostics": [
+          {
+            "path": "$",
+            "reason": "unknown-key"
+          }
+        ]
+      }
     }
   ],
   "rejected": [
@@ -1064,6 +1696,544 @@
         }
       },
       "reason": "invalid-argument:names"
+    },
+    {
+      "id": "limit-33-references",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "$arguments": {
+            "type": "message",
+            "value": {
+              "key": "steps_cleanup",
+              "arguments": {}
+            }
+          },
+          "count": 32,
+          "prefix": "a"
+        }
+      },
+      "reason": "limit-exceeded"
+    },
+    {
+      "id": "limit-33-arguments",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "$arguments": {
+            "type": "string",
+            "value": "v"
+          },
+          "count": 33,
+          "prefix": "a"
+        }
+      },
+      "reason": "limit-exceeded"
+    },
+    {
+      "id": "limit-257-list-items",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "names": {
+            "type": "list",
+            "value": {
+              "$items": "i",
+              "count": 257
+            }
+          }
+        }
+      },
+      "reason": "invalid-argument:names"
+    },
+    {
+      "id": "limit-16-kib-value",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16385
+            }
+          }
+        }
+      },
+      "reason": "invalid-argument:name"
+    },
+    {
+      "id": "limit-key-length",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk",
+        "arguments": {}
+      },
+      "reason": "malformed"
+    },
+    {
+      "id": "limit-total-text",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "a": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16384
+            }
+          },
+          "b": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16384
+            }
+          },
+          "c": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16384
+            }
+          },
+          "d": {
+            "type": "string",
+            "value": {
+              "$text": "v",
+              "length": 16384
+            }
+          },
+          "e": {
+            "type": "string",
+            "value": "v"
+          }
+        }
+      },
+      "reason": "limit-exceeded"
+    },
+    {
+      "id": "limit-encoded-size",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "x"
+          }
+        },
+        "fallbackText": {
+          "$text": "\u0001",
+          "length": 60000
+        }
+      },
+      "reason": "limit-exceeded"
+    },
+    {
+      "id": "version-with-fraction",
+      "json": "{\"version\":2.0,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"x\"}}}",
+      "reason": "malformed"
+    },
+    {
+      "id": "version-with-exponent",
+      "json": "{\"version\":2e0,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"x\"}}}",
+      "reason": "malformed"
+    },
+    {
+      "id": "duplicate-member",
+      "json": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"steps_build\",\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"x\"}}}",
+      "reason": "malformed"
+    },
+    {
+      "id": "duplicate-argument",
+      "json": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"x\"},\"name\":{\"type\":\"string\",\"value\":\"y\"}}}",
+      "reason": "malformed"
+    },
+    {
+      "id": "lone-surrogate",
+      "json": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"\\ud800\"}}}",
+      "reason": "malformed"
+    },
+    {
+      "id": "decimal-scale-over-28",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_amount",
+        "arguments": {
+          "x": {
+            "type": "decimal",
+            "value": "1.00000000000000000000000000000"
+          }
+        }
+      },
+      "reason": "invalid-argument:x"
+    },
+    {
+      "id": "decimal-beyond-range",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_amount",
+        "arguments": {
+          "x": {
+            "type": "decimal",
+            "value": "79228162514264337593543950336"
+          }
+        }
+      },
+      "reason": "invalid-argument:x"
+    },
+    {
+      "id": "int64-beyond-range",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_big",
+        "arguments": {
+          "n": {
+            "type": "int64",
+            "value": "9223372036854775808"
+          }
+        }
+      },
+      "reason": "invalid-argument:n"
+    },
+    {
+      "id": "uppercase-guid",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_id",
+        "arguments": {
+          "id": {
+            "type": "guid",
+            "value": "0F8FAD5B-D9CB-469F-A165-70867728950E"
+          }
+        }
+      },
+      "reason": "invalid-argument:id"
+    },
+    {
+      "id": "fractional-time",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_clock",
+        "arguments": {
+          "at": {
+            "type": "time",
+            "value": "08:30:00.5"
+          }
+        }
+      },
+      "reason": "invalid-argument:at"
+    },
+    {
+      "id": "offset-datetime",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_moment",
+        "arguments": {
+          "at": {
+            "type": "datetime",
+            "value": "2026-10-14T08:30:00+02:00"
+          }
+        }
+      },
+      "reason": "invalid-argument:at"
+    },
+    {
+      "id": "boolean-as-string",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_flag",
+        "arguments": {
+          "on": {
+            "type": "boolean",
+            "value": "true"
+          }
+        }
+      },
+      "reason": "invalid-argument:on"
+    },
+    {
+      "id": "whitespace-key",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "　",
+        "arguments": {}
+      },
+      "reason": "malformed"
+    }
+  ],
+  "written": [
+    {
+      "id": "html-and-plus",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "Größe <b>&'+\"\\ </script>"
+          }
+        },
+        "fallbackText": "Größe <b>&'+"
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"Größe <b>&'+\\\"\\\\ </script>\"}},\"fallbackText\":\"Größe <b>&'+\"}"
+    },
+    {
+      "id": "nfd-text",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "Café Åström"
+          }
+        },
+        "fallbackText": "Café"
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"Café Åström\"}},\"fallbackText\":\"Café\"}"
+    },
+    {
+      "id": "control-characters",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "a\u0000b\u0001\b\f\n\r\t\u001f"
+          }
+        },
+        "fallbackText": "x y z"
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"a\\u0000b\\u0001\\b\\f\\n\\r\\t\\u001f\"}},\"fallbackText\":\"x y z\"}"
+    },
+    {
+      "id": "emoji",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "steps_build",
+        "arguments": {
+          "name": {
+            "type": "string",
+            "value": "😀 👩‍💻 🇩🇪"
+          }
+        },
+        "fallbackText": "😀"
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"😀 👩‍💻 🇩🇪\"}},\"fallbackText\":\"😀\"}"
+    },
+    {
+      "id": "nested-message",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "operation_failed",
+        "arguments": {
+          "step": {
+            "type": "message",
+            "value": {
+              "key": "steps_build",
+              "arguments": {
+                "name": {
+                  "type": "string",
+                  "value": "Größe"
+                }
+              },
+              "fallbackText": "Bau von Größe"
+            }
+          }
+        },
+        "fallbackText": "Bau von Größe fehlgeschlagen"
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"operation_failed\",\"arguments\":{\"step\":{\"type\":\"message\",\"value\":{\"key\":\"steps_build\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":\"Größe\"}},\"fallbackText\":\"Bau von Größe\"}}},\"fallbackText\":\"Bau von Größe fehlgeschlagen\"}"
+    },
+    {
+      "id": "integers",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "operation_retry",
+        "arguments": {
+          "attempt": {
+            "type": "int64",
+            "value": "9007199254740993"
+          },
+          "total": {
+            "type": "int64",
+            "value": "-3"
+          }
+        }
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"operation_retry\",\"arguments\":{\"attempt\":{\"type\":\"int64\",\"value\":\"9007199254740993\"},\"total\":{\"type\":\"int64\",\"value\":\"-3\"}}}"
+    },
+    {
+      "id": "decimal-scale",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_amount",
+        "arguments": {
+          "x": {
+            "type": "decimal",
+            "value": "1.50"
+          }
+        }
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"values_amount\",\"arguments\":{\"x\":{\"type\":\"decimal\",\"value\":\"1.50\"}}}"
+    },
+    {
+      "id": "all-scalar-types",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_moment",
+        "arguments": {
+          "at": {
+            "type": "datetime",
+            "value": "2026-10-14T08:30:00Z"
+          }
+        },
+        "fallbackText": "At"
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"values_moment\",\"arguments\":{\"at\":{\"type\":\"datetime\",\"value\":\"2026-10-14T08:30:00Z\"}},\"fallbackText\":\"At\"}"
+    },
+    {
+      "id": "guid",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_id",
+        "arguments": {
+          "id": {
+            "type": "guid",
+            "value": "0f8fad5b-d9cb-469f-a165-70867728950e"
+          }
+        }
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"values_id\",\"arguments\":{\"id\":{\"type\":\"guid\",\"value\":\"0f8fad5b-d9cb-469f-a165-70867728950e\"}}}"
+    },
+    {
+      "id": "boolean",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_flag",
+        "arguments": {
+          "on": {
+            "type": "boolean",
+            "value": false
+          }
+        }
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"values_flag\",\"arguments\":{\"on\":{\"type\":\"boolean\",\"value\":false}}}"
+    },
+    {
+      "id": "list",
+      "reference": {
+        "version": 2,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "operation_summary",
+        "arguments": {
+          "names": {
+            "type": "list",
+            "value": [
+              "Größe",
+              "😀",
+              "a\"b"
+            ]
+          }
+        }
+      },
+      "expected": "{\"version\":2,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"operation_summary\",\"arguments\":{\"names\":{\"type\":\"list\",\"value\":[\"Größe\",\"😀\",\"a\\\"b\"]}}}"
+    },
+    {
+      "id": "version-1",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "operation_retry",
+        "arguments": {
+          "attempt": {
+            "type": "int64",
+            "value": "2"
+          },
+          "total": {
+            "type": "int64",
+            "value": "3"
+          }
+        },
+        "fallbackText": "Retry 2 of 3"
+      },
+      "expected": "{\"version\":1,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"operation_retry\",\"arguments\":{\"attempt\":\"2\",\"total\":\"3\"},\"fallbackText\":\"Retry 2 of 3\"}"
+    },
+    {
+      "id": "version-1-boolean",
+      "reference": {
+        "version": 1,
+        "catalog": "ops",
+        "contractFingerprint": "$reader",
+        "key": "values_flag",
+        "arguments": {
+          "on": {
+            "type": "boolean",
+            "value": true
+          }
+        }
+      },
+      "expected": "{\"version\":1,\"catalog\":\"ops\",\"contractFingerprint\":\"$reader\",\"key\":\"values_flag\",\"arguments\":{\"on\":true}}"
     }
   ]
 }

@@ -27,10 +27,67 @@ internal sealed class TransportV2ConformanceTests
             sources.Select(item => (item.Key, item.Value!.GetValue<string>())).ToArray());
     }
 
-    // Replaces the "$writer" and "$reader" fingerprint placeholders.
-    private static string Wire(JsonNode reference, Rmf2ProjectV5 writer, Rmf2ProjectV5 reader) =>
-        reference.ToJsonString().Replace("\"$writer\"", JsonSerializer.Serialize(writer.CallerFingerprint), StringComparison.Ordinal)
+    private static readonly JsonSerializerOptions Literal = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    // Expands the corpus macros that keep large limit cases readable: {"$text": c, "length": n} is a string of n copies of c,
+    // {"$items": v, "count": n} an array of n copies of v, and {"$arguments": v, "count": n, "prefix": p} an object with the
+    // members p0 to p(n-1), each a copy of v.
+    private static JsonNode? Expand(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonObject macro when macro.ContainsKey("$text"):
+                return (JsonNode)(string.Concat(Enumerable.Repeat(macro["$text"]!.GetValue<string>(), macro["length"]!.GetValue<int>())));
+            case JsonObject macro when macro.ContainsKey("$items"):
+                return new JsonArray(Enumerable.Range(0, macro["count"]!.GetValue<int>()).Select(_ => Expand(macro["$items"])).ToArray());
+            case JsonObject macro when macro.ContainsKey("$arguments"):
+                return new JsonObject(Enumerable.Range(0, macro["count"]!.GetValue<int>())
+                    .Select(index => KeyValuePair.Create(macro["prefix"]!.GetValue<string>() + index, Expand(macro["$arguments"]))));
+            case JsonObject value:
+                return new JsonObject(value.Select(item => KeyValuePair.Create(item.Key, Expand(item.Value))));
+            case JsonArray array:
+                return new JsonArray(array.Select(Expand).ToArray());
+            default:
+                return node?.DeepClone();
+        }
+    }
+
+    // The JSON text of a case, either written in the corpus ("json") or the expanded "reference", with the "$writer" and "$reader"
+    // fingerprint placeholders replaced.
+    private static string Wire(JsonNode item, Rmf2ProjectV5 writer, Rmf2ProjectV5 reader) =>
+        (item["json"]?.GetValue<string>() ?? Expand(item["reference"])!.ToJsonString(Literal))
+            .Replace("\"$writer\"", JsonSerializer.Serialize(writer.CallerFingerprint), StringComparison.Ordinal)
             .Replace("\"$reader\"", JsonSerializer.Serialize(reader.CallerFingerprint), StringComparison.Ordinal);
+
+    private static TranslationReference Build(JsonObject description, string fingerprint)
+    {
+        Dictionary<string, TranslationReferenceArgument> arguments = Arguments(description["arguments"]!.AsObject(), fingerprint);
+        string key = description["key"]!.GetValue<string>(), catalog = "ops";
+        string? fallback = description["fallbackText"]?.GetValue<string>();
+        return description["version"]?.GetValue<int>() == 1
+            ? TranslationReference.CreateVersion1(catalog, fingerprint, key, arguments, fallback)
+            : new TranslationReference(catalog, fingerprint, key, arguments, fallback);
+    }
+
+    private static Dictionary<string, TranslationReferenceArgument> Arguments(JsonObject arguments, string fingerprint) =>
+        arguments.ToDictionary(item => item.Key, item =>
+        {
+            JsonNode value = item.Value!["value"]!;
+            return item.Value["type"]!.GetValue<string>() switch
+            {
+                "message" => new TranslationReferenceArgument(Build(value.AsObject(), fingerprint)),
+                "list" => new TranslationReferenceArgument(value.AsArray().Select(element => element!.GetValue<string>()).ToArray()),
+                "boolean" => new TranslationReferenceArgument(TextArgumentType.Bool, value.GetValue<bool>() ? "true" : "false"),
+                "string" => new(TextArgumentType.String, value.GetValue<string>()),
+                "int64" => new(TextArgumentType.Int, value.GetValue<string>()),
+                "decimal" => new(TextArgumentType.Number, value.GetValue<string>()),
+                "date" => new(TextArgumentType.Date, value.GetValue<string>()),
+                "time" => new(TextArgumentType.Time, value.GetValue<string>()),
+                "datetime" => new(TextArgumentType.DateTime, value.GetValue<string>()),
+                "guid" => new(TextArgumentType.Guid, value.GetValue<string>()),
+                string type => throw new InvalidOperationException("Unknown corpus type " + type),
+            };
+        }, StringComparer.Ordinal);
 
     private static CompiledTranslationSnapshot Snapshot(Rmf2ProjectV5 project, string locale)
     {
@@ -41,7 +98,8 @@ internal sealed class TransportV2ConformanceTests
             CompiledTranslationDefinition.FromRmf2Inputs(message.Key, message.Inputs.Select(input => new CompiledRmf2Input(input.Name, input.Type switch
             {
                 "string" => TextArgumentType.String, "int64" => TextArgumentType.Int, "decimal" => TextArgumentType.Number, "list" => TextArgumentType.List,
-                string type => throw new InvalidOperationException("Unexpected corpus carrier " + type),
+                "boolean" => TextArgumentType.Bool, "date" => TextArgumentType.Date, "time" => TextArgumentType.Time, "datetime" => TextArgumentType.DateTime,
+                "guid" => TextArgumentType.Guid, string type => throw new InvalidOperationException("Unexpected corpus carrier " + type),
             })).ToArray())).ToArray();
         var catalog = new CompiledTranslationCatalog(project.Id, locale, definitions,
             [new CompiledTranslationLocale(locale, null, pack.Messages.Select(message => new CompiledTranslationValue(message.Key.Id, string.Empty, message.Message))
@@ -55,38 +113,60 @@ internal sealed class TransportV2ConformanceTests
     private static string Expected(JsonObject expected) => Describe(expected["outcome"]!.GetValue<string>(), expected["text"]?.GetValue<string>(),
         expected["diagnostics"]!.AsArray().Select(item => (item!["path"]!.GetValue<string>(), item["reason"]!.GetValue<string>())));
 
-    [Test, DisplayName("persisted text references resolve after catalog changes in .NET as the corpus expects")]
+    private static string Expected(JsonNode expected) => expected is JsonObject value ? Expected(value) : "(no expectation)";
+
+    [Test, DisplayName("persisted text references read, resolve and write in .NET as the corpus expects")]
     public void DotNet()
     {
         JsonObject corpus = Corpus();
         Rmf2ProjectV5 writer = Project(corpus, "writer"), reader = Project(corpus, "reader");
         Assert.True(writer.CallerFingerprint != reader.CallerFingerprint, "The corpus catalogs must have different contracts.");
         var snapshots = new Dictionary<string, CompiledTranslationSnapshot>(StringComparer.Ordinal);
+        var failures = new List<string>();
         JsonArray cases = corpus["cases"]!.AsArray();
-        Assert.True(cases.Count >= 20, "The persisted-reference cases are missing.");
+        Assert.True(cases.Count >= 50, "The persisted-reference cases are missing.");
         foreach (JsonNode? item in cases)
         {
             string id = item!["id"]!.GetValue<string>(), locale = item["locale"]!.GetValue<string>();
             if (!snapshots.TryGetValue(locale, out CompiledTranslationSnapshot? snapshot)) snapshots[locale] = snapshot = Snapshot(reader, locale);
-            string wire = Wire(item["reference"]!, writer, reader);
-            TranslationReference reference = JsonSerializer.Deserialize(wire, TranslationReferenceJsonContext.Default.TranslationReference)!;
-            // The corpus spells every reference in the writer's canonical form.
-            Assert.Equal(wire, JsonSerializer.Serialize(reference, TranslationReferenceJsonContext.Default.TranslationReference), id + "/round trip");
+            string wire = Wire(item, writer, reader);
+            TranslationReference reference;
+            try { reference = TranslationReference.Parse(wire); }
+            catch (JsonException exception) { failures.Add(id + ": rejected: " + (exception.InnerException ?? exception).Message); continue; }
+            // Writing the reference back keeps its content; a version 1 null fallback is written as no fallback.
+            string written = JsonSerializer.Serialize(reference, TranslationReferenceJsonContext.Default.TranslationReference);
+            if (item["reference"]?["fallbackText"] is not null || item["reference"]?.AsObject().ContainsKey("fallbackText") != true)
+                if (!JsonNode.DeepEquals(JsonNode.Parse(wire), JsonNode.Parse(written))) failures.Add(id + ": round trip " + written);
             TranslationReferenceResolution resolution = TranslationReferenceResolver.Resolve(snapshot, reader.CallerFingerprint, reference);
             string actual = Describe(resolution.Outcome switch
             {
                 TranslationReferenceOutcome.Translated => "translated", TranslationReferenceOutcome.Fallback => "fallback", _ => "failed",
             }, resolution.Text, resolution.Diagnostics.Select(diagnostic => (diagnostic.Path, diagnostic.Reason)));
-            Assert.Equal(Expected(item["expected"]!.AsObject()), actual, id);
+            string expected = Expected(item["expected"]!);
+            if (expected != actual) failures.Add(id + ": expected " + expected + ", got " + actual);
         }
         foreach (JsonNode? item in corpus["rejected"]!.AsArray())
         {
             string id = item!["id"]!.GetValue<string>();
-            Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(Wire(item["reference"]!, writer, reader), TranslationReferenceJsonContext.Default.TranslationReference), id);
+            try { _ = TranslationReference.Parse(Wire(item, writer, reader)); failures.Add(id + ": accepted"); }
+            catch (JsonException) { }
+            // The converter checks the size itself when it is called through JsonSerializer.
+            try { _ = JsonSerializer.Deserialize(Wire(item, writer, reader), TranslationReferenceJsonContext.Default.TranslationReference); failures.Add(id + ": accepted by the converter"); }
+            catch (JsonException) { }
         }
+        foreach (JsonNode? item in corpus["written"]!.AsArray())
+        {
+            string id = item!["id"]!.GetValue<string>();
+            string expected = item["expected"]!.GetValue<string>().Replace("$reader", reader.CallerFingerprint, StringComparison.Ordinal);
+            string actual = JsonSerializer.Serialize(Build(Expand(item["reference"])!.AsObject(), reader.CallerFingerprint), TranslationReferenceJsonContext.Default.TranslationReference);
+            if (actual != expected) failures.Add(id + ": wrote " + actual);
+            string reread = JsonSerializer.Serialize(TranslationReference.Parse(expected), TranslationReferenceJsonContext.Default.TranslationReference);
+            if (reread != expected) failures.Add(id + ": rewrote " + reread);
+        }
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
 
-    [Test, NotInParallel, DisplayName("persisted text references resolve after catalog changes in generated ESM as the corpus expects")]
+    [Test, NotInParallel, DisplayName("persisted text references read, resolve and write in generated ESM as the corpus expects")]
     public void Esm()
     {
         JsonObject corpus = Corpus();
@@ -97,29 +177,46 @@ internal sealed class TransportV2ConformanceTests
             var cases = new JsonArray(corpus["cases"]!.AsArray().Select(item => (JsonNode)new JsonObject
             {
                 ["id"] = item!["id"]!.GetValue<string>(), ["locale"] = item["locale"]!.GetValue<string>(),
-                ["reference"] = JsonNode.Parse(Wire(item["reference"]!, writer, reader)), ["expected"] = Expected(item["expected"]!.AsObject()),
+                ["json"] = Wire(item, writer, reader), ["expected"] = Expected(item["expected"]!),
             }).ToArray());
             var rejected = new JsonArray(corpus["rejected"]!.AsArray().Select(item => (JsonNode)new JsonObject
             {
-                ["id"] = item!["id"]!.GetValue<string>(), ["reference"] = JsonNode.Parse(Wire(item["reference"]!, writer, reader)),
-                ["reason"] = item["reason"]!.GetValue<string>(),
+                ["id"] = item!["id"]!.GetValue<string>(), ["json"] = Wire(item, writer, reader), ["reason"] = item["reason"]!.GetValue<string>(),
+            }).ToArray());
+            var written = new JsonArray(corpus["written"]!.AsArray().Select(item => (JsonNode)new JsonObject
+            {
+                ["id"] = item!["id"]!.GetValue<string>(), ["reference"] = Expand(item["reference"]),
+                ["expected"] = item["expected"]!.GetValue<string>().Replace("$reader", reader.CallerFingerprint, StringComparison.Ordinal),
             }).ToArray());
             string script = Path.Combine(directory, "persisted.mjs");
-            File.WriteAllText(script, "const cases = " + cases.ToJsonString() + ";\nconst rejected = " + rejected.ToJsonString() + ";\n" + """
+            File.WriteAllText(script, "const cases = " + cases.ToJsonString() + ";\nconst rejected = " + rejected.ToJsonString() + ";\nconst written = " + written.ToJsonString() + ";\n" + """
                 import { m } from "./ops.esm-v5/messages.js";
-                import { resolveTextReference } from "./ops.esm-v5/transport.js";
+                import { createTextReference, resolveTextReference } from "./ops.esm-v5/transport.js";
                 const describe = (outcome, text, diagnostics) => `${outcome} ${text === undefined ? "null" : `«${text}»`} [${diagnostics.map(item => `${item.path}:${item.reason}`).join(", ")}]`;
+                const failures = [];
                 for (const item of cases) {
-                  const result = resolveTextReference(item.reference, m, { locale: item.locale });
+                  const result = resolveTextReference(item.json, m, { locale: item.locale });
                   const actual = describe(result.outcome, result.text, result.diagnostics);
-                  if (actual !== item.expected) throw new Error(`${item.id}: expected ${item.expected}, got ${actual}`);
-                  if (!Object.isFrozen(result) || !Object.isFrozen(result.diagnostics)) throw new Error(`${item.id}: resolution is not frozen`);
+                  if (actual !== item.expected) failures.push(`${item.id}: expected ${item.expected}, got ${actual}`);
+                  if (!Object.isFrozen(result) || !Object.isFrozen(result.diagnostics)) failures.push(`${item.id}: resolution is not frozen`);
+                  // An object parsed elsewhere resolves the same way.
+                  const object = describe(...Object.values(resolveTextReference(JSON.parse(item.json), m, { locale: item.locale })));
+                  if (object !== item.expected) failures.push(`${item.id}: object input gave ${object}`);
                 }
                 for (const item of rejected) {
-                  const result = resolveTextReference(item.reference, m, { locale: "en" });
+                  const result = resolveTextReference(item.json, m, { locale: "en" });
                   const expected = `failed null [$:${item.reason}]`, actual = describe(result.outcome, result.text, result.diagnostics);
-                  if (actual !== expected) throw new Error(`${item.id}: expected ${expected}, got ${actual}`);
+                  if (actual !== expected) failures.push(`${item.id}: expected ${expected}, got ${actual}`);
                 }
+                const inputs = args => Object.fromEntries(Object.entries(args).map(([name, { type, value }]) => [name,
+                  type === "message" ? create(value) : type === "int64" ? BigInt(value) : value]));
+                const create = description => createTextReference(description.key, inputs(description.arguments),
+                  { ...(description.fallbackText === undefined ? {} : { fallbackText: description.fallbackText }), ...(description.version === 1 ? { version: 1 } : {}) });
+                for (const item of written) {
+                  const actual = JSON.stringify(create(item.reference));
+                  if (actual !== item.expected) failures.push(`${item.id}: wrote ${actual}`);
+                }
+                if (failures.length) throw new Error(failures.join("\n"));
                 console.log("persisted references OK");
                 """, new UTF8Encoding(false));
             Rmf2EsmV5Tests.Run("bun", [script], directory);
@@ -153,7 +250,7 @@ internal sealed class TransportV2ConformanceTests
             File.WriteAllText(script, "const writerFingerprint = " + Text(writer.CallerFingerprint) + ";\nconst dotnet = [" + string.Join(",", written.Select(Text)) + "];\n" + """
                 import { m } from "./ops.esm-v5/messages.js";
                 import { contractFingerprint } from "./ops.esm-v5/runtime.js";
-                import { createTextReference, decodeTextReference, formatTextReference, resolveTextReference } from "./ops.esm-v5/transport.js";
+                import { createTextReference, decodeTextReference, formatTextReference, parseTextReference, resolveTextReference } from "./ops.esm-v5/transport.js";
                 const check = (condition, message) => { if (!condition) throw new Error(message); };
                 const step = { type: "message", value: { key: "steps_build", arguments: { name: { type: "string", value: "firefox" } }, fallbackText: "Building firefox" } };
                 const reference = { version: 2, catalog: "ops", contractFingerprint: writerFingerprint, key: "operation_failed", arguments: { step } };
@@ -198,6 +295,19 @@ internal sealed class TransportV2ConformanceTests
                 let nested = createTextReference("steps_build", { name: "x" });
                 for (let level = 1; level < 8; level++) nested = createTextReference("operation_failed", { step: nested });
                 let tooDeep = false; try { createTextReference("operation_failed", { step: nested }); } catch { tooDeep = true; } check(tooDeep, "writer depth limit");
+                const written1 = createTextReference("operation_retry", { attempt: 2n, total: 3 }, { version: 1, fallbackText: "Retry 2 of 3" });
+                check(JSON.stringify(written1) === `{"version":1,"catalog":"ops","contractFingerprint":"${contractFingerprint}","key":"operation_retry","arguments":{"attempt":"2","total":"3"},"fallbackText":"Retry 2 of 3"}`, `version 1 writer: ${JSON.stringify(written1)}`);
+                check(decodeTextReference(JSON.stringify(written1)).ok, "version 1 output decodes");
+                for (const [key, inputs, message] of [["operation_summary", { names: ["a"] }, "list"], ["operation_failed", { step: createdStep }, "message"]]) {
+                  let error; try { createTextReference(key, inputs, { version: 1 }); } catch (caught) { error = caught; }
+                  check(error instanceof TypeError && error.message.includes("needs transport version 2") && error.message.includes(message), `version 1 ${message}: ${error}`);
+                }
+                let unknownVersion = false; try { createTextReference("steps_build", { name: "x" }, { version: 3 }); } catch { unknownVersion = true; } check(unknownVersion, "writer version 3");
+                let lone = false; try { createTextReference("steps_build", { name: "\ud800" }); } catch { lone = true; } check(lone, "writer lone surrogate");
+                let large = false; try { createTextReference("steps_build", { name: "x" }, { fallbackText: "\u0001".repeat(60000) }); } catch { large = true; } check(large, "writer encoded size");
+                check(parseTextReference(42).reason === "malformed" && parseTextReference("x".repeat(262145)).reason === "limit-exceeded", "parse entry checks");
+                check(parseTextReference('{"a":[1,{"b":null}]}').ok && Object.getPrototypeOf(parseTextReference('{"__proto__":{}}').value) === null, "strict JSON reader objects");
+                check(!parseTextReference('{"a":1,}').ok && !parseTextReference('{"a":01}').ok && !parseTextReference('"\u0001"').ok, "strict JSON reader syntax");
                 console.log("transport v2 strict OK");
                 """, new UTF8Encoding(false));
             Rmf2EsmV5Tests.Run("bun", [script], directory);
