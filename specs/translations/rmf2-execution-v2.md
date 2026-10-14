@@ -123,6 +123,7 @@ range.
 | `time` | time | string literal exactly `HH:mm:ss`, valid clock time |
 | `datetime` | datetime | string literal exactly `yyyy-MM-ddTHH:mm:ssZ`, UTC |
 | `runic:uuid` | guid | exactly 36 decoded characters in UUID D format; no whitespace padding |
+| `runic:list` | list (ordered strings) | none |
 
 ## Finite function options
 
@@ -145,6 +146,8 @@ option permits a typed dynamic value.
 | `runic:uuid` | `style` | string: `d`, `n`, `b`, `p` | `d` |
 | `runic:relative-time` | `unit` | string: `second`, `minute`, `hour`, `day`, `week`, `month`, `year` | `day` |
 | `runic:relative-time` | `numeric` | string: `always`, `auto` | `always` |
+| `runic:list` | `type` | string: `conjunction`, `disjunction`, `unit` | `conjunction` |
+| `runic:list` | `style` | string: `long`, `short`, `narrow` | `long` |
 
 For number formatting, `0 <= minimum <= maximum <= 6` for decimal and
 `0 <= minimum <= maximum <= 4` for percent. Omitted bounds use the table defaults;
@@ -154,6 +157,48 @@ display multiplies by 100. These options never change the typed value: a local
 or alias keeps the underlying number, and a later formatter starts from it. They
 do determine the numeric selection operand described under
 [Numeric selection operand](#numeric-selection-operand).
+
+### List formatting
+
+`:runic:list` formats an ordered list of strings the way `Intl.ListFormat` does.
+Its `type` and `style` options have the `Intl.ListFormat` names and select the
+CLDR `listPatterns` of the content locale's language family: `conjunction` uses
+`standard` ("A, B, and C"), `disjunction` uses `or` ("A, B, or C") and `unit`
+uses `unit` ("3 ft, 7 in"), each in its `long`, `short` or `narrow` form. The
+patterns come from the pinned CLDR subset for every locale family in the
+[capability matrix](capabilities-v1.json); a content locale without them is a
+compile-time `RTR0031` error and a runtime format error.
+
+```text
+.input {$guests :runic:list}
+.local $choices = {$guests :runic:list type=disjunction style=short}
+{{Invited: {$guests}. Seat one of {$choices}.}}
+```
+
+A list caller input is declared by `:runic:list` or inferred from it; there is
+no list literal, a list cannot select a variant, and no other function accepts
+it. Without a function, a list value formats with the default options. Items
+are inserted verbatim in caller order: they are not sorted, trimmed or
+formatted. Zero items format as the empty string and one item as itself; two
+items use the CLDR `2` pattern; three or more use `start` for the first two
+items, `middle` for each inner item and `end` for the last.
+
+As in ICU, Spanish (`es`) adapts the conjunction before the last item: when the
+`2` or `end` pattern is `{0} y {1}`, `y` becomes `e` before an item that starts
+with `i`, or with `hi` not followed by `a` or `e` ("Juan e Inés", "agua y
+hielo"). Otherwise, when it is `{0} o {1}`, `o` becomes `u` before an item that
+starts with `o`, `ho` or `8`, or is `11` or starts with `11 ` ("siete u ocho").
+The comparison ignores ASCII case. The patterns contain no other contextual forms
+for the supported families. Both runtimes apply the same generated patterns and
+rule, so list output is exact across .NET and ESM; the
+[list conformance corpus](corpus/rmf2-list-conformance.json) records the shared
+expectations.
+
+The C# API takes `IReadOnlyList<string>` and the ESM API `readonly string[]`;
+both copy the items when the message is formatted (.NET when the argument is
+created), and reject a null or non-string item. The transport contract v1 has
+no list value, so a message with a list input cannot be carried in a
+`TranslationReference`.
 
 A variable used as a dynamic option must refer to an explicitly declared input
 of the option's type, or to a previously declared local of that type whose

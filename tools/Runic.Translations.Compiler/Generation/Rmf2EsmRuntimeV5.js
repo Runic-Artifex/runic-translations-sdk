@@ -112,6 +112,8 @@ function coerceInput(value, type, name) {
     case "time": if (typeof value === "string" && validTime(value)) return value; break;
     case "datetime": if (typeof value === "string" && validDateTime(value)) return value; break;
     case "guid": if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return value.toLowerCase(); break;
+    // A frozen snapshot, so later changes to the caller's array cannot affect formatting.
+    case "list": if (Array.isArray(value)) { const items = Array.from(value); if (items.every(item => typeof item === "string")) return Object.freeze(items); } break;
   }
   throw new TypeError(`Input '${name}' does not contain its declared ${type} carrier.`);
 }
@@ -123,14 +125,15 @@ function validateInputs(inputs, contract) {
   return freezeOwnRecord(contract.inputs.map(item => [item.name, Object.freeze({ carrier: coerceInput(inputs[item.name], item.type, item.name), type: item.type, format: Object.freeze({ function: defaultFunction(item.type), options: freezeOwnRecord([]) }) })]));
 }
 
-function defaultFunction(type) { return ({ string: "string", int64: "integer", decimal: "number", boolean: "runic:boolean", date: "date", time: "time", datetime: "datetime", guid: "runic:uuid" })[type]; }
-function functionType(name) { return ({ string: "string", integer: "int64", number: "decimal", "runic:boolean": "boolean", date: "date", time: "time", datetime: "datetime", "runic:uuid": "guid", "runic:relative-time": "decimal" })[name]; }
+function defaultFunction(type) { return ({ string: "string", int64: "integer", decimal: "number", boolean: "runic:boolean", date: "date", time: "time", datetime: "datetime", guid: "runic:uuid", list: "runic:list" })[type]; }
+function functionType(name) { return ({ string: "string", integer: "int64", number: "decimal", "runic:boolean": "boolean", date: "date", time: "time", datetime: "datetime", "runic:uuid": "guid", "runic:relative-time": "decimal", "runic:list": "list" })[name]; }
 function optionType(fn, name) {
   if (["string", "runic:boolean", "integer", "number"].includes(fn) && name === "select") return "string";
   if (fn === "integer" && name === "useGrouping") return "string";
   if (["number", "date", "time", "datetime", "runic:uuid"].includes(fn) && name === "style") return "string";
   if (fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) return "int64";
   if (fn === "runic:relative-time" && ["unit", "numeric"].includes(name)) return "string";
+  if (fn === "runic:list" && ["type", "style"].includes(name)) return "string";
   return null;
 }
 
@@ -183,6 +186,7 @@ function validateResolvedOptions(fn, options) {
     number: { select: ["plural", "ordinal", "exact"], style: ["decimal", "percent"] }, date: { style: ["iso", "short", "long"] },
     time: { style: ["iso", "short", "long"] }, datetime: { style: ["iso", "short", "long"] }, "runic:uuid": { style: ["d", "n", "b", "p"] },
     "runic:relative-time": { unit: ["second", "minute", "hour", "day", "week", "month", "year"], numeric: ["always", "auto"] },
+    "runic:list": { type: ["conjunction", "disjunction", "unit"], style: ["long", "short", "narrow"] },
   }[fn];
   if (!allowed) throw new TypeError("Unknown formatter.");
   for (const name of Object.keys(options)) {
@@ -208,6 +212,7 @@ function formatResolved(value, locale) {
     case "datetime": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale);
     case "runic:uuid": { const canonical = value.carrier; const style = options.style ?? "d"; if (style === "d") return canonical; if (style === "n") return canonical.replaceAll("-", ""); if (style === "b") return `{${canonical}}`; return `(${canonical})`; }
     case "runic:relative-time": return formatRelative(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options.unit ?? "day", options.numeric ?? "always", locale);
+    case "runic:list": return formatList(value.carrier, options.type ?? "conjunction", options.style ?? "long", locale);
     default: throw new TypeError("Unknown formatter.");
   }
 }
@@ -272,6 +277,32 @@ function formatRelative(value, unit, numeric, locale) {
   if (numeric === "auto" && unit === "day" && value.scale === 0 && signed >= -1n && signed <= 1n) return data.autoDay[Number(signed + 1n)];
   const absolute = decimalAbsolute(value), forms = data.units[unit], noun = forms[selectPlural(absolute, locale, false) === "one" ? 0 : 1];
   return (value.negative ? data.past : data.future).replace("{0}", decimalCanonical(absolute)).replace("{unit}", noun);
+}
+
+// Joins the items with the pinned CLDR list patterns, as Intl.ListFormat does.
+// The .NET runtime applies the same generated separators and Spanish rule.
+function formatList(items, type, style, locale) {
+  const language = locale.toLowerCase().split(/[-_]/)[0], data = Object.hasOwn(generatedLocaleData.list, language) ? generatedLocaleData.list[language] : undefined;
+  if (!data) throw new RangeError(`List formatting is not supported for locale '${locale}'.`);
+  const offset = (["conjunction", "disjunction", "unit"].indexOf(type) * 3 + ["long", "short", "narrow"].indexOf(style)) * 4;
+  const [start, middle, end, two] = data.slice(offset, offset + 4);
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  const last = items[items.length - 1];
+  if (items.length === 2) return items[0] + contextualListSeparator(language, two, end, two, last) + last;
+  let text = items[0] + start + items[1];
+  for (let index = 2; index < items.length - 1; index++) text += middle + items[index];
+  return text + contextualListSeparator(language, two, end, end, last) + last;
+}
+
+// ICU, and therefore Intl.ListFormat, changes Spanish "y" to "e" before an /i/ sound
+// and "o" to "u" before an /o/ sound. The rule applies to the two-item and end
+// separators of a pattern set that uses " y " (or else " o "), and tests the last item.
+function contextualListSeparator(language, two, end, separator, last) {
+  if (language !== "es") return separator;
+  if (two === " y " || end === " y ") return separator === " y " && /^(?:[iI]|[hH][iI](?![aAeE]))/.test(last) ? " e " : separator;
+  if (two === " o " || end === " o ") return separator === " o " && /^(?:[oO8]|[hH][oO]|11(?: |$))/.test(last) ? " u " : separator;
+  return separator;
 }
 
 function formatTemporal(value, type, style, locale) {
@@ -498,7 +529,7 @@ function validateExpression(expression, symbols, references) {
   if(Object.hasOwn(expression,"function")&&expression.function===undefined)return "malformed-pattern";
   const valueError=validateValue(expression.operand);if(valueError)return valueError;
   const annotationError=validateAnnotations(expression.annotations,"malformed-pattern");if(annotationError)return annotationError;
-  if (!["string","int64","decimal","boolean","date","time","datetime","guid"].includes(expression.valueType)) return "malformed-pattern";
+  if (!["string","int64","decimal","boolean","date","time","datetime","guid","list"].includes(expression.valueType)) return "malformed-pattern";
   if (!Array.isArray(expression.options)) return "malformed-pattern";
   if (["input","local"].includes(expression.operand.kind)) { if (!Object.hasOwn(symbols,expression.operand.value) || symbols[expression.operand.value].type !== expression.valueType) return "argument-contract-mismatch"; }
   else { try { literal(expression.operand, expression.valueType); } catch { return "malformed-pattern"; } }

@@ -102,6 +102,25 @@ keys compare the same displayed value: 1 as a percent matches key `100`. The
 typed value is unchanged, so another expression over the same variable starts
 from the original number.
 
+`:runic:list` joins a list of strings with the content locale's CLDR list
+patterns, like `Intl.ListFormat`. `type` is `conjunction` (default),
+`disjunction` or `unit`, and `style` is `long` (default), `short` or `narrow`:
+
+```rmf2
+invited = Invited: {$guests :runic:list}.
+choice = Pick {$options :runic:list type=disjunction}.
+```
+
+In English, `["Ana", "Bo", "Cy"]` formats as `Invited: Ana, Bo, and Cy.` and
+`Pick Ana, Bo, or Cy.`; in Spanish the conjunction follows the CLDR and ICU forms,
+so `["Juan", "Inés"]` gives `Juan e Inés`. The generated C# method takes an
+`IReadOnlyList<string>` and the generated ESM function a `readonly string[]`.
+Items are inserted as given, in caller order; sort them before formatting if the
+order matters. A list cannot select a variant, has no literal form and is not
+part of the cross-process transport. The
+[execution profile](../../../specs/translations/rmf2-execution-v2.md#list-formatting)
+specifies the patterns and the Spanish rule.
+
 Fallback remains per message. The resolved source locale accompanies content and
 controls formatting and accessible icon names. Terms and group-atomic fallback
 remain deferred.

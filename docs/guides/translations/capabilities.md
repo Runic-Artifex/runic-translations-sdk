@@ -7,29 +7,31 @@ Release target: **0.6.0-preview.7**\
 CLDR source: **48.2** (JSON tag `48.2.0`, Unicode-3.0)\
 Conforming backends: **dotnet, esm**
 
-## Locale selectors and relative time
+## Locale selectors, relative time and lists
 
-| Locale family | Cardinal | Ordinal | Relative time |
-| ------------- | -------: | ------: | ------------: |
-| `cs`          |      yes |     yes |             — |
-| `da`          |      yes |     yes |             — |
-| `de`          |      yes |     yes |           yes |
-| `en`          |      yes |     yes |           yes |
-| `es`          |      yes |     yes |           yes |
-| `fr`          |      yes |     yes |           yes |
-| `it`          |      yes |     yes |           yes |
-| `nb`          |      yes |     yes |             — |
-| `nl`          |      yes |     yes |             — |
-| `nn`          |      yes |     yes |             — |
-| `no`          |      yes |     yes |             — |
-| `sv`          |      yes |     yes |             — |
+| Locale family | Cardinal | Ordinal | Relative time | List |
+| ------------- | -------: | ------: | ------------: | ---: |
+| `cs`          |      yes |     yes |             — |  yes |
+| `da`          |      yes |     yes |             — |  yes |
+| `de`          |      yes |     yes |           yes |  yes |
+| `en`          |      yes |     yes |           yes |  yes |
+| `es`          |      yes |     yes |           yes |  yes |
+| `fr`          |      yes |     yes |           yes |  yes |
+| `it`          |      yes |     yes |           yes |  yes |
+| `ja`          |      yes |     yes |             — |  yes |
+| `nb`          |      yes |     yes |             — |  yes |
+| `nl`          |      yes |     yes |             — |  yes |
+| `nn`          |      yes |     yes |             — |  yes |
+| `no`          |      yes |     yes |             — |  yes |
+| `sv`          |      yes |     yes |             — |  yes |
 
 Locale variants such as `de-DE` use the declared base language capability.
-Unsupported selector or relative-time combinations fail compilation with `RTR0031`.
+Unsupported selector, relative-time or list combinations fail compilation with `RTR0031`.
 Cardinal selector equivalence: **exact**.
 Ordinal selector equivalence: **exact**.
 Relative-time equivalence: **semantic**.
-Plural selection and relative-time language patterns are generated from the pinned CLDR subset; the ESM backend does not delegate them to host `Intl` data.
+List equivalence: **exact**.
+Plural selection, relative-time and list patterns are generated from the pinned CLDR subset; the ESM backend does not delegate them to host `Intl` data.
 Cardinal and ordinal rules use all CLDR operands of the displayed number, after percent scaling, rounding and minimum fraction digits.
 
 ## Formatter equivalence

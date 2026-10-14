@@ -114,6 +114,50 @@ internal sealed class GeneratorTests
             Execute(run, "Example.Localization.ExecutionProbe", "Run"), "generated execution");
     }
 
+    [Test, DisplayName("generated C# types list inputs as IReadOnlyList<string> and formats them")]
+    public void GeneratedListInputs()
+    {
+        const string resource = """
+            invited = {{Invited: {$names :runic:list}.}}
+            choice =
+              .input {$names :runic:list type=disjunction style=short}
+              {{{$names}}}
+            """;
+        string invited = PathMember("invited"), choice = PathMember("choice");
+        string source = $$"""
+            namespace Example.Localization;
+            public static class ListProbe
+            {
+                public static string Run()
+                {
+                    global::Runic.Translations.ITranslationManager manager =
+                        AppTextCatalog.CreateManagerAsync().AsTask().GetAwaiter().GetResult();
+                    var text = new AppText(manager);
+                    var names = new global::System.Collections.Generic.List<string> { "Ana", "Bo" };
+                    string first = text.{{invited}}(new[] { "Ana", "Bo", "Cy" });
+                    string second = text.{{choice}}(names);
+                    names.Add("Cy");
+                    return first + "|" + second + "|" + text.{{choice}}(names);
+                }
+            }
+            """;
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, ProjectInput(), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", resource));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Assert.True(Serialize(run).Contains("(global::System.Collections.Generic.IReadOnlyList<string> ", StringComparison.Ordinal), "list parameter type");
+        Assert.Equal("Invited: Ana, Bo, and Cy.|Ana or Bo|Ana, Bo, or Cy", Execute(run, "Example.Localization.ListProbe", "Run"), "generated list execution");
+
+        string mistyped = $$"""
+            namespace Example.Localization;
+            public static class MistypedProbe
+            {
+                public static string Run(AppText text) => text.{{invited}}("Ana");
+            }
+            """;
+        Diagnostic[] errors = GeneratorTestHost.RunWithConsumer(mistyped, ProjectInput(), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", resource))
+            .Compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
+        Assert.True(errors.Any(static error => error.Id == "CS1503"), "A string was accepted for a list input: " + string.Join("; ", errors.Select(static error => error.ToString())));
+    }
+
     // For startup code that cannot await, such as a WPF StartupUri application: no continuation is posted.
     [Test, DisplayName("generated CreateManager returns a ready manager without awaiting")]
     public void SynchronousManager()

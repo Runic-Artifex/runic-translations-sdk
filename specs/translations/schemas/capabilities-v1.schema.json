@@ -53,11 +53,12 @@
     "messageProfile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cardinal", "ordinal", "relativeTime"],
+      "required": ["cardinal", "ordinal", "relativeTime", "list"],
       "properties": {
         "cardinal": { "$ref": "#/$defs/equivalence" },
         "ordinal": { "$ref": "#/$defs/equivalence" },
-        "relativeTime": { "$ref": "#/$defs/equivalence" }
+        "relativeTime": { "$ref": "#/$defs/equivalence" },
+        "list": { "$ref": "#/$defs/equivalence" }
       }
     },
     "locales": {
@@ -94,12 +95,13 @@
     "locale": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tag", "cardinal", "ordinal", "relativeTime"],
+      "required": ["tag", "cardinal", "ordinal", "relativeTime", "list"],
       "properties": {
         "tag": { "type": "string", "pattern": "^[a-z]{2,8}$" },
         "cardinal": { "type": "boolean" },
         "ordinal": { "type": "boolean" },
-        "relativeTime": { "type": "boolean" }
+        "relativeTime": { "type": "boolean" },
+        "list": { "type": "boolean" }
       }
     }
   }

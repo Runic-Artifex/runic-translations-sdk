@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 
@@ -23,6 +24,8 @@ public enum TextArgumentType
     DateTime,
     /// <summary>A globally unique identifier.</summary>
     Guid,
+    /// <summary>An ordered list of strings, joined with the locale's CLDR list patterns.</summary>
+    List,
 }
 
 /// <summary>Portable, closed formatting choices for text arguments.</summary>
@@ -139,6 +142,13 @@ public readonly struct TextArgument
     {
     }
 
+    /// <summary>Creates a list argument from a snapshot of <paramref name="value"/>.</summary>
+    /// <remarks>Later changes to the caller's collection do not affect the argument. Items cannot be null.</remarks>
+    public TextArgument(string name, IReadOnlyList<string> value)
+        : this(name, TextArgumentType.List, TextArgumentFormat.None, Snapshot(value))
+    {
+    }
+
     /// <summary>Copies a closed carrier under an NFC RMF2 identity, independently of legacy ASCII placeholder names.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static TextArgument CreateRmf2(string name, TextArgument value)
@@ -192,6 +202,15 @@ public readonly struct TextArgument
         return false;
     }
 
+    private static System.Collections.ObjectModel.ReadOnlyCollection<string> Snapshot(IReadOnlyList<string> value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var items = new string[value.Count];
+        for (int index = 0; index < items.Length; index++)
+            items[index] = value[index] ?? throw new ArgumentException("List items cannot be null.", nameof(value));
+        return Array.AsReadOnly(items);
+    }
+
     private static bool IsPlaceholderName(string name)
     {
         if (!IsAsciiLetter(name[0]) && name[0] != '_')
@@ -224,6 +243,7 @@ public readonly struct TextArgument
         TextArgumentType.Time => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium,
         TextArgumentType.DateTime => format is TextArgumentFormat.Iso or TextArgumentFormat.Short or TextArgumentFormat.Medium or TextArgumentFormat.Long,
         TextArgumentType.Guid => format is TextArgumentFormat.D or TextArgumentFormat.N,
+        TextArgumentType.List => format == TextArgumentFormat.None,
         _ => false,
     };
 }

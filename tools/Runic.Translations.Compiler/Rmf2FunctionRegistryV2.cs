@@ -33,6 +33,7 @@ internal static class Rmf2FunctionRegistryV2
         Function("runic:uuid", "guid", "none", Enum("style", "d", true, "d", "n", "b", "p")),
         Function("runic:boolean", "boolean", "exact", Enum("select", "exact", false, "exact")),
         Function("runic:relative-time", "decimal", "plural", Enum("unit", "day", true, "second", "minute", "hour", "day", "week", "month", "year"), Enum("numeric", "always", true, "always", "auto")),
+        Function("runic:list", "list", "none", Enum("type", "conjunction", true, "conjunction", "disjunction", "unit"), Enum("style", "long", true, "long", "short", "narrow")),
     });
 
     internal static Rmf2FunctionRuleV2? Find(string name) => Functions.FirstOrDefault(function => function.Name == name);

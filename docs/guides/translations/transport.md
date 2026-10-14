@@ -3,7 +3,9 @@
 Backend-originated UI text uses transport version 1: catalog ID, generated
 contract fingerprint, stable dotted key, canonical arguments, and optional plain
 fallback text. Integer and decimal wire values are canonical decimal strings;
-booleans are JSON booleans; other portable values are strings.
+booleans are JSON booleans; other portable values are strings. Version 1 has no
+list value: `TranslationReferenceArgument` rejects `TextArgumentType.List` and
+`transport.js` rejects a reference to a message with a `:runic:list` input.
 
 The .NET runtime exposes bounded immutable `TranslationReference` and
 `TranslationReferenceArgument` types plus `TranslationReferenceJsonContext` for

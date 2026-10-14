@@ -87,7 +87,8 @@ internal static class Rmf2RuntimeValidation
     {
         TextArgumentType.String => "string", TextArgumentType.Int => "integer", TextArgumentType.Number => "number",
         TextArgumentType.Bool => "runic:boolean", TextArgumentType.Date => "date", TextArgumentType.Time => "time",
-        TextArgumentType.DateTime => "datetime", TextArgumentType.Guid => "runic:uuid", _ => throw new ArgumentException("Invalid carrier type.", nameof(type)),
+        TextArgumentType.DateTime => "datetime", TextArgumentType.Guid => "runic:uuid", TextArgumentType.List => "runic:list",
+        _ => throw new ArgumentException("Invalid carrier type.", nameof(type)),
     };
     internal static string Selection(string function) => function is "integer" or "number" or "runic:relative-time" ? "plural" : function is "string" or "runic:boolean" ? "exact" : "none";
     private static TextArgumentType FunctionInputType(string function) => function switch
@@ -95,7 +96,8 @@ internal static class Rmf2RuntimeValidation
         "string" => TextArgumentType.String, "integer" => TextArgumentType.Int,
         "number" or "runic:relative-time" => TextArgumentType.Number, "runic:boolean" => TextArgumentType.Bool,
         "date" => TextArgumentType.Date, "time" => TextArgumentType.Time, "datetime" => TextArgumentType.DateTime,
-        "runic:uuid" => TextArgumentType.Guid, _ => throw new ArgumentException("Unknown v5 input function.", nameof(function)),
+        "runic:uuid" => TextArgumentType.Guid, "runic:list" => TextArgumentType.List,
+        _ => throw new ArgumentException("Unknown v5 input function.", nameof(function)),
     };
     internal static TextArgumentType OptionType(string function, string name) => (function, name) switch
     {
@@ -104,6 +106,7 @@ internal static class Rmf2RuntimeValidation
         ("number" or "date" or "time" or "datetime" or "runic:uuid", "style") => TextArgumentType.String,
         ("number", "minimumFractionDigits" or "maximumFractionDigits") => TextArgumentType.Int,
         ("runic:relative-time", "unit" or "numeric") => TextArgumentType.String,
+        ("runic:list", "type" or "style") => TextArgumentType.String,
         _ => throw new ArgumentException("Unknown option '" + name + "' for '" + function + "'.", nameof(name)),
     };
     internal static void Function(CompiledRmf2Expression expression)

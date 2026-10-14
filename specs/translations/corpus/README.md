@@ -1,6 +1,6 @@
 # Runic Translations conformance corpora
 
-The current release contract is exercised by four complementary fixtures:
+The current release contract is exercised by five complementary fixtures:
 
 - [`rmf2-v1/index.json`](rmf2-v1/index.json) is the cross-backend release oracle
   for resource syntax `rmf2-v1` executed as `rmf2-execution-v2`, grammar/AST and
@@ -11,7 +11,12 @@ The current release contract is exercised by four complementary fixtures:
 - [`semantic-v5`](semantic-v5/README.md) isolates normalized AST and semantic
   validation cases;
 - [`v5-project`](v5-project/README.md) isolates project linking, caller and
-  freshness hashes, generated backends, and strict pack decoding.
+  freshness hashes, generated backends, and strict pack decoding;
+- [`rmf2-list-conformance.json`](rmf2-list-conformance.json) is the
+  cross-backend oracle for `:runic:list`: every supported locale family, each
+  type and style, and the Spanish `y`/`e` and `o`/`u` forms. Each case must
+  format exactly as expected in a linked .NET message, a loaded .NET pack,
+  generated ESM and a dynamically decoded ESM artifact.
 
 The name `rmf2-v1` denotes the resource-file syntax. It does not select a retired
 runtime, artifact, or emitter. Current runners compile every fixture through the

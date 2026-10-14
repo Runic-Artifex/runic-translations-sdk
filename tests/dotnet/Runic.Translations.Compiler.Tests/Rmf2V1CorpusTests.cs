@@ -179,8 +179,10 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for W250-016: the C# registration gains the synchronous CreateManager. Every other output is unchanged.
     // EncodedOutputDigest covers output without the readable surface, so it is unchanged by W250-017. With the readable
     // surface, W250-017 adds [EditorBrowsable(Never)] to each encoded key and accessor that has a readable member.
-    private const string EncodedOutputDigest = "e995151c2219307c10b041420ae74cf316836e388b9e503f78b43a1eebd749b6";
-    private const string HiddenEncodedOutputDigest = "fd3b1e428e30bf6a0edfc4b5f2d6fa5ab4f4ae9e031f0723f8bb1026b9d612ea";
+    // Re-pinned for W300-009: runtime.js gains :runic:list, the generated CLDR list patterns and the Japanese
+    // plural rules, in both digests. Every other output is unchanged.
+    private const string EncodedOutputDigest = "d0b5ba1fd34cd121336ad160c35d4ca0f1b49c0d3f6e529c14ad947ff8ada77b";
+    private const string HiddenEncodedOutputDigest = "26ad8ea12f07388079e8e0f031176f2e913394e4c0b059bd9fa11d2c5db1062a";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
@@ -242,7 +244,7 @@ internal sealed class Rmf2V1CorpusTests
     {
         "string" => TextArgumentType.String, "int64" => TextArgumentType.Int, "decimal" => TextArgumentType.Number,
         "boolean" => TextArgumentType.Bool, "date" => TextArgumentType.Date, "time" => TextArgumentType.Time,
-        "datetime" => TextArgumentType.DateTime, "guid" => TextArgumentType.Guid,
+        "datetime" => TextArgumentType.DateTime, "guid" => TextArgumentType.Guid, "list" => TextArgumentType.List,
         _ => throw new InvalidOperationException("Unknown corpus carrier " + type),
     };
 
