@@ -1,0 +1,15 @@
+# Step labels and operation outcomes. The server stores them as references
+# (key and arguments); every process translates them where they are shown.
+steps {
+  build = Building {$name}
+  switch = Switching to generation {$generation :integer}
+}
+operation {
+  failed = {$step} failed
+  finished =
+    .input {$count :integer}
+    .match $count
+    one {{Finished one step}}
+    * {{Finished {$count} steps}}
+  changed = Changed {$packages :runic:list}
+}
