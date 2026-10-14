@@ -23,19 +23,28 @@ internal sealed class TranslationReferenceJsonConverter : JsonConverter<Translat
     public override TranslationReference Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType != JsonTokenType.StartObject) throw new JsonException("A text reference must be an object.");
+        // Measure the encoded object by scanning its tokens before building anything from it.
+        Utf8JsonReader scan = reader;
+        long start = reader.TokenStartIndex;
+        if (!scan.TrySkip()) throw new JsonException("The text reference is incomplete.");
+        if (scan.BytesConsumed - start > TranslationTransport.MaximumEncodedLength)
+            throw new JsonException("The text reference is larger than the transport limit.");
         using JsonDocument document = JsonDocument.ParseValue(ref reader);
-        JsonElement root = document.RootElement;
-        var members = Members(root, ["version", "catalog", "contractFingerprint", "key", "arguments", "fallbackText"]);
-        if (!members.TryGetValue("version", out JsonElement versionElement) || versionElement.ValueKind != JsonValueKind.Number ||
-            !versionElement.TryGetInt32(out int version) || version is < TranslationTransport.MinimumReadVersion or > TranslationTransport.Version)
-            throw new JsonException("Unsupported text-reference version.");
-        if (!members.TryGetValue("catalog", out JsonElement catalog) || !members.TryGetValue("contractFingerprint", out JsonElement fingerprint))
-            throw new JsonException("Text reference is incomplete.");
         try
         {
+            JsonElement root = document.RootElement;
+            var members = Members(root, ["version", "catalog", "contractFingerprint", "key", "arguments", "fallbackText"]);
+            // An integer token only: 2.0 and 2e0 are rejected, as the ESM reader rejects them.
+            if (!members.TryGetValue("version", out JsonElement versionElement) || versionElement.ValueKind != JsonValueKind.Number ||
+                !versionElement.TryGetInt32(out int version) || versionElement.GetRawText() != version.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
+                version is < TranslationTransport.MinimumReadVersion or > TranslationTransport.Version)
+                throw new JsonException("Unsupported text-reference version.");
+            if (!members.TryGetValue("catalog", out JsonElement catalog) || !members.TryGetValue("contractFingerprint", out JsonElement fingerprint))
+                throw new JsonException("Text reference is incomplete.");
             return Reference(version, String(catalog), String(fingerprint), members, depth: 1);
         }
         catch (ArgumentException exception) { throw new JsonException("Text reference is invalid.", exception); }
+        // GetString and JsonProperty.Name throw InvalidOperationException for a lone surrogate escape.
         catch (InvalidOperationException exception) { throw new JsonException("Text reference is invalid.", exception); }
     }
 
@@ -115,55 +124,8 @@ internal sealed class TranslationReferenceJsonConverter : JsonConverter<Translat
     {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(value);
-        writer.WriteStartObject();
-        writer.WriteNumber("version", value.Version);
-        writer.WriteString("catalog", value.Catalog);
-        writer.WriteString("contractFingerprint", value.ContractFingerprint);
-        WriteBody(writer, value);
-        writer.WriteEndObject();
-    }
-
-    private static void WriteBody(Utf8JsonWriter writer, TranslationReference value)
-    {
-        writer.WriteString("key", value.Key);
-        writer.WritePropertyName("arguments");
-        writer.WriteStartObject();
-        var names = new List<string>(value.Arguments.Keys);
-        names.Sort(StringComparer.Ordinal);
-        foreach (string name in names)
-        {
-            TranslationReferenceArgument argument = value.Arguments[name];
-            if (value.Version == 1)
-            {
-                if (argument.Type == TextArgumentType.Bool) writer.WriteBoolean(name, argument.Value == "true");
-                else writer.WriteString(name, argument.Value);
-                continue;
-            }
-            writer.WriteStartObject(name);
-            if (argument.Message is { } message)
-            {
-                writer.WriteString("type", "message");
-                writer.WriteStartObject("value");
-                WriteBody(writer, message);
-                writer.WriteEndObject();
-            }
-            else
-            {
-                writer.WriteString("type", TranslationTransport.WireType(argument.Type));
-                writer.WritePropertyName("value");
-                if (argument.Items is { } items)
-                {
-                    writer.WriteStartArray();
-                    foreach (string item in items) writer.WriteStringValue(item);
-                    writer.WriteEndArray();
-                }
-                else if (argument.Type == TextArgumentType.Bool) writer.WriteBooleanValue(argument.Value == "true");
-                else writer.WriteStringValue(argument.Value);
-            }
-            writer.WriteEndObject();
-        }
-        writer.WriteEndObject();
-        if (value.FallbackText is not null) writer.WriteString("fallbackText", value.FallbackText);
+        // The transport's own escaping, identical to JSON.stringify, independent of the serializer's encoder.
+        writer.WriteRawValue(TranslationReferenceWire.Write(value), skipInputValidation: true);
     }
 
     private static string String(JsonElement element) =>

@@ -130,6 +130,56 @@ internal sealed class TranslationReferenceTests
             Arguments(("inner", new(new TranslationReference("app", OtherFingerprint, "leaf"))))));
     }
 
+    [Test, DisplayName("version 1 references can still be written for receivers that do not read version 2")]
+    public void WriteVersion1()
+    {
+        TranslationReference reference = TranslationReference.CreateVersion1("app", Fingerprint, "files.deleted",
+            Arguments(("count", new(TextArgumentType.Int, "3")), ("confirmed", new(TextArgumentType.Bool, "true"))), "fallback");
+        Assert.Equal(1, reference.Version);
+        Assert.Equal("{\"version\":1,\"catalog\":\"app\",\"contractFingerprint\":\"" + Fingerprint +
+            "\",\"key\":\"files.deleted\",\"arguments\":{\"confirmed\":true,\"count\":\"3\"},\"fallbackText\":\"fallback\"}", Json(reference));
+        Assert.Throws<ArgumentException>(() => TranslationReference.CreateVersion1("app", Fingerprint, "k", Arguments(("names", new(["a"])))), "needs transport version 2");
+        Assert.Throws<ArgumentException>(() => TranslationReference.CreateVersion1("app", Fingerprint, "k",
+            Arguments(("step", new(new TranslationReference("app", Fingerprint, "leaf"))))), "needs transport version 2");
+    }
+
+    [Test, DisplayName("text references are written as JSON.stringify writes them and reject lone surrogates")]
+    public void Escaping()
+    {
+        var reference = new TranslationReference("app", Fingerprint, "k",
+            Arguments(("name", new(TextArgumentType.String, "Gr\u00f6\u00dfe <b>&'+\"\\ \u0000\u0001\b\f\n\r\t\u001f\u007f\u2028 \ud83d\ude00"))));
+        Assert.Equal("{\"version\":2,\"catalog\":\"app\",\"contractFingerprint\":\"" + Fingerprint + "\",\"key\":\"k\",\"arguments\":{\"name\":{\"type\":\"string\",\"value\":" +
+            "\"Gr\u00f6\u00dfe <b>&'+\\\"\\\\ \\u0000\\u0001\\b\\f\\n\\r\\t\\u001f\u007f\u2028 \ud83d\ude00\"}}}", Json(reference));
+        // The serializer's own encoder does not change the transport's escaping.
+        Assert.Equal(Json(reference), JsonSerializer.Serialize(reference, new TranslationReferenceJsonContext(new JsonSerializerOptions()).TranslationReference));
+        Assert.Throws<ArgumentException>(() => _ = new TranslationReferenceArgument(TextArgumentType.String, "\ud800"));
+        Assert.Throws<ArgumentException>(() => _ = new TranslationReference("app", Fingerprint, "k", fallbackText: "a\udc00"));
+        Assert.Throws<ArgumentException>(() => _ = new TranslationReferenceArgument(["ok", "\ud83d"]));
+        Assert.Throws<JsonException>(() => Parse("{\"version\":2,\"catalog\":\"app\",\"contractFingerprint\":\"" + Fingerprint + "\",\"key\":\"k\",\"arguments\":{},\"fallbackText\":\"\\ud800\"}"));
+        var builder = new System.Text.StringBuilder();
+        TranslationReferenceWire.Quote(builder, "\ud800x\udc00");
+        Assert.Equal("\"\\ud800x\\udc00\"", builder.ToString());
+    }
+
+    [Test, DisplayName("text references bound their encoded size before parsing and their total text")]
+    public void EncodedSize()
+    {
+        string large = "{\"version\":2,\"catalog\":\"app\",\"contractFingerprint\":\"" + Fingerprint + "\",\"key\":\"k\",\"arguments\":{},\"fallbackText\":\"" +
+            string.Concat(Enumerable.Repeat("\\u0001", 50_000)) + "\"}";
+        Assert.True(System.Text.Encoding.UTF8.GetByteCount(large) > TranslationTransport.MaximumEncodedLength, "The probe is too small.");
+        Assert.Throws<JsonException>(() => TranslationReference.Parse(large), "transport limit");
+        Assert.Throws<JsonException>(() => TranslationReference.Parse(System.Text.Encoding.UTF8.GetBytes(large)), "transport limit");
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(large, TranslationReferenceJsonContext.Default.TranslationReference), "transport limit");
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new TranslationReference("app", Fingerprint, "k", fallbackText: new string('\u0001', 50_000)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = new TranslationReference("app", Fingerprint, "k",
+            Arguments(Enumerable.Range(0, 5).Select(index => ("a" + index, new TranslationReferenceArgument(TextArgumentType.String, new string('v', 16 * 1024)))).ToArray())));
+        var full = new TranslationReference("app", Fingerprint, "k",
+            Arguments(Enumerable.Range(0, 4).Select(index => ("a" + index, new TranslationReferenceArgument(TextArgumentType.String, new string('v', 16 * 1024)))).ToArray()));
+        Assert.Equal(TranslationTransport.MaximumTotalTextLength, full.TextLength);
+        Assert.Equal(Json(full), Json(TranslationReference.Parse(Json(full))));
+        Assert.Throws<JsonException>(() => Parse(Json(full).Replace("\"version\":2", "\"version\":2.0", StringComparison.Ordinal)));
+    }
+
     private static CompiledTranslationSnapshot Snapshot() => new(new CompiledTranslationCatalog("app", "en",
         [
             new CompiledTranslationDefinition("files.deleted", [new("count", TextArgumentType.Int, TextArgumentFormat.Plain), new("folder", TextArgumentType.String, TextArgumentFormat.None)]),
@@ -175,5 +225,34 @@ internal sealed class TranslationReferenceTests
             Describe(TranslationReferenceResolver.Resolve(snapshot, OtherFingerprint, Parse(version1))));
         Assert.Equal("Fallback stored [$:incompatible-arguments]", Describe(TranslationReferenceResolver.Resolve(snapshot, OtherFingerprint,
             Parse(version1.Replace("\"3\"", "\"three\"", StringComparison.Ordinal)))));
+    }
+
+    // A snapshot whose locale lacks a message, formatting it as MissingTranslationPolicy.ReturnKey or ReturnMarker would.
+    private sealed class MissingMessageSnapshot(ITranslationSnapshot inner, string missing, string formatted) : ITranslationSnapshot
+    {
+        public string Catalog => inner.Catalog;
+        public string Locale => inner.Locale;
+        public bool TryGet(TranslationKey key, out string pattern)
+        {
+            if (key.Name == missing) { pattern = string.Empty; return false; }
+            return inner.TryGet(key, out pattern);
+        }
+        public string Get(TranslationKey key) => key.Name == missing ? formatted : inner.Get(key);
+        public string Format(TranslationKey key, ReadOnlySpan<TextArgument> arguments) => key.Name == missing ? formatted : inner.Format(key, arguments);
+        public bool TryGetKey(string name, out TranslationKey key) => inner.TryGetKey(name, out key);
+        public bool TryGetPlaceholders(TranslationKey key, out ReadOnlyMemory<TranslationPlaceholderDescriptor> placeholders) => inner.TryGetPlaceholders(key, out placeholders);
+    }
+
+    [Test, DisplayName("a key without a message in the locale resolves as unknown whatever the missing-key policy formats")]
+    public void MissingInLocale()
+    {
+        var reference = new TranslationReference("app", Fingerprint, "steps.build", Arguments(("name", new(TextArgumentType.String, "gimp"))), "Building gimp");
+        foreach (string formatted in new[] { "steps.build", "[missing: steps.build]" })
+        {
+            var snapshot = new MissingMessageSnapshot(Snapshot(), "steps.build", formatted);
+            Assert.Equal("Fallback Building gimp [$:unknown-key]", Describe(TranslationReferenceResolver.Resolve(snapshot, Fingerprint, reference)), formatted);
+            var failed = new TranslationReference("app", Fingerprint, "operation.failed", Arguments(("step", new(reference))));
+            Assert.Equal("Translated Building gimp failed [$.step:unknown-key]", Describe(TranslationReferenceResolver.Resolve(snapshot, Fingerprint, failed)), formatted);
+        }
     }
 }

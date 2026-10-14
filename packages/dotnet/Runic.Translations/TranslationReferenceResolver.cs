@@ -59,7 +59,13 @@ public sealed class TranslationReferenceResolution
 /// </para>
 /// <para>
 /// Resolution produces plain text. A message that formats to markup or document content in the snapshot's locale is not
-/// translated (<c>structured-content</c>). Resolution never throws for a catalog change; it reports diagnostics instead.
+/// translated (<c>structured-content</c>), and a key without a message in that locale is <c>unknown-key</c>, whatever the
+/// snapshot's <see cref="MissingTranslationPolicy"/> would format. Resolution never throws for a catalog change; it reports
+/// diagnostics instead.
+/// </para>
+/// <para>
+/// The text contains stored fallback text and argument values verbatim. Render it as text, never as HTML. Read stored JSON
+/// with <see cref="TranslationReference.Parse(string)"/>, which checks its size before parsing it.
 /// </para>
 /// </remarks>
 public static class TranslationReferenceResolver
@@ -102,7 +108,9 @@ public static class TranslationReferenceResolver
         // Keys are matched exactly, as the generated ESM transport contract does: no dotted aliases and no locale extras.
         if (!snapshot.TryGetKey(reference.Key, out TranslationKey key) || key.Id == CompiledTranslationCatalog.DynamicKeyId ||
             !string.Equals(key.Name, reference.Key, StringComparison.Ordinal) ||
-            !snapshot.TryGetPlaceholders(key, out ReadOnlyMemory<TranslationPlaceholderDescriptor> placeholders))
+            !snapshot.TryGetPlaceholders(key, out ReadOnlyMemory<TranslationPlaceholderDescriptor> placeholders) ||
+            // A key without a message in this locale is missing, whatever the snapshot's missing-key policy would format.
+            !snapshot.TryGet(key, out _))
         {
             diagnostics.Add(new(path, "unknown-key"));
             return null;
@@ -133,7 +141,7 @@ public static class TranslationReferenceResolver
                 if (text is null) return null;
                 arguments[index] = TextArgument.CreateRmf2(input.Name, new TextArgument("_", text));
             }
-            else arguments[index] = TextArgument.CreateRmf2(input.Name, Carrier(input, argument));
+            else arguments[index] = TextArgument.CreateRmf2(input.Name, Carrier(reference.Version, input, argument));
         }
 
         try
@@ -173,22 +181,28 @@ public static class TranslationReferenceResolver
     private static bool Compatible(int version, TranslationPlaceholderDescriptor input, TranslationReferenceArgument argument)
     {
         if (version != 1) return argument.Type == input.Type && (argument.Message is null || input.Type == TextArgumentType.String);
-        // Version 1 carries strings and booleans only; the receiver's type decides how a string is read.
+        // Version 1 carries strings and booleans only; the receiver's type decides how a string is read, as decodeTextReference reads it.
         if (input.Type is TextArgumentType.Bool or TextArgumentType.List) return argument.Type == input.Type;
-        if (argument.Type != TextArgumentType.String) return false;
-        try { _ = new TranslationReferenceArgument(input.Type, argument.Value); return true; }
-        catch (ArgumentException) { return false; }
+        return argument.Type == TextArgumentType.String && TranslationReferenceWire.TryDecodeVersion1(input.Type, input.Format, argument.Value, out _);
     }
 
-    private static TextArgument Carrier(TranslationPlaceholderDescriptor input, TranslationReferenceArgument argument)
+    private static TextArgument Carrier(int version, TranslationPlaceholderDescriptor input, TranslationReferenceArgument argument)
     {
         string value = argument.Value;
+        if (version == 1 && input.Type != TextArgumentType.Bool)
+        {
+            if (!TranslationReferenceWire.TryDecodeVersion1(input.Type, input.Format, value, out TextArgument decoded))
+                throw new InvalidOperationException("A checked version 1 argument did not decode.");
+            return decoded;
+        }
         CultureInfo invariant = CultureInfo.InvariantCulture;
         return input.Type switch
         {
             TextArgumentType.String => new TextArgument("_", value),
             TextArgumentType.Int => new TextArgument("_", long.Parse(value, NumberStyles.AllowLeadingSign, invariant), input.Format),
-            TextArgumentType.Number => new TextArgument("_", decimal.Parse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, invariant), input.Format),
+            // Trailing zeros are dropped, as the ESM decimal carrier drops them.
+            TextArgumentType.Number => new TextArgument("_", TranslationReferenceWire.Normalize(
+                decimal.Parse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, invariant)), input.Format),
             TextArgumentType.Bool => new TextArgument("_", value == "true", input.Format),
             TextArgumentType.Date => new TextArgument("_", DateOnly.ParseExact(value, "yyyy-MM-dd", invariant), input.Format),
             TextArgumentType.Time => new TextArgument("_", TimeOnly.ParseExact(value, "HH:mm:ss", invariant), input.Format),

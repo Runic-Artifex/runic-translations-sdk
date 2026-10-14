@@ -1,7 +1,9 @@
 #nullable enable
 const Runic.Translations.TranslationTransport.MaximumDepth = 8 -> int
+const Runic.Translations.TranslationTransport.MaximumEncodedLength = 262144 -> int
 const Runic.Translations.TranslationTransport.MaximumListItems = 256 -> int
 const Runic.Translations.TranslationTransport.MaximumReferences = 32 -> int
+const Runic.Translations.TranslationTransport.MaximumTotalTextLength = 65536 -> int
 const Runic.Translations.TranslationTransport.MinimumReadVersion = 1 -> int
 const Runic.Translations.TranslationTransport.Version = 2 -> int
 ~override Runic.Translations.TranslationReferenceDiagnostic.Equals(object obj) -> bool
@@ -37,6 +39,9 @@ Runic.Translations.TranslationReferenceResolution.Diagnostics.get -> System.Coll
 Runic.Translations.TranslationReferenceResolution.Outcome.get -> Runic.Translations.TranslationReferenceOutcome
 Runic.Translations.TranslationReferenceResolution.Text.get -> string?
 Runic.Translations.TranslationReferenceResolver
+static Runic.Translations.TranslationReference.CreateVersion1(string! catalog, string! contractFingerprint, string! key, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.TranslationReferenceArgument>? arguments = null, string? fallbackText = null) -> Runic.Translations.TranslationReference!
 static Runic.Translations.TranslationReferenceDiagnostic.operator !=(Runic.Translations.TranslationReferenceDiagnostic left, Runic.Translations.TranslationReferenceDiagnostic right) -> bool
 static Runic.Translations.TranslationReferenceDiagnostic.operator ==(Runic.Translations.TranslationReferenceDiagnostic left, Runic.Translations.TranslationReferenceDiagnostic right) -> bool
+static Runic.Translations.TranslationReference.Parse(string! json) -> Runic.Translations.TranslationReference!
+static Runic.Translations.TranslationReference.Parse(System.ReadOnlySpan<byte> utf8Json) -> Runic.Translations.TranslationReference!
 static Runic.Translations.TranslationReferenceResolver.Resolve(Runic.Translations.ITranslationSnapshot! snapshot, string! contractFingerprint, Runic.Translations.TranslationReference! reference) -> Runic.Translations.TranslationReferenceResolution!
