@@ -1,11 +1,13 @@
 # Source-local RMF2 v5 NativeAOT probe
 
 This fixture links the runtime's v5 behavior and hostile-input tests directly to
-the current runtime project. It uses no generated catalog, installed package,
-reflection-based serialization or JSON metadata construction.
+the current runtime project. It uses no generated catalog, installed package or
+reflection-based serialization; the text-reference cases use the runtime's
+source-generated `TranslationReferenceJsonContext`.
 
 The probe is a TUnit test application published with NativeAOT. It links the
-`Rmf2RuntimeV5Tests` and `TypedSlotBindingsTests` cases and the suite's
+`Rmf2RuntimeV5Tests`, `TypedSlotBindingsTests` and `TranslationReferenceTests`
+cases and the suite's
 `Assert` helpers from `tests/dotnet/Runic.Translations.Runtime.Tests`, and keeps
 that suite's assembly name because the cases use runtime internals.
 

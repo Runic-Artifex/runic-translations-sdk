@@ -1,4 +1,13 @@
 #nullable enable
+const Runic.Translations.TranslationTransport.MaximumDepth = 8 -> int
+const Runic.Translations.TranslationTransport.MaximumListItems = 256 -> int
+const Runic.Translations.TranslationTransport.MaximumReferences = 32 -> int
+const Runic.Translations.TranslationTransport.MinimumReadVersion = 1 -> int
+const Runic.Translations.TranslationTransport.Version = 2 -> int
+~override Runic.Translations.TranslationReferenceDiagnostic.Equals(object obj) -> bool
+override Runic.Translations.TranslationReferenceDiagnostic.GetHashCode() -> int
+~override Runic.Translations.TranslationReferenceDiagnostic.ToString() -> string
+*REMOVED*const Runic.Translations.TranslationTransport.Version = 1 -> int
 Runic.Translations.CompiledTranslationCatalog.TryGetKey(string! name, out Runic.Translations.TranslationKey key) -> bool
 Runic.Translations.CompiledTranslationSnapshot.TryGetKey(string! name, out Runic.Translations.TranslationKey key) -> bool
 Runic.Translations.CompiledTranslationSnapshot.TryGetPlaceholders(Runic.Translations.TranslationKey key, out System.ReadOnlyMemory<Runic.Translations.TranslationPlaceholderDescriptor> placeholders) -> bool
@@ -6,3 +15,28 @@ Runic.Translations.ITranslationSnapshot.TryGetKey(string! name, out Runic.Transl
 Runic.Translations.ITranslationSnapshot.TryGetPlaceholders(Runic.Translations.TranslationKey key, out System.ReadOnlyMemory<Runic.Translations.TranslationPlaceholderDescriptor> placeholders) -> bool
 Runic.Translations.TextArgument.TextArgument(string! name, System.Collections.Generic.IReadOnlyList<string!>! value) -> void
 Runic.Translations.TextArgumentType.List = 8 -> Runic.Translations.TextArgumentType
+Runic.Translations.TranslationReferenceArgument.Items.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Runic.Translations.TranslationReferenceArgument.Message.get -> Runic.Translations.TranslationReference?
+Runic.Translations.TranslationReferenceArgument.TranslationReferenceArgument(Runic.Translations.TranslationReference! message) -> void
+Runic.Translations.TranslationReferenceArgument.TranslationReferenceArgument(System.Collections.Generic.IReadOnlyList<string!>! items) -> void
+Runic.Translations.TranslationReferenceDiagnostic
+Runic.Translations.TranslationReferenceDiagnostic.Deconstruct(out string! Path, out string! Reason) -> void
+Runic.Translations.TranslationReferenceDiagnostic.Equals(Runic.Translations.TranslationReferenceDiagnostic other) -> bool
+Runic.Translations.TranslationReferenceDiagnostic.Path.get -> string!
+Runic.Translations.TranslationReferenceDiagnostic.Path.init -> void
+Runic.Translations.TranslationReferenceDiagnostic.Reason.get -> string!
+Runic.Translations.TranslationReferenceDiagnostic.Reason.init -> void
+Runic.Translations.TranslationReferenceDiagnostic.TranslationReferenceDiagnostic(string! Path, string! Reason) -> void
+Runic.Translations.TranslationReferenceDiagnostic.TranslationReferenceDiagnostic() -> void
+Runic.Translations.TranslationReferenceOutcome
+Runic.Translations.TranslationReferenceOutcome.Failed = 2 -> Runic.Translations.TranslationReferenceOutcome
+Runic.Translations.TranslationReferenceOutcome.Fallback = 1 -> Runic.Translations.TranslationReferenceOutcome
+Runic.Translations.TranslationReferenceOutcome.Translated = 0 -> Runic.Translations.TranslationReferenceOutcome
+Runic.Translations.TranslationReferenceResolution
+Runic.Translations.TranslationReferenceResolution.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationReferenceDiagnostic>!
+Runic.Translations.TranslationReferenceResolution.Outcome.get -> Runic.Translations.TranslationReferenceOutcome
+Runic.Translations.TranslationReferenceResolution.Text.get -> string?
+Runic.Translations.TranslationReferenceResolver
+static Runic.Translations.TranslationReferenceDiagnostic.operator !=(Runic.Translations.TranslationReferenceDiagnostic left, Runic.Translations.TranslationReferenceDiagnostic right) -> bool
+static Runic.Translations.TranslationReferenceDiagnostic.operator ==(Runic.Translations.TranslationReferenceDiagnostic left, Runic.Translations.TranslationReferenceDiagnostic right) -> bool
+static Runic.Translations.TranslationReferenceResolver.Resolve(Runic.Translations.ITranslationSnapshot! snapshot, string! contractFingerprint, Runic.Translations.TranslationReference! reference) -> Runic.Translations.TranslationReferenceResolution!
