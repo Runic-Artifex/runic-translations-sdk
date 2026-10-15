@@ -12,6 +12,7 @@ internal static class FrameworkTextArguments
     private static readonly string[] None = [];
     private static readonly string[] Option = ["option"];
     private static readonly string[] Parameter = ["parameter"];
+    private static readonly string[] Prompt = ["prompt"];
 
     internal static FrozenDictionary<string, string[]> ByKey { get; } = new Dictionary<string, string[]>(StringComparer.Ordinal)
     {
@@ -26,6 +27,7 @@ internal static class FrameworkTextArguments
         ["help.show-help"] = None,
         ["help.show-version"] = None,
         ["help.output-format"] = None,
+        ["help.json-output-alias"] = Option,
         ["help.examples"] = None,
         ["help.required"] = None,
         ["help.default"] = None,
@@ -39,7 +41,19 @@ internal static class FrameworkTextArguments
         ["help.requires"] = None,
         ["help.conflicts"] = None,
         ["completion.invalid-shell"] = None,
+        ["prompts.select-hint"] = None,
+        ["prompts.multi-select-hint"] = None,
+        ["prompts.yes"] = None,
+        ["prompts.no"] = None,
+        ["prompts.choose-one"] = ["count"],
+        ["prompts.choose-many"] = ["count"],
+        ["prompts.answer-yes-no"] = ["yes", "no"],
+        ["prompts.required"] = None,
+        ["prompts.cancelled"] = None,
+        ["prompts.done"] = None,
         ["faults.RCLI4000"] = None,
+        // The built-in catalogs leave faults.RCLI4001 to its more specific diagnostics.prompt-* text.
+        ["faults.RCLI4001"] = None,
         ["faults.RCLI5000"] = None,
         ["hints.RCLI5000"] = None,
         ["diagnostics.unknown-option"] = Option,
@@ -53,6 +67,7 @@ internal static class FrameworkTextArguments
         ["diagnostics.duplicate-option"] = Option,
         ["diagnostics.unsupported-short-bundle"] = None,
         ["diagnostics.invalid-output-mode"] = Option,
+        ["diagnostics.conflicting-output-selector"] = ["option", "conflict"],
         ["diagnostics.transport-output-option-collision"] = None,
         ["diagnostics.missing-required-option"] = ["option", "command"],
         ["diagnostics.unexpected-root-help-argument"] = None,
@@ -76,6 +91,9 @@ internal static class FrameworkTextArguments
         ["diagnostics.file-not-found"] = Parameter,
         ["diagnostics.directory-not-found"] = Parameter,
         ["diagnostics.environment-value-source"] = ["parameter", "variable"],
+        ["diagnostics.prompt-requires-terminal"] = Prompt,
+        ["diagnostics.prompt-json-output"] = Prompt,
+        ["diagnostics.prompt-disabled"] = Prompt,
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     internal static string[] For(string key) => ByKey.TryGetValue(key, out string[]? names) ? names : None;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Runic.CommandLine;
 using Runic.CommandLine.Generated;
@@ -12,7 +13,7 @@ using TUnit.Core;
 
 namespace Runic.Translations.CommandLine.Tests;
 
-internal sealed class ResolverTests
+internal sealed partial class ResolverTests
 {
     // Invocations that reach help, parse errors, value errors and the unknown-command path.
     private static readonly string[][] Invocations =
@@ -27,6 +28,9 @@ internal sealed class ResolverTests
         ["greet", "Ada", "--times", "1", "--times", "2"],
         ["greet", "Ada", "Bob"],
         ["frobnicate"],
+        ["greet", "Ada", "--json", "--output", "json"],
+        ["ask"],
+        ["ask", "--json"],
     ];
 
     [Test, DisplayName("message names drop hyphens and capitalize the next letter")]
@@ -40,9 +44,9 @@ internal sealed class ResolverTests
         Assert.Throws<ArgumentNullException>(() => TranslationCommandTextResolver.GetMessageName(null!));
     }
 
-    // CommandTextKeys is new in Runic.CommandLine 0.6.0-preview.4, the floor of the adapter package.
+    // CommandTextKeys is new in Runic.CommandLine 0.6.0-preview.4; the adapter package requires 0.7.0-preview.1, whose keys it lists.
     private static readonly Type TextKeys = typeof(CommandApp).Assembly.GetType("Runic.CommandLine.CommandTextKeys")
-        ?? throw new InvalidOperationException("Runic.CommandLine has no CommandTextKeys; the adapter requires 0.6.0-preview.4 or later.");
+        ?? throw new InvalidOperationException("Runic.CommandLine has no CommandTextKeys; the adapter requires 0.7.0-preview.1 or later.");
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The test runs on the JIT and reads a public property.")]
     [Test, DisplayName("the argument table matches CommandTextKeys.All")]
@@ -62,15 +66,19 @@ internal sealed class ResolverTests
         Assert.Equal(FrameworkTextArguments.ByKey.Count, keys.Count, "framework key count");
     }
 
+    // Runic.CommandLine uses faults.RCLI4001 only when the diagnostics.prompt-* text resolves to its English text, so a
+    // built-in message would replace that more specific text in English. The application catalog may still define it.
+    private static readonly string[] WithoutBuiltInText = ["faults.RCLI4001"];
+
     [Test, DisplayName("built-in catalogs translate every framework key in English and German")]
     public void BuiltInCoverage()
     {
         // The catalogs hold exactly one message per framework key, with inputs the framework supplies.
         CompiledTranslationDefinition[] definitions = CommandLineTextCatalogData.CreateDefinition().Definitions.ToArray();
-        string[] expected = FrameworkTextArguments.ByKey.Keys.Select(static key => TranslationCommandTextResolver.GetMessageName(key).Replace('.', '_'))
+        string[] expected = FrameworkTextArguments.ByKey.Keys.Except(WithoutBuiltInText).Select(static key => TranslationCommandTextResolver.GetMessageName(key).Replace('.', '_'))
             .Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(string.Join("|", expected), string.Join("|", definitions.Select(static item => item.Name).Order(StringComparer.Ordinal)), "built-in messages");
-        foreach ((string key, string[] names) in FrameworkTextArguments.ByKey)
+        foreach ((string key, string[] names) in FrameworkTextArguments.ByKey.Where(static item => !WithoutBuiltInText.Contains(item.Key)))
         {
             CompiledTranslationDefinition definition = definitions.Single(item => item.Name == TranslationCommandTextResolver.GetMessageName(key).Replace('.', '_'));
             foreach (TranslationPlaceholderDescriptor input in definition.Placeholders.ToArray())
@@ -79,7 +87,13 @@ internal sealed class ResolverTests
 
         var resolver = new TranslationCommandTextResolver();
         string[] identical = ["help.minimum", "help.maximum"];
-        foreach ((string key, string[] names) in FrameworkTextArguments.ByKey)
+        foreach (string key in WithoutBuiltInText)
+        {
+            Assert.Equal(null, resolver.Resolve(key, CultureInfo.GetCultureInfo("en"), []));
+            Assert.Equal(null, resolver.Resolve(key, CultureInfo.GetCultureInfo("de"), []));
+        }
+
+        foreach ((string key, string[] names) in FrameworkTextArguments.ByKey.Where(static item => !WithoutBuiltInText.Contains(item.Key)))
         {
             string[] arguments = names.Select(static name => "<" + name + ">").ToArray();
             string? english = resolver.Resolve(key, CultureInfo.GetCultureInfo("en"), arguments);
@@ -110,6 +124,7 @@ internal sealed class ResolverTests
         var resolver = new TranslationCommandTextResolver();
         // Every English framework sentence and label of more than one word.
         string[] english = FrameworkTextArguments.ByKey
+            .Where(static item => !WithoutBuiltInText.Contains(item.Key))
             .Select(item => resolver.Resolve(item.Key, CultureInfo.GetCultureInfo("en"), item.Value.Select(static name => "\u0001").ToArray())!)
             .SelectMany(static text => text.Split('\u0001'))
             .Select(static fragment => fragment.Trim(' ', '.', '(', ')', '\'', '?', ':'))
@@ -135,6 +150,14 @@ internal sealed class ResolverTests
             help.Output.Contains("Hilfe anzeigen", StringComparison.Ordinal), help.Output);
         Result unknown = await Run(resolver, "de", "greet", "Ada", "--bogus");
         Assert.True(unknown.Error.Contains("Unbekannte Option. (--bogus)", StringComparison.Ordinal), unknown.Error);
+        Assert.True(help.Output.Contains("Entspricht --output json", StringComparison.Ordinal), help.Output);
+        Result conflict = await Run(resolver, "de", "greet", "Ada", "--json", "--output", "json");
+        Assert.True(conflict.Output.Contains("--output und --json wählen beide das Ausgabeformat.", StringComparison.Ordinal), conflict.Output);
+        Result prompt = await Run(resolver, "de", "ask");
+        Assert.Equal("RCLI4001: Name benötigt eine Antwort, aber der Befehl läuft nicht in einem interaktiven Terminal. Geben Sie den Wert in der Befehlszeile an.\n",
+            prompt.Error, "ask error");
+        Result json = await Run(resolver, "de", "ask", "--json");
+        Assert.True(json.Output.Contains("Name benötigt eine Antwort, aber bei JSON-Ausgabe wird nie nachgefragt.", StringComparison.Ordinal), json.Output);
     }
 
     [Test, DisplayName("the application catalog comes first and binds arguments by name or position")]
@@ -201,15 +224,19 @@ internal sealed class ResolverTests
     private static async Task<Result> Run(ICommandTextResolver? resolver, string culture, params string[] args)
     {
         var console = new MemoryConsole();
-        int exit = await new CommandApp(GeneratedCommandCatalog.Create())
+        int exit = await new CommandApp(GeneratedCommandCatalog.Create(static builder => builder.JsonOutputAlias("--json")))
         {
             Name = "greeter",
             Console = console,
             Culture = CultureInfo.GetCultureInfo(culture),
             TextResolver = resolver,
         }.RunAsync(args);
-        return new Result(exit, console.StandardOutput, console.StandardError);
+        // JSON frames carry a fresh request id on every run.
+        return new Result(exit, RequestId().Replace(console.StandardOutput, "\"requestId\":\"*\""), console.StandardError);
     }
+
+    [GeneratedRegex("\"requestId\":\"[0-9a-f]+\"")]
+    private static partial Regex RequestId();
 
     private readonly record struct Result(int Exit, string Output, string Error);
 }
