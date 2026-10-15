@@ -110,7 +110,7 @@
       "runic.translations.generator": {
         "type": "Project",
         "dependencies": {
-          "Runic.Translations.Compiler": "[0.7.0-preview.2, )"
+          "Runic.Translations.Compiler": "[0.7.0-preview.3, )"
         }
       }
     }
