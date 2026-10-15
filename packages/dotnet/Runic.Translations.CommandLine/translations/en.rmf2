@@ -1,6 +1,8 @@
 # Built-in English text for Runic.CommandLine framework keys. Each message is named
 # after its CommandTextKeys key: hyphens are removed and the next letter is capitalized.
 # The text matches the English the framework writes without a resolver.
+# faults.RCLI4001 has no message: Runic.CommandLine shows its diagnostics.prompt-* text, and
+# would show a faults.RCLI4001 message instead of that text whenever it is unchanged in English.
 help {
   usage = Usage
   commandPlaceholder = command
@@ -13,6 +15,9 @@ help {
   showHelp = Show help
   showVersion = Show version
   outputFormat = Select output format
+  jsonOutputAlias =
+    .input {$option :string}
+    {{Same as {$option} json}}
   examples = Examples
   required = required
   default = default
@@ -30,6 +35,25 @@ help {
 }
 completion {
   invalidShell = Choose a completion shell: bash, zsh, fish or powershell.
+}
+prompts {
+  selectHint = Arrow keys to move, Enter to confirm
+  multiSelectHint = Arrow keys to move, Space to select, A for all, Enter to confirm
+  yes = Yes
+  no = No
+  chooseOne =
+    .input {$count :string}
+    {{Enter a number from 1 to {$count}}}
+  chooseMany =
+    .input {$count :string}
+    {{Enter numbers from 1 to {$count}, separated by commas}}
+  answerYesNo =
+    .input {$yes :string}
+    .input {$no :string}
+    {{Answer {$yes} or {$no}.}}
+  required = An answer is required.
+  cancelled = Cancelled
+  done = Done
 }
 faults {
   RCLI4000 = The command was cancelled.
@@ -67,6 +91,10 @@ diagnostics {
   invalidOutputMode =
     .input {$option :string}
     {{{$option} must be human or json.}}
+  conflictingOutputSelector =
+    .input {$option :string}
+    .input {$conflict :string}
+    {{{$option} and {$conflict} both select the output format. Use one of them.}}
   transportOutputOptionCollision = The command line is invalid.
   missingRequiredOption =
     .input {$option :string}
@@ -142,4 +170,13 @@ diagnostics {
     .input {$parameter :string}
     .input {$variable :string}
     {{The value for {$parameter} came from environment variable {$variable}.}}
+  promptRequiresTerminal =
+    .input {$prompt :string}
+    {{{$prompt} needs an answer, but the command is not running in an interactive terminal. Pass the value on the command line.}}
+  promptJsonOutput =
+    .input {$prompt :string}
+    {{{$prompt} needs an answer, but JSON output never prompts. Pass the value on the command line.}}
+  promptDisabled =
+    .input {$prompt :string}
+    {{{$prompt} needs an answer, but prompts are disabled. Pass the value on the command line.}}
 }

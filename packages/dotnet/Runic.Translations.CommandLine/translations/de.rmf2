@@ -10,6 +10,9 @@ help {
   showHelp = Hilfe anzeigen
   showVersion = Version anzeigen
   outputFormat = Ausgabeformat wählen
+  jsonOutputAlias =
+    .input {$option :string}
+    {{Entspricht {$option} json}}
   examples = Beispiele
   required = erforderlich
   default = Standard
@@ -27,6 +30,25 @@ help {
 }
 completion {
   invalidShell = Wählen Sie eine Shell für die Vervollständigung: bash, zsh, fish oder powershell.
+}
+prompts {
+  selectHint = Pfeiltasten zum Bewegen, Eingabetaste zum Bestätigen
+  multiSelectHint = Pfeiltasten zum Bewegen, Leertaste zum Auswählen, A für alle, Eingabetaste zum Bestätigen
+  yes = Ja
+  no = Nein
+  chooseOne =
+    .input {$count :string}
+    {{Geben Sie eine Zahl von 1 bis {$count} ein}}
+  chooseMany =
+    .input {$count :string}
+    {{Geben Sie Zahlen von 1 bis {$count} ein, durch Kommas getrennt}}
+  answerYesNo =
+    .input {$yes :string}
+    .input {$no :string}
+    {{Antworten Sie mit {$yes} oder {$no}.}}
+  required = Eine Antwort ist erforderlich.
+  cancelled = Abgebrochen
+  done = Fertig
 }
 faults {
   RCLI4000 = Der Befehl wurde abgebrochen.
@@ -64,6 +86,10 @@ diagnostics {
   invalidOutputMode =
     .input {$option :string}
     {{{$option} muss human oder json sein.}}
+  conflictingOutputSelector =
+    .input {$option :string}
+    .input {$conflict :string}
+    {{{$option} und {$conflict} wählen beide das Ausgabeformat. Verwenden Sie nur eine der beiden Optionen.}}
   transportOutputOptionCollision = Die Befehlszeile ist ungültig.
   missingRequiredOption =
     .input {$option :string}
@@ -139,4 +165,13 @@ diagnostics {
     .input {$parameter :string}
     .input {$variable :string}
     {{Der Wert für {$parameter} stammt aus der Umgebungsvariablen {$variable}.}}
+  promptRequiresTerminal =
+    .input {$prompt :string}
+    {{{$prompt} benötigt eine Antwort, aber der Befehl läuft nicht in einem interaktiven Terminal. Geben Sie den Wert in der Befehlszeile an.}}
+  promptJsonOutput =
+    .input {$prompt :string}
+    {{{$prompt} benötigt eine Antwort, aber bei JSON-Ausgabe wird nie nachgefragt. Geben Sie den Wert in der Befehlszeile an.}}
+  promptDisabled =
+    .input {$prompt :string}
+    {{{$prompt} benötigt eine Antwort, aber Abfragen sind deaktiviert. Geben Sie den Wert in der Befehlszeile an.}}
 }

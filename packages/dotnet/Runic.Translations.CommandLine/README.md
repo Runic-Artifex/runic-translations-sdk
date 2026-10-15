@@ -1,10 +1,10 @@
 # Runic.Translations.CommandLine (preview)
 
-`Runic.Translations.CommandLine` translates the help, errors and faults of a
-[Runic.CommandLine](https://github.com/Runic-Artifex/runic-cli-sdk) app with
-Runic Translations. It ships English and German text for every framework key,
-so a German invocation shows no English framework text and you write no key
-mapping.
+`Runic.Translations.CommandLine` translates the help, errors, prompts and
+faults of a [Runic.CommandLine](https://github.com/Runic-Artifex/runic-cli-sdk)
+app with Runic Translations. It ships English and German text for every
+framework key, so a German invocation shows no English framework text and you
+write no key mapping.
 
 ```csharp
 using System.Globalization;

@@ -3,9 +3,9 @@
 `Runic.Translations.CommandLine` connects a
 [Runic.CommandLine](https://github.com/Runic-Artifex/runic-cli-sdk) app to
 Runic Translations. Its `TranslationCommandTextResolver` translates help
-labels, parse and value errors, faults and your `DescriptionKey` values. It
-ships English and German text for every framework key, so you translate only
-your own text and write no key mapping.
+labels, parse and value errors, `CommandPrompts` hints and errors, faults and
+your `DescriptionKey` values. It ships English and German text for every
+framework key, so you translate only your own text and write no key mapping.
 
 ```sh
 dotnet add package Runic.CommandLine
@@ -68,6 +68,11 @@ It then tries, in order:
    current snapshot. Other locales use English.
 3. Nothing: Runic.CommandLine writes its English text.
 
+The built-in catalogs have no `faults.RCLI4001` message. Runic.CommandLine shows
+the more specific `diagnostics.prompt-*` text for that fault, and would show a
+`faults.RCLI4001` message instead whenever that text is the English one. Your
+catalog can still define it.
+
 A message receives the framework's arguments through inputs named after them,
 as listed in the
 [framework text key table](https://github.com/Runic-Artifex/runic-cli-sdk/blob/main/docs/guides/command-line/text-keys.md),
@@ -91,10 +96,11 @@ only the built-in text in the invocation culture.
 
 The adapter depends on `Runic.CommandLine` through `ICommandTextResolver`
 only, but `Runic.Translations.CommandLine` and `Runic.Translations.Tooling`
-require Runic.CommandLine 0.6.0-preview.4 or later, so a project that adds only
-the adapter restores a Runic.CommandLine that names the cause of a command
-catalog error instead of aborting at startup. Releases before the one that adds
-`CommandTextKeys` report value errors as `faults.RCLI2xxx` without arguments;
-preview.4 and later ask for `diagnostics.invalid-integer`,
-`diagnostics.out-of-range` and the other keys, which the built-in catalogs
-translate.
+require Runic.CommandLine 0.7.0-preview.1 or later, whose prompt, JSON output
+alias and output selector keys the built-in catalogs translate. A project that
+adds only the adapter therefore restores a Runic.CommandLine that names the
+cause of a command catalog error instead of aborting at startup. Releases
+before 0.6.0-preview.4, the one that adds `CommandTextKeys`, report value
+errors as `faults.RCLI2xxx` without arguments; preview.4 and later ask for
+`diagnostics.invalid-integer`, `diagnostics.out-of-range` and the other keys,
+which the built-in catalogs translate.
