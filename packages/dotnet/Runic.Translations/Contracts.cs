@@ -45,6 +45,11 @@ public interface ITranslationSnapshot
 public interface ITranslationProvider
 {
     /// <summary>Gets a fully validated snapshot.</summary>
+    /// <remarks>
+    /// An empty <paramref name="requestedLocale"/>, the name of the invariant culture, names no locale: the catalog's
+    /// <see cref="UnsupportedLocalePolicy"/> resolves it to the default locale, or rejects it under
+    /// <see cref="UnsupportedLocalePolicy.Exact"/>.
+    /// </remarks>
     ValueTask<ITranslationSnapshot> GetSnapshotAsync(string requestedLocale, CancellationToken cancellationToken = default);
 }
 
@@ -59,7 +64,9 @@ public interface ITranslationManager
     event EventHandler<TranslationLocaleChangedEventArgs>? LocaleChanged;
     /// <summary>Builds and atomically activates a locale snapshot.</summary>
     /// <remarks>
-    /// Requesting the active locale completes without composing a snapshot; use
+    /// The provider resolves <paramref name="locale"/>, so an empty locale (the invariant culture's name) selects the
+    /// default locale unless the catalog's <see cref="UnsupportedLocalePolicy"/> is
+    /// <see cref="UnsupportedLocalePolicy.Exact"/>. Requesting the active locale completes without composing a snapshot; use
     /// <see cref="RefreshAsync"/> to reload replacement bytes for the active locale.
     /// </remarks>
     ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default);

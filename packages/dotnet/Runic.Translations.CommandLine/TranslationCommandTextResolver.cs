@@ -143,7 +143,6 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
 
     private static ITranslationSnapshot BuiltIn(string locale)
     {
-        if (locale.Length == 0) locale = CommandLineTextCatalog.DefaultLocale;
         if (BuiltInSnapshots.TryGetValue(locale, out ITranslationSnapshot? snapshot)) return snapshot;
         ITranslationProvider provider = s_builtInProvider ??= CommandLineTextCatalog.CreateProvider();
         try

@@ -64,7 +64,8 @@ public sealed class TranslationManager : ITranslationManager, ITranslationSnapsh
         string locale,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(locale);
+        // An empty locale is the invariant culture's name; the provider resolves it like an unsupported locale.
+        ArgumentNullException.ThrowIfNull(locale);
         cancellationToken.ThrowIfCancellationRequested();
 
         if (IsCurrentLocale(locale))

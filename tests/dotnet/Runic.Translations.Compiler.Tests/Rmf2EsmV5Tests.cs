@@ -326,6 +326,42 @@ internal sealed class Rmf2EsmV5Tests
         }
         finally { Directory.Delete(europeanDirectory, true); }
 
+        // An empty tag, such as the invariant culture's name under LANG=C, follows the unsupported-locale policy as in .NET.
+        string invariantDirectory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(european));
+        try
+        {
+            string script = Path.Combine(invariantDirectory, "invariant.mjs");
+            File.WriteAllText(script, """
+                import { m } from "./numbers.esm-v5/messages.js";
+                import { createLocaleSource, resolveLocale } from "./numbers.esm-v5/runtime.js";
+                if(resolveLocale("")!=="en")throw new Error("an empty locale did not resolve to the base locale");
+                if(createLocaleSource({initialLocale:""}).getLocale()!=="en")throw new Error("an empty initial locale did not resolve to the base locale");
+                const source=createLocaleSource({initialLocale:"nl"});source.setLocale("");if(source.getLocale()!=="en")throw new Error("setLocale('') did not select the base locale");
+                if(m.hello({locale:""})!=="Hello")throw new Error("an empty format locale did not use the base locale");
+                for(const locale of [" ",undefined,null]){let rejected=false;try{resolveLocale(locale);}catch(error){rejected=error instanceof RangeError;}if(!rejected)throw new Error(`locale accepted: ${String(locale)}`);}
+                """, new UTF8Encoding(false));
+            Run("bun", [script], invariantDirectory);
+        }
+        finally { Directory.Delete(invariantDirectory, true); }
+
+        Rmf2ProjectCompilationV5 exactCompilation = TranslationCompiler.CompileRmf2ProjectV5(
+            new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(
+                "{\"schemaVersion\":1,\"catalog\":\"exact\",\"code\":{\"namespace\":\"Example\",\"className\":\"Text\"},\"baseLocale\":\"en\",\"locales\":[\"en\"],\"runtime\":{\"unsupportedLocale\":\"exact\"}}")),
+            [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("hello = Hello"))]);
+        Assert.True(exactCompilation.Success, string.Join("; ", exactCompilation.Diagnostics.Select(item => item.Message)));
+        string exactDirectory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(exactCompilation.Project!));
+        try
+        {
+            string script = Path.Combine(exactDirectory, "exact.mjs");
+            File.WriteAllText(script, """
+                import { resolveLocale } from "./exact.esm-v5/runtime.js";
+                let rejected=false;try{resolveLocale("");}catch(error){rejected=error instanceof RangeError&&String(error).includes("Unsupported locale");}
+                if(!rejected)throw new Error("the exact policy accepted an empty locale");
+                """, new UTF8Encoding(false));
+            Run("bun", [script], exactDirectory);
+        }
+        finally { Directory.Delete(exactDirectory, true); }
+
         Rmf2ProjectV5 legacyTag = CompileProject("legacy", "iw", ["iw"], false, ("iw", "hello = שלום"));
         string legacyDirectory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(legacyTag));
         try

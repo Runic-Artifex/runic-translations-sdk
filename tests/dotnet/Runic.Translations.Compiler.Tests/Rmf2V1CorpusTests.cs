@@ -183,8 +183,10 @@ internal sealed class Rmf2V1CorpusTests
     // plural rules, in both digests. Every other output is unchanged.
     // Re-pinned for W300-010: transport.js gains transport version 2 (createTextReference, resolveTextReference) and
     // transport.d.ts its types, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "b5e8fea3847358c55cb38bec51ee96df095db63364eee1dd4a3e9742327283e5";
-    private const string HiddenEncodedOutputDigest = "50dd361a172ffcdedf44ce2ec67cf75c75a8f9334a999696eebc84b033e1fcec";
+    // Re-pinned for #72: runtime.js resolves an empty locale through the unsupported-locale policy, in both digests.
+    // Every other output is unchanged.
+    private const string EncodedOutputDigest = "5dd8ea6c7b4d9d4619d5b30b955a542e22d538b57e1e2df0276d11c2f99b186c";
+    private const string HiddenEncodedOutputDigest = "ce5598a5132fe37ca84fa7a9677ab2e0b747ab7c7f3d764348c20a0df90f8490";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

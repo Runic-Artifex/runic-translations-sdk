@@ -193,6 +193,32 @@ internal sealed class GeneratorTests
         Assert.Equal("de|Titel|en|Title", Execute(run, "Example.Localization.SynchronousProbe", "Run"), "synchronous managers");
     }
 
+    // Under LANG=C the UI culture is invariant, so CultureInfo.CurrentUICulture.Name is "" (#72).
+    [Test, DisplayName("generated managers fall back to the base locale for the invariant culture")]
+    public void InvariantCultureManager()
+    {
+        string title = PathMember("title");
+        string source = $$"""
+            namespace Example.Localization;
+            public static class InvariantProbe
+            {
+                public static string Run()
+                {
+                    string invariant = global::System.Globalization.CultureInfo.InvariantCulture.Name;
+                    global::Runic.Translations.ITranslationManager synchronous = AppTextCatalog.CreateManager(invariant);
+                    global::Runic.Translations.ITranslationManager awaited = AppTextCatalog.CreateManagerAsync(invariant).AsTask().GetAwaiter().GetResult();
+                    global::Runic.Translations.ITranslationManager german = AppTextCatalog.CreateManager("de");
+                    german.SetLocaleAsync(invariant).AsTask().GetAwaiter().GetResult();
+                    return synchronous.CurrentLocale + "|" + new AppText(synchronous).{{title}} + "|" + awaited.CurrentLocale + "|" + german.CurrentLocale;
+                }
+            }
+            """;
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, ProjectInput(Project.Replace("[ \"en\" ]", "[ \"en\", \"de\" ]", StringComparison.Ordinal)),
+            new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "title = Title\n"), new TestInput("C:/repo/translations/de.rmf2", "Rmf2", "title = Titel\n"));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Assert.Equal("en|Title|en|en", Execute(run, "Example.Localization.InvariantProbe", "Run"), "invariant culture managers");
+    }
+
     [Test, DisplayName("generator input enumeration is deterministic")]
     public void DeterministicInputOrder()
     {

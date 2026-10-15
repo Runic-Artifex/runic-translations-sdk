@@ -39,8 +39,9 @@ export function createLocaleSource(options = {}) {
 }
 
 export function resolveLocale(requested) {
-  if (typeof requested !== "string" || !requested) throw new RangeError("A non-empty locale is required.");
-  const canonical = canonicalLocale(requested); if (canonical === null) throw new RangeError(`Invalid locale '${requested}'.`);
+  if (typeof requested !== "string") throw new RangeError("A locale string is required.");
+  // An empty tag (the invariant culture, an unset lang) names no locale, so the unsupported-locale policy applies to it.
+  const canonical = requested === "" ? "" : canonicalLocale(requested); if (canonical === null) throw new RangeError(`Invalid locale '${requested}'.`);
   if (localeSet.has(canonical)) return canonical;
   if (unsupportedLocalePolicy === "ParentsThenDefault") {
     let parent = canonical; while (parent.includes("-")) { parent = parent.slice(0, parent.lastIndexOf("-")); if (localeSet.has(parent)) return parent; }
