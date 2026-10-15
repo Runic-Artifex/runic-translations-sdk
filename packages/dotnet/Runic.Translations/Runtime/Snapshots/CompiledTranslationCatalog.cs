@@ -169,8 +169,11 @@ public sealed class CompiledTranslationCatalog
 
     internal string ResolveRequestedLocale(string requestedLocale)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(requestedLocale);
-        if (!LocaleTag.TryCanonicalize(requestedLocale, out string canonical))
+        ArgumentNullException.ThrowIfNull(requestedLocale);
+        // An empty tag, the name of the invariant culture (for example under LANG=C), names no locale.
+        // It is an unsupported locale without subtags, so the policy chooses the default locale or rejects it.
+        string canonical = string.Empty;
+        if (requestedLocale.Length != 0 && !LocaleTag.TryCanonicalize(requestedLocale, out canonical))
         {
             throw new ArgumentException("The requested locale is not a structurally valid BCP 47 tag.", nameof(requestedLocale));
         }

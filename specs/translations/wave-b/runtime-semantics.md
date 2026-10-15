@@ -26,6 +26,14 @@ pack input bytes or caller-owned collections.
   is found;
 - `default`: ignore unsupported requested tags and use the default locale.
 
+An empty requested locale, the name of the .NET invariant culture (for example
+under `LANG=C`), names no locale. It is treated as an unsupported tag without
+subtags: `parentsThenDefault` and `default` use the default locale and `exact`
+rejects it. .NET `ITranslationProvider.GetSnapshotAsync`,
+`ITranslationManager.SetLocaleAsync` and the generated `CreateManager` and
+`CreateManagerAsync`, and ESM `resolveLocale` and everything that resolves a
+tag through it, behave the same. A null or whitespace locale is still rejected.
+
 Declared fallback is never inferred from `CultureInfo`. Parent traversal is
 used only to choose a declared locale under `parentsThenDefault`; key fallback
 within that snapshot always uses the manifest's explicit graph.

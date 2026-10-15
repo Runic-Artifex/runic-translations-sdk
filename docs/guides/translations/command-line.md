@@ -40,6 +40,11 @@ and an unknown option prints `RCLI1001: Unbekannte Option. (--unknown)`. The
 [localized example](../../../examples/command-line/localized/README.md) is a
 complete app that is also published with NativeAOT in CI.
 
+To follow the user's display language, use `CultureInfo.CurrentUICulture`
+instead of a fixed culture. Under `LANG=C` it is the invariant culture, whose
+name is empty; `CreateManagerAsync("")` then uses the base locale, and the
+built-in framework text is English.
+
 ## How keys are resolved
 
 The resolver turns a text key into a message name by removing each hyphen and

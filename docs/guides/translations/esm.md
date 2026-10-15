@@ -68,7 +68,9 @@ mutable locale source with `getLocale`, `subscribe`, and `setLocale`.
 `createLocaleSource`, and `getRequestLocale` in `server.d.ts` use it, so a
 source fits a typed `MutableLocaleSource<Locale>` without a cast. Functions
 that resolve a tag, such as `resolveLocale`, `runWithLocale` and the
-`initialLocale` option, still accept any string. Framework adapters consume this
+`initialLocale` option, still accept any string; an empty string, such as an
+unset `lang` attribute, resolves like an unsupported locale (the base locale
+unless `unsupportedLocale` is `exact`). Framework adapters consume this
 structural contract and create one source per browser root. SSR uses the
 generated server entrypoint rather than a mutable global source.
 

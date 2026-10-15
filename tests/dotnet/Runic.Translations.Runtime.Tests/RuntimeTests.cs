@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -486,6 +487,38 @@ internal sealed class RuntimeTests
     {
         CompiledTranslationProvider provider = new(CreateCatalog(UnsupportedLocalePolicy.Default));
         Assert.Equal("en", (await provider.GetSnapshotAsync("zh-Hant-TW")).Locale);
+    }
+
+    [Test, DisplayName("provider resolves an empty (invariant) locale through the unsupported policy")]
+    public async Task ProviderEmptyLocale()
+    {
+        // Under LANG=C the UI culture is invariant and its name is "".
+        Assert.Equal(string.Empty, CultureInfo.InvariantCulture.Name);
+        CompiledTranslationProvider parents = new(CreateCatalog());
+        ITranslationSnapshot snapshot = await parents.GetSnapshotAsync(CultureInfo.InvariantCulture.Name);
+        Assert.Equal("en", snapshot.Locale);
+        Assert.Same(snapshot, await parents.GetSnapshotAsync("en"));
+        Assert.Equal("en", (await new CompiledTranslationProvider(CreateCatalog(UnsupportedLocalePolicy.Default)).GetSnapshotAsync("")).Locale);
+        await Assert.ThrowsAsync<TranslationNotFoundException>(
+            () => new CompiledTranslationProvider(CreateCatalog(UnsupportedLocalePolicy.Exact)).GetSnapshotAsync("").AsTask(), "not declared");
+        // Whitespace is not a locale, and null is still rejected.
+        await Assert.ThrowsAsync<ArgumentException>(() => parents.GetSnapshotAsync(" ").AsTask(), "BCP 47");
+        await Assert.ThrowsAsync<ArgumentNullException>(() => parents.GetSnapshotAsync(null!).AsTask());
+    }
+
+    [Test, DisplayName("manager switches to the default locale for an empty (invariant) locale")]
+    public async Task ManagerEmptyLocale()
+    {
+        CompiledTranslationProvider provider = new(CreateCatalog());
+        TranslationManager manager = new(provider, await provider.GetSnapshotAsync("de-DE"));
+        int changes = 0;
+        manager.LocaleChanged += (_, _) => changes++;
+        await manager.SetLocaleAsync(string.Empty);
+        Assert.Equal("en", manager.CurrentLocale);
+        Assert.Equal(1, changes);
+        await manager.SetLocaleAsync(string.Empty);
+        Assert.Equal(1, changes);
+        await Assert.ThrowsAsync<ArgumentNullException>(() => manager.SetLocaleAsync(null!).AsTask());
     }
 
     [Test, DisplayName("provider caches and coalesces canonical locale")]
