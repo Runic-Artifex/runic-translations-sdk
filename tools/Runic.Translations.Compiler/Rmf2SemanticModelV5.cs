@@ -38,10 +38,10 @@ internal sealed record Rmf2SemanticResultV5(Rmf2MessageV5? Message, IReadOnlyLis
 internal static class Rmf2MessageJsonV5
 {
     // This is the normalized-AST boundary, not locale artifact emission.
-    internal static string Serialize(Rmf2MessageV5 message)
+    internal static string Serialize(Rmf2MessageV5 message, bool indented = true)
     {
         using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = indented }))
         {
             writer.WriteStartObject();
             writer.WriteNumber("astVersion", 5);

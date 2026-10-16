@@ -397,6 +397,77 @@ internal sealed class Rmf2EsmV5Tests
         finally { Directory.Delete(extraDirectory, true); }
     }
 
+    // #85: message modules were indented AST JSON per locale, repeated for every locale that falls back. They are now
+    // text or text-and-placeholder parts where that is the whole message, minified JSON otherwise, and a fallback
+    // locale shares its source's object. The runtime rebuilds the same AST, so the output equals the locale artifacts'.
+    [Test, DisplayName("RMF2 v5 ESM message modules are compact and format as the locale artifacts do")]
+    public void CompactMessageModules()
+    {
+        const string english = """
+            title = Updates
+            empty = {{}}
+            greet = Hello {$name}, welcome to {$place}
+            count = {$count :integer} updates
+            braces = Literal \{x\} and \\ backslash
+            plural =
+              .input {$count :integer}
+              .match $count
+              one {{One update}}
+              *   {{{$count} updates}}
+            """;
+        const string german = """
+            title = Aktualisierungen
+            greet = Hallo {$name}, willkommen in {$place}
+            """;
+        const string json = """{"schemaVersion":1,"catalog":"compact","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","de"],"validation":{"translationCompleteness":"allow"}}""";
+        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
+            [new("translations/en.rmf2", Encoding.UTF8.GetBytes(english)), new("translations/de.rmf2", Encoding.UTF8.GetBytes(german))]);
+        Assert.True(compilation.Success, string.Join("; ", compilation.Diagnostics.Select(item => item.Message)));
+        Rmf2ProjectV5 project = compilation.Project!;
+        IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(project);
+        string Module(string key) => outputs.Single(output => output.RelativePath.EndsWith("/" + Rmf2GeneratedNamesV1.Identifier(key) + ".js", StringComparison.Ordinal)).Text;
+        Assert.True(Module("title").Contains("messages[\"de\"] = freezeGeneratedText(\"title\", \"de\", \"Aktualisierungen\");", StringComparison.Ordinal), Module("title"));
+        Assert.True(Module("greet").Contains("freezeGeneratedPattern(\"greet\", \"en\", [\"Hello \", [\"name\"], \", welcome to \", [\"place\"]])", StringComparison.Ordinal), Module("greet"));
+        Assert.True(Module("plural").Contains("messages[\"de\"] = messages[\"en\"];", StringComparison.Ordinal), Module("plural"));
+        Assert.True(Module("plural").Contains("JSON.parse(", StringComparison.Ordinal), Module("plural"));
+        Assert.True(Module("count").Contains("JSON.parse(", StringComparison.Ordinal), Module("count"));
+        foreach (TranslationGeneratedOutput output in outputs.Where(output => output.RelativePath.Contains("/messages/r_", StringComparison.Ordinal)))
+            Assert.True(!output.Text.Contains("\\n  ", StringComparison.Ordinal), output.RelativePath + " contains indented JSON.");
+
+        string directory = Write(outputs);
+        try
+        {
+            foreach (string locale in new[] { "en", "de" })
+                File.WriteAllBytes(Path.Combine(directory, locale + ".json"), Rmf2LocaleArtifactV5.Render(project, locale).GetUtf8Bytes());
+            string script = Path.Combine(directory, "compact.mjs");
+            File.WriteAllText(script, """
+                import { readFile } from "node:fs/promises";
+                import { m } from "./compact.esm-v5/messages.js";
+                import { decodeLocaleArtifact, formatDynamicMessage } from "./compact.esm-v5/dynamic.js";
+                const calls = { title: [], empty: [], greet: [{ name: "Ada", place: "{Runic}" }], count: [{ count: 1234 }], braces: [], plural: [{ count: 1 }, { count: 3 }] };
+                for (const locale of ["en", "de"]) {
+                  const artifact = decodeLocaleArtifact(JSON.parse(await readFile(new URL(`./${locale}.json`, import.meta.url), "utf8")));
+                  if (!artifact.ok) throw new Error(`artifact ${locale}: ${artifact.reason}`);
+                  for (const [key, inputs] of Object.entries(calls))
+                    for (const input of inputs.length ? inputs : [undefined]) {
+                      const compiled = input ? m[key](input, { locale }) : m[key]({ locale });
+                      const dynamic = formatDynamicMessage(artifact.value, key, input ?? {}, { locale });
+                      if (compiled !== dynamic) throw new Error(`${locale} ${key}: ${compiled} !== ${dynamic}`);
+                    }
+                }
+                const expected = { title: "Aktualisierungen", greet: "Hallo Ada, willkommen in {Runic}", braces: "Literal {x} and \\ backslash", empty: "" };
+                for (const [key, text] of Object.entries(expected)) {
+                  const actual = key === "greet" ? m.greet({ name: "Ada", place: "{Runic}" }, { locale: "de" }) : m[key]({ locale: "de" });
+                  if (actual !== text) throw new Error(`${key}: ${actual}`);
+                }
+                if (m.plural({ count: 1 }, { locale: "de" }) !== "One update") throw new Error("shared fallback");
+                console.log("compact OK");
+                """, new UTF8Encoding(false));
+            Run("bun", [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     internal static Rmf2ProjectV5 CompileProject(string id, string baseLocale, IReadOnlyList<string> locales,
         bool allowExtras, params (string Locale, string Source)[] sources)
     {

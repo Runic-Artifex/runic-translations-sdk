@@ -189,8 +189,10 @@ internal sealed class Rmf2V1CorpusTests
     // external pack contracts into small methods, in both digests. Every other output is unchanged.
     // Re-pinned for #86: runtime.js and transport.js accept a finite number for a decimal input, transport.js imports
     // decimal, and messages.d.ts types decimal inputs as Rmf2Decimal | string | number, in both digests.
-    private const string EncodedOutputDigest = "cb6fed4215daf46a9671823255bffebdef94787259de4bf433b6470c03bafc7e";
-    private const string HiddenEncodedOutputDigest = "b367e37069926078e26534d3e38a96c620dcbae4099aec249da24c9643cfe52f";
+    // Re-pinned for #85: message modules write text-and-placeholder messages as parts, other messages as minified JSON,
+    // and share a fallback's object; runtime.js gains freezeGeneratedText and freezeGeneratedPattern, in both digests.
+    private const string EncodedOutputDigest = "1686a96e92a61976a3ec5d320e05d9bfad01b51da56551dfe46cf5d1176dc31b";
+    private const string HiddenEncodedOutputDigest = "f18e5793d6e1e6f778f6c89209916920dc35a7e0f20970d8d4e06bf0996b6b46";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
