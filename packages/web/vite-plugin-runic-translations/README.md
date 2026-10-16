@@ -74,6 +74,10 @@ generated file, for example:
 }
 ```
 
+The file exists once Vite has run the plugin (`vite build`, or `vite` for the
+dev server). A type checker does not run Vite, so on a clean checkout check
+after building: `vite build && svelte-check`, `vite build && tsc --noEmit`.
+
 No hand-written `declare module`, catalog-specific path mapping, or client
 compatibility module is needed. Use `typeDeclarations` to select another stable
 path, or set it to `false` when another tool owns virtual-module declarations.

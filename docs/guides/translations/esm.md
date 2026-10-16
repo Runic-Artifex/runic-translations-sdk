@@ -92,8 +92,12 @@ render it as semantic HTML with `createDomDocumentRenderer` (see
 reject a pack whose document message has a block structure outside the
 generated contract as `RTR0023/document-structure-mismatch`.
 
-JavaScript `number` is accepted only for safe integer inputs; `bigint` covers the
-full signed integer contract. V5 decimal inputs use the exact coefficient/scale
-carrier returned by `decimal("...")` (and also accept an exact decimal string),
-not a JavaScript `number`. Other numeric contracts may use bounded finite
-JavaScript numbers where their documented precision is sufficient.
+An integer input (`:integer`) takes a safe-integer JavaScript `number` or a
+`bigint`, which covers the full signed integer contract. A decimal input
+(`:number`, `:runic:relative-time`) takes a finite JavaScript `number`, a
+decimal string such as `"12.50"`, or the exact coefficient/scale carrier that
+`decimal("...")` returns: `m.hours({ count: 1.5 })`. A `number` stands for the
+decimal that `String(value)` writes, its shortest round-trip form, so `0.1` is
+`0.1` and `1e-7` is `0.0000001`; `NaN` and the infinities are rejected. Pass a
+string or `decimal("...")` for more digits than a `number` holds, such as
+`"0.10000000000000000001"`. `createTextReference` accepts the same values.

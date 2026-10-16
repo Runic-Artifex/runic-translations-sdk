@@ -80,6 +80,8 @@ function parseDecimal(value) {
 
 function exactDecimal(value) {
   if (typeof value === "string") return parseDecimal(value);
+  // A finite number is its shortest round-trip decimal, as String() writes it: 0.1 is 0.1, 1e-7 is 0.0000001.
+  if (typeof value === "number") { if (!Number.isFinite(value)) throw new TypeError("A decimal input must be a finite number."); return parseDecimal(String(value)); }
   if (!isRecord(value) || !exactKeys(value, ["coefficient", "scale", "negative"]) || typeof value.coefficient !== "bigint" ||
       !Number.isInteger(value.scale) || value.scale < 0 || value.scale > 28 || typeof value.negative !== "boolean" ||
       value.coefficient < 0n || value.coefficient > maximumCoefficient) throw new TypeError("An exact RMF2 decimal is required.");
