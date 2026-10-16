@@ -102,7 +102,7 @@ internal static class InputFiles
     private static ToolDiagnosticException TooLarge(string displayPath) => new(
         $"{NormalizePath(displayPath)}(1,1,1,1): error RTR0022: Document exceeds the configured byte limit of {MaximumDocumentBytes} bytes.");
 
-    private static string DisplayPath(string fullPath, string currentDirectory)
+    internal static string DisplayPath(string fullPath, string currentDirectory)
     {
         string relative = Path.GetRelativePath(currentDirectory, fullPath);
         // Keep all inputs in the same coordinate system as the project path.

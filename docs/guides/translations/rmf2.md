@@ -565,6 +565,80 @@ The [VS Code extension](../../../tools/vscode-runic-translations/README.md) and
 package this language server with native IDE navigation and preview commands.
 Their READMEs describe configuration, supported refactor scope and host checks.
 
+## Import a text-keyed catalog
+
+Many applications key their catalog by base-language text: they call
+`t("Remove user {name}")` and look the sentence up in a table per locale.
+`runic-translations import-text` turns such tables into one RMF2 group with
+generated keys. Given `locales/de.json`
+
+```json
+{
+  "Remove user {name}": "Benutzer {name} entfernen",
+  "Remove user {name}!": "Benutzer {name} entfernen!",
+  "Use {} for an empty object": "Verwenden Sie {} für ein leeres Objekt",
+  " Indented": " Eingerückt"
+}
+```
+
+and `locales/untranslated.json`, a JSON array of base texts without a
+translation yet, such as `["Restart now"]`, run:
+
+```sh
+runic-translations import-text --project translations --group stored \
+  --base locales/untranslated.json --table de=locales/de.json
+```
+
+The locale of each `--table` must be declared in `runic.json` and must not be the
+base locale. The command writes `translations/stored/en.rmf2`:
+
+```rmf2
+# Imported by `runic-translations import-text`. The next import rewrites this file; edit the source tables instead.
+
+restart_now = Restart now
+remove_user = Remove user {$name}
+remove_user_2 = Remove user {$name}!
+use_for_an_empty_object = Use \{\} for an empty object
+indented = {{ Indented}}
+```
+
+`translations/stored/de.rmf2` holds the German patterns under the same keys and
+omits `restart_now`, which has no translation; with the default
+`validation.translationCompleteness` this is `RTR0010`, so translate it or relax
+the policy. `{name}` placeholders become `{$name}` in both locales, other braces
+and backslashes are escaped, and text that an unquoted pattern would change
+(outer whitespace, a leading `.`, a newline) is written as a quoted pattern. A
+translation that uses a placeholder its base text lacks is an `RCLI9014` error
+that names the base text; the command exits with 1 and writes nothing.
+
+The directory is the namespace, so the generated APIs name the messages
+`stored_remove_user` and so on, as in `m.stored_remove_user({ name })` in ESM. A
+key is the first seven ASCII words of the text without placeholders, with
+diacritics removed, `n_` before a leading digit, `text` when nothing is left, and
+`_2`, `_3` on collision. Running the command again after the tables change keeps
+the key of every text that is still present, gives new texts new keys, never
+reuses the key of a removed text in the same import, and lists the removed texts.
+The group's files belong to the importer: edit the tables, not the `.rmf2`
+files. `--dry-run` reports and validates the planned files without writing them.
+
+`translations/stored/base-text.json` maps each base text, with its `{name}`
+placeholders as given, to its message key:
+
+```json
+{
+  "Restart now": "stored_restart_now",
+  "Remove user {name}": "stored_remove_user",
+  "Remove user {name}!": "stored_remove_user_2",
+  "Use {} for an empty object": "stored_use_for_an_empty_object",
+  " Indented": "stored_indented"
+}
+```
+
+It lets an application look up text it stored in the base language, such as
+English messages that an earlier version persisted, and show it translated. New
+data should store [text references](transport.md) instead: a reference keeps the
+key and typed arguments, so it survives changes to the base text.
+
 ## Versions and execution limits
 
 RMF2 resource syntax remains version **1**; the markup contract is version

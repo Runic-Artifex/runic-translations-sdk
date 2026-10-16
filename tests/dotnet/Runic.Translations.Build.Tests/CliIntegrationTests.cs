@@ -114,6 +114,7 @@ internal sealed class CliIntegrationTests
         Assert.Equal(0, help.ExitCode, help.Combined);
         AssertHelpEntry(help.StandardOutput, "generate", "Generate translation artifacts.");
         AssertHelpEntry(help.StandardOutput, "init", "Create an RMF2 translation project and starter resources.");
+        AssertHelpEntry(help.StandardOutput, "import-text", "Import a text-keyed catalog into an RMF2 group.");
         AssertHelpEntry(help.StandardOutput, "lsp", "Run the RMF2 language server over standard input/output.");
         AssertHelpEntry(help.StandardOutput, "serve", "Run a persistent compiler for development servers");
         // One aligned column: every command description starts at the same offset.
@@ -129,6 +130,14 @@ internal sealed class CliIntegrationTests
         }
         string? locale = initHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith("--locale", StringComparison.Ordinal));
         Assert.True(locale is not null && !locale.Contains("[required]", StringComparison.Ordinal), "init help must list --locale as optional.");
+
+        ProcessResult importHelp = TestFixture.RunTool(temporary, "help", "import-text");
+        Assert.Equal(0, importHelp.ExitCode, importHelp.Combined);
+        foreach (string option in new[] { "--group <name>", "--table <locale=path...>", "--base <path>", "--dry-run", "--project <directory>" })
+        {
+            string? line = importHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith(option, StringComparison.Ordinal));
+            Assert.True(line is not null && line.Contains("[required]", StringComparison.Ordinal) == (option == "--group <name>"), $"import-text help lists {option} wrongly:\n{importHelp.StandardOutput}");
+        }
     }
 
     [Test, DisplayName("CLI JSON output carries the tool payload type")]
@@ -340,6 +349,205 @@ internal sealed class CliIntegrationTests
         Assert.Equal("en.rmf2|runic.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("Resources"))));
         ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "Resources");
         Assert.Equal(0, validate.ExitCode, validate.Combined);
+    }
+
+    private const string ImportHeader = "# Imported by `runic-translations import-text`. The next import rewrites this file; edit the source tables instead.\n\n";
+
+    // A project like nix-manager's: English base texts, a German table, the group directory as the namespace.
+    private static void WriteImportProject(TemporaryDirectory temporary, string validation = "")
+    {
+        Directory.CreateDirectory(temporary.Resolve("translations"));
+        Directory.CreateDirectory(temporary.Resolve("tables"));
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), """
+            { "schemaVersion": 1, "catalog": "app", "code": { "namespace": "Example", "className": "AppText" }, "baseLocale": "en", "locales": ["en", "de"]
+            """ + validation + " }\n", new UTF8Encoding(false));
+    }
+
+    private static void WriteTable(TemporaryDirectory temporary, string name, string json) =>
+        File.WriteAllText(temporary.Resolve("tables", name), json, new UTF8Encoding(false));
+
+    private static string ReadImported(TemporaryDirectory temporary, string file) =>
+        File.ReadAllText(temporary.Resolve("translations", "stored", file), Encoding.UTF8);
+
+    private static void RunBun(string directory, string script)
+    {
+        string path = Path.Combine(directory, "check.mjs");
+        File.WriteAllText(path, script, new UTF8Encoding(false));
+        var start = new System.Diagnostics.ProcessStartInfo("bun") { WorkingDirectory = directory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        start.ArgumentList.Add(path);
+        using System.Diagnostics.Process process = System.Diagnostics.Process.Start(start) ?? throw new InvalidOperationException("Could not start bun.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        Assert.True(process.WaitForExit(60_000), "bun did not finish.");
+        Assert.Equal(0, process.ExitCode, output.Result + error.Result);
+    }
+
+    [Test, DisplayName("CLI import-text writes a valid group whose ESM formats placeholders, escapes and quoted patterns")]
+    public void ImportTextValidatesAndGenerates()
+    {
+        using TemporaryDirectory temporary = new();
+        WriteImportProject(temporary);
+        WriteTable(temporary, "de.json", """
+            {
+              "Remove user {name}": "Benutzer {name} entfernen",
+              "Use {braces} \\ and {0} }": "Nutze {braces} \\ und {0} }",
+              " Leading space": " Führendes Leerzeichen",
+              "Trailing space ": "Leerzeichen am Ende ",
+              ".hidden files": ".versteckte Dateien",
+              "Two\nlines": "Zwei\nZeilen"
+            }
+            """);
+
+        ProcessResult import = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--table", "de=tables/de.json");
+        Assert.Equal(0, import.ExitCode, import.Combined);
+        Assert.Contains("imported 6 base text(s) into translations/stored: 6 new, 0 kept, 0 removed.", import.StandardOutput);
+        Assert.Contains("validated 1 project(s)", import.StandardOutput);
+        Assert.Equal("base-text.json|de.rmf2|en.rmf2", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("translations", "stored"))));
+
+        // {name} becomes {$name}; other braces and backslashes are escaped; text that an unquoted
+        // pattern would change (outer whitespace, a leading '.', a newline) is quoted.
+        Assert.Equal(ImportHeader + """
+            remove_user = Remove user {$name}
+            use_and_0 = Use {$braces} \\ and \{0\} \}
+            leading_space = {{ Leading space}}
+            trailing_space = {{Trailing space }}
+            hidden_files = {{.hidden files}}
+            two_lines =
+              {{Two
+              lines}}
+
+            """.Replace("\r\n", "\n", StringComparison.Ordinal), ReadImported(temporary, "en.rmf2"));
+        Assert.Contains("use_and_0 = Nutze {$braces} \\\\ und \\{0\\} \\}\n", ReadImported(temporary, "de.rmf2"));
+
+        ProcessResult validate = TestFixture.RunTool(temporary, "validate");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+        ProcessResult generate = TestFixture.RunTool(temporary, "generate", "--output", "generated", "--emit-esm");
+        Assert.Equal(0, generate.ExitCode, generate.Combined);
+        RunBun(temporary.Path, """
+            import { m } from "./generated/app.esm-v5/messages.js";
+            const checks = [
+              [m.stored_remove_user({ name: "Ada" }, { locale: "de" }), "Benutzer Ada entfernen"],
+              [m.stored_remove_user({ name: "Ada" }, { locale: "en" }), "Remove user Ada"],
+              [m.stored_use_and_0({ braces: "B" }, { locale: "en" }), "Use B \\ and {0} }"],
+              [m.stored_leading_space({ locale: "en" }), " Leading space"],
+              [m.stored_trailing_space({ locale: "de" }), "Leerzeichen am Ende "],
+              [m.stored_hidden_files({ locale: "en" }), ".hidden files"],
+              [m.stored_two_lines({ locale: "de" }), "Zwei\nZeilen"],
+            ];
+            for (const [actual, expected] of checks)
+              if (actual !== expected) throw new Error(`expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+            """);
+    }
+
+    [Test, DisplayName("CLI import-text generates deterministic keys, resolves collisions and writes the base-text index")]
+    public void ImportTextGeneratesKeysAndIndex()
+    {
+        using TemporaryDirectory temporary = new();
+        WriteImportProject(temporary, """, "validation": { "translationCompleteness": "warning" }""");
+        File.WriteAllText(temporary.Resolve("tables", "base.json"), """["Not translated yet", "Remove user {name}"]""", new UTF8Encoding(false));
+        WriteTable(temporary, "de.json", """
+            {
+              "Remove user {name}": "Benutzer {name} entfernen",
+              "Remove user {name}!": "Benutzer {name} entfernen!",
+              "Über die Brücke": "Über die Brücke",
+              "42 apples": "42 Äpfel",
+              "!!!": "!!!",
+              "One two three four five six seven eight nine": "Eins"
+            }
+            """);
+
+        ProcessResult import = TestFixture.RunTool(temporary, "import-text", "--project", "translations", "--group", "stored", "--base", "tables/base.json", "--table", "de=tables/de.json");
+        Assert.Equal(0, import.ExitCode, import.Combined);
+        // --base first, then the table's keys, each text once; the JSON keeps {name} as given.
+        Assert.Equal("""
+            {
+              "Not translated yet": "stored_not_translated_yet",
+              "Remove user {name}": "stored_remove_user",
+              "Remove user {name}!": "stored_remove_user_2",
+              "Über die Brücke": "stored_uber_die_brucke",
+              "42 apples": "stored_n_42_apples",
+              "!!!": "stored_text",
+              "One two three four five six seven eight nine": "stored_one_two_three_four_five_six_seven"
+            }
+
+            """.Replace("\r\n", "\n", StringComparison.Ordinal), ReadImported(temporary, "base-text.json"));
+        // An untranslated text is omitted from the locale's file.
+        string german = ReadImported(temporary, "de.rmf2");
+        Assert.False(german.Contains("not_translated_yet", StringComparison.Ordinal), german);
+        Assert.Contains("remove_user_2 = Benutzer {$name} entfernen!\n", german);
+        Assert.Contains("uber_die_brucke = Über die Brücke\n", german);
+    }
+
+    [Test, DisplayName("CLI import-text re-import keeps existing keys, adds new ones and reports removed texts")]
+    public void ImportTextReimportKeepsKeys()
+    {
+        using TemporaryDirectory temporary = new();
+        WriteImportProject(temporary);
+        WriteTable(temporary, "de.json", """{ "Delete item": "Eintrag löschen", "Save": "Speichern", "Save!": "Speichern!" }""");
+        ProcessResult first = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--table", "de=tables/de.json");
+        Assert.Equal(0, first.ExitCode, first.Combined);
+        Assert.Contains("save_2 = Save!\n", ReadImported(temporary, "en.rmf2"));
+
+        // "Save" and "Delete item" go, so their slugs are free; the kept "Save!" stays save_2, and the
+        // new "Delete item!" does not reuse the removed text's key.
+        WriteTable(temporary, "de.json", """{ "Save!": "Speichern!", "Delete item!": "Eintrag löschen!", "Open": "Öffnen" }""");
+        ProcessResult second = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--table", "de=tables/de.json");
+        Assert.Equal(0, second.ExitCode, second.Combined);
+        Assert.Contains("imported 3 base text(s) into translations/stored: 2 new, 1 kept, 2 removed.", second.StandardOutput);
+        Assert.Contains("removed stored_delete_item: \"Delete item\"", second.StandardOutput);
+        Assert.Contains("removed stored_save: \"Save\"", second.StandardOutput);
+        Assert.Equal(ImportHeader + "save_2 = Save!\ndelete_item_2 = Delete item!\nopen = Open\n", ReadImported(temporary, "en.rmf2"));
+        Assert.Equal(ImportHeader + "save_2 = Speichern!\ndelete_item_2 = Eintrag löschen!\nopen = Öffnen\n", ReadImported(temporary, "de.rmf2"));
+        Assert.Equal("{\n  \"Save!\": \"stored_save_2\",\n  \"Delete item!\": \"stored_delete_item_2\",\n  \"Open\": \"stored_open\"\n}\n", ReadImported(temporary, "base-text.json"));
+    }
+
+    [Test, DisplayName("CLI import-text rejects a translation placeholder the base text lacks and writes nothing")]
+    public void ImportTextRejectsPlaceholderMismatch()
+    {
+        using TemporaryDirectory temporary = new();
+        WriteImportProject(temporary);
+        WriteTable(temporary, "de.json", """{ "Fine": "Gut", "Remove user {name}": "Benutzer {user} entfernen" }""");
+
+        ProcessResult import = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--table", "de=tables/de.json");
+        Assert.Equal(1, import.ExitCode, import.Combined);
+        Assert.Contains("The de translation of \"Remove user {name}\" uses the placeholder {user}, which the base text does not contain.", import.StandardError);
+        Assert.Contains("No files were written.", import.StandardOutput);
+        Assert.False(Directory.Exists(temporary.Resolve("translations", "stored")), "A rejected import wrote files.");
+
+        WriteTable(temporary, "de.json", """{ "Count": 3 }""");
+        ProcessResult json = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--table", "de=tables/de.json", "--runic-output", "json");
+        Assert.Equal(1, json.ExitCode, json.Combined);
+        using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
+        JsonElement diagnostic = envelope.RootElement.GetProperty("diagnostics")[0];
+        Assert.Equal("RCLI9014", diagnostic.GetProperty("code").GetString());
+        Assert.Contains("tables/de.json: the value of \"Count\" is not a string.", diagnostic.GetProperty("message").GetString() ?? string.Empty);
+        Assert.False(Directory.Exists(temporary.Resolve("translations", "stored")), "A rejected import wrote files.");
+
+        AssertUsageFailure(temporary, "--table locale 'fr' is not declared in runic.json.", "import-text", "--group", "stored", "--table", "fr=tables/de.json");
+        AssertUsageFailure(temporary, "--table en names the base locale; list base texts without a translation with --base.", "import-text", "--group", "stored", "--table", "en=tables/de.json");
+        AssertUsageFailure(temporary, "--group must be an RMF2 identifier ([A-Za-z_][A-Za-z0-9_]*), not 'stored-text'.", "import-text", "--group", "stored-text");
+    }
+
+    [Test, DisplayName("CLI import-text dry run reports and validates the files without writing them")]
+    public void ImportTextDryRunWritesNothing()
+    {
+        using TemporaryDirectory temporary = new();
+        WriteImportProject(temporary);
+        WriteTable(temporary, "de.json", """{ "Remove user {name}": "Benutzer {name} entfernen" }""");
+
+        ProcessResult dryRun = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--table", "de=tables/de.json", "--dry-run");
+        Assert.Equal(0, dryRun.ExitCode, dryRun.Combined);
+        Assert.Contains("would write translations/stored/en.rmf2", dryRun.StandardOutput);
+        Assert.Contains("would write translations/stored/base-text.json", dryRun.StandardOutput);
+        Assert.Contains("validated 1 project(s) and 2 source document(s).", dryRun.StandardOutput);
+        Assert.False(Directory.Exists(temporary.Resolve("translations", "stored")), "A dry run wrote files.");
+
+        // The planned content is validated: an untranslated text fails RTR0010 without writing.
+        File.WriteAllText(temporary.Resolve("tables", "base.json"), """["Untranslated"]""", new UTF8Encoding(false));
+        ProcessResult incomplete = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--base", "tables/base.json", "--table", "de=tables/de.json", "--dry-run");
+        Assert.Equal(1, incomplete.ExitCode, incomplete.Combined);
+        Assert.Contains("error RTR0010: Locale 'de' does not translate 'stored.untranslated'", incomplete.StandardError);
+        Assert.False(Directory.Exists(temporary.Resolve("translations", "stored")), "A dry run wrote files.");
     }
 
     [Test, DisplayName("CLI schema writes exact bundled versioned schemas")]
