@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Runic.Translations;
 
@@ -18,6 +19,7 @@ public sealed class CompiledTranslationCatalog
     private readonly CompiledTranslationLocale[] _locales;
     private readonly Dictionary<string, int> _idByName;
     private readonly Dictionary<string, LocaleState> _localeByTag;
+    private readonly object _stateGate;
 
     /// <summary>Creates a validated compiled catalog from generated closed data.</summary>
     public CompiledTranslationCatalog(
@@ -64,7 +66,8 @@ public sealed class CompiledTranslationCatalog
 
         _idByName = BuildDefinitionIndex(_definitions);
         _locales = CopyLocales(locales);
-        _localeByTag = BuildLocaleStates(_locales, _definitions);
+        _localeByTag = CreateLocaleStates(_locales);
+        _stateGate = new object();
 
         if (!_localeByTag.TryGetValue(defaultLocale, out LocaleState? defaultState))
         {
@@ -77,29 +80,36 @@ public sealed class CompiledTranslationCatalog
         }
 
         ValidateFallbackGraph(defaultLocale, _localeByTag, nameof(locales));
-        ResolveValues(defaultLocale, _localeByTag, _definitions.Length);
 
-        for (int i = 0; i < defaultState.DirectPatterns.Length; i++)
+        // Deferred locales (generated catalogs) are built and validated when a snapshot first needs them; the
+        // locales given with their values are validated here, as before.
+        bool deferred = false;
+        foreach (CompiledTranslationLocale locale in _locales)
         {
-            if (_definitions[i].IsCanonical && defaultState.DirectPatterns[i] is null)
+            if (locale.IsDeferred)
             {
-                throw new ArgumentException(
-                    $"The default locale does not define canonical key '{_definitions[i].Name}'.",
-                    nameof(locales));
+                deferred = true;
+                continue;
             }
 
-            else if (!_definitions[i].IsCanonical && defaultState.DirectPatterns[i] is not null)
+            BuildDirect(_localeByTag[locale.Locale], _definitions, nameof(locales));
+        }
+
+        if (!deferred)
+        {
+            for (int i = 0; i < _definitions.Length; i++)
             {
-                throw new ArgumentException(
-                    $"Permitted locale extra '{_definitions[i].Name}' cannot be defined by the default locale.",
-                    nameof(locales));
+                if (!_definitions[i].IsCanonical && !HasDirectValue(_localeByTag, i))
+                {
+                    throw new ArgumentException(
+                        $"Permitted locale extra '{_definitions[i].Name}' is not directly defined by any locale.",
+                        nameof(locales));
+                }
             }
 
-            if (!_definitions[i].IsCanonical && !HasDirectValue(_localeByTag, i))
+            foreach (string tag in _localeByTag.Keys)
             {
-                throw new ArgumentException(
-                    $"Permitted locale extra '{_definitions[i].Name}' is not directly defined by any locale.",
-                    nameof(locales));
+                Resolve(tag);
             }
         }
 
@@ -118,6 +128,7 @@ public sealed class CompiledTranslationCatalog
         _locales = source._locales;
         _idByName = source._idByName;
         _localeByTag = source._localeByTag;
+        _stateGate = source._stateGate;
         Catalog = source.Catalog;
         DefaultLocale = source.DefaultLocale;
         UnsupportedLocale = unsupportedLocale;
@@ -209,10 +220,85 @@ public sealed class CompiledTranslationCatalog
     }
 
     internal string?[] GetResolvedPatterns(string canonicalLocale) =>
-        _localeByTag[canonicalLocale].ResolvedPatterns;
+        Resolve(canonicalLocale).ResolvedPatterns!;
 
     internal CompiledTextMessage?[] GetResolvedMessages(string canonicalLocale) =>
-        _localeByTag[canonicalLocale].ResolvedMessages;
+        Resolve(canonicalLocale).ResolvedMessages!;
+
+    private LocaleState Resolve(string canonicalLocale)
+    {
+        LocaleState state = _localeByTag[canonicalLocale];
+        if (Volatile.Read(ref state.ResolvedMessages) is not null)
+        {
+            return state;
+        }
+
+        lock (_stateGate)
+        {
+            if (state.ResolvedMessages is not null)
+            {
+                return state;
+            }
+
+            try
+            {
+                // The locale and its fallback chain, ending at the default locale.
+                var chain = new List<LocaleState>();
+                for (LocaleState? current = state; current is not null;
+                     current = current.FallbackLocale is null ? null : _localeByTag[current.FallbackLocale])
+                {
+                    if (current.DirectMessages is null)
+                    {
+                        BuildDirect(current, _definitions, "locales");
+                    }
+
+                    chain.Add(current);
+                }
+
+                int keyCount = _definitions.Length;
+                var resolved = new string?[keyCount];
+                var resolvedMessages = new CompiledTextMessage?[keyCount];
+                Array.Copy(state.DirectPatterns!, resolved, keyCount);
+                Array.Copy(state.DirectMessages!, resolvedMessages, keyCount);
+                for (int link = 1; link < chain.Count; link++)
+                {
+                    string?[] fallbackPatterns = chain[link].DirectPatterns!;
+                    CompiledTextMessage?[] fallbackMessages = chain[link].DirectMessages!;
+                    for (int i = 0; i < keyCount; i++)
+                    {
+                        resolved[i] ??= fallbackPatterns[i];
+                        resolvedMessages[i] ??= fallbackMessages[i];
+                    }
+                }
+
+                state.ResolvedPatterns = resolved;
+                Volatile.Write(ref state.ResolvedMessages, resolvedMessages);
+                return state;
+            }
+            catch (Exception exception) when (exception is ArgumentException or TranslationPackException && HasDeferredData(state))
+            {
+                throw new InvalidOperationException(
+                    $"The compiled data of locale '{canonicalLocale}' in catalog '{Catalog}' is invalid: {exception.Message}",
+                    exception);
+            }
+        }
+    }
+
+    // A locale whose chain includes deferred data reports invalid data when it is first used, not as a constructor
+    // argument.
+    private bool HasDeferredData(LocaleState state)
+    {
+        for (LocaleState? current = state; current is not null;
+             current = current.FallbackLocale is null ? null : _localeByTag[current.FallbackLocale])
+        {
+            if (current.Deferred)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>Attempts to find a message by name, such as <c>help.usage</c>.</summary>
     /// <remarks>
@@ -320,7 +406,7 @@ public sealed class CompiledTranslationCatalog
     {
         foreach (KeyValuePair<string, LocaleState> pair in localeByTag)
         {
-            if (pair.Value.DirectPatterns[id] is not null)
+            if (pair.Value.DirectPatterns![id] is not null)
             {
                 return true;
             }
@@ -372,53 +458,84 @@ public sealed class CompiledTranslationCatalog
         return result;
     }
 
-    private static Dictionary<string, LocaleState> BuildLocaleStates(
-        CompiledTranslationLocale[] locales,
-        CompiledTranslationDefinition[] definitions)
+    private static Dictionary<string, LocaleState> CreateLocaleStates(CompiledTranslationLocale[] locales)
     {
         var result = new Dictionary<string, LocaleState>(locales.Length, StringComparer.Ordinal);
-        for (int i = 0; i < locales.Length; i++)
+        foreach (CompiledTranslationLocale locale in locales)
         {
-            CompiledTranslationLocale locale = locales[i];
-            var directPatterns = new string?[definitions.Length];
-            var directMessages = new CompiledTextMessage?[definitions.Length];
-            CompiledTranslationValue[] values = locale.ValueArray;
-            for (int valueIndex = 0; valueIndex < values.Length; valueIndex++)
-            {
-                CompiledTranslationValue value = values[valueIndex];
-                if (value.Id >= definitions.Length)
-                {
-                    throw new ArgumentException(
-                        $"Locale '{locale.Locale}' contains unknown key ID {value.Id}.",
-                        nameof(locales));
-                }
-
-                CompiledTextMessage message;
-                try
-                {
-                    message = value.Message ?? CompiledTextMessageRuntime.ParseVersion1(value.Pattern);
-                }
-                catch (TranslationFormatException)
-                {
-                    throw new ArgumentException(
-                        $"Locale '{locale.Locale}' pattern for key '{definitions[value.Id].Name}' is malformed.",
-                        nameof(locales));
-                }
-                if (!CompiledTextMessageRuntime.MatchesContract(message, definitions[value.Id].PlaceholderArray))
-                {
-                    throw new ArgumentException(
-                        $"Locale '{locale.Locale}' pattern for key '{definitions[value.Id].Name}' does not match its placeholder contract.",
-                        nameof(locales));
-                }
-
-                directPatterns[value.Id] = value.Pattern;
-                directMessages[value.Id] = message;
-            }
-
-            result.Add(locale.Locale, new LocaleState(locale.FallbackLocale, directPatterns, directMessages));
+            result.Add(locale.Locale, new LocaleState(locale));
         }
 
         return result;
+    }
+
+    private static void BuildDirect(LocaleState state, CompiledTranslationDefinition[] definitions, string parameterName)
+    {
+        CompiledTranslationLocale locale = state.Locale;
+        var directPatterns = new string?[definitions.Length];
+        var directMessages = new CompiledTextMessage?[definitions.Length];
+        CompiledTranslationValue[] values = locale.ValueArray;
+        for (int valueIndex = 0; valueIndex < values.Length; valueIndex++)
+        {
+            CompiledTranslationValue value = values[valueIndex];
+            if (value.Id >= definitions.Length)
+            {
+                throw new ArgumentException(
+                    $"Locale '{locale.Locale}' contains unknown key ID {value.Id}.",
+                    parameterName);
+            }
+
+            CompiledTextMessage message;
+            try
+            {
+                message = value.Message ?? CompiledTextMessageRuntime.ParseVersion1(value.Pattern);
+            }
+            catch (TranslationFormatException)
+            {
+                throw new ArgumentException(
+                    $"Locale '{locale.Locale}' pattern for key '{definitions[value.Id].Name}' is malformed.",
+                    parameterName);
+            }
+            if (!CompiledTextMessageRuntime.MatchesContract(message, definitions[value.Id].PlaceholderArray))
+            {
+                throw new ArgumentException(
+                    $"Locale '{locale.Locale}' pattern for key '{definitions[value.Id].Name}' does not match its placeholder contract.",
+                    parameterName);
+            }
+
+            directPatterns[value.Id] = value.Pattern;
+            directMessages[value.Id] = message;
+        }
+
+        // The default locale must define exactly the canonical keys. Its values are kept only once that holds, so a
+        // failed deferred build is not mistaken for a valid one on the next attempt.
+        if (state.FallbackLocale is null)
+        {
+            ValidateDefaultLocale(directPatterns, definitions, parameterName);
+        }
+
+        state.DirectPatterns = directPatterns;
+        state.DirectMessages = directMessages;
+    }
+
+    private static void ValidateDefaultLocale(string?[] directPatterns, CompiledTranslationDefinition[] definitions, string parameterName)
+    {
+        for (int i = 0; i < directPatterns.Length; i++)
+        {
+            if (definitions[i].IsCanonical && directPatterns[i] is null)
+            {
+                throw new ArgumentException(
+                    $"The default locale does not define canonical key '{definitions[i].Name}'.",
+                    parameterName);
+            }
+
+            else if (!definitions[i].IsCanonical && directPatterns[i] is not null)
+            {
+                throw new ArgumentException(
+                    $"Permitted locale extra '{definitions[i].Name}' cannot be defined by the default locale.",
+                    parameterName);
+            }
+        }
     }
 
     private static void ValidateFallbackGraph(
@@ -462,57 +579,27 @@ public sealed class CompiledTranslationCatalog
         }
     }
 
-    private static void ResolveValues(
-        string defaultLocale,
-        Dictionary<string, LocaleState> localeByTag,
-        int keyCount)
-    {
-        foreach (KeyValuePair<string, LocaleState> pair in localeByTag)
-        {
-            var resolved = new string?[keyCount];
-            var resolvedMessages = new CompiledTextMessage?[keyCount];
-            Array.Copy(pair.Value.DirectPatterns, resolved, keyCount);
-            Array.Copy(pair.Value.DirectMessages, resolvedMessages, keyCount);
-
-            string current = pair.Key;
-            while (!string.Equals(current, defaultLocale, StringComparison.Ordinal))
-            {
-                string fallback = localeByTag[current].FallbackLocale!;
-                string?[] fallbackPatterns = localeByTag[fallback].DirectPatterns;
-                CompiledTextMessage?[] fallbackMessages = localeByTag[fallback].DirectMessages;
-                for (int i = 0; i < resolved.Length; i++)
-                {
-                    resolved[i] ??= fallbackPatterns[i];
-                    resolvedMessages[i] ??= fallbackMessages[i];
-                }
-
-                current = fallback;
-            }
-
-            pair.Value.ResolvedPatterns = resolved;
-            pair.Value.ResolvedMessages = resolvedMessages;
-        }
-    }
-
     private sealed class LocaleState
     {
-        internal LocaleState(string? fallbackLocale, string?[] directPatterns, CompiledTextMessage?[] directMessages)
+        internal LocaleState(CompiledTranslationLocale locale)
         {
-            FallbackLocale = fallbackLocale;
-            DirectPatterns = directPatterns;
-            DirectMessages = directMessages;
-            ResolvedPatterns = Array.Empty<string?>();
-            ResolvedMessages = Array.Empty<CompiledTextMessage?>();
+            Locale = locale;
+            Deferred = locale.IsDeferred;
         }
 
-        internal string? FallbackLocale { get; }
+        internal CompiledTranslationLocale Locale { get; }
 
-        internal string?[] DirectPatterns { get; }
+        /// <summary>Whether the locale's values were created on first use.</summary>
+        internal bool Deferred { get; }
 
-        internal CompiledTextMessage?[] DirectMessages { get; }
+        internal string? FallbackLocale => Locale.FallbackLocale;
 
-        internal string?[] ResolvedPatterns { get; set; }
+        internal string?[]? DirectPatterns;
 
-        internal CompiledTextMessage?[] ResolvedMessages { get; set; }
+        internal CompiledTextMessage?[]? DirectMessages;
+
+        internal string?[]? ResolvedPatterns;
+
+        internal CompiledTextMessage?[]? ResolvedMessages;
     }
 }

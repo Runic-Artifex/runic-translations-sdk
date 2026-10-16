@@ -206,6 +206,22 @@ function testNativeAot() {
   for (const text of ["Aufruf: localized greet", "Grüßt eine Person", "Argumente:", "Optionen:", "Hilfe anzeigen"])
     assert.ok(help.text.includes(text), `German help lacks ${text}:\n${help.text}`);
   assert.deepEqual(invoke("en", "greet", "--unknown"), { status: 2, text: "RCLI1001: An unrecognized option was supplied. (--unknown)\n" });
+
+  // The shared-catalog example: a C# process formatting a frontend's catalog, read from embedded data on first use.
+  const tray = resolve(root, "artifacts/shared-catalog-aot");
+  rmSync(tray, { recursive: true, force: true });
+  run("dotnet", ["publish", "examples/shared-catalog/Tray/Tray.csproj", "--configuration", configuration,
+    "--runtime", "linux-x64", "--self-contained", "true", "-p:PublishAot=true", "-p:IlcTreatWarningsAsErrors=true", "--output", tray]);
+  const trayOutput = spawnSync(resolve(tray, "Tray"), ["de", "en"], { encoding: "utf8" });
+  if (trayOutput.error) throw trayOutput.error;
+  assert.equal(trayOutput.status, 0, trayOutput.stderr);
+  assert.equal(trayOutput.stdout, [
+    "[de] Übersicht öffnen | Nach Aktualisierungen suchen | Beenden",
+    "[de] Eine Aktualisierung ist bereit. 3 Aktualisierungen sind bereit.",
+    "[en] Open the dashboard | Check for updates | Quit",
+    "[en] One update is ready to install. 3 updates are ready to install.",
+    ""].join("\n"));
+  rmSync(tray, { recursive: true, force: true });
   rmSync(example, { recursive: true, force: true });
 }
 

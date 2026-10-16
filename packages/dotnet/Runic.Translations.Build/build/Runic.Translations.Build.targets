@@ -19,7 +19,9 @@
     <TranslationProject Include="$(MSBuildProjectDirectory)\translations\runic.json" />
   </ItemGroup>
   <ItemGroup>
-    <AdditionalFiles Include="@(TranslationProject)" RunicTranslationKind="Project" />
+    <!-- Full paths, as discovery reports the sources: a project outside this directory, such as
+         ../Frontend/translations/runic.json, then contains its sources (RTR0052 otherwise). -->
+    <AdditionalFiles Include="@(TranslationProject->'%(FullPath)')" RunicTranslationKind="Project" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationKind" />
   </ItemGroup>
 
@@ -57,7 +59,7 @@
                       Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.mf2' or '%(_TranslationsDiscoveredSource.Extension)' == '.rmf2'" />
     </ItemGroup>
     <ItemGroup>
-      <AdditionalFiles Include="@(TranslationMf2)" RunicTranslationKind="Mf2" />
+      <AdditionalFiles Include="@(TranslationMf2->'%(FullPath)')" RunicTranslationKind="Mf2" />
     </ItemGroup>
   </Target>
 

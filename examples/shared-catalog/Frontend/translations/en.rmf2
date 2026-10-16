@@ -1,0 +1,17 @@
+# Text the page shows, through the Vite plugin's m.page_title().
+page {
+  title = Updates
+  summary = {$count :integer} updates are ready.
+}
+
+# Text the background process shows: its tray menu and notifications.
+tray {
+  open = Open the dashboard
+  check = Check for updates
+  quit = Quit
+  updates_ready =
+    .input {$count :integer}
+    .match $count
+    one {{One update is ready to install.}}
+    *   {{{$count} updates are ready to install.}}
+}

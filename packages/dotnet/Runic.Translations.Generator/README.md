@@ -38,6 +38,15 @@ For startup code that cannot await, such as a WPF application with `StartupUri`,
 `AppTextCatalog.CreateManager()` returns the same manager synchronously; the
 embedded catalog needs no I/O.
 
+The generated catalog embeds each locale's messages as UTF-8 data in the
+assembly and reads a locale when a manager or provider first needs it, with the
+locales it falls back to. A process that formats English never reads German,
+and the JIT compiles no per-message code, so a large catalog stays cheap to
+start in small processes such as a tray or a background service. The data is
+read without reflection and is safe for trimming and NativeAOT. Invalid data,
+which only a mismatched compiler and runtime can produce, fails that locale's
+first snapshot with an `InvalidOperationException`.
+
 `text.Messages` is the readable surface. It names each message by its
 flattened key, as ESM does (`application_title`), and returns
 `LocalizedTextContent<AppTextSlots.key>` for messages with markup; bind their

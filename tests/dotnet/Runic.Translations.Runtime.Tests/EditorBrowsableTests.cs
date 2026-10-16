@@ -35,6 +35,8 @@ internal sealed class EditorBrowsableTests
         (typeof(CompiledTextMessage), nameof(CompiledTextMessage.Rmf2V5)),
         (typeof(CompiledTextMessage), nameof(CompiledTextMessage.FromRmf2)),
         (typeof(CompiledTranslationDefinition), nameof(CompiledTranslationDefinition.FromRmf2Inputs)),
+        (typeof(CompiledTranslationLocale), nameof(CompiledTranslationLocale.CreateDeferred)),
+        (typeof(CompiledTranslationLocale), nameof(CompiledTranslationLocale.ReadRmf2Values)),
         (typeof(TranslationPackContract), nameof(TranslationPackContract.CreateRmf2V5)),
         (typeof(TranslationPackMessageContract), nameof(TranslationPackMessageContract.FromRmf2Inputs)),
         (typeof(TextArgument), nameof(TextArgument.CreateRmf2)),
