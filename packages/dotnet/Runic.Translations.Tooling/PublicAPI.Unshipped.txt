@@ -1,1 +1,8 @@
 #nullable enable
+Runic.Translations.Tooling.TranslationsToolCommandRequest.BaseTexts.get -> string?
+Runic.Translations.Tooling.TranslationsToolCommandRequest.BaseTexts.init -> void
+Runic.Translations.Tooling.TranslationsToolCommandRequest.Group.get -> string?
+Runic.Translations.Tooling.TranslationsToolCommandRequest.Group.init -> void
+Runic.Translations.Tooling.TranslationsToolCommandRequest.Tables.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Runic.Translations.Tooling.TranslationsToolCommandRequest.Tables.init -> void
+static Runic.Translations.Tooling.TranslationsToolCommandModule.ImportText(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project, string! group, System.Collections.Generic.IReadOnlyList<string!>! tables, string? baseTexts, bool dryRun) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!

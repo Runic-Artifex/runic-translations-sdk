@@ -435,3 +435,11 @@ in its message. Fix the `RTR` diagnostic.
 
 The project cannot produce the requested output, for example an emit switch
 the project's sources do not support. The message names the output.
+
+## RCLI9014
+
+`import-text` cannot import its input: a table is not a JSON object of string
+values, `--base` is not a JSON array of strings, a translation uses a
+placeholder that its base text lacks, or the existing base-locale file of the
+group cannot be read back. The message names the file or the base text. The
+command exits with 1 and writes nothing.

@@ -1,6 +1,6 @@
 # dotnet-runic-translations
 
-Create, validate, generate, and verify Runic Translations MF2 projects from a project-local .NET tool. Use it in developer workflows and CI to catch message errors before generated C# or ESM reaches an application.
+Create, import, validate, generate, and verify Runic Translations MF2 projects from a project-local .NET tool. Use it in developer workflows and CI to catch message errors before generated C# or ESM reaches an application.
 
 ## Install locally
 
@@ -46,6 +46,42 @@ Validation permits an empty v5 project as a scaffold, but `generate` and `verify
 fail with `RTR0009` until the effective default locale defines a canonical key.
 
 Use `Runic.Translations.Build` for generated C# or when MSBuild should invoke this local tool. Use this CLI directly when Vite, CI, or a custom script owns artifact generation.
+
+## Import a text-keyed catalog
+
+```bash
+dotnet tool run runic-translations -- import-text \
+  --project translations \
+  --group stored \
+  --base locales/untranslated.json \
+  --table de=locales/de.json
+```
+
+`import-text` turns a catalog keyed by base-language text, such as
+`{ "Remove user {name}": "Benutzer {name} entfernen" }`, into the RMF2 group
+`<project>/<group>/`. Each `--table <locale>=<path>` (repeatable) is a JSON object
+of string values for a locale declared in `runic.json` other than the base locale.
+`--base` is an optional JSON array of base texts without a translation yet. The
+base texts are the `--base` entries and then each table's keys, in order of first
+appearance.
+
+It writes `<baseLocale>.rmf2`, one `<locale>.rmf2` per table (an untranslated
+text is omitted) and `base-text.json`, then validates the project as `validate`
+does. `{name}` placeholders become `{$name}`; other `{`, `}` and `\` are escaped,
+and text that an unquoted pattern would change (outer whitespace, a leading `.`,
+a newline) is written as a quoted pattern. A translation that uses a placeholder
+its base text lacks, or a table value that is not a string, fails with `RCLI9014`
+and exit code 1, and nothing is written. `--dry-run` reports and validates the
+files without writing them.
+
+Keys are the first seven ASCII words of the text without placeholders
+(`Remove user {name}` becomes `remove_user`), with `_2`, `_3` and so on for
+collisions. A re-import reads the existing `<baseLocale>.rmf2` back: a text that is
+still present keeps its key, new texts get new keys, and removed texts are dropped
+and listed in the output. `base-text.json` maps each base text to its generated
+message key, `{ "Remove user {name}": "stored_remove_user" }`, for an application
+that must look up text it stored in the base language. See
+[Import a text-keyed catalog](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#import-a-text-keyed-catalog).
 
 ## Other commands
 

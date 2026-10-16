@@ -202,9 +202,12 @@ internal static class Program
     private static string UsageText(CommandPath path) =>
         CommandHelpFormatter.Format(TranslationsToolCommandModule.CreateCatalog(), "runic-translations", path, "--runic-output").TrimEnd();
 
-    private static CommandPath PathOf(ToolCommand command) => command == ToolCommand.Help
-        ? CommandPath.Root
-        : new CommandPath([command.ToString().ToLowerInvariant()]);
+    private static CommandPath PathOf(ToolCommand command) => command switch
+    {
+        ToolCommand.Help => CommandPath.Root,
+        ToolCommand.ImportText => new CommandPath(["import-text"]),
+        _ => new CommandPath([command.ToString().ToLowerInvariant()]),
+    };
 
 
     internal static ToolOperationResult Execute(ToolInvocation invocation, SourceUnitCache? units = null)
@@ -352,6 +355,10 @@ internal static class Program
             return Success;
         }
 
+        if (invocation.Command == ToolCommand.ImportText)
+            return TextCatalogImport.Run(invocation.ProjectPath!, invocation.TextImport!, invocation.DryRun, result,
+                planned => RunSemanticV5(invocation with { Command = ToolCommand.Validate }, planned, result, units));
+
         CompilerInputs inputs = InputFiles.ReadProject(invocation.ProjectPath!);
         if (invocation.Command is ToolCommand.Validate or ToolCommand.Generate or ToolCommand.Verify)
             return RunSemanticV5(invocation, inputs, result, units);
@@ -491,7 +498,7 @@ internal sealed class ToolExecutionSink : ICommandOutcomeSink
     {
         foreach (CommandDiagnostic diagnostic in diagnostics)
         {
-            if (diagnostic.Code is "RCLI9010" or "RCLI9011" or "RCLI9013") return true;
+            if (diagnostic.Code is "RCLI9010" or "RCLI9011" or "RCLI9013" or TextCatalogImport.DiagnosticCode) return true;
         }
 
         return false;
@@ -530,6 +537,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
             "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp), OmitSourceDiagnostics()),
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp), OmitSourceDiagnostics()),
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
+            "import-text" => ExecuteImport(request),
             _ => new ToolOperationResult { ExitCode = 2 },
         };
         var report = new TranslationsToolCommandResult(result.Output, string.Empty) { Diagnostics = result.TranslationDiagnostics };
@@ -547,6 +555,15 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
     }
 
     private const string PayloadType = "runic.translations.tool/1";
+
+    private static ToolOperationResult ExecuteImport(TranslationsToolCommandRequest request)
+    {
+        string? project = string.IsNullOrWhiteSpace(request.Project) ? DefaultProject() : request.Project;
+        if (project is null)
+            return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", ToolCommand.ImportText);
+        return Program.Execute(new ToolInvocation(ToolCommand.ImportText, null, ToolEmission.None, null, project, request.DryRun,
+            TextImport: new TextImportRequest(request.Group ?? string.Empty, request.Tables ?? [], request.BaseTexts)));
+    }
 
     // The translation diagnostics of a result: the payload of a success, fault.data of a failure.
     internal static IReadOnlyList<TranslationsToolDiagnostic> TranslationDiagnostics(CommandOutcome<TranslationsToolCommandResult> outcome)

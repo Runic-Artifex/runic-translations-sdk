@@ -14,6 +14,7 @@ internal enum ToolCommand
     Generate,
     Verify,
     Schema,
+    ImportText,
 }
 
 [Flags]
@@ -36,7 +37,8 @@ internal sealed record ToolInvocation(
     TranslationProjectCreationRequest? ProjectCreation,
     string? ProjectPath = null,
     bool DryRun = false,
-    bool OmitSourceDiagnostics = false);
+    bool OmitSourceDiagnostics = false,
+    TextImportRequest? TextImport = null);
 
 internal static class CommandLine
 {

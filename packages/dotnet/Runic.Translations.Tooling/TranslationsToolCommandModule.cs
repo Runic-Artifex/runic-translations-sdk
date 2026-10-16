@@ -92,6 +92,9 @@ public static class TranslationsToolCommandModule
     [Command("verify", Description = "Check that generated artifacts match the sources.", LongDescription = "Renders in memory and compares byte for byte with --output, including extra files. " + EmitDescription + "\n\n" + ExitCodes, Examples = ["runic-translations verify --output obj/translations --emit-esm"])][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Verify([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Description = ProjectDescription, ValueName = "directory")] string? project, [Option("--output", Required = true, Description = "Directory with the artifacts to compare.", ValueName = "directory")] string output, [Option("--emit-csharp", Description = "Compare the typed C# API.")] bool csharp, [Option("--emit-json", Description = "Compare locale-v5 JSON and its asset manifest.")] bool json, [Option("--emit-typescript", Hidden = true)] bool typescript, [Option("--emit-template-manifest", Hidden = true)] bool manifest, [Option("--emit-esm", Description = "Compare the ESM package and web-module-manifest-v3.json.")] bool esm, [Option("--emit-cpp", Hidden = true)] bool cpp) => operations.Execute(new("verify", Project: project, Output: output, EmitCSharp: csharp, EmitJson: json, EmitTypeScript: typescript, EmitTemplateManifest: manifest, EmitEsm: esm, EmitCpp: cpp));
 
+    [Command("import-text", Description = "Import a text-keyed catalog into an RMF2 group.", LongDescription = "Generates stable keys from the base texts, writes <project>/<group>/<locale>.rmf2 and <project>/<group>/base-text.json, then validates the project. A re-import keeps the key of every base text that is still present.\n\n" + ExitCodes, Examples = ["runic-translations import-text --group stored --table de=locales/de.json", "runic-translations import-text --project translations --group stored --base locales/untranslated.json --table de=locales/de.json --dry-run"])][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    public static CommandOutcome<TranslationsToolCommandResult> ImportText([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Description = ProjectDescription, ValueName = "directory")] string? project, [Option("--group", Required = true, ValueName = "name", Description = "RMF2 group, written to <group>/.")] string group, [Option("--table", AllowMultipleValues = true, ValueName = "locale=path", Description = "JSON object mapping base text to translated text for a declared locale; repeatable.")] IReadOnlyList<string> tables, [Option("--base", ValueName = "path", Description = "JSON array of base texts that have no translation yet.")] string? baseTexts, [Option("--dry-run", Description = "Report the files without writing them.")] bool dryRun) => operations.Execute(new("import-text", Project: project, DryRun: dryRun) { Group = group, Tables = tables, BaseTexts = baseTexts });
+
     [Command("schema", Description = "Write the bundled JSON schemas to a directory.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     public static CommandOutcome<TranslationsToolCommandResult> Schema([FromServices] ITranslationsToolCommandOperations operations, [Option("--output", Required = true, Description = "Directory to write the schemas to.", ValueName = "directory")] string output) => operations.Execute(new("schema", Output: output));
 
@@ -214,7 +217,17 @@ public sealed record TranslationsToolCommandRequest(
     bool EmitTemplateManifest = false,
     bool EmitEsm = false,
     bool EmitCpp = false,
-    bool DryRun = false);
+    bool DryRun = false)
+{
+    /// <summary>The RMF2 group that <c>import-text</c> writes, a directory below the project.</summary>
+    public string? Group { get; init; }
+
+    /// <summary>The <c>import-text</c> tables, each <c>&lt;locale&gt;=&lt;path&gt;</c> of a JSON object that maps base text to translated text.</summary>
+    public IReadOnlyList<string>? Tables { get; init; }
+
+    /// <summary>The path of the JSON array of base texts without a translation that <c>import-text</c> reads.</summary>
+    public string? BaseTexts { get; init; }
+}
 
 /// <summary>Portable command payload; the standard dispatcher renders its human text or JSON envelope.</summary>
 /// <remarks>A failed command carries the same shape as <c>fault.data</c> of type <c>runic.translations.tool/1</c>.</remarks>
