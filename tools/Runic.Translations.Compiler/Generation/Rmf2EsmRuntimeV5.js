@@ -366,6 +366,21 @@ function freezeContentNode(node) { node.annotations = Object.freeze(node.annotat
 function compareRanks(left, right) { for (let index = 0; index < left.length; index++) if (left[index] !== right[index]) return left[index] - right[index]; return 0; }
 function canonicalCarrier(value, type) { if (type === "decimal") return decimalCanonical(value); if (type === "int64") return value.toString(); if (type === "boolean") return value ? "true" : "false"; return value; }
 
+// Compact generated messages. A message of text and plain input placeholders is written as its parts, text strings and
+// [inputName] for {$inputName}; these rebuild the same normalized AST, which freezeGeneratedMessage validates as before.
+export function freezeGeneratedText(key, contentLocale, text) { return freezeGeneratedPattern(key, contentLocale, text === "" ? [] : [text]); }
+export function freezeGeneratedPattern(key, contentLocale, parts) {
+  const inputs = messageContracts[key]?.inputs ?? [];
+  const nodes = parts.map(part => {
+    if (typeof part === "string") return { kind: "text", value: part };
+    const input = inputs.find(item => item.name === part[0]);
+    if (!input) throw new TypeError(`Invalid generated RMF2 v5 message: ${key} has no input ${part[0]}.`);
+    return { kind: "expression", expression: { operand: { kind: "input", value: input.name }, valueType: input.type, options: [], annotations: [] } };
+  });
+  return freezeGeneratedMessage(key, { contentLocale, ast: { astVersion: 5, profile: "rmf2-execution-v2",
+    inputs: inputs.map(item => ({ name: item.name, type: item.type })), declarations: [], selectors: [], variants: [{ keys: [], nodes }] } });
+}
+
 export function freezeGeneratedMessage(key, value) {
   const contract = messageContracts[key]; const error = validateMessageWrapper(value, contract, null, key);
   if (error) throw new TypeError(`Invalid generated RMF2 v5 message: ${error}.`);

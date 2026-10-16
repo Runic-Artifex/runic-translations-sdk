@@ -9,6 +9,16 @@ canonical message has an injectively named internal module under `messages/`;
 input validation, and portable scalar formatting. Generated messages consume the
 compiler AST and never parse authoring patterns or fetch JSON.
 
+A message module holds each locale's message compactly. A message that is text
+and plain placeholders (`{$name}`, with no function) is written as its parts,
+such as `["Hello ", ["name"]]`; any other message is minified AST JSON. A locale
+whose message comes from its fallback shares the fallback's object instead of a
+copy. The runtime rebuilds the same normalized AST from the parts and validates
+every message when its module loads, so the encoding does not change what a
+message formats. For a catalog of about 1,300 messages in two locales, the
+minified bundle of all messages shrank from 2.0 MB to 0.93 MB, of which
+0.32 MB is `runtime.js`.
+
 `server.js` owns an `AsyncLocalStorage` request context. Wrap an SSR operation in
 `runWithLocale(locale, operation)` and ordinary message calls inside it resolve
 request-locally. Concurrent renders do not share mutable locale state. An
