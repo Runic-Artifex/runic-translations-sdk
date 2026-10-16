@@ -33,8 +33,14 @@ internal sealed class Rmf2EsmV5Tests
                 import { createInlineRenderer, decimal, linkBinding, toPlainText } from "./billing.esm-v5/runtime.js";
                 import { runWithLocale } from "./billing.esm-v5/server.js";
                 import { decodeLocaleArtifact, decodeLocalePack, formatDynamicMessage } from "./billing.esm-v5/dynamic.js";
-                import { decodeTextReference } from "./billing.esm-v5/transport.js";
+                import { createTextReference, decodeTextReference } from "./billing.esm-v5/transport.js";
                 const check = (condition, message) => { if (!condition) throw new Error(message); };
+                // #86: a :number input takes a finite JavaScript number as the decimal String() writes.
+                check(m.account_total({ rate: 0.125 }, { locale: "de" }) === "12,50%", "number decimal input");
+                check(m.account_total({ rate: 1e-7 }, { locale: "en" }) === m.account_total({ rate: "0.0000001" }, { locale: "en" }), "exponent number decimal input");
+                for (const value of [NaN, Infinity, -Infinity]) { let rejected=false; try { m.account_total({ rate: value }); } catch (error) { rejected = error instanceof TypeError; } check(rejected, `non-finite decimal accepted: ${value}`); }
+                check(createTextReference("account_total", { rate: 0.125 }).arguments.rate.value === "0.125", "number decimal reference");
+                check(createTextReference("account_total", { rate: -0 }).arguments.rate.value === "0", "negative zero decimal reference");
                 check(m.account_total({ rate: decimal("0.125") }, { locale: "de" }) === "12,50%", "exact percent formatting");
                 check(m.account_total({ rate: { coefficient: 125n, scale: 3, negative: false } }, { locale: "en" }) === "12.50%", "coefficient/scale input");
                 const bill = m.account_bill({ count: 2n, rate: decimal("0.125"), "用户": "Ada" }, { locale: "de" });
@@ -94,6 +100,7 @@ internal sealed class Rmf2EsmV5Tests
                 import { m } from "./billing.esm-v5/messages.js";
                 import { decimal, type LocalizedContent } from "./billing.esm-v5/runtime.js";
                 const total: string = m.account_total({ rate: decimal("0.125") }, { locale: "de" });
+                const fromNumber: string = m.account_total({ rate: 0.125 });
                 const typedBill = m.account_bill({ count: 2n, rate: decimal("0.125"), "用户": "Ada" });
                 const bill: LocalizedContent = typedBill;
                 // @ts-expect-error invoice is a required link slot.
@@ -110,7 +117,7 @@ internal sealed class Rmf2EsmV5Tests
                 source.setLocale("fr");
                 // @ts-expect-error fr is not a locale of the catalog.
                 const unknown: Locale = "fr";
-                void total; void bill; void exact; void catalogLocales; void requestLocale; void base; void unknown;
+                void total; void fromNumber; void bill; void exact; void catalogLocales; void requestLocale; void base; void unknown;
                 """, new UTF8Encoding(false));
             Run("bun", [RepositoryPaths.Resolve("node_modules", "typescript", "bin", "tsc"), "--strict", "--noEmit", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--lib", "ES2022,DOM", "--skipLibCheck", typecheck], directory);
         }

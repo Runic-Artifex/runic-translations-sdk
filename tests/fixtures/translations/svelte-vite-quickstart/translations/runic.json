@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "catalog": "app",
+  "code": { "namespace": "Example", "className": "AppText" },
+  "baseLocale": "en",
+  "locales": ["en", "de"]
+}

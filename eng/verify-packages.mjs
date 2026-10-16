@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { root, run, workspace } from "./run.mjs";
 import { verifySvelteKitQuickStart } from "./verify-sveltekit-quickstart.mjs";
+import { verifySvelteViteQuickStart } from "./verify-svelte-vite-quickstart.mjs";
 
 function quoted(value) {
   return value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
@@ -214,6 +215,7 @@ export default defineConfig({ plugins: [runicTranslations({
     run("dotnet", ["tool", "run", "runic-translations", "--", "verify", ...compilerArguments], frontend, environment);
 
     await verifySvelteKitQuickStart({ directory, npmArchives, nugetConfig: join(directory, "NuGet.config"), version, environment });
+    verifySvelteViteQuickStart({ directory, npmArchives, nugetConfig: join(directory, "NuGet.config"), version, environment });
     console.log("All seven NuGet and three npm package consumers passed.");
   } finally {
     rmSync(directory, { recursive: true, force: true });

@@ -106,11 +106,57 @@ the printed URL to see `Runic application`. The production command is
 `npm run build`; the plugin generates `.runic/translations` before bundling.
 
 For TypeScript, the plugin creates `.runic/translations/virtual.d.ts`. Include
-that file in your TypeScript configuration. If your build runs `tsc` before Vite,
-run Vite generation first (for example, `vite build && tsc --noEmit`) so the
-declarations exist on a clean checkout. See the
+that file in your TypeScript configuration. The plugin writes it when Vite runs,
+and a type checker does not run Vite, so on a clean checkout run Vite first:
+`vite build && tsc --noEmit`, `vite build && svelte-check` or
+`vite build && vue-tsc --noEmit`. The opposite order fails with "Cannot find
+module 'virtual:runic-translations/app'" until the first Vite run. See the
 [adapter guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/web/vite-plugin-runic-translations/README.md)
 for all virtual entry points and options.
+
+## Svelte without SvelteKit
+
+A Vite and Svelte app, such as a Runic application's frontend, uses
+`@runic-artifex/translations-svelte` beside the plugin:
+
+```bash
+npm install --save-dev --save-exact @runic-artifex/translations-svelte@<VERSION>
+```
+
+When the application owns the locale, for example a ViewModel's language
+setting, `useMessageLocale` makes the `m.*()` calls follow it. Templates,
+`$derived` and `$effect` that call a message update in place when the locale
+changes; the page does not need `{#key locale}`. `LocalizedInline` renders a
+message with markup, here a link slot, as Svelte elements:
+
+```svelte
+<script lang="ts">
+  import { LocalizedInline, inlineFactory } from "@runic-artifex/translations-svelte/inline";
+  import { useMessageLocale } from "@runic-artifex/translations-svelte/translations";
+  import { m } from "virtual:runic-translations/app";
+  import { configureLocaleResolver, createInlineRenderer, linkBinding } from "virtual:runic-translations/app/runtime";
+
+  let locale = $state("en"); // or a ViewModel's state, such as settings.state?.locale
+  useMessageLocale(configureLocaleResolver, () => locale);
+
+  const inline = createInlineRenderer(inlineFactory);
+  const terms = $derived(inline.render(m.app_terms(), { slots: { terms: linkBinding({ href: "/terms" }) } }));
+</script>
+
+<h1>{m.app_title()}</h1>
+<p>{m.app_hours({ count: 1.5 })}</p>
+<p><LocalizedInline nodes={terms} /></p>
+<button onclick={() => (locale = locale === "en" ? "de" : "en")}>{m.app_switch()}</button>
+```
+
+with `app_terms = Read the {#link ref=terms}terms{/link} before you continue.`
+and `app_hours = About {$count :number} hours left`. A `:number` input takes a
+JavaScript `number`, a decimal string or `decimal("...")`; see
+[ESM inputs](esm.md). Call `useMessageLocale` once, while the root component
+initialises; it installs the resolver for every component of the page and
+removes it when that component is destroyed. With server-side rendering, use
+the request-scoped [SvelteKit quick start](quickstart-sveltekit.md) instead. The
+`svelte-check` and `vite build` order above applies here too.
 
 ## 5. Validate in CI
 

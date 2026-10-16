@@ -1,0 +1,6 @@
+app {
+  title = Updates
+  hours = About {$count :number} hours left
+  terms = Read the {#link ref=terms}terms{/link} before you continue.
+  switch = Deutsch
+}

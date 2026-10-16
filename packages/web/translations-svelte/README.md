@@ -7,6 +7,13 @@ document content.
 import { createLocaleContext } from "@runic-artifex/translations-svelte/translations";
 ```
 
+`useMessageLocale(configureLocaleResolver, () => locale)` from `./translations`
+makes the generated `m.*()` calls follow a locale the application owns, such as
+a ViewModel's setting, so templates update in place when it changes. The
+`./inline` and `./document` components work in any Svelte 5 app built with Vite,
+with or without SvelteKit; see
+[Svelte without SvelteKit](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-vite.md#svelte-without-sveltekit).
+
 The browser-safe `@runic-artifex/translations-svelte/translations/testing`
 entry point provides pseudo-localization, RTL isolation, plural boundary values,
 and accessibility stress fixtures. `@runic-artifex/translations-svelte/inline`

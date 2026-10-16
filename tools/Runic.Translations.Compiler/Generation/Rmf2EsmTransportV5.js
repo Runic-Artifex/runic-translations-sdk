@@ -40,7 +40,7 @@ export function formatTextReference(reference, handlers, options) {
 }
 
 // Writes a reference for this catalog. A string input may receive another reference created here, which is stored as a message
-// argument; integers accept bigint or safe numbers, decimals a decimal carrier or canonical string. { version: 1 } writes the
+// argument; integers accept bigint or safe numbers, decimals a decimal carrier, a canonical string or a finite number. { version: 1 } writes the
 // version 1 wire for receivers that do not read version 2 yet; it carries scalar inputs only.
 export function createTextReference(key, inputs = {}, options = {}) {
   const version = options?.version ?? 2;
@@ -94,6 +94,7 @@ function countNested(body, depth, state) {
 function encode(value, type, name) {
   let wire = value;
   if (type === "int64" && (typeof value === "bigint" || Number.isSafeInteger(value))) wire = String(value);
+  else if (type === "decimal" && typeof value === "number" && Number.isFinite(value)) wire = encode(decimal(String(value)), type, name);
   else if (type === "decimal" && isRecord(value) && typeof value.coefficient === "bigint" && Number.isInteger(value.scale) && value.scale >= 0) {
     const digits = value.coefficient.toString().padStart(value.scale + 1, "0");
     const unsigned = value.scale === 0 ? digits : `${digits.slice(0, digits.length - value.scale)}.${digits.slice(digits.length - value.scale)}`;

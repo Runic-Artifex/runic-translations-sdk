@@ -187,8 +187,10 @@ internal sealed class Rmf2V1CorpusTests
     // Every other output is unchanged.
     // Re-pinned for #87: the C# CatalogData embeds each locale as data read on first use and splits definitions and
     // external pack contracts into small methods, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "8a3d2dcbde9ec1b10b0796b6e133e4802480625a232d19ec06e5f86add208b06";
-    private const string HiddenEncodedOutputDigest = "679bc84fe8653e8604636f2c062d2194813ae809c90780cbb57b05626edd3f55";
+    // Re-pinned for #86: runtime.js and transport.js accept a finite number for a decimal input, transport.js imports
+    // decimal, and messages.d.ts types decimal inputs as Rmf2Decimal | string | number, in both digests.
+    private const string EncodedOutputDigest = "cb6fed4215daf46a9671823255bffebdef94787259de4bf433b6470c03bafc7e";
+    private const string HiddenEncodedOutputDigest = "b367e37069926078e26534d3e38a96c620dcbae4099aec249da24c9643cfe52f";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
