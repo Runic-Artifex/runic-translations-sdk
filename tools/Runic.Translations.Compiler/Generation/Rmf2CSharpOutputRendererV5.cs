@@ -57,11 +57,13 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("return new global::Runic.Translations.CompiledTranslationCatalog("); writer.Indent();
         writer.Line(GenerationSupport.CSharpString(project.Id) + ",");
         writer.Line(GenerationSupport.CSharpString(project.DefaultLocale) + ",");
-        WriteDefinitions(writer, table, ",");
-        WriteLocales(writer, project, table, ",");
+        writer.Line("CreateDefinitions(),");
+        WriteLocaleList(writer, project);
         writer.Line("global::Runic.Translations.UnsupportedLocalePolicy." + project.UnsupportedLocale + ",");
         writer.Line("global::Runic.Translations.MissingTranslationPolicy." + project.MissingKey + ");");
         writer.Unindent(); writer.Unindent(); writer.Line("}"); writer.Blank();
+        WriteDefinitionChunks(writer, table);
+        WriteLocaleData(writer, project, table);
         WritePackContractFactory(writer, project, table);
         writer.Unindent(); writer.Line("}");
         return Output(TranslationGeneratedOutputKind.CSharpCatalogData, project.ClassName + ".CatalogData.g.cs", writer);
@@ -312,34 +314,77 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public " + result + " r_args_" + member + "(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", arguments)" + close + ";");
     }
 
-    private static void WriteDefinitions(GenerationWriter writer, Rmf2V5DefinitionTable table, string suffix)
-    {
-        writer.Line("new global::Runic.Translations.CompiledTranslationDefinition[]"); writer.Line("{"); writer.Indent();
-        foreach (Rmf2V5Definition definition in table.Definitions)
-        {
-            writer.Line("global::Runic.Translations.CompiledTranslationDefinition.FromRmf2Inputs(" + GenerationSupport.CSharpString(definition.Contract.Key) + ","); writer.Indent();
-            WriteInputs(writer, definition.Contract.Inputs, ", isCanonical: " + (definition.Canonical ? "true" : "false") + "),"); writer.Unindent();
-        }
-        writer.Unindent(); writer.Line("}" + suffix);
-    }
 
-    private static void WriteLocales(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2V5DefinitionTable table, string suffix)
+    private const int ChunkSize = 32;
+
+    private static void WriteLocaleList(GenerationWriter writer, Rmf2ProjectV5 project)
     {
         writer.Line("new global::Runic.Translations.CompiledTranslationLocale[]"); writer.Line("{"); writer.Indent();
+        int index = 0;
         foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
         {
-            writer.Line("new global::Runic.Translations.CompiledTranslationLocale(" + GenerationSupport.CSharpString(locale.Tag) + ", " +
-                (locale.FallbackTag is null ? "null" : GenerationSupport.CSharpString(locale.FallbackTag)) + ", new global::Runic.Translations.CompiledTranslationValue[]");
-            writer.Line("{"); writer.Indent();
-            foreach (Rmf2TranslationV5 resource in locale.DirectResources.OrderBy(item => table.Id(item.Key)))
-            {
-                Rmf2MessageContractV5 contract = table.Contract(resource.Key);
-                writer.Line("new global::Runic.Translations.CompiledTranslationValue(" + table.Id(resource.Key) + ", \"\", global::Runic.Translations.CompiledTextMessage.FromRmf2("); writer.Indent();
-                WriteMessage(writer, resource.Message with { Inputs = contract.Inputs }, resource.ContentLocale, "))),"); writer.Unindent();
-            }
-            writer.Unindent(); writer.Line("}),");
+            writer.Line("global::Runic.Translations.CompiledTranslationLocale.CreateDeferred(" + GenerationSupport.CSharpString(locale.Tag) + ", " +
+                (locale.FallbackTag is null ? "null" : GenerationSupport.CSharpString(locale.FallbackTag)) +
+                ", static () => global::Runic.Translations.CompiledTranslationLocale.ReadRmf2Values(Locale" + index++ + "Data)),");
         }
-        writer.Unindent(); writer.Line("}" + suffix);
+        writer.Unindent(); writer.Line("},");
+    }
+
+    private static void WriteDefinitionChunks(GenerationWriter writer, Rmf2V5DefinitionTable table)
+    {
+        int count = table.Definitions.Count;
+        writer.Line("private static global::Runic.Translations.CompiledTranslationDefinition[] CreateDefinitions()");
+        writer.Line("{"); writer.Indent();
+        writer.Line("var definitions = new global::Runic.Translations.CompiledTranslationDefinition[" + count + "];");
+        for (int chunk = 0; chunk * ChunkSize < count; chunk++) writer.Line("Definitions" + chunk + "(definitions);");
+        writer.Line("return definitions;");
+        writer.Unindent(); writer.Line("}"); writer.Blank();
+        for (int chunk = 0; chunk * ChunkSize < count; chunk++)
+        {
+            writer.Line("private static void Definitions" + chunk + "(global::Runic.Translations.CompiledTranslationDefinition[] definitions)");
+            writer.Line("{"); writer.Indent();
+            for (int i = chunk * ChunkSize; i < Math.Min(count, (chunk + 1) * ChunkSize); i++)
+            {
+                Rmf2V5Definition definition = table.Definitions[i];
+                writer.Line("definitions[" + i + "] = global::Runic.Translations.CompiledTranslationDefinition.FromRmf2Inputs(" + GenerationSupport.CSharpString(definition.Contract.Key) + ","); writer.Indent();
+                WriteInputs(writer, definition.Contract.Inputs, ", isCanonical: " + (definition.Canonical ? "true" : "false") + ");"); writer.Unindent();
+            }
+            writer.Unindent(); writer.Line("}"); writer.Blank();
+        }
+    }
+
+    // Each locale's direct values are UTF-8 JSON data in the assembly, read when a snapshot first needs the locale:
+    // [[id, {"contentLocale": ..., "ast": ...}], ...] with ASTs in the normalized v5 form. Data instead of code keeps the
+    // JIT out of catalog creation, and a process builds only the locales it formats.
+    private static void WriteLocaleData(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2V5DefinitionTable table)
+    {
+        int index = 0;
+        foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
+        {
+            using var stream = new System.IO.MemoryStream();
+            using (var json = new System.Text.Json.Utf8JsonWriter(stream, new System.Text.Json.JsonWriterOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+            {
+                json.WriteStartArray();
+                foreach (Rmf2TranslationV5 resource in locale.DirectResources.OrderBy(item => table.Id(item.Key)))
+                {
+                    Rmf2MessageContractV5 contract = table.Contract(resource.Key);
+                    json.WriteStartArray();
+                    json.WriteNumberValue(table.Id(resource.Key));
+                    json.WriteStartObject();
+                    json.WriteString("contentLocale", resource.ContentLocale);
+                    json.WritePropertyName("ast");
+                    using (var ast = System.Text.Json.JsonDocument.Parse(Rmf2MessageJsonV5.Serialize(resource.Message with { Inputs = contract.Inputs })))
+                        ast.RootElement.WriteTo(json);
+                    json.WriteEndObject();
+                    json.WriteEndArray();
+                }
+                json.WriteEndArray();
+            }
+            // Text stays readable UTF-8; the C# literal escapes what a string literal cannot hold.
+            writer.Line("private static global::System.ReadOnlySpan<byte> Locale" + index++ + "Data => " +
+                GenerationSupport.CSharpString(System.Text.Encoding.UTF8.GetString(stream.ToArray())) + "u8;");
+            writer.Blank();
+        }
     }
 
     private static void WriteMessage(GenerationWriter writer, Rmf2MessageV5 message, string contentLocale, string suffix)
@@ -444,29 +489,45 @@ internal static class Rmf2CSharpOutputRendererV5
 
     private static void WritePackContractFactory(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2V5DefinitionTable table)
     {
+        Rmf2LocaleV5[] locales = project.Locales.OrderBy(item => item.Tag, StringComparer.Ordinal).ToArray();
         writer.Line("internal static global::Runic.Translations.TranslationPackContract CreateExternalPackContract(string locale)");
         writer.Line("{"); writer.Indent();
         writer.Line("if (locale is null) throw new global::System.ArgumentNullException(nameof(locale));");
-        foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
+        for (int index = 0; index < locales.Length; index++)
         {
-            writer.Line("if (global::System.String.Equals(locale, " + GenerationSupport.CSharpString(locale.Tag) + ", global::System.StringComparison.Ordinal))");
-            writer.Line("{"); writer.Indent();
-            var resolved = locale.ResolvedResources.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
-            writer.Line("return global::Runic.Translations.TranslationPackContract.CreateRmf2V5("); writer.Indent();
-            writer.Line(GenerationSupport.CSharpString(project.Id) + ", " + GenerationSupport.CSharpString(locale.Tag) + ", " + GenerationSupport.CSharpString(project.CallerFingerprint) + ",");
-            writer.Line("new global::Runic.Translations.TranslationPackMessageContract[]"); writer.Line("{"); writer.Indent();
-            foreach (Rmf2V5Definition definition in table.Definitions.Where(item => item.Canonical || resolved.Contains(item.Contract.Key)).OrderBy(item => item.Contract.Key, StringComparer.Ordinal))
-            {
-                writer.Line("global::Runic.Translations.TranslationPackMessageContract.FromRmf2Inputs("); writer.Indent();
-                writer.Line("new global::Runic.Translations.TranslationKey(" + GenerationSupport.CSharpString(project.Id) + ", " + definition.Id + ", " + GenerationSupport.CSharpString(definition.Contract.Key) + "),");
-                WriteInputs(writer, definition.Contract.Inputs, "),"); writer.Unindent();
-            }
-            writer.Unindent(); writer.Line("},");
-            writer.Line(GenerationSupport.CSharpString(project.MarkupContract) + ");"); writer.Unindent();
-            writer.Unindent(); writer.Line("}");
+            writer.Line("if (global::System.String.Equals(locale, " + GenerationSupport.CSharpString(locales[index].Tag) + ", global::System.StringComparison.Ordinal))");
+            writer.Indent(); writer.Line("return CreateExternalPackContract" + index + "();"); writer.Unindent();
         }
         writer.Line("throw new global::System.ArgumentException(\"The locale is not declared by this generated catalog.\", nameof(locale));");
-        writer.Unindent(); writer.Line("}");
+        writer.Unindent(); writer.Line("}"); writer.Blank();
+        for (int index = 0; index < locales.Length; index++)
+        {
+            Rmf2LocaleV5 locale = locales[index];
+            var resolved = locale.ResolvedResources.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
+            Rmf2V5Definition[] definitions = table.Definitions.Where(item => item.Canonical || resolved.Contains(item.Contract.Key)).OrderBy(item => item.Contract.Key, StringComparer.Ordinal).ToArray();
+            string name = "ExternalPackContract" + index;
+            writer.Line("private static global::Runic.Translations.TranslationPackContract Create" + name + "()");
+            writer.Line("{"); writer.Indent();
+            writer.Line("var messages = new global::Runic.Translations.TranslationPackMessageContract[" + definitions.Length + "];");
+            for (int chunk = 0; chunk * ChunkSize < definitions.Length; chunk++) writer.Line(name + "Messages" + chunk + "(messages);");
+            writer.Line("return global::Runic.Translations.TranslationPackContract.CreateRmf2V5("); writer.Indent();
+            writer.Line(GenerationSupport.CSharpString(project.Id) + ", " + GenerationSupport.CSharpString(locale.Tag) + ", " + GenerationSupport.CSharpString(project.CallerFingerprint) + ", messages, " +
+                GenerationSupport.CSharpString(project.MarkupContract) + ");"); writer.Unindent();
+            writer.Unindent(); writer.Line("}"); writer.Blank();
+            for (int chunk = 0; chunk * ChunkSize < definitions.Length; chunk++)
+            {
+                writer.Line("private static void " + name + "Messages" + chunk + "(global::Runic.Translations.TranslationPackMessageContract[] messages)");
+                writer.Line("{"); writer.Indent();
+                for (int i = chunk * ChunkSize; i < Math.Min(definitions.Length, (chunk + 1) * ChunkSize); i++)
+                {
+                    Rmf2V5Definition definition = definitions[i];
+                    writer.Line("messages[" + i + "] = global::Runic.Translations.TranslationPackMessageContract.FromRmf2Inputs("); writer.Indent();
+                    writer.Line("new global::Runic.Translations.TranslationKey(" + GenerationSupport.CSharpString(project.Id) + ", " + definition.Id + ", " + GenerationSupport.CSharpString(definition.Contract.Key) + "),");
+                    WriteInputs(writer, definition.Contract.Inputs, ");"); writer.Unindent();
+                }
+                writer.Unindent(); writer.Line("}"); writer.Blank();
+            }
+        }
     }
 
     private static string Value(Rmf2ValueV5 value) => "new global::Runic.Translations.CompiledRmf2Value(" + GenerationSupport.CSharpString(value.Kind) + ", " + GenerationSupport.CSharpString(value.Value) + ", " + (value.Canonical is null ? "null" : GenerationSupport.CSharpString(value.Canonical)) + ")";

@@ -82,6 +82,36 @@ internal static class TranslationPackV5Loader
         { throw Error("The external pack contains an invalid normalized v5 AST.", TranslationPackFailureReason.MalformedPattern); }
     }
 
+    // Generated catalogs embed each locale's direct values as [[id, {"contentLocale", "ast"}], ...] and read them when the
+    // locale is first used. The data comes from the same compiler as the generated code, so only the shape is checked
+    // here; the catalog checks every message against its definition's inputs.
+    internal static CompiledTranslationValue[] ReadGeneratedValues(ReadOnlySpan<byte> content)
+    {
+        try
+        {
+            var reader = new Utf8JsonReader(content, new JsonReaderOptions { MaxDepth = TranslationPackLimits.DefaultMaximumDepth });
+            using JsonDocument document = JsonDocument.ParseValue(ref reader);
+            if (document.RootElement.ValueKind != JsonValueKind.Array) throw Error("Generated locale data must be an array.");
+            var limits = new TranslationPackLimits();
+            var result = new CompiledTranslationValue[document.RootElement.GetArrayLength()];
+            int index = 0;
+            foreach (JsonElement entry in document.RootElement.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Array || entry.GetArrayLength() != 2) throw Error("A generated locale value is malformed.");
+                int id = Integer(entry[0]);
+                Dictionary<string, JsonElement> wrapper = Members(entry[1], ["contentLocale", "ast"]);
+                string contentLocale = String(wrapper["contentLocale"]);
+                CompiledRmf2Message message = ReadAst(wrapper["ast"], null, limits, contentLocale);
+                result[index++] = new CompiledTranslationValue(id, string.Empty, CompiledTextMessage.FromRmf2(message));
+            }
+            return result;
+        }
+        catch (TranslationPackException) { throw; }
+        catch (JsonException exception) { throw Error("Generated locale data is malformed JSON near byte " + exception.BytePositionInLine + "."); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
+        { throw Error("Generated locale data contains an invalid normalized v5 AST: " + exception.Message, TranslationPackFailureReason.MalformedPattern); }
+    }
+
     private static VerifiedTranslationPackMessage ReadMessage(JsonElement value, TranslationPackMessageContract contract,
         TranslationPackLimits limits, Rmf2MarkupContract markup, string locale)
     {
@@ -99,7 +129,7 @@ internal static class TranslationPackV5Loader
         return new VerifiedTranslationPackMessage(contract.Key, CompiledTextMessage.FromRmf2(message));
     }
 
-    private static CompiledRmf2Message ReadAst(JsonElement value, TranslationPackMessageContract contract,
+    private static CompiledRmf2Message ReadAst(JsonElement value, TranslationPackMessageContract? contract,
         TranslationPackLimits limits, string contentLocale)
     {
         Dictionary<string, JsonElement> ast = Members(value, ["astVersion", "profile", "inputs", "declarations", "selectors", "variants"]);
@@ -123,18 +153,25 @@ internal static class TranslationPackV5Loader
         { throw Error(exception.Message, TranslationPackFailureReason.ArgumentContractMismatch); }
     }
 
-    private static CompiledRmf2Input[] ReadInputs(JsonElement value, TranslationPackMessageContract contract, TranslationPackLimits limits)
+    // Without a contract (generated data), the inputs are read as written and checked by the catalog.
+    private static CompiledRmf2Input[] ReadInputs(JsonElement value, TranslationPackMessageContract? contract, TranslationPackLimits limits)
     {
         if (value.ValueKind != JsonValueKind.Array) throw Error("A message input contract must be an array.");
         if (value.GetArrayLength() > limits.MaximumArgumentsPerMessage) throw Limit("A message exceeds the configured argument limit.");
-        if (value.GetArrayLength() != contract.Arguments.Count) throw ContractMismatch(contract.Key.Name);
-        var result = new CompiledRmf2Input[contract.Arguments.Count];
+        if (contract is not null && value.GetArrayLength() != contract.Arguments.Count) throw ContractMismatch(contract.Key.Name);
+        var result = new CompiledRmf2Input[value.GetArrayLength()];
         int index = 0;
         foreach (JsonElement item in value.EnumerateArray())
         {
             Dictionary<string, JsonElement> fields = Members(item, ["name", "type"]);
             string name = String(fields["name"]);
             TextArgumentType type = Type(String(fields["type"]));
+            if (contract is null)
+            {
+                if (!TranslationPackValidation.IsRmf2Name(name)) throw Error("A generated message input name is invalid.");
+                result[index++] = new CompiledRmf2Input(name, type);
+                continue;
+            }
             TranslationPackArgumentContract expected = contract.Arguments[index];
             if (name != expected.Name || type != expected.Type || !TranslationPackValidation.IsRmf2Name(name)) throw ContractMismatch(contract.Key.Name);
             result[index++] = new CompiledRmf2Input(name, type);

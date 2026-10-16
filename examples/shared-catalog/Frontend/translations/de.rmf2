@@ -1,0 +1,15 @@
+page {
+  title = Aktualisierungen
+  summary = {$count :integer} Aktualisierungen sind bereit.
+}
+
+tray {
+  open = Übersicht öffnen
+  check = Nach Aktualisierungen suchen
+  quit = Beenden
+  updates_ready =
+    .input {$count :integer}
+    .match $count
+    one {{Eine Aktualisierung ist bereit.}}
+    *   {{{$count} Aktualisierungen sind bereit.}}
+}

@@ -44,7 +44,7 @@ internal sealed class GeneratorTests
         Assert.True(generated.Contains("EnsureRmf2RuntimeAbi(3)", StringComparison.Ordinal), "RMF2 ABI 3 guard missing");
         Assert.True(generated.Contains("Rmf2RuntimeAbiVersion = 3", StringComparison.Ordinal), "RMF2 ABI 3 marker missing");
         Assert.True(generated.Contains("RuntimeAbiVersion = 1", StringComparison.Ordinal), "base generated ABI marker missing");
-        Assert.True(generated.Contains("CompiledTextMessage.FromRmf2", StringComparison.Ordinal), "typed v5 message construction missing");
+        Assert.True(generated.Contains("CompiledTranslationLocale.CreateDeferred(\"en\", null, static () => global::Runic.Translations.CompiledTranslationLocale.ReadRmf2Values(Locale0Data))", StringComparison.Ordinal), "deferred v5 locale data missing");
         Assert.True(!generated.Contains("C:/repo", StringComparison.OrdinalIgnoreCase), "absolute path leaked into generated source");
     }
 
@@ -273,6 +273,60 @@ internal sealed class GeneratorTests
         Diagnostic diagnostic = run.SingleResult.Diagnostics.Single(static item => item.Id == "RTR0018");
         Assert.Equal("translations/runic.json", diagnostic.Location.GetLineSpan().Path, "device diagnostic path");
         Assert.Equal(0, run.SingleResult.GeneratedSources.Length, "device generated sources");
+    }
+
+    // Issue #87: the catalog was one method with every message of every locale, which the JIT compiled whole in each
+    // process that created a manager. Locales are now UTF-8 data read on first use, and the remaining code is small
+    // methods.
+    [Test, DisplayName("generated C# embeds each locale as data and keeps catalog methods small")]
+    public void CatalogDataIsDataPerLocale()
+    {
+        const string project = """
+            {
+              "schemaVersion": 1,
+              "catalog": "app",
+              "code": { "namespace": "Example.Localization", "className": "AppText", "visibility": "public" },
+              "baseLocale": "en",
+              "locales": [ "de", "en" ]
+            }
+            """;
+        var english = new StringBuilder("quote = Say \\{\"hi\"\\} \\\\ done\n");
+        var german = new StringBuilder("quote = Sag \\{\"Grüß\"\\} \\\\ fertig\n");
+        for (int i = 0; i < 150; i++)
+        {
+            english.Append(CultureInfo.InvariantCulture, $"m{i:D3} = Item {i} for {{$name}}\n");
+            german.Append(CultureInfo.InvariantCulture, $"m{i:D3} = Eintrag {i} für {{$name}}\n");
+        }
+        string quote = PathMember("quote"), last = PathMember("m149");
+        string source = $$"""
+            namespace Example.Localization;
+            public static class DataProbe
+            {
+                public static string Run()
+                {
+                    var english = new AppText(AppTextCatalog.CreateManager("en"));
+                    var german = new AppText(AppTextCatalog.CreateManager("de"));
+                    return english.{{quote}} + "|" + german.{{quote}} + "|" + german.{{last}}("Ada") + "|" + english.{{last}}("Ada");
+                }
+            }
+            """;
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, ProjectInput(project),
+            new TestInput("C:/repo/translations/en.rmf2", "Rmf2", english.ToString()),
+            new TestInput("C:/repo/translations/de.rmf2", "Rmf2", german.ToString()));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Assert.Equal("Say {\"hi\"} \\ done|Sag {\"Grüß\"} \\ fertig|Eintrag 149 für Ada|Item 149 for Ada",
+            Execute(run, "Example.Localization.DataProbe", "Run"), "generated execution");
+
+        SyntaxTree data = run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.CatalogData.g.cs").SyntaxTree;
+        string text = data.ToString();
+        Assert.True(!text.Contains("CompiledRmf2Message(", StringComparison.Ordinal), "Locale messages are still constructed in code.");
+        Assert.True(text.Contains("CreateDeferred(\"de\", \"en\", static () => global::Runic.Translations.CompiledTranslationLocale.ReadRmf2Values(Locale0Data))", StringComparison.Ordinal), "German is not deferred data.");
+        Assert.True(text.Contains("Grüß", StringComparison.Ordinal), "German text is not kept as UTF-8.");
+        foreach (var method in data.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>())
+        {
+            int statements = method.Body?.Statements.Count ?? 1;
+            Assert.True(statements <= 40, $"{method.Identifier.Text} has {statements} statements.");
+        }
     }
 
     private static string Execute(GeneratorRun run, string typeName, string methodName)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Threading;
 
 namespace Runic.Translations;
 
@@ -132,16 +133,24 @@ public readonly record struct CompiledTranslationValue(int Id, string Pattern)
 /// <summary>Contains the direct compiled values and fallback edge for one declared locale.</summary>
 public sealed class CompiledTranslationLocale
 {
-    private readonly CompiledTranslationValue[] _values;
+    private readonly object _gate = new();
+    private Func<IReadOnlyList<CompiledTranslationValue>>? _valueFactory;
+    private CompiledTranslationValue[]? _values;
 
     /// <summary>Creates immutable compiled locale data.</summary>
     public CompiledTranslationLocale(
         string locale,
         string? fallbackLocale,
         IReadOnlyList<CompiledTranslationValue> values)
+        : this(locale, fallbackLocale)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        _values = CopyValues(values, nameof(values));
+    }
+
+    private CompiledTranslationLocale(string locale, string? fallbackLocale)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(locale);
-        ArgumentNullException.ThrowIfNull(values);
 
         if (!LocaleTag.TryCanonicalize(locale, out string canonical) ||
             !string.Equals(locale, canonical, StringComparison.Ordinal))
@@ -156,31 +165,41 @@ public sealed class CompiledTranslationLocale
             throw new ArgumentException("The fallback locale must be a canonical BCP 47 tag.", nameof(fallbackLocale));
         }
 
-        _values = new CompiledTranslationValue[values.Count];
-        int previousId = -1;
-        for (int i = 0; i < values.Count; i++)
-        {
-            CompiledTranslationValue value = values[i];
-            if (value.Id < 0)
-            {
-                throw new ArgumentException("Compiled value identifiers cannot be negative.", nameof(values));
-            }
-
-            ArgumentNullException.ThrowIfNull(value.Pattern);
-            if (value.Id <= previousId)
-            {
-                throw new ArgumentException(
-                    "Compiled values must be unique and ordered by ascending identifier.",
-                    nameof(values));
-            }
-
-            _values[i] = value;
-            previousId = value.Id;
-        }
-
         Locale = locale;
         FallbackLocale = fallbackLocale;
     }
+
+    /// <summary>
+    /// Creates locale data whose values are created on first use, the form the generated catalog uses so that a
+    /// process only builds the locales it formats.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="valueFactory"/> runs at most once, when a snapshot of this locale or of a locale that falls back
+    /// to it is first created, or when <see cref="Values"/> is first read. Its values are validated then, so invalid
+    /// data surfaces from that first use instead of from the catalog constructor. If it throws, the next use calls it
+    /// again.
+    /// </remarks>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static CompiledTranslationLocale CreateDeferred(
+        string locale,
+        string? fallbackLocale,
+        Func<IReadOnlyList<CompiledTranslationValue>> valueFactory)
+    {
+        ArgumentNullException.ThrowIfNull(valueFactory);
+        return new CompiledTranslationLocale(locale, fallbackLocale) { _valueFactory = valueFactory };
+    }
+
+    /// <summary>
+    /// Reads the direct values that a generated catalog embeds for one locale, for <see cref="CreateDeferred"/>.
+    /// </summary>
+    /// <param name="utf8Json">
+    /// The compiler's UTF-8 JSON for the locale: an array of <c>[id, {"contentLocale": ..., "ast": ...}]</c> entries
+    /// in ascending key-identifier order, each AST in the normalized message AST v5 form.
+    /// </param>
+    /// <exception cref="TranslationPackException">The data is not in that form.</exception>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static IReadOnlyList<CompiledTranslationValue> ReadRmf2Values(ReadOnlySpan<byte> utf8Json) =>
+        TranslationPackV5Loader.ReadGeneratedValues(utf8Json);
 
     /// <summary>The canonical declared locale.</summary>
     public string Locale { get; }
@@ -190,9 +209,63 @@ public sealed class CompiledTranslationLocale
 
     /// <summary>The direct values ordered by ascending canonical key identifier.</summary>
     public ReadOnlyMemory<CompiledTranslationValue> Values =>
-        (CompiledTranslationValue[])_values.Clone();
+        (CompiledTranslationValue[])ValueArray.Clone();
 
-    internal CompiledTranslationValue[] ValueArray => _values;
+    /// <summary>Whether the values are created on first use and have not been created yet.</summary>
+    internal bool IsDeferred => Volatile.Read(ref _values) is null;
+
+    internal CompiledTranslationValue[] ValueArray
+    {
+        get
+        {
+            CompiledTranslationValue[]? values = Volatile.Read(ref _values);
+            if (values is not null)
+            {
+                return values;
+            }
+
+            lock (_gate)
+            {
+                if (_values is null)
+                {
+                    IReadOnlyList<CompiledTranslationValue> created = _valueFactory!() ??
+                        throw new InvalidOperationException($"The value factory of locale '{Locale}' returned null.");
+                    Volatile.Write(ref _values, CopyValues(created, "valueFactory"));
+                    _valueFactory = null;
+                }
+
+                return _values;
+            }
+        }
+    }
+
+    private static CompiledTranslationValue[] CopyValues(IReadOnlyList<CompiledTranslationValue> values, string parameterName)
+    {
+        var result = new CompiledTranslationValue[values.Count];
+        int previousId = -1;
+        for (int i = 0; i < values.Count; i++)
+        {
+            CompiledTranslationValue value = values[i];
+            if (value.Id < 0)
+            {
+                throw new ArgumentException("Compiled value identifiers cannot be negative.", parameterName);
+            }
+
+            ArgumentNullException.ThrowIfNull(value.Pattern);
+
+            if (value.Id <= previousId)
+            {
+                throw new ArgumentException(
+                    "Compiled values must be unique and ordered by ascending identifier.",
+                    parameterName);
+            }
+
+            result[i] = value;
+            previousId = value.Id;
+        }
+
+        return result;
+    }
 }
 
 internal static class TranslationDataValidation

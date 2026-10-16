@@ -185,8 +185,10 @@ internal sealed class Rmf2V1CorpusTests
     // transport.d.ts its types, in both digests. Every other output is unchanged.
     // Re-pinned for #72: runtime.js resolves an empty locale through the unsupported-locale policy, in both digests.
     // Every other output is unchanged.
-    private const string EncodedOutputDigest = "5dd8ea6c7b4d9d4619d5b30b955a542e22d538b57e1e2df0276d11c2f99b186c";
-    private const string HiddenEncodedOutputDigest = "ce5598a5132fe37ca84fa7a9677ab2e0b747ab7c7f3d764348c20a0df90f8490";
+    // Re-pinned for #87: the C# CatalogData embeds each locale as data read on first use and splits definitions and
+    // external pack contracts into small methods, in both digests. Every other output is unchanged.
+    private const string EncodedOutputDigest = "8a3d2dcbde9ec1b10b0796b6e133e4802480625a232d19ec06e5f86add208b06";
+    private const string HiddenEncodedOutputDigest = "679bc84fe8653e8604636f2c062d2194813ae809c90780cbb57b05626edd3f55";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

@@ -461,6 +461,32 @@ internal sealed class Rmf2IntegrationTests
         var third = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
         Assert.Equal(0, third.ExitCode, third.Combined); Assert.False(File.ReadAllText(temporary.Resolve("sources.txt")).Replace('\\', '/').Contains("feature/de.rmf2", StringComparison.Ordinal), "Deleted mounted source remained in MSBuild discovery.");
     }
+    // A C# process that shares a frontend's catalog names it with a relative path outside its own directory (#87).
+    // The compiler matches sources to their project by path, so both reach it as full paths without "..".
+    [Test, DisplayName("RMF2 MSBuild passes a translation project outside the project directory as full paths")]
+    public void ProjectOutsideProjectDirectory()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("Frontend/translations")); Directory.CreateDirectory(temporary.Resolve("Tray"));
+        File.WriteAllText(temporary.Resolve("Frontend/translations/runic.json"), Project);
+        File.WriteAllText(temporary.Resolve("Frontend/translations/en.rmf2"), "title = Shop\n");
+        string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name ?? "Debug";
+        string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
+        File.WriteAllText(temporary.Resolve("Tray/Consumer.proj"), $$"""
+            <Project><PropertyGroup><Configuration>{{configuration}}</Configuration></PropertyGroup>
+            <ItemGroup><TranslationProject Include="../Frontend/translations/runic.json" /></ItemGroup>
+            <Import Project="{{targets}}" />
+            <Target Name="Dump" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources">
+              <WriteLinesToFile File="files.txt" Lines="@(AdditionalFiles->'%(RunicTranslationKind) %(Identity)')" Overwrite="true" />
+            </Target></Project>
+            """);
+        var result = Processes.DotNet(temporary.Resolve("Tray"), "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
+        Assert.Equal(0, result.ExitCode, result.Combined);
+        string[] files = File.ReadAllLines(temporary.Resolve("Tray/files.txt")).Select(line => line.Replace('\\', '/')).ToArray();
+        string frontend = Path.GetFullPath(temporary.Resolve("Frontend/translations")).Replace('\\', '/');
+        Assert.True(files.Contains("Project " + frontend + "/runic.json"), "The project is not a full path: " + string.Join(" | ", files));
+        Assert.True(files.Contains("Mf2 " + frontend + "/en.rmf2"), "The source is not a full path: " + string.Join(" | ", files));
+    }
     [Test, DisplayName("RMF2 LSP negotiates Unicode positions and returns versioned rename edits")]
     public void Lsp()
     {
