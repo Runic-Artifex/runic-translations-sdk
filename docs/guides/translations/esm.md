@@ -84,6 +84,31 @@ unless `unsupportedLocale` is `exact`). Framework adapters consume this
 structural contract and create one source per browser root. SSR uses the
 generated server entrypoint rather than a mutable global source.
 
+`localeDirection(locale)` returns `"rtl"` or `"ltr"` for any valid BCP 47
+tag, not only the catalog's locales, so the page can set its direction with
+the language:
+
+```ts
+import { getLocale, localeDirection } from 'virtual:runic-translations/app/runtime';
+
+const locale = getLocale();
+document.documentElement.lang = locale;
+document.documentElement.dir = localeDirection(locale);
+```
+
+The script decides: an explicit script subtag, otherwise the likely script
+that `Intl.Locale.prototype.maximize()` finds in CLDR's likely-subtags data. A
+script is right-to-left when CLDR's script metadata marks it so (Arabic,
+Hebrew, Syriac, Thaana, N'Ko, Adlam and others; the list is pinned in
+`specs/translations/cldr/runic-subset-48.2.json`). So `ar`, `he`, `fa`, `ur`,
+`pa-PK` and `ku-Arab` are right-to-left, and `ku`, `he-Latn` and `sd-Deva` are
+left-to-right. `Intl.Locale.prototype.getTextInfo()` is not used: it is missing
+in older engines, and JavaScriptCore answers `ltr` for tags such as `en-Arab`
+and `az-IR`. Without `Intl.Locale`, only an explicit script subtag counts. An
+invalid tag throws a `RangeError`, as in `resolveLocale`. In .NET, use
+`CultureInfo.TextInfo.IsRightToLeft`; it is always `false` with
+`InvariantGlobalization`.
+
 Dynamic loading consumes locale artifact 5 and validates the
 closed artifact envelope, profile and grammar 5, catalog, caller fingerprint,
 locale and content-locale mappings, linked markup/slot contract, and bounded

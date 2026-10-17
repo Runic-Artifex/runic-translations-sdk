@@ -424,6 +424,49 @@ internal sealed class Rmf2EsmV5Tests
     // #85: message modules were indented AST JSON per locale, repeated for every locale that falls back. They are now
     // text or text-and-placeholder parts where that is the whole message, minified JSON otherwise, and a fallback
     // locale shares its source's object. The runtime rebuilds the same AST, so the output equals the locale artifacts'.
+    [Test, DisplayName("RMF2 v5 ESM reports the text direction of any locale tag")]
+    public void LocaleDirection()
+    {
+        Rmf2ProjectV5 project = CompileProject("direction", "en", ["en", "ar", "he"], false,
+            ("en", "hello = Hello"), ("ar", "hello = مرحبا"), ("he", "hello = שלום"));
+        string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
+        try
+        {
+            string script = Path.Combine(directory, "direction.mjs");
+            File.WriteAllText(script, """
+                import { locales, localeDirection } from "./direction.esm-v5/runtime.js";
+                if(locales.map(localeDirection).join()!=="rtl,ltr,rtl")throw new Error(`catalog directions: ${locales.map(localeDirection)}`);
+                // The likely script decides, so a region or an explicit script can change the language's default.
+                const expected={ar:"rtl","ar-EG":"rtl","AR-eg":"rtl",he:"rtl",iw:"rtl",fa:"rtl",ur:"rtl",ps:"rtl",dv:"rtl",yi:"rtl",ckb:"rtl",sd:"rtl",ug:"rtl",ks:"rtl",
+                  "pa-PK":"rtl","pa-Arab":"rtl","az-IR":"rtl","uz-AF":"rtl","ku-Arab":"rtl","en-Arab":"rtl","und-Hebr":"rtl","ar-u-nu-latn":"rtl",
+                  en:"ltr","en-US":"ltr",de:"ltr",ja:"ltr","zh-Hant-TW":"ltr","sr-Cyrl":"ltr",pa:"ltr",ku:"ltr","he-Latn":"ltr","sd-Deva":"ltr","ks-Deva":"ltr","ar-Latn":"ltr",und:"ltr"};
+                for(const [tag,direction] of Object.entries(expected))if(localeDirection(tag)!==direction)throw new Error(`${tag}: ${localeDirection(tag)}`);
+                for(const tag of [""," ","en-","x","en-a",undefined,null,1]){let rejected=false;try{localeDirection(tag);}catch(error){rejected=error instanceof RangeError;}if(!rejected)throw new Error(`accepted ${String(tag)}`);}
+                // Every language the engine has data for agrees with the engine's own Intl.Locale text info. Tags with
+                // an explicit script are not compared: JavaScriptCore reports "ltr" for en-Arab, ku-Arab, az-IR and
+                // und-Hebr, where V8 and CLDR's script metadata say "rtl".
+                const letters="abcdefghijklmnopqrstuvwxyz",candidates=[];
+                for(const a of letters)for(const b of letters){candidates.push(a+b);for(const c of letters)candidates.push(a+b+c);}
+                const languages=Intl.DateTimeFormat.supportedLocalesOf(candidates);if(languages.length<200)throw new Error(`only ${languages.length} languages`);
+                const info=(tag)=>{const locale=new Intl.Locale(tag);return (typeof locale.getTextInfo==="function"?locale.getTextInfo():locale.textInfo).direction;};
+                const mismatches=languages.filter(tag=>localeDirection(tag)!==info(tag));
+                if(mismatches.length)throw new Error(`differs from Intl text info: ${mismatches.join(" ")}`);
+                if(!languages.some(language=>localeDirection(language)==="rtl"))throw new Error("no right-to-left language");
+                """, new UTF8Encoding(false));
+            Run("bun", [script], directory);
+
+            // Without Intl.Locale only an explicit script subtag counts.
+            string fallback = Path.Combine(directory, "fallback.mjs");
+            File.WriteAllText(fallback, """
+                delete Intl.Locale;
+                const { localeDirection } = await import("./direction.esm-v5/runtime.js");
+                if(localeDirection("ar-Arab")!=="rtl"||localeDirection("ar")!=="ltr"||localeDirection("en")!=="ltr")throw new Error("explicit scripts only");
+                """, new UTF8Encoding(false));
+            Run("bun", [fallback], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     [Test, DisplayName("RMF2 v5 ESM message modules are compact and format as the locale artifacts do")]
     public void CompactMessageModules()
     {

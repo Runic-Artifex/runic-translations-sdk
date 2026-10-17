@@ -51,6 +51,20 @@ export function resolveLocale(requested) {
   throw new RangeError(`Unsupported locale '${requested}'.`);
 }
 
+// The direction of a locale's script: the explicit script subtag, else the likely script CLDR gives Intl.Locale's
+// maximize(), so "ar", "pa-PK" and "ku-Arab" are right-to-left and "ku", "he-Latn" and "sd-Deva" left-to-right. Any
+// valid tag is accepted, not only the catalog's locales; without Intl.Locale only an explicit script counts.
+const rightToLeftScripts = new Set(generatedLocaleData.rightToLeftScripts);
+export function localeDirection(locale) {
+  if (typeof locale !== "string") throw new RangeError("A locale string is required.");
+  const canonical = canonicalLocale(locale); if (canonical === null) throw new RangeError(`Invalid locale '${locale}'.`);
+  let script = canonical.split("-").find((part) => part.length === 4 && /^[A-Z][a-z]{3}$/.test(part));
+  if (script === undefined && typeof Intl === "object" && typeof Intl.Locale === "function") {
+    try { script = new Intl.Locale(canonical).maximize().script; } catch { script = undefined; }
+  }
+  return script !== undefined && rightToLeftScripts.has(script) ? "rtl" : "ltr";
+}
+
 export function decimal(value) { return parseDecimal(value); }
 
 function parseDecimal(value) {
