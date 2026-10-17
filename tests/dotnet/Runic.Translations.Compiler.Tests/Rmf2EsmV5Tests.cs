@@ -146,7 +146,7 @@ internal sealed class Rmf2EsmV5Tests
                 const text=content=>content.nodes.map(node=>node.value??"").join("");
                 // Percent selection compares the displayed 1.00, which exactly matches key 1.0.
                 const exact=m.sample({count:decimal("0.01"),digits:2n,style:"percent"});
-                if(exact.kind!=="localized-content"||text(exact)!=="exact 1.00% 4200%")throw new Error(`alias/dynamic/exact mismatch: ${text(exact)}`);
+                if(exact.kind!=="localized-content"||text(exact)!=="exact 1.00% 4,200%")throw new Error(`alias/dynamic/exact mismatch: ${text(exact)}`);
                 const hundred=m.sample({count:decimal("1.0"),digits:2n,style:"percent"});
                 if(hundred.nodes[0].value!=="other ")throw new Error(`displayed 100.00% matched a key for 1: ${text(hundred)}`);
                 if(m.huge({n:decimal("9007199254740993")})!=="exact")throw new Error("binary64-unsafe exact selector failed");

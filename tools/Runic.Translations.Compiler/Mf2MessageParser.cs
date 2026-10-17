@@ -100,7 +100,7 @@ internal static partial class Mf2MessageParser
             {
                 bool valid = option.Key switch {
                     "select" => option.Value is "plural" or "ordinal" or "exact",
-                    "useGrouping" => option.Value is "always" or "never",
+                    "useGrouping" => option.Value is "auto" or "always" or "never" or "min2",
                     "style" => name switch {
                         "number" => option.Value is "decimal" or "percent",
                         "runic:uuid" => option.Value is "d" or "n" or "b" or "p",
@@ -121,7 +121,7 @@ internal static partial class Mf2MessageParser
         }
     }
     internal static string FunctionOptions(string name) => name switch {
-        "string" => "select", "integer" => "select useGrouping", "number" => "select style minimumFractionDigits maximumFractionDigits",
+        "string" => "select", "integer" => "select useGrouping", "number" => "select style useGrouping minimumFractionDigits maximumFractionDigits",
         "date" or "time" or "datetime" or "runic:uuid" => "style", "runic:boolean" => "select", "runic:relative-time" => "unit numeric", "runic:list" => "type style", _ => "",
     };
 
@@ -187,7 +187,7 @@ internal static partial class Mf2MessageParser
         switch (function)
         {
             case "string": type = TranslationArgumentType.String; format = "none"; break;
-            case "integer": type = TranslationArgumentType.Int; format = OptionValue(options, "useGrouping") == "always" ? "grouped" : "plain"; break;
+            case "integer": type = TranslationArgumentType.Int; format = OptionValue(options, "useGrouping") == "never" ? "plain" : "grouped"; break;
             case "number":
                 type = TranslationArgumentType.Number;
                 string? style = OptionValue(options, "style");

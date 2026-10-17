@@ -148,9 +148,10 @@ internal sealed class Rmf2SemanticV5Tests
         foreach (string source in new[] {
             "{1 :number minimumFractionDigits=2 maximumFractionDigits=4}", "{1 :number style=percent maximumFractionDigits=4}",
             "{|2026-09-21| :date style=long}", "{|12:30:45| :time}", "{|2026-09-21T12:30:45Z| :datetime}",
-            "{|true| :runic:boolean}", "{42 :runic:relative-time unit=day numeric=auto}", "{1 :integer useGrouping=always}" }) Message(source);
+            "{|true| :runic:boolean}", "{42 :runic:relative-time unit=day numeric=auto}", "{1 :integer useGrouping=always}",
+            "{1 :integer useGrouping=auto}", "{1 :integer useGrouping=min2}", "{1 :number useGrouping=never}", "{1 :number style=percent useGrouping=min2}" }) Message(source);
         foreach (string source in new[] {
-            "{1 :number bogus=1}", "{1 :number style=currency}", "{1 :integer useGrouping=sometimes}",
+            "{1 :number bogus=1}", "{1 :number style=currency}", "{1 :integer useGrouping=sometimes}", "{1 :number useGrouping=true}",
             "{1 :number maximumFractionDigits=7}", "{1 :number maximumFractionDigits=-1}", "{1 :number maximumFractionDigits=1.5}",
             "{1 :number maximumFractionDigits=|2|}", "{1 :number minimumFractionDigits=3 maximumFractionDigits=2}",
             "{1 :number style=percent maximumFractionDigits=5}", "{|x| :string select=plural}", "{|nope| :date}",

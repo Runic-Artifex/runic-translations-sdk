@@ -102,6 +102,22 @@ keys compare the same displayed value: 1 as a percent matches key `100`. The
 typed value is unchanged, so another expression over the same variable starts
 from the original number.
 
+`:integer` and `:number` group digits as Unicode MessageFormat 2 and
+`Intl.NumberFormat` do. `useGrouping` is `auto` (default), `always`, `never` or
+`min2`. `auto` follows the content locale: `{$n :integer}` writes 1234 as
+`1,234` in English and `1.234` in German, but `1234` in Spanish and Italian,
+whose CLDR data groups only from five digits (`12.345`). `always` groups every
+number above the first group, `min2` only from five digits, and `never` writes
+the digits alone (`1234`, `-1234`). Both runtimes use the same pinned CLDR
+threshold; separators and the minus sign come from the platform. See
+[digit grouping](../../../specs/translations/rmf2-execution-v2.md#digit-grouping).
+
+```rmf2
+items = {$count :integer} items
+hours = about {$hours :number maximumFractionDigits=1} hours
+code = Code {$code :integer useGrouping=never}
+```
+
 `:runic:list` joins a list of strings with the content locale's CLDR list
 patterns, like `Intl.ListFormat`. `type` is `conjunction` (default),
 `disjunction` or `unit`, and `style` is `long` (default), `short` or `narrow`:

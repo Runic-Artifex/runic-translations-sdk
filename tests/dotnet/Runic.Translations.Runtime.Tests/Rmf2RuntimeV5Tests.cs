@@ -36,7 +36,7 @@ internal sealed class Rmf2RuntimeV5Tests
         (CompiledRmf2Value Value, TextArgumentType Type, string? Function, string Expected)[] cases =
         [
             (Text("hi"), TextArgumentType.String, null, "hi"), (Number("1e2", "100"), TextArgumentType.Number, null, "100"),
-            (Number("-9223372036854775808"), TextArgumentType.Int, "integer", "-9223372036854775808"),
+            (Number("-9223372036854775808"), TextArgumentType.Int, "integer", "-9,223,372,036,854,775,808"),
             (Text("true"), TextArgumentType.Bool, "runic:boolean", "true"),
             (Text("2024-02-29"), TextArgumentType.Date, "date", "2024-02-29"),
             (Text("23:59:58"), TextArgumentType.Time, "time", "23:59:58"),
@@ -48,8 +48,11 @@ internal sealed class Rmf2RuntimeV5Tests
         Assert.Equal("yesterday", Simple([], [], Output(Number("-1"), TextArgumentType.Number, "runic:relative-time", new CompiledRmf2Option("numeric", Text("auto")))).Format([], "en"));
         Assert.Equal("1.3", Simple([], [], Output(Number("1.25"), TextArgumentType.Number, "number", new CompiledRmf2Option("maximumFractionDigits", Number("1")))).Format([], "en"));
         Assert.Equal("-1.3", Simple([], [], Output(Number("-1.25"), TextArgumentType.Number, "number", new CompiledRmf2Option("maximumFractionDigits", Number("1")))).Format([], "en"));
-        Assert.Equal("-1", Simple([], [], Output(Number("-1"), TextArgumentType.Int, "integer")).Format([], "sv"));
-        Assert.Equal("7922816251426433759354395033500%", Simple([], [], Output(Number("79228162514264337593543950335"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Text("percent")))).Format([], "en"));
+        // useGrouping=auto (the default) formats with the locale's minus sign; never keeps the invariant integer.
+        Assert.Equal("\u22121", Simple([], [], Output(Number("-1"), TextArgumentType.Int, "integer")).Format([], "sv"));
+        Assert.Equal("-1234", Simple([], [], Output(Number("-1234"), TextArgumentType.Int, "integer", new CompiledRmf2Option("useGrouping", Text("never")))).Format([], "sv"));
+        Assert.Equal("-9223372036854775808", Simple([], [], Output(Number("-9223372036854775808"), TextArgumentType.Int, "integer", new CompiledRmf2Option("useGrouping", Text("never")))).Format([], "en"));
+        Assert.Equal("7,922,816,251,426,433,759,354,395,033,500%", Simple([], [], Output(Number("79228162514264337593543950335"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Text("percent")))).Format([], "en"));
     }
     [Test, DisplayName("v5 lists join snapshot items with CLDR list patterns")]
     public void Lists()
@@ -113,7 +116,7 @@ internal sealed class Rmf2RuntimeV5Tests
         var maximum = Simple([new("digits", TextArgumentType.Int)], [Declare("digits", TextArgumentType.Int)], Output(Number("1.2"), TextArgumentType.Number, "number", new CompiledRmf2Option("minimumFractionDigits", Number("3")), new CompiledRmf2Option("maximumFractionDigits", Input("digits"))));
         Assert.Throws<TranslationFormatException>(() => maximum.Format([new("digits", 2L)], "en"));
         (TextArgumentType Type, string Function, string Option, string Valid, string Invalid)[] enums =
-        [ (TextArgumentType.Int,"integer","useGrouping","always","auto"), (TextArgumentType.Date,"date","style","long","medium"),
+        [ (TextArgumentType.Int,"integer","useGrouping","min2","sometimes"), (TextArgumentType.Number,"number","useGrouping","auto","true"), (TextArgumentType.Date,"date","style","long","medium"),
           (TextArgumentType.Time,"time","style","long","medium"), (TextArgumentType.DateTime,"datetime","style","short","full"),
           (TextArgumentType.Guid,"runic:uuid","style","p","P"), (TextArgumentType.Number,"runic:relative-time","unit","week","decade"),
           (TextArgumentType.Number,"runic:relative-time","numeric","auto","never") ];

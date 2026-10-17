@@ -54,7 +54,7 @@ const ui = createUiText(() => locale);
 for (locale of ["en", "de"]) {
   const messages = await readUiMessages(locale);
   for (const count of pluralStressCounts) {
-    const formatted = String(count); // :integer uses the compiler's ungrouped integer format.
+    const formatted = new Intl.NumberFormat(locale).format(count); // :integer groups digits by default (useGrouping=auto).
     assert.equal(ui.text("ui_count_affected_files", { count }), locale === "en"
       ? count === 1 ? "One affected file" : `${formatted} affected files`
       : count === 1 ? "Eine betroffene Datei" : `${formatted} betroffene Dateien`);

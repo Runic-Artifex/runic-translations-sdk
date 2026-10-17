@@ -23,8 +23,8 @@ internal static class Rmf2FunctionRegistryV2
 {
     internal static readonly IReadOnlyList<Rmf2FunctionRuleV2> Functions = Array.AsReadOnly(new[] {
         Function("string", "string", "exact", Enum("select", "exact", false, "exact")),
-        Function("integer", "int64", "plural", Enum("select", "plural", false, "plural", "ordinal", "exact"), Enum("useGrouping", "never", true, "always", "never")),
-        Function("number", "decimal", "plural", Enum("select", "plural", false, "plural", "ordinal", "exact"), Enum("style", "decimal", true, "decimal", "percent"),
+        Function("integer", "int64", "plural", Enum("select", "plural", false, "plural", "ordinal", "exact"), Grouping()),
+        Function("number", "decimal", "plural", Enum("select", "plural", false, "plural", "ordinal", "exact"), Enum("style", "decimal", true, "decimal", "percent"), Grouping(),
             new Rmf2OptionRuleV2("minimumFractionDigits", "int64", true, true, "0", Array.Empty<string>(), 0, 6),
             new Rmf2OptionRuleV2("maximumFractionDigits", "int64", true, true, "6 (decimal), 4 (percent)", Array.Empty<string>(), 0, 6)),
         Function("date", "date", "none", Enum("style", "iso", true, "iso", "short", "long")),
@@ -38,6 +38,8 @@ internal static class Rmf2FunctionRegistryV2
 
     internal static Rmf2FunctionRuleV2? Find(string name) => Functions.FirstOrDefault(function => function.Name == name);
     private static Rmf2FunctionRuleV2 Function(string name, string type, string selection, params Rmf2OptionRuleV2[] options) => new(name, type, selection, Array.AsReadOnly(options));
+    // Unicode MessageFormat 2 spec/functions/number.md: useGrouping on :number and :integer, default auto.
+    private static Rmf2OptionRuleV2 Grouping() => Enum("useGrouping", "auto", true, "auto", "always", "never", "min2");
     private static Rmf2OptionRuleV2 Enum(string name, string fallback, bool dynamic, params string[] values) => new(name, "string", true, dynamic, fallback, Array.AsReadOnly(values));
 
     // Used both at compile time for fully static options and by the future runtime

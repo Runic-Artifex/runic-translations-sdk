@@ -132,7 +132,7 @@ function defaultFunction(type) { return ({ string: "string", int64: "integer", d
 function functionType(name) { return ({ string: "string", integer: "int64", number: "decimal", "runic:boolean": "boolean", date: "date", time: "time", datetime: "datetime", "runic:uuid": "guid", "runic:relative-time": "decimal", "runic:list": "list" })[name]; }
 function optionType(fn, name) {
   if (["string", "runic:boolean", "integer", "number"].includes(fn) && name === "select") return "string";
-  if (fn === "integer" && name === "useGrouping") return "string";
+  if ((fn === "integer" || fn === "number") && name === "useGrouping") return "string";
   if (["number", "date", "time", "datetime", "runic:uuid"].includes(fn) && name === "style") return "string";
   if (fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) return "int64";
   if (fn === "runic:relative-time" && ["unit", "numeric"].includes(name)) return "string";
@@ -185,8 +185,8 @@ function contextFor(wrapper, inputs, contract) {
 
 function validateResolvedOptions(fn, options) {
   const allowed = {
-    string: { select: ["exact"] }, "runic:boolean": { select: ["exact"] }, integer: { select: ["plural", "ordinal", "exact"], useGrouping: ["always", "never"] },
-    number: { select: ["plural", "ordinal", "exact"], style: ["decimal", "percent"] }, date: { style: ["iso", "short", "long"] },
+    string: { select: ["exact"] }, "runic:boolean": { select: ["exact"] }, integer: { select: ["plural", "ordinal", "exact"], useGrouping: ["auto", "always", "never", "min2"] },
+    number: { select: ["plural", "ordinal", "exact"], style: ["decimal", "percent"], useGrouping: ["auto", "always", "never", "min2"] }, date: { style: ["iso", "short", "long"] },
     time: { style: ["iso", "short", "long"] }, datetime: { style: ["iso", "short", "long"] }, "runic:uuid": { style: ["d", "n", "b", "p"] },
     "runic:relative-time": { unit: ["second", "minute", "hour", "day", "week", "month", "year"], numeric: ["always", "auto"] },
     "runic:list": { type: ["conjunction", "disjunction", "unit"], style: ["long", "short", "narrow"] },
@@ -208,7 +208,7 @@ function formatResolved(value, locale) {
   switch (fn) {
     case "string": return value.carrier;
     case "runic:boolean": return value.carrier ? "true" : "false";
-    case "integer": return options.useGrouping === "always" ? groupInteger(value.carrier, locale) : value.carrier.toString();
+    case "integer": return formatInteger(value.carrier, locale, options.useGrouping ?? "auto");
     case "number": return formatDecimal(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, locale, options);
     case "date": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale);
     case "time": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale);
@@ -240,15 +240,43 @@ function formatDecimal(value, locale, options) {
   const visible = visibleNumber(value, options), percent = (options.style ?? "decimal") === "percent";
   const digits = visible.coefficient.toString().padStart(visible.scale + 1, "0");
   const whole = digits.slice(0, digits.length - visible.scale), fraction = digits.slice(digits.length - visible.scale);
-  const { decimal: separator } = numberSymbols(locale);
-  return `${visible.negative ? "-" : ""}${whole}${fraction ? separator + fraction : ""}${percent ? "%" : ""}`;
+  const symbols = numberSymbols(locale);
+  return `${visible.negative ? symbols.minus : ""}${groupDigits(whole, options.useGrouping ?? "auto", symbols, locale)}${fraction ? symbols.decimal + fraction : ""}${percent ? "%" : ""}`;
 }
 
-function numberSymbols(locale) {
-  const parts = new Intl.NumberFormat(locale, { useGrouping: false, minimumFractionDigits: 1, maximumFractionDigits: 1 }).formatToParts(1.1);
-  return { decimal: parts.find(part => part.type === "decimal")?.value ?? "." };
+// Ungrouped integers stay invariant; the grouping strategies use the locale's sign, separator and group sizes.
+function formatInteger(value, locale, grouping) {
+  if (grouping === "never") return value.toString();
+  const symbols = numberSymbols(locale);
+  return `${value < 0n ? symbols.minus : ""}${groupDigits((value < 0n ? -value : value).toString(), grouping, symbols, locale)}`;
 }
-function groupInteger(value, locale) { return new Intl.NumberFormat(locale, { useGrouping: true, maximumFractionDigits: 0 }).format(value); }
+
+// The host's decimal, group and minus symbols and its primary and secondary group sizes, read once per locale.
+const numberSymbolCache = new Map();
+function numberSymbols(locale) {
+  let symbols = numberSymbolCache.get(locale);
+  if (symbols) return symbols;
+  const parts = new Intl.NumberFormat(locale, { useGrouping: true, minimumFractionDigits: 1, maximumFractionDigits: 1 }).formatToParts(-1234567890.1);
+  const value = type => parts.find(part => part.type === type)?.value;
+  const groups = parts.filter(part => part.type === "integer").map(part => part.value.length);
+  const primary = groups.length > 1 ? groups[groups.length - 1] : 0;
+  symbols = Object.freeze({ decimal: value("decimal") ?? ".", group: value("group") ?? "", minus: value("minusSign") ?? "-", primary, secondary: groups.length > 2 ? groups[groups.length - 2] : primary });
+  if (numberSymbolCache.size < 64) numberSymbolCache.set(locale, symbols);
+  return symbols;
+}
+
+// useGrouping as ICU and Intl.NumberFormat apply it: auto groups once the digits above the primary group
+// reach the pinned CLDR minimumGroupingDigits of the content locale, min2 requires at least two, always one.
+function groupDigits(digits, grouping, symbols, locale) {
+  if (grouping === "never" || symbols.primary <= 0 || !symbols.group) return digits;
+  const language = locale.toLowerCase().split(/[-_]/)[0];
+  const pinned = Object.hasOwn(generatedLocaleData.minimumGroupingDigits, language) ? generatedLocaleData.minimumGroupingDigits[language] : 1;
+  const minimum = grouping === "always" ? 1 : grouping === "min2" ? Math.max(2, pinned) : pinned;
+  if (digits.length - symbols.primary < minimum) return digits;
+  let end = digits.length - symbols.primary; const groups = [digits.slice(end)];
+  while (end > 0) { const start = Math.max(0, end - symbols.secondary); groups.unshift(digits.slice(start, end)); end = start; }
+  return groups.join(symbols.group);
+}
 
 // The number selection compares: :number uses its displayed digits; :integer and
 // relative time use the canonical typed value. The carrier itself never changes.

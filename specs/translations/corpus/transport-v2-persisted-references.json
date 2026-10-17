@@ -972,7 +972,7 @@
       },
       "expected": {
         "outcome": "translated",
-        "text": "Count 9007199254740993",
+        "text": "Count 9,007,199,254,740,993",
         "diagnostics": []
       }
     },
@@ -993,7 +993,7 @@
       },
       "expected": {
         "outcome": "translated",
-        "text": "Count -9223372036854775808",
+        "text": "Count -9,223,372,036,854,775,808",
         "diagnostics": []
       }
     },
@@ -1056,7 +1056,7 @@
       },
       "expected": {
         "outcome": "translated",
-        "text": "Amount 79228162514264337593543950335",
+        "text": "Amount 79,228,162,514,264,337,593,543,950,335",
         "diagnostics": []
       }
     },

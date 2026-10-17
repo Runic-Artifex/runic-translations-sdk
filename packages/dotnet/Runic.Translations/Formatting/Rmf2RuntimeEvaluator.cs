@@ -33,7 +33,7 @@ internal sealed class Rmf2ResolvedFormat
         {
             ("string" or "runic:boolean", "select") => text == "exact",
             ("integer" or "number", "select") => text is "exact" or "plural" or "ordinal",
-            ("integer", "useGrouping") => text is "always" or "never",
+            ("integer" or "number", "useGrouping") => text is "auto" or "always" or "never" or "min2",
             ("number", "style") => text is "decimal" or "percent",
             ("date" or "time" or "datetime", "style") => text is "iso" or "short" or "long",
             ("runic:uuid", "style") => text is "d" or "n" or "b" or "p",
@@ -52,17 +52,30 @@ internal sealed class Rmf2ResolvedFormat
         {
             case "string": return Get<string>(value);
             case "runic:boolean": return Get<bool>(value) ? "true" : "false";
-            case "integer": return String("useGrouping", "never") == "always"
-                ? Get<long>(value).ToString("N0", CultureInfo.GetCultureInfo(locale))
-                : Get<long>(value).ToString(CultureInfo.InvariantCulture);
+            case "integer":
+            {
+                long integer = Get<long>(value);
+                string grouping = String("useGrouping", "auto");
+                // Ungrouped integers stay invariant; the grouping strategies use the locale's sign, separator and group sizes.
+                if (grouping == "never") return integer.ToString(CultureInfo.InvariantCulture);
+                CultureInfo culture = NumberCulture(locale);
+                int digits = integer == long.MinValue ? 19 : Math.Abs(integer).ToString(CultureInfo.InvariantCulture).Length;
+                return integer.ToString(Groups(grouping, digits, locale, culture.NumberFormat) ? "#,0" : "0", culture);
+            }
             case "number":
+            {
                 bool percent = String("style", "decimal") == "percent";
                 int minimum = MinimumDigits, maximum = MaximumDigits;
                 // Round the unscaled decimal explicitly. The custom percent formatter
                 // scales its decimal digit buffer, so decimal.MaxValue cannot overflow.
                 decimal rounded = decimal.Round(Number(value), maximum + (percent ? 2 : 0), MidpointRounding.AwayFromZero);
-                string pattern = "0" + (maximum == 0 ? "" : "." + new string('0', minimum) + new string('#', maximum - minimum)) + (percent ? "%" : "");
-                return rounded.ToString(pattern, CultureInfo.GetCultureInfo(locale));
+                CultureInfo culture = NumberCulture(locale);
+                VisibleDecimal visible = VisibleDecimal.FromNumber(Number(value), percent, minimum, maximum);
+                int digits = Math.Max(1, visible.Coefficient.ToString(CultureInfo.InvariantCulture).Length - visible.Scale);
+                string pattern = (Groups(String("useGrouping", "auto"), digits, locale, culture.NumberFormat) ? "#,0" : "0")
+                    + (maximum == 0 ? "" : "." + new string('0', minimum) + new string('#', maximum - minimum)) + (percent ? "%" : "");
+                return rounded.ToString(pattern, culture);
+            }
             case "date": return Get<DateOnly>(value).ToString(style == "iso" ? "yyyy-MM-dd" : style == "short" ? "d" : "D", style == "iso" ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(locale));
             case "time": return Get<TimeOnly>(value).ToString(style == "iso" ? "HH:mm:ss.FFFFFFF" : style == "short" ? "t" : "T", style == "iso" ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(locale));
             case "datetime":
@@ -73,6 +86,30 @@ internal sealed class Rmf2ResolvedFormat
             case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), locale);
             default: throw new TranslationFormatException("Unknown v5 formatter.");
         }
+    }
+    /// <summary>
+    /// The platform's number symbols for a locale. Without platform locale data, as under
+    /// <c>InvariantGlobalization</c>, numbers use the invariant symbols instead of failing.
+    /// </summary>
+    private static CultureInfo NumberCulture(string locale)
+    {
+        try { return CultureInfo.GetCultureInfo(locale); }
+        catch (CultureNotFoundException) { return CultureInfo.InvariantCulture; }
+    }
+    /// <summary>
+    /// Whether <c>useGrouping</c> separates an integer part of <paramref name="digits"/> digits, as ICU and
+    /// <c>Intl.NumberFormat</c> do: <c>auto</c> groups once the digits above the primary group reach the
+    /// pinned CLDR <c>minimumGroupingDigits</c> of the content locale, <c>min2</c> requires at least two,
+    /// <c>always</c> one. Group sizes and the separator come from platform globalization.
+    /// </summary>
+    internal static bool Groups(string grouping, int digits, string locale, NumberFormatInfo format)
+    {
+        if (grouping == "never") return false;
+        int[] sizes = format.NumberGroupSizes;
+        if (sizes.Length == 0 || sizes[0] <= 0 || format.NumberGroupSeparator.Length == 0) return false;
+        int pinned = GeneratedLocaleData.MinimumGroupingDigits(GeneratedLocaleData.Language(locale));
+        int minimum = grouping switch { "always" => 1, "min2" => Math.Max(2, pinned), _ => pinned };
+        return digits - sizes[0] >= minimum;
     }
     /// <summary>
     /// The number that plural, ordinal and exact selection compare. <c>:number</c>

@@ -138,7 +138,7 @@ option permits a typed dynamic value.
 | --- | --- | --- | --- |
 | `string`, `runic:boolean` | `select` | string: `exact` | `exact` |
 | `integer`, `number` | `select` | string: `plural`, `ordinal`, `exact` | `plural` |
-| `integer` | `useGrouping` | string: `always`, `never` | `never` |
+| `integer`, `number` | `useGrouping` | string: `auto`, `always`, `never`, `min2` | `auto` |
 | `number` | `style` | string: `decimal`, `percent` | `decimal` |
 | `number` | `minimumFractionDigits` | int64: 0..6 | 0 |
 | `number` | `maximumFractionDigits` | int64: 0..6 | 6 for decimal; 4 for percent |
@@ -157,6 +157,43 @@ display multiplies by 100. These options never change the typed value: a local
 or alias keeps the underlying number, and a later formatter starts from it. They
 do determine the numeric selection operand described under
 [Numeric selection operand](#numeric-selection-operand).
+
+### Digit grouping
+
+`useGrouping` on `:integer` and `:number` has the names, values and default of
+Unicode MessageFormat 2 (`spec/functions/number.md`), which takes them from
+`Intl.NumberFormat`. It decides whether the integer part of the displayed
+number is split into groups; it never changes the typed value or numeric
+selection. With a primary group size `p` (3 in every pinned locale family) and
+an integer part of `d` digits:
+
+| Value | Groups when |
+| --- | --- |
+| `auto` (default) | `d - p >= m`, where `m` is the CLDR `minimumGroupingDigits` of the content locale's language family |
+| `always` | `d - p >= 1` |
+| `min2` | `d - p >= max(2, m)` |
+| `never` | never |
+
+`m` comes from the pinned CLDR subset: 2 for `es` and `it`, 1 for the other
+pinned families and for a language without pinned data. So in English
+`{$n :integer}` formats 1234 as `1,234`; in Spanish `auto` keeps `1234` and
+groups `12.345`, while `always` gives `1.234`; `min2` gives `1234` and `12,345`
+in English. This is the rule ICU applies, so for the pinned families the result
+matches `Intl.NumberFormat` with the same `useGrouping` value.
+
+The group separator, the minus sign and the group sizes after the primary one
+(such as the Indian `12,34,567`) come from platform globalization, like the
+decimal separator. A grouped or `auto` integer therefore uses the locale's
+minus sign, while `useGrouping=never` keeps the invariant integer output
+(`-1234`). A .NET process without platform locale data
+(`InvariantGlobalization`) formats numbers with the invariant symbols
+(`1,234`) instead of failing. Both runtimes apply the same pinned threshold; the
+[grouping conformance corpus](corpus/rmf2-grouping-conformance.json) records
+the shared expectations.
+
+Before 0.7.0-preview.4, `:integer` defaulted to `never` and accepted only
+`always` and `never`, and `:number` never grouped. Write `useGrouping=never` to
+keep that output.
 
 ### List formatting
 
@@ -390,8 +427,9 @@ argument exceptions. Authored numeric spelling and canonical fields are checked
 exactly before parsing into decimal; no binary floating point is involved.
 Number display and numeric selection use the same halfExpand visible decimal and
 the finite precision table. Platform globalization still controls localized
-punctuation and date/time names. Ungrouped
-integer output is invariant, matching the pinned exact formatter capability.
+punctuation and date/time names. Ungrouped (`useGrouping=never`)
+integer output is invariant, matching the pinned exact formatter capability;
+the grouping threshold is pinned (see [Digit grouping](#digit-grouping)).
 V5 uses the closed formatter table directly; a snapshot's optional legacy
 `ITextValueFormatter` does not override v5 function semantics.
 

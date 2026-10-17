@@ -4,9 +4,11 @@
 Unicode CLDR 48.2 (`cldr-json` tag `48.2.0`). The source archive URL and
 SHA-512 digest are recorded in the file. The retained fields are the cardinal and
 ordinal plural rules, copied verbatim with their `@integer`/`@decimal` samples
-from `supplemental/plurals.json` and `ordinals.json`, relative-time patterns
-and the resolved `listPatterns` of `cldr-misc-full` for Runic's explicit target
-locales. CLDR has no ordinal rules for `nn`, which therefore inherits the root
+from `supplemental/plurals.json` and `ordinals.json`, relative-time patterns,
+the resolved `listPatterns` of `cldr-misc-full`, and `minimumGroupingDigits`
+from `cldr-numbers-full` (`main/<locale>/numbers.json`) for Runic's explicit
+target locales. Every pinned locale's standard decimal pattern is `#,##0.###`,
+so the primary group has 3 digits. CLDR has no ordinal rules for `nn`, which therefore inherits the root
 rule set (`other` only).
 
 `listPatterns` maps the `Intl.ListFormat` types to the CLDR pattern sets

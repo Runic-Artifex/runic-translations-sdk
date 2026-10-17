@@ -52,10 +52,12 @@
           "inputType": "string",
           "literal": true,
           "dynamic": true,
-          "default": "never",
+          "default": "auto",
           "values": [
+            "auto",
             "always",
-            "never"
+            "never",
+            "min2"
           ]
         }
       }
@@ -83,6 +85,18 @@
           "values": [
             "decimal",
             "percent"
+          ]
+        },
+        "useGrouping": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "auto",
+          "values": [
+            "auto",
+            "always",
+            "never",
+            "min2"
           ]
         },
         "minimumFractionDigits": {
@@ -275,6 +289,15 @@
     "underflow": "reject nonzero values outside the exact domain",
     "rounding": "none"
   },
+  "grouping": {
+    "option": "useGrouping on integer and number, as in Unicode MessageFormat 2 and Intl.NumberFormat",
+    "never": "no separators; an integer formats invariantly",
+    "always": "separators whenever the integer part is longer than the primary group",
+    "auto": "separators once the integer part has at least the content locale family's CLDR minimumGroupingDigits digits above the primary group (1 unless pinned)",
+    "min2": "as auto with at least 2 digits above the primary group",
+    "platform": "group and minus symbols and group sizes come from platform globalization",
+    "conformance": "corpus/rmf2-grouping-conformance.json"
+  },
   "listFormat": {
     "patterns": "CLDR listPatterns of the content locale family: conjunction = standard, disjunction = or, unit = unit; long, short and narrow styles",
     "items": "strings inserted verbatim, in caller order, without sorting",
@@ -325,8 +348,8 @@
     { "id": "fr-minimum-fraction-digits-one", "locale": "fr", "message": ".input {$n :number minimumFractionDigits=1}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1" } }, "expected": "1,0 fichier" },
     { "id": "fr-rounding-into-other", "locale": "fr", "message": ".input {$n :number maximumFractionDigits=0}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1.5" } }, "expected": "2 fichiers" },
     { "id": "fr-rounding-into-one", "locale": "fr", "message": ".input {$n :number maximumFractionDigits=0}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "0.4" } }, "expected": "0 fichier" },
-    { "id": "fr-million-many", "locale": "fr", "message": ".input {$n :number}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1000000" } }, "expected": "1000000 de fichiers" },
-    { "id": "fr-million-visible-fraction-other", "locale": "fr", "message": ".input {$n :number minimumFractionDigits=1}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1000000" } }, "expected": "1000000,0 fichiers" },
+    { "id": "fr-million-many", "locale": "fr", "message": ".input {$n :number}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1000000" } }, "expected": "1\u202f000\u202f000 de fichiers" },
+    { "id": "fr-million-visible-fraction-other", "locale": "fr", "message": ".input {$n :number minimumFractionDigits=1}\n.match $n\none {{{$n} fichier}}\nmany {{{$n} de fichiers}}\n* {{{$n} fichiers}}", "arguments": { "n": { "type": "decimal", "value": "1000000" } }, "expected": "1\u202f000\u202f000,0 fichiers" },
     { "id": "fr-ordinal-rounded", "locale": "fr", "message": ".input {$n :number select=ordinal maximumFractionDigits=0}\n.match $n\none {{{$n}er}}\n* {{{$n}e}}", "arguments": { "n": { "type": "decimal", "value": "1.2" } }, "expected": "1er" },
     { "id": "cs-one", "locale": "cs", "message": ".input {$n :number}\n.match $n\none {{{$n} den}}\nfew {{{$n} dny}}\nmany {{{$n} dne}}\n* {{{$n} dní}}", "arguments": { "n": { "type": "decimal", "value": "1" } }, "expected": "1 den" },
     { "id": "cs-few", "locale": "cs", "message": ".input {$n :number}\n.match $n\none {{{$n} den}}\nfew {{{$n} dny}}\nmany {{{$n} dne}}\n* {{{$n} dní}}", "arguments": { "n": { "type": "decimal", "value": "2" } }, "expected": "2 dny" },

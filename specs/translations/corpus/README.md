@@ -1,6 +1,6 @@
 # Runic Translations conformance corpora
 
-The current release contract is exercised by six complementary fixtures:
+The current release contract is exercised by seven complementary fixtures:
 
 - [`rmf2-v1/index.json`](rmf2-v1/index.json) is the cross-backend release oracle
   for resource syntax `rmf2-v1` executed as `rmf2-execution-v2`, grammar/AST and
@@ -17,6 +17,12 @@ The current release contract is exercised by six complementary fixtures:
   type and style, and the Spanish `y`/`e` and `o`/`u` forms. Each case must
   format exactly as expected in a linked .NET message, a loaded .NET pack,
   generated ESM and a dynamically decoded ESM artifact;
+- [`rmf2-grouping-conformance.json`](rmf2-grouping-conformance.json) is the
+  cross-backend oracle for `useGrouping` on `:integer` and `:number`: the
+  `auto` default in every supported locale family, each value in `en`, `de`,
+  `es` and `it`, dynamic and inherited options. The expectations are
+  `Intl.NumberFormat`'s output for the same option and must format exactly in
+  the same four routes as the list corpus;
 - [`transport-v2-persisted-references.json`](transport-v2-persisted-references.json)
   is the cross-backend oracle for [persisted text references](../transport-v2.md):
   references written against the `writer` catalog are resolved by the changed

@@ -57,6 +57,14 @@ internal static class GeneratedLocaleData
         _ => null,
     };
 
+    /// <summary>CLDR <c>minimumGroupingDigits</c> of a language family: 1 for every language without pinned data.</summary>
+    internal static int MinimumGroupingDigits(string language) => language switch
+    {
+        "es" => 2,
+        "it" => 2,
+        _ => 1,
+    };
+
     internal static GeneratedRelativeTimeLocale? FindRelativeTime(string language)
     {
         for (int index = 0; index < RelativeTimeLocales.Length; index++)
