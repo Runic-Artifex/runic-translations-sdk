@@ -49,6 +49,17 @@ for (const name of [
       `CLDR subset source metadata '${name}' must be a non-empty string.`,
     );
 
+// CLDR's right-to-left scripts (scriptMetadata rtl: YES), for the ESM runtime's localeDirection.
+const rightToLeftScripts = source.rightToLeftScripts;
+if (
+  !Array.isArray(rightToLeftScripts) ||
+  rightToLeftScripts.length === 0 ||
+  rightToLeftScripts.some((script, index) =>
+    typeof script !== "string" || !/^[A-Z][a-z]{3}$/.test(script) ||
+    (index > 0 && rightToLeftScripts[index - 1] >= script))
+)
+  throw new Error("CLDR subset rightToLeftScripts must be sorted, unique ISO 15924 codes.");
+
 const locales = source.locales;
 if (!Array.isArray(locales) || locales.length === 0)
   throw new Error("CLDR subset has no locales.");
@@ -159,6 +170,7 @@ const esmLocaleData = JSON.stringify({
       .filter((locale) => locale.minimumGroupingDigits !== 1)
       .map((locale) => [locale.tag, locale.minimumGroupingDigits]),
   ),
+  rightToLeftScripts,
 });
 // No-break spaces (in the Czech list patterns) stay visible as escapes.
 const csString = (value) =>

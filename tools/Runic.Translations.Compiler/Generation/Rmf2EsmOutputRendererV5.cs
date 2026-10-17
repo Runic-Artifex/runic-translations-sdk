@@ -199,6 +199,8 @@ internal static class Rmf2EsmOutputRendererV5
         export declare const locales: readonly Locale[];
         export declare function decimal(value: string): Rmf2Decimal;
         export declare function resolveLocale(locale: string): Locale;
+        /** The text direction of any BCP 47 locale tag's script, for the page's `dir` attribute. */
+        export declare function localeDirection(locale: string): "ltr" | "rtl";
         export declare function getLocale(): Locale;
         export declare function configureLocaleResolver(resolver: () => string): () => void;
         export declare function createLocaleSource(options?: { initialLocale?: string }): Readonly<{ getLocale(): Locale; setLocale(locale: Locale): void; subscribe(listener: (locale: Locale) => void): () => void }>;

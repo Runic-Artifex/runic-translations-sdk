@@ -7,7 +7,8 @@ ordinal plural rules, copied verbatim with their `@integer`/`@decimal` samples
 from `supplemental/plurals.json` and `ordinals.json`, relative-time patterns,
 the resolved `listPatterns` of `cldr-misc-full`, and `minimumGroupingDigits`
 from `cldr-numbers-full` (`main/<locale>/numbers.json`) for Runic's explicit
-target locales. Every pinned locale's standard decimal pattern is `#,##0.###`,
+target locales, and `rightToLeftScripts`, the scripts whose `rtl` is `YES` in
+`cldr-core/scriptMetadata.json`, which the ESM runtime's `localeDirection` reads. Every pinned locale's standard decimal pattern is `#,##0.###`,
 so the primary group has 3 digits. CLDR has no ordinal rules for `nn`, which therefore inherits the root
 rule set (`other` only).
 

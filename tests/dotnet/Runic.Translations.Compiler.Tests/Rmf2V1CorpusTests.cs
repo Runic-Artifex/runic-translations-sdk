@@ -195,8 +195,10 @@ internal sealed class Rmf2V1CorpusTests
     // minimumGroupingDigits in its locale data, in both digests. Every other output is unchanged.
     // Re-pinned for #96: runtime.js exports projectMarkup and passes unbound project tags to factory.element, and
     // runtime.d.ts declares projectMarkup, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "3a1429f06d3a4866e54de0855203290e44cb51ce738241da4feacc513b0e41c6";
-    private const string HiddenEncodedOutputDigest = "32c07f58a056ddf79372af91a49dea8d4c702bae77cdab08314643129fc21da2";
+    // Re-pinned for W315-019: runtime.js exports localeDirection and carries CLDR's right-to-left scripts in its locale
+    // data, and runtime.d.ts declares localeDirection, in both digests. Every other output is unchanged.
+    private const string EncodedOutputDigest = "9fcca053ca67a530b01c0c91f7bd69413ce9c34f6554d307ff2018bd87470ad1";
+    private const string HiddenEncodedOutputDigest = "1c3d397247251a8d23386ecf5ec31aad378b421ae847b677864e854b03852027";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
