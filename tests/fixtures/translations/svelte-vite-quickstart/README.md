@@ -3,7 +3,8 @@
 This app follows the "Svelte without SvelteKit" section of
 [the Vite quick start](../../../../docs/guides/translations/quickstart-vite.md):
 a plain Vite and Svelte app with the Translations plugin, `useMessageLocale`
-for a locale the application owns, `LocalizedInline` for a message with a link,
+for a locale the application owns, `LocalizedInline` for a message with a link and for one with a project tag
+declared in `runic.json` and rendered by a snippet,
 and a `:number` input given a JavaScript number. Keep its files in step with
 the guide.
 

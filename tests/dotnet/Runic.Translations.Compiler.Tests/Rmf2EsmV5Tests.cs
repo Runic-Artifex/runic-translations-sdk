@@ -184,7 +184,7 @@ internal sealed class Rmf2EsmV5Tests
             string script = Path.Combine(directory, "renderer-parity.mjs");
             File.WriteAllText(script, """
                 import { m } from "./app.esm-v5/messages.js";
-                import { bindMarkup, createInlineRenderer, defineMarkup, linkBinding, toPlainText } from "./app.esm-v5/runtime.js";
+                import { bindMarkup, createDomInlineRenderer, createInlineRenderer, defineMarkup, linkBinding, projectMarkup, toPlainText } from "./app.esm-v5/runtime.js";
                 const check=(condition,message)=>{if(!condition)throw new Error(message);};
                 const children=defineMarkup({name:"app:children",kind:"paired",children:"inline",interactive:false,plainText:"children",options:{}});
                 const content=m.children();
@@ -195,7 +195,20 @@ internal sealed class Rmf2EsmV5Tests
                 ]);
                 check(renderer.render(content).join("")==="keep","custom renderer output");
                 check(!Object.hasOwn(adapterElement,"annotations")&&!Object.hasOwn(adapterElement,"closingAnnotations"),"compiler annotations leaked into the renderer adapter");
-                let rejected=false;try{createInlineRenderer({text:value=>value,element:element=>element.children.join("")}).render(content);}catch{rejected=true;}check(rejected,"strict renderer accepted an unbound custom element");
+                // Issue #96: a project tag needs no restated contract. Without a binding it reaches factory.element, like a
+                // built-in tag, so a factory that dispatches by name (Svelte's LocalizedInline snippets) renders it.
+                const seen=[];
+                const structural=createInlineRenderer({text:value=>value,element:element=>{seen.push(element.name+"@"+element.occurrence);return `<${element.name}>${element.children.join("")}</${element.name}>`;}});
+                check(structural.render(content).join("")==="<app:children>keep</app:children>"&&seen.join()==="app:children@children:v0.0","an unbound project tag did not reach factory.element: "+seen.join());
+                check(Object.keys(projectMarkup).sort().join()==="app:alternate,app:break,app:children,app:explicit,app:omit","projectMarkup lists the project's tags");
+                check(Object.isFrozen(projectMarkup)&&Object.isFrozen(projectMarkup["app:children"])&&projectMarkup["app:children"].name==="app:children"&&projectMarkup["app:break"].kind==="standalone","projectMarkup carries frozen named contracts");
+                check(JSON.stringify(defineMarkup(projectMarkup["app:children"]))===JSON.stringify(projectMarkup["app:children"]),"projectMarkup is in defineMarkup form");
+                check(structural.extend([bindMarkup(projectMarkup["app:children"],({children})=>`[${children.join("")}]`)]).render(content).join("")==="[keep]","an explicit binding from projectMarkup did not override the factory");
+                check(createInlineRenderer({text:value=>value,element:()=>"factory"},[bindMarkup(children,({children})=>`(${children.join("")})`)]).render(content).join("")==="(keep)","a restated binding no longer overrides the factory");
+                // Unbound omit and line-break tags reach the factory too; only plain-text projection drops them.
+                check(structural.render(m.break()).join("")==="before<app:break></app:break>after","an unbound line-break tag was projected instead of rendered");
+                const fakeDocument={createTextNode:value=>({value}),createElement:name=>{throw new Error("created "+name);}};
+                let rejected=false;try{createDomInlineRenderer(fakeDocument).render(content);}catch(error){rejected=String(error).includes("No DOM renderer linked for 'app:children'");}check(rejected,"the DOM renderer created an element for an unbound project tag");
                 const forgedKind=Object.freeze({...content,nodes:Object.freeze([Object.freeze({...content.nodes[0],kind:"script"})])});
                 rejected=false;try{renderer.render(forgedKind);}catch{rejected=true;}check(rejected,"forged content-node discriminator reached the renderer");
                 check(toPlainText(content)==="keep","children projection");
@@ -215,6 +228,17 @@ internal sealed class Rmf2EsmV5Tests
                 rejected=false;try{createInlineRenderer({text:value=>value,element:element=>element.children.join("")},[{contract:{name:"runic:strong",kind:"paired",children:"inline",interactive:false,plainText:"children",options:{}},render:()=>"forged"}]);}catch{rejected=true;}check(rejected,"built-in renderer override accepted");
                 """, new UTF8Encoding(false));
             Run("bun", [script], directory);
+            string typecheck = Path.Combine(directory, "typecheck.ts");
+            File.WriteAllText(typecheck, """
+                import { bindMarkup, createInlineRenderer, projectMarkup, type MarkupContract } from "./app.esm-v5/runtime.js";
+                const contract: MarkupContract = projectMarkup["app:children"];
+                const renderer = createInlineRenderer({ text: (value: string) => value, element: element => element.children.join("") },
+                  [bindMarkup(contract, element => element.children.join(""))]);
+                // @ts-expect-error projectMarkup declares only the project's tags.
+                void projectMarkup["app:missing"];
+                void renderer;
+                """, new UTF8Encoding(false));
+            Run("bun", [RepositoryPaths.Resolve("node_modules", "typescript", "bin", "tsc"), "--strict", "--noEmit", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--lib", "ES2022,DOM", "--skipLibCheck", typecheck], directory);
         }
         finally { Directory.Delete(directory, true); }
     }

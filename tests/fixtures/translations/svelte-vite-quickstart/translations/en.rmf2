@@ -2,5 +2,6 @@ app {
   title = Updates
   hours = About {$count :number} hours left
   terms = Read the {#link ref=terms}terms{/link} before you continue.
+  pending = {#highlight}{$count :integer}{/highlight} updates are waiting.
   switch = Deutsch
 }

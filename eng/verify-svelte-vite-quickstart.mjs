@@ -6,7 +6,8 @@ import { root, run } from "./run.mjs";
 // Builds the "Svelte without SvelteKit" section of the Vite quick start (docs/guides/translations/quickstart-vite.md)
 // from packed candidates and the packed compiler, as a clean checkout: no .runic/ yet, so its build script must run
 // Vite, which writes the virtual-module declarations, before svelte-check (#84). The app imports LocalizedInline (#88)
-// and useMessageLocale and passes a JavaScript number to a :number input (#86).
+// and useMessageLocale and passes a JavaScript number to a :number input (#86). Its project tag, declared only in
+// runic.json, renders through a LocalizedInline snippet without a restated contract (#96).
 export function verifySvelteViteQuickStart({ directory, npmArchives, nugetConfig, version, environment }) {
   const app = join(directory, "svelte-vite-quickstart");
   cpSync(resolve(root, "tests/fixtures/translations/svelte-vite-quickstart"), app, { recursive: true });
@@ -27,7 +28,7 @@ export function verifySvelteViteQuickStart({ directory, npmArchives, nugetConfig
 
   const assets = join(app, "dist", "assets");
   const bundle = readdirSync(assets).filter(name => name.endsWith(".js")).map(name => readFileSync(join(assets, name), "utf8")).join("\n");
-  for (const text of ["Updates", "Aktualisierungen", "Bedingungen", "/terms"])
+  for (const text of ["Updates", "Aktualisierungen", "Bedingungen", "/terms", "Aktualisierungen warten", "app:highlight"])
     assert.ok(bundle.includes(text), `The Svelte and Vite quick start bundle lacks ${text}.`);
-  console.log("Svelte and Vite quick start passed: clean-checkout build order, LocalizedInline, useMessageLocale and :number types.");
+  console.log("Svelte and Vite quick start passed: clean-checkout build order, LocalizedInline with a project tag, useMessageLocale and :number types.");
 }

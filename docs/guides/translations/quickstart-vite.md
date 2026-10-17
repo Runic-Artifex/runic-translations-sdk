@@ -127,11 +127,11 @@ When the application owns the locale, for example a ViewModel's language
 setting, `useMessageLocale` makes the `m.*()` calls follow it. Templates,
 `$derived` and `$effect` that call a message update in place when the locale
 changes; the page does not need `{#key locale}`. `LocalizedInline` renders a
-message with markup, here a link slot, as Svelte elements:
+message with markup, here a link slot and a project tag, as Svelte elements:
 
 ```svelte
 <script lang="ts">
-  import { LocalizedInline, inlineFactory } from "@runic-artifex/translations-svelte/inline";
+  import { LocalizedInline, inlineFactory, type InlineElement } from "@runic-artifex/translations-svelte/inline";
   import { useMessageLocale } from "@runic-artifex/translations-svelte/translations";
   import { m } from "virtual:runic-translations/app";
   import { configureLocaleResolver, createInlineRenderer, linkBinding } from "virtual:runic-translations/app/runtime";
@@ -141,16 +141,37 @@ message with markup, here a link slot, as Svelte elements:
 
   const inline = createInlineRenderer(inlineFactory);
   const terms = $derived(inline.render(m.app_terms(), { slots: { terms: linkBinding({ href: "/terms" }) } }));
+  const pending = $derived(inline.render(m.app_pending({ count: 1234 }), { slots: {} }));
 </script>
+
+{#snippet highlight(node: InlineElement)}<mark><LocalizedInline nodes={node.children} /></mark>{/snippet}
 
 <h1>{m.app_title()}</h1>
 <p>{m.app_hours({ count: 1.5 })}</p>
 <p><LocalizedInline nodes={terms} /></p>
+<p><LocalizedInline nodes={pending} custom={{ "app:highlight": highlight }} /></p>
 <button onclick={() => (locale = locale === "en" ? "de" : "en")}>{m.app_switch()}</button>
 ```
 
-with `app_terms = Read the {#link ref=terms}terms{/link} before you continue.`
-and `app_hours = About {$count :number} hours left`. A `:number` input takes a
+with `app_terms = Read the {#link ref=terms}terms{/link} before you continue.`,
+`app_hours = About {$count :number} hours left` and
+`app_pending = {#highlight}{$count :integer}{/highlight} updates are waiting.`.
+`highlight` is a tag the project declares in `runic.json`:
+
+```json
+"markup": {
+  "contracts": [
+    { "name": "app:highlight", "kind": "paired", "children": "inline", "interactive": false, "plainText": "children" }
+  ],
+  "aliases": { "highlight": "app:highlight" }
+}
+```
+
+The renderer passes it to `inlineFactory` like a built-in tag, and
+`LocalizedInline` renders it with the snippet of the same name; the contract is
+not restated in TypeScript. To render a tag without a snippet, bind its
+declared contract with `bindMarkup(projectMarkup["app:highlight"], render)`
+from the same runtime module. A `:number` input takes a
 JavaScript `number`, a decimal string or `decimal("...")`; see
 [ESM inputs](esm.md). Call `useMessageLocale` once, while the root component
 initialises; it installs the resolver for every component of the page and
