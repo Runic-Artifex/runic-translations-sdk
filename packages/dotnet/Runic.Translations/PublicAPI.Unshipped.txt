@@ -1,3 +1,1 @@
 #nullable enable
-static Runic.Translations.CompiledTranslationLocale.CreateDeferred(string! locale, string? fallbackLocale, System.Func<System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!>! valueFactory) -> Runic.Translations.CompiledTranslationLocale!
-static Runic.Translations.CompiledTranslationLocale.ReadRmf2Values(System.ReadOnlySpan<byte> utf8Json) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!

@@ -68,6 +68,8 @@ Runic.Translations.Tooling.TranslationsToolCommandJsonContext.TranslationsToolCo
 Runic.Translations.Tooling.TranslationsToolCommandModule
 Runic.Translations.Tooling.TranslationsToolCommandRequest
 Runic.Translations.Tooling.TranslationsToolCommandRequest.<Clone>$() -> Runic.Translations.Tooling.TranslationsToolCommandRequest!
+Runic.Translations.Tooling.TranslationsToolCommandRequest.BaseTexts.get -> string?
+Runic.Translations.Tooling.TranslationsToolCommandRequest.BaseTexts.init -> void
 Runic.Translations.Tooling.TranslationsToolCommandRequest.Catalog.get -> string?
 Runic.Translations.Tooling.TranslationsToolCommandRequest.Catalog.init -> void
 Runic.Translations.Tooling.TranslationsToolCommandRequest.ClassName.get -> string?
@@ -94,6 +96,8 @@ Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitTemplateManifest.i
 Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitTypeScript.get -> bool
 Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitTypeScript.init -> void
 Runic.Translations.Tooling.TranslationsToolCommandRequest.Equals(Runic.Translations.Tooling.TranslationsToolCommandRequest? other) -> bool
+Runic.Translations.Tooling.TranslationsToolCommandRequest.Group.get -> string?
+Runic.Translations.Tooling.TranslationsToolCommandRequest.Group.init -> void
 Runic.Translations.Tooling.TranslationsToolCommandRequest.Locales.get -> System.Collections.Generic.IReadOnlyList<string!>?
 Runic.Translations.Tooling.TranslationsToolCommandRequest.Locales.init -> void
 Runic.Translations.Tooling.TranslationsToolCommandRequest.Namespace.get -> string?
@@ -104,6 +108,8 @@ Runic.Translations.Tooling.TranslationsToolCommandRequest.Output.get -> string?
 Runic.Translations.Tooling.TranslationsToolCommandRequest.Output.init -> void
 Runic.Translations.Tooling.TranslationsToolCommandRequest.Project.get -> string?
 Runic.Translations.Tooling.TranslationsToolCommandRequest.Project.init -> void
+Runic.Translations.Tooling.TranslationsToolCommandRequest.Tables.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Runic.Translations.Tooling.TranslationsToolCommandRequest.Tables.init -> void
 Runic.Translations.Tooling.TranslationsToolCommandRequest.TranslationsToolCommandRequest(string! Command, string? Project = null, string? Output = null, string? Directory = null, string? Catalog = null, string? DefaultLocale = null, string? Namespace = null, string? ClassName = null, System.Collections.Generic.IReadOnlyList<string!>? Locales = null, bool NoStarter = false, bool EmitCSharp = false, bool EmitJson = false, bool EmitTypeScript = false, bool EmitTemplateManifest = false, bool EmitEsm = false, bool EmitCpp = false, bool DryRun = false) -> void
 Runic.Translations.Tooling.TranslationsToolCommandResult
 Runic.Translations.Tooling.TranslationsToolCommandResult.<Clone>$() -> Runic.Translations.Tooling.TranslationsToolCommandResult!
@@ -166,6 +172,7 @@ static Runic.Translations.Tooling.TranslationInterchange.ImportXliff21(System.Re
 static Runic.Translations.Tooling.TranslationsToolCommandJsonContext.Default.get -> Runic.Translations.Tooling.TranslationsToolCommandJsonContext!
 static Runic.Translations.Tooling.TranslationsToolCommandModule.CreateCatalog() -> Runic.CommandLine.CommandCatalog!
 static Runic.Translations.Tooling.TranslationsToolCommandModule.Generate(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project, string! output, bool csharp, bool json, bool typescript, bool manifest, bool esm, bool cpp) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
+static Runic.Translations.Tooling.TranslationsToolCommandModule.ImportText(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project, string! group, System.Collections.Generic.IReadOnlyList<string!>! tables, string? baseTexts, bool dryRun) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
 static Runic.Translations.Tooling.TranslationsToolCommandModule.Init(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string! directory, string! catalog, string! defaultLocale, string! codeNamespace, string! className, System.Collections.Generic.IReadOnlyList<string!>! locales, bool noStarter) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
 static Runic.Translations.Tooling.TranslationsToolCommandModule.Lsp(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
 static Runic.Translations.Tooling.TranslationsToolCommandModule.PresentAsync(Runic.CommandLine.CommandOutputMode outputMode, Runic.CommandLine.ICommandConsole! console, System.Globalization.CultureInfo! culture, string! command, int exitCode, Runic.Translations.Tooling.TranslationsToolCommandResult? result, Runic.CommandLine.CommandFault? fault, System.Collections.Generic.IReadOnlyList<Runic.CommandLine.CommandDiagnostic!>! diagnostics, string? humanFailureOutput = null, Runic.Translations.Tooling.TranslationsToolFailurePresentation failurePresentation = Runic.Translations.Tooling.TranslationsToolFailurePresentation.Standard, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
