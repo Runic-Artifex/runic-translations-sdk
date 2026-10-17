@@ -144,6 +144,93 @@ internal sealed class DeferredLocaleTests
     {
         foreach (string data in new[] { "{}", "[[0]]", "[[\"0\",{}]]", "[[0,{\"contentLocale\":\"en\"}]]", "[[0,{\"contentLocale\":\"en\",\"ast\":{\"astVersion\":4}}]]" })
             Assert.Throws<TranslationPackException>(() => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(data)));
+        // Each change breaks the shape of otherwise valid data: the reader checks members, kinds, types and limits.
+        (string Find, string Replace)[] changes =
+        [
+            ("\"value\":\"Goodbye\"", "\"value\":\"Goodbye\",\"value\":\"Again\""),
+            ("\"value\":\"Goodbye\"", "\"value\":\"Goodbye\",\"extra\":1"),
+            ("\"value\":\"Goodbye\"", "\"value\":\"Goodbye\",\"options\":[]"),
+            ("{\"kind\":\"text\",\"value\":\"Goodbye\"}", "{\"kind\":\"comment\",\"value\":\"Goodbye\"}"),
+            ("\"value\":\"Goodbye\"", "\"value\":7"),
+            ("\"kind\":\"input\",\"value\":\"name\"", "\"kind\":\"input\",\"value\":\"name\",\"canonical\":\"1\""),
+            ("\"kind\":\"input\",\"value\":\"name\"", "\"kind\":\"variable\",\"value\":\"name\""),
+            ("\"valueType\":\"string\"", "\"valueType\":\"text\""),
+            ("\"keys\":[]", "\"keys\":[{\"kind\":\"wildcard\",\"value\":\"*\"}]"),
+            ("\"profile\":\"rmf2-execution-v2\"", "\"profile\":\"rmf2-execution-v1\""),
+            ("\"declarations\":[],", ""),
+            ("\"variants\":[{\"keys\":[],\"nodes\":[{\"kind\":\"text\",\"value\":\"Goodbye\"}]}]", "\"variants\":[]"),
+        ];
+        foreach (var (find, replace) in changes)
+        {
+            string data = English.Replace(find, replace, StringComparison.Ordinal);
+            Assert.True(data != English, "The change did not apply: " + replace);
+            Assert.Throws<TranslationPackException>(() => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(data)));
+        }
+        Assert.Throws<TranslationPackException>(() => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(English + " []")));
+        string deep = "[[0,{\"contentLocale\":\"en\",\"ast\":{\"astVersion\":5,\"profile\":\"rmf2-execution-v2\",\"inputs\":[],\"declarations\":[],\"selectors\":[],\"variants\":[{\"keys\":[],\"nodes\":["
+            + string.Concat(Enumerable.Repeat("{\"kind\":\"markup\",\"name\":\"b\",\"markupKind\":\"open\",\"options\":[],\"annotations\":[]},", 17))
+            + "{\"kind\":\"text\",\"value\":\"x\"}]}]}}]]";
+        Assert.Equal(TranslationPackFailureReason.LimitExceeded,
+            TranslationPackFailure.GetReason(Assert.Throws<TranslationPackException>(() => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(deep)))));
+    }
+
+    [Test, DisplayName("generated locale data is read in any member order and shares equal strings")]
+    public void ReadAnyMemberOrder()
+    {
+        // The compiler writes "kind" first; the reader must not depend on it.
+        string reordered = English
+            .Replace("{\"kind\":\"text\",\"value\":\"Goodbye\"}", "{\"value\":\"Goodbye\",\"kind\":\"text\"}", StringComparison.Ordinal)
+            .Replace("{\"kind\":\"input\",\"value\":\"name\"}", "{\"value\":\"name\",\"kind\":\"input\"}", StringComparison.Ordinal)
+            .Replace("{\"contentLocale\":\"en\",\"ast\":{\"astVersion\":5,\"profile\":\"rmf2-execution-v2\",", "{\"ast\":{\"profile\":\"rmf2-execution-v2\",\"astVersion\":5,", StringComparison.Ordinal)
+            .Replace("]}]}}]", "]}]},\"contentLocale\":\"en\"}]", StringComparison.Ordinal);
+        Assert.True(reordered.Contains("{\"value\":\"name\",\"kind\":\"input\"}", StringComparison.Ordinal) && reordered.Contains("\"contentLocale\":\"en\"}]", StringComparison.Ordinal), "The members were not reordered.");
+        IReadOnlyList<CompiledTranslationValue> values = CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(reordered));
+        Assert.Equal("Goodbye", values[0].Message!.Rmf2V5!.Format([], "en"));
+        Assert.Equal("Hello Ada", values[1].Message!.Rmf2V5!.Format([TextArgument.CreateRmf2("name", new TextArgument("_", "Ada"))], "en"));
+        CompiledRmf2Message greeting = values[1].Message!.Rmf2V5!;
+        Assert.True(ReferenceEquals(greeting.InputArray[0].Name, greeting.VariantArray[0].NodeArray[1].Expression!.Operand.Value), "Equal names were not shared.");
+        Assert.True(ReferenceEquals(values[0].Message!.ContentLocale, values[1].Message!.ContentLocale), "Equal content locales were not shared.");
+    }
+
+    // Issue #97: a generated catalog's first use of a locale read the data into a JSON document and validated every
+    // message again, allocating about 25 times the data for 1,300 messages. Reading must cost on the order of the data.
+    [Test, NotInParallel, DisplayName("reading generated locale data allocates on the order of the data")]
+    public void ReadAllocation()
+    {
+        byte[] data = Encoding.UTF8.GetBytes(LargeLocale(1300));
+        IReadOnlyList<CompiledTranslationValue> warm = CompiledTranslationLocale.ReadRmf2Values(data);
+        Assert.Equal(1300, warm.Count);
+        Assert.Equal("5 items", warm[1].Message!.Rmf2V5!.Format([TextArgument.CreateRmf2("count", new TextArgument("_", 5L))], "en"));
+        Assert.True(warm[2].Message!.Rmf2V5!.FormatContent([], "en") is not null, "Markup content did not format.");
+        Assert.True(warm[2].Message!.Rmf2V5!.HasMarkup && !warm[1].Message!.Rmf2V5!.HasMarkup, "Markup was not detected.");
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        IReadOnlyList<CompiledTranslationValue> values = CompiledTranslationLocale.ReadRmf2Values(data);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        GC.KeepAlive(values);
+        Assert.True(allocated < 2L * data.Length, $"Reading {data.Length} bytes of locale data allocated {allocated} bytes.");
+    }
+
+    private static string LargeLocale(int count)
+    {
+        var json = new StringBuilder("[");
+        for (int id = 0; id < count; id++)
+        {
+            if (id != 0) json.Append(',');
+            json.Append('[').Append(id).Append(",{\"contentLocale\":\"en\",\"ast\":{\"astVersion\":5,\"profile\":\"rmf2-execution-v2\",");
+            json.Append((id % 3) switch
+            {
+                0 => "\"inputs\":[],\"declarations\":[],\"selectors\":[],\"variants\":[{\"keys\":[],\"nodes\":[{\"kind\":\"text\",\"value\":\"Message " + id + " says something short\"}]}]",
+                1 => "\"inputs\":[{\"name\":\"count\",\"type\":\"int64\"}],\"declarations\":[{\"kind\":\"input\",\"name\":\"count\",\"expression\":{\"operand\":{\"kind\":\"input\",\"value\":\"count\"},\"valueType\":\"int64\",\"function\":\"integer\",\"options\":[],\"annotations\":[]}}],"
+                    + "\"selectors\":[{\"value\":{\"kind\":\"input\",\"value\":\"count\"},\"type\":\"int64\",\"function\":\"plural\"}],"
+                    + "\"variants\":[{\"keys\":[{\"kind\":\"literal\",\"value\":\"one\"}],\"nodes\":[{\"kind\":\"text\",\"value\":\"one item\"}]},"
+                    + "{\"keys\":[{\"kind\":\"wildcard\"}],\"nodes\":[{\"kind\":\"expression\",\"expression\":{\"operand\":{\"kind\":\"input\",\"value\":\"count\"},\"valueType\":\"int64\",\"options\":[],\"annotations\":[]}},{\"kind\":\"text\",\"value\":\" items\"}]}]",
+                _ => "\"inputs\":[],\"declarations\":[],\"selectors\":[],\"variants\":[{\"keys\":[],\"nodes\":[{\"kind\":\"text\",\"value\":\"Open \"},"
+                    + "{\"kind\":\"markup\",\"name\":\"b\",\"markupKind\":\"open\",\"options\":[],\"annotations\":[]},{\"kind\":\"expression\",\"expression\":{\"operand\":{\"kind\":\"number-literal\",\"value\":\"1\",\"canonical\":\"1\"},\"valueType\":\"decimal\",\"options\":[],\"annotations\":[]}},"
+                    + "{\"kind\":\"markup\",\"name\":\"b\",\"markupKind\":\"close\",\"options\":[],\"annotations\":[]}]}]",
+            });
+            json.Append("}}]");
+        }
+        return json.Append(']').ToString();
     }
 
     [Test, DisplayName("a deferred locale validates its value order when it is built")]

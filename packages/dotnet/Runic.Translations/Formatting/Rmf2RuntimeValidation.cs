@@ -2,25 +2,48 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace Runic.Translations;
 
 internal static class Rmf2RuntimeDecimal
 {
-    private static readonly Regex Number = new(@"\A(?<sign>-?)(?<whole>0|[1-9][0-9]*)(?:\.(?<fraction>[0-9]+))?(?:[eE](?<exponent>[+-]?[0-9]+))?\z", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
     private const string MaximumCoefficient = "79228162514264337593543950335";
+    /// <summary>
+    /// Canonicalizes a portable number literal: <c>-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?</c>, exactly within the
+    /// decimal domain. A hand-written scanner rather than a regular expression keeps reading numbers free of regex construction.
+    /// </summary>
     internal static bool TryCanonicalize(string value, out string canonical)
     {
         canonical = string.Empty;
         if (value.Length > 4096) return false;
-        Match match = Number.Match(value);
-        if (!match.Success) return false;
+        int index = 0;
+        bool negative = index < value.Length && value[index] == '-';
+        if (negative) index++;
+        int wholeStart = index;
+        while (index < value.Length && char.IsAsciiDigit(value[index])) index++;
+        int wholeLength = index - wholeStart;
+        if (wholeLength == 0 || (wholeLength > 1 && value[wholeStart] == '0')) return false;
+        int fractionStart = index, fractionLength = 0;
+        if (index < value.Length && value[index] == '.')
+        {
+            fractionStart = ++index;
+            while (index < value.Length && char.IsAsciiDigit(value[index])) index++;
+            fractionLength = index - fractionStart;
+            if (fractionLength == 0) return false;
+        }
         int exponent = 0;
-        if (match.Groups["exponent"].Success && !int.TryParse(match.Groups["exponent"].Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)) return false;
-        string coefficient = (match.Groups["whole"].Value + match.Groups["fraction"].Value).TrimStart('0');
+        if (index < value.Length && value[index] is 'e' or 'E')
+        {
+            int exponentStart = ++index;
+            if (index < value.Length && value[index] is '+' or '-') index++;
+            int digits = index;
+            while (index < value.Length && char.IsAsciiDigit(value[index])) index++;
+            if (index == digits || !int.TryParse(value.AsSpan(exponentStart, index - exponentStart), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out exponent)) return false;
+        }
+        if (index != value.Length) return false;
+        string coefficient = string.Concat(value.AsSpan(wholeStart, wholeLength), value.AsSpan(fractionStart, fractionLength)).TrimStart('0');
         if (coefficient.Length == 0) { canonical = "0"; return true; }
-        long scale = (long)match.Groups["fraction"].Length - exponent;
+        long scale = (long)fractionLength - exponent;
         int trailing = coefficient.Length;
         while (trailing > 0 && coefficient[trailing - 1] == '0') { trailing--; scale--; }
         coefficient = coefficient.Substring(0, trailing);
@@ -34,7 +57,7 @@ internal static class Rmf2RuntimeDecimal
         canonical = scale == 0 ? coefficient : scale >= coefficient.Length
             ? "0." + new string('0', (int)scale - coefficient.Length) + coefficient
             : coefficient.Insert(coefficient.Length - (int)scale, ".");
-        if (match.Groups["sign"].Length != 0) canonical = "-" + canonical;
+        if (negative) canonical = "-" + canonical;
         return true;
     }
     internal static decimal Parse(string canonical) => decimal.Parse(canonical, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
@@ -67,7 +90,7 @@ internal static class Rmf2RuntimeValidation
     { if (!Enum.IsDefined(type)) throw new ArgumentException("Unknown v5 carrier type.", nameof(type)); }
     internal static T[] Copy<T>(IReadOnlyList<T>? values, int maximum) where T : class
     {
-        if (values is null) return [];
+        if (values is null || values.Count == 0) return [];
         if (values.Count > maximum) throw new ArgumentException("Collection exceeds the v5 runtime limit.", nameof(values));
         var copy = new T[values.Count];
         for (int index = 0; index < copy.Length; index++) copy[index] = values[index] ?? throw new ArgumentException("Null v5 model entry.", nameof(values));
