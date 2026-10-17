@@ -54,6 +54,19 @@ internal sealed class Rmf2RuntimeV5Tests
         Assert.Equal("-9223372036854775808", Simple([], [], Output(Number("-9223372036854775808"), TextArgumentType.Int, "integer", new CompiledRmf2Option("useGrouping", Text("never")))).Format([], "en"));
         Assert.Equal("7,922,816,251,426,433,759,354,395,033,500%", Simple([], [], Output(Number("79228162514264337593543950335"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Text("percent")))).Format([], "en"));
     }
+    [Test, DisplayName("v5 number literals canonicalize exactly as the portable grammar defines")]
+    public void NumberLiterals()
+    {
+        foreach (var (literal, canonical) in new[] { ("0", "0"), ("-0", "0"), ("1e+2", "100"), ("1E2", "100"), ("1.2300e-2", "0.0123"), ("-0.000e999", "0"),
+            ("-10e-1", "-1"), ("1e-28", "0.0000000000000000000000000001"), ("79228162514264337593543950335", "79228162514264337593543950335"), ("12.50", "12.5") })
+        {
+            Assert.True(Rmf2RuntimeDecimal.TryCanonicalize(literal, out string actual), "Valid literal rejected: " + literal);
+            Assert.Equal(canonical, actual, literal);
+        }
+        foreach (string invalid in new[] { "", "-", "1e29", "1e-29", "79228162514264337593543950336", "0.12345678901234567890123456789", "1e999999999999",
+            "NaN", "Infinity", "01", "+1", ".1", "1.", "1,2", "1e", "1e+", "1 ", " 1", "1\n", "--1", "1.2.3", "0x1", "\u0661", "1e1.5" })
+            Assert.True(!Rmf2RuntimeDecimal.TryCanonicalize(invalid, out _), "Invalid literal accepted: " + invalid);
+    }
     [Test, DisplayName("v5 lists join snapshot items with CLDR list patterns")]
     public void Lists()
     {

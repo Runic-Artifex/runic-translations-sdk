@@ -4,6 +4,12 @@ using System.ComponentModel;
 
 namespace Runic.Translations;
 
+/// <summary>
+/// Selects the internal constructors that take a model the compiler already validated, such as a generated catalog's
+/// locale data: they keep the arrays they are given and skip the semantic checks of the public constructors.
+/// </summary>
+internal enum TrustedRmf2 { Compiler }
+
 /// <summary>A normalized v5 value: input, local, string-literal or number-literal.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class CompiledRmf2Value
@@ -22,6 +28,8 @@ public sealed class CompiledRmf2Value
         else if (canonical is not null) throw new ArgumentException("Only numeric literals have a canonical field.", nameof(canonical));
         Kind = kind; Value = value; Canonical = canonical;
     }
+    internal CompiledRmf2Value(TrustedRmf2 _, string kind, string value, string? canonical)
+    { Kind = kind; Value = value; Canonical = canonical; }
     /// <summary>The normalized value tag.</summary>
     public string Kind { get; }
     /// <summary>The NFC reference name or decoded authored literal.</summary>
@@ -37,6 +45,7 @@ public sealed class CompiledRmf2Option
     /// <summary>Creates an option.</summary>
     public CompiledRmf2Option(string name, CompiledRmf2Value value)
     { Rmf2RuntimeValidation.Name(name, true); Name = name; Value = value ?? throw new ArgumentNullException(nameof(value)); }
+    internal CompiledRmf2Option(TrustedRmf2 _, string name, CompiledRmf2Value value) { Name = name; Value = value; }
     /// <summary>The option name.</summary>
     public string Name { get; }
     /// <summary>The literal or typed reference.</summary>
@@ -54,6 +63,7 @@ public sealed class CompiledRmf2Annotation
         if (value?.Kind is "input" or "local") throw new ArgumentException("Annotations cannot reference values.", nameof(value));
         Name = name; Value = value;
     }
+    internal CompiledRmf2Annotation(TrustedRmf2 _, string name, CompiledRmf2Value? value) { Name = name; Value = value; }
     /// <summary>The annotation name.</summary>
     public string Name { get; }
     /// <summary>The optional literal. Null means valueless.</summary>
@@ -77,6 +87,9 @@ public sealed class CompiledRmf2Expression
         Rmf2RuntimeValidation.UniqueAnnotations(AnnotationArray);
         Rmf2RuntimeValidation.Function(this);
     }
+    internal CompiledRmf2Expression(TrustedRmf2 _, CompiledRmf2Value operand, TextArgumentType valueType, string? function,
+        CompiledRmf2Option[] options, CompiledRmf2Annotation[] annotations)
+    { Operand = operand; ValueType = valueType; Function = function; OptionArray = options; AnnotationArray = annotations; }
     /// <summary>The underlying value reference or literal.</summary>
     public CompiledRmf2Value Operand { get; }
     /// <summary>The underlying carrier, unchanged by formatting.</summary>
@@ -98,6 +111,7 @@ public sealed class CompiledRmf2Input
     /// <summary>Creates a caller contract entry.</summary>
     public CompiledRmf2Input(string name, TextArgumentType type)
     { Rmf2RuntimeValidation.Name(name); Rmf2RuntimeValidation.Type(type); Name = name; Type = type; }
+    internal CompiledRmf2Input(TrustedRmf2 _, string name, TextArgumentType type) { Name = name; Type = type; }
     /// <summary>The NFC input identity.</summary>
     public string Name { get; }
     /// <summary>The required underlying carrier.</summary>
@@ -115,6 +129,8 @@ public sealed class CompiledRmf2Declaration
         Rmf2RuntimeValidation.Name(name); Kind = kind; Name = name;
         Expression = expression ?? throw new ArgumentNullException(nameof(expression));
     }
+    internal CompiledRmf2Declaration(TrustedRmf2 _, string kind, string name, CompiledRmf2Expression expression)
+    { Kind = kind; Name = name; Expression = expression; }
     /// <summary>The declaration kind.</summary>
     public string Kind { get; }
     /// <summary>The declared NFC identity.</summary>
@@ -136,6 +152,8 @@ public sealed class CompiledRmf2Selector
             throw new ArgumentException("Invalid v5 selector.", nameof(value));
         Value = value; Type = type; Function = function;
     }
+    internal CompiledRmf2Selector(TrustedRmf2 _, CompiledRmf2Value value, TextArgumentType type, string function)
+    { Value = value; Type = type; Function = function; }
     /// <summary>The input or local reference.</summary>
     public CompiledRmf2Value Value { get; }
     /// <summary>The underlying selector carrier.</summary>
@@ -155,6 +173,9 @@ public sealed class CompiledRmf2Key
             throw new ArgumentException("Invalid canonical selector key.", nameof(canonical));
         Value = value; Canonical = canonical;
     }
+    internal CompiledRmf2Key(TrustedRmf2 _, string value, string? canonical) { Value = value; Canonical = canonical; }
+    /// <summary>The shared wildcard key of trusted models.</summary>
+    internal static CompiledRmf2Key Wildcard { get; } = new();
     /// <summary>Null denotes wildcard; all other strings are literal values.</summary>
     public string? Value { get; }
     /// <summary>The canonical numeric exact key, when present.</summary>
@@ -182,6 +203,8 @@ public sealed class CompiledRmf2Node
         Rmf2RuntimeValidation.UniqueOptions(OptionArray);
         Rmf2RuntimeValidation.UniqueAnnotations(AnnotationArray);
     }
+    internal CompiledRmf2Node(TrustedRmf2 _, string name, string markupKind, CompiledRmf2Option[] options, CompiledRmf2Annotation[] annotations)
+    { Kind = "markup"; Value = name; MarkupKind = markupKind; OptionArray = options; AnnotationArray = annotations; }
     /// <summary>The text, expression or markup tag.</summary>
     public string Kind { get; }
     /// <summary>Authored text or linked markup identity.</summary>
@@ -205,6 +228,7 @@ public sealed class CompiledRmf2Variant
     /// <summary>Creates a variant, or a simple pattern with no keys.</summary>
     public CompiledRmf2Variant(IReadOnlyList<CompiledRmf2Key> keys, IReadOnlyList<CompiledRmf2Node> nodes)
     { ArgumentNullException.ThrowIfNull(keys); ArgumentNullException.ThrowIfNull(nodes); KeyArray = Rmf2RuntimeValidation.Copy(keys, 16); NodeArray = Rmf2RuntimeValidation.Copy(nodes, 4096); }
+    internal CompiledRmf2Variant(TrustedRmf2 _, CompiledRmf2Key[] keys, CompiledRmf2Node[] nodes) { KeyArray = keys; NodeArray = nodes; }
     /// <summary>Keys in selector order.</summary>
     public ReadOnlyMemory<CompiledRmf2Key> Keys => (CompiledRmf2Key[])KeyArray.Clone();
     /// <summary>Ordered pattern nodes.</summary>
@@ -228,6 +252,14 @@ public sealed class CompiledRmf2Message
         if (contentLocale is not null && !LocaleTag.TryCanonicalize(contentLocale, out _)) throw new ArgumentException("Invalid content locale.", nameof(contentLocale));
         ContentLocale = contentLocale;
         Rmf2RuntimeValidation.Message(this);
+    }
+    internal CompiledRmf2Message(TrustedRmf2 _, CompiledRmf2Input[] inputs, CompiledRmf2Declaration[] declarations,
+        CompiledRmf2Selector[] selectors, CompiledRmf2Variant[] variants, string? contentLocale)
+    {
+        InputArray = inputs; DeclarationArray = declarations; SelectorArray = selectors; VariantArray = variants; ContentLocale = contentLocale;
+        foreach (var variant in variants)
+            foreach (var node in variant.NodeArray)
+                if (node.Kind == "markup") { HasMarkup = true; return; }
     }
     /// <summary>The ordinally sorted caller input contract.</summary>
     public ReadOnlyMemory<CompiledRmf2Input> Inputs => (CompiledRmf2Input[])InputArray.Clone();

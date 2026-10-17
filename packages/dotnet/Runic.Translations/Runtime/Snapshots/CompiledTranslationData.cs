@@ -196,6 +196,12 @@ public sealed class CompiledTranslationLocale
     /// The compiler's UTF-8 JSON for the locale: an array of <c>[id, {"contentLocale": ..., "ast": ...}]</c> entries
     /// in ascending key-identifier order, each AST in the normalized message AST v5 form.
     /// </param>
+    /// <remarks>
+    /// The data is read as it streams, without a JSON document. Its shape, kinds, types and limits are checked, but the
+    /// messages are not validated again: the compiler validated them when it generated the catalog, and the catalog
+    /// checks each one against its definition's inputs. Build a <see cref="CompiledRmf2Message"/> with its public
+    /// constructor to validate a model from another source.
+    /// </remarks>
     /// <exception cref="TranslationPackException">The data is not in that form.</exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static IReadOnlyList<CompiledTranslationValue> ReadRmf2Values(ReadOnlySpan<byte> utf8Json) =>
