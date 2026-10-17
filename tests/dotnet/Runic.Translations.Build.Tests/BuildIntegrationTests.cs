@@ -31,6 +31,20 @@ internal sealed class BuildIntegrationTests
         Assert.Contains(temporary.Path.Replace('\\', '/') + "/.config/dotnet-tools.json", result.StandardOutput.Replace("\\\\", "/").Replace('\\', '/'));
     }
 
+    // The editor runs the source-built tool through dotnet run, which no tool manifest describes. Without its sources as
+    // generation inputs, a compiler change (such as the generated ESM runtime) left the editor's catalog stale under obj/.
+    [Test, DisplayName("the editor regenerates its catalog when the source-built tool changes")]
+    public void EditorTracksSourceToolInputs()
+    {
+        ProcessResult result = Processes.DotNet(RepositoryPaths.Resolve("apps", "translations-editor"), "msbuild", "Runic.Translations.Editor.csproj", "/nologo", "-getItem:TranslationsToolInput");
+        Assert.Equal(0, result.ExitCode, result.Combined);
+        string items = result.StandardOutput.Replace("\\\\", "/").Replace('\\', '/');
+        foreach (string input in new[] { "tools/Runic.Translations.Compiler/Generation/Rmf2EsmRuntimeV5.js", "tools/Runic.Translations.Compiler/Generation/Rmf2EsmOutputRendererV5.cs",
+            "tools/dotnet-runic-translations/Program.cs", "packages/dotnet/Runic.Translations.Tooling/TranslationsToolCommandModule.cs" })
+            Assert.Contains(RepositoryPaths.Resolve(input.Split('/')).Replace('\\', '/'), items);
+        Assert.True(!items.Contains("/bin/", StringComparison.Ordinal) && !items.Contains("/obj/", StringComparison.Ordinal), "Build output is a tool input.");
+    }
+
     [Test, DisplayName("build discovers direct MF2 sources and generates semantic artifacts")]
     public void DirectMf2GenerationIsIncremental()
     {

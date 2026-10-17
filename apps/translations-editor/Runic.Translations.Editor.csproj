@@ -74,6 +74,17 @@
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <!-- The source-built tool runs through dotnet run, which no tool manifest describes. Its sources are
+       generation inputs, so a compiler change (such as the generated ESM runtime) regenerates the
+       editor's catalog instead of leaving stale output under obj/. -->
+  <ItemGroup Condition="'$(RunicEditorUsePackedTranslations)' != 'true'">
+    <TranslationsToolInput Include="$(RunicTranslationsRoot)tools/dotnet-runic-translations/**/*" Exclude="$(RunicTranslationsRoot)tools/dotnet-runic-translations/bin/**;$(RunicTranslationsRoot)tools/dotnet-runic-translations/obj/**" />
+    <TranslationsToolInput Include="$(RunicTranslationsRoot)tools/Runic.Translations.Compiler/**/*" Exclude="$(RunicTranslationsRoot)tools/Runic.Translations.Compiler/bin/**;$(RunicTranslationsRoot)tools/Runic.Translations.Compiler/obj/**" />
+    <TranslationsToolInput Include="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Tooling/**/*" Exclude="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Tooling/bin/**;$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Tooling/obj/**" />
+    <TranslationsToolInput Include="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Authoring/**/*" Exclude="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Authoring/bin/**;$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Authoring/obj/**" />
+    <TranslationsToolInput Include="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations/**/*" Exclude="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations/bin/**;$(RunicTranslationsRoot)packages/dotnet/Runic.Translations/obj/**" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(RunicEditorUsePackedTranslations)' == 'true'">
     <RunicEditorTranslationsPackageVersion Condition="'$(RunicEditorTranslationsPackageVersion)' == ''">$(RunicTranslationsVersion)</RunicEditorTranslationsPackageVersion>
   </PropertyGroup>
