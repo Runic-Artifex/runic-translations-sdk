@@ -233,3 +233,46 @@ for `Runic-Artifex/runic-translations-sdk`, `publish-preview.yml`, and the
 `preview` environment. Each npm trusted publisher also needs **Allow npm dist-tag**
 enabled. New repository ownership does not inherit trusted publisher
 configuration from the former SDK repository.
+
+## Versioning and support from 1.0
+
+This policy takes effect with 1.0.0. Until then every release is a preview: any
+release may change or remove an API, and only the latest preview gets fixes. The
+[Runic SDK release guide](https://github.com/Runic-Artifex/runic-sdk/blob/main/eng/release/README.md#versioning-and-support-from-10)
+has the shared policy for the three SDKs: SemVer rules and what counts as
+breaking, enforcement, package tiers, .NET versions, deprecation and fixes. The
+[documentation portal](https://docs.runic-artifex.eu/support/policy/) states the
+same policy. For Translations:
+
+- Every NuGet and npm package and both IDE extensions share the version in
+  `eng/workspace.json` and are stable from 1.0.0. From 1.0 npm previews go to the
+  `preview` dist-tag and `latest` moves only to stable versions. `1.0.0` maps to
+  Visual Studio `1.0.0.1000` and VS Code `1.0.1000` without the pre-release flag
+  ([IDE extension versions](#ide-extension-versions)). The editor is not released.
+- `Runic.Translations.Tooling`, the MF2 authoring facade, is planned to ship as
+  an experimental API inside its stable package, with an assembly-level
+  `[Experimental]` diagnostic ID (proposed `RUNICTRX001`); it may change in a
+  minor release. Translations has no preview packages.
+- `Runic.Translations.CommandLine` and `Runic.Translations.Tooling` depend on
+  Runic Command Line. Translations ships 1.0.0 after Command Line 1.0.0 and
+  before Runic SDK 1.0.0 in one release train. After 1.0 it releases minors and
+  patches independently, references Command Line by NuGet minimum version, and
+  its release notes name the Command Line version it was tested with.
+- Contracts covered by the breaking-change rules, besides the C# API of each
+  package's `PublicAPI.Shipped.txt`, the `Runic.Translations.Build` MSBuild
+  properties and the `dotnet-runic-translations` commands and options: the JSON
+  contracts `runic.translations.editor-state/1`,
+  `runic.translations.editor-diagnostics/1` and
+  `runic.translations.interchange-review/1`; the packed schemas `project-v1`,
+  `message-ast-v5`, `locale-artifact-v5` and `external-pack-v5`; and the
+  translations transport: a 1.x reader must read every message any 1.x writer
+  produced, including persisted messages, and writers emit a new transport
+  version only on request until every supported reader accepts it.
+- Package validation runs against `RunicTranslationsPackageValidationBaselineVersion`
+  in `eng/Versions.props`; from 1.0 that is the latest stable release of the
+  major line, and a `CompatibilitySuppressions.xml` or a `*REMOVED*` entry is
+  allowed only as the shared policy describes.
+- The runtime packages are managed and run wherever .NET 10 does;
+  `Runic.Translations.Wpf` targets `net10.0-windows`.
+- Bug and security fixes ship in a patch of the latest minor only. `[Obsolete]`
+  APIs stay for at least one minor release and are removed only in a major.
