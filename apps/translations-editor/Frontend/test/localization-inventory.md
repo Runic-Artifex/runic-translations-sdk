@@ -17,7 +17,7 @@ The runtime catalog is `EditorResources/runic.json` with grouped `en.rmf2` and
 | Hosted connection initialization and capability validation | `ui_host_*`; typed `UiNoticeError` preserves notice identity until rendering |
 | Backend editor validation, conflicts, recovery, path checks, picker, history and diagnostic operations | `ui_backend_*`; `EditorNotice` carries code, typed arguments, and optional technical detail |
 
-Count messages use MF2 `:integer select=plural`; plural branches contain complete sentences or complete standalone metric phrases. The project and quality summaries select on both counts. No UI-side singular/plural key selection remains. Integer display preserves the compiler's existing ungrouped integer format.
+Count messages use MF2 `:integer select=plural`; plural branches contain complete sentences or complete standalone metric phrases. The project and quality summaries select on both counts. No UI-side singular/plural key selection remains. Integer display uses the MF2 default grouping (`useGrouping=auto`: `1,000` in English, `1.000` in German).
 
 Deliberate replacements: `ui_page_recovered_drafts_one` and `_many` become `ui_count_recovered_drafts`; `ui_workspace_file` / `_files` become `ui_count_malformed_files`; `ui_project_locale` / `_locales` become `ui_count_project_locales`; `ui_page_project_wizard_language` is removed in favor of `ui_count_project_summary`. The plural-named project-wizard language key remains as the independent Languages heading.
 
