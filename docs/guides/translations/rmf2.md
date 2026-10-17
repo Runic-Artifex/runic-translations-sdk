@@ -183,10 +183,20 @@ properties. Applications map allowed options explicitly.
 
 Generated ESM exports `linkBinding`, `actionBinding`, `iconBinding`, `defineMarkup`,
 `enumOption`, `bindMarkup`, `createInlineRenderer`, `createDocumentRenderer`,
-`createDomInlineRenderer`, and `toPlainText`. Message return types carry the union of possible slots;
+`createDomInlineRenderer`, `toPlainText` and `projectMarkup`. Message return types carry the union of possible slots;
 `renderer.render(content, {slots})` checks their typed kinds. Custom contracts and
 the generated registry are deeply frozen. `extend` composes a new renderer and
 rejects duplicate or incompatible registrations.
+
+A renderer needs no restated contract for the project's own tags. Without a
+binding, `createInlineRenderer` and `createDocumentRenderer` pass a custom tag to
+the factory's `element`, as they pass the built-in ones, so the Svelte
+`LocalizedInline` renders it with the `custom` snippet of the same name. To
+render a tag with a function instead, bind the declared contract:
+`projectMarkup` holds the `runic.json` contracts by name, typed in
+`runtime.d.ts`, and `bindMarkup(projectMarkup["shop:badge"], render)` replaces the
+factory for that tag. The DOM renderers create elements only for the built-in
+tags; pass a binding for each custom tag.
 
 The DOM adapter uses text nodes, semantic emphasis, links, buttons and explicit
 icon accessibility; it never creates HTML from translation strings. Rendering

@@ -3,5 +3,11 @@
   "catalog": "app",
   "code": { "namespace": "Example", "className": "AppText" },
   "baseLocale": "en",
-  "locales": ["en", "de"]
+  "locales": ["en", "de"],
+  "markup": {
+    "contracts": [
+      { "name": "app:highlight", "kind": "paired", "children": "inline", "interactive": false, "plainText": "children" }
+    ],
+    "aliases": { "highlight": "app:highlight" }
+  }
 }

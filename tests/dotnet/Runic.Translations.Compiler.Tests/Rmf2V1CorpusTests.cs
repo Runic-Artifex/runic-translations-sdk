@@ -193,8 +193,10 @@ internal sealed class Rmf2V1CorpusTests
     // and share a fallback's object; runtime.js gains freezeGeneratedText and freezeGeneratedPattern, in both digests.
     // Re-pinned for #98: runtime.js groups :integer and :number by useGrouping (default auto) with the pinned CLDR
     // minimumGroupingDigits in its locale data, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "a9acad7c4cc2e8d201a0d286bcf7b82a517483f11b396495170cd7d0f53464d6";
-    private const string HiddenEncodedOutputDigest = "e54acd59f6126a4357bc1ef67c5d5253f02782ebab5c87d6904b223afa8538a9";
+    // Re-pinned for #96: runtime.js exports projectMarkup and passes unbound project tags to factory.element, and
+    // runtime.d.ts declares projectMarkup, in both digests. Every other output is unchanged.
+    private const string EncodedOutputDigest = "3a1429f06d3a4866e54de0855203290e44cb51ce738241da4feacc513b0e41c6";
+    private const string HiddenEncodedOutputDigest = "32c07f58a056ddf79372af91a49dea8d4c702bae77cdab08314643129fc21da2";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

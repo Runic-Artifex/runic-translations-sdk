@@ -216,7 +216,18 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function createDomInlineRenderer(document: Document, bindings?: readonly MarkupBinding<Node>[]): InlineRenderer<Node>;
         export interface DomDocumentRenderer extends DocumentRenderer<Node> { setContent<S extends Record<string,string>>(target: Element | DocumentFragment, content: LocalizedDocument<S>, options: { slots: SlotBindings<S> }): void; clearContent(target: Element | DocumentFragment): void; extend(bindings: readonly MarkupBinding<Node>[]): DomDocumentRenderer; }
         export declare function createDomDocumentRenderer(document: Document, options?: { headingBase?: number; custom?: readonly MarkupBinding<Node>[] }): DomDocumentRenderer;
-        """;
+        """ + ProjectMarkupType(project);
+
+    // The project's own markup contracts (runic.json), typed by name so bindMarkup(projectMarkup["app:tag"], ...)
+    // needs no restated contract and a misspelled tag fails to compile.
+    private static string ProjectMarkupType(Rmf2ProjectV5 project)
+    {
+        using JsonDocument contract = JsonDocument.Parse(project.MarkupContract);
+        string[] names = contract.RootElement.GetProperty("contracts").EnumerateObject().Select(item => item.Name)
+            .Where(name => !name.StartsWith("runic:", StringComparison.Ordinal)).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        return "export declare const projectMarkup: Readonly<" + (names.Length == 0 ? "Record<never, MarkupContract>"
+            : "{ " + string.Join(" ", names.Select(name => GenerationSupport.JsonString(name) + ": MarkupContract;")) + " }") + ">;\n";
+    }
 
     private static string LocaleType(Rmf2ProjectV5 project) =>
         "export type Locale = " + string.Join(" | ", project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal).Select(GenerationSupport.JsonString)) + ";";
