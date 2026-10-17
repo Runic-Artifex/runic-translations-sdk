@@ -81,7 +81,7 @@
       "runic.translations.authoring": {
         "type": "Project",
         "dependencies": {
-          "Runic.Translations.Compiler": "[0.7.0-preview.3, )"
+          "Runic.Translations.Compiler": "[0.7.0-preview.4, )"
         }
       },
       "runic.translations.compiler": {

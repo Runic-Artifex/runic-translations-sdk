@@ -640,6 +640,8 @@ static Runic.Translations.CompiledTextMessage.FromRmf2(Runic.Translations.Compil
 static Runic.Translations.CompiledTextMessageSelector.operator !=(Runic.Translations.CompiledTextMessageSelector left, Runic.Translations.CompiledTextMessageSelector right) -> bool
 static Runic.Translations.CompiledTextMessageSelector.operator ==(Runic.Translations.CompiledTextMessageSelector left, Runic.Translations.CompiledTextMessageSelector right) -> bool
 static Runic.Translations.CompiledTranslationDefinition.FromRmf2Inputs(string! name, System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledRmf2Input!>! inputs, bool isCanonical = true) -> Runic.Translations.CompiledTranslationDefinition!
+static Runic.Translations.CompiledTranslationLocale.CreateDeferred(string! locale, string? fallbackLocale, System.Func<System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!>! valueFactory) -> Runic.Translations.CompiledTranslationLocale!
+static Runic.Translations.CompiledTranslationLocale.ReadRmf2Values(System.ReadOnlySpan<byte> utf8Json) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
 static Runic.Translations.CompiledTranslationValue.operator !=(Runic.Translations.CompiledTranslationValue left, Runic.Translations.CompiledTranslationValue right) -> bool
 static Runic.Translations.CompiledTranslationValue.operator ==(Runic.Translations.CompiledTranslationValue left, Runic.Translations.CompiledTranslationValue right) -> bool
 static Runic.Translations.DefaultTextValueFormatter.Shared.get -> Runic.Translations.DefaultTextValueFormatter!
