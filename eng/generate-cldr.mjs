@@ -61,6 +61,10 @@ for (let index = 0; index < locales.length; index++) {
     cardinal: parseRuleSet(locale.cardinal, `${locale.tag} cardinal`),
     ordinal: parseRuleSet(locale.ordinal, `${locale.tag} ordinal`),
   };
+  // CLDR numbers.minimumGroupingDigits: `useGrouping=auto` groups only when the
+  // integer part has at least this many digits above the primary group.
+  if (!Number.isInteger(locale.minimumGroupingDigits) || locale.minimumGroupingDigits < 1 || locale.minimumGroupingDigits > 4)
+    throw new Error(`Locale '${locale.tag}' needs minimumGroupingDigits 1..4.`);
   if (index > 0 && locales[index - 1].tag >= locale.tag)
     throw new Error("Locales must be unique and ordinal-sorted.");
 }
@@ -149,6 +153,12 @@ const esmLocaleData = JSON.stringify({
   list: Object.fromEntries(
     listLocales.map((locale) => [locale.tag, locale.separators]),
   ),
+  // Only the locales that differ from the default of 1.
+  minimumGroupingDigits: Object.fromEntries(
+    locales
+      .filter((locale) => locale.minimumGroupingDigits !== 1)
+      .map((locale) => [locale.tag, locale.minimumGroupingDigits]),
+  ),
 });
 // No-break spaces (in the Czech list patterns) stay visible as escapes.
 const csString = (value) =>
@@ -225,6 +235,10 @@ const relativeRows = locales
     return `        new(${csString(locale.tag)}, ${csArray(data.autoDay)}, ${csString(data.past)}, ${csString(data.future)}, [${units}]),`;
   })
   .join("\n");
+const groupingCases = locales
+  .filter((locale) => locale.minimumGroupingDigits !== 1)
+  .map((locale) => `        ${csString(locale.tag)} => ${locale.minimumGroupingDigits},`)
+  .join("\n");
 const listRows = listLocales
   .map((locale) => `        new(${csString(locale.tag)}, ${csArray(locale.separators)}),`)
   .join("\n");
@@ -257,6 +271,13 @@ ${listRows}
     {
 ${pluralSwitch}
         _ => null,
+    };
+
+    /// <summary>CLDR <c>minimumGroupingDigits</c> of a language family: 1 for every language without pinned data.</summary>
+    internal static int MinimumGroupingDigits(string language) => language switch
+    {
+${groupingCases}
+        _ => 1,
     };
 
     internal static GeneratedRelativeTimeLocale? FindRelativeTime(string language)

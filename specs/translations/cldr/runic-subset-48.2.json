@@ -8,6 +8,7 @@
   },
   "locales": [
     { "tag": "cs",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "i = 1 and v = 0 @integer 1",
         "few": "i = 2..4 and v = 0 @integer 2~4",
@@ -24,6 +25,7 @@
       }
     },
     { "tag": "da",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "n = 1 or t != 0 and i = 0,1 @integer 1 @decimal 0.1~1.6",
         "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0, 2.0~3.4, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
@@ -38,6 +40,7 @@
       }
     },
     { "tag": "de",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "i = 1 and v = 0 @integer 1",
         "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
@@ -56,6 +59,7 @@
       }
     },
     { "tag": "en",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "i = 1 and v = 0 @integer 1",
         "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
@@ -77,6 +81,7 @@
       }
     },
     { "tag": "es",
+      "minimumGroupingDigits": 2,
       "cardinal": {
         "one": "n = 1 @integer 1 @decimal 1.0, 1.00, 1.000, 1.0000",
         "many": "e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5 @integer 1000000, 1c6, 2c6, 3c6, 4c6, 5c6, 6c6, … @decimal 1.0000001c6, 1.1c6, 2.0000001c6, 2.1c6, 3.0000001c6, 3.1c6, …",
@@ -96,6 +101,7 @@
       }
     },
     { "tag": "fr",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "i = 0,1 @integer 0, 1 @decimal 0.0~1.5",
         "many": "e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5 @integer 1000000, 1c6, 2c6, 3c6, 4c6, 5c6, 6c6, … @decimal 1.0000001c6, 1.1c6, 2.0000001c6, 2.1c6, 3.0000001c6, 3.1c6, …",
@@ -116,6 +122,7 @@
       }
     },
     { "tag": "it",
+      "minimumGroupingDigits": 2,
       "cardinal": {
         "one": "i = 1 and v = 0 @integer 1",
         "many": "e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5 @integer 1000000, 1c6, 2c6, 3c6, 4c6, 5c6, 6c6, … @decimal 1.0000001c6, 1.1c6, 2.0000001c6, 2.1c6, 3.0000001c6, 3.1c6, …",
@@ -136,6 +143,7 @@
       }
     },
     { "tag": "ja",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "other": " @integer 0~15, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
       },
@@ -149,6 +157,7 @@
       }
     },
     { "tag": "nb",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "n = 1 @integer 1 @decimal 1.0, 1.00, 1.000, 1.0000",
         "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~0.9, 1.1~1.6, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
@@ -163,6 +172,7 @@
       }
     },
     { "tag": "nl",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "i = 1 and v = 0 @integer 1",
         "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
@@ -177,6 +187,7 @@
       }
     },
     { "tag": "nn",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "n = 1 @integer 1 @decimal 1.0, 1.00, 1.000, 1.0000",
         "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~0.9, 1.1~1.6, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
@@ -191,6 +202,7 @@
       }
     },
     { "tag": "no",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "n = 1 @integer 1 @decimal 1.0, 1.00, 1.000, 1.0000",
         "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~0.9, 1.1~1.6, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"
@@ -205,6 +217,7 @@
       }
     },
     { "tag": "sv",
+      "minimumGroupingDigits": 1,
       "cardinal": {
         "one": "i = 1 and v = 0 @integer 1",
         "other": " @integer 0, 2~16, 100, 1000, 10000, 100000, 1000000, … @decimal 0.0~1.5, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0, …"

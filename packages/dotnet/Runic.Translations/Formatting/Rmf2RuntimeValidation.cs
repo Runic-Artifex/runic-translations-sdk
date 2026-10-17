@@ -102,7 +102,7 @@ internal static class Rmf2RuntimeValidation
     internal static TextArgumentType OptionType(string function, string name) => (function, name) switch
     {
         ("string" or "runic:boolean" or "integer" or "number", "select") => TextArgumentType.String,
-        ("integer", "useGrouping") => TextArgumentType.String,
+        ("integer" or "number", "useGrouping") => TextArgumentType.String,
         ("number" or "date" or "time" or "datetime" or "runic:uuid", "style") => TextArgumentType.String,
         ("number", "minimumFractionDigits" or "maximumFractionDigits") => TextArgumentType.Int,
         ("runic:relative-time", "unit" or "numeric") => TextArgumentType.String,
