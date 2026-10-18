@@ -174,7 +174,7 @@ attestation from `publish-preview.yml` on `main`; the packages and VSIX files al
 have an SBOM attestation. Verify with the GitHub CLI (`gh auth login` first):
 
 ```sh
-version=0.7.0-preview.3
+version=0.7.0-preview.4
 gh release download "v$version" -R Runic-Artifex/runic-translations-sdk
 gh attestation verify "Runic.Translations.$version.nupkg" -R Runic-Artifex/runic-translations-sdk \
   --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
