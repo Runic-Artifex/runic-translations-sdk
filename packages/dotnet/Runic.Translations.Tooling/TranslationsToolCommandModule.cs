@@ -68,7 +68,7 @@ public static class TranslationsToolCommandModule
             cancellationToken);
     }
 
-    private const string ExitCodes = "Exit codes: 0 success; 1 translation or verification diagnostics; 2 invalid invocation or operational failure.";
+    private const string ExitCodes = "Exit codes: 0 success; 1 command failure, such as a verify difference or an inaccessible file; 2 invalid invocation or translation diagnostics; 3 internal failure; 130 cancelled.";
     private const string ProjectDescription = "Translations directory or its runic.json. Defaults to ./runic.json, then ./translations/runic.json.";
     private const string EmitDescription = "With no --emit-* option, renders C#, locale-v5 JSON with its asset manifest, and ESM. With any, renders only the selected groups.";
 

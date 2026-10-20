@@ -635,7 +635,7 @@ the policy. `{name}` placeholders become `{$name}` in both locales, other braces
 and backslashes are escaped, and text that an unquoted pattern would change
 (outer whitespace, a leading `.`, a newline) is written as a quoted pattern. A
 translation that uses a placeholder its base text lacks is an `RCLI9014` error
-that names the base text; the command exits with 1 and writes nothing.
+that names the base text; the command exits with 2 and writes nothing.
 
 The directory is the namespace, so the generated APIs name the messages
 `stored_remove_user` and so on, as in `m.stored_remove_user({ name })` in ESM. A

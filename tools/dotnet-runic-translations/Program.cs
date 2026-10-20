@@ -17,10 +17,28 @@ namespace Runic.Translations.Tool;
 internal static class Program
 {
     private static readonly ICommandConsole PresentationConsole = new SpectreCommandConsole();
-    private const int Success = 0;
-    private const int DiagnosticFailure = 1;
-    private const int InvocationFailure = 2;
+    // Exit codes, shared by every Runic tool; ToolExitCodePolicy maps the outcome categories to them.
+    internal const int Success = 0;
+    /// <summary>The command failed, such as a verify difference or an I/O failure, or a resource was unavailable.</summary>
+    internal const int CommandFailure = 1;
+    /// <summary>An invalid invocation, or input that failed validation, such as translation diagnostics.</summary>
+    internal const int UsageFailure = 2;
+    /// <summary>An internal or host failure.</summary>
+    internal const int InternalFailure = 3;
+    /// <summary>The command was cancelled, for example with Ctrl+C: 128 + SIGINT, as shells report it.</summary>
+    internal const int Cancelled = 130;
+    // Run's result: not successful; the category in ToolOperationResult decides the exit code.
+    private const int Failed = 1;
     private const string ToolVersion = "0.2";
+
+    /// <summary>Selects human or JSON output, as in every Runic tool.</summary>
+    internal const string FormatOptionName = Runic.Tools.Shared.OutputSelectorAlias.Selector;
+    /// <summary>The former spelling of <see cref="FormatOptionName"/>, a hidden alias until 2.0.</summary>
+    internal const string FormerFormatOptionName = "--runic-output";
+
+    /// <summary>The translations commands and <c>support</c>.</summary>
+    internal static CommandCatalog CreateCatalog() =>
+        CommandCatalog.Combine(TranslationsToolCommandModule.CreateCatalog(), SupportCommandModule.CreateCatalog());
 
     public static int Main(string[] arguments)
     {
@@ -28,50 +46,56 @@ internal static class Program
         {
             if (arguments.Length == 1 && arguments[0] == "lsp") return new Rmf2LanguageServer(Console.OpenStandardInput(), Console.OpenStandardOutput()).Run();
             if (arguments.Length == 1 && arguments[0] == "serve") return CompileServer.RunOnStandardStreams(ToolVersion);
-            List<string> expanded = CommandLine.ExpandResponseFiles(arguments);
-            return new CommandApp(TranslationsToolCommandModule.CreateCatalog())
+            string[] expanded = Runic.Tools.Shared.OutputSelectorAlias.Rewrite(CommandLine.ExpandResponseFiles(arguments).ToArray(), FormerFormatOptionName);
+            return new CommandApp(CreateCatalog())
             {
                 Name = "runic-translations",
                 Version = ToolVersion,
                 Console = PresentationConsole,
-                ParseSettings = new ParseSettings(Environment.GetEnvironmentVariable(CommandOutputClassifier.EnvironmentVariableName), transportOutputOptionName: "--runic-output"),
+                ParseSettings = new ParseSettings(Environment.GetEnvironmentVariable(CommandOutputClassifier.EnvironmentVariableName), transportOutputOptionName: FormatOptionName),
                 ScopeFactory = ToolExecutionScopeFactory.Instance,
                 ExitCodePolicy = ToolExitCodePolicy.Instance,
                 OutcomeSink = new ToolExecutionSink(),
                 PresentFrameworkRequest = static (parsed, _, _) => ValueTask.FromResult(PresentFramework(parsed)),
-            }.RunAsync(expanded.ToArray()).GetAwaiter().GetResult();
+            }.RunAsync(expanded).GetAwaiter().GetResult();
         }
         catch (ToolOutputException exception)
         {
-            return Fatal("RCLI9001", "tool-output", $"error {exception.Message}", DiagnosticFailure);
+            return Fatal("RCLI9001", "tool-output", $"error {exception.Message}", CommandFailure);
         }
         catch (ToolDiagnosticException exception)
         {
-            return Fatal("RCLI9002", "tool-diagnostic", exception.Message, DiagnosticFailure);
+            return Fatal("RCLI9002", "tool-diagnostic", exception.Message, CommandFailure);
         }
         catch (ToolUsageException exception)
         {
-            return Fatal("RCLI9003", "tool-usage", exception.Message, InvocationFailure, true);
+            return Fatal("RCLI9003", "tool-usage", exception.Message, UsageFailure, true);
         }
         catch (TranslationAuthoringException exception)
         {
-            return Fatal("RCLI9004", "authoring", exception.Message, InvocationFailure);
+            return Fatal("RCLI9004", "authoring", exception.Message, UsageFailure);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return Fatal("RCLI9005", "io", exception.Message, InvocationFailure);
+            return Fatal("RCLI9005", "io", exception.Message, ExitCodeOf(IoCategory(exception)));
         }
         catch (Exception exception)
         {
-            return Fatal("RCLI9006", "internal", $"internal failure: {exception.Message}", InvocationFailure);
+            return Fatal("RCLI9006", "internal", $"internal failure: {exception.Message}", InternalFailure);
         }
     }
+
+    internal static int ExitCodeOf(CommandExitCategory category) => ToolExitCodePolicy.Instance.GetExitCode(category);
+
+    // An inaccessible file is a command failure; an invalid path argument is a usage failure.
+    private static CommandExitCategory IoCategory(Exception exception) =>
+        exception is ArgumentException ? CommandExitCategory.Usage : CommandExitCategory.CommandFailure;
 
     private static int PresentFramework(ParseOutcome parsed)
     {
             if (parsed.Kind == ParseOutcomeKind.Help)
             {
-                Present(parsed, "runic-translations", Success, new(CommandHelpFormatter.Format(TranslationsToolCommandModule.CreateCatalog(), "runic-translations", parsed.HelpRequest!.Path, "--runic-output"), string.Empty), null, []);
+                Present(parsed, "runic-translations", Success, new(CommandHelpFormatter.Format(CreateCatalog(), "runic-translations", parsed.HelpRequest!.Path, FormatOptionName), string.Empty), null, []);
                 return Success;
             }
 
@@ -84,6 +108,7 @@ internal static class Program
             if (parsed.Kind == ParseOutcomeKind.Error)
             {
                 CommandDiagnostic original = parsed.Diagnostics[0];
+                if (IsUnknownSupportMode(original)) return PresentUnknownSupportMode(parsed);
                 string message = FormatDiagnostic(original);
                 CommandDiagnostic diagnostic = new(
                     original.Code,
@@ -99,16 +124,54 @@ internal static class Program
                 Present(
                     parsed,
                     "runic-translations",
-                    InvocationFailure,
+                    UsageFailure,
                     null,
                     new CommandFault(diagnostic.Code, diagnostic.Message),
                     [diagnostic],
                     $"runic-translations: {message}\n{UsageText(original.Path)}\n",
                     TranslationsToolFailurePresentation.ErrorOnly);
-                return InvocationFailure;
+                return UsageFailure;
             }
 
-        return InvocationFailure;
+        return UsageFailure;
+    }
+
+    // `support <mode>` names its mode as a subcommand; an unknown mode keeps the code of the former
+    // dotnet runic support --mode, RTRSUP001. `support` alone prints the group's help.
+    private static bool IsUnknownSupportMode(CommandDiagnostic diagnostic) =>
+        diagnostic.Code == "RCLI1002" && diagnostic.Path.Count >= 1 && diagnostic.Path[0] == SupportCommandModule.Group;
+
+    private static int PresentUnknownSupportMode(ParseOutcome parsed)
+    {
+        CommandOutcome<SupportCommandResult> outcome = SupportCommandModule.Failure(
+            CommandExitCategory.Usage, "RTRSUP001", "Use support preview, collect, or remove.");
+        var context = new CommandExecutionContext(
+            EmptyServices.Instance,
+            PresentationConsole,
+            new CommandPath([SupportCommandModule.Group]),
+            OutputMode(parsed),
+            CultureInfo.InvariantCulture,
+            "runic-translations");
+        int exitCode = ExitCodeOf(outcome.ExitCategory);
+        CommandDescriptor command = CreateCatalog().Commands.First(descriptor => descriptor.Name == SupportCommandModule.Group);
+        new CommandOutputDispatcher().WriteAsync(command, context, outcome, SupportResultCodec.Instance, exitCode, [], CancellationToken.None)
+            .AsTask().GetAwaiter().GetResult();
+        return exitCode;
+    }
+
+    private sealed class EmptyServices : IServiceProvider
+    {
+        internal static EmptyServices Instance { get; } = new();
+        public object? GetService(Type serviceType) => null;
+    }
+
+    private sealed class SupportResultCodec : ICommandResultCodec<SupportCommandResult>
+    {
+        internal static SupportResultCodec Instance { get; } = new();
+        public string PayloadType => SupportCommandModule.PayloadType;
+        public System.Text.Json.Serialization.Metadata.JsonTypeInfo<SupportCommandResult> TypeInfo => SupportCommandJsonContext.Default.SupportCommandResult;
+        public ValueTask WriteHumanAsync(SupportCommandResult value, ICommandConsole console, CultureInfo culture, CancellationToken cancellationToken) =>
+            console.WriteOutAsync((value.ToHumanOutput() + "\n").AsMemory(), cancellationToken);
     }
 
     private static string FormatDiagnostic(CommandDiagnostic diagnostic) => diagnostic.Code switch
@@ -200,7 +263,7 @@ internal static class Program
 
     // Usage failures print the same help as --help for the command, so there is one help text.
     private static string UsageText(CommandPath path) =>
-        CommandHelpFormatter.Format(TranslationsToolCommandModule.CreateCatalog(), "runic-translations", path, "--runic-output").TrimEnd();
+        CommandHelpFormatter.Format(CreateCatalog(), "runic-translations", path, FormatOptionName).TrimEnd();
 
     private static CommandPath PathOf(ToolCommand command) => command switch
     {
@@ -213,10 +276,15 @@ internal static class Program
     internal static ToolOperationResult Execute(ToolInvocation invocation, SourceUnitCache? units = null)
     {
         var result = new ToolOperationResult();
-        try { result.ExitCode = Run(invocation, result, units); result.ExitCategory = result.ExitCode == Success ? CommandExitCategory.Success : CommandExitCategory.Validation; }
-        catch (ToolOutputException exception) { result.SetHumanOutput($"error {exception.Message}\n"); result.AddDiagnostic("RCLI9001", "tool-output", SafeDomainMessage(exception.Message, "The requested output could not be written."), CommandDiagnosticSeverity.Error); result.ExitCode = DiagnosticFailure; result.ExitCategory = CommandExitCategory.CommandFailure; }
-        catch (ToolDiagnosticException exception) { result.SetHumanOutput(exception.Message + "\n"); result.AddDiagnostic("RCLI9002", "tool-diagnostic", SafeDomainMessage(exception.Message, "The translations operation reported diagnostics."), CommandDiagnosticSeverity.Error); result.ExitCode = DiagnosticFailure; result.ExitCategory = CommandExitCategory.CommandFailure; }
-        catch (ToolUsageException exception) { result.SetHumanOutput($"runic-translations: {exception.Message}\n{UsageText(PathOf(invocation.Command))}\n"); result.AddDiagnostic("RCLI9003", "tool-usage", SafeDomainMessage(exception.Message, "The translations command arguments are invalid."), CommandDiagnosticSeverity.Error); result.ExitCode = InvocationFailure; result.ExitCategory = CommandExitCategory.Usage; }
+        try
+        {
+            // A failed run is a validation failure (translation diagnostics) unless it chose another category.
+            if (Run(invocation, result, units) == Success) result.ExitCategory = CommandExitCategory.Success;
+            else if (result.ExitCategory == CommandExitCategory.Success) result.ExitCategory = CommandExitCategory.Validation;
+        }
+        catch (ToolOutputException exception) { result.SetHumanOutput($"error {exception.Message}\n"); result.AddDiagnostic("RCLI9001", "tool-output", SafeDomainMessage(exception.Message, "The requested output could not be written."), CommandDiagnosticSeverity.Error); result.ExitCategory = CommandExitCategory.CommandFailure; }
+        catch (ToolDiagnosticException exception) { result.SetHumanOutput(exception.Message + "\n"); result.AddDiagnostic("RCLI9002", "tool-diagnostic", SafeDomainMessage(exception.Message, "The translations operation reported diagnostics."), CommandDiagnosticSeverity.Error); result.ExitCategory = CommandExitCategory.CommandFailure; }
+        catch (ToolUsageException exception) { result.SetHumanOutput($"runic-translations: {exception.Message}\n{UsageText(PathOf(invocation.Command))}\n"); result.AddDiagnostic("RCLI9003", "tool-usage", SafeDomainMessage(exception.Message, "The translations command arguments are invalid."), CommandDiagnosticSeverity.Error); result.ExitCategory = CommandExitCategory.Usage; }
         catch (TranslationAuthoringException exception)
         {
             string message = exception.Message.Contains("already exists; no files were written", StringComparison.Ordinal)
@@ -224,11 +292,11 @@ internal static class Program
                 : exception.Message;
             result.SetHumanOutput($"runic-translations: {exception.Message}\n");
             result.AddDiagnostic("RCLI9004", "authoring", message, CommandDiagnosticSeverity.Error);
-            result.ExitCode = InvocationFailure;
             result.ExitCategory = CommandExitCategory.Usage;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException) { result.SetHumanOutput($"runic-translations: {exception.Message}\n"); result.AddDiagnostic("RCLI9005", "io", "The translations input or output could not be accessed.", CommandDiagnosticSeverity.Error); result.ExitCode = InvocationFailure; result.ExitCategory = CommandExitCategory.Usage; }
-        catch (Exception) { result.AddDiagnostic("RCLI9006", "internal", "The translations command encountered an internal failure.", CommandDiagnosticSeverity.Error); result.ExitCode = InvocationFailure; result.ExitCategory = CommandExitCategory.Usage; }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException) { result.SetHumanOutput($"runic-translations: {exception.Message}\n"); result.AddDiagnostic("RCLI9005", "io", "The translations input or output could not be accessed.", CommandDiagnosticSeverity.Error); result.ExitCategory = IoCategory(exception); }
+        catch (Exception) { result.AddDiagnostic("RCLI9006", "internal", "The translations command encountered an internal failure.", CommandDiagnosticSeverity.Error); result.ExitCategory = CommandExitCategory.HostFailure; }
+        result.ExitCode = ExitCodeOf(result.ExitCategory);
         return result;
     }
 
@@ -260,7 +328,7 @@ internal static class Program
 
     internal static ToolOperationResult Usage(string message, ToolCommand command)
     {
-        var result = new ToolOperationResult { ExitCode = InvocationFailure, ExitCategory = CommandExitCategory.Usage };
+        var result = new ToolOperationResult { ExitCode = UsageFailure, ExitCategory = CommandExitCategory.Usage };
         result.AddDiagnostic("RCLI9003", "tool-usage", message, CommandDiagnosticSeverity.Error);
         result.SetHumanOutput($"runic-translations: {message}\n{UsageText(PathOf(command))}\n");
         return result;
@@ -379,7 +447,7 @@ internal static class Program
         {
             if (invocation.OmitSourceDiagnostics)
                 result.SetHumanOutput("runic-translations: translation artifacts were not generated; the C# compilation reports the translation errors.\n");
-            return DiagnosticFailure;
+            return Failed;
         }
         if (invocation.Command == ToolCommand.Validate)
         {
@@ -394,7 +462,7 @@ internal static class Program
                 TranslationDiagnosticSeverity.Error,
                 Rmf2ProjectV5EmissionEligibility.Message,
                 new TextSourceLocation(inputs.Project.Path, 0, 0, 1, 1, 1, 1))], result);
-            return DiagnosticFailure;
+            return Failed;
         }
 
         IReadOnlyList<ToolArtifact> artifacts;
@@ -405,7 +473,7 @@ internal static class Program
         catch (ToolDiagnosticException exception)
         {
             result.AddDiagnostic("RCLI9013", "unsupported-output", exception.Message, CommandDiagnosticSeverity.Error);
-            return DiagnosticFailure;
+            return Failed;
         }
         if (invocation.Command == ToolCommand.Generate)
         {
@@ -422,7 +490,9 @@ internal static class Program
         }
         for (int index = 0; index < differences.Count; index++)
             result.AddDiagnostic("RCLI9011", "verify", $"verify: {differences[index]}", CommandDiagnosticSeverity.Error);
-        return DiagnosticFailure;
+        // The sources are valid; the retained output is stale, so the check failed.
+        result.ExitCategory = CommandExitCategory.CommandFailure;
+        return Failed;
     }
 
     private static void WriteDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics, ToolOperationResult result)
@@ -485,7 +555,8 @@ internal sealed class ToolExecutionSink : ICommandOutcomeSink
         bool hasTranslationDiagnostics)
     {
         if (outcome.IsSuccess) return TranslationsToolFailurePresentation.Standard;
-        if (outcome.ExitCategory != CommandExitCategory.Validation) return TranslationsToolFailurePresentation.ErrorOnly;
+        // A verify difference is a command failure that reports its differences like diagnostics.
+        if (outcome.ExitCategory != CommandExitCategory.Validation && !HasApplicationDiagnostic(diagnostics)) return TranslationsToolFailurePresentation.ErrorOnly;
         // Translation diagnostics are the report; the generic fault line would only repeat them.
         if (hasTranslationDiagnostics) return TranslationsToolFailurePresentation.DiagnosticsOnly;
         if (diagnostics.Count == 0 && outcome.HumanOutput is { Length: > 0 }) return TranslationsToolFailurePresentation.OutputOnly;
@@ -538,7 +609,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp), OmitSourceDiagnostics()),
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
             "import-text" => ExecuteImport(request),
-            _ => new ToolOperationResult { ExitCode = 2 },
+            _ => new ToolOperationResult { ExitCode = Program.UsageFailure, ExitCategory = CommandExitCategory.Usage },
         };
         var report = new TranslationsToolCommandResult(result.Output, string.Empty) { Diagnostics = result.TranslationDiagnostics };
         if (result.ExitCode == 0) return CommandOutcome.Success(report, result.Diagnostics);
@@ -607,9 +678,11 @@ internal sealed class ToolExitCodePolicy : IExitCodePolicy
     internal static ToolExitCodePolicy Instance { get; } = new();
     public int GetExitCode(CommandExitCategory category) => category switch
     {
-        CommandExitCategory.Success => 0,
-        CommandExitCategory.Usage or CommandExitCategory.Unavailable or CommandExitCategory.HostFailure => 2,
-        _ => 1,
+        CommandExitCategory.Success => Program.Success,
+        CommandExitCategory.CommandFailure or CommandExitCategory.Unavailable => Program.CommandFailure,
+        CommandExitCategory.Usage or CommandExitCategory.Validation => Program.UsageFailure,
+        CommandExitCategory.Cancelled => Program.Cancelled,
+        _ => Program.InternalFailure,
     };
 }
 

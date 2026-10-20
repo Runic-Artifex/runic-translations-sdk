@@ -71,7 +71,7 @@ does. `{name}` placeholders become `{$name}`; other `{`, `}` and `\` are escaped
 and text that an unquoted pattern would change (outer whitespace, a leading `.`,
 a newline) is written as a quoted pattern. A translation that uses a placeholder
 its base text lacks, or a table value that is not a string, fails with `RCLI9014`
-and exit code 1, and nothing is written. `--dry-run` reports and validates the
+and exit code 2, and nothing is written. `--dry-run` reports and validates the
 files without writing them.
 
 Keys are the first seven ASCII words of the text without placeholders
@@ -97,7 +97,58 @@ runic-translations serve
 
 `generate` leaves output files whose bytes are unchanged untouched, so file watchers only see artifacts that changed.
 
-Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`. Exit code `0` means success, `1` means catalog or verification diagnostics, and `2` means invalid invocation or an operational failure.
+Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`.
+
+## Output and exit codes
+
+Every command writes human text by default. `--format json` (or
+`RUNIC_COMMANDLINE_OUTPUT=json`) writes one `runic.commandline/1` envelope to
+standard output instead. `--runic-output` is the former spelling of
+`--format`; it is still accepted until 2.0 but no longer listed in help or
+completions.
+
+The exit codes are the same in every Runic tool:
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | The command failed or a resource was unavailable, for example a `verify` difference or a file that cannot be read or written. |
+| `2` | Invalid invocation, or input that failed validation, such as translation (`RTR`) diagnostics. |
+| `3` | Internal or host failure. |
+| `130` | The command was cancelled, for example with Ctrl+C. |
+
+`serve` reports the same exit code in each response's `exitCode`.
+
+## Support envelope
+
+```text
+runic-translations support preview --editor-diagnostics <zip>
+runic-translations support collect --editor-diagnostics <zip> --destination <path>
+runic-translations support remove  --destination <path>
+```
+
+`support` reads the diagnostic ZIP that the Translations Editor's `diagnostics`
+command exports (`runic.translations.editor-diagnostics/1`) and builds a local,
+unsigned `runic.support-envelope/1` from it. `preview` reports what the envelope
+would contain, `collect` writes it to a new file, and `remove` deletes a file
+only after checking that `collect` wrote it. It accepts only bounded,
+path-free summary fields and never collects source, translation or review
+text, workspace paths, sessions, cookies or tokens. Nothing is uploaded. It
+moved here from `dotnet runic support --mode <mode>`, which forwards to it
+until 2.0.
+
+With `--format json` the payload is `runic.translations.support/1`:
+
+```json
+{"mode":"collect","destination":"/home/me/support-envelope.json","digest":"sha256:...","collectors":["runic.translations.editor-diagnostics"],"omissions":["automatic-capture","network","workspace-roots","relative-paths","source-text","translation-text","review-text","sessions-cookies-tokens"],"outboundTransportAttempts":0}
+```
+
+`destination` is the full path of the envelope, or `null` for `preview`;
+`digest` is the SHA-256 of the envelope's bytes; `collectors` and `omissions`
+are empty for `remove`. A failure reports an `RTRSUP` code from the
+[diagnostics reference](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md#runic-translations-support-codes)
+with exit code `2`, or `RTRSUP025` with exit code `1` when a file cannot be
+read or written.
 
 ## Diagnostics
 
@@ -108,7 +159,7 @@ form editors and MSBuild recognize:
 translations/de.rmf2(2,3,2,8): error RTR0011: Locale 'de' defines 'commands.remov', which base locale 'en' does not define. Did you mean 'commands.remove'?
 ```
 
-With `--runic-output json` they are structured entries rather than text. A
+With `--format json` they are structured entries rather than text. A
 success carries them in `payload.diagnostics`; a failure carries the same
 `runic.translations.tool/1` payload in `fault.data.payload`:
 

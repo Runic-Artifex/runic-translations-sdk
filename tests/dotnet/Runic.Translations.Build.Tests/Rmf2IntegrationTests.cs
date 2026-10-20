@@ -199,8 +199,8 @@ internal sealed class Rmf2IntegrationTests
         Directory.CreateDirectory(temporary.Resolve("translations"));
         File.WriteAllText(temporary.Resolve("translations/runic.json"), Project);
         File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "hello = Hello\n");
-        ProcessResult result = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated", "--emit-cpp", "--runic-output", "json");
-        Assert.Equal(1, result.ExitCode, result.Combined);
+        ProcessResult result = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated", "--emit-cpp", "--format", "json");
+        Assert.Equal(2, result.ExitCode, result.Combined);
         Assert.Contains("RCLI9013", result.Combined);
         Assert.Contains("semantic translation contract does not support --emit-cpp", result.Combined);
         Assert.False(Directory.Exists(temporary.Resolve("generated")), "Unsupported RMF2 output created artifacts.");
@@ -284,7 +284,7 @@ internal sealed class Rmf2IntegrationTests
             File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"sourceRoots\":[{\"path\":\"" + path + "\",\"namespace\":[\"shop\"]}]}");
             File.WriteAllText(temporary.Resolve("feature/en.rmf2"), "x = Hello\n");
             ProcessResult result = TestFixture.RunTool(temporary, "validate", "--project", "translations");
-            Assert.Equal(1, result.ExitCode, result.Combined);
+            Assert.Equal(2, result.ExitCode, result.Combined);
             Assert.Contains(location, result.Combined);
             Assert.Contains("error RTR0052: " + message, result.Combined);
             Assert.False(result.Combined.Contains("validated", StringComparison.Ordinal), "An unusable mount validated: " + result.Combined);
@@ -298,7 +298,7 @@ internal sealed class Rmf2IntegrationTests
         File.WriteAllText(temporary.Resolve("translations/runic.json"), """["not","an","object"]""");
         File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "x = Hello\n");
         ProcessResult result = TestFixture.RunTool(temporary, "validate", "--project", "translations");
-        Assert.Equal(1, result.ExitCode, result.Combined);
+        Assert.Equal(2, result.ExitCode, result.Combined);
         Assert.Contains("RTR0019", result.Combined);
         Assert.Contains("Runic project root must be an object.", result.Combined);
     }
@@ -330,6 +330,12 @@ internal sealed class Rmf2IntegrationTests
         Assert.True(Directory.EnumerateFiles(temporary.Resolve("out"), "*.Readable.g.cs", SearchOption.TopDirectoryOnly).Count() == 1, "readable C# output missing");
         ProcessResult verify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "out");
         Assert.Equal(0, verify.ExitCode, verify.Combined);
+        // Stale output is a command failure (exit code 1), not a validation failure of the sources (2).
+        File.WriteAllText(manifestPath, manifest + " ");
+        ProcessResult stale = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "out");
+        Assert.Equal(1, stale.ExitCode, stale.Combined);
+        Assert.Contains("verify: ", stale.Combined);
+        File.WriteAllText(manifestPath, manifest);
 
         ProcessResult csharp = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "csharp", "--emit-csharp");
         Assert.Equal(0, csharp.ExitCode, csharp.Combined);
@@ -347,22 +353,22 @@ internal sealed class Rmf2IntegrationTests
         {
             string directory = flag.Substring("--emit-".Length);
             ProcessResult unsupported = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", directory, flag);
-            Assert.Equal(1, unsupported.ExitCode, unsupported.Combined);
+            Assert.Equal(2, unsupported.ExitCode, unsupported.Combined);
             Assert.Contains("RTR0065", unsupported.Combined);
             Assert.Contains(flag, unsupported.Combined);
             Assert.False(Directory.Exists(temporary.Resolve(directory)), "unsupported v5 selection emitted output");
         }
         ProcessResult mixed = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "mixed", "--emit-json", "--emit-typescript");
-        Assert.Equal(1, mixed.ExitCode, mixed.Combined);
+        Assert.Equal(2, mixed.ExitCode, mixed.Combined);
         Assert.Contains("RTR0065", mixed.Combined);
         Assert.False(Directory.Exists(temporary.Resolve("mixed")), "mixed supported/unsupported v5 selection emitted partial output");
         ProcessResult unsupportedVerify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "out", "--emit-template-manifest");
-        Assert.Equal(1, unsupportedVerify.ExitCode, unsupportedVerify.Combined);
+        Assert.Equal(2, unsupportedVerify.ExitCode, unsupportedVerify.Combined);
         Assert.Contains("RTR0065", unsupportedVerify.Combined);
 
         File.WriteAllText(path, Project[..^1] + ",\"executionProfile\":\"future-profile\"}");
         ProcessResult invalid = TestFixture.RunTool(temporary, "validate", "--project", "translations");
-        Assert.Equal(1, invalid.ExitCode, invalid.Combined);
+        Assert.Equal(2, invalid.ExitCode, invalid.Combined);
         Assert.Contains("RTR0019", invalid.Combined);
     }
     [Test, DisplayName("RMF2 v5 validate permits empty scaffolds while generate and verify reject them")]
@@ -382,7 +388,7 @@ internal sealed class Rmf2IntegrationTests
             ProcessResult result = Flag is null
                 ? TestFixture.RunTool(temporary, Command, "--project", "translations", "--output", output)
                 : TestFixture.RunTool(temporary, Command, "--project", "translations", "--output", output, Flag);
-            Assert.Equal(1, result.ExitCode, result.Combined);
+            Assert.Equal(2, result.ExitCode, result.Combined);
             Assert.Contains("RTR0009", result.Combined);
             Assert.False(Directory.Exists(temporary.Resolve(output)), "empty v5 project emitted " + output);
         }

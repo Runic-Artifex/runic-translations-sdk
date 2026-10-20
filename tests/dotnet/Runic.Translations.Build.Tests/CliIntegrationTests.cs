@@ -77,7 +77,7 @@ internal sealed class CliIntegrationTests
         // --project is optional and described, in the same aligned help as every other command.
         string? project = commandHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith("--project <directory>", StringComparison.Ordinal));
         Assert.True(project is not null && project.Contains("Translations directory or its runic.json.", StringComparison.Ordinal) && !project.Contains("[required]", StringComparison.Ordinal), commandHelp.StandardOutput);
-        Assert.Contains("Defaults to ./runic.json", commandHelp.StandardOutput);
+        Assert.Contains("Defaults to ./runic.json", System.Text.RegularExpressions.Regex.Replace(commandHelp.StandardOutput, "\\s+", " "));
         // Emitters without a renderer fail with RTR0065, so help and usage list only working ones.
         foreach (string command in new[] { "generate", "verify" })
         {
@@ -150,7 +150,7 @@ internal sealed class CliIntegrationTests
             """, new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("translations", "en", "application_title.mf2"), "Runic application\n", new UTF8Encoding(false));
 
-        ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "translations", "--runic-output", "json");
+        ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "translations", "--format", "json");
         Assert.Equal(0, validate.ExitCode, validate.Combined);
         using JsonDocument envelope = JsonDocument.Parse(validate.StandardOutput);
         JsonElement root = envelope.RootElement;
@@ -167,8 +167,8 @@ internal sealed class CliIntegrationTests
 
         // Translation diagnostics are native RTR entries: in fault.data of a failure, never RCLI9012 strings.
         File.WriteAllText(temporary.Resolve("translations", "en", "application_title.mf2"), ".local $a = {$n}\n.input {$n :number}\n{{{$a}}}\n", new UTF8Encoding(false));
-        ProcessResult failed = TestFixture.RunTool(temporary, "validate", "--runic-output", "json");
-        Assert.Equal(1, failed.ExitCode, failed.Combined);
+        ProcessResult failed = TestFixture.RunTool(temporary, "validate", "--format", "json");
+        Assert.Equal(2, failed.ExitCode, failed.Combined);
         Assert.False(failed.StandardOutput.Contains("RCLI9012", StringComparison.Ordinal), failed.StandardOutput);
         using JsonDocument failure = JsonDocument.Parse(failed.StandardOutput);
         JsonElement data = failure.RootElement.GetProperty("fault").GetProperty("data");
@@ -182,7 +182,7 @@ internal sealed class CliIntegrationTests
 
         // Human output prints each diagnostic once, in the canonical file(line,col): form, without a prefix.
         ProcessResult human = TestFixture.RunTool(temporary, "validate");
-        Assert.Equal(1, human.ExitCode, human.Combined);
+        Assert.Equal(2, human.ExitCode, human.Combined);
         string[] lines = human.StandardError.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Assert.True(lines.Length == 1 && lines[0].Replace('\\', '/').StartsWith("translations/en/application_title.mf2(2,", StringComparison.Ordinal) && lines[0].Contains("): error RTR0067: ", StringComparison.Ordinal), human.Combined);
         Assert.Equal(string.Empty, human.StandardOutput.Trim());
@@ -206,7 +206,7 @@ internal sealed class CliIntegrationTests
         using TemporaryDirectory temporary = new();
         AssertUsageFailure(temporary, "generate requires --output <directory>.", "generate", "--project", "translations");
 
-        ProcessResult json = TestFixture.RunTool(temporary, "init", "--directory", "target", "--runic-output", "json");
+        ProcessResult json = TestFixture.RunTool(temporary, "init", "--directory", "target", "--format", "json");
         Assert.Equal(2, json.ExitCode, json.Combined);
         using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
         JsonElement diagnostic = envelope.RootElement.GetProperty("diagnostics")[0];
@@ -509,14 +509,14 @@ internal sealed class CliIntegrationTests
         WriteTable(temporary, "de.json", """{ "Fine": "Gut", "Remove user {name}": "Benutzer {user} entfernen" }""");
 
         ProcessResult import = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--table", "de=tables/de.json");
-        Assert.Equal(1, import.ExitCode, import.Combined);
+        Assert.Equal(2, import.ExitCode, import.Combined);
         Assert.Contains("The de translation of \"Remove user {name}\" uses the placeholder {user}, which the base text does not contain.", import.StandardError);
         Assert.Contains("No files were written.", import.StandardOutput);
         Assert.False(Directory.Exists(temporary.Resolve("translations", "stored")), "A rejected import wrote files.");
 
         WriteTable(temporary, "de.json", """{ "Count": 3 }""");
-        ProcessResult json = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--table", "de=tables/de.json", "--runic-output", "json");
-        Assert.Equal(1, json.ExitCode, json.Combined);
+        ProcessResult json = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--table", "de=tables/de.json", "--format", "json");
+        Assert.Equal(2, json.ExitCode, json.Combined);
         using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
         JsonElement diagnostic = envelope.RootElement.GetProperty("diagnostics")[0];
         Assert.Equal("RCLI9014", diagnostic.GetProperty("code").GetString());
@@ -545,7 +545,7 @@ internal sealed class CliIntegrationTests
         // The planned content is validated: an untranslated text fails RTR0010 without writing.
         File.WriteAllText(temporary.Resolve("tables", "base.json"), """["Untranslated"]""", new UTF8Encoding(false));
         ProcessResult incomplete = TestFixture.RunTool(temporary, "import-text", "--group", "stored", "--base", "tables/base.json", "--table", "de=tables/de.json", "--dry-run");
-        Assert.Equal(1, incomplete.ExitCode, incomplete.Combined);
+        Assert.Equal(2, incomplete.ExitCode, incomplete.Combined);
         Assert.Contains("error RTR0010: Locale 'de' does not translate 'stored.untranslated'", incomplete.StandardError);
         Assert.False(Directory.Exists(temporary.Resolve("translations", "stored")), "A dry run wrote files.");
     }
