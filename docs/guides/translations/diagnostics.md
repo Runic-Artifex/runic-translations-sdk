@@ -383,8 +383,10 @@ Keys of another catalog cannot be checked by the build; the WPF adapter still ch
 ## runic-translations tool codes
 
 The `runic-translations` tool (`dotnet-runic-translations`) reports these codes
-in the `runic.commandline/1` envelope. Exit code `1` means catalog or
-verification diagnostics, `2` an invalid invocation or an operational failure.
+in the `runic.commandline/1` envelope. Exit code `1` means a command failure,
+such as a `verify` difference or an inaccessible file; `2` an invalid
+invocation or translation diagnostics; `3` an internal failure; `130` a
+cancelled command.
 
 ## RCLI9000
 
@@ -442,4 +444,169 @@ the project's sources do not support. The message names the output.
 values, `--base` is not a JSON array of strings, a translation uses a
 placeholder that its base text lacks, or the existing base-locale file of the
 group cannot be read back. The message names the file or the base text. The
-command exits with 1 and writes nothing.
+command exits with 2 and writes nothing.
+
+## runic-translations support codes
+
+`runic-translations support preview|collect|remove` reports these codes as the
+fault of a failed command. They replace the `RAPPSUP` codes of the former
+`dotnet runic support --mode`, with the same numbers and meanings.
+`RTRSUP025` exits with `1`; every other code is a usage error and exits with
+`2`.
+
+## RTRSUP001
+
+`support` received a mode other than `preview`, `collect` or `remove`.
+
+**Fix:** run `runic-translations support preview`, `collect` or `remove`.
+
+## RTRSUP002
+
+`support collect` has no `--destination`.
+
+**Fix:** pass the envelope file with `--destination`.
+
+## RTRSUP003
+
+The `--destination` file of `collect` already exists.
+
+**Fix:** choose a new file, or remove the old envelope with `support remove`.
+
+## RTRSUP004
+
+The support envelope would exceed its size limit.
+
+**Fix:** collect from a smaller Editor diagnostic ZIP.
+
+## RTRSUP005
+
+`support remove` was given a collector source such as
+`--editor-diagnostics`.
+
+**Fix:** pass only `--destination`.
+
+## RTRSUP006
+
+`support remove` has no `--destination`.
+
+**Fix:** pass the envelope file with `--destination`.
+
+## RTRSUP007
+
+The `--destination` file of `remove` does not exist.
+
+**Fix:** pass the path of an envelope that `collect` wrote.
+
+## RTRSUP008
+
+`preview` or `collect` has no collector.
+
+**Fix:** select the Editor collector with `--editor-diagnostics <zip>`.
+
+## RTRSUP009
+
+The Editor collector source is not a `.zip` file.
+
+**Fix:** pass the diagnostic ZIP that the Editor exported.
+
+## RTRSUP010
+
+The Editor diagnostic ZIP is missing or exceeds its size limit.
+
+**Fix:** export the diagnostics from the Editor again and pass that file.
+
+## RTRSUP011
+
+The Editor diagnostic ZIP has an invalid number of entries.
+
+**Fix:** pass the ZIP exactly as the Editor exported it.
+
+## RTRSUP012
+
+The Editor diagnostic ZIP does not contain a bounded `diagnostics.json`.
+
+**Fix:** pass the ZIP exactly as the Editor exported it.
+
+## RTRSUP013
+
+The Editor diagnostic source is not a valid ZIP file.
+
+**Fix:** export the diagnostics from the Editor again.
+
+## RTRSUP014
+
+The Editor diagnostic summary is not valid JSON.
+
+**Fix:** export the diagnostics from the Editor again.
+
+## RTRSUP015
+
+The diagnostic summary uses a schema that this version of `runic-translations`
+does not support.
+
+**Fix:** use a `runic-translations` from the same release as the Editor.
+
+## RTRSUP016
+
+The diagnostic groups in the summary are invalid or exceed their limit.
+
+**Fix:** export the diagnostics from the Editor again.
+
+## RTRSUP017
+
+The `--destination` file of `remove` is not a support envelope created by
+`support collect`.
+
+**Fix:** pass the envelope that `collect` wrote; `remove` deletes nothing else.
+
+## RTRSUP018
+
+The diagnostic summary omits a required field.
+
+**Fix:** export the diagnostics from the Editor again, with the Editor and
+`runic-translations` from the same release.
+
+## RTRSUP019
+
+A text field of the diagnostic summary is not a string.
+
+**Fix:** export the diagnostics from the Editor again.
+
+## RTRSUP020
+
+A count in the diagnostic summary is not a non-negative integer.
+
+**Fix:** export the diagnostics from the Editor again.
+
+## RTRSUP021
+
+A flag in the diagnostic summary is not `true` or `false`.
+
+**Fix:** export the diagnostics from the Editor again.
+
+## RTRSUP022
+
+A section of the diagnostic summary is not a JSON object.
+
+**Fix:** export the diagnostics from the Editor again.
+
+## RTRSUP023
+
+The diagnostic summary contains fields that the envelope does not support.
+
+**Fix:** use a `runic-translations` from the same release as the Editor.
+
+## RTRSUP024
+
+The diagnostic summary contains a path or other sensitive text, which a
+support envelope must not include.
+
+**Fix:** export the diagnostics from the Editor again; it removes paths from
+the summary.
+
+## RTRSUP025
+
+`support` could not read or write a required local file.
+
+**Fix:** check that the ZIP and the destination folder exist and that you can
+read and write them.

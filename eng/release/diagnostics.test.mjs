@@ -12,8 +12,8 @@ const catalog = readFileSync(join(root, "docs/guides/translations/diagnostics.md
 const shipped = ["packages/dotnet", "tools/Runic.Translations.Compiler", "tools/dotnet-runic-translations"];
 // Recognized as a tool diagnostic but not reported by this release.
 const unreported = new Set(["RCLI9010"]);
-// RCLI1xxx are Runic.CommandLine parser codes, documented with Runic.CommandLine.
-const idPattern = /\b(RTR\d{4}|RCLI9\d{3})\b/g;
+// RCLI1xxx are Runic.CommandLine parser codes, documented with Runic.CommandLine. RTRSUP are the support command's.
+const idPattern = /\b(RTR\d{4}|RTRSUP\d{3}|RCLI9\d{3})\b/g;
 const skipped = new Set(["bin", "obj", "node_modules", "dist"]);
 
 function* sources(directory) {
@@ -33,6 +33,7 @@ for (const directory of shipped)
 test("the scan finds the RTR and tool code families", () => {
   expect([...reports.keys()].some(id => id.startsWith("RTR"))).toBe(true);
   expect([...reports.keys()].some(id => id.startsWith("RCLI9"))).toBe(true);
+  expect([...reports.keys()].some(id => id.startsWith("RTRSUP"))).toBe(true);
 });
 
 test("every reported diagnostic ID has a catalog entry", () => {

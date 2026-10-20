@@ -51,7 +51,7 @@ internal sealed class ServeModeTests
         File.WriteAllText(Path.Combine(project, "en.rmf2"), "title = {$name :unknown-function}\n", new UTF8Encoding(false));
         JsonElement failed = server.Send(Request(1, "generate", project, temporary.Resolve("out")));
         Assert.False(failed.GetProperty("ok").GetBoolean(), failed.ToString());
-        Assert.Equal(1, failed.GetProperty("exitCode").GetInt32());
+        Assert.Equal(2, failed.GetProperty("exitCode").GetInt32());
         Assert.Contains("error RTR", failed.GetProperty("message").GetString() ?? string.Empty);
         JsonElement translation = failed.GetProperty("diagnostics").EnumerateArray().First(item => item.GetProperty("code").GetString()!.StartsWith("RTR", StringComparison.Ordinal) && (item.GetProperty("path").GetString() ?? string.Empty).EndsWith("en.rmf2", StringComparison.Ordinal));
         Assert.Equal("error", translation.GetProperty("severity").GetString());

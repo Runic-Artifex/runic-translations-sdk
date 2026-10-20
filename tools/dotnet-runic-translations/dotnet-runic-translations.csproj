@@ -21,6 +21,8 @@
     <InternalsVisibleTo Include="Runic.Translations.Build.Tests" />
     <Compile Include="../../eng/translations/Rmf2Preview.cs" Link="Shared/Rmf2Preview.cs" />
     <Compile Include="../../eng/translations/TranslationManifestReader.cs" Link="Shared/TranslationManifestReader.cs" />
+    <!-- The output selector alias helper, the same file as in runic-sdk. -->
+    <Compile Include="../Shared/OutputSelectorAlias.cs" Link="Shared/OutputSelectorAlias.cs" />
     <ProjectReference Include="../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" />
     <PackageReference Include="Runic.CommandLine" />
     <ProjectReference Include="..\..\packages\dotnet\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />

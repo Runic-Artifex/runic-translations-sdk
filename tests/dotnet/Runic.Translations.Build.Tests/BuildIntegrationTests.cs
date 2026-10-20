@@ -146,10 +146,10 @@ internal sealed class BuildIntegrationTests
     // A tool that fails without logging a canonical error must not leave a successful build, whether or
     // not the source generator is present to report deferred diagnostics.
     [Test, DisplayName("build fails when the tool exits with $exitCode and logs no error (generator: $withGenerator)")]
-    [Arguments(1, false)]
+    [Arguments(2, false)]
     [Arguments(3, false)]
     [Arguments(1, true)]
-    [Arguments(3, true)]
+    [Arguments(2, true)]
     public void SilentToolFailureFailsTheBuild(int exitCode, bool withGenerator)
     {
         bool windows = OperatingSystem.IsWindows();
@@ -159,7 +159,7 @@ internal sealed class BuildIntegrationTests
         if (withGenerator) AddSourceGenerator(temporary);
         ProcessResult failed = Build(temporary);
         Assert.True(failed.ExitCode != 0, $"Build succeeded although the tool exited with {exitCode}:\n" + failed.Combined);
-        Assert.Contains(withGenerator && exitCode == 1 ? "The Runic Translations tool reported translation errors" : $"The Runic Translations tool exited with code {exitCode}.", failed.Combined);
+        Assert.Contains(withGenerator && exitCode == 2 ? "The Runic Translations tool reported translation errors" : $"The Runic Translations tool exited with code {exitCode}.", failed.Combined);
         Assert.False(failed.Combined.Contains("MSB3073", StringComparison.Ordinal), failed.Combined);
     }
 
