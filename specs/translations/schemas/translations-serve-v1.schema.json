@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/translations-serve-v1.schema.json",
+  "title": "runic-translations-serve/1",
+  "description": "One line written by runic-translations serve on standard output: the ready event, then one response per request. The protocol is a contract between the Vite plugin and the tool of the same release; a minor release may change both together. Requests are described in $defs/request.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ready"
+    },
+    {
+      "$ref": "#/$defs/response"
+    }
+  ],
+  "$defs": {
+    "ready": {
+      "type": "object",
+      "required": [
+        "protocol",
+        "event",
+        "version"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "runic-translations-serve/1"
+        },
+        "event": {
+          "const": "ready"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "id",
+        "ok",
+        "exitCode",
+        "output",
+        "message",
+        "diagnostics",
+        "elapsedMs"
+      ],
+      "properties": {
+        "id": {
+          "description": "The request's id, or null for a request that could not be read."
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "exitCode": {
+          "type": "integer",
+          "description": "The exit code of the matching one-shot command."
+        },
+        "output": {
+          "type": "string",
+          "description": "Display text."
+        },
+        "message": {
+          "type": "string",
+          "description": "The text a one-shot command would print on failure."
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/commandDiagnostic"
+              },
+              {
+                "$ref": "#/$defs/translationDiagnostic"
+              }
+            ]
+          }
+        },
+        "elapsedMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "commandDiagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "translationDiagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "severity",
+        "message",
+        "path",
+        "line",
+        "column",
+        "endLine",
+        "endColumn",
+        "helpUri"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^RTR[0-9]{4}$",
+          "description": "The RTR code."
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "The message, without location or code."
+        },
+        "path": {
+          "type": "string",
+          "description": "The source path with forward slashes, relative to the working directory where possible."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endColumn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "helpUri": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "method"
+      ],
+      "properties": {
+        "id": {
+          "description": "Echoed in the response."
+        },
+        "method": {
+          "enum": [
+            "generate",
+            "validate",
+            "shutdown"
+          ]
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output": {
+          "type": "string",
+          "minLength": 1
+        },
+        "emit": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "csharp",
+              "json",
+              "esm"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

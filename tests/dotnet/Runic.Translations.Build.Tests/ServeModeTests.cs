@@ -183,12 +183,15 @@ internal sealed class ServeModeTests
             _thread.Start();
             using JsonDocument ready = JsonDocument.Parse(_output.ReadLine());
             Assert.Equal("ready", ready.RootElement.GetProperty("event").GetString());
+            PayloadSchemas.Validate(PayloadSchemas.Serve, ready.RootElement);
         }
 
         internal JsonElement Send(string request)
         {
             _input.Add(request);
             using JsonDocument response = JsonDocument.Parse(_output.ReadLine());
+            // Every response line follows runic-translations-serve/1.
+            PayloadSchemas.Validate(PayloadSchemas.Serve, response.RootElement);
             return response.RootElement.Clone();
         }
 

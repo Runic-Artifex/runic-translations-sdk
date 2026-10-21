@@ -91,7 +91,7 @@ runic-translations serve
 ```
 
 - `verify` renders in isolation and byte-compares the selected expected output, including extra-file detection.
-- `schema` copies the bundled source, artifact, manifest, normalized-AST, and capability schemas.
+- `schema` copies the bundled source, artifact, manifest, normalized-AST, capability and tool payload schemas.
 - `serve` is a persistent compiler for development servers, used by `@runic-artifex/vite-plugin-runic-translations`. It keeps unchanged sources parsed and compiled between requests, so a request after an edit recompiles only the edited files. See [serve protocol](#serve-protocol).
 - `lsp` runs the RMF2 language server over standard input/output for the VS Code and Visual Studio extensions. It is hidden from help, and its protocol subset and custom methods are outside the 1.0 compatibility rules until the production language server (2.0).
 
@@ -106,6 +106,14 @@ Every command writes human text by default. `--format json` (or
 standard output instead. `--runic-output` is the former spelling of
 `--format`; it is still accepted until 2.0 but no longer listed in help or
 completions.
+
+The envelope's payload is `runic.translations.tool/1` for every command except
+`support`, whose payload is `runic.translations.support/1`. Their JSON schemas
+are published as `translations-tool-v1.schema.json` and
+`translations-support-v1.schema.json` (written by `schema`). The `output` and
+`error` members of `runic.translations.tool/1` are display text, not a format to
+parse; read `diagnostics` and the envelope's `exitCode` instead. Later releases
+may add members; readers ignore members they do not know.
 
 The exit codes are the same in every Runic tool:
 
@@ -178,7 +186,7 @@ equivalent tool command is `runic-translations validate --project <path>`.
 
 ## Serve protocol
 
-`serve` speaks line-delimited JSON (`runic-translations-serve/1`) over standard input and output; diagnostics never go to standard output. It first writes `{"protocol":"runic-translations-serve/1","event":"ready","version":"..."}`. Each request is one line and gets exactly one response line with the same `id`, in order:
+`serve` speaks line-delimited JSON (`runic-translations-serve/1`, schema `translations-serve-v1.schema.json`) over standard input and output. The protocol is a contract between the Vite plugin and the tool of the same release, so a minor release may change both together; diagnostics never go to standard output. It first writes `{"protocol":"runic-translations-serve/1","event":"ready","version":"..."}`. Each request is one line and gets exactly one response line with the same `id`, in order:
 
 ```text
 {"id":1,"method":"generate","project":"translations","output":".runic/translations","emit":["esm"]}

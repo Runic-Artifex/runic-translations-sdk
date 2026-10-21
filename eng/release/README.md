@@ -298,12 +298,17 @@ same policy. For Translations:
   `runic.translations.editor-diagnostics/1` bundle only as input of
   `runic-translations support`, which keeps reading every `/1` bundle; the packed
   schemas `project-v1`, `message-ast-v5`, `locale-artifact-v5`, `external-pack-v5`
-  and `web-module-manifest-v3`, with the Vite plugin's virtual module IDs; and the
+  and `web-module-manifest-v3`, with the Vite plugin's virtual module IDs; the
+  tool payloads `runic.translations.tool/1` and `runic.translations.support/1`
+  (schemas `translations-tool-v1` and `translations-support-v1`; `output` and
+  `error` are display text, and new members may be added); and the
   translations transport: a 1.x reader must read every message any 1.x writer
   produced, including persisted messages, and writers emit a new transport
   version only on request until every supported reader accepts it. The editor's
   own state file (`runic.translations.editor-state/1`) belongs to the editor
-  product and is not an SDK contract.
+  product and is not an SDK contract. The `serve` protocol
+  (`runic-translations-serve/1`, schema `translations-serve-v1`) is a contract
+  between the Vite plugin and the tool of the same release only.
 - Open and closed sets: the RMF2 document block set (`runic:p`, `runic:h`,
   `runic:ul`, `runic:ol`, `runic:li` today) is open, so a later minor may add
   blocks; renderers and custom document or WPF markup factories must handle an

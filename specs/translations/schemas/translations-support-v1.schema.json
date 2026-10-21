@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/translations-support-v1.schema.json",
+  "title": "runic.translations.support/1",
+  "description": "The payload of runic-translations support preview|collect|remove inside the runic.commandline/1 envelope of --format json. Later releases may add properties; readers ignore properties they do not know.",
+  "type": "object",
+  "required": [
+    "mode",
+    "destination",
+    "digest",
+    "collectors",
+    "omissions",
+    "outboundTransportAttempts"
+  ],
+  "properties": {
+    "mode": {
+      "enum": [
+        "preview",
+        "collect",
+        "remove"
+      ]
+    },
+    "destination": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The full path of the envelope file; null for preview."
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "The SHA-256 digest of the envelope bytes."
+    },
+    "collectors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The collectors whose data the envelope contains."
+    },
+    "omissions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The data classes the envelope never contains."
+    },
+    "outboundTransportAttempts": {
+      "type": "integer",
+      "const": 0,
+      "description": "Always 0: support never uploads anything."
+    }
+  }
+}

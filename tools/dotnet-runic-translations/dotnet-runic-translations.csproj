@@ -35,6 +35,9 @@
     <EmbeddedResource Include="..\..\specs\translations\schemas\message-ast-v5.schema.json" LogicalName="Runic.Translations.Tool.Schemas.message-ast-v5.schema.json" />
     <EmbeddedResource Include="..\..\specs\translations\schemas\capabilities-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.capabilities-v1.schema.json" />
     <EmbeddedResource Include="..\..\specs\translations\schemas\project-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.project-v1.schema.json" />
+    <EmbeddedResource Include="..\..\specs\translations\schemas\translations-tool-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.translations-tool-v1.schema.json" />
+    <EmbeddedResource Include="..\..\specs\translations\schemas\translations-support-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.translations-support-v1.schema.json" />
+    <EmbeddedResource Include="..\..\specs\translations\schemas\translations-serve-v1.schema.json" LogicalName="Runic.Translations.Tool.Schemas.translations-serve-v1.schema.json" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
     <None Include="..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />

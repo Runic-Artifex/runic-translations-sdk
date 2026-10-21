@@ -554,6 +554,35 @@ internal sealed class CliIntegrationTests
         Assert.False(Directory.Exists(temporary.Resolve("translations", "stored")), "A dry run wrote files.");
     }
 
+    // runic.translations.tool/1 on success (payload) and on failure (fault.data.payload) follows its published schema.
+    [Test, DisplayName("tool payloads follow the runic.translations.tool/1 schema")]
+    public void ToolPayloadsFollowTheirSchema()
+    {
+        using TemporaryDirectory temporary = new();
+        ProcessResult init = TestFixture.RunTool(temporary, "init", "--directory", "translations", "--catalog", "app", "--default-locale", "en", "--namespace", "Example", "--class-name", "AppText", "--format", "json");
+        Assert.Equal(0, init.ExitCode, init.Combined);
+        using (JsonDocument envelope = JsonDocument.Parse(init.StandardOutput))
+        {
+            Assert.Equal("runic.translations.tool/1", envelope.RootElement.GetProperty("payloadType").GetString());
+            PayloadSchemas.Validate(PayloadSchemas.Tool, envelope.RootElement.GetProperty("payload"));
+        }
+        ProcessResult valid = TestFixture.RunTool(temporary, "validate", "--project", "translations", "--format", "json");
+        Assert.Equal(0, valid.ExitCode, valid.Combined);
+        using (JsonDocument envelope = JsonDocument.Parse(valid.StandardOutput))
+            PayloadSchemas.Validate(PayloadSchemas.Tool, envelope.RootElement.GetProperty("payload"));
+        File.AppendAllText(temporary.Resolve("translations", "en.rmf2"), "broken = {$x\n");
+        ProcessResult invalid = TestFixture.RunTool(temporary, "validate", "--project", "translations", "--format", "json");
+        Assert.Equal(2, invalid.ExitCode, invalid.Combined);
+        using (JsonDocument envelope = JsonDocument.Parse(invalid.StandardOutput))
+        {
+            JsonElement data = envelope.RootElement.GetProperty("fault").GetProperty("data");
+            Assert.Equal("runic.translations.tool/1", data.GetProperty("type").GetString());
+            JsonElement payload = data.GetProperty("payload");
+            PayloadSchemas.Validate(PayloadSchemas.Tool, payload);
+            Assert.True(payload.GetProperty("diagnostics").GetArrayLength() == 1, "The translation diagnostic is missing from fault.data.");
+        }
+    }
+
     [Test, DisplayName("CLI schema writes exact bundled versioned schemas")]
     public void SchemaWritesExactSchemas()
     {
@@ -561,7 +590,7 @@ internal sealed class CliIntegrationTests
         ProcessResult result = TestFixture.RunTool(temporary, "schema", "--output", "schemas");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string source = RepositoryPaths.Resolve("specs", "translations", "schemas");
-        string[] expected = ["asset-manifest-v1.schema.json", "capabilities-v1.schema.json", "external-pack-v5.schema.json", "locale-artifact-v5.schema.json", "message-ast-v5.schema.json", "project-v1.schema.json", "web-module-manifest-v3.schema.json"];
+        string[] expected = ["asset-manifest-v1.schema.json", "capabilities-v1.schema.json", "external-pack-v5.schema.json", "locale-artifact-v5.schema.json", "message-ast-v5.schema.json", "project-v1.schema.json", "translations-serve-v1.schema.json", "translations-support-v1.schema.json", "translations-tool-v1.schema.json", "web-module-manifest-v3.schema.json"];
         Array.Sort(expected, StringComparer.Ordinal);
         Assert.Equal(string.Join('|', expected), string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("schemas"))));
         foreach (string schema in expected)

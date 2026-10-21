@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/translations-tool-v1.schema.json",
+  "title": "runic.translations.tool/1",
+  "description": "The payload of every runic-translations command except support, inside the runic.commandline/1 envelope of --format json: as payload on success, as fault.data.payload on failure. output and error are display text, not a parseable format. Later releases may add properties; readers ignore properties they do not know.",
+  "type": "object",
+  "required": [
+    "output",
+    "error",
+    "diagnostics"
+  ],
+  "properties": {
+    "output": {
+      "type": "string",
+      "description": "The human output text."
+    },
+    "error": {
+      "type": "string",
+      "description": "The human error text."
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      },
+      "description": "Translation diagnostics under their RTR codes, with source locations."
+    }
+  },
+  "$defs": {
+    "diagnostic": {
+      "type": "object",
+      "required": [
+        "code",
+        "severity",
+        "message",
+        "path",
+        "line",
+        "column",
+        "endLine",
+        "endColumn",
+        "helpUri"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^RTR[0-9]{4}$",
+          "description": "The RTR code."
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "The message, without location or code."
+        },
+        "path": {
+          "type": "string",
+          "description": "The source path with forward slashes, relative to the working directory where possible."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endColumn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "helpUri": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    }
+  }
+}

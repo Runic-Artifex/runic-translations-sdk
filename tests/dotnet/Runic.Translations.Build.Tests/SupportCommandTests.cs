@@ -43,6 +43,7 @@ internal sealed class SupportCommandTests
         using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
         Assert.Equal("support preview", envelope.RootElement.GetProperty("command").GetString());
         Assert.Equal("runic.translations.support/1", envelope.RootElement.GetProperty("payloadType").GetString());
+        PayloadSchemas.Validate(PayloadSchemas.Support, envelope.RootElement.GetProperty("payload"));
         Assert.Equal(
             "{\"mode\":\"preview\",\"destination\":null,\"digest\":\"" + Digest + "\",\"collectors\":[\"runic.translations.editor-diagnostics\"],\"omissions\":" + Omissions + ",\"outboundTransportAttempts\":0}",
             envelope.RootElement.GetProperty("payload").GetRawText());
@@ -60,6 +61,7 @@ internal sealed class SupportCommandTests
         Assert.Equal(0, json.ExitCode, json.Combined);
         Assert.Equal(Envelope, File.ReadAllText(destination, Encoding.UTF8));
         using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
+        PayloadSchemas.Validate(PayloadSchemas.Support, envelope.RootElement.GetProperty("payload"));
         Assert.Equal(
             "{\"mode\":\"collect\",\"destination\":" + JsonSerializer.Serialize(destination) + ",\"digest\":\"" + Digest + "\",\"collectors\":[\"runic.translations.editor-diagnostics\"],\"omissions\":" + Omissions + ",\"outboundTransportAttempts\":0}",
             envelope.RootElement.GetProperty("payload").GetRawText());
