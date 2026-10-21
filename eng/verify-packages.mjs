@@ -149,7 +149,7 @@ Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
       scripts: { build: "vite build" },
       dependencies: {
         ...Object.fromEntries(npmArchives.map(([name, archive]) => [name, `file:${archive}`])),
-        svelte: "5.57.1", "@sveltejs/kit": "3.0.0", vite: "8.3.2"
+        svelte: "5.57.1", "@sveltejs/kit": "3.0.0", vite: "8.3.5"
       }
     }, null, 2));
     run("bun", ["install", "--ignore-scripts"], frontend);

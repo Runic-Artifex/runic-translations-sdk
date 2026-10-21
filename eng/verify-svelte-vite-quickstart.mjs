@@ -18,7 +18,7 @@ export function verifySvelteViteQuickStart({ directory, npmArchives, nugetConfig
     devDependencies: {
       // A plain Vite app: the plugin and the Svelte adapter, not the SvelteKit one.
       ...Object.fromEntries(npmArchives.filter(([name]) => name !== "@runic-artifex/translations-sveltekit").map(([name, archive]) => [name, `file:${archive}`])),
-      "@sveltejs/vite-plugin-svelte": "7.3.1", svelte: "5.57.1", "svelte-check": "4.7.6", typescript: "6.0.3", vite: "8.3.2",
+      "@sveltejs/vite-plugin-svelte": "7.3.1", svelte: "5.57.1", "svelte-check": "4.7.6", typescript: "6.0.3", vite: "8.3.5",
     },
   }, null, 2));
   run("bun", ["install", "--ignore-scripts"], app);
