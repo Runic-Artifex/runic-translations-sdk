@@ -24,6 +24,9 @@
     <PackageReference Include="Microsoft.VisualStudio.LanguageServer.Client" Version="17.14.60" />
     <PackageReference Include="Microsoft.VisualStudio.Shell.15.0" Version="17.14.40264" />
     <PackageReference Include="Microsoft.VisualStudio.Text.UI.Wpf" Version="17.14.249" />
+    <!-- Raises the transitive MessagePack 2.5.192 past CVE-2026-92707 (GHSA-qhrr-8q5h-9q3h). Visual Studio
+         supplies MessagePack at run time and the VSIX does not ship it (package.py checks this). -->
+    <PackageReference Include="MessagePack" Version="2.5.303" />
     <VSCTCompile Include="Commands.vsct"><ResourceName>Menus.ctmenu</ResourceName></VSCTCompile>
     <SuppressFromVsix Include="System.Text.Encodings.Web.dll" />
     <Content Include="Runic.pkgdef" IncludeInVSIX="true" />
