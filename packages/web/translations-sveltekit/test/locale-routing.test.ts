@@ -2,14 +2,14 @@ import type { Cookies, RequestEvent } from "@sveltejs/kit";
 import type { Handle } from "@sveltejs/kit/hooks";
 import { describe, expect, test, vi } from "vitest";
 import {
-  createRunicLocaleHandle,
-  createRunicLocaleReroute,
-  createRunicLocaleRouting,
+  createLocaleHandle,
+  createLocaleReroute,
+  createLocaleRouting,
   localeFromLocals,
   parseAcceptLanguage,
 } from "../src/translations/index.js";
 
-const routing = createRunicLocaleRouting({
+const routing = createLocaleRouting({
   locales: ["en", "de"] as const,
   baseLocale: "en",
   baseLocalePath: "unprefixed",
@@ -51,7 +51,7 @@ describe("Runic locale routing", () => {
   });
 
   test("supports a SvelteKit base path and prefixed base-locale policy", () => {
-    const prefixed = createRunicLocaleRouting({
+    const prefixed = createLocaleRouting({
       locales: ["en", "de"] as const,
       baseLocale: "en",
       baseLocalePath: "prefixed",
@@ -73,7 +73,7 @@ describe("Runic locale routing", () => {
       applicationLocale: "en",
     })).toEqual({ locale: "de", source: "url" });
 
-    const preferenceFirst = createRunicLocaleRouting({
+    const preferenceFirst = createLocaleRouting({
       locales: ["en", "de"] as const,
       baseLocale: "en",
       baseLocalePath: "prefixed",
@@ -92,7 +92,7 @@ describe("Runic locale routing", () => {
   });
 
   test("reroutes localized URLs to one filesystem route", () => {
-    const reroute = createRunicLocaleReroute(routing);
+    const reroute = createLocaleReroute(routing);
     expect(reroute({ url: new URL("https://example.test/de/setup"), fetch }))
       .toBe("/setup");
     expect(reroute({ url: new URL("https://example.test/setup"), fetch }))
@@ -103,7 +103,7 @@ describe("Runic locale routing", () => {
 describe("Runic SvelteKit request integration", () => {
   test("sets request-scoped locals, persists cookies, and supplies hydration locale", async () => {
     const { event, set } = requestEvent("/de/setup");
-    const handle = createRunicLocaleHandle(routing, { persistLocale: true });
+    const handle = createLocaleHandle(routing, { persistLocale: true });
     const response = await handle({
       event,
       resolve: async (_event, options) => {
@@ -126,7 +126,7 @@ describe("Runic SvelteKit request integration", () => {
 
   test("redirects non-canonical locale URLs", async () => {
     const { event } = requestEvent("/en/setup?tab=runtime");
-    const handle = createRunicLocaleHandle(routing);
+    const handle = createLocaleHandle(routing);
     const response = await handle({ event, resolve: vi.fn() });
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("/setup?tab=runtime");
@@ -135,7 +135,7 @@ describe("Runic SvelteKit request integration", () => {
   test("isolates concurrent SSR requests and leaves explicit message locale authoritative", async () => {
     const english = requestEvent("/setup").event;
     const german = requestEvent("/de/setup").event;
-    const handle = createRunicLocaleHandle(routing, { htmlLanguageToken: false });
+    const handle = createLocaleHandle(routing, { htmlLanguageToken: false });
     let release!: () => void;
     const barrier = new Promise<void>((resolve) => { release = resolve; });
     const resolve = async (event: RequestEvent) => {
@@ -158,7 +158,7 @@ describe("Runic SvelteKit request integration", () => {
   test("runs rendering in the generated request-local locale context", async () => {
     const { event } = requestEvent("/de/setup");
     let activeLocale: "en" | "de" = "en";
-    const handle = createRunicLocaleHandle(routing, {
+    const handle = createLocaleHandle(routing, {
       htmlLanguageToken: false,
       runWithLocale(locale, operation) {
         activeLocale = locale;
@@ -171,5 +171,13 @@ describe("Runic SvelteKit request integration", () => {
 });
 
 // Compile-time assurance that the factory result is directly assignable to SvelteKit's hook type.
-const _handle: Handle = createRunicLocaleHandle(routing);
+const _handle: Handle = createLocaleHandle(routing);
 void _handle;
+
+test("the package exposes the root entry and ./navigation only, with unprefixed names", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  expect(Object.keys(manifest.exports)).toEqual([".", "./navigation"]);
+  const entry = await import("../src/translations/index.js");
+  expect(Object.keys(entry).filter(name => name.includes("Runic"))).toEqual([]);
+});

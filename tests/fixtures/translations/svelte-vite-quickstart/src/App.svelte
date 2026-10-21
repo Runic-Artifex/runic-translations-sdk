@@ -1,6 +1,6 @@
 <script lang="ts">
   import { LocalizedInline, inlineFactory, type InlineElement } from "@runic-artifex/translations-svelte/inline";
-  import { useMessageLocale } from "@runic-artifex/translations-svelte/translations";
+  import { useMessageLocale } from "@runic-artifex/translations-svelte";
   import { m } from "virtual:runic-translations/app";
   import { configureLocaleResolver, createInlineRenderer, linkBinding } from "virtual:runic-translations/app/runtime";
 

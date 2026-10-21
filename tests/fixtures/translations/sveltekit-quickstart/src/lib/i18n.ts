@@ -1,6 +1,6 @@
-import { createRunicLocaleRouting } from '@runic-artifex/translations-sveltekit/translations';
+import { createLocaleRouting } from '@runic-artifex/translations-sveltekit';
 
-export const routing = createRunicLocaleRouting({
+export const routing = createLocaleRouting({
 	locales: ['en', 'de'] as const,
 	baseLocale: 'en',
 	baseLocalePath: 'unprefixed'

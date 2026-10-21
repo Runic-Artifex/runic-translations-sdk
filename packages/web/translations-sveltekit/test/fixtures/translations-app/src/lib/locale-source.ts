@@ -1,4 +1,4 @@
-import type { MutableLocaleSource } from "@runic-artifex/translations-svelte/translations";
+import type { MutableLocaleSource } from "@runic-artifex/translations-svelte";
 
 export function createFixtureLocaleSource(initialLocale: "en" | "de"): MutableLocaleSource<"en" | "de"> {
   let locale = initialLocale;

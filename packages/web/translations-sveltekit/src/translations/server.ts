@@ -1,16 +1,16 @@
 import type { Cookies, RequestEvent } from "@sveltejs/kit";
 import type { Handle, Reroute } from "@sveltejs/kit/hooks";
-import type { RunicLocaleRouting } from "./routing.js";
+import type { LocaleRouting } from "./routing.js";
 
 type CookieSetOptions = NonNullable<Parameters<Cookies["set"]>[2]>;
 
-export interface RunicLocaleCookieOptions extends CookieSetOptions {
+export interface LocaleCookieOptions extends CookieSetOptions {
   readonly name?: string;
   readonly path?: string;
 }
 
-export interface RunicLocaleHandleOptions<Locale extends string> {
-  readonly cookie?: false | RunicLocaleCookieOptions;
+export interface LocaleHandleOptions<Locale extends string> {
+  readonly cookie?: false | LocaleCookieOptions;
   readonly persistLocale?: boolean;
   readonly canonicalRedirect?: boolean;
   readonly redirectStatus?: 301 | 302 | 307 | 308;
@@ -23,9 +23,9 @@ export interface RunicLocaleHandleOptions<Locale extends string> {
   readonly htmlLanguageToken?: string | false;
 }
 
-export function createRunicLocaleHandle<Locale extends string>(
-  routing: RunicLocaleRouting<Locale>,
-  options: RunicLocaleHandleOptions<Locale> = {},
+export function createLocaleHandle<Locale extends string>(
+  routing: LocaleRouting<Locale>,
+  options: LocaleHandleOptions<Locale> = {},
 ): Handle {
   const configuredCookie = options.cookie === false ? undefined : options.cookie ?? {};
   const cookie = configuredCookie && {
@@ -34,7 +34,7 @@ export function createRunicLocaleHandle<Locale extends string>(
     path: configuredCookie.path ?? "/",
     httpOnly: configuredCookie.httpOnly ?? true,
     sameSite: configuredCookie.sameSite ?? "lax",
-  } satisfies RunicLocaleCookieOptions;
+  } satisfies LocaleCookieOptions;
   const localsKey = options.localsKey ?? "locale";
   const htmlLanguageToken = options.htmlLanguageToken ?? "%runic.locale%";
 
@@ -76,8 +76,8 @@ export function createRunicLocaleHandle<Locale extends string>(
   };
 }
 
-export function createRunicLocaleReroute<Locale extends string>(
-  routing: RunicLocaleRouting<Locale>,
+export function createLocaleReroute<Locale extends string>(
+  routing: LocaleRouting<Locale>,
 ): Reroute {
   return ({ url }) => {
     const unlocalized = routing.inspectUrl(url).unlocalizedPathname;
@@ -87,7 +87,7 @@ export function createRunicLocaleReroute<Locale extends string>(
 
 export function localeFromLocals<Locale extends string>(
   locals: App.Locals,
-  routing: RunicLocaleRouting<Locale>,
+  routing: LocaleRouting<Locale>,
   key = "locale",
 ): Locale {
   const locale = (locals as Record<string, unknown>)[key];

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { gotoLocale } from '@runic-artifex/translations-sveltekit/translations/navigation';
+	import { gotoLocale } from '@runic-artifex/translations-sveltekit/navigation';
 	import { m } from 'virtual:runic-translations/app';
 	import { routing } from '#lib/i18n.ts';
 	import { localeContext } from '#lib/locale.ts';

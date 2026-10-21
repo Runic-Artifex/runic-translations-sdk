@@ -164,7 +164,7 @@ Console.WriteLine(text.r_6170706c69636174696f6e_r_7469746c65);
 import assert from "node:assert/strict";
 import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations";
 import * as svelte from "@runic-artifex/translations-svelte";
-import * as sveltekit from "@runic-artifex/translations-sveltekit/translations";
+import * as sveltekit from "@runic-artifex/translations-sveltekit";
 assert.equal(typeof runicTranslations, "function");
 assert.ok(Object.keys(svelte).length > 0);
 assert.ok(Object.keys(sveltekit).length > 0);

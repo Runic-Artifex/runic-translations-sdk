@@ -2,7 +2,7 @@
 
 This workflow keeps the .NET compiler authoritative while making compilation,
 watching, HMR, and production bundling part of the normal Vite lifecycle.
-It requires the .NET 10 SDK and Node 24.18 or later in the Node 24 series.
+It requires the .NET 10 SDK and Node 24.18 or later, or Node 26.
 Use one exact published Translations version for both the tool and adapter;
 replace `<VERSION>` below with that release. No SDK source checkout is needed.
 
@@ -132,7 +132,7 @@ message with markup, here a link slot and a project tag, as Svelte elements:
 ```svelte
 <script lang="ts">
   import { LocalizedInline, inlineFactory, type InlineElement } from "@runic-artifex/translations-svelte/inline";
-  import { useMessageLocale } from "@runic-artifex/translations-svelte/translations";
+  import { useMessageLocale } from "@runic-artifex/translations-svelte";
   import { m } from "virtual:runic-translations/app";
   import { configureLocaleResolver, createInlineRenderer, linkBinding } from "virtual:runic-translations/app/runtime";
 

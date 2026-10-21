@@ -3,7 +3,7 @@
 This workflow adds localized routes and request-scoped server rendering to a
 SvelteKit 3 application. The Vite plugin compiles your RMF2 sources, and the
 SvelteKit adapter resolves each request's locale from its URL. The workflow
-requires the .NET 10 SDK and Node 24.18 or later in the Node 24 series.
+requires the .NET 10 SDK and Node 24.18 or later, or Node 26.
 Use one exact published Translations version for the tool and all three npm
 packages; replace `<VERSION>` below with that release. No SDK source checkout is
 needed.
@@ -108,9 +108,9 @@ The declarations exist only after Vite has run once. On a clean checkout, run
 Create `src/lib/i18n.ts`. Use the same locales as `runic.json`:
 
 ```ts
-import { createRunicLocaleRouting } from '@runic-artifex/translations-sveltekit/translations';
+import { createLocaleRouting } from '@runic-artifex/translations-sveltekit';
 
-export const routing = createRunicLocaleRouting({
+export const routing = createLocaleRouting({
 	locales: ['en', 'de'] as const,
 	baseLocale: 'en',
 	baseLocalePath: 'unprefixed'
@@ -145,11 +145,11 @@ value as `basePath`.
 Create `src/hooks.server.ts`:
 
 ```ts
-import { createRunicLocaleHandle } from '@runic-artifex/translations-sveltekit/translations';
+import { createLocaleHandle } from '@runic-artifex/translations-sveltekit';
 import { runWithLocale } from 'virtual:runic-translations/app/server';
 import { routing } from '#lib/i18n.ts';
 
-export const handle = createRunicLocaleHandle(routing, { runWithLocale });
+export const handle = createLocaleHandle(routing, { runWithLocale });
 ```
 
 The handle resolves the locale and stores it in `event.locals.locale`. It
@@ -160,10 +160,10 @@ message calls in the rest of the request.
 Create `src/hooks.ts`:
 
 ```ts
-import { createRunicLocaleReroute } from '@runic-artifex/translations-sveltekit/translations';
+import { createLocaleReroute } from '@runic-artifex/translations-sveltekit';
 import { routing } from '#lib/i18n.ts';
 
-export const reroute = createRunicLocaleReroute(routing);
+export const reroute = createLocaleReroute(routing);
 ```
 
 The reroute hook removes the locale prefix before route matching, so
@@ -197,7 +197,7 @@ In `src/app.html`, change `<html lang="en">` to:
 Create `src/lib/locale.ts`:
 
 ```ts
-import { createLocaleContext } from '@runic-artifex/translations-svelte/translations';
+import { createLocaleContext } from '@runic-artifex/translations-svelte';
 import type { Locale } from '#lib/i18n.ts';
 
 export const localeContext = createLocaleContext<Locale>();
@@ -206,7 +206,7 @@ export const localeContext = createLocaleContext<Locale>();
 Read the request locale in `src/routes/+layout.server.ts`:
 
 ```ts
-import { localeFromLocals } from '@runic-artifex/translations-sveltekit/translations';
+import { localeFromLocals } from '@runic-artifex/translations-sveltekit';
 import { routing } from '#lib/i18n.ts';
 import type { LayoutServerLoad } from './$types';
 
@@ -225,7 +225,7 @@ Replace `src/routes/+layout.svelte`:
 	import {
 		createLocaleNavigation,
 		synchronizeLocaleWithNavigation
-	} from '@runic-artifex/translations-sveltekit/translations/navigation';
+	} from '@runic-artifex/translations-sveltekit/navigation';
 	import { createLocaleSource } from 'virtual:runic-translations/app/runtime';
 	import { routing } from '#lib/i18n.ts';
 	import { localeContext } from '#lib/locale.ts';
@@ -268,7 +268,7 @@ Replace `src/routes/+page.svelte`:
 
 ```svelte
 <script lang="ts">
-	import { gotoLocale } from '@runic-artifex/translations-sveltekit/translations/navigation';
+	import { gotoLocale } from '@runic-artifex/translations-sveltekit/navigation';
 	import { m } from 'virtual:runic-translations/app';
 	import { routing } from '#lib/i18n.ts';
 	import { localeContext } from '#lib/locale.ts';
@@ -353,7 +353,7 @@ The handle always reads the `runic_locale` cookie, but it only writes it if you
 enable `persistLocale`:
 
 ```ts
-export const handle = createRunicLocaleHandle(routing, { runWithLocale, persistLocale: true });
+export const handle = createLocaleHandle(routing, { runWithLocale, persistLocale: true });
 ```
 
 The handle then sets `runic_locale` on every response it resolves, including
@@ -364,7 +364,7 @@ accept `Secure` cookies on `http://localhost`, but they drop them on other
 plain-HTTP hosts. For those hosts, pass `cookie: { secure: false }`:
 
 ```ts
-export const handle = createRunicLocaleHandle(routing, {
+export const handle = createLocaleHandle(routing, {
 	runWithLocale,
 	persistLocale: true,
 	cookie: { secure: false }

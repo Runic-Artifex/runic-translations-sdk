@@ -32,16 +32,16 @@ for which generated modules need it.
 
 | Import | Use in | Exports |
 | --- | --- | --- |
-| `@runic-artifex/translations-sveltekit/translations` | Shared, server, and universal hooks | `createRunicLocaleRouting`, `createRunicLocaleHandle`, `createRunicLocaleReroute`, `localeFromLocals`, `parseAcceptLanguage` |
-| `@runic-artifex/translations-sveltekit/translations/navigation` | Components (browser) | `gotoLocale`, `createLocaleNavigation`, `synchronizeLocaleWithNavigation` |
+| `@runic-artifex/translations-sveltekit` | Shared, server, and universal hooks | `createLocaleRouting`, `createLocaleHandle`, `createLocaleReroute`, `localeFromLocals`, `parseAcceptLanguage` |
+| `@runic-artifex/translations-sveltekit/navigation` | Components (browser) | `gotoLocale`, `createLocaleNavigation`, `synchronizeLocaleWithNavigation` |
 
 ## Routing
 
 ```ts
 // src/lib/i18n.ts
-import { createRunicLocaleRouting } from '@runic-artifex/translations-sveltekit/translations';
+import { createLocaleRouting } from '@runic-artifex/translations-sveltekit';
 
-export const routing = createRunicLocaleRouting({
+export const routing = createLocaleRouting({
 	locales: ['en', 'de'] as const,
 	baseLocale: 'en',
 	baseLocalePath: 'unprefixed'
@@ -66,19 +66,19 @@ absolute URL for an absolute input.
 
 ```ts
 // src/hooks.server.ts
-import { createRunicLocaleHandle } from '@runic-artifex/translations-sveltekit/translations';
+import { createLocaleHandle } from '@runic-artifex/translations-sveltekit';
 import { runWithLocale } from 'virtual:runic-translations/app/server';
 import { routing } from '#lib/i18n.ts';
 
-export const handle = createRunicLocaleHandle(routing, { runWithLocale });
+export const handle = createLocaleHandle(routing, { runWithLocale });
 ```
 
 ```ts
 // src/hooks.ts
-import { createRunicLocaleReroute } from '@runic-artifex/translations-sveltekit/translations';
+import { createLocaleReroute } from '@runic-artifex/translations-sveltekit';
 import { routing } from '#lib/i18n.ts';
 
-export const reroute = createRunicLocaleReroute(routing);
+export const reroute = createLocaleReroute(routing);
 ```
 
 The handle resolves the locale, stores it in `event.locals.locale`, and
@@ -88,7 +88,7 @@ redirects non-canonical URLs, such as `/en/about` in unprefixed mode or
 calls during the request use the request's locale and concurrent renders stay
 isolated.
 
-`createRunicLocaleHandle` options:
+`createLocaleHandle` options:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -110,7 +110,7 @@ parameter.
 
 ```ts
 // src/routes/+layout.server.ts
-import { localeFromLocals } from '@runic-artifex/translations-sveltekit/translations';
+import { localeFromLocals } from '@runic-artifex/translations-sveltekit';
 import { routing } from '#lib/i18n.ts';
 import type { LayoutServerLoad } from './$types';
 

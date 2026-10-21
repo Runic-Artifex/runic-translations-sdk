@@ -38,3 +38,10 @@ describe("localization stress fixtures", () => {
     expect(visualAccessibilityStressScenarios.every((scenario) => scenario.checks.length >= 2)).toBe(true);
   });
 });
+
+test("the package exposes one import path per export and no engines field", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  expect(Object.keys(manifest.exports)).toEqual([".", "./inline", "./document", "./testing"]);
+  expect(manifest.engines).toBeUndefined();
+});
