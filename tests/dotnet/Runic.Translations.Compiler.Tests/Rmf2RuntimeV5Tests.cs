@@ -4,6 +4,8 @@ using System.Text;
 using Runic.Translations.Compiler;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Compiler.Tests;
 
 [Category("rmf2-semantic-v5")]

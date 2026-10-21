@@ -22,12 +22,49 @@ public enum TranslationReferenceOutcome
 /// <c>$</c> for the reference itself, followed by <c>.name</c> for each message argument on the way to the reference concerned,
 /// for example <c>$.step</c>.
 /// </param>
-/// <param name="Reason">
-/// A stable reason: <c>contract-changed</c> (informational: the catalog contract differs from the writer's, but the reference was
-/// checked key by key), <c>catalog-mismatch</c>, <c>fingerprint-mismatch</c> (a version 1 reference, whose untyped arguments need
-/// the writer's exact contract), <c>unknown-key</c>, <c>incompatible-arguments</c>, <c>structured-content</c> or <c>format-failed</c>.
-/// </param>
-public readonly record struct TranslationReferenceDiagnostic(string Path, string Reason);
+/// <param name="Reason">Why the reference, or the argument at <paramref name="Path"/>, could not be translated as written.</param>
+public readonly record struct TranslationReferenceDiagnostic(string Path, TranslationReferenceDiagnosticReason Reason);
+
+/// <summary>
+/// Why a text reference was not translated as written. The set is open: a later release may add reasons, so treat a value
+/// you do not know like <see cref="Unknown"/>. The names match the ESM transport's diagnostic strings
+/// (<c>contract-changed</c>, <c>catalog-mismatch</c>, …).
+/// </summary>
+public enum TranslationReferenceDiagnosticReason
+{
+    /// <summary>No reason recorded; the value of a default <see cref="TranslationReferenceDiagnostic"/>.</summary>
+    Unknown = 0,
+    /// <summary><c>contract-changed</c> (informational): the catalog contract differs from the writer's, but the reference was checked key by key.</summary>
+    ContractChanged,
+    /// <summary><c>catalog-mismatch</c>: the reference names another catalog.</summary>
+    CatalogMismatch,
+    /// <summary><c>fingerprint-mismatch</c>: a version 1 reference, whose untyped arguments need the writer's exact contract.</summary>
+    FingerprintMismatch,
+    /// <summary><c>unknown-key</c>: the catalog has no message with the reference's key.</summary>
+    UnknownKey,
+    /// <summary><c>incompatible-arguments</c>: the arguments do not match the message's inputs.</summary>
+    IncompatibleArguments,
+    /// <summary><c>structured-content</c>: the message has markup or is a document, which a plain-text reference cannot show.</summary>
+    StructuredContent,
+    /// <summary><c>format-failed</c>: formatting the message failed.</summary>
+    FormatFailed,
+}
+
+/// <summary>The kebab-case spelling of <see cref="TranslationReferenceDiagnosticReason"/>, as in the ESM transport.</summary>
+internal static class TranslationReferenceDiagnosticReasons
+{
+    internal static string ToWire(TranslationReferenceDiagnosticReason reason) => reason switch
+    {
+        TranslationReferenceDiagnosticReason.ContractChanged => "contract-changed",
+        TranslationReferenceDiagnosticReason.CatalogMismatch => "catalog-mismatch",
+        TranslationReferenceDiagnosticReason.FingerprintMismatch => "fingerprint-mismatch",
+        TranslationReferenceDiagnosticReason.UnknownKey => "unknown-key",
+        TranslationReferenceDiagnosticReason.IncompatibleArguments => "incompatible-arguments",
+        TranslationReferenceDiagnosticReason.StructuredContent => "structured-content",
+        TranslationReferenceDiagnosticReason.FormatFailed => "format-failed",
+        _ => "unknown",
+    };
+}
 
 /// <summary>The text shown for a reference and how it was obtained.</summary>
 public sealed class TranslationReferenceResolution
@@ -82,17 +119,17 @@ public static class TranslationReferenceResolver
         var diagnostics = new List<TranslationReferenceDiagnostic>();
         if (!string.Equals(reference.Catalog, snapshot.Catalog, StringComparison.Ordinal))
         {
-            diagnostics.Add(new("$", "catalog-mismatch"));
+            diagnostics.Add(new("$", TranslationReferenceDiagnosticReason.CatalogMismatch));
             return Fallback(reference, diagnostics);
         }
         if (!string.Equals(reference.ContractFingerprint, contractFingerprint, StringComparison.Ordinal))
         {
             if (reference.Version == 1)
             {
-                diagnostics.Add(new("$", "fingerprint-mismatch"));
+                diagnostics.Add(new("$", TranslationReferenceDiagnosticReason.FingerprintMismatch));
                 return Fallback(reference, diagnostics);
             }
-            diagnostics.Add(new("$", "contract-changed"));
+            diagnostics.Add(new("$", TranslationReferenceDiagnosticReason.ContractChanged));
         }
         string? text = Translate(snapshot, reference, "$", diagnostics);
         return text is null ? Fallback(reference, diagnostics) : new(TranslationReferenceOutcome.Translated, text, diagnostics);
@@ -112,7 +149,7 @@ public static class TranslationReferenceResolver
             // A key without a message in this locale is missing, whatever the snapshot's missing-key policy would format.
             !snapshot.TryGet(key, out _))
         {
-            diagnostics.Add(new(path, "unknown-key"));
+            diagnostics.Add(new(path, TranslationReferenceDiagnosticReason.UnknownKey));
             return null;
         }
 
@@ -123,7 +160,7 @@ public static class TranslationReferenceResolver
                 Compatible(reference.Version, inputs[index], argument);
         if (!compatible)
         {
-            diagnostics.Add(new(path, "incompatible-arguments"));
+            diagnostics.Add(new(path, TranslationReferenceDiagnosticReason.IncompatibleArguments));
             return null;
         }
 
@@ -154,7 +191,7 @@ public static class TranslationReferenceResolver
         }
         catch (Exception exception) when (exception is TranslationNotFoundException or ArgumentException or FormatException or NotSupportedException)
         {
-            diagnostics.Add(new(path, "format-failed"));
+            diagnostics.Add(new(path, TranslationReferenceDiagnosticReason.FormatFailed));
             return null;
         }
 
@@ -162,7 +199,7 @@ public static class TranslationReferenceResolver
         try { content = snapshot.FormatContent(key, arguments); }
         catch (Exception exception) when (exception is TranslationFormatException or TranslationNotFoundException or ArgumentException or FormatException or NotSupportedException)
         {
-            diagnostics.Add(new(path, "format-failed"));
+            diagnostics.Add(new(path, TranslationReferenceDiagnosticReason.FormatFailed));
             return null;
         }
         var builder = new StringBuilder();
@@ -170,7 +207,7 @@ public static class TranslationReferenceResolver
         {
             if (node.Kind != LocalizedTextContentNodeKind.Text)
             {
-                diagnostics.Add(new(path, "structured-content"));
+                diagnostics.Add(new(path, TranslationReferenceDiagnosticReason.StructuredContent));
                 return null;
             }
             builder.Append(node.Value);

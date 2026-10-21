@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using Runic.Translations.Compiler.Generation;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Compiler.Tests;
 
 [Category("rmf2-semantic-v5")]

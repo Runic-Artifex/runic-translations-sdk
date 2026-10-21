@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations;
 
 /// <summary>Semantic output node kinds. Hosts decide how named elements render.</summary>

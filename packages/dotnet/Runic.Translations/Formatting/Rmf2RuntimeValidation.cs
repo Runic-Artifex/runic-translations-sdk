@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations;
 
 internal static class Rmf2RuntimeDecimal

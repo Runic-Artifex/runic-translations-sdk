@@ -18,7 +18,7 @@ internal static class Program
         {
             var key = new TranslationKey("app", 0, "greeting");
             var noticeKey = new TranslationKey("app", 1, "notice");
-            TranslationPackContract contract = TranslationPackContract.CreateRmf2V5("app", "de", Fingerprint,
+            TranslationPackContract contract = Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract("app", "de", Fingerprint,
                 [new TranslationPackMessageContract(key), new TranslationPackMessageContract(noticeKey)], MarkupContract);
             VerifiedExternalTranslationPack verified = await TranslationPackLoader.VerifyAsync(
                 new ExternalTranslationPack(Encoding.UTF8.GetBytes(CreateArtifact())), contract).ConfigureAwait(false);

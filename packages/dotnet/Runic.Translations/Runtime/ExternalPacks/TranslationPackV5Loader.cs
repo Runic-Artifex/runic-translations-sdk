@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations;
 
 // This parser is intentionally independent of the v2/v4 carrier. Accepting a

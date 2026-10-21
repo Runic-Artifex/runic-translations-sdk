@@ -8,6 +8,8 @@ using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Compiler.Tests;
 
 // specs/translations/corpus/rmf2-grouping-conformance.json is the shared .NET/ESM oracle

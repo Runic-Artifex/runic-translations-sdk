@@ -5,6 +5,8 @@ using System.Windows;
 using System.Windows.Controls;
 using Runic.Translations;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Wpf.Tests;
 
 /// <summary>
@@ -86,7 +88,7 @@ internal static class DocumentFixture
             [new([], Backup())], locale);
         var lists = new CompiledRmf2Message([], [], [], [new([], Lists())], locale);
         var catalog = new CompiledTranslationCatalog("guide", locale,
-            [CompiledTranslationDefinition.FromRmf2Inputs("backup", backupInputs), CompiledTranslationDefinition.FromRmf2Inputs("lists", [])],
+            [GeneratedCatalogSupport.CreateDefinition("backup", backupInputs), GeneratedCatalogSupport.CreateDefinition("lists", [])],
             [new CompiledTranslationLocale(locale, null,
                 [new CompiledTranslationValue(0, "", CompiledTextMessage.FromRmf2(backup)), new CompiledTranslationValue(1, "", CompiledTextMessage.FromRmf2(lists))])]);
         return new CompiledTranslationSnapshot(catalog, locale);

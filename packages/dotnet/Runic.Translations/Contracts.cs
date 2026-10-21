@@ -81,8 +81,7 @@ public interface ITranslationManager
     /// <see cref="SetLocaleAsync"/> work resolves deterministically: whichever acquires the lock
     /// first runs first, and a refresh that runs after a committed switch recomposes the newly
     /// active locale. <see cref="LocaleChanged"/> is never raised by a refresh because the active
-    /// locale is unchanged. Managers that implement <see cref="ITranslationSnapshotNotifier"/> raise
-    /// <see cref="ITranslationSnapshotNotifier.SnapshotPublished"/> for refreshes and locale switches alike.
+    /// locale is unchanged. <see cref="SnapshotPublished"/> is raised for refreshes and locale switches alike.
     /// </para>
     /// <para>
     /// The replacement publishes only after the same validation gates as
@@ -92,6 +91,19 @@ public interface ITranslationManager
     /// </para>
     /// </remarks>
     ValueTask RefreshAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Raised after a snapshot becomes <see cref="Current"/>: once for a successful locale switch
+    /// and once for each successful <see cref="RefreshAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// For a locale switch it is raised after <see cref="LocaleChanged"/>. Handlers run on the
+    /// thread that completed the publication, which may be a thread-pool thread, never while the manager holds its
+    /// transition lock, so a handler may call <see cref="RefreshAsync"/> or
+    /// <see cref="SetLocaleAsync"/>. Notifications of transitions that complete close together
+    /// are not serialized and may arrive out of order; read <see cref="Current"/> for the latest
+    /// state instead of relying on the event data. A subscriber failure never affects the publishing caller.
+    /// </remarks>
+    event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
 }
 
 /// <summary>Formats a closed typed argument for a resource locale.</summary>
@@ -138,25 +150,6 @@ public sealed class ExternalTranslationPack
     public ReadOnlyMemory<byte> Content { get; }
 }
 
-/// <summary>
-/// Optionally implemented by managers that report every published snapshot, including refreshes that keep the locale.
-/// </summary>
-public interface ITranslationSnapshotNotifier
-{
-    /// <summary>
-    /// Raised after a snapshot becomes <see cref="ITranslationManager.Current"/>: once for a successful locale switch
-    /// and once for each successful <see cref="ITranslationManager.RefreshAsync"/>.
-    /// </summary>
-    /// <remarks>
-    /// For a locale switch it is raised after <see cref="ITranslationManager.LocaleChanged"/>. Handlers run on the
-    /// thread that completed the publication, which may be a thread-pool thread, never while the manager holds its
-    /// transition lock, so a handler may call <see cref="ITranslationManager.RefreshAsync"/> or
-    /// <see cref="ITranslationManager.SetLocaleAsync"/>. Notifications of transitions that complete close together
-    /// are not serialized and may arrive out of order; read <see cref="ITranslationManager.Current"/> for the latest
-    /// state instead of relying on the event data. A subscriber failure never affects the publishing caller.
-    /// </remarks>
-    event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
-}
 
 /// <summary>
 /// Why a snapshot was published. The values are explicit and stable; there is no "unknown" member because the manager always knows the
@@ -184,4 +177,13 @@ public sealed class TranslationSnapshotPublishedEventArgs : EventArgs
     public ITranslationSnapshot Snapshot { get; }
     /// <summary>Why the snapshot was published.</summary>
     public TranslationSnapshotPublishReason Reason { get; }
+}
+
+/// <summary>A generated readable message surface, such as <c>new AppText(manager).Messages</c>.</summary>
+/// <remarks>The generator implements this interface on every readable surface; it is not meant to be implemented by
+/// hand. Adapters such as the WPF <c>TranslationSource</c> take it to resolve messages by their readable names.</remarks>
+public interface IReadableMessages
+{
+    /// <summary>The readable-name scheme the surface was generated with.</summary>
+    int ReadableNameVersion { get; }
 }

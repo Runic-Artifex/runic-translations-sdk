@@ -97,7 +97,7 @@ method with one parameter per input otherwise.
       guide: new InlineLinkBinding(guideUri),
       retry: new InlineActionBinding(Retry)));
   var renderer = new Rmf2InlineRenderer(AppTextCatalog.Rmf2MarkupContract);
-  string plain = renderer.ToPlainText(help, allowActionLabels: true);
+  string plain = renderer.ToPlainText(help, new Rmf2PlainTextOptions { AllowActionLabels = true });
   ```
 
   A wrong binding kind, a missing or misspelled slot, or another message's

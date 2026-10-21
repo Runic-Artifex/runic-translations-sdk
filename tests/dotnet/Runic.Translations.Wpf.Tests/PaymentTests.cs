@@ -10,6 +10,8 @@ using Runic.Translations;
 using Runic.Translations.Wpf;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Wpf.Tests;
 
 /// <summary>The WPF payment consumer: custom badge, icon accessibility and callback lifetime of the inline renderer.</summary>
@@ -231,7 +233,7 @@ internal static class PaymentFixture
         var catalog = new CompiledTranslationCatalog(
             "checkout",
             "en",
-            [CompiledTranslationDefinition.FromRmf2Inputs("payment", inputs)],
+            [GeneratedCatalogSupport.CreateDefinition("payment", inputs)],
             [new CompiledTranslationLocale("en", null,
                 [new CompiledTranslationValue(0, "", CompiledTextMessage.FromRmf2(message))])]);
         return new CompiledTranslationSnapshot(catalog, "en");

@@ -110,8 +110,8 @@ protected override async void OnStartup(StartupEventArgs e)
 }
 ```
 
-Pass `text.Messages`, not `text`; the constructor rejects anything that is not a
-generated readable surface. Create the source on the UI thread (it uses the
+Pass `text.Messages`: the constructor takes the generated readable surface
+(`IReadableMessages`), so passing `text` does not compile. Create the source on the UI thread (it uses the
 application's dispatcher, else the current thread's, and throws if there is none;
 pass a `Dispatcher` otherwise). The renderer is needed only for messages with
 markup. Set `Default` once at startup: replacing it after a binding used it
@@ -228,11 +228,10 @@ await manager.SetLocaleAsync("de");
 Every `{rt:Message}` and `RichMessage` refreshes when the manager publishes the
 new snapshot, from any thread: the source marshals to the dispatcher it was
 created on, and each rich element renders on its own dispatcher. Several changes
-in a row render once. The built-in manager also publishes
-`ITranslationManager.RefreshAsync` (for example after external pack bytes
-change), although that never raises `LocaleChanged`. A custom
-`ITranslationManager` is followed through `LocaleChanged` only; implement
-`ITranslationSnapshotNotifier` or call `source.Invalidate()` after refreshing it.
+in a row render once. The source follows `ITranslationManager.SnapshotPublished`,
+which a manager raises for a locale switch and for `RefreshAsync` (for example
+after external pack bytes change), although a refresh never raises
+`LocaleChanged`.
 
 Nothing leaks when windows close: the manager holds only a weak reference to the
 source, the source holds rich elements weakly, and WPF's own bindings do the

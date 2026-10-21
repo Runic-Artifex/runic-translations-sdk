@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations;
 
 /// <summary>Describes one closed placeholder contract in a compiled resource.</summary>
@@ -17,8 +19,7 @@ public sealed class CompiledTranslationDefinition
     private readonly TranslationPlaceholderDescriptor[] _placeholders;
 
     /// <summary>Creates a v5 caller definition with NFC input names and type-only formatting contracts.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static CompiledTranslationDefinition FromRmf2Inputs(string name, IReadOnlyList<CompiledRmf2Input> inputs, bool isCanonical = true)
+    internal static CompiledTranslationDefinition FromRmf2Inputs(string name, IReadOnlyList<CompiledRmf2Input> inputs, bool isCanonical = true)
     {
         ArgumentNullException.ThrowIfNull(inputs);
         if (inputs.Count > 32) throw new ArgumentException("A resource cannot declare more than 32 inputs.", nameof(inputs));
@@ -179,8 +180,7 @@ public sealed class CompiledTranslationLocale
     /// data surfaces from that first use instead of from the catalog constructor. If it throws, the next use calls it
     /// again.
     /// </remarks>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static CompiledTranslationLocale CreateDeferred(
+    internal static CompiledTranslationLocale CreateDeferred(
         string locale,
         string? fallbackLocale,
         Func<IReadOnlyList<CompiledTranslationValue>> valueFactory)
@@ -203,8 +203,7 @@ public sealed class CompiledTranslationLocale
     /// constructor to validate a model from another source.
     /// </remarks>
     /// <exception cref="TranslationPackException">The data is not in that form.</exception>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static IReadOnlyList<CompiledTranslationValue> ReadRmf2Values(ReadOnlySpan<byte> utf8Json) =>
+    internal static IReadOnlyList<CompiledTranslationValue> ReadRmf2Values(ReadOnlySpan<byte> utf8Json) =>
         TranslationPackV5Loader.ReadGeneratedValues(utf8Json);
 
     /// <summary>The canonical declared locale.</summary>

@@ -227,7 +227,7 @@ internal static class Program
         Assert(string.Equals(manager.Current.Get(title), "Application", StringComparison.Ordinal), "compiled locale fallback resolves default text");
 
         const string MarkupContract = "{\"version\":2,\"contracts\":{},\"messages\":{\"title\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\"},\"content\":\"inline\",\"skeletons\":[]}}}";
-        TranslationPackContract contract = TranslationPackContract.CreateRmf2V5(
+        TranslationPackContract contract = Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract(
             "app", "de", Fingerprint, [new TranslationPackMessageContract(title)], MarkupContract);
         byte[] packBytes = Encoding.UTF8.GetBytes(
             "{\"artifactVersion\":5,\"messageGrammarVersion\":5,\"profile\":\"rmf2-execution-v2\",\"catalog\":\"app\",\"locale\":\"de\"," +

@@ -1,14 +1,14 @@
 using System.ComponentModel;
 
-namespace Runic.Translations;
+namespace Runic.Translations.Generated;
 
 /// <summary>Version numbers shared by generated code and the runtime.</summary>
+/// <remarks>Generated-code support: binary compatible for code that an earlier release of the same major generated;
+/// not intended for hand-written code. The ABI constants are <c>const</c> on purpose, because generated code inlines
+/// the version it was generated for and checks it at run time.</remarks>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class TranslationsCompatibility
 {
-    /// <summary>The portable message grammar version supported by this release.</summary>
-    public const int MessageGrammarVersion = 2;
-
     /// <summary>The ABI version embedded into generated C#.</summary>
     public const int RuntimeAbiVersion = 1;
 

@@ -44,7 +44,7 @@ internal sealed class GeneratorTests
         Assert.True(generated.Contains("EnsureRmf2RuntimeAbi(3)", StringComparison.Ordinal), "RMF2 ABI 3 guard missing");
         Assert.True(generated.Contains("Rmf2RuntimeAbiVersion = 3", StringComparison.Ordinal), "RMF2 ABI 3 marker missing");
         Assert.True(generated.Contains("RuntimeAbiVersion = 1", StringComparison.Ordinal), "base generated ABI marker missing");
-        Assert.True(generated.Contains("CompiledTranslationLocale.CreateDeferred(\"en\", null, static () => global::Runic.Translations.CompiledTranslationLocale.ReadRmf2Values(Locale0Data))", StringComparison.Ordinal), "deferred v5 locale data missing");
+        Assert.True(generated.Contains("GeneratedCatalogSupport.CreateDeferredLocale(\"en\", null, static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale0Data))", StringComparison.Ordinal), "deferred v5 locale data missing");
         Assert.True(!generated.Contains("C:/repo", StringComparison.OrdinalIgnoreCase), "absolute path leaked into generated source");
     }
 
@@ -320,7 +320,7 @@ internal sealed class GeneratorTests
         SyntaxTree data = run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.CatalogData.g.cs").SyntaxTree;
         string text = data.ToString();
         Assert.True(!text.Contains("CompiledRmf2Message(", StringComparison.Ordinal), "Locale messages are still constructed in code.");
-        Assert.True(text.Contains("CreateDeferred(\"de\", \"en\", static () => global::Runic.Translations.CompiledTranslationLocale.ReadRmf2Values(Locale0Data))", StringComparison.Ordinal), "German is not deferred data.");
+        Assert.True(text.Contains("CreateDeferredLocale(\"de\", \"en\", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale0Data))", StringComparison.Ordinal), "German is not deferred data.");
         Assert.True(text.Contains("Grüß", StringComparison.Ordinal), "German text is not kept as UTF-8.");
         foreach (var method in data.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>())
         {

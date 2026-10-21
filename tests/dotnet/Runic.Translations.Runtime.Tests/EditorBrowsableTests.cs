@@ -4,6 +4,8 @@ using System.Reflection;
 using TUnit.Core;
 using DisplayNameAttribute = TUnit.Core.DisplayNameAttribute;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Runtime.Tests;
 
 // Runtime plumbing that only generated catalogs and the runtime itself call stays
@@ -14,9 +16,7 @@ internal sealed class EditorBrowsableTests
     private static readonly Type[] HiddenTypes =
     [
         typeof(TranslationsCompatibility),
-        typeof(TextMessageSelector),
-        typeof(TextRelativeTimeFormatter),
-        typeof(TextPatternFormatter),
+        typeof(GeneratedCatalogSupport),
         typeof(CompiledRmf2Value),
         typeof(CompiledRmf2Option),
         typeof(CompiledRmf2Annotation),
@@ -34,12 +34,6 @@ internal sealed class EditorBrowsableTests
     [
         (typeof(CompiledTextMessage), nameof(CompiledTextMessage.Rmf2V5)),
         (typeof(CompiledTextMessage), nameof(CompiledTextMessage.FromRmf2)),
-        (typeof(CompiledTranslationDefinition), nameof(CompiledTranslationDefinition.FromRmf2Inputs)),
-        (typeof(CompiledTranslationLocale), nameof(CompiledTranslationLocale.CreateDeferred)),
-        (typeof(CompiledTranslationLocale), nameof(CompiledTranslationLocale.ReadRmf2Values)),
-        (typeof(TranslationPackContract), nameof(TranslationPackContract.CreateRmf2V5)),
-        (typeof(TranslationPackMessageContract), nameof(TranslationPackMessageContract.FromRmf2Inputs)),
-        (typeof(TextArgument), nameof(TextArgument.CreateRmf2)),
         (typeof(TextArgumentFormat), nameof(TextArgumentFormat.Fixed0)),
         (typeof(TextArgumentFormat), nameof(TextArgumentFormat.Fixed1)),
         (typeof(TextArgumentFormat), nameof(TextArgumentFormat.Fixed2)),
@@ -58,7 +52,13 @@ internal sealed class EditorBrowsableTests
     public void Hidden()
     {
         foreach (Type type in HiddenTypes)
+        {
             Assert.True(type.IsPublic && IsHidden(type), $"{type.FullName} must stay public and carry [EditorBrowsable(Never)].");
+            Assert.Equal("Runic.Translations.Generated", type.Namespace, type.Name + " must live in the generated-code namespace.");
+        }
+        // The retired pre-v5 formatter classes are internal.
+        foreach (Type type in new[] { typeof(TextMessageSelector), typeof(TextRelativeTimeFormatter), typeof(TextPatternFormatter) })
+            Assert.False(type.IsPublic, type.Name + " must be internal.");
         foreach ((Type type, string name) in HiddenMembers)
         {
             MemberInfo[] members = type.GetMember(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance);

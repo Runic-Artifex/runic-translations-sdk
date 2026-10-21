@@ -16,6 +16,8 @@
   <ItemGroup>
     <!-- Checks the generated CLDR selectors against every pinned rule sample. -->
     <InternalsVisibleTo Include="Runic.Translations.Runtime.Tests" />
+    <!-- The transport conformance corpus still writes version 1 cases. -->
+    <InternalsVisibleTo Include="Runic.Translations.Compiler.Tests" />
   </ItemGroup>
 
   <ItemGroup>

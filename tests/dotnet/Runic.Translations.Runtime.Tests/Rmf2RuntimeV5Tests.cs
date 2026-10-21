@@ -4,6 +4,8 @@ using System.Globalization;
 using Runic.Translations;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Runtime.Tests;
 
 internal sealed class Rmf2RuntimeV5Tests
@@ -380,7 +382,7 @@ internal sealed class Rmf2RuntimeV5Tests
     [Test, DisplayName("v5 immutable arrays and compatibility checks require ABI 3")]
     public void Compatibility()
     {
-        Assert.Equal(3, TranslationsCompatibility.Rmf2RuntimeAbiVersion); Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion); Assert.Equal(2, TranslationsCompatibility.MessageGrammarVersion);
+        Assert.Equal(3, TranslationsCompatibility.Rmf2RuntimeAbiVersion); Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion);
         Assert.False(TranslationsCompatibility.SupportsRmf2RuntimeAbi(2), "Retired ABI 2 must not remain accepted"); Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(3), "ABI 3 is supported");
         TranslationsCompatibility.EnsureRmf2RuntimeAbi(3);
         foreach (int version in new[] { -1, 0, 1, 2, 4, int.MaxValue }) Assert.Throws<NotSupportedException>(() => TranslationsCompatibility.EnsureRmf2RuntimeAbi(version));

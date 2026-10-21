@@ -8,6 +8,8 @@ using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Compiler.Tests;
 
 // specs/translations/corpus/transport-v2-persisted-references.json is the shared .NET/ESM oracle for persisted references:
@@ -141,7 +143,7 @@ internal sealed class TransportV2ConformanceTests
             string actual = Describe(resolution.Outcome switch
             {
                 TranslationReferenceOutcome.Translated => "translated", TranslationReferenceOutcome.Fallback => "fallback", _ => "failed",
-            }, resolution.Text, resolution.Diagnostics.Select(diagnostic => (diagnostic.Path, diagnostic.Reason)));
+            }, resolution.Text, resolution.Diagnostics.Select(diagnostic => (diagnostic.Path, TranslationReferenceDiagnosticReasons.ToWire(diagnostic.Reason))));
             string expected = Expected(item["expected"]!);
             if (expected != actual) failures.Add(id + ": expected " + expected + ", got " + actual);
         }

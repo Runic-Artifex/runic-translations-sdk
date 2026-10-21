@@ -37,7 +37,7 @@ internal sealed class TranslationReferenceJsonConverter : JsonConverter<Translat
             // An integer token only: 2.0 and 2e0 are rejected, as the ESM reader rejects them.
             if (!members.TryGetValue("version", out JsonElement versionElement) || versionElement.ValueKind != JsonValueKind.Number ||
                 !versionElement.TryGetInt32(out int version) || versionElement.GetRawText() != version.ToString(System.Globalization.CultureInfo.InvariantCulture) ||
-                version is < TranslationTransport.MinimumReadVersion or > TranslationTransport.Version)
+                version is < TranslationTransport.MinimumReadVersion or > TranslationTransport.CurrentVersion)
                 throw new JsonException("Unsupported text-reference version.");
             if (!members.TryGetValue("catalog", out JsonElement catalog) || !members.TryGetValue("contractFingerprint", out JsonElement fingerprint))
                 throw new JsonException("Text reference is incomplete.");

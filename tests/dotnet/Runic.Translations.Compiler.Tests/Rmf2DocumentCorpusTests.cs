@@ -10,6 +10,8 @@ using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Compiler.Tests;
 
 // The shared rmf2-document-v1 corpus (W220-004 acceptance): compiler diagnostics, linked and
@@ -169,7 +171,7 @@ internal sealed class Rmf2DocumentCorpusTests
                 }
                 catch (TranslationPackException exception)
                 {
-                    Assert.Equal(test.GetProperty("rejection").GetString(), TranslationPackFailure.GetRejectionId(exception), id);
+                    Assert.Equal(test.GetProperty("rejection").GetString(), exception.RejectionId, id);
                 }
             }
             // Equivalent encodings of the same pack that both loaders accept.
@@ -179,7 +181,7 @@ internal sealed class Rmf2DocumentCorpusTests
                 byte[] bytes = Mutate(artifact.Text, test);
                 File.WriteAllBytes(Path.Combine(directory, id + ".json"), bytes);
                 try { _ = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(bytes), contract).AsTask().GetAwaiter().GetResult(); }
-                catch (TranslationPackException exception) { throw new InvalidOperationException("Valid pack was rejected: " + id + " " + TranslationPackFailure.GetRejectionId(exception), exception); }
+                catch (TranslationPackException exception) { throw new InvalidOperationException("Valid pack was rejected: " + id + " " + exception.RejectionId, exception); }
             }
             File.WriteAllText(Path.Combine(directory, "index.json"), index.RootElement.GetRawText(), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(directory, "invalid.mjs"), EsmInvalidScript, new UTF8Encoding(false));

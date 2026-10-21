@@ -5,6 +5,8 @@ using System.Text;
 using Runic.Translations;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Runtime.Tests;
 
 /// <summary>Typed slot bindings (W220-002). Also linked into the NativeAOT runtime probe fixture.</summary>
@@ -63,8 +65,9 @@ internal sealed class TypedSlotBindingsTests
         BoundLocalizedTextContent bound = new LocalizedTextContent<HelpSlots>(content).Bind(slots);
         Assert.Equal(Describe(renderer.Render("help", content, dictionary)), Describe(renderer.Render(bound)));
         foreach ((bool actions, bool annotate) in new[] { (true, false), (true, true) })
-            Assert.Equal(renderer.ToPlainText("help", content, dictionary, actions, annotate), renderer.ToPlainText(bound, actions, annotate));
-        Assert.Equal("See the guide or retry Star (en)", renderer.ToPlainText(bound, allowActionLabels: true));
+            Assert.Equal(renderer.ToPlainText("help", content, dictionary, new Rmf2PlainTextOptions { AllowActionLabels = actions, AnnotateLinkDestinations = annotate }),
+                renderer.ToPlainText(bound, new Rmf2PlainTextOptions { AllowActionLabels = actions, AnnotateLinkDestinations = annotate }));
+        Assert.Equal("See the guide or retry Star (en)", renderer.ToPlainText(bound, new Rmf2PlainTextOptions { AllowActionLabels = true }));
         Assert.Throws<TranslationFormatException>(() => renderer.ToPlainText(bound), "explicit label-only");
         Assert.Throws<ArgumentNullException>(() => renderer.Render(null!));
         Assert.Throws<ArgumentNullException>(() => renderer.ToPlainText((BoundLocalizedTextContent)null!));
@@ -91,7 +94,7 @@ internal sealed class TypedSlotBindingsTests
         Assert.Equal("guide,retry,star", string.Join(",", bound.Slots.Keys.Order(StringComparer.Ordinal)));
         Assert.False(bound.Slots.ContainsKey("GUIDE"), "Slot lookup must be ordinal.");
         Assert.Throws<NotSupportedException>(() => ((IDictionary<string, MarkupBinding>)bound.Slots).Add("extra", new InlineLinkBinding(new Uri("https://example.test"))));
-        Assert.Equal(renderer.ToPlainText(bound, true), renderer.ToPlainText(bound, true));
+        Assert.Equal(renderer.ToPlainText(bound, new Rmf2PlainTextOptions { AllowActionLabels = true }), renderer.ToPlainText(bound, new Rmf2PlainTextOptions { AllowActionLabels = true }));
         Assert.Equal(0, calls);
         Assert.Throws<ArgumentNullException>(() => typed.Bind(null!));
     }

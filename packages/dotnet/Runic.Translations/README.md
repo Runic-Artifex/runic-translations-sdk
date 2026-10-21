@@ -45,7 +45,9 @@ profile, and ABI versions fail explicitly.
 
 This package targets .NET 10. Before 1.0 a minor release may contain breaking changes, each listed with upgrade steps in the release notes (see [Versions before 1.0](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#versions-before-10)). Keep the runtime and generated source on the same Runic Translations release; runtime ABI mismatches fail explicitly.
 
-Generated code and the retained pre-v5 message model use public runtime plumbing such as the `CompiledRmf2*` message model, `TranslationsCompatibility`, `CompiledTextMessage.Rmf2V5` and `TextArgumentFormat.Fixed0`–`Fixed6`/`Percent0`–`Percent4`. These are marked `[EditorBrowsable(Never)]`, so they stay out of completion lists; they are not application API.
+Generated code calls the runtime through the `Runic.Translations.Generated` namespace: the `CompiledRmf2*` message model, `TranslationsCompatibility` and `GeneratedCatalogSupport`. These types are binary compatible for code that an earlier release of the same major generated, but they are not application API: their source may change in a minor, and they are marked `[EditorBrowsable(Never)]`. `TextArgumentFormat.Fixed0`–`Fixed6`/`Percent0`–`Percent4` are likewise hidden. Generated readable surfaces implement `IReadableMessages`.
+
+Open and closed sets: the markup bindings (`InlineLinkBinding`, `InlineActionBinding`, `InlineIconBinding`) are a closed set, so a switch over them is exhaustive. `TranslationPackFailureReason`, `TranslationReferenceDiagnosticReason` and the RMF2 document block names are open: handle a value you do not know.
 
 - [Runtime and generated C# example](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.PackageTests/Program.cs)
 - [NativeAOT example](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/dotnet/Runic.Translations.AotTests)

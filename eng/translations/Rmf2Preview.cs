@@ -8,6 +8,8 @@ using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
 using Runic.Translations.Compiler.Generation;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Internal;
 
 /// <summary>Executes the verified RMF2 runtime plan with inert preview bindings.</summary>
@@ -25,9 +27,9 @@ internal static class Rmf2Preview
         TranslationPackMessageContract[] contracts = table.Definitions
             .Where(item => item.Canonical || resolved.Contains(item.Contract.Key))
             .OrderBy(item => item.Contract.Key, StringComparer.Ordinal)
-            .Select(item => TranslationPackMessageContract.FromRmf2Inputs(
+            .Select(item => GeneratedCatalogSupport.CreatePackMessageContract(
                 new TranslationKey(project.Id, item.Id, item.Contract.Key), Inputs(item.Contract.Inputs))).ToArray();
-        TranslationPackContract packContract = TranslationPackContract.CreateRmf2V5(
+        TranslationPackContract packContract = GeneratedCatalogSupport.CreatePackContract(
             project.Id, locale, project.CallerFingerprint, contracts, project.MarkupContract);
         VerifiedExternalTranslationPack verified = TranslationPackLoader.VerifyAsync(
             new ExternalTranslationPack(Rmf2LocaleArtifactV5.Render(project, locale).GetUtf8Bytes()),
@@ -120,7 +122,7 @@ internal static class Rmf2Preview
             string[] items = sample is JsonArray array && array.All(static item => item is JsonValue value && value.TryGetValue(out string? _))
                 ? array.Select(static item => item!.GetValue<string>()).ToArray()
                 : throw new ArgumentException("The sample for " + input.Name + " must be an array of strings.");
-            return TextArgument.CreateRmf2(input.Name, new TextArgument("_", items));
+            return GeneratedCatalogSupport.CreateArgument(input.Name, new TextArgument("_", items));
         }
         string value = sample.ToString();
         TextArgument carrier = input.Type switch
@@ -136,7 +138,7 @@ internal static class Rmf2Preview
             "guid" => new TextArgument("_", Guid.Parse(value)),
             _ => throw new ArgumentException("Unsupported preview input type."),
         };
-        return TextArgument.CreateRmf2(input.Name, carrier);
+        return GeneratedCatalogSupport.CreateArgument(input.Name, carrier);
     }
 
     private static TextArgumentType Type(string type) => type switch

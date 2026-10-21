@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Runtime.Tests;
 
 // Generated catalogs embed each locale as data and build it on first use (issue #87): a process pays only for the
