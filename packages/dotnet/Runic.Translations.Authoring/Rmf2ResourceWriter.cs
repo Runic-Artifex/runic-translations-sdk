@@ -10,7 +10,7 @@ using Runic.Translations.Compiler;
 namespace Runic.Translations.Authoring;
 
 /// <summary>Source-preserving resource edits shared by the editor, CLI and language server.</summary>
-public static class Rmf2ResourceWriter
+internal static class Rmf2ResourceWriter
 {
     private static readonly string[] FunctionalNames = ["link", "action", "icon", "runic:link", "runic:action", "runic:icon"];
     private static readonly UTF8Encoding Utf8 = new(false, true);

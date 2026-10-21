@@ -32,7 +32,7 @@ public static partial class TranslationCompiler
         TranslationProjectProfileSelection selection = SelectProjectProfile(project, options, cancellationToken);
         if (!selection.Success)
             return new TranslationProfileCompilation(selection.Profile,
-                new Rmf2ProjectCompilationV5(null, selection.Diagnostics));
+                new Rmf2ProjectCompilation(null, selection.Diagnostics));
         return new TranslationProfileCompilation(selection.Profile,
             CompileRmf2ProjectV5(project, messages, options, cancellationToken));
     }
@@ -44,7 +44,7 @@ public static partial class TranslationCompiler
             Source.Node.Comments.Count == 0 ? null : string.Join("\n", Source.Node.Comments));
     }
 
-    internal static Rmf2ProjectCompilationV5 CompileRmf2ProjectV5(TranslationSource project,
+    internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
         IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -57,7 +57,7 @@ public static partial class TranslationCompiler
     /// lowering work. Units built with other options are recompiled, so the result is always identical
     /// to compiling the units' sources directly.
     /// </summary>
-    internal static Rmf2ProjectCompilationV5 CompileRmf2ProjectV5(TranslationSource project,
+    internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
         IEnumerable<Rmf2SourceUnitV5> units, TranslationCompilerOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -74,12 +74,12 @@ public static partial class TranslationCompiler
         return CompileRmf2ProjectV5(project, Materialize(sources), lookup, options, cancellationToken);
     }
 
-    private static Rmf2ProjectCompilationV5 CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
+    private static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
-        Rmf2ProjectCompilationV5 Result(Rmf2ProjectV5? value = null) => new(value, Array.AsReadOnly(diagnostics.ToSortedArray()));
+        Rmf2ProjectCompilation Result(Rmf2ProjectV5? value = null) => new(value, Array.AsReadOnly(diagnostics.ToSortedArray()));
         bool Failed() => diagnostics.Items.Any(d => d.Severity == TranslationDiagnosticSeverity.Error);
         if (RejectDuplicateSourcePaths(new[] { project }, sources, diagnostics)) return Result();
         ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, options, cancellationToken);

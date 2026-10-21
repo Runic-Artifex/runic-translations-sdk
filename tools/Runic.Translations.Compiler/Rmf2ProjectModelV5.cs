@@ -15,23 +15,27 @@ internal sealed record TranslationProjectProfileSelection(TranslationProjectProf
     internal bool Success => !Diagnostics.Any(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
 }
 internal sealed record TranslationProfileCompilation(TranslationProjectProfile Profile,
-    Rmf2ProjectCompilationV5 Rmf2)
+    Rmf2ProjectCompilation Rmf2)
 {
     internal bool Success => Rmf2.Success;
     internal IReadOnlyList<TranslationDiagnostic> Diagnostics => Rmf2.Diagnostics;
 }
 
 /// <summary>The result of compiling a project for the single supported RMF2 execution contract.</summary>
-public sealed class Rmf2ProjectCompilationV5
+public sealed class Rmf2ProjectCompilation
 {
-    /// <summary>The semantic execution profile produced by this compiler.</summary>
-    public const string ExecutionProfile = "rmf2-execution-v2";
-    /// <summary>The normalized message grammar version produced by this compiler.</summary>
-    public const int MessageGrammarVersion = 5;
-    /// <summary>The required .NET runtime ABI version.</summary>
-    public const int RuntimeAbiVersion = 3;
+    internal const string CurrentExecutionProfile = "rmf2-execution-v2";
+    internal const int CurrentMessageGrammarVersion = 5;
+    internal const int CurrentRuntimeAbiVersion = 3;
 
-    internal Rmf2ProjectCompilationV5(Rmf2ProjectV5? project, IReadOnlyList<TranslationDiagnostic> diagnostics)
+    /// <summary>The semantic execution profile of this compilation, such as <c>rmf2-execution-v2</c>.</summary>
+    public string ExecutionProfile { get; } = CurrentExecutionProfile;
+    /// <summary>The normalized message grammar version of this compilation.</summary>
+    public int MessageGrammarVersion { get; } = CurrentMessageGrammarVersion;
+    /// <summary>The .NET runtime ABI version that code generated from this compilation requires.</summary>
+    public int RuntimeAbiVersion { get; } = CurrentRuntimeAbiVersion;
+
+    internal Rmf2ProjectCompilation(Rmf2ProjectV5? project, IReadOnlyList<TranslationDiagnostic> diagnostics)
     {
         Project = project;
         Diagnostics = diagnostics;

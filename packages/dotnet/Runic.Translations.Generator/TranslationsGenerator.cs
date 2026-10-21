@@ -272,7 +272,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         GeneratorInput selected = projects[0];
         sourceTexts[selected.Path] = SourceText.From(selected.Text!, StrictUtf8);
         var project = new TranslationSource(selected.Path, StrictUtf8.GetBytes(selected.Text!));
-        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, compiled, CompilerOptions, cancellationToken);
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(project, compiled, CompilerOptions, cancellationToken);
         bool hasErrors = false;
         for (int index = 0; index < compilation.Diagnostics.Count; index++)
         {
@@ -305,7 +305,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             var compiled = new List<Rmf2SourceUnitV5>();
             foreach (SourceUnit unit in units.OrderBy(static unit => unit.Input.Path, StringComparer.Ordinal))
                 if (unit.Compiled is not null && string.Equals(unit.Input.Owner, project.Path, StringComparison.Ordinal)) compiled.Add(unit.Compiled);
-            Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
+            Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(
                 new TranslationSource(project.Path, StrictUtf8.GetBytes(project.Text)), compiled, CompilerOptions, cancellationToken);
             if (compilation.Project is not { } linked ||
                 compilation.Diagnostics.Any(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error) ||
@@ -374,9 +374,12 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             location = Location.Create(diagnostic.Location.Path, TextSpan.FromBounds(start, end), lineSpan);
         }
 
-        DiagnosticSeverity severity = diagnostic.Severity == TranslationDiagnosticSeverity.Warning
-            ? DiagnosticSeverity.Warning
-            : DiagnosticSeverity.Error;
+        DiagnosticSeverity severity = diagnostic.Severity switch
+        {
+            TranslationDiagnosticSeverity.Information => DiagnosticSeverity.Info,
+            TranslationDiagnosticSeverity.Warning => DiagnosticSeverity.Warning,
+            _ => DiagnosticSeverity.Error,
+        };
         return Diagnostic.Create(TranslationsDiagnostics.Get(diagnostic.Id), location, severity,
             additionalLocations: null, properties: null, diagnostic.Message);
     }

@@ -1,13 +1,27 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Runic.Translations.Authoring;
 
+/// <summary>Writes a rendered <see cref="TranslationProjectPlan"/> to disk.</summary>
 public static class TranslationProjectWriter
 {
-    public static string Create(TranslationProjectPlan plan)
+    // The synchronous form for the command-line tool, which has no synchronization context.
+    internal static string Create(TranslationProjectPlan plan) => CreateAsync(plan).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Writes the plan's files to a staging directory beside the target and moves it into place, so either the
+    /// complete project appears or nothing does. The target must not exist.
+    /// </summary>
+    /// <returns>The full path of the created project directory.</returns>
+    /// <exception cref="TranslationAuthoringException">The target exists, a parent is a link, or writing failed.</exception>
+    /// <exception cref="OperationCanceledException">Cancelled; no project was committed.</exception>
+    public static async Task<string> CreateAsync(TranslationProjectPlan plan, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
+        cancellationToken.ThrowIfCancellationRequested();
         string target = Path.GetFullPath(plan.Request.Directory);
         if (Directory.Exists(target) || File.Exists(target))
         {
@@ -30,6 +44,7 @@ public static class TranslationProjectWriter
         {
             for (int index = 0; index < plan.Files.Count; index++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 TranslationProjectFile file = plan.Files[index];
                 string destination = ResolveContainedPath(staging, file.RelativePath);
                 string? destinationParent = Path.GetDirectoryName(destination);
@@ -38,17 +53,20 @@ public static class TranslationProjectWriter
                     Directory.CreateDirectory(destinationParent);
                 }
 
-                using var stream = new FileStream(
+                await using (var stream = new FileStream(
                     destination,
                     FileMode.CreateNew,
                     FileAccess.Write,
                     FileShare.None,
                     bufferSize: 16 * 1024,
-                    FileOptions.WriteThrough);
-                stream.Write(file.Bytes);
-                stream.Flush(flushToDisk: true);
+                    FileOptions.WriteThrough | FileOptions.Asynchronous))
+                {
+                    await stream.WriteAsync(file.Bytes, cancellationToken).ConfigureAwait(false);
+                    await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             Directory.Move(staging, target);
             return target;
         }

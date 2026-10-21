@@ -8,7 +8,7 @@ using System.Threading;
 namespace Runic.Translations.Compiler;
 
 /// <summary>A resource node with attached documentation and exact physical UTF-8 locations.</summary>
-public sealed class Rmf2ResourceNode
+internal sealed class Rmf2ResourceNode
 {
     internal Rmf2ResourceNode(string[] path, string? message, string[] comments, string[] properties,
         TextSourceLocation name, TextSourceLocation extent, int[] map)
@@ -29,7 +29,7 @@ public sealed class Rmf2ResourceNode
 }
 
 /// <summary>Lossless source plus a recoverable RMF2 outline; invalid documents cannot compile.</summary>
-public sealed class Rmf2ResourceDocument
+internal sealed class Rmf2ResourceDocument
 {
     internal Rmf2ResourceDocument(TranslationSource source, List<Rmf2ResourceNode> nodes, IReadOnlyList<TranslationDiagnostic> diagnostics)
     { Source = source; Nodes = nodes.AsReadOnly(); Diagnostics = diagnostics; }
@@ -40,7 +40,7 @@ public sealed class Rmf2ResourceDocument
 }
 
 /// <summary>RMF2 resource syntax version 1. Message execution is validated separately.</summary>
-public static class Rmf2ResourceReader
+internal static class Rmf2ResourceReader
 {
     internal static readonly Regex Identifier = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
     private static readonly Regex Structural = new("^([A-Za-z_][A-Za-z0-9_]*)[ ]*(=|\\{)(.*)$", RegexOptions.CultureInvariant);

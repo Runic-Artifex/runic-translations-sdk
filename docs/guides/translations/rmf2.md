@@ -503,7 +503,11 @@ runic-translations generate --project translations --output obj/translations --e
 runic-translations lsp
 ```
 
-`Rmf2Workspace` accepts unsaved buffers and revisions. Rename, format,
+`runic-translations lsp` serves the IDE extensions; it is hidden from help and,
+with its protocol subset and custom methods, outside the 1.0 compatibility rules
+until the production language server (2.0). The workspace it shares with the
+Translations Editor is internal to the tool and the editor; it accepts unsaved
+buffers and revisions. Rename, format,
 extract-group, and inline-resource produce validated transaction plans. Extracting
 a documented group leaves its authoritative declaration and metadata in place.
 Mounted namespace renames update configuration while preserving physical roots.
@@ -513,7 +517,7 @@ locale add/remove/fallback operations validate the complete fallback graph.
 The stdio LSP implements incremental changes, UTF-8/16/32 position negotiation,
 recoverable diagnostics, flat document symbols, folding, formatting, contract-aware
 completion/hover, logical definitions, and versioned resource rename edits.
-The compiler-owned `Rmf2LanguageService` supplies registered custom tags and aliases,
+The compiler-owned language service (internal) supplies registered custom tags and aliases,
 missing markup options, enum values and literal-only/default/required constraints
 in completion details and hover. Standalone tags do not offer closing tags.
 Variable suggestions use semantic tokens rather than literal text. Definitions and
@@ -689,7 +693,7 @@ explicit in [the RMF2 option table](../../../specs/translations/rmf2-execution-v
 The pinned [locale capability matrix](capabilities.md) still applies. Unsupported
 function options produce `RTR0065` rather than being silently ignored or clamped.
 
-`Rmf2ResourceNode.MessageSyntax` exposes the shared `Mf2SyntaxDocument`: original
+The shared MF2 syntax tree (internal to the compiler, the tool and the editor) keeps original
 tokens, expression operands, options, attributes, declarations, selectors and
 variant keys with UTF-8 spans. Unknown functions and overlapping markup survive
 this syntax pass. The balanced-inline check separately reports `RTR0061`;

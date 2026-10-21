@@ -76,8 +76,8 @@ internal static class TranslationManifestReader
     /// compiler diagnostic is not duplicated; discovery errors (a missing or
     /// unusable source root) are always added.
     /// </summary>
-    internal static Rmf2ProjectCompilationV5 WithManifestErrors(
-        Rmf2ProjectCompilationV5 compilation, string projectPath, string? layoutError, IReadOnlyList<string>? discoveryErrors = null)
+    internal static Rmf2ProjectCompilation WithManifestErrors(
+        Rmf2ProjectCompilation compilation, string projectPath, string? layoutError, IReadOnlyList<string>? discoveryErrors = null)
     {
         var errors = new List<string>();
         if (layoutError is not null && !compilation.Diagnostics.Any(diagnostic =>
@@ -90,7 +90,7 @@ internal static class TranslationManifestReader
         foreach (string error in errors)
             diagnostics.Add(new TranslationDiagnostic(DiagnosticId, TranslationDiagnosticSeverity.Error, error,
                 new TextSourceLocation(projectPath, 0, 0, 1, 1, 1, 1)));
-        return new Rmf2ProjectCompilationV5(null, diagnostics);
+        return new Rmf2ProjectCompilation(null, diagnostics);
     }
 
     private static TranslationManifestLayout Invalid(string error, string? baseLocale = null) => new([], baseLocale, error);

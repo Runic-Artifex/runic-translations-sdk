@@ -11,7 +11,7 @@ using JsonValue = System.Text.Json.Nodes.JsonValue;
 
 namespace Runic.Translations.Authoring;
 
-public static class TranslationWorkspaceMutation
+internal static class TranslationWorkspaceMutation
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
@@ -273,7 +273,7 @@ public static class TranslationWorkspaceMutation
                 if (edit.Kind == TranslationWorkspaceEditKind.Delete) proposed.Remove(edit.RelativePath);
                 else proposed[edit.RelativePath] = edit.Bytes!;
             }
-            Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
+            Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(
                 new TranslationSource(configRelative, proposedConfig),
                 proposed.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new TranslationSource(pair.Key, pair.Value)));
             if (!compilation.Success)

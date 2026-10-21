@@ -309,7 +309,7 @@ internal sealed class Rmf2AuthoringTests
         Assert.True(planType.GetNestedType("ValidationReceipt", System.Reflection.BindingFlags.NonPublic)?.IsNestedPrivate == true,
             "The selected-profile validation receipt is not private to the transaction plan.");
         Assert.True(planType.GetConstructors(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-            .All(constructor => constructor.GetParameters()[^1].ParameterType.Name == "Rmf2ProjectCompilationV5"),
+            .All(constructor => constructor.GetParameters()[^1].ParameterType.Name == "Rmf2ProjectCompilation"),
             "A transaction-plan constructor accepts a detached validation receipt.");
         string root = Path.Combine(Path.GetTempPath(), "runic-rmf2-v2-authoring-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "translations"));

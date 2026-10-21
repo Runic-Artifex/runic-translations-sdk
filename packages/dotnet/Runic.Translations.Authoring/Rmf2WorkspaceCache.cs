@@ -7,7 +7,7 @@ using Runic.Translations.Compiler;
 namespace Runic.Translations.Authoring;
 
 /// <summary>Reuses unchanged resource syntax across independent, cancellation-scoped catalog snapshots.</summary>
-public sealed class Rmf2WorkspaceCache
+internal sealed class Rmf2WorkspaceCache
 {
     private readonly int _capacity;
     private readonly Dictionary<string, (Rmf2ResourceDocument Document, LinkedListNode<string> Node)> _documents = new(StringComparer.Ordinal);

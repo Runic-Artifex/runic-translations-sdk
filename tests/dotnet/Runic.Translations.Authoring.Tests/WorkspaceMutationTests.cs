@@ -8,6 +8,8 @@ using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
 using TUnit.Core;
 
+using JsonValue = System.Text.Json.Nodes.JsonValue;
+
 namespace Runic.Translations.Authoring.Tests;
 
 internal sealed class WorkspaceMutationTests

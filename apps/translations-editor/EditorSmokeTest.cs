@@ -17,9 +17,9 @@ internal static class EditorSmokeTest
 {
     private static async Task AuthoringJourneyAsync(string project)
     {
-        TranslationProjectWriter.Create(TranslationProjectScaffolder.Render(
+        await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
             new TranslationProjectCreationRequest(project, "authoring-smoke", "en", "Smoke.Translations", "SmokeText",
-                [new TranslationProjectLocale("de", "en")])));
+                [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
         const string source = "# Cart count context 🦊\n@tag checkout\n@example {\"count\":1}\n@example {\"count\":2}\ncart =\n  .input {$count :integer}\n  .match $count\n  one {{One item}}\n  * {{Many items}}\n";
         const string target = "# Warenkorbkontext\n@tag checkout\n@example {\"count\":1}\n@example {\"count\":2}\ncart =\n  .input {$count :integer}\n  .match $count\n  one {{Ein Artikel}}\n  * {{Viele Artikel}}\n";
         await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), source).ConfigureAwait(false);
@@ -172,9 +172,9 @@ internal static class EditorSmokeTest
             string project = Path.Combine(container, "translations");
             // Smoke tests exercise an intentionally minimal workspace. They must
             // never mutate the packaged example or a caller-provided directory.
-            TranslationProjectWriter.Create(TranslationProjectScaffolder.Render(
+            await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
                 new TranslationProjectCreationRequest(project, "editor-smoke", "en", "Smoke.Translations", "SmokeText",
-                    [new TranslationProjectLocale("de", "en")])));
+                    [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
             await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "application {\n  title = Title\n}\n").ConfigureAwait(false);
             await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "application {\n  title = Titel\n}\n").ConfigureAwait(false);
 

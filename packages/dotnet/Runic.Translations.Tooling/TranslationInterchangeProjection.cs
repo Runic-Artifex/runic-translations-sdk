@@ -54,7 +54,7 @@ internal sealed record TranslationInterchangePlaceholder(string Name, string Typ
 
 internal static class TranslationInterchangeProjectionAdapter
 {
-    internal static TranslationInterchangeProjection From(Rmf2ProjectCompilationV5 compilation)
+    internal static TranslationInterchangeProjection From(Rmf2ProjectCompilation compilation)
     {
         ArgumentNullException.ThrowIfNull(compilation);
         if (!compilation.Success)
@@ -122,16 +122,16 @@ internal static class TranslationInterchangeProjectionAdapter
         string? sourceFreshness)
     {
         string textFingerprint = TranslationInterchangeFingerprint.TextProfile(
-            catalog, sourceLocale, Rmf2ProjectCompilationV5.ExecutionProfile,
-            Rmf2ProjectCompilationV5.MessageGrammarVersion,
+            catalog, sourceLocale, Rmf2ProjectCompilation.CurrentExecutionProfile,
+            Rmf2ProjectCompilation.CurrentMessageGrammarVersion,
             TranslationInterchange.XliffProfile,
             TranslationInterchange.XliffProfileVersion,
             canonical);
         var projection = new TranslationInterchangeProjection(
             catalog,
             sourceLocale,
-            Rmf2ProjectCompilationV5.ExecutionProfile,
-            Rmf2ProjectCompilationV5.MessageGrammarVersion,
+            Rmf2ProjectCompilation.CurrentExecutionProfile,
+            Rmf2ProjectCompilation.CurrentMessageGrammarVersion,
             TranslationInterchange.XliffProfile,
             TranslationInterchange.XliffProfileVersion,
             canonical,

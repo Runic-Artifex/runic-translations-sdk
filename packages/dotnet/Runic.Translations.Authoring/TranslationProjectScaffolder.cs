@@ -41,7 +41,7 @@ public static class TranslationProjectScaffolder
         }
         files.Sort((left, right) => StringComparer.Ordinal.Compare(left.RelativePath, right.RelativePath));
 
-        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(
             new TranslationSource("runic.json", files.Find(static file => file.RelativePath == "runic.json")!.Bytes),
             MessageSources(files));
         if (!compilation.Success) throw new TranslationAuthoringException(FormatDiagnostics(compilation.Diagnostics));

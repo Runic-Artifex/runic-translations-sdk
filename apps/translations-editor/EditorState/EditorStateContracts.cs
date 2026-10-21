@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 
-namespace Runic.Translations.Authoring;
+namespace Runic.Translations.Editor;
 
-public sealed record TranslationEditorStateEntry(
+internal sealed record TranslationEditorStateEntry(
     string Key,
     string Locale,
     string State,
@@ -11,24 +11,24 @@ public sealed record TranslationEditorStateEntry(
     string? SourceFingerprint,
     IReadOnlyDictionary<string, string> Samples);
 
-public sealed record TranslationTerminologyEntry(
+internal sealed record TranslationTerminologyEntry(
     string Source,
     string Preferred,
     string? Locale,
     string? Note);
 
-public sealed record TranslationEditorState(
+internal sealed record TranslationEditorState(
     string CatalogId,
     IReadOnlyList<TranslationEditorStateEntry> Entries,
     IReadOnlyList<TranslationTerminologyEntry> Terminology);
 
-public sealed record TranslationEditorStateLoadResult(
+internal sealed record TranslationEditorStateLoadResult(
     string Path,
     string? Revision,
     TranslationEditorState State,
     string? Error);
 
-public sealed class TranslationEditorStateException : Exception
+internal sealed class TranslationEditorStateException : Exception
 {
     public TranslationEditorStateException(string message) : base(message) { }
 }

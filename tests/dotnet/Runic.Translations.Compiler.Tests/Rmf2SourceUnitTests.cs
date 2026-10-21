@@ -45,8 +45,8 @@ internal sealed class Rmf2SourceUnitTests
                      new[] { Source("translations/en.rmf2", "title = {$x :nope}\n"), Source("translations/de.rmf2", "title = Laden\n") },
                  })
         {
-            Rmf2ProjectCompilationV5 direct = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(), sources.AsEnumerable().Reverse(), options);
-            Rmf2ProjectCompilationV5 linked = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(),
+            Rmf2ProjectCompilation direct = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(), sources.AsEnumerable().Reverse(), options);
+            Rmf2ProjectCompilation linked = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(),
                 sources.Select(source => Rmf2SourceUnitV5.Create(source, options)).ToArray(), options);
             Assert.Equal(Describe(direct), Describe(linked), sources[0].Path);
         }
@@ -74,7 +74,7 @@ internal sealed class Rmf2SourceUnitTests
 
         // A base-locale input change gives translations a new caller contract, so they lower again.
         Rmf2SourceUnitV5 retyped = Rmf2SourceUnitV5.Create(Source("translations/en.rmf2", English.Replace(":integer", ":number", StringComparison.Ordinal)), options);
-        Rmf2ProjectCompilationV5 contractChange = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(), [retyped, edited], options);
+        Rmf2ProjectCompilation contractChange = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(), [retyped, edited], options);
         Assert.Equal(3, edited.LoweringCount, "translated message lowered against the new caller contract");
         Assert.Equal(Describe(TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(), [retyped.Source, edited.Source], options)),
             Describe(contractChange), "caller contract change");
@@ -87,12 +87,12 @@ internal sealed class Rmf2SourceUnitTests
 
     private static Rmf2ProjectV5 Link(TranslationCompilerOptions options, params Rmf2SourceUnitV5[] units)
     {
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(), units, options);
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(), units, options);
         Assert.True(result.Success, string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message)));
         return result.Project!;
     }
 
-    private static string Describe(Rmf2ProjectCompilationV5 result)
+    private static string Describe(Rmf2ProjectCompilation result)
     {
         var builder = new StringBuilder();
         foreach (TranslationDiagnostic diagnostic in result.Diagnostics)

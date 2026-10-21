@@ -9,30 +9,30 @@ using System.Threading;
 namespace Runic.Translations.Compiler;
 
 /// <summary>Lossless lexical categories; text and trivia are never discarded.</summary>
-public enum Mf2SyntaxTokenKind { Text, Whitespace, PatternStart, PatternEnd, ExpressionStart, ExpressionEnd, Variable, Literal, Function, Attribute, MarkupOpen, MarkupClose, Standalone, Equals, Name, Invalid }
+internal enum Mf2SyntaxTokenKind { Text, Whitespace, PatternStart, PatternEnd, ExpressionStart, ExpressionEnd, Variable, Literal, Function, Attribute, MarkupOpen, MarkupClose, Standalone, Equals, Name, Invalid }
 /// <summary>One exact source slice, including its original spelling.</summary>
-public sealed record Mf2SyntaxToken(Mf2SyntaxTokenKind Kind, string Raw, string Value, TextSourceLocation Location);
+internal sealed record Mf2SyntaxToken(Mf2SyntaxTokenKind Kind, string Raw, string Value, TextSourceLocation Location);
 /// <summary>MF2 operands retain whether a value is a variable, number or string literal.</summary>
-public enum Mf2OperandKind { Variable, Number, String }
-public sealed record Mf2OperandSyntax(Mf2OperandKind Kind, string Value, bool Quoted, TextSourceLocation Location);
+internal enum Mf2OperandKind { Variable, Number, String }
+internal sealed record Mf2OperandSyntax(Mf2OperandKind Kind, string Value, bool Quoted, TextSourceLocation Location);
 /// <summary>Attributes are distinct from function/markup options and may be valueless.</summary>
-public sealed record Mf2PropertySyntax(string Name, Mf2OperandSyntax? Value, bool IsAttribute, TextSourceLocation Location);
-public enum Mf2MarkupKind { None, Open, Close, Standalone }
+internal sealed record Mf2PropertySyntax(string Name, Mf2OperandSyntax? Value, bool IsAttribute, TextSourceLocation Location);
+internal enum Mf2MarkupKind { None, Open, Close, Standalone }
 /// <summary>A syntax expression before function resolution or renderer-profile validation.</summary>
-public sealed record Mf2ExpressionSyntax(Mf2OperandSyntax? Operand, string? Function, string? MarkupName,
+internal sealed record Mf2ExpressionSyntax(Mf2OperandSyntax? Operand, string? Function, string? MarkupName,
     Mf2MarkupKind MarkupKind, IReadOnlyList<Mf2PropertySyntax> Options, IReadOnlyList<Mf2PropertySyntax> Attributes,
     TextSourceLocation Location);
 /// <summary>A declaration retains its expression and exact source symbol.</summary>
-public sealed record Mf2VariantSyntax(IReadOnlyList<string> Keys, TextSourceLocation Location)
+internal sealed record Mf2VariantSyntax(IReadOnlyList<string> Keys, TextSourceLocation Location)
 {
     public TextSourceLocation PatternLocation { get; init; } = Location;
     public IReadOnlyList<TextSourceLocation> KeyLocations { get; init; } = Array.Empty<TextSourceLocation>();
 }
-public sealed record Mf2MatchSyntax(IReadOnlyList<string> Selectors, TextSourceLocation Location);
-public sealed record Mf2DeclarationSyntax(string Kind, string Name, TextSourceLocation NameLocation,
+internal sealed record Mf2MatchSyntax(IReadOnlyList<string> Selectors, TextSourceLocation Location);
+internal sealed record Mf2DeclarationSyntax(string Kind, string Name, TextSourceLocation NameLocation,
     Mf2ExpressionSyntax Expression, TextSourceLocation Location);
 /// <summary>Full original bytes, a contiguous token stream and parsed expressions for authoring tools.</summary>
-public sealed class Mf2SyntaxDocument
+internal sealed class Mf2SyntaxDocument
 {
     internal Mf2SyntaxDocument(TranslationSource source, List<Mf2SyntaxToken> tokens, List<Mf2ExpressionSyntax> expressions,
         List<Mf2DeclarationSyntax> declarations, List<Mf2VariantSyntax> variants, Mf2MatchSyntax? match, TranslationDiagnostic[] diagnostics)
@@ -65,7 +65,7 @@ public sealed class Mf2SyntaxDocument
 }
 
 /// <summary>Reads MF2 source independently of executable functions and balanced-inline markup rules.</summary>
-public static class Mf2SyntaxReader
+internal static class Mf2SyntaxReader
 {
     public static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
     {

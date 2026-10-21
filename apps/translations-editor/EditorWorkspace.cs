@@ -530,9 +530,9 @@ internal sealed class EditorWorkspace : IDisposable
             foreach (TranslationXliffDocument document in export.Documents)
             {
                 string fullPath = Path.Combine(targetDirectory, $"{catalog.CatalogId}.{document.TargetLocale}.xliff");
-                await WriteAtomicallyAsync(fullPath, document.Bytes, cancellationToken).ConfigureAwait(false);
+                await WriteAtomicallyAsync(fullPath, document.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
                 documents.Add(new EditorInterchangeFile(
-                    Path.GetRelativePath(_root, fullPath).Replace('\\', '/'), document.TargetLocale, document.Bytes.LongLength));
+                    Path.GetRelativePath(_root, fullPath).Replace('\\', '/'), document.TargetLocale, (long)document.Bytes.Length));
             }
             return new EditorXliffExportResult(
                 true,
@@ -609,7 +609,7 @@ internal sealed class EditorWorkspace : IDisposable
                 .ToDictionary(static message => message.MessageId, StringComparer.Ordinal);
             Dictionary<string, string> importedValues = importedMessages.ToDictionary(
                 static pair => pair.Key,
-                static pair => StrictUtf8.GetString(pair.Value.Bytes).TrimEnd('\r', '\n'),
+                static pair => StrictUtf8.GetString(pair.Value.Bytes.Span).TrimEnd('\r', '\n'),
                 StringComparer.Ordinal);
             if (!string.Equals(import.SourceLocale, catalog.SourceLocale, StringComparison.Ordinal))
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-LOCALE-MISMATCH",
@@ -678,7 +678,7 @@ internal sealed class EditorWorkspace : IDisposable
                     targetPath,
                     target?.Revision,
                     original,
-                    importedMessages[key].Bytes));
+                    importedMessages[key].Bytes.ToArray()));
             }
 
             if (rmf2)
@@ -697,7 +697,7 @@ internal sealed class EditorWorkspace : IDisposable
                 }
             }
 
-            Rmf2ProjectCompilationV5 proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
+            Rmf2ProjectCompilation proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
             if (!proposed.Success)
             {
                 string message = string.Join(" ", proposed.Diagnostics
@@ -712,11 +712,11 @@ internal sealed class EditorWorkspace : IDisposable
             foreach (TranslationInterchangeReviewEntry entry in import.Review.Entries.OrderBy(static item => item.Key, StringComparer.Ordinal).ThenBy(static item => item.Locale, StringComparer.Ordinal))
             {
                 TranslationEditorStateEntry? existing = currentEntries.GetValueOrDefault(Identity(entry.Key, entry.Locale));
-                bool stateChanged = existing?.State != entry.State;
+                bool stateChanged = existing?.State != TranslationReviewStates.ToWire(entry.State);
                 bool noteChanged = existing?.Note != entry.Note;
                 if (!stateChanged && !noteChanged) continue;
                 reviewUpdates += 1;
-                Push(ref changes, ref overflowed, new EditorKeyChange(entry.Key, "state-change", null, null, existing?.State ?? "draft", entry.State));
+                Push(ref changes, ref overflowed, new EditorKeyChange(entry.Key, "state-change", null, null, existing?.State ?? "draft", TranslationReviewStates.ToWire(entry.State)));
             }
 
             List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Review.Entries);
@@ -871,12 +871,12 @@ internal sealed class EditorWorkspace : IDisposable
                 if (existing is null)
                 {
                     added += 1;
-                    Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "added", null, entry.State));
+                    Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "added", null, TranslationReviewStates.ToWire(entry.State)));
                 }
-                else if (existing.State != entry.State || existing.Note != entry.Note)
+                else if (existing.State != TranslationReviewStates.ToWire(entry.State) || existing.Note != entry.Note)
                 {
                     changed += 1;
-                    Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "changed", existing.State, entry.State));
+                    Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "changed", existing.State, TranslationReviewStates.ToWire(entry.State)));
                 }
             }
             List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Entries);
@@ -1004,7 +1004,7 @@ internal sealed class EditorWorkspace : IDisposable
             .Select(entry => new TranslationInterchangeReviewEntry(
                 entry.Key,
                 entry.Locale,
-                entry.State,
+                TranslationReviewStates.TryParse(entry.State, out TranslationReviewState state) ? state : throw new InvalidDataException("Unknown review state '" + entry.State + "'."),
                 entry.Note,
                 string.Equals(entry.State, "approved", StringComparison.Ordinal) ? catalog.TextProfileFingerprint : null))
             .ToArray();
@@ -1026,7 +1026,7 @@ internal sealed class EditorWorkspace : IDisposable
             merged[Identity(entry.Key, entry.Locale)] = new TranslationEditorStateEntry(
                 entry.Key,
                 entry.Locale,
-                entry.State,
+                TranslationReviewStates.ToWire(entry.State),
                 entry.Note,
                 null,
                 existing?.Samples ?? new SortedDictionary<string, string>(StringComparer.Ordinal));
@@ -1037,7 +1037,7 @@ internal sealed class EditorWorkspace : IDisposable
             .ToList();
     }
 
-    private static Rmf2ProjectCompilationV5 CompileWithInterchangeDocuments(
+    private static Rmf2ProjectCompilation CompileWithInterchangeDocuments(
         IReadOnlyList<WorkspaceFile> files,
         IReadOnlyList<PreparedInterchangeDocument> documents,
         CancellationToken cancellationToken)
@@ -1204,7 +1204,7 @@ internal sealed class EditorWorkspace : IDisposable
         IReadOnlyList<TranslationInterchangeReviewEntry> entries,
         List<EditorInterchangeRefusal> refusals)
     {
-        foreach (TranslationInterchangeReviewEntry entry in entries.Where(static entry => string.Equals(entry.State, "approved", StringComparison.Ordinal)))
+        foreach (TranslationInterchangeReviewEntry entry in entries.Where(static entry => entry.State == TranslationReviewState.Approved))
         {
             if (string.Equals(entry.SourceFingerprint, catalog.TextProfileFingerprint, StringComparison.Ordinal)) continue;
             refusals.Add(new EditorInterchangeRefusal("EDITOR-APPROVAL-FINGERPRINT",
@@ -1330,7 +1330,7 @@ internal sealed class EditorWorkspace : IDisposable
             files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         }
 
-        Rmf2ProjectCompilationV5 compilation = TranslationManifestReader.WithManifestErrors(
+        Rmf2ProjectCompilation compilation = TranslationManifestReader.WithManifestErrors(
             TranslationCompiler.CompileRmf2ProjectV5(projectSource, messageSources, null, cancellationToken),
             projectSource.Path, layout.Error, discoveryErrors);
         Rmf2ProjectV5? rmf2 = compilation.Project;
@@ -1706,7 +1706,7 @@ internal sealed class EditorWorkspace : IDisposable
         return Path.GetFullPath(path).StartsWith(boundary, StringComparison.Ordinal);
     }
 
-    private EditorMessageEntry[] ReadEntries(string path, string content, Rmf2ProjectCompilationV5 compilation)
+    private EditorMessageEntry[] ReadEntries(string path, string content, Rmf2ProjectCompilation compilation)
     {
         var resources = compilation.Project?.Locales.SelectMany(locale => locale.DirectResources).ToArray() ?? [];
         EditorMessageEntry Entry(string key, string message, int start, int length, Rmf2ResourceNode? node)
@@ -1823,6 +1823,6 @@ internal sealed class EditorWorkspace : IDisposable
 
     private sealed record WorkspaceState(
         List<WorkspaceFile> Files,
-        Rmf2ProjectCompilationV5 Compilation,
+        Rmf2ProjectCompilation Compilation,
         IReadOnlyList<EditorCatalogSummary> Catalogs);
 }

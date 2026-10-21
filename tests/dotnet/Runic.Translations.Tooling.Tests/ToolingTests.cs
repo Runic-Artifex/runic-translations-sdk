@@ -15,28 +15,71 @@ internal sealed class ToolingTests
     [Test]
     public void SemanticXliffRoundTripsDirectMf2AndReview()
     {
-        Rmf2ProjectCompilationV5 compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
+        Rmf2ProjectCompilation compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
         object preflight = Preflight(compilation);
         string fingerprint = Property<string>(preflight, "TextProfileFingerprint");
         var review = new TranslationInterchangeReview("app",
-            [new TranslationInterchangeReviewEntry("hello", "de", "approved", "Ready.", fingerprint)]);
+            [new TranslationInterchangeReviewEntry("hello", "de", TranslationReviewState.Approved, "Ready.", fingerprint)]);
 
         TranslationXliffExportResult first = Export(compilation, review);
         TranslationXliffExportResult second = Export(compilation, review);
-        if (first.Documents.Count != 1 || !first.Documents[0].Bytes.SequenceEqual(second.Documents[0].Bytes) || !first.Report.IsLossless)
+        if (first.Documents.Count != 1 || !first.Documents[0].Bytes.Span.SequenceEqual(second.Documents[0].Bytes.Span) || !first.Report.IsLossless)
             throw new InvalidOperationException("Direct MF2 semantic XLIFF export was not deterministic and lossless.");
 
         TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(first.Documents.Single().Bytes);
         TranslationInterchangeReviewEntry importedReview = imported.Review.Entries.Single();
-        if (Encoding.UTF8.GetString(imported.Messages.Single().Bytes) != "Hallo\n" ||
-            importedReview.State != "approved" || importedReview.SourceFingerprint != fingerprint)
+        if (Encoding.UTF8.GetString(imported.Messages.Single().Bytes.Span) != "Hallo\n" ||
+            importedReview.State != TranslationReviewState.Approved || importedReview.SourceFingerprint != fingerprint)
             throw new InvalidOperationException("Direct MF2 semantic XLIFF did not round-trip translator text and review evidence.");
+    }
+
+    // The review states keep their sidecar spelling: draft, translated, needs-review, approved.
+    [Test, DisplayName("review states round-trip with their wire spelling")]
+    public void ReviewStatesRoundTripWithTheirWireSpelling()
+    {
+        (TranslationReviewState State, string Wire)[] states =
+        [
+            (TranslationReviewState.Draft, "draft"), (TranslationReviewState.Translated, "translated"),
+            (TranslationReviewState.NeedsReview, "needs-review"), (TranslationReviewState.Approved, "approved"),
+        ];
+        if (default(TranslationReviewState) != TranslationReviewState.Draft)
+            throw new InvalidOperationException("The default review state must be Draft.");
+        foreach ((TranslationReviewState state, string wire) in states)
+        {
+            var review = new TranslationInterchangeReview("app", [new TranslationInterchangeReviewEntry("hello", "de", state)]);
+            byte[] json = TranslationInterchange.ExportReviewJson(review);
+            if (!Encoding.UTF8.GetString(json).Contains("\"state\":\"" + wire + "\"", StringComparison.Ordinal))
+                throw new InvalidOperationException($"{state} was not written as '{wire}': {Encoding.UTF8.GetString(json)}");
+            if (TranslationInterchange.ImportReviewJson(json).Entries.Single().State != state)
+                throw new InvalidOperationException($"'{wire}' did not read back as {state}.");
+        }
+        byte[] unknown = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(TranslationInterchange.ExportReviewJson(
+            new TranslationInterchangeReview("app", [new TranslationInterchangeReviewEntry("hello", "de", TranslationReviewState.Draft)]))).Replace("\"draft\"", "\"final\"", StringComparison.Ordinal));
+        try { TranslationInterchange.ImportReviewJson(unknown); throw new InvalidOperationException("An unknown review state was accepted."); }
+        catch (TranslationInterchangeException exception) when (exception.Code == "REVIEW-INVALID") { }
+        try { _ = new TranslationInterchangeReviewEntry("hello", "de", (TranslationReviewState)42); throw new InvalidOperationException("An undefined review state was accepted."); }
+        catch (ArgumentOutOfRangeException) { }
+    }
+
+    [Test, DisplayName("artifact kinds report their wire spelling and default to Unknown")]
+    public void ArtifactKindsReportTheirWireSpelling()
+    {
+        if (default(ArtifactKind) != ArtifactKind.Unknown) throw new InvalidOperationException("The default artifact kind must be Unknown.");
+        ArtifactInspection empty = ArtifactInspector.Inspect(ReadOnlyMemory<byte>.Empty);
+        if (empty.Kind != ArtifactKind.Unknown || !empty.ToReport().StartsWith("kind: unknown\n", StringComparison.Ordinal))
+            throw new InvalidOperationException("An empty artifact did not report kind unknown: " + empty.ToReport());
+        ArtifactInspection malformed = ArtifactInspector.Inspect(Encoding.UTF8.GetBytes("<xliff version=\"2.1\""));
+        if (malformed.Kind != ArtifactKind.Xliff || !malformed.ToReport().StartsWith("kind: xliff\n", StringComparison.Ordinal))
+            throw new InvalidOperationException("A malformed XLIFF document did not report kind xliff: " + malformed.ToReport());
+        TranslationXliffDocument xliff = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single();
+        if (!ArtifactInspector.Inspect(xliff.Bytes).ToReport().StartsWith("kind: xliff-2.1\n", StringComparison.Ordinal))
+            throw new InvalidOperationException("An XLIFF 2.1 document did not report kind xliff-2.1.");
     }
 
     [Test]
     public void SemanticXliffAcceptsGroupedRmf2()
     {
-        Rmf2ProjectCompilationV5 compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: true);
+        Rmf2ProjectCompilation compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: true);
         TranslationXliffExportResult exported = Export(compilation);
         if (exported.Documents.Count != 1 || !exported.Report.IsLossless)
             throw new InvalidOperationException("Grouped RMF2 input did not reach the semantic interchange path.");
@@ -87,7 +130,7 @@ internal sealed class ToolingTests
     [Test]
     public void XliffRefusesStructuredTextWithStaleMetadata()
     {
-        byte[] exported = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single().Bytes;
+        byte[] exported = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single().Bytes.ToArray();
         string text = Encoding.UTF8.GetString(exported);
         const string original = "<target>Hallo</target>";
         if (!text.Contains(original, StringComparison.Ordinal))
@@ -101,8 +144,8 @@ internal sealed class ToolingTests
     [Test]
     public void XliffPreflightSeparatesTextContractAndFreshness()
     {
-        Rmf2ProjectCompilationV5 first = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
-        Rmf2ProjectCompilationV5 changed = CompileSemantic("hello = Hello again", "hello = Hallo", grouped: false);
+        Rmf2ProjectCompilation first = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
+        Rmf2ProjectCompilation changed = CompileSemantic("hello = Hello again", "hello = Hallo", grouped: false);
         object firstPreflight = Preflight(first);
         object changedPreflight = Preflight(changed);
         string caller = first.CallerFingerprint!;
@@ -123,7 +166,7 @@ internal sealed class ToolingTests
     [Test]
     public void XliffRequiresSelectedV5ContractIdentity()
     {
-        byte[] exported = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single().Bytes;
+        byte[] exported = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single().Bytes.ToArray();
         string metadata = UnitMetadata(exported);
         if (!metadata.Contains("\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal) ||
             !metadata.Contains("\"messageGrammarVersion\":5", StringComparison.Ordinal) ||
@@ -190,36 +233,69 @@ internal sealed class ToolingTests
     {
         TranslationXliffDocument xliff = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single();
         ArtifactInspection inspection = ArtifactInspector.Inspect(xliff.Bytes);
-        if (inspection.Kind != "xliff-2.1" || inspection.Catalog != "app" || inspection.Locale != "de" || inspection.Findings.Count != 0)
+        if (inspection.Kind != ArtifactKind.Xliff21 || inspection.Catalog != "app" || inspection.Locale != "de" || inspection.Findings.Count != 0)
             throw new InvalidOperationException("Artifact inspection did not recognize the generated XLIFF document.");
     }
 
-    [Test]
-    public void ToolRequestHasCanonicalShape()
+    // The package's stable surface: compile, interchange, inspection and scaffolding. The tool's command plumbing,
+    // the workspace transactions, the editor state, the MF2 syntax tree and the language service are internal.
+    [Test, DisplayName("Tooling exports only the stable compile, interchange, inspection and scaffolding surface")]
+    public void ExportsOnlyTheStableSurface()
     {
-        var request = new TranslationsToolCommandRequest("init");
-        request.Deconstruct(out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _);
-        if (typeof(TranslationsToolCommandRequest).GetConstructors().Single().GetParameters().Length != 17)
-            throw new InvalidOperationException("TranslationsToolCommandRequest changed its positional constructor shape.");
-    }
-
-    [Test]
-    public void ToolCommandHasCanonicalInitShape()
-    {
-        Type[] expected =
+        string[] expected =
         [
-            typeof(ITranslationsToolCommandOperations), typeof(string), typeof(string), typeof(string),
-            typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(bool),
+            "Runic.Translations.Authoring.TranslationAuthoringException",
+            "Runic.Translations.Authoring.TranslationProjectCreationRequest",
+            "Runic.Translations.Authoring.TranslationProjectFile",
+            "Runic.Translations.Authoring.TranslationProjectLocale",
+            "Runic.Translations.Authoring.TranslationProjectPlan",
+            "Runic.Translations.Authoring.TranslationProjectScaffolder",
+            "Runic.Translations.Authoring.TranslationProjectWriter",
+            "Runic.Translations.Compiler.Rmf2ProjectCompilation",
+            "Runic.Translations.Compiler.TextSourceLocation",
+            "Runic.Translations.Compiler.TranslationCompiler",
+            "Runic.Translations.Compiler.TranslationCompilerOptions",
+            "Runic.Translations.Compiler.TranslationDiagnostic",
+            "Runic.Translations.Compiler.TranslationDiagnosticSeverity",
+            "Runic.Translations.Compiler.TranslationSource",
+            "Runic.Translations.Tooling.ArtifactInspection",
+            "Runic.Translations.Tooling.ArtifactInspectionFinding",
+            "Runic.Translations.Tooling.ArtifactInspector",
+            "Runic.Translations.Tooling.ArtifactKind",
+            "Runic.Translations.Tooling.TranslationInterchange",
+            "Runic.Translations.Tooling.TranslationInterchangeException",
+            "Runic.Translations.Tooling.TranslationInterchangeLoss",
+            "Runic.Translations.Tooling.TranslationInterchangeReport",
+            "Runic.Translations.Tooling.TranslationInterchangeReview",
+            "Runic.Translations.Tooling.TranslationInterchangeReviewEntry",
+            "Runic.Translations.Tooling.TranslationMf2Document",
+            "Runic.Translations.Tooling.TranslationReviewState",
+            "Runic.Translations.Tooling.TranslationXliffDocument",
+            "Runic.Translations.Tooling.TranslationXliffExportResult",
+            "Runic.Translations.Tooling.TranslationXliffImportResult",
         ];
-        MethodInfo[] initMethods = typeof(TranslationsToolCommandModule).GetMethods()
-            .Where(method => method.Name == "Init")
+        string[] exported = new[] { typeof(TranslationInterchange).Assembly, typeof(TranslationCompiler).Assembly, Assembly.Load("Runic.Translations.Authoring") }
+            .SelectMany(assembly => assembly.GetExportedTypes())
+            .Select(type => type.FullName!)
+            .Order(StringComparer.Ordinal)
             .ToArray();
-        MethodInfo? canonical = initMethods.SingleOrDefault(method => method.GetParameters().Length == expected.Length);
-        if (canonical is null || !canonical.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(expected) || initMethods.Length != 1)
-            throw new InvalidOperationException("TranslationsToolCommandModule.Init retained an obsolete layout overload.");
+        if (!exported.SequenceEqual(expected))
+            throw new InvalidOperationException("The Tooling package exports another surface: " + string.Join(", ", exported.Except(expected)) +
+                " added; " + string.Join(", ", expected.Except(exported)) + " missing.");
+        if (typeof(TranslationInterchange).Assembly.GetReferencedAssemblies().Any(name => name.Name!.StartsWith("Runic.CommandLine", StringComparison.Ordinal)))
+            throw new InvalidOperationException("Runic.Translations.Tooling must not reference Runic.CommandLine.");
     }
 
-    private static Rmf2ProjectCompilationV5 CompileSemantic(string english, string german, bool grouped)
+    // The harmless level is zero, as in Runic SDK: an uninitialized severity never reads as an error.
+    [Test, DisplayName("diagnostic severity orders Information, Warning, Error from zero")]
+    public void SeverityIsOrderedFromInformation()
+    {
+        if (default(TranslationDiagnosticSeverity) != TranslationDiagnosticSeverity.Information ||
+            (int)TranslationDiagnosticSeverity.Warning != 1 || (int)TranslationDiagnosticSeverity.Error != 2)
+            throw new InvalidOperationException("TranslationDiagnosticSeverity must be Information = 0, Warning = 1, Error = 2.");
+    }
+
+    private static Rmf2ProjectCompilation CompileSemantic(string english, string german, bool grouped)
     {
         TranslationSource project = Source("translations/runic.json", """
             {
@@ -233,7 +309,7 @@ internal sealed class ToolingTests
         TranslationSource[] messages = grouped
             ? [Source("translations/en.rmf2", english), Source("translations/de.rmf2", german)]
             : [Source("translations/en/hello.mf2", DirectPattern(english)), Source("translations/de/hello.mf2", DirectPattern(german))];
-        Rmf2ProjectCompilationV5 compilation = grouped
+        Rmf2ProjectCompilation compilation = grouped
             ? TranslationCompiler.CompileProject(project, messages)
             : TranslationCompiler.CompileMf2Project(project, messages);
         if (!compilation.Success)
@@ -241,10 +317,10 @@ internal sealed class ToolingTests
         if (compilation.CatalogId != "app" || compilation.DefaultLocale != "en" ||
             !compilation.Locales.SequenceEqual(["de", "en"]) ||
             compilation.CallerFingerprint is null || compilation.SourceHash is null ||
-            Rmf2ProjectCompilationV5.ExecutionProfile != "rmf2-execution-v2" ||
-            Rmf2ProjectCompilationV5.MessageGrammarVersion != 5 ||
-            Rmf2ProjectCompilationV5.RuntimeAbiVersion != 3)
-            throw new InvalidOperationException("The public v5 compilation result omitted selected contract metadata.");
+            compilation.ExecutionProfile != "rmf2-execution-v2" ||
+            compilation.MessageGrammarVersion != 5 ||
+            compilation.RuntimeAbiVersion != 3)
+            throw new InvalidOperationException("The public compilation result omitted selected contract metadata.");
         return compilation;
     }
 
@@ -252,10 +328,10 @@ internal sealed class ToolingTests
         ? source.Substring("hello =".Length).TrimStart(' ', '\n', '\r')
         : source;
 
-    private static TranslationXliffExportResult Export(Rmf2ProjectCompilationV5 compilation, TranslationInterchangeReview? review = null) =>
+    private static TranslationXliffExportResult Export(Rmf2ProjectCompilation compilation, TranslationInterchangeReview? review = null) =>
         TranslationInterchange.ExportXliff21(compilation, review);
 
-    private static object Preflight(Rmf2ProjectCompilationV5 compilation)
+    private static object Preflight(Rmf2ProjectCompilation compilation)
     {
         MethodInfo method = typeof(TranslationInterchange).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
             .Single(candidate => candidate.Name == "PreflightXliff21" && candidate.GetParameters().Length == 1 &&

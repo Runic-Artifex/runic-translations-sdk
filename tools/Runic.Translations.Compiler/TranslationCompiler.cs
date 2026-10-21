@@ -18,30 +18,21 @@ public static partial class TranslationCompiler
     /// The project file is named <c>runic.json</c>. Message paths are relative to its directory and
     /// use the convention <c>{locale}/{message-id}.mf2</c>.
     /// </remarks>
-    public static Rmf2ProjectCompilationV5 CompileMf2Project(
-        TranslationSource project,
-        IEnumerable<TranslationSource> messages,
-        TranslationCompilerOptions? options = null)
-        => CompileMf2Project(project, messages, options, CancellationToken.None);
-
-    /// <summary>Compiles a convention-based Runic MF2 project with cancellation.</summary>
     /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
-    public static Rmf2ProjectCompilationV5 CompileMf2Project(
+    public static Rmf2ProjectCompilation CompileMf2Project(
         TranslationSource project,
         IEnumerable<TranslationSource> messages,
-        TranslationCompilerOptions? options,
-        CancellationToken cancellationToken)
+        TranslationCompilerOptions? options = null,
+        CancellationToken cancellationToken = default)
         => CompileRmf2ProjectV5(project, messages, options, cancellationToken);
 
     /// <summary>Compiles direct <c>.mf2</c> or grouped <c>.rmf2</c> sources into the RMF2 execution-v2 contract.</summary>
-    public static Rmf2ProjectCompilationV5 CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
-        TranslationCompilerOptions? options = null)
-        => CompileProject(project, messages, options, CancellationToken.None);
-
-    /// <summary>Compiles direct <c>.mf2</c> or grouped <c>.rmf2</c> sources into the RMF2 execution-v2 contract with cancellation.</summary>
     /// <exception cref="OperationCanceledException">The cancellation token was canceled.</exception>
-    public static Rmf2ProjectCompilationV5 CompileProject(TranslationSource project, IEnumerable<TranslationSource> messages,
-        TranslationCompilerOptions? options, CancellationToken cancellationToken)
+    public static Rmf2ProjectCompilation CompileProject(
+        TranslationSource project,
+        IEnumerable<TranslationSource> messages,
+        TranslationCompilerOptions? options = null,
+        CancellationToken cancellationToken = default)
         => CompileRmf2ProjectV5(project, messages, options, cancellationToken);
 
     private static ManifestModel? ReadMf2Project(ParsedJson parsed, DiagnosticBag diagnostics, TranslationCompilerOptions options)

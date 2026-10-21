@@ -20,8 +20,25 @@ public sealed record EditorDocumentValidationDiagnostic(
     int Column,
     int EndLine,
     int EndColumn,
-    Runic.Translations.Compiler.Rmf2DiagnosticSpan? Span = null, string? SourceRevision = null,
-    IReadOnlyList<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix>? QuickFixes = null);
+    EditorDiagnosticSpan? Span = null, string? SourceRevision = null,
+    IReadOnlyList<EditorDiagnosticQuickFix>? QuickFixes = null);
+
+/// <summary>Physical source selection of a validation diagnostic. Line and character positions are zero-based UTF-16.</summary>
+public sealed record EditorDiagnosticSpan(int StartByte, int LengthBytes, int StartUtf16, int LengthUtf16,
+    int StartLine, int StartCharacter, int EndLine, int EndCharacter)
+{
+    internal static EditorDiagnosticSpan? From(Runic.Translations.Compiler.Rmf2DiagnosticSpan? span) => span is null ? null :
+        new(span.StartByte, span.LengthBytes, span.StartUtf16, span.LengthUtf16, span.StartLine, span.StartCharacter, span.EndLine, span.EndCharacter);
+}
+
+/// <summary>A compiler-authorized source edit offered for a validation diagnostic, tied to the complete source revision.</summary>
+public sealed record EditorDiagnosticQuickFix(string Id, string Title, string DiagnosticId,
+    Runic.Translations.Compiler.TextSourceLocation Location, string ExpectedRevision, int StartByte, int LengthBytes, string NewText)
+{
+    internal static IReadOnlyList<EditorDiagnosticQuickFix>? From(IReadOnlyList<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix>? fixes) =>
+        fixes?.Select(static fix => new EditorDiagnosticQuickFix(fix.Id, fix.Title, fix.DiagnosticId, fix.Location, fix.ExpectedRevision,
+            fix.StartByte, fix.LengthBytes, fix.NewText)).ToArray();
+}
 
 /// <summary>Typed validation result retained by the bridge operation.</summary>
 public sealed record EditorDocumentValidationResult(
@@ -96,7 +113,7 @@ public sealed class EditorDocumentViewModel : ReactiveObject, IDisposable
         await _modelContext.InvokeAsync(() => LastValidation = result).ConfigureAwait(false);
         return new EditorDocumentValidationResult(result.Success, result.Diagnostics.Select(diagnostic =>
             new EditorDocumentValidationDiagnostic(diagnostic.Id, diagnostic.Severity, diagnostic.Message,
-                diagnostic.Path, diagnostic.Line, diagnostic.Column, diagnostic.EndLine, diagnostic.EndColumn, diagnostic.Span, diagnostic.SourceRevision, diagnostic.QuickFixes)).ToArray());
+                diagnostic.Path, diagnostic.Line, diagnostic.Column, diagnostic.EndLine, diagnostic.EndColumn, EditorDiagnosticSpan.From(diagnostic.Span), diagnostic.SourceRevision, EditorDiagnosticQuickFix.From(diagnostic.QuickFixes))).ToArray());
     }
 
     private async Task<EditorDocumentSaveResult> SaveAsync(EditorDocumentSaveRequest request)

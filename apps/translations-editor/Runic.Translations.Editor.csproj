@@ -26,10 +26,6 @@
     <TranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' != 'true'">$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</TranslationsOutputPath>
     <TranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' == 'true'">obj/runic-bridge/bootstrap/obj/$(Configuration)/$(TargetFramework)/translations</TranslationsOutputPath>
     <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
-    <!-- The editor hosts its own generated Runic.CommandLine catalog beside the one
-         published inside Runic.Translations.Tooling; the identical well-known
-         generated type name is expected and the locally generated catalog wins. -->
-    <NoWarn>$(NoWarn);CS0436</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>

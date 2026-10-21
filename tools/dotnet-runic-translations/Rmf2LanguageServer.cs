@@ -200,7 +200,7 @@ internal sealed class Rmf2LanguageServer
             if (command is "runic.preview" or "runic.renderPreview")
             {
                 string key = arguments[1]!.GetValue<string>(), locale = arguments[2]!.GetValue<string>();
-                Rmf2ProjectCompilationV5 compilation = workspace.Validate();
+                Rmf2ProjectCompilation compilation = workspace.Validate();
                 if (!compilation.Success) throw new TranslationAuthoringException(string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
                 Rmf2ProjectV5 project = compilation.Project!;
                 JsonNode message;
@@ -383,7 +383,7 @@ internal sealed class Rmf2LanguageServer
             string path = LocalPath(uri); var workspace = Workspace(path);
             string key = string.Join('_', workspace.LogicalPath(path, entry));
             string content = entry.MessageSyntax is { } messageSyntax ? workspace.LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte)) ?? key : key;
-            Rmf2ProjectCompilationV5 compiled = workspace.Validate();
+            Rmf2ProjectCompilation compiled = workspace.Validate();
             if (compiled.Success && !entry.IsGroup)
             {
                 string locale = workspace.Locale(path);
@@ -919,7 +919,7 @@ internal sealed class Rmf2LanguageServer
             var diagnostics = current.Syntax.Diagnostics.Concat(catalogDiagnostics.Where(d => PathComparer.Equals(Path.GetFullPath(d.Location.Path).Replace('\\', '/'), path)))
                 .DistinctBy(d => (d.Id, d.Location.StartByte, d.Location.LengthBytes, d.Message));
             Publish(uri, new JsonArray(diagnostics.Select(d => (JsonNode)new JsonObject {
-                ["range"] = Range(current, d.Location), ["severity"] = d.Severity == TranslationDiagnosticSeverity.Error ? 1 : 2,
+                ["range"] = Range(current, d.Location), ["severity"] = d.Severity switch { TranslationDiagnosticSeverity.Error => 1, TranslationDiagnosticSeverity.Warning => 2, _ => 3 },
                 ["code"] = d.Id, ["source"] = "runic-rmf2", ["message"] = d.Message,
             }).ToArray()));
         }

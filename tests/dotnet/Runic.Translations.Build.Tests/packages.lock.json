@@ -115,10 +115,7 @@
         "type": "Project"
       },
       "runic.translations.tooling": {
-        "type": "Project",
-        "dependencies": {
-          "Runic.CommandLine": "[0.7.0-preview.1, )"
-        }
+        "type": "Project"
       },
       "Runic.CommandLine": {
         "type": "CentralTransitive",

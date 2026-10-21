@@ -1,6 +1,6 @@
 # Runic.Translations.Authoring
 
-Build editors and workspace tools on supported Runic Translations project creation, mutation, transaction, recovery, and review-state APIs. The package validates proposed changes with the compiler and provides safe filesystem operations without imposing a user interface.
+Create validated Runic Translations projects. The assembly renders a project plan, checks it with the compiler and writes it with safe filesystem operations, without imposing a user interface.
 
 ## Install
 
@@ -20,30 +20,25 @@ var request = new TranslationProjectCreationRequest(
     additionalLocales: [new TranslationProjectLocale("de", "en")]);
 
 TranslationProjectPlan plan = TranslationProjectScaffolder.Render(request);
-string createdDirectory = TranslationProjectWriter.Create(plan);
+string createdDirectory = await TranslationProjectWriter.CreateAsync(plan, cancellationToken);
 
 Console.WriteLine(createdDirectory);
 ```
 
-`Render` is side-effect free and returns the exact UTF-8 files plus their successful compilation. `Create` commits the complete plan to a target that does not already exist; conflicts and unsafe linked target parents fail without overwriting an existing workspace.
+`Render` is side-effect free and returns the exact UTF-8 files plus their successful compilation. `CreateAsync` commits the complete plan to a target that does not already exist; conflicts, unsafe linked target parents and cancellation fail without overwriting an existing workspace or leaving a partial project.
 
 ## When to choose this package
 
-Consume these authoring APIs through the `Runic.Translations.Tooling` package when building a translation editor, project wizard, or other tool that must inspect and change `runic.json` and RMF2 sources. Use `dotnet-runic-translations` or `Runic.Translations.Templates` when you only need a ready-made command or scaffold. Runtime applications do not need this assembly.
-
-Mutation and recovery APIs use expected revisions and contained paths to detect concurrent or unsafe changes. Callers still own user authorization, backups, source control, and any product-specific review workflow.
-
-`TranslationWorkspaceTransactionPlan.Compilation` retains the compiler result
-for direct MF2 projects. Typed RMF2 plans are validated and commit-guarded
-through the v5 carrier; accessing `Compilation` for such a plan throws
-`InvalidOperationException` rather than returning a fabricated catalog.
-
-## RMF2 authoring
+Consume these APIs through the `Runic.Translations.Tooling` package when building a project wizard or other tool that creates translation projects. Use `dotnet-runic-translations` or `Runic.Translations.Templates` when you only need a ready-made command or scaffold. Runtime applications do not need this assembly.
 
 New scaffolds create one `{locale}.rmf2` source per declared locale, including
-empty starter-free locales. `Rmf2Workspace` and `Rmf2ResourceWriter` provide
-revision-aware, source-preserving resource and locale mutations. Direct `.mf2`
-sources remain the alternate supported representation.
+empty starter-free locales.
+
+The workspace mutation, transaction and recovery operations, the RMF2 resource
+writer and the workspace language service are internal: they serve the
+`runic-translations` tool and the Translations Editor, which are built from the
+same release. The editor's review state (`runic.translations.editor-state/1`)
+belongs to the editor product.
 
 ## Compatibility and status
 
