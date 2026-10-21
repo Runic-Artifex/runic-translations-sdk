@@ -115,11 +115,10 @@ ESM, `JsonException` in .NET). Upgrade in this order:
 
 1. Upgrade and deploy every receiver: update the .NET package and regenerate the
    ESM output. New receivers read both versions.
-2. Until then, keep ESM writers on version 1 with
-   `createTextReference(key, inputs, { version: 1 })`. .NET writers emit only
-   version 2 since 0.8 (`TranslationReference.CreateVersion1` was removed), so
-   upgrade .NET receivers before .NET writers. Version 1 carries scalar arguments
-   only; a list or message argument throws and needs version 2.
+2. Writers emit only version 2 since 0.8: the .NET
+   `TranslationReference.CreateVersion1` and the ESM
+   `createTextReference(key, inputs, { version: 1 })` writers were removed. Keep
+   writers on 0.7 until every receiver is upgraded.
 3. Once every receiver is upgraded, switch writers to the version 2 constructor
    and `createTextReference` without `version`.
 

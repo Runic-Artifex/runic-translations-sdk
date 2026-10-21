@@ -156,9 +156,9 @@ dates, times and date-times need the version 2 forms. A time with fractional
 seconds or a date-time with an offset, which earlier .NET writers accepted, does
 not match its input.
 
-ESM writers can still emit version 1 while receivers are upgraded:
-`createTextReference(key, inputs, { version: 1 })`; .NET writers emit only
-version 2 since 0.8. Version 1 carries scalar
+Writers emit only version 2 since 0.8: the .NET `TranslationReference.CreateVersion1`
+and ESM `createTextReference(key, inputs, { version: 1 })` writers were removed.
+Readers on both sides still read version 1. Version 1 carries scalar
 arguments only, each value as its canonical string (booleans as JSON booleans);
 a list or message argument throws.
 

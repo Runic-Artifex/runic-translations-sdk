@@ -201,9 +201,10 @@ internal sealed class Rmf2V1CorpusTests
     // data, and runtime.d.ts declares localeDirection, in both digests. Every other output is unchanged.
     // Re-pinned for TR-2 (0.8): generated C# calls the runtime through Runic.Translations.Generated
     // (GeneratedCatalogSupport, CompiledRmf2*, TranslationsCompatibility) and the readable surface implements
-    // IReadableMessages, in both digests. ESM output is unchanged.
-    private const string EncodedOutputDigest = "a978a32dbb9fd50aebb706d5c9234695f9ca07a8b32b259998f2148d6308fbfd";
-    private const string HiddenEncodedOutputDigest = "002f22ec2163a6bbb3bd385193775db419dbab9b6bd79af9ffb84b28d57f9931";
+    // IReadableMessages; transport.js writes only version 2 and transport.d.ts drops the version 1 createTextReference
+    // overload, in both digests.
+    private const string EncodedOutputDigest = "3c0d6e68105b785be90716051494fd03c97212bb7b7f61c4f395d1e8a7ea7ed1";
+    private const string HiddenEncodedOutputDigest = "ab003375e12da228bf01aa8eba793b64f51a8244c25313c042c754f50ae347d6";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
