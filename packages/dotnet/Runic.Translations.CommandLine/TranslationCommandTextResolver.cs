@@ -127,13 +127,13 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         switch (input.Type)
         {
             case TextArgumentType.String:
-                argument = TextArgument.CreateRmf2(input.Name, new TextArgument("_", value));
+                argument = Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(input.Name, new TextArgument("_", value));
                 return true;
             case TextArgumentType.Int when long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out long whole):
-                argument = TextArgument.CreateRmf2(input.Name, new TextArgument("_", whole, input.Format));
+                argument = Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(input.Name, new TextArgument("_", whole, input.Format));
                 return true;
             case TextArgumentType.Number when decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal number):
-                argument = TextArgument.CreateRmf2(input.Name, new TextArgument("_", number, input.Format));
+                argument = Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(input.Name, new TextArgument("_", number, input.Format));
                 return true;
             default:
                 argument = default;

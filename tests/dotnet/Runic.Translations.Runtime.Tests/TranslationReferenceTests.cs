@@ -194,7 +194,7 @@ internal sealed class TranslationReferenceTests
         ])]), "en");
 
     private static string Describe(TranslationReferenceResolution resolution) =>
-        resolution.Outcome + " " + (resolution.Text ?? "null") + " [" + string.Join(", ", resolution.Diagnostics.Select(item => item.Path + ":" + item.Reason)) + "]";
+        resolution.Outcome + " " + (resolution.Text ?? "null") + " [" + string.Join(", ", resolution.Diagnostics.Select(item => item.Path + ":" + TranslationReferenceDiagnosticReasons.ToWire(item.Reason))) + "]";
 
     [Test, DisplayName("persisted text references resolve with the receiver's catalog and fall back explicitly")]
     public void Resolve()

@@ -6,7 +6,7 @@ namespace Runic.Translations;
 
 /// <summary>The closed relative-time registry shared by generated schema version 2 messages.</summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class TextRelativeTimeFormatter
+internal static class TextRelativeTimeFormatter
 {
     /// <summary>Formats a relative duration for a compiler-supported locale family.</summary>
     public static string Format(decimal value, string unit, string numeric, string locale)

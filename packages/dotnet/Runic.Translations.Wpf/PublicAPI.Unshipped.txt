@@ -1,1 +1,5 @@
 #nullable enable
+Runic.Translations.Wpf.TranslationSource.Messages.get -> Runic.Translations.IReadableMessages!
+Runic.Translations.Wpf.TranslationSource.TranslationSource(Runic.Translations.ITranslationManager! manager, Runic.Translations.IReadableMessages! messages, Runic.Translations.Wpf.WpfInlineRenderer? renderer = null, System.Windows.Threading.Dispatcher? dispatcher = null) -> void
+*REMOVED*Runic.Translations.Wpf.TranslationSource.Messages.get -> object!
+*REMOVED*Runic.Translations.Wpf.TranslationSource.TranslationSource(Runic.Translations.ITranslationManager! manager, object! messages, Runic.Translations.Wpf.WpfInlineRenderer? renderer = null, System.Windows.Threading.Dispatcher? dispatcher = null) -> void

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 
-namespace Runic.Translations;
+namespace Runic.Translations.Generated;
 
 /// <summary>
 /// Selects the internal constructors that take a model the compiler already validated, such as a generated catalog's

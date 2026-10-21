@@ -10,8 +10,11 @@ namespace Runic.Translations;
 public static class TranslationTransport
 {
     /// <summary>The current transport writer version.</summary>
-    /// <remarks>Version 2 tags each argument with its type and adds list and message arguments. Readers also accept version 1.</remarks>
-    public const int Version = 2;
+    /// <remarks>Version 2 tags each argument with its type and adds list and message arguments. Readers also accept version 1.
+    /// A property, not a constant, so code compiled against this release reads the version of the runtime it runs on.</remarks>
+    public static int Version => CurrentVersion;
+    internal const int CurrentVersion = 2;
+    // The limits below are fixed for each transport version; a new transport version may change them.
     /// <summary>The oldest transport version that readers accept.</summary>
     public const int MinimumReadVersion = 1;
     /// <summary>The maximum number of arguments in one reference.</summary>
@@ -187,13 +190,14 @@ public sealed class TranslationReference
     {
     }
 
-    /// <summary>Creates a version 1 reference, for receivers that do not read version 2 yet during a rolling upgrade.</summary>
+    // Writes transport version 1 for the conformance corpus; the public writer was removed in 0.8 (version 1 stays readable).
+    /// <summary>Creates a version 1 reference.</summary>
     /// <remarks>
     /// Version 1 carries scalar arguments only: booleans as JSON booleans and every other value as its canonical string, whose type the
     /// receiver's catalog decides. List and message arguments need version 2 and throw <see cref="ArgumentException"/>. Upgrade the
     /// receivers, then write version 2 with the public constructor.
     /// </remarks>
-    public static TranslationReference CreateVersion1(
+    internal static TranslationReference CreateVersion1(
         string catalog,
         string contractFingerprint,
         string key,

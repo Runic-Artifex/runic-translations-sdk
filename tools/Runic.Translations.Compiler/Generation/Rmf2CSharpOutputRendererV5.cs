@@ -92,9 +92,9 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,");
         writer.Line("global::Runic.Translations.TranslationOptions? options = null)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("if (global::Runic.Translations.TranslationsCompatibility.RuntimeAbiVersion != 1)"); writer.Indent();
+        writer.Line("if (global::Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion != 1)"); writer.Indent();
         writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");"); writer.Unindent();
-        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
+        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("return new global::Runic.Translations.CompiledTranslationProvider(" + className + "CatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
         writer.Line("public static async global::System.Threading.Tasks.ValueTask<global::Runic.Translations.ITranslationManager> CreateManagerAsync("); writer.Indent();
@@ -128,7 +128,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackLimits? limits = null,");
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
+        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("var factory = new global::Runic.Translations.ExternalTranslationSnapshotFactory(externalSource, CatalogId, ContractFingerprint, CreateExternalPackContract, limits, integrityVerifier);");
         writer.Line("return CreateProvider(valueFormatter, factory, options);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
@@ -151,7 +151,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null,");
         writer.Line("global::System.Threading.CancellationToken cancellationToken = default)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
+        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("return global::Runic.Translations.TranslationPackLoader.LoadAsync(source, CreateExternalPackContract(locale), limits, integrityVerifier, cancellationToken);");
         writer.Unindent(); writer.Line("}");
         writer.Unindent(); writer.Line("}");
@@ -181,10 +181,11 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Unindent(); writer.Line("}"); writer.Blank();
 
         writer.Line("/// <summary>Readable accessors for the " + GenerationSupport.XmlDocumentation(project.Id) + " translation catalog. Each member forwards to its encoded accessor.</summary>");
-        writer.Line(visibility + " sealed class " + messages);
+        writer.Line(visibility + " sealed class " + messages + " : global::Runic.Translations.IReadableMessages");
         writer.Line("{"); writer.Indent();
         writer.Line("/// <summary>The readable C# name policy version of this surface.</summary>");
         writer.Line("public const int ReadableNameVersion = " + Rmf2ReadableNamesV1.Version + ";");
+        writer.Line("int global::Runic.Translations.IReadableMessages.ReadableNameVersion => ReadableNameVersion;");
         writer.Line("private readonly " + ns + className + " __text;"); writer.Blank();
         writer.Line("internal " + messages + "(" + ns + className + " text) => this.__text = text;");
         foreach (Rmf2ReadableMessageV1 message in readable)
@@ -302,7 +303,7 @@ internal static class Rmf2CSharpOutputRendererV5
             foreach (Rmf2InputV5 input in message.Inputs)
             {
                 string parameter = Rmf2GeneratedNamesV1.Identifier(input.Name);
-                writer.Line("global::Runic.Translations.TextArgument.CreateRmf2(" + GenerationSupport.CSharpString(input.Name) + ", new global::Runic.Translations.TextArgument(\"_\", " + parameter + ")),");
+                writer.Line("global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(" + GenerationSupport.CSharpString(input.Name) + ", new global::Runic.Translations.TextArgument(\"_\", " + parameter + ")),");
             }
             writer.Unindent(); writer.Line("})" + close + ";");
             writer.Unindent(); writer.Line("}");
@@ -323,9 +324,9 @@ internal static class Rmf2CSharpOutputRendererV5
         int index = 0;
         foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
         {
-            writer.Line("global::Runic.Translations.CompiledTranslationLocale.CreateDeferred(" + GenerationSupport.CSharpString(locale.Tag) + ", " +
+            writer.Line("global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateDeferredLocale(" + GenerationSupport.CSharpString(locale.Tag) + ", " +
                 (locale.FallbackTag is null ? "null" : GenerationSupport.CSharpString(locale.FallbackTag)) +
-                ", static () => global::Runic.Translations.CompiledTranslationLocale.ReadRmf2Values(Locale" + index++ + "Data)),");
+                ", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale" + index++ + "Data)),");
         }
         writer.Unindent(); writer.Line("},");
     }
@@ -346,7 +347,7 @@ internal static class Rmf2CSharpOutputRendererV5
             for (int i = chunk * ChunkSize; i < Math.Min(count, (chunk + 1) * ChunkSize); i++)
             {
                 Rmf2V5Definition definition = table.Definitions[i];
-                writer.Line("definitions[" + i + "] = global::Runic.Translations.CompiledTranslationDefinition.FromRmf2Inputs(" + GenerationSupport.CSharpString(definition.Contract.Key) + ","); writer.Indent();
+                writer.Line("definitions[" + i + "] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateDefinition(" + GenerationSupport.CSharpString(definition.Contract.Key) + ","); writer.Indent();
                 WriteInputs(writer, definition.Contract.Inputs, ", isCanonical: " + (definition.Canonical ? "true" : "false") + ");"); writer.Unindent();
             }
             writer.Unindent(); writer.Line("}"); writer.Blank();
@@ -389,7 +390,7 @@ internal static class Rmf2CSharpOutputRendererV5
 
     private static void WriteMessage(GenerationWriter writer, Rmf2MessageV5 message, string contentLocale, string suffix)
     {
-        writer.Line("new global::Runic.Translations.CompiledRmf2Message("); writer.Indent();
+        writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Message("); writer.Indent();
         WriteInputs(writer, message.Inputs, ",");
         WriteDeclarations(writer, message.Declarations, ",");
         WriteSelectors(writer, message.Selectors, ",");
@@ -399,18 +400,18 @@ internal static class Rmf2CSharpOutputRendererV5
 
     private static void WriteInputs(GenerationWriter writer, IReadOnlyList<Rmf2InputV5> inputs, string suffix)
     {
-        writer.Line("new global::Runic.Translations.CompiledRmf2Input[]"); writer.Line("{"); writer.Indent();
+        writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Input[]"); writer.Line("{"); writer.Indent();
         foreach (Rmf2InputV5 input in inputs)
-            writer.Line("new global::Runic.Translations.CompiledRmf2Input(" + GenerationSupport.CSharpString(input.Name) + ", global::Runic.Translations.TextArgumentType." + Type(input.Type) + "),");
+            writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Input(" + GenerationSupport.CSharpString(input.Name) + ", global::Runic.Translations.TextArgumentType." + Type(input.Type) + "),");
         writer.Unindent(); writer.Line("}" + suffix);
     }
 
     private static void WriteDeclarations(GenerationWriter writer, IReadOnlyList<Rmf2DeclarationV5> declarations, string suffix)
     {
-        writer.Line("new global::Runic.Translations.CompiledRmf2Declaration[]"); writer.Line("{"); writer.Indent();
+        writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Declaration[]"); writer.Line("{"); writer.Indent();
         foreach (Rmf2DeclarationV5 declaration in declarations)
         {
-            writer.Line("new global::Runic.Translations.CompiledRmf2Declaration(" + GenerationSupport.CSharpString(declaration.Kind) + ", " + GenerationSupport.CSharpString(declaration.Name) + ","); writer.Indent();
+            writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Declaration(" + GenerationSupport.CSharpString(declaration.Kind) + ", " + GenerationSupport.CSharpString(declaration.Name) + ","); writer.Indent();
             WriteExpression(writer, declaration.Expression, ")),"); writer.Unindent();
         }
         writer.Unindent(); writer.Line("}" + suffix);
@@ -418,23 +419,23 @@ internal static class Rmf2CSharpOutputRendererV5
 
     private static void WriteSelectors(GenerationWriter writer, IReadOnlyList<Rmf2SelectorV5> selectors, string suffix)
     {
-        writer.Line("new global::Runic.Translations.CompiledRmf2Selector[]"); writer.Line("{"); writer.Indent();
+        writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Selector[]"); writer.Line("{"); writer.Indent();
         foreach (Rmf2SelectorV5 selector in selectors)
-            writer.Line("new global::Runic.Translations.CompiledRmf2Selector(" + Value(selector.Value) + ", global::Runic.Translations.TextArgumentType." + Type(selector.Type) + ", " + GenerationSupport.CSharpString(selector.Function) + "),");
+            writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Selector(" + Value(selector.Value) + ", global::Runic.Translations.TextArgumentType." + Type(selector.Type) + ", " + GenerationSupport.CSharpString(selector.Function) + "),");
         writer.Unindent(); writer.Line("}" + suffix);
     }
 
     private static void WriteVariants(GenerationWriter writer, IReadOnlyList<Rmf2VariantV5> variants, string suffix)
     {
-        writer.Line("new global::Runic.Translations.CompiledRmf2Variant[]"); writer.Line("{"); writer.Indent();
+        writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Variant[]"); writer.Line("{"); writer.Indent();
         foreach (Rmf2VariantV5 variant in variants)
         {
-            writer.Line("new global::Runic.Translations.CompiledRmf2Variant("); writer.Indent();
-            writer.Line("new global::Runic.Translations.CompiledRmf2Key[]"); writer.Line("{"); writer.Indent();
+            writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Variant("); writer.Indent();
+            writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Key[]"); writer.Line("{"); writer.Indent();
             foreach (Rmf2KeyV5 key in variant.Keys)
-                writer.Line(key.Kind == "wildcard" ? "new global::Runic.Translations.CompiledRmf2Key()," : "new global::Runic.Translations.CompiledRmf2Key(" + GenerationSupport.CSharpString(key.Value!) + ", " + (key.Canonical is null ? "null" : GenerationSupport.CSharpString(key.Canonical)) + "),");
+                writer.Line(key.Kind == "wildcard" ? "new global::Runic.Translations.Generated.CompiledRmf2Key()," : "new global::Runic.Translations.Generated.CompiledRmf2Key(" + GenerationSupport.CSharpString(key.Value!) + ", " + (key.Canonical is null ? "null" : GenerationSupport.CSharpString(key.Canonical)) + "),");
             writer.Unindent(); writer.Line("},");
-            writer.Line("new global::Runic.Translations.CompiledRmf2Node[]"); writer.Line("{"); writer.Indent();
+            writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Node[]"); writer.Line("{"); writer.Indent();
             foreach (Rmf2NodeV5 node in variant.Nodes) WriteNode(writer, node);
             writer.Unindent(); writer.Line("}),"); writer.Unindent();
         }
@@ -446,14 +447,14 @@ internal static class Rmf2CSharpOutputRendererV5
         switch (node)
         {
             case Rmf2TextV5 text:
-                writer.Line("new global::Runic.Translations.CompiledRmf2Node(" + GenerationSupport.CSharpString(text.Value) + "),");
+                writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Node(" + GenerationSupport.CSharpString(text.Value) + "),");
                 break;
             case Rmf2ExpressionNodeV5 expression:
-                writer.Line("new global::Runic.Translations.CompiledRmf2Node("); writer.Indent();
+                writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Node("); writer.Indent();
                 WriteExpression(writer, expression.Expression, ")),"); writer.Unindent();
                 break;
             case Rmf2MarkupV5 markup:
-                writer.Line("new global::Runic.Translations.CompiledRmf2Node(" + GenerationSupport.CSharpString(markup.Name) + ", " + GenerationSupport.CSharpString(markup.MarkupKind) + ","); writer.Indent();
+                writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Node(" + GenerationSupport.CSharpString(markup.Name) + ", " + GenerationSupport.CSharpString(markup.MarkupKind) + ","); writer.Indent();
                 WriteOptions(writer, markup.Options, ",");
                 WriteAnnotations(writer, markup.Annotations, "),"); writer.Unindent();
                 break;
@@ -463,7 +464,7 @@ internal static class Rmf2CSharpOutputRendererV5
 
     private static void WriteExpression(GenerationWriter writer, Rmf2ExpressionV5 expression, string suffix)
     {
-        writer.Line("new global::Runic.Translations.CompiledRmf2Expression("); writer.Indent();
+        writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Expression("); writer.Indent();
         writer.Line(Value(expression.Operand) + ",");
         writer.Line("global::Runic.Translations.TextArgumentType." + Type(expression.ValueType) + ",");
         writer.Line((expression.Function is null ? "null" : GenerationSupport.CSharpString(expression.Function)) + ",");
@@ -473,17 +474,17 @@ internal static class Rmf2CSharpOutputRendererV5
 
     private static void WriteOptions(GenerationWriter writer, IReadOnlyList<Rmf2OptionV5> options, string suffix)
     {
-        writer.Line("new global::Runic.Translations.CompiledRmf2Option[]"); writer.Line("{"); writer.Indent();
+        writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Option[]"); writer.Line("{"); writer.Indent();
         foreach (Rmf2OptionV5 option in options)
-            writer.Line("new global::Runic.Translations.CompiledRmf2Option(" + GenerationSupport.CSharpString(option.Name) + ", " + Value(option.Value) + "),");
+            writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Option(" + GenerationSupport.CSharpString(option.Name) + ", " + Value(option.Value) + "),");
         writer.Unindent(); writer.Line("}" + suffix);
     }
 
     private static void WriteAnnotations(GenerationWriter writer, IReadOnlyList<Rmf2AnnotationV5> annotations, string suffix)
     {
-        writer.Line("new global::Runic.Translations.CompiledRmf2Annotation[]"); writer.Line("{"); writer.Indent();
+        writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Annotation[]"); writer.Line("{"); writer.Indent();
         foreach (Rmf2AnnotationV5 annotation in annotations)
-            writer.Line("new global::Runic.Translations.CompiledRmf2Annotation(" + GenerationSupport.CSharpString(annotation.Name) + ", " + (annotation.Value is null ? "null" : Value(annotation.Value)) + "),");
+            writer.Line("new global::Runic.Translations.Generated.CompiledRmf2Annotation(" + GenerationSupport.CSharpString(annotation.Name) + ", " + (annotation.Value is null ? "null" : Value(annotation.Value)) + "),");
         writer.Unindent(); writer.Line("}" + suffix);
     }
 
@@ -510,7 +511,7 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Line("{"); writer.Indent();
             writer.Line("var messages = new global::Runic.Translations.TranslationPackMessageContract[" + definitions.Length + "];");
             for (int chunk = 0; chunk * ChunkSize < definitions.Length; chunk++) writer.Line(name + "Messages" + chunk + "(messages);");
-            writer.Line("return global::Runic.Translations.TranslationPackContract.CreateRmf2V5("); writer.Indent();
+            writer.Line("return global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract("); writer.Indent();
             writer.Line(GenerationSupport.CSharpString(project.Id) + ", " + GenerationSupport.CSharpString(locale.Tag) + ", " + GenerationSupport.CSharpString(project.CallerFingerprint) + ", messages, " +
                 GenerationSupport.CSharpString(project.MarkupContract) + ");"); writer.Unindent();
             writer.Unindent(); writer.Line("}"); writer.Blank();
@@ -521,7 +522,7 @@ internal static class Rmf2CSharpOutputRendererV5
                 for (int i = chunk * ChunkSize; i < Math.Min(definitions.Length, (chunk + 1) * ChunkSize); i++)
                 {
                     Rmf2V5Definition definition = definitions[i];
-                    writer.Line("messages[" + i + "] = global::Runic.Translations.TranslationPackMessageContract.FromRmf2Inputs("); writer.Indent();
+                    writer.Line("messages[" + i + "] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackMessageContract("); writer.Indent();
                     writer.Line("new global::Runic.Translations.TranslationKey(" + GenerationSupport.CSharpString(project.Id) + ", " + definition.Id + ", " + GenerationSupport.CSharpString(definition.Contract.Key) + "),");
                     WriteInputs(writer, definition.Contract.Inputs, ");"); writer.Unindent();
                 }
@@ -530,7 +531,7 @@ internal static class Rmf2CSharpOutputRendererV5
         }
     }
 
-    private static string Value(Rmf2ValueV5 value) => "new global::Runic.Translations.CompiledRmf2Value(" + GenerationSupport.CSharpString(value.Kind) + ", " + GenerationSupport.CSharpString(value.Value) + ", " + (value.Canonical is null ? "null" : GenerationSupport.CSharpString(value.Canonical)) + ")";
+    private static string Value(Rmf2ValueV5 value) => "new global::Runic.Translations.Generated.CompiledRmf2Value(" + GenerationSupport.CSharpString(value.Kind) + ", " + GenerationSupport.CSharpString(value.Value) + ", " + (value.Canonical is null ? "null" : GenerationSupport.CSharpString(value.Canonical)) + ")";
     private static string Type(string type) => type switch { "string" => "String", "int64" => "Int", "decimal" => "Number", "boolean" => "Bool", "date" => "Date", "time" => "Time", "datetime" => "DateTime", "guid" => "Guid", "list" => "List", _ => throw new InvalidOperationException("Unknown RMF2 carrier '" + type + "'.") };
     private static string ParameterType(string type) => type switch { "string" => "string", "int64" => "long", "decimal" => "decimal", "boolean" => "bool", "date" => "global::System.DateOnly", "time" => "global::System.TimeOnly", "datetime" => "global::System.DateTimeOffset", "guid" => "global::System.Guid", "list" => "global::System.Collections.Generic.IReadOnlyList<string>", _ => throw new InvalidOperationException("Unknown RMF2 carrier '" + type + "'.") };
     private static string Member(Rmf2MessageContractV5 message) => Rmf2GeneratedNamesV1.Path(message.Path);

@@ -40,21 +40,21 @@ export function formatTextReference(reference, handlers, options) {
 }
 
 // Writes a reference for this catalog. A string input may receive another reference created here, which is stored as a message
-// argument; integers accept bigint or safe numbers, decimals a decimal carrier, a canonical string or a finite number. { version: 1 } writes the
-// version 1 wire for receivers that do not read version 2 yet; it carries scalar inputs only.
+// argument; integers accept bigint or safe numbers, decimals a decimal carrier, a canonical string or a finite number. Writers
+// emit transport version 2 only; version 1 references stay readable.
 export function createTextReference(key, inputs = {}, options = {}) {
   const version = options?.version ?? 2;
-  if (version !== 1 && version !== 2) throw new RangeError("Text references are written as version 1 or 2.");
+  if (version !== 2) throw new RangeError("Text references are written as version 2.");
   const state = { references: 0, text: 0 };
-  const body = writeBody(key, inputs, options, version, 1, state);
+  const body = writeBody(key, inputs, options, 1, state);
   const reference = Object.freeze({ version, catalog, contractFingerprint, ...body });
   if (state.text > limits.totalText) throw new RangeError("The reference contains too much text.");
   if (utf8Length(JSON.stringify(reference)) > limits.encoded) throw new RangeError("The encoded reference is larger than the transport limit.");
-  if (version === 2) createdReferences.add(reference);
+  createdReferences.add(reference);
   return reference;
 }
 
-function writeBody(key, inputs, options, version, depth, state) {
+function writeBody(key, inputs, options, depth, state) {
   if (typeof key !== "string" || !Object.hasOwn(contracts, key)) throw new RangeError(`Unknown message '${key}'.`);
   if (depth > limits.depth || ++state.references > limits.references) throw new RangeError("The reference nests too many messages.");
   if (!isRecord(inputs)) throw new TypeError("Message inputs must be an object.");
@@ -64,17 +64,15 @@ function writeBody(key, inputs, options, version, depth, state) {
   for (const input of [...contract].sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0)) {
     const value = inputs[input.name];
     if (input.type === "string" && createdReferences.has(value)) {
-      if (version === 1) throw new TypeError(`Input '${input.name}' is a message, which needs transport version 2.`);
       const { key: nestedKey, arguments: nestedArguments, fallbackText } = value;
       const nested = Object.freeze({ key: nestedKey, arguments: nestedArguments, ...(fallbackText === undefined ? {} : { fallbackText }) });
       countNested(nested, depth + 1, state);
       entries.push([input.name, Object.freeze({ type: "message", value: nested })]);
       continue;
     }
-    if (version === 1 && input.type === "list") throw new TypeError(`Input '${input.name}' is a list, which needs transport version 2.`);
     const wire = encode(value, input.type, input.name);
     state.text += textLength(wire);
-    entries.push([input.name, version === 1 ? wire : Object.freeze({ type: input.type, value: wire })]);
+    entries.push([input.name, Object.freeze({ type: input.type, value: wire })]);
   }
   const fallbackText = options?.fallbackText;
   if (fallbackText !== undefined && (typeof fallbackText !== "string" || fallbackText.length > limits.fallbackLength || !fallbackText.isWellFormed())) throw new TypeError("Invalid fallback text.");

@@ -8,6 +8,8 @@ using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Compiler.Tests;
 
 // specs/translations/corpus/transport-v2-persisted-references.json is the shared .NET/ESM oracle for persisted references:
@@ -141,7 +143,7 @@ internal sealed class TransportV2ConformanceTests
             string actual = Describe(resolution.Outcome switch
             {
                 TranslationReferenceOutcome.Translated => "translated", TranslationReferenceOutcome.Fallback => "fallback", _ => "failed",
-            }, resolution.Text, resolution.Diagnostics.Select(diagnostic => (diagnostic.Path, diagnostic.Reason)));
+            }, resolution.Text, resolution.Diagnostics.Select(diagnostic => (diagnostic.Path, TranslationReferenceDiagnosticReasons.ToWire(diagnostic.Reason))));
             string expected = Expected(item["expected"]!);
             if (expected != actual) failures.Add(id + ": expected " + expected + ", got " + actual);
         }
@@ -211,8 +213,10 @@ internal sealed class TransportV2ConformanceTests
                 const inputs = args => Object.fromEntries(Object.entries(args).map(([name, { type, value }]) => [name,
                   type === "message" ? create(value) : type === "int64" ? BigInt(value) : value]));
                 const create = description => createTextReference(description.key, inputs(description.arguments),
-                  { ...(description.fallbackText === undefined ? {} : { fallbackText: description.fallbackText }), ...(description.version === 1 ? { version: 1 } : {}) });
+                  description.fallbackText === undefined ? {} : { fallbackText: description.fallbackText });
                 for (const item of written) {
+                  // ESM writes version 2 only; the version 1 cases stay as reader cases.
+                  if (item.reference.version === 1) continue;
                   const actual = JSON.stringify(create(item.reference));
                   if (actual !== item.expected) failures.push(`${item.id}: wrote ${actual}`);
                 }
@@ -295,13 +299,10 @@ internal sealed class TransportV2ConformanceTests
                 let nested = createTextReference("steps_build", { name: "x" });
                 for (let level = 1; level < 8; level++) nested = createTextReference("operation_failed", { step: nested });
                 let tooDeep = false; try { createTextReference("operation_failed", { step: nested }); } catch { tooDeep = true; } check(tooDeep, "writer depth limit");
-                const written1 = createTextReference("operation_retry", { attempt: 2n, total: 3 }, { version: 1, fallbackText: "Retry 2 of 3" });
-                check(JSON.stringify(written1) === `{"version":1,"catalog":"ops","contractFingerprint":"${contractFingerprint}","key":"operation_retry","arguments":{"attempt":"2","total":"3"},"fallbackText":"Retry 2 of 3"}`, `version 1 writer: ${JSON.stringify(written1)}`);
-                check(decodeTextReference(JSON.stringify(written1)).ok, "version 1 output decodes");
-                for (const [key, inputs, message] of [["operation_summary", { names: ["a"] }, "list"], ["operation_failed", { step: createdStep }, "message"]]) {
-                  let error; try { createTextReference(key, inputs, { version: 1 }); } catch (caught) { error = caught; }
-                  check(error instanceof TypeError && error.message.includes("needs transport version 2") && error.message.includes(message), `version 1 ${message}: ${error}`);
-                }
+                // The version 1 writer was removed in 0.8; version 1 references stay readable.
+                let writerVersion1 = false; try { createTextReference("operation_retry", { attempt: 2n, total: 3 }, { version: 1 }); } catch (caught) { writerVersion1 = caught instanceof RangeError; } check(writerVersion1, "writer version 1");
+                const read1 = `{"version":1,"catalog":"ops","contractFingerprint":"${contractFingerprint}","key":"operation_retry","arguments":{"attempt":"2","total":"3"},"fallbackText":"Retry 2 of 3"}`;
+                check(decodeTextReference(read1).ok, "version 1 input decodes");
                 let unknownVersion = false; try { createTextReference("steps_build", { name: "x" }, { version: 3 }); } catch { unknownVersion = true; } check(unknownVersion, "writer version 3");
                 let lone = false; try { createTextReference("steps_build", { name: "\ud800" }); } catch { lone = true; } check(lone, "writer lone surrogate");
                 let large = false; try { createTextReference("steps_build", { name: "x" }, { fallbackText: "\u0001".repeat(60000) }); } catch { large = true; } check(large, "writer encoded size");

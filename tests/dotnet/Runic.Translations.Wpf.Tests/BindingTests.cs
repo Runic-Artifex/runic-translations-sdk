@@ -75,9 +75,7 @@ internal sealed class BindingTests
     public void Construction()
     {
         NotifyingManager manager = State.Manager;
-        // The generated readable surface carries ReadableNameVersion; the facade itself does not.
-        Throws<ArgumentException>(() => new TranslationSource(manager, new object()), "A non-generated messages object was accepted.");
-        Throws<ArgumentException>(() => new TranslationSource(manager, new WrongFacade()), "The catalog class instead of its Messages was accepted.");
+        // The constructor takes IReadableMessages, so passing the catalog class instead of its Messages does not compile.
         // No ambient dispatcher: a thread without one must say which to use.
         Throws<AggregateException>(() => Task.Run(() => new TranslationSource(manager, State.Messages)).Wait(), "A source was created without a dispatcher.");
     }
@@ -177,26 +175,22 @@ internal sealed class BindingTests
         Require(title.Text == "Anwendung" && manager.Refreshes == refreshes + 2, "TranslationSource.RefreshAsync did not refresh.");
     }
 
-    [Test, DisplayName("binding: a custom manager without the notifier follows LocaleChanged and needs Invalidate for refreshes"), NotInParallel(WpfSuite.Key, Order = 307)]
-    public void CustomManager()
+    [Test, DisplayName("binding: Invalidate refreshes every binding without a publication"), NotInParallel(WpfSuite.Key, Order = 307)]
+    public void Invalidate()
     {
-        // A custom manager without the notifier follows LocaleChanged only; Invalidate covers refreshes.
+        // A manager that publishes no snapshot (FakeManager) leaves the UI as is until Invalidate.
         var plainManager = new FakeManager();
         var plainMessages = new FakeMessages(plainManager);
-        using var legacy = new TranslationSource(plainManager, plainMessages);
+        using var source = new TranslationSource(plainManager, plainMessages);
         var text = new TextBlock();
-        text.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("[application_title]") { Source = legacy });
+        text.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("[application_title]") { Source = source });
         Flush(Dispatcher);
         plainMessages.Suffix = "?";
-        plainManager.RefreshAsync().AsTask().GetAwaiter().GetResult();
         Flush(Dispatcher);
-        Require(text.Text == "Application", "A custom manager refresh changed the UI without Invalidate.");
-        legacy.Invalidate();
+        Require(text.Text == "Application", "The UI changed without a publication.");
+        source.Invalidate();
         Flush(Dispatcher);
         Require(text.Text == "Application?", "Invalidate did not refresh.");
-        plainManager.Switch("de");
-        Flush(Dispatcher);
-        Require(text.Text == "Anwendung?", "A custom manager LocaleChanged did not refresh.");
     }
 
     [Test, DisplayName("binding: messages work in a DataTemplate, a Style setter and a ControlTemplate"), NotInParallel(WpfSuite.Key, Order = 308)]
@@ -624,15 +618,17 @@ internal sealed class BindingTests
         public int Count { get; set; }
     }
 
-    /// <summary>A manager that only raises LocaleChanged, like a custom implementation.</summary>
+    /// <summary>A manager that raises LocaleChanged but publishes no snapshot; NotifyingManager publishes them.</summary>
     private class FakeManager : ITranslationManager
     {
         private readonly ITranslationSnapshot _snapshot = PaymentFixture.CreateSnapshot();
         public string CurrentLocale { get; private set; } = "en";
         public ITranslationSnapshot Current => _snapshot;
         public int Refreshes { get; protected set; }
-        public virtual int Subscribers => LocaleChanged?.GetInvocationList().Length ?? 0;
+        public int Subscribers => (LocaleChanged?.GetInvocationList().Length ?? 0) + (SnapshotPublished?.GetInvocationList().Length ?? 0);
         public event EventHandler<TranslationLocaleChangedEventArgs>? LocaleChanged;
+        public event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
+        protected void Publish(TranslationSnapshotPublishReason reason) => SnapshotPublished?.Invoke(this, new TranslationSnapshotPublishedEventArgs(Current, reason));
         public virtual void Switch(string locale)
         {
             CurrentLocale = locale;
@@ -643,27 +639,26 @@ internal sealed class BindingTests
     }
 
     /// <summary>A manager that also publishes every snapshot, like the built-in one.</summary>
-    private sealed class NotifyingManager : FakeManager, ITranslationSnapshotNotifier
+    private sealed class NotifyingManager : FakeManager
     {
-        public event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
-        public override int Subscribers => base.Subscribers + (SnapshotPublished?.GetInvocationList().Length ?? 0);
         public override void Switch(string locale)
         {
             base.Switch(locale);
-            SnapshotPublished?.Invoke(this, new TranslationSnapshotPublishedEventArgs(Current, TranslationSnapshotPublishReason.LocaleChanged));
+            Publish(TranslationSnapshotPublishReason.LocaleChanged);
         }
         public override ValueTask RefreshAsync(CancellationToken cancellationToken = default)
         {
             Refreshes++;
-            SnapshotPublished?.Invoke(this, new TranslationSnapshotPublishedEventArgs(Current, TranslationSnapshotPublishReason.Refresh));
+            Publish(TranslationSnapshotPublishReason.Refresh);
             return ValueTask.CompletedTask;
         }
     }
 
     /// <summary>A second catalog sharing a key with the first.</summary>
-    private sealed class OtherMessages(FakeManager manager)
+    private sealed class OtherMessages(FakeManager manager) : IReadableMessages
     {
         public const int ReadableNameVersion = 1;
+        int IReadableMessages.ReadableNameVersion => ReadableNameVersion;
         public int PaymentCalls { get; set; }
         public string application_title => manager.CurrentLocale == "de" ? "Anderer Titel" : "Other title";
         public string only_other => "only in other";
@@ -675,18 +670,18 @@ internal sealed class BindingTests
         }
     }
 
-    private sealed class LateMessages
+    private sealed class LateMessages : IReadableMessages
     {
         public const int ReadableNameVersion = 1;
+        int IReadableMessages.ReadableNameVersion => ReadableNameVersion;
         public string only_late => "late only";
     }
 
-    private sealed class WrongFacade { public string application_title => ""; }
-
     /// <summary>Mirrors the shape of a generated readable surface: properties, methods and typed rich content.</summary>
-    private sealed class FakeMessages(FakeManager manager)
+    private sealed class FakeMessages(FakeManager manager) : IReadableMessages
     {
         public const int ReadableNameVersion = 1;
+        int IReadableMessages.ReadableNameVersion => ReadableNameVersion;
         private bool German => manager.CurrentLocale == "de";
         public string Suffix { get; set; } = "";
         public int PaymentCalls { get; private set; }

@@ -19,7 +19,7 @@ namespace Runic.Translations;
     "Design",
     "CA1001:Types that own disposable fields should be disposable",
     Justification = "The transition semaphore never exposes its wait handle, and disposing it would race active callers.")]
-public sealed class TranslationManager : ITranslationManager, ITranslationSnapshotNotifier
+public sealed class TranslationManager : ITranslationManager
 {
     private readonly object _pendingGate = new();
     private readonly Dictionary<string, PendingSwitch> _pendingSwitches =

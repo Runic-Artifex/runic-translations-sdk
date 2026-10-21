@@ -718,8 +718,6 @@ internal sealed class RuntimeTests
             MissingKey = MissingTranslationPolicy.ReturnMarker,
         };
         CompiledTranslationCatalog changed = original.WithOptions(options);
-        options.UnsupportedLocale = UnsupportedLocalePolicy.Default;
-        options.MissingKey = MissingTranslationPolicy.ReturnKey;
         Assert.Equal(UnsupportedLocalePolicy.Exact, changed.UnsupportedLocale);
         Assert.Equal(MissingTranslationPolicy.ReturnMarker, changed.MissingKey);
         Assert.Equal(UnsupportedLocalePolicy.ParentsThenDefault, original.UnsupportedLocale);
@@ -729,11 +727,8 @@ internal sealed class RuntimeTests
         ITranslationSnapshot snapshot = await new CompiledTranslationProvider(changed).GetSnapshotAsync("en");
         Assert.Equal("⟦missing.key⟧", snapshot.Get(Key(99, "missing.key")));
 
-        options.UnsupportedLocale = (UnsupportedLocalePolicy)999;
-        Assert.Throws<ArgumentException>(() => original.WithOptions(options));
-        options.UnsupportedLocale = UnsupportedLocalePolicy.Exact;
-        options.MissingKey = (MissingTranslationPolicy)999;
-        Assert.Throws<ArgumentException>(() => original.WithOptions(options));
+        Assert.Throws<ArgumentException>(() => original.WithOptions(new TranslationOptions { UnsupportedLocale = (UnsupportedLocalePolicy)999 }));
+        Assert.Throws<ArgumentException>(() => original.WithOptions(new TranslationOptions { UnsupportedLocale = UnsupportedLocalePolicy.Exact, MissingKey = (MissingTranslationPolicy)999 }));
     }
 
     private static TranslationKey Key(int id, string name) => new("app", id, name);

@@ -82,10 +82,11 @@ internal sealed class GeneratorReadableTests
         }
 
         /// <summary>Readable accessors for the app translation catalog. Each member forwards to its encoded accessor.</summary>
-        public sealed class @AppTextMessages
+        public sealed class @AppTextMessages : global::Runic.Translations.IReadableMessages
         {
             /// <summary>The readable C# name policy version of this surface.</summary>
             public const int ReadableNameVersion = 1;
+            int global::Runic.Translations.IReadableMessages.ReadableNameVersion => ReadableNameVersion;
             private readonly global::@Example.@Translations.@AppText __text;
 
             internal @AppTextMessages(global::@Example.@Translations.@AppText text) => this.__text = text;
@@ -189,8 +190,8 @@ internal sealed class GeneratorReadableTests
                         LocalizedTextContent<AppTextSlots.checkout_help> content = text.Messages.checkout_help;
                         BoundLocalizedTextContent bound = content.Bind(new(guide: guide, retry: retry));
                         var slots = new Dictionary<string, InlineMarkupBinding> { ["guide"] = guide, ["retry"] = retry };
-                        string typed = renderer.ToPlainText(bound, allowActionLabels: true);
-                        Require(typed == renderer.ToPlainText("checkout_help", text.{{help}}, slots, allowActionLabels: true), "help");
+                        string typed = renderer.ToPlainText(bound, new Rmf2PlainTextOptions { AllowActionLabels = true });
+                        Require(typed == renderer.ToPlainText("checkout_help", text.{{help}}, slots, new Rmf2PlainTextOptions { AllowActionLabels = true }), "help");
                         LocalizedTextContent untyped = content;
                         Require(untyped.Locale == locale && content.Locale == locale, "content locale");
                         output.Add(text.Messages.greeting(name: "Ada") + "|" + text.Messages.profile_badge({{userName}}: "ada") + "|" +
@@ -303,7 +304,7 @@ internal sealed class GeneratorReadableTests
                     string help = renderer.ToPlainText(m.help.Bind(new(link: link)));
                     string extension = renderer.ToPlainText(m.extension(value: "v").Bind(new(d: link, destination: link)));
                     string keywords = m.field + "|" + m.allows(@class: "c");
-                    string @class = renderer.ToPlainText(m.@class.Bind(new(__destination: action, MessageKey: link, CopyTo: icon)), allowActionLabels: true);
+                    string @class = renderer.ToPlainText(m.@class.Bind(new(__destination: action, MessageKey: link, CopyTo: icon)), new Rmf2PlainTextOptions { AllowActionLabels = true });
                     string value = renderer.ToPlainText(m.value.Bind(new({{Encoded("help-link")}}: link, {{Encoded("app:x")}}: link)));
                     string hostile = m.hostile(__proto__: "p", constructor: "c", {{Encoded("user-name")}}: "u", {{Encoded("café")}}: "e", {{Encoded("用户")}}: "y");
                     string plain = renderer.ToPlainText(m.plain.Bind(new()));

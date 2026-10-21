@@ -1,12 +1,11 @@
 using System;
-using System.Runtime.CompilerServices;
 
 namespace Runic.Translations;
 
 /// <summary>A stable machine-readable reason for an external pack failure.</summary>
 public enum TranslationPackFailureReason
 {
-    /// <summary>The exception was not created by the external pack loader or has no registered reason.</summary>
+    /// <summary>No reason was given: the exception was not created by the pack loader or with a reason. The default.</summary>
     Unknown,
     /// <summary>The pack artifact version is not supported.</summary>
     ArtifactVersionMismatch,
@@ -42,46 +41,9 @@ public enum TranslationPackFailureReason
     DocumentStructureMismatch,
 }
 
-/// <summary>Reads stable machine-classifiable metadata from external pack exceptions.</summary>
+/// <summary>Classifies external pack failures, including cancellation.</summary>
 public static class TranslationPackFailure
 {
-    /// <summary>The reserved diagnostic identity for external pack incompatibility or rejection.</summary>
-    public const string DiagnosticId = "RTR0023";
-
-    /// <summary>The stable prefix used by RMF2 v5 external-pack consumers.</summary>
-    public const string RejectionIdPrefix = "RTR0023/";
-
-    private static readonly ConditionalWeakTable<TranslationPackException, FailureReasonHolder> Reasons = new();
-
-    /// <summary>
-    /// Returns the registered reason, or <see cref="TranslationPackFailureReason.Unknown"/> for
-    /// exceptions created outside the external pack loader.
-    /// </summary>
-    public static TranslationPackFailureReason GetReason(TranslationPackException exception)
-    {
-        ArgumentNullException.ThrowIfNull(exception);
-        return Reasons.TryGetValue(exception, out FailureReasonHolder? holder)
-            ? holder.Reason
-            : TranslationPackFailureReason.Unknown;
-    }
-
-    /// <summary>
-    /// Returns the stable location-free diagnostic identity for an external pack failure.
-    /// Runtime pack failures do not manufacture a source span.
-    /// </summary>
-    public static string GetDiagnosticId(TranslationPackException exception)
-    {
-        ArgumentNullException.ThrowIfNull(exception);
-        return DiagnosticId;
-    }
-
-    /// <summary>Returns the normalized, location-free external-pack rejection ID.</summary>
-    public static string GetRejectionId(TranslationPackException exception)
-    {
-        ArgumentNullException.ThrowIfNull(exception);
-        return RejectionIdPrefix + RejectionName(GetReason(exception));
-    }
-
     /// <summary>
     /// Classifies a pack exception or cancellation without requiring callers to branch on
     /// exception type before reading the stable reason.
@@ -92,19 +54,14 @@ public static class TranslationPackFailure
         return exception switch
         {
             OperationCanceledException => TranslationPackFailureReason.Cancelled,
-            TranslationPackException packException => GetReason(packException),
+            TranslationPackException packException => packException.Reason,
             _ => TranslationPackFailureReason.Unknown,
         };
     }
 
-    internal static TranslationPackException Create(string message, TranslationPackFailureReason reason)
-    {
-        var exception = new TranslationPackException(message);
-        Reasons.Add(exception, new FailureReasonHolder(reason));
-        return exception;
-    }
+    internal static TranslationPackException Create(string message, TranslationPackFailureReason reason) => new(message, reason);
 
-    private static string RejectionName(TranslationPackFailureReason reason) => reason switch
+    internal static string RejectionName(TranslationPackFailureReason reason) => reason switch
     {
         TranslationPackFailureReason.ArtifactVersionMismatch => "artifact-version-mismatch",
         TranslationPackFailureReason.MessageGrammarVersionMismatch => "message-grammar-version-mismatch",
@@ -124,10 +81,4 @@ public static class TranslationPackFailure
         TranslationPackFailureReason.DocumentStructureMismatch => "document-structure-mismatch",
         _ => "unknown",
     };
-
-    private sealed class FailureReasonHolder
-    {
-        internal FailureReasonHolder(TranslationPackFailureReason reason) => Reason = reason;
-        internal TranslationPackFailureReason Reason { get; }
-    }
 }

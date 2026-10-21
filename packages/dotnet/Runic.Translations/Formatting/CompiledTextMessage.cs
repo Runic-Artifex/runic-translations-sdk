@@ -4,6 +4,8 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations;
 
 /// <summary>The closed node kinds admitted by the portable compiled message ABI.</summary>
@@ -40,7 +42,7 @@ public sealed class CompiledTextMessageNode
     private readonly CompiledTextMarkupProperty[] _attributes;
 
     /// <summary>Creates a compiled node.</summary>
-    public CompiledTextMessageNode(
+    internal CompiledTextMessageNode(
         CompiledTextMessageNodeKind kind,
         string value,
         TextArgumentFormat format = TextArgumentFormat.None,
@@ -111,7 +113,7 @@ public sealed class CompiledTextMessageVariant
     private readonly CompiledTextMessageNode[] _nodes;
 
     /// <summary>Creates an immutable variant. Matches are in selector order.</summary>
-    public CompiledTextMessageVariant(
+    internal CompiledTextMessageVariant(
         IReadOnlyList<string> matches,
         IReadOnlyList<CompiledTextMessageNode> nodes)
     {
@@ -166,24 +168,24 @@ public sealed class CompiledTextMessage
     public CompiledRmf2Message? Rmf2V5 { get; }
 
     /// <summary>Creates a simple compiled pattern.</summary>
-    public CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes)
+    internal CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes)
         : this(nodes, Array.Empty<CompiledTextMessageSelector>(), Array.Empty<CompiledTextMessageVariant>())
     {
     }
 
     /// <summary>Creates a simple pattern using the explicit RMF2 execution profile.</summary>
-    public CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes, bool rmf2, string? contentLocale = null)
+    internal CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes, bool rmf2, string? contentLocale = null)
         : this(nodes, Array.Empty<CompiledTextMessageSelector>(), Array.Empty<CompiledTextMessageVariant>(), rmf2, contentLocale) { }
 
     /// <summary>Creates a simple or selector-driven compiled message.</summary>
-    public CompiledTextMessage(
+    internal CompiledTextMessage(
         IReadOnlyList<CompiledTextMessageNode> nodes,
         IReadOnlyList<CompiledTextMessageSelector> selectors,
         IReadOnlyList<CompiledTextMessageVariant> variants)
         : this(nodes, selectors, variants, false) { }
 
     /// <summary>Creates a message with an explicit versioned RMF2 execution profile.</summary>
-    public CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes,
+    internal CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes,
         IReadOnlyList<CompiledTextMessageSelector> selectors, IReadOnlyList<CompiledTextMessageVariant> variants, bool rmf2, string? contentLocale = null)
     {
         Rmf2 = rmf2;

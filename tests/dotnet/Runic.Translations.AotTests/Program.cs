@@ -68,7 +68,7 @@ internal static class Program
 
     private const string MarkupContract = "{\"version\":2,\"contracts\":{},\"messages\":{\"greeting\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\"},\"content\":\"inline\",\"skeletons\":[]}}}";
 
-    private static TranslationPackContract CreatePackContract(string locale) => TranslationPackContract.CreateRmf2V5(
+    private static TranslationPackContract CreatePackContract(string locale) => Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract(
         "app", locale, Fingerprint,
         [
             new TranslationPackMessageContract(

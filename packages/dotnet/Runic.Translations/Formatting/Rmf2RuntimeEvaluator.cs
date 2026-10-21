@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations;
 
 internal sealed class Rmf2ResolvedFormat

@@ -150,8 +150,7 @@ public readonly struct TextArgument
     }
 
     /// <summary>Copies a closed carrier under an NFC RMF2 identity, independently of legacy ASCII placeholder names.</summary>
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static TextArgument CreateRmf2(string name, TextArgument value)
+    internal static TextArgument CreateRmf2(string name, TextArgument value)
     {
         Rmf2RuntimeValidation.Name(name);
         _ = Rmf2ResolvedFormat.Canonical(value);

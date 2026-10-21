@@ -10,6 +10,8 @@ using System.Text.Json.Nodes;
 using Runic.Translations.Compiler.Generation;
 using TUnit.Core;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations.Compiler.Tests;
 
 [Category("rmf2-semantic-v5"), NotInParallel]
@@ -134,7 +136,7 @@ internal sealed class Rmf2V1CorpusTests
             }
             catch (TranslationPackException exception)
             {
-                Assert.Equal(expected, TranslationPackFailure.GetRejectionId(exception), test.GetProperty("id").GetString());
+                Assert.Equal(expected, exception.RejectionId, test.GetProperty("id").GetString());
             }
         }
         RunEsmInvalid(project, index.RootElement, artifact);
@@ -197,8 +199,12 @@ internal sealed class Rmf2V1CorpusTests
     // runtime.d.ts declares projectMarkup, in both digests. Every other output is unchanged.
     // Re-pinned for W315-019: runtime.js exports localeDirection and carries CLDR's right-to-left scripts in its locale
     // data, and runtime.d.ts declares localeDirection, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "9fcca053ca67a530b01c0c91f7bd69413ce9c34f6554d307ff2018bd87470ad1";
-    private const string HiddenEncodedOutputDigest = "1c3d397247251a8d23386ecf5ec31aad378b421ae847b677864e854b03852027";
+    // Re-pinned for TR-2 (0.8): generated C# calls the runtime through Runic.Translations.Generated
+    // (GeneratedCatalogSupport, CompiledRmf2*, TranslationsCompatibility) and the readable surface implements
+    // IReadableMessages; transport.js writes only version 2 and transport.d.ts drops the version 1 createTextReference
+    // overload, in both digests.
+    private const string EncodedOutputDigest = "3c0d6e68105b785be90716051494fd03c97212bb7b7f61c4f395d1e8a7ea7ed1";
+    private const string HiddenEncodedOutputDigest = "ab003375e12da228bf01aa8eba793b64f51a8244c25313c042c754f50ae347d6";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

@@ -110,7 +110,7 @@ internal static class GeneratorTestHost
             _ => string.Empty,
         };
         SyntaxTree tree = CSharpSyntaxTree.ParseText($$"""
-            namespace Runic.Translations;
+            namespace Runic.Translations.Generated;
             public static class TranslationsCompatibility
             {
                 public const int RuntimeAbiVersion = {{(mode == RuntimeReferenceMode.Mismatched ? 2 : 1)}};

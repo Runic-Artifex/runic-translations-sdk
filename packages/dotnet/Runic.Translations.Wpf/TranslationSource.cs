@@ -23,10 +23,8 @@ namespace Runic.Translations.Wpf;
 /// Create one per catalog on the UI thread, usually in <c>App.OnStartup</c>, and keep it for the life of the
 /// application or call <see cref="Dispose"/>. The manager holds only a weak reference to the source, and bound
 /// rich elements are held weakly, so abandoned windows are collected without unsubscribing.
-/// A manager that implements <see cref="ITranslationSnapshotNotifier"/> (the built-in
-/// <see cref="TranslationManager"/> does) refreshes bindings after a locale switch and after
-/// <see cref="ITranslationManager.RefreshAsync"/>. For any other manager only
-/// <see cref="ITranslationManager.LocaleChanged"/> is observed; call <see cref="Invalidate"/> after refreshing it.
+/// Bindings refresh on <see cref="ITranslationManager.SnapshotPublished"/>: after a locale switch and after
+/// <see cref="ITranslationManager.RefreshAsync"/>.
 /// </remarks>
 public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
 {
@@ -65,19 +63,16 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
 
     /// <summary>Creates a source on the current thread's dispatcher (else the application's), or on <paramref name="dispatcher"/> when given.</summary>
     /// <param name="manager">The manager whose snapshot publications refresh bindings.</param>
-    /// <param name="messages">The generated readable surface, <c>new AppText(manager).Messages</c>, not <c>AppText</c> itself.</param>
+    /// <param name="messages">The generated readable surface, <c>new AppText(manager).Messages</c>.</param>
     /// <param name="renderer">Required only for rich messages bound with <c>TranslationProperties.RichMessage</c>.</param>
     /// <param name="dispatcher">
     /// The UI dispatcher. Defaults to the current thread's dispatcher, else <see cref="Application.Current"/>'s; there is no
     /// implicit dispatcher, so a call from a thread without one must pass it.
     /// </param>
-    public TranslationSource(ITranslationManager manager, object messages, WpfInlineRenderer? renderer = null, Dispatcher? dispatcher = null)
+    public TranslationSource(ITranslationManager manager, IReadableMessages messages, WpfInlineRenderer? renderer = null, Dispatcher? dispatcher = null)
     {
         ArgumentNullException.ThrowIfNull(manager);
         ArgumentNullException.ThrowIfNull(messages);
-        FieldInfo? version = messages.GetType().GetField("ReadableNameVersion", BindingFlags.Public | BindingFlags.Static);
-        if (version is not { IsLiteral: true })
-            throw new ArgumentException($"{messages.GetType().Name} is not a generated readable surface. Pass 'text.Messages', not 'text'.", nameof(messages));
         _dispatcher = dispatcher ?? Dispatcher.FromThread(Thread.CurrentThread) ?? Application.Current?.Dispatcher
             ?? throw new InvalidOperationException("No dispatcher: create the TranslationSource on the UI thread or pass the UI Dispatcher.");
         Manager = manager;
@@ -100,7 +95,7 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
     public ITranslationManager Manager { get; }
 
     /// <summary>The generated readable surface this source resolves message names against.</summary>
-    public object Messages { get; }
+    public IReadableMessages Messages { get; }
 
     /// <summary>The inline renderer used for rich messages, or <see langword="null"/>.</summary>
     public WpfInlineRenderer? Renderer { get; }
@@ -130,7 +125,6 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
     public async ValueTask RefreshAsync(CancellationToken cancellationToken = default)
     {
         await Manager.RefreshAsync(cancellationToken).ConfigureAwait(false);
-        if (Manager is not ITranslationSnapshotNotifier) Invalidate();
     }
 
     /// <summary>Stops following the manager and clears <see cref="Default"/> when it is this source. Bound elements keep their last value.</summary>
@@ -360,18 +354,15 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
         {
             _owner = new WeakReference<TranslationSource>(owner);
             _manager = manager;
-            if (manager is ITranslationSnapshotNotifier notifier) notifier.SnapshotPublished += OnPublished;
-            else manager.LocaleChanged += OnLocaleChanged;
+            manager.SnapshotPublished += OnPublished;
         }
 
         public void Detach()
         {
-            if (_manager is ITranslationSnapshotNotifier notifier) notifier.SnapshotPublished -= OnPublished;
-            else _manager.LocaleChanged -= OnLocaleChanged;
+            _manager.SnapshotPublished -= OnPublished;
         }
 
         private void OnPublished(object? sender, TranslationSnapshotPublishedEventArgs e) => Notify();
-        private void OnLocaleChanged(object? sender, TranslationLocaleChangedEventArgs e) => Notify();
 
         private void Notify()
         {

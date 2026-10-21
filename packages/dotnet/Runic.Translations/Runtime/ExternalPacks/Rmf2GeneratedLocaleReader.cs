@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 
+using Runic.Translations.Generated;
+
 namespace Runic.Translations;
 
 /// <summary>

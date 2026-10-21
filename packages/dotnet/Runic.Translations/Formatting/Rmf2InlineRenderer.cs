@@ -7,14 +7,25 @@ using System.Text;
 namespace Runic.Translations;
 
 /// <summary>A typed application-owned binding for a functional RMF2 markup slot.</summary>
-public abstract record MarkupBinding;
-/// <summary>A typed application-owned functional inline binding.</summary>
-public abstract record InlineMarkupBinding : MarkupBinding;
+/// <remarks>The set of bindings is closed: <see cref="InlineLinkBinding"/>, <see cref="InlineActionBinding"/> and
+/// <see cref="InlineIconBinding"/>. Renderers accept only these, so a switch over them is exhaustive.</remarks>
+public abstract record MarkupBinding
+{
+    private protected MarkupBinding() { }
+}
+/// <summary>A typed application-owned functional inline binding: a link, an action or an icon (closed set).</summary>
+public abstract record InlineMarkupBinding : MarkupBinding
+{
+    private protected InlineMarkupBinding() { }
+}
 /// <summary>Application-owned navigation destination.</summary>
 public sealed record InlineLinkBinding(Uri Destination) : InlineMarkupBinding;
 /// <summary>Application-owned activation callback; rendering never invokes it.</summary>
 public sealed record InlineActionBinding(Action Activate) : InlineMarkupBinding;
 /// <summary>An application-owned asset with explicit accessibility semantics.</summary>
+/// <remarks><see cref="Asset"/> is adapter-specific: the WPF adapter requires a <c>Func&lt;FrameworkElement&gt;</c> that
+/// creates the icon element, and fails when the binding is rendered otherwise. A renderer you write decides its own
+/// asset type.</remarks>
 public sealed record InlineIconBinding(object Asset, bool Decorative, Func<string, string>? AccessibleName = null) : InlineMarkupBinding;
 
 /// <summary>A semantic native/UI run. Factories explicitly map options to their toolkit.</summary>
@@ -70,26 +81,21 @@ public sealed class Rmf2InlineRenderer
         return runs;
     }
 
-    /// <summary>Explicit projection; action labels require opt-in, custom explicit/alternate-text policies require an adapter, and meaningful icons require alternate text in the effective locale.</summary>
-    public string ToPlainText(string key, LocalizedTextContent content, IReadOnlyDictionary<string, InlineMarkupBinding>? slots = null,
-        bool allowActionLabels = false, bool annotateLinkDestinations = false) =>
-        ToPlainText(key, content, slots, new Rmf2PlainTextOptions { AllowActionLabels = allowActionLabels, AnnotateLinkDestinations = annotateLinkDestinations });
-
-    /// <summary>Explicit plain-text projection of typed bound content, with the same policies as the string-key overload.</summary>
+    /// <summary>
+    /// Explicit plain-text projection with the given options, including custom element projections. Action labels require
+    /// opt-in, custom explicit/alternate-text policies require an adapter, and meaningful icons require alternate text in
+    /// the effective locale.
+    /// </summary>
     [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "The overloads take unrelated first parameters (string key vs. bound content), so calls cannot become ambiguous.")]
-    [SuppressMessage("ApiDesign", "RS0027:API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The longer overloads take a string key or Rmf2PlainTextOptions, so no existing call binds differently.")]
-    public string ToPlainText(BoundLocalizedTextContent content, bool allowActionLabels = false, bool annotateLinkDestinations = false) =>
-        ToPlainText(content, new Rmf2PlainTextOptions { AllowActionLabels = allowActionLabels, AnnotateLinkDestinations = annotateLinkDestinations });
-
-    /// <summary>Explicit plain-text projection with the given options, including custom element projections.</summary>
-    public string ToPlainText(string key, LocalizedTextContent content, IReadOnlyDictionary<string, InlineMarkupBinding>? slots, Rmf2PlainTextOptions? options)
+    public string ToPlainText(string key, LocalizedTextContent content, IReadOnlyDictionary<string, InlineMarkupBinding>? slots = null, Rmf2PlainTextOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(content);
         return Rmf2PlainText.Inline(_contract, Render(key, content, slots), content.Locale, options ?? Rmf2PlainTextOptions.Default);
     }
 
     /// <summary>Explicit plain-text projection of typed bound content with the given options.</summary>
-    public string ToPlainText(BoundLocalizedTextContent content, Rmf2PlainTextOptions? options)
+    [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "The overloads take unrelated first parameters (string key vs. bound content), so calls cannot become ambiguous.")]
+    public string ToPlainText(BoundLocalizedTextContent content, Rmf2PlainTextOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(content);
         return Rmf2PlainText.Inline(_contract, Render(content), content.Content.Locale, options ?? Rmf2PlainTextOptions.Default);
