@@ -195,8 +195,7 @@ internal static class Program
     };
 
     private static bool IsEmitSwitch(string option) => option is
-        "--emit-csharp" or "--emit-json" or "--emit-typescript" or
-        "--emit-template-manifest" or "--emit-esm" or "--emit-cpp";
+        "--emit-csharp" or "--emit-json" or "--emit-esm";
 
     private static bool IsSchemaForbiddenOption(string option) =>
         option == "--project" || IsEmitSwitch(option);
@@ -314,15 +313,12 @@ internal static class Program
         }
     }
 
-    internal static ToolEmission Emission(bool csharp, bool json, bool typescript, bool templateManifest, bool esm, bool cpp)
+    internal static ToolEmission Emission(bool csharp, bool json, bool esm)
     {
         ToolEmission result = ToolEmission.None;
         if (csharp) result |= ToolEmission.CSharp;
         if (json) result |= ToolEmission.Json;
-        if (typescript) result |= ToolEmission.TypeScript;
-        if (templateManifest) result |= ToolEmission.TemplateManifest;
         if (esm) result |= ToolEmission.Esm;
-        if (cpp) result |= ToolEmission.Cpp;
         return result;
     }
 
@@ -605,8 +601,8 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         {
             "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter),
             "validate" => ExecuteCompilation(request, ToolCommand.Validate, null, ToolEmission.None),
-            "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp), OmitSourceDiagnostics()),
-            "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitTypeScript, request.EmitTemplateManifest, request.EmitEsm, request.EmitCpp), OmitSourceDiagnostics()),
+            "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
+            "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
             "import-text" => ExecuteImport(request),
             _ => new ToolOperationResult { ExitCode = Program.UsageFailure, ExitCategory = CommandExitCategory.Usage },

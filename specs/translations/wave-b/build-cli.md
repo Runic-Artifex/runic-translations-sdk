@@ -20,7 +20,7 @@ part of the current command contract.
 The exact command forms are:
 
 ```text
-init     --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class <name> [--locale <tag[:fallback]>...] [--no-starter]
+init     --directory <directory> --catalog <id> --default-locale <tag> --namespace <namespace> --class-name <name> [--locale <tag[:fallback]>...] [--no-starter]
 validate --project <directory>
 generate --project <directory> --output <directory> [--emit-csharp] [--emit-json] [--emit-esm]
 verify   --project <directory> --output <directory> [--emit-csharp] [--emit-json] [--emit-esm]
@@ -38,8 +38,9 @@ Each scalar option occurs once. Exit categories are stable:
 project and generated-artifact schemas. Diagnostics go to the diagnostic stream
 in deterministic order; generated artifact bytes never share that stream.
 Standalone TypeScript, template-manifest, and C++ emitters are not part of v5.
-Retired `--emit-typescript`, `--emit-template-manifest`, and `--emit-cpp` requests
-fail with `RTR0065`; they never select an older renderer.
+The retired `--emit-typescript`, `--emit-template-manifest`, and `--emit-cpp`
+options were removed: the tool rejects them as unknown options, and MSBuild
+rejects the former emit properties with `RTR0086`.
 
 ## Generate and verify
 

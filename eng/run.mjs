@@ -104,7 +104,7 @@ function verifyEditorPacked(version = `${workspace.version}.editor-packed`) {
     assert.ok(existsSync(tool), `Missing installed tool ${tool}`);
     run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", "--nologo",
       "-p:RunicEditorUsePackedTranslations=true", `-p:RunicEditorTranslationsPackageVersion=${version}`,
-      `-p:RestoreAdditionalProjectSources=${feed}`, `-p:TranslationsToolCommand=dotnet "${tool}"`]);
+      `-p:RestoreAdditionalProjectSources=${feed}`, `-p:RunicTranslationsToolCommand=dotnet "${tool}"`]);
     const editorDirectory = dirname(resolve(root, workspace.editor.project));
     const assets = JSON.parse(readFileSync(resolve(editorDirectory, "obj/project.assets.json"), "utf8"));
     const sourceProjects = Object.entries(assets.libraries)

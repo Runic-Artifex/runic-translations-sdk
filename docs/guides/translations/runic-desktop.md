@@ -32,7 +32,7 @@ uses the same catalog as the frontend. The C# project names the frontend's
   <PackageReference Include="Runic.Translations" Version="<VERSION>" />
   <PackageReference Include="Runic.Translations.Build" Version="<VERSION>" />
   <!-- The page's catalog, which the Vite plugin compiles for the frontend. -->
-  <TranslationProject Include="Frontend/translations/runic.json" />
+  <RunicTranslationProject Include="Frontend/translations/runic.json" />
 </ItemGroup>
 ```
 

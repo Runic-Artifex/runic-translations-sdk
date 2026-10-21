@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- RunicEditorUsePackedTranslations=true builds against locally packed Translations
        packages instead of source projects. Only bun eng/run.mjs verify-editor-packed sets it,
-       because it also supplies the packaged tool as TranslationsToolCommand. -->
+       because it also supplies the packaged tool as RunicTranslationsToolCommand. -->
   <Import Project="../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.props"
           Condition="'$(RunicEditorUsePackedTranslations)' != 'true'" />
 
@@ -19,12 +19,12 @@
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <ImplicitUsings>enable</ImplicitUsings>
-    <TranslationsEmitEsm>true</TranslationsEmitEsm>
-    <TranslationsToolCommand>dotnet tool run runic-translations --</TranslationsToolCommand>
-    <TranslationsToolCommand Condition="'$(RunicEditorUsePackedTranslations)' != 'true'">dotnet run --project &quot;$(RunicTranslationsRoot)tools/dotnet-runic-translations/dotnet-runic-translations.csproj&quot; --configuration Release --</TranslationsToolCommand>
+    <RunicTranslationsEmitEsm>true</RunicTranslationsEmitEsm>
+    <RunicTranslationsToolCommand>dotnet tool run runic-translations --</RunicTranslationsToolCommand>
+    <RunicTranslationsToolCommand Condition="'$(RunicEditorUsePackedTranslations)' != 'true'">dotnet run --project &quot;$(RunicTranslationsRoot)tools/dotnet-runic-translations/dotnet-runic-translations.csproj&quot; --configuration Release --</RunicTranslationsToolCommand>
     <TranslationsRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TranslationsRuntimePath>
-    <TranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' != 'true'">$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</TranslationsOutputPath>
-    <TranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' == 'true'">obj/runic-bridge/bootstrap/obj/$(Configuration)/$(TargetFramework)/translations</TranslationsOutputPath>
+    <RunicTranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' != 'true'">$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</RunicTranslationsOutputPath>
+    <RunicTranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' == 'true'">obj/runic-bridge/bootstrap/obj/$(Configuration)/$(TargetFramework)/translations</RunicTranslationsOutputPath>
     <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
   </PropertyGroup>
 
@@ -74,11 +74,11 @@
        generation inputs, so a compiler change (such as the generated ESM runtime) regenerates the
        editor's catalog instead of leaving stale output under obj/. -->
   <ItemGroup Condition="'$(RunicEditorUsePackedTranslations)' != 'true'">
-    <TranslationsToolInput Include="$(RunicTranslationsRoot)tools/dotnet-runic-translations/**/*" Exclude="$(RunicTranslationsRoot)tools/dotnet-runic-translations/bin/**;$(RunicTranslationsRoot)tools/dotnet-runic-translations/obj/**" />
-    <TranslationsToolInput Include="$(RunicTranslationsRoot)tools/Runic.Translations.Compiler/**/*" Exclude="$(RunicTranslationsRoot)tools/Runic.Translations.Compiler/bin/**;$(RunicTranslationsRoot)tools/Runic.Translations.Compiler/obj/**" />
-    <TranslationsToolInput Include="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Tooling/**/*" Exclude="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Tooling/bin/**;$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Tooling/obj/**" />
-    <TranslationsToolInput Include="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Authoring/**/*" Exclude="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Authoring/bin/**;$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Authoring/obj/**" />
-    <TranslationsToolInput Include="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations/**/*" Exclude="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations/bin/**;$(RunicTranslationsRoot)packages/dotnet/Runic.Translations/obj/**" />
+    <RunicTranslationsToolInput Include="$(RunicTranslationsRoot)tools/dotnet-runic-translations/**/*" Exclude="$(RunicTranslationsRoot)tools/dotnet-runic-translations/bin/**;$(RunicTranslationsRoot)tools/dotnet-runic-translations/obj/**" />
+    <RunicTranslationsToolInput Include="$(RunicTranslationsRoot)tools/Runic.Translations.Compiler/**/*" Exclude="$(RunicTranslationsRoot)tools/Runic.Translations.Compiler/bin/**;$(RunicTranslationsRoot)tools/Runic.Translations.Compiler/obj/**" />
+    <RunicTranslationsToolInput Include="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Tooling/**/*" Exclude="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Tooling/bin/**;$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Tooling/obj/**" />
+    <RunicTranslationsToolInput Include="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Authoring/**/*" Exclude="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Authoring/bin/**;$(RunicTranslationsRoot)packages/dotnet/Runic.Translations.Authoring/obj/**" />
+    <RunicTranslationsToolInput Include="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations/**/*" Exclude="$(RunicTranslationsRoot)packages/dotnet/Runic.Translations/bin/**;$(RunicTranslationsRoot)packages/dotnet/Runic.Translations/obj/**" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(RunicEditorUsePackedTranslations)' == 'true'">
@@ -100,8 +100,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <TranslationProject Include="EditorResources/runic.json" />
-    <TranslationMf2 Include="EditorResources/*.rmf2" />
+    <RunicTranslationProject Include="EditorResources/runic.json" />
+    <RunicTranslationMf2 Include="EditorResources/*.rmf2" />
     <None Update="ExampleWorkspace/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -119,9 +119,9 @@
        them, breaking the frontend build that consumes the manifest. -->
   <Target Name="KeepGeneratedTranslationsOutOfIncrementalClean"
           BeforeTargets="_CleanGetCurrentAndPriorFileWrites"
-          Condition="'$(TranslationsOutputPath)' != '' and Exists('$(TranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json')">
+          Condition="'$(RunicTranslationsOutputPath)' != '' and Exists('$(RunicTranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json')">
     <ItemGroup>
-      <_ExistingTranslationsArtifacts Include="$(TranslationsOutputPath)/editor.esm-v5/**/*" />
+      <_ExistingTranslationsArtifacts Include="$(RunicTranslationsOutputPath)/editor.esm-v5/**/*" />
       <FileWrites Include="@(_ExistingTranslationsArtifacts)" />
     </ItemGroup>
   </Target>
@@ -133,12 +133,12 @@
           DestinationFiles="Frontend/static/runic-cswebui.js"
           SkipUnchangedFiles="true" />
     <WriteLinesToFile File="Frontend/.runic-translations-manifest-path"
-                      Lines="$(MSBuildProjectDirectory)/$(TranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json"
+                      Lines="$(MSBuildProjectDirectory)/$(RunicTranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json"
                       Overwrite="true" WriteOnlyWhenDifferent="true" />
     <!-- The frontend build also consumes generated translations and built
          workspace packages, which live outside Frontend. -->
     <ItemGroup>
-      <RunicBridgeFrontendInput Include="$(TranslationsOutputPath)/editor.esm-v5/**/*" />
+      <RunicBridgeFrontendInput Include="$(RunicTranslationsOutputPath)/editor.esm-v5/**/*" />
       <RunicBridgeFrontendInput Include="../../packages/web/translations-svelte/dist/**/*;../../packages/web/translations-sveltekit/dist/**/*" />
       <RunicBridgeFrontendInput Include="../../packages/web/vite-plugin-runic-translations/package.json;../../packages/web/vite-plugin-runic-translations/dist/**/*" />
     </ItemGroup>

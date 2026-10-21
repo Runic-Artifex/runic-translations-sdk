@@ -192,7 +192,7 @@ internal sealed class Rmf2IntegrationTests
         string german = File.ReadAllText(temporary.Resolve("generated/checkout.de.locale-v5.json"));
         Assert.Contains("account_heading", german); Assert.Contains("runic:action", german);
     }
-    [Test, DisplayName("RMF2 --emit-cpp fails before creating output")]
+    [Test, DisplayName("RMF2 --emit-cpp is an unknown option and creates no output")]
     public void CppEmissionIsUnsupported()
     {
         using TemporaryDirectory temporary = new();
@@ -201,8 +201,7 @@ internal sealed class Rmf2IntegrationTests
         File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "hello = Hello\n");
         ProcessResult result = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated", "--emit-cpp", "--format", "json");
         Assert.Equal(2, result.ExitCode, result.Combined);
-        Assert.Contains("RCLI9013", result.Combined);
-        Assert.Contains("semantic translation contract does not support --emit-cpp", result.Combined);
+        Assert.Contains("--emit-cpp", result.Combined);
         Assert.False(Directory.Exists(temporary.Resolve("generated")), "Unsupported RMF2 output created artifacts.");
     }
     [Test, DisplayName("RMF2 CLI discovers feature mounts and produces cohesive packs")]
@@ -354,17 +353,17 @@ internal sealed class Rmf2IntegrationTests
             string directory = flag.Substring("--emit-".Length);
             ProcessResult unsupported = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", directory, flag);
             Assert.Equal(2, unsupported.ExitCode, unsupported.Combined);
-            Assert.Contains("RTR0065", unsupported.Combined);
+            Assert.Contains("unknown option", unsupported.Combined);
             Assert.Contains(flag, unsupported.Combined);
             Assert.False(Directory.Exists(temporary.Resolve(directory)), "unsupported v5 selection emitted output");
         }
         ProcessResult mixed = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "mixed", "--emit-json", "--emit-typescript");
         Assert.Equal(2, mixed.ExitCode, mixed.Combined);
-        Assert.Contains("RTR0065", mixed.Combined);
+        Assert.Contains("unknown option", mixed.Combined);
         Assert.False(Directory.Exists(temporary.Resolve("mixed")), "mixed supported/unsupported v5 selection emitted partial output");
         ProcessResult unsupportedVerify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "out", "--emit-template-manifest");
         Assert.Equal(2, unsupportedVerify.ExitCode, unsupportedVerify.Combined);
-        Assert.Contains("RTR0065", unsupportedVerify.Combined);
+        Assert.Contains("unknown option", unsupportedVerify.Combined);
 
         File.WriteAllText(path, Project[..^1] + ",\"executionProfile\":\"future-profile\"}");
         ProcessResult invalid = TestFixture.RunTool(temporary, "validate", "--project", "translations");
@@ -426,7 +425,7 @@ internal sealed class Rmf2IntegrationTests
         string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
         File.WriteAllText(temporary.Resolve("Consumer.proj"), $$"""
             <Project><PropertyGroup><Configuration>{{configuration}}</Configuration></PropertyGroup>
-            <ItemGroup><TranslationProject Include="translations/runic.json" /></ItemGroup>
+            <ItemGroup><RunicTranslationProject Include="translations/runic.json" /></ItemGroup>
             <Import Project="{{targets}}" />
             <Target Name="Dump" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources" />
             </Project>
@@ -449,10 +448,10 @@ internal sealed class Rmf2IntegrationTests
         string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
         File.WriteAllText(temporary.Resolve("Consumer.proj"), $$"""
             <Project><PropertyGroup><Configuration>{{configuration}}</Configuration></PropertyGroup>
-            <ItemGroup><TranslationProject Include="translations/runic.json" /></ItemGroup>
+            <ItemGroup><RunicTranslationProject Include="translations/runic.json" /></ItemGroup>
             <Import Project="{{targets}}" />
             <Target Name="Dump" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources">
-              <WriteLinesToFile File="sources.txt" Lines="@(TranslationMf2)" Overwrite="true" />
+              <WriteLinesToFile File="sources.txt" Lines="@(RunicTranslationMf2)" Overwrite="true" />
             </Target></Project>
             """);
         var first = Processes.DotNet(temporary.Path, "msbuild", "Consumer.proj", "/t:Dump", "/nologo");
@@ -480,7 +479,7 @@ internal sealed class Rmf2IntegrationTests
         string targets = RepositoryPaths.Resolve("packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets");
         File.WriteAllText(temporary.Resolve("Tray/Consumer.proj"), $$"""
             <Project><PropertyGroup><Configuration>{{configuration}}</Configuration></PropertyGroup>
-            <ItemGroup><TranslationProject Include="../Frontend/translations/runic.json" /></ItemGroup>
+            <ItemGroup><RunicTranslationProject Include="../Frontend/translations/runic.json" /></ItemGroup>
             <Import Project="{{targets}}" />
             <Target Name="Dump" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources">
               <WriteLinesToFile File="files.txt" Lines="@(AdditionalFiles->'%(RunicTranslationKind) %(Identity)')" Overwrite="true" />

@@ -28,7 +28,7 @@ internal sealed class XamlCatalog
     internal Dictionary<string, Rmf2ReadableMessageV1> Messages { get; } = new(StringComparer.Ordinal);
 }
 
-// The catalogs XAML can be checked against: the local TranslationProject's, then those of referenced projects.
+// The catalogs XAML can be checked against: the local RunicTranslationProject's, then those of referenced projects.
 // A local catalog wins over a referenced one with the same ID.
 internal sealed class XamlCatalogs
 {
@@ -366,8 +366,8 @@ internal sealed class XamlMessageValidator
         }
         if (!_catalogs.TryGet(catalog!, out XamlCatalog target))
         {
-            Report(TranslationsDiagnostics.XamlDeclaration, location, "XAML catalog '" + catalog + "' is not the catalog of the local TranslationProject or of a referenced project (" +
-                string.Join(", ", _catalogs.Ids.Select(static id => "'" + id + "'")) + "). External catalogs are not checked; set TranslationsValidateXaml=\"false\" on the file's Page or TranslationXaml item to skip it.");
+            Report(TranslationsDiagnostics.XamlDeclaration, location, "XAML catalog '" + catalog + "' is not the catalog of the local RunicTranslationProject or of a referenced project (" +
+                string.Join(", ", _catalogs.Ids.Select(static id => "'" + id + "'")) + "). External catalogs are not checked; set RunicTranslationsValidateXaml=\"false\" on the file's Page or RunicTranslationXaml item to skip it.");
             return;
         }
         if (!target.Messages.TryGetValue(key, out Rmf2ReadableMessageV1? message))
@@ -376,7 +376,7 @@ internal sealed class XamlMessageValidator
             Report(TranslationsDiagnostics.XamlKey, location, "'" + key + "' is not a readable message of catalog '" + catalog + "'." +
                 (suggestion is null ? " Use its flattened readable name." : " Did you mean '" + suggestion + "'?") +
                 (string.IsNullOrWhiteSpace(_input.Catalog)
-                    ? " The file was checked against TranslationsXamlCatalog; if its source comes from another file or code, set TranslationsValidateXaml=\"false\" on its Page item."
+                    ? " The file was checked against RunicTranslationsXamlCatalog; if its source comes from another file or code, set RunicTranslationsValidateXaml=\"false\" on its Page item."
                     : string.Empty));
             return;
         }
@@ -467,12 +467,12 @@ internal sealed class XamlMessageValidator
         if (!_reportedSources.Add(source)) return;
         string text = source == location
             ? "Message '" + key + "' sets its own Source, so it is not checked against catalog '" + catalog + "'. If that Source provides catalog '" + catalog +
-                "', set Catalog=\"" + catalog + "\" on the file's Page or TranslationXaml item to check it."
+                "', set Catalog=\"" + catalog + "\" on the file's Page or RunicTranslationXaml item to check it."
             : (source == _fileSource
                 ? "TranslationProperties.Source is set by a style Setter here, which can apply to any element, so keys in this whole file are"
                 : "TranslationProperties.Source is set here, so keys in this element's content and in this file's templates, styles and resources are") +
               " not checked against catalog '" + catalog + "' (first: '" + key + "' at line " + Line(location) + "). If this source provides catalog '" + catalog +
-              "', set Catalog=\"" + catalog + "\" on the file's Page or TranslationXaml item to check them; keys of another catalog cannot be checked.";
+              "', set Catalog=\"" + catalog + "\" on the file's Page or RunicTranslationXaml item to check them; keys of another catalog cannot be checked.";
         Report(TranslationsDiagnostics.XamlSourceNotChecked, source, text);
     }
 

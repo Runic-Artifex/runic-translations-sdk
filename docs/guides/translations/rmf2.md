@@ -497,7 +497,7 @@ generate, or start the language service:
 
 ```sh
 runic-translations init --directory translations --catalog app \
-  --default-locale en --namespace Example --class AppText
+  --default-locale en --namespace Example --class-name AppText
 runic-translations validate --project translations
 runic-translations generate --project translations --output obj/translations --emit-csharp --emit-json --emit-esm
 runic-translations lsp
