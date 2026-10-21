@@ -4,7 +4,7 @@ Build editors and workspace tools on supported Runic Translations project creati
 
 ## Install
 
-This assembly is not published as a standalone package: it ships inside the preview `Runic.Translations.Tooling` package and is not a separate public package.
+This assembly is not published as a standalone package: it ships inside the `Runic.Translations.Tooling` package and is not a separate public package.
 
 ## Create a validated project
 
@@ -29,7 +29,7 @@ Console.WriteLine(createdDirectory);
 
 ## When to choose this package
 
-Consume these authoring APIs through the preview `Runic.Translations.Tooling` package when building a translation editor, project wizard, or other tool that must inspect and change `runic.json` and RMF2 sources. Use `dotnet-runic-translations` or `Runic.Translations.Templates` when you only need a ready-made command or scaffold. Runtime applications do not need this assembly.
+Consume these authoring APIs through the `Runic.Translations.Tooling` package when building a translation editor, project wizard, or other tool that must inspect and change `runic.json` and RMF2 sources. Use `dotnet-runic-translations` or `Runic.Translations.Templates` when you only need a ready-made command or scaffold. Runtime applications do not need this assembly.
 
 Mutation and recovery APIs use expected revisions and contained paths to detect concurrent or unsafe changes. Callers still own user authorization, backups, source control, and any product-specific review workflow.
 
@@ -47,12 +47,12 @@ sources remain the alternate supported representation.
 
 ## Compatibility and status
 
-This package is a public preview for .NET 10. Preview APIs and workspace operations may change with documented migrations. Keep it on the same exact release as the compiler and any CLI or editor that exchanges its project contracts.
+This assembly targets .NET 10. Before 1.0 a minor release may contain breaking changes, each listed with upgrade steps in the release notes (see [Versions before 1.0](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#versions-before-10)). Keep it on the same exact release as the compiler and any CLI or editor that exchanges its project contracts.
 
 - [Project creation example](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.Authoring.Tests/ProjectCreationTests.cs)
 - [Workspace authoring examples](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/dotnet/Runic.Translations.Authoring.Tests)
 - [RMF2 project guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md)
-- [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/apps/translations-editor): built from source; standalone Editor downloads are not part of this preview.
+- [Runic Translations Editor](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/apps/translations-editor): built from source; the editor is a separate product with its own releases.
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations-sdk/issues)
 
 Licensed under the [MIT License](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/LICENSE). See [Third-Party Notices](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/specs/translations/THIRD-PARTY-NOTICES.md) for attribution.

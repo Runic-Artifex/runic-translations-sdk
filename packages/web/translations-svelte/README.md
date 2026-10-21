@@ -22,5 +22,5 @@ exports `LocalizedInline` and `inlineFactory` for localized structured content.
 `documentFactory` for RMF2 document messages: semantic paragraphs, headings and
 lists that hydrate by occurrence path, with no inline styles. Pass
 `documentFactory` to the catalog's `createDocumentRenderer` once, then render
-its output with `<LocalizedDocument {nodes} />`. See
+its output with `<LocalizedDocument {nodes} />`. The document block set is open: a later minor release may add blocks, and the renderer fails on a block name it does not know, so update the adapter with the compiler. Inline binding kinds (`runic:link`, `runic:action`, `runic:icon`) are closed. See
 [Web document adapters](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#web-document-adapters).

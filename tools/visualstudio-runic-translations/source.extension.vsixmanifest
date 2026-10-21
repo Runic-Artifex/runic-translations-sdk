@@ -3,7 +3,7 @@
   <Metadata>
     <Identity Id="Runic.Artifex.Translations.Rmf2" Version="|%CurrentProject%;GetRunicVsixVersion|" Language="en-US" Publisher="Runic Artifex" />
     <DisplayName>Runic MF2 Translations</DisplayName>
-    <Description xml:space="preserve">Direct MF2 and grouped RMF2 diagnostics, navigation, resource refactoring and inert message preview through the project-local Runic language server. Development preview.</Description>
+    <Description xml:space="preserve">Direct MF2 and grouped RMF2 diagnostics, navigation, resource refactoring and inert message preview through the project-local Runic language server. Preview until the production language server; commands may change in a minor release.</Description>
     <License>LICENSE.txt</License>
   </Metadata>
   <Installation>

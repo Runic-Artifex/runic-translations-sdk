@@ -8,7 +8,7 @@ Import generated Runic Translations messages through stable Vite virtual modules
 npm install --save-dev @runic-artifex/vite-plugin-runic-translations@<VERSION>
 ```
 
-Replace `<VERSION>` with the current public preview shown on npm. The package supports Vite 6, 7, and 8 and accepts only the RMF2 `web-module-manifest-v3.json` contract (ESM ABI 4, runtime ABI 2). If the plugin owns generation, install `dotnet-runic-translations` in a project-local .NET 10 tool manifest at that same exact release.
+Replace `<VERSION>` with the current version shown on npm. The package supports Vite 6, 7, and 8 and accepts only the RMF2 `web-module-manifest-v3.json` contract (ESM ABI 4, runtime ABI 3). If the plugin owns generation, install `dotnet-runic-translations` in a project-local .NET 10 tool manifest at that same exact release.
 
 ## Configure Vite
 
@@ -103,7 +103,7 @@ Choose the plugin when Vite should resolve generated virtual modules and invalid
 
 ## Compatibility and status
 
-The plugin is a public preview for Vite `>=6 <9`. It accepts the supported web-module manifest and ESM ABI only and reports a clear error for incompatible generated output. Keep the adapter and .NET tool on one release, regenerate ESM during upgrades, and review preview migration notes.
+The plugin supports Vite `>=6 <9`. Before 1.0 a minor release may contain breaking changes, each listed with upgrade steps in the release notes (see [Versions before 1.0](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#versions-before-10)). It accepts the supported web-module manifest and ESM ABI only and reports a clear error for incompatible generated output. Keep the adapter and .NET tool on one release, regenerate ESM during upgrades, and review the release notes.
 
 - [Ten-minute Vite workflow](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
 - [SvelteKit quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-sveltekit.md)

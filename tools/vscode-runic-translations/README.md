@@ -1,6 +1,11 @@
 # Runic MF2 Translations for VS Code
 
-This development extension uses the shared Runic language server for direct
+**Preview.** This extension is a preview product until the production language
+server (2.0): its commands and settings, and the `lsp` protocol it uses, are
+outside the 1.0 compatibility rules and may change in a minor release. Every
+release carries the Marketplace "Preview" label.
+
+This extension uses the shared Runic language server for direct
 `.mf2` and grouped `.rmf2` resources. It supplies highlighting, diagnostics, symbols, folding, completion,
 hover, definition/reference navigation, formatting and versioned resource edits.
 It synchronizes open `runic.json` buffers so mounted/slot configuration changes
@@ -67,9 +72,10 @@ no marketplace upload or user-profile installation is part of these commands.
 
 The `version` in `package.json` is a placeholder. `bun run package` (`package.mjs`)
 stamps the release version of `eng/workspace.json`, mapped to `x.y.z`, into a
-staged copy and packs that: `0.6.0-preview.N` becomes `0.6.N`, packaged with
-`--pre-release`, and the final `0.6.0` becomes `0.6.1000`. It fails if the VSIX
-does not carry that version and flag. See
+staged copy and packs that: the plain `0.8.0` becomes `0.8.1000`, `1.0.0-rc.N`
+becomes `1.0.(500 + N)` packaged with `--pre-release`, and the final `1.0.0`
+becomes `1.0.1000`. It fails if the VSIX does not carry that version, the
+pre-release flag of a `-preview.N`/`-rc.N` release, and the Preview label. See
 [IDE extension versions](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#ide-extension-versions) for
 the full mapping. Each GitHub release attaches the attested VSIX that CI built.
 

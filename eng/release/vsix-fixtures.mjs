@@ -20,8 +20,8 @@ export function writeVsixFixtures(directory, version, overrides = {}) {
   const versions = ideVersions(version);
   for (const { artifact, file, id, publisher, format } of VSIX) {
     const vscode = format === "vscode";
-    const preview = vscode && versions.vscodePreRelease;
-    const fixture = { id, publisher, version: versions[format], preRelease: preview, preview, packagePreview: preview,
+    const preRelease = vscode && versions.vscodePreRelease, preview = vscode && versions.vscodePreview;
+    const fixture = { id, publisher, version: versions[format], preRelease, preview, packagePreview: preview,
       packageVersion: vscode ? versions.vscode : "", ...overrides[format] };
     execFileSync(process.platform === "win32" ? "python" : "python3", ["-c", script, `${directory}/${artifact}/${file}`, fixture.id, fixture.version,
       fixture.publisher, String(fixture.preRelease), String(fixture.preview), String(fixture.packagePreview), fixture.packageVersion]);

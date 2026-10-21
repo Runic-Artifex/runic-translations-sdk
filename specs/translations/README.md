@@ -1,7 +1,7 @@
 # Runic Translations contracts
 
 This directory defines the single translation contract emitted by the current
-preview. Source organization can be direct `.mf2` messages or grouped `.rmf2`
+release. Source organization can be direct `.mf2` messages or grouped `.rmf2`
 resources, but both forms link to the same semantic model. They are not separate
 execution profiles and cannot be mixed in one project.
 
@@ -60,7 +60,7 @@ oracles. Schema validation alone is intentionally insufficient for normalized
 uniqueness, BCP 47 canonicalization, fallback graphs, cross-file linking,
 caller/markup parity, compiler limits, and generated identifier collisions.
 The root Wave A JSON corpus is retained only as a published-0.3 historical
-fixture and is not an accepted input contract for the current preview.
+fixture and is not an accepted input contract.
 
 The supported authoring convention is documented in
 [`../../docs/guides/translations/rmf2.md`](../../docs/guides/translations/rmf2.md).

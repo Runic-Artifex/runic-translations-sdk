@@ -11,12 +11,19 @@ const read = path => readFileSync(new URL(`../../${path}`, import.meta.url), "ut
 const table = [
   ["0.6.0-preview.1", "0.6.0.1", "0.6.1", true],
   ["0.6.0-preview.2", "0.6.0.2", "0.6.2", true],
-  ["0.6.0-preview.999", "0.6.0.999", "0.6.999", true],
+  ["0.6.0-preview.499", "0.6.0.499", "0.6.499", true],
   ["0.6.0", "0.6.0.1000", "0.6.1000", false],
   ["0.6.1-preview.1", "0.6.1.1", "0.6.1001", true],
   ["0.6.1", "0.6.1.1000", "0.6.2000", false],
   ["0.7.0-preview.1", "0.7.0.1", "0.7.1", true],
+  ["0.8.0", "0.8.0.1000", "0.8.1000", false],
+  ["0.8.1", "0.8.1.1000", "0.8.2000", false],
+  ["1.0.0-preview.1", "1.0.0.1", "1.0.1", true],
+  ["1.0.0-rc.1", "1.0.0.501", "1.0.501", true],
+  ["1.0.0-rc.499", "1.0.0.999", "1.0.999", true],
   ["1.0.0", "1.0.0.1000", "1.0.1000", false],
+  ["1.0.1-rc.2", "1.0.1.502", "1.0.1502", true],
+  ["1.0.1", "1.0.1.1000", "1.0.2000", false],
 ];
 const compare = (a, b) => {
   const [x, y] = [a, b].map(version => version.split(".").map(Number));
@@ -25,10 +32,10 @@ const compare = (a, b) => {
 
 test("maps a release onto the Visual Studio and VS Code version formats", () => {
   for (const [release, visualStudio, vscode, vscodePreRelease] of table)
-    expect(ideVersions(release)).toEqual({ release, visualStudio, vscode, vscodePreRelease });
+    expect(ideVersions(release)).toEqual({ release, visualStudio, vscode, vscodePreRelease, vscodePreview: true });
 });
 
-test("IDE versions sort in release order and a preview never takes a final release's number", () => {
+test("IDE versions sort in release order and a prerelease never takes a final release's number", () => {
   for (let index = 1; index < table.length; index++) {
     expect(compare(table[index - 1][1], table[index][1])).toBeLessThan(0);
     expect(compare(table[index - 1][2], table[index][2])).toBeLessThan(0);
@@ -36,13 +43,16 @@ test("IDE versions sort in release order and a preview never takes a final relea
   const finals = new Set(), previews = new Set();
   for (let patch = 0; patch < 5; patch++) {
     finals.add(ideVersions(`0.6.${patch}`).vscode);
-    for (const preview of [1, 2, 500, 999]) previews.add(ideVersions(`0.6.${patch}-preview.${preview}`).vscode);
+    for (const number of [1, 2, 250, 499]) {
+      previews.add(ideVersions(`0.6.${patch}-preview.${number}`).vscode);
+      previews.add(ideVersions(`0.6.${patch}-rc.${number}`).vscode);
+    }
   }
   expect([...previews].filter(version => finals.has(version))).toEqual([]);
 });
 
 test("refuses versions the IDE formats cannot express", () => {
-  for (const version of ["0.6.0-preview.0", "0.6.0-preview.1000", "0.6.0-rc.1", "0.6.0-preview", "0.6", "06.0.0", "0.6.0+build", ""])
+  for (const version of ["0.6.0-preview.0", "0.6.0-preview.500", "0.6.0-rc.0", "0.6.0-rc.500", "0.6.0-beta.1", "0.6.0-preview", "0.6", "06.0.0", "0.6.0+build", ""])
     expect(() => ideVersions(version)).toThrow("IDE extension versions cannot express it");
   for (const version of ["65535.0.0", "0.65535.0", "0.6.65535", "0.6.99999-preview.1"])
     expect(() => ideVersions(version)).toThrow("above 65534");
@@ -52,12 +62,12 @@ test("refuses versions the IDE formats cannot express", () => {
 // folded VS Code patch fits the Marketplace's 32-bit component.
 test("the largest components map within both IDE limits", () => {
   expect(ideVersions("65534.65534.65534")).toEqual({ release: "65534.65534.65534", visualStudio: "65534.65534.65534.1000",
-    vscode: "65534.65534.65535000", vscodePreRelease: false });
-  expect(ideVersions("65534.65534.65534-preview.999").vscode).toBe("65534.65534.65534999");
+    vscode: "65534.65534.65535000", vscodePreRelease: false, vscodePreview: true });
+  expect(ideVersions("65534.65534.65534-rc.499").vscode).toBe("65534.65534.65534999");
   expect(65534 * 1000 + 1000).toBeLessThanOrEqual(2 ** 31 - 1);
 });
 
-const limits = [["65534.65534.65534", "65534.65534.65534.1000"], ["0.6.65534-preview.3", "0.6.65534.3"]];
+const limits = [["65534.65534.65534", "65534.65534.65534.1000"], ["0.6.65534-preview.3", "0.6.65534.3"], ["0.6.65534-rc.3", "0.6.65534.503"]];
 const tooLarge = ["65535.0.0", "0.65535.0", "0.6.65535", "0.6.99999-preview.1"];
 
 test("package.py and the Visual Studio project map versions like ide-versions.mjs", () => {
@@ -65,10 +75,10 @@ test("package.py and the Visual Studio project map versions like ide-versions.mj
     expect(execFileSync(python, [`${root}/tools/visualstudio-runic-translations/package.py`, "--print-version", "--release-version", release], { encoding: "utf8" }).trim()).toBe(visualStudio);
   for (const [release, visualStudio] of limits)
     expect(execFileSync(python, [`${root}/tools/visualstudio-runic-translations/package.py`, "--print-version", "--release-version", release], { encoding: "utf8" }).trim()).toBe(visualStudio);
-  for (const version of ["0.6.0-rc.1", ...tooLarge]) {
+  for (const version of ["0.6.0-beta.1", ...tooLarge]) {
     const refused = spawnSync(python, [`${root}/tools/visualstudio-runic-translations/package.py`, "--print-version", "--release-version", version], { encoding: "utf8" });
     expect(refused.status).not.toBe(0);
-    expect(refused.stderr).toContain(version.startsWith("0.6.0-rc") ? "cannot be mapped" : "above 65534");
+    expect(refused.stderr).toContain(version.startsWith("0.6.0-beta") ? "cannot be mapped" : "above 65534");
   }
   expect(execFileSync(python, [`${root}/tools/visualstudio-runic-translations/package.py`, "--print-version"], { encoding: "utf8" }).trim())
     .toBe(ideVersions(workspaceVersion()).visualStudio);
@@ -85,10 +95,10 @@ test("Publish preview rejects a version the IDE formats cannot express before lo
   const formatChecks = script.slice(0, script.findIndex(line => line.startsWith("bun eng/release/ide-versions.mjs")) + 1).join("\n");
   expect(script.slice(script.indexOf(formatChecks.split("\n").at(-1)) + 1).every(line => !line || line.startsWith("test "))).toBe(true);
   const validate = version => spawnSync("bash", ["-c", formatChecks], { cwd: root, encoding: "utf8", env: { ...process.env, VERSION: version } });
-  for (const version of ["0.6.0-rc.1", "0.6.0-preview.0", "0.6.0-preview.1000", "0.6.0-beta", "0.6.0+build", "06.0.0", "0.6"]) {
+  for (const version of ["0.6.0-rc.500", "0.6.0-preview.0", "0.6.0-preview.500", "0.6.0-beta", "0.6.0+build", "06.0.0", "0.6"]) {
     const refused = validate(version);
     expect(refused.status).not.toBe(0);
-    expect(refused.stdout).toContain(`::error::Version '${version}' is not x.y.z-preview.N`);
+    expect(refused.stdout).toContain(`::error::Version '${version}' is not a plain x.y.z`);
   }
   const tooLarge = validate("0.65535.0");
   expect(tooLarge.status).not.toBe(0);
@@ -107,11 +117,11 @@ test.skipIf(!dotnet)("the Visual Studio project stamps the mapped version from e
   const current = stamped(msbuild());
   expect(current.Result).toBe("Success");
   expect(current.Items.map(item => item.Identity)).toEqual([ideVersions(workspaceVersion()).visualStudio]);
-  for (const [release, visualStudio] of [table[1], table[3], table[4]])
+  for (const [release, visualStudio] of [table[1], table[3], table[4], table[11]])
     expect(stamped(msbuild(`-p:RunicIdeReleaseVersion=${release}`)).Items.map(item => item.Identity)).toEqual([visualStudio]);
   for (const [release, visualStudio] of limits)
     expect(stamped(msbuild(`-p:RunicIdeReleaseVersion=${release}`)).Items.map(item => item.Identity)).toEqual([visualStudio]);
-  for (const version of ["0.6.0-rc.1", ...tooLarge]) {
+  for (const version of ["0.6.0-beta.1", ...tooLarge]) {
     const refused = msbuild(`-p:RunicIdeReleaseVersion=${version}`);
     expect(refused.status).not.toBe(0);
     expect(refused.stdout + refused.stderr).toContain("cannot be mapped to a VSIX version");
@@ -123,10 +133,10 @@ test("both manifests take their version from the build, never from a committed n
     .toContain('<Identity Id="Runic.Artifex.Translations.Rmf2" Version="|%CurrentProject%;GetRunicVsixVersion|"');
   const extension = JSON.parse(read("tools/vscode-runic-translations/package.json"));
   expect(extension.scripts.package).toBe("bun run build && node package.mjs");
-  // package.mjs stamps "preview" from the release; CI also packages a final release to check it.
-  expect(read("tools/vscode-runic-translations/package.mjs")).toContain("preview: versions.vscodePreRelease }");
+  // package.mjs stamps "preview" (always true until 2.0); CI also packages a final release to check it.
+  expect(read("tools/vscode-runic-translations/package.mjs")).toContain("preview: versions.vscodePreview }");
   const steps = Bun.YAML.parse(read(".github/workflows/ci.yml")).jobs["ide-packaging"].steps;
   expect(steps.find(step => step.name === "Build, test and package the VS Code extension").run.split("\n"))
-    .toContain('node package.mjs 0.6.0 "$RUNNER_TEMP/final-release-check.vsix"');
+    .toContain('node package.mjs 0.8.0 "$RUNNER_TEMP/final-release-check.vsix"');
   expect(read("tools/vscode-runic-translations/.vscodeignore").split("\n")).toContain("package.mjs");
 });
