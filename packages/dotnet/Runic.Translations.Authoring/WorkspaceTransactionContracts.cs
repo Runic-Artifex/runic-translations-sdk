@@ -42,7 +42,7 @@ internal sealed class TranslationWorkspaceTransactionPlan
         string root,
         string catalogId,
         IReadOnlyList<TranslationWorkspaceEdit> edits,
-        Rmf2ProjectCompilationV5 compilation)
+        Rmf2ProjectCompilation compilation)
     {
         Root = root;
         CatalogId = catalogId;
@@ -70,7 +70,7 @@ internal sealed class TranslationWorkspaceTransactionPlan
     {
         private ValidationReceipt(bool success) => Success = success;
         internal bool Success { get; }
-        internal static ValidationReceipt From(Rmf2ProjectCompilationV5 compilation) =>
+        internal static ValidationReceipt From(Rmf2ProjectCompilation compilation) =>
             new((compilation ?? throw new ArgumentNullException(nameof(compilation))).Success);
     }
 }

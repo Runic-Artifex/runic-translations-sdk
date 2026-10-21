@@ -59,7 +59,7 @@ internal sealed class Rmf2DocumentCorpusTests
             const string manifest = "{\"schemaVersion\":1,\"catalog\":\"cases\",\"code\":{\"namespace\":\"Corpus\",\"className\":\"CaseText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"de\"],\"validation\":{\"translationCompleteness\":\"allow\"}}";
             TranslationSource[] sources = test.GetProperty("sources").EnumerateObject()
                 .Select(source => new TranslationSource("translations/" + source.Name + ".rmf2", Encoding.UTF8.GetBytes(source.Value.GetString()!))).ToArray();
-            Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(manifest)), sources);
+            Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(manifest)), sources);
             Assert.Equal(Strings(test.GetProperty("diagnostics")), DiagnosticList(result), id + ": " + string.Join("; ", result.Diagnostics.Select(item => item.Id + " " + item.Message)));
             Assert.Equal(test.GetProperty("success").GetBoolean(), result.Success, id + " success");
         }
@@ -283,14 +283,14 @@ internal sealed class Rmf2DocumentCorpusTests
         TranslationSource manifest = new("translations/runic.json", File.ReadAllBytes(Path.Combine(Root, project.GetProperty("manifest").GetString()!)));
         TranslationSource[] sources = project.GetProperty("sources").EnumerateArray()
             .Select(path => new TranslationSource("translations/" + path.GetString(), File.ReadAllBytes(Path.Combine(Root, path.GetString()!)))).ToArray();
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(manifest, sources);
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(manifest, sources);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Id + ": " + item.Message)));
         Assert.Equal(Strings(project.GetProperty("diagnostics")), DiagnosticList(result),
             "The corpus project diagnostics: " + string.Join("; ", result.Diagnostics.Select(item => item.Id + ": " + item.Message)));
         return result.Project!;
     }
 
-    private static string DiagnosticList(Rmf2ProjectCompilationV5 result) => string.Join('|', result.Diagnostics
+    private static string DiagnosticList(Rmf2ProjectCompilation result) => string.Join('|', result.Diagnostics
         .Select(diagnostic => diagnostic.Id + ":" + Path.GetFileNameWithoutExtension(diagnostic.Location.Path) + ":" + (diagnostic.Severity == TranslationDiagnosticSeverity.Error ? "error" : "warning"))
         .Order(StringComparer.Ordinal));
 

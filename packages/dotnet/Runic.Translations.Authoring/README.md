@@ -20,12 +20,12 @@ var request = new TranslationProjectCreationRequest(
     additionalLocales: [new TranslationProjectLocale("de", "en")]);
 
 TranslationProjectPlan plan = TranslationProjectScaffolder.Render(request);
-string createdDirectory = TranslationProjectWriter.Create(plan);
+string createdDirectory = await TranslationProjectWriter.CreateAsync(plan, cancellationToken);
 
 Console.WriteLine(createdDirectory);
 ```
 
-`Render` is side-effect free and returns the exact UTF-8 files plus their successful compilation. `Create` commits the complete plan to a target that does not already exist; conflicts and unsafe linked target parents fail without overwriting an existing workspace.
+`Render` is side-effect free and returns the exact UTF-8 files plus their successful compilation. `CreateAsync` commits the complete plan to a target that does not already exist; conflicts, unsafe linked target parents and cancellation fail without overwriting an existing workspace or leaving a partial project.
 
 ## When to choose this package
 

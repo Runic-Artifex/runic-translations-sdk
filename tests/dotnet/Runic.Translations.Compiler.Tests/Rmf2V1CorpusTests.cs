@@ -153,7 +153,7 @@ internal sealed class Rmf2V1CorpusTests
             if (layout.TryGetProperty("newline", out JsonElement newline) && newline.GetString() == "crlf")
                 text = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
             TranslationSource source = new(layout.GetProperty("logicalPath").GetString()!, Encoding.UTF8.GetBytes(text));
-            Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(project, [source]);
+            Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(project, [source]);
             Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Id + ": " + item.Message)));
             yield return result.Project!;
         }
@@ -233,7 +233,7 @@ internal sealed class Rmf2V1CorpusTests
         TranslationSource manifest = new("translations/runic.json", File.ReadAllBytes(Path.Combine(Root, project.GetProperty("manifest").GetString()!)));
         TranslationSource[] sources = project.GetProperty("sources").EnumerateArray()
             .Select(path => new TranslationSource("translations/" + path.GetString(), File.ReadAllBytes(Path.Combine(Root, path.GetString()!)))).ToArray();
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(manifest, reverse ? sources.Reverse() : sources);
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(manifest, reverse ? sources.Reverse() : sources);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Id + ": " + item.Message)));
         return result.Project!;
     }

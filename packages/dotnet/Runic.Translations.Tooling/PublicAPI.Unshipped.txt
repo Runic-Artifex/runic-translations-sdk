@@ -123,3 +123,24 @@
 *REMOVED*~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.String.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>
 *REMOVED*~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.TranslationsToolCommandResult.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Runic.Translations.Tooling.TranslationsToolCommandResult>
 *REMOVED*~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.TranslationsToolDiagnostic.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Runic.Translations.Tooling.TranslationsToolDiagnostic>
+Runic.Translations.Tooling.ArtifactInspection.Kind.get -> Runic.Translations.Tooling.ArtifactKind
+Runic.Translations.Tooling.ArtifactKind
+Runic.Translations.Tooling.ArtifactKind.Unknown = 0 -> Runic.Translations.Tooling.ArtifactKind
+Runic.Translations.Tooling.ArtifactKind.Xliff = 1 -> Runic.Translations.Tooling.ArtifactKind
+Runic.Translations.Tooling.ArtifactKind.Xliff21 = 2 -> Runic.Translations.Tooling.ArtifactKind
+Runic.Translations.Tooling.TranslationInterchangeReviewEntry.State.get -> Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationInterchangeReviewEntry.TranslationInterchangeReviewEntry(string! key, string! locale, Runic.Translations.Tooling.TranslationReviewState state, string? note = null, string? sourceFingerprint = null) -> void
+Runic.Translations.Tooling.TranslationMf2Document.Bytes.get -> System.ReadOnlyMemory<byte>
+Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationReviewState.Approved = 3 -> Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationReviewState.Draft = 0 -> Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationReviewState.NeedsReview = 2 -> Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationReviewState.Translated = 1 -> Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationXliffDocument.Bytes.get -> System.ReadOnlyMemory<byte>
+static Runic.Translations.Tooling.TranslationInterchange.ExportXliff21(Runic.Translations.Compiler.Rmf2ProjectCompilation! compilation, Runic.Translations.Tooling.TranslationInterchangeReview? review = null) -> Runic.Translations.Tooling.TranslationXliffExportResult!
+*REMOVED*Runic.Translations.Tooling.ArtifactInspection.Kind.get -> string!
+*REMOVED*Runic.Translations.Tooling.TranslationInterchangeReviewEntry.State.get -> string!
+*REMOVED*Runic.Translations.Tooling.TranslationInterchangeReviewEntry.TranslationInterchangeReviewEntry(string! key, string! locale, string! state, string? note = null, string? sourceFingerprint = null) -> void
+*REMOVED*Runic.Translations.Tooling.TranslationMf2Document.Bytes.get -> byte[]!
+*REMOVED*Runic.Translations.Tooling.TranslationXliffDocument.Bytes.get -> byte[]!
+*REMOVED*static Runic.Translations.Tooling.TranslationInterchange.ExportXliff21(Runic.Translations.Compiler.Rmf2ProjectCompilationV5! compilation, Runic.Translations.Tooling.TranslationInterchangeReview? review = null) -> Runic.Translations.Tooling.TranslationXliffExportResult!

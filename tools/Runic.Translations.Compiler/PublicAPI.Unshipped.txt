@@ -271,3 +271,63 @@ Runic.Translations.Compiler.TranslationDiagnosticSeverity.Warning = 1 -> Runic.T
 *REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.operator ==(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? left, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? right) -> bool
 *REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticSpan.operator !=(Runic.Translations.Compiler.Rmf2DiagnosticSpan? left, Runic.Translations.Compiler.Rmf2DiagnosticSpan? right) -> bool
 *REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticSpan.operator ==(Runic.Translations.Compiler.Rmf2DiagnosticSpan? left, Runic.Translations.Compiler.Rmf2DiagnosticSpan? right) -> bool
+Runic.Translations.Compiler.Rmf2ProjectCompilation
+Runic.Translations.Compiler.Rmf2ProjectCompilation.CallerFingerprint.get -> string?
+Runic.Translations.Compiler.Rmf2ProjectCompilation.CatalogId.get -> string?
+Runic.Translations.Compiler.Rmf2ProjectCompilation.DefaultLocale.get -> string?
+Runic.Translations.Compiler.Rmf2ProjectCompilation.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic!>!
+Runic.Translations.Compiler.Rmf2ProjectCompilation.ExecutionProfile.get -> string!
+Runic.Translations.Compiler.Rmf2ProjectCompilation.Locales.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Runic.Translations.Compiler.Rmf2ProjectCompilation.MessageGrammarVersion.get -> int
+Runic.Translations.Compiler.Rmf2ProjectCompilation.RuntimeAbiVersion.get -> int
+Runic.Translations.Compiler.Rmf2ProjectCompilation.SourceHash.get -> string?
+Runic.Translations.Compiler.Rmf2ProjectCompilation.Success.get -> bool
+Runic.Translations.Compiler.TranslationCompilerOptions.MaximumDepth.init -> void
+Runic.Translations.Compiler.TranslationCompilerOptions.MaximumDocumentBytes.init -> void
+Runic.Translations.Compiler.TranslationCompilerOptions.MaximumKeysPerCatalog.init -> void
+Runic.Translations.Compiler.TranslationCompilerOptions.MaximumLocalesPerCatalog.init -> void
+Runic.Translations.Compiler.TranslationCompilerOptions.MaximumPlaceholdersPerValue.init -> void
+Runic.Translations.Compiler.TranslationCompilerOptions.MaximumValueBytes.init -> void
+Runic.Translations.Compiler.TranslationCompilerOptions.TranslationCompilerOptions() -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2ProjectCompilationV5
+*REMOVED*Runic.Translations.Compiler.Rmf2ProjectCompilationV5.CallerFingerprint.get -> string?
+*REMOVED*Runic.Translations.Compiler.Rmf2ProjectCompilationV5.CatalogId.get -> string?
+*REMOVED*Runic.Translations.Compiler.Rmf2ProjectCompilationV5.DefaultLocale.get -> string?
+*REMOVED*Runic.Translations.Compiler.Rmf2ProjectCompilationV5.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2ProjectCompilationV5.Locales.get -> System.Collections.Generic.IReadOnlyList<string!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2ProjectCompilationV5.SourceHash.get -> string?
+*REMOVED*Runic.Translations.Compiler.Rmf2ProjectCompilationV5.Success.get -> bool
+*REMOVED*Runic.Translations.Compiler.TranslationArgumentType
+*REMOVED*Runic.Translations.Compiler.TranslationArgumentType.Boolean = 3 -> Runic.Translations.Compiler.TranslationArgumentType
+*REMOVED*Runic.Translations.Compiler.TranslationArgumentType.Date = 4 -> Runic.Translations.Compiler.TranslationArgumentType
+*REMOVED*Runic.Translations.Compiler.TranslationArgumentType.DateTime = 6 -> Runic.Translations.Compiler.TranslationArgumentType
+*REMOVED*Runic.Translations.Compiler.TranslationArgumentType.Guid = 7 -> Runic.Translations.Compiler.TranslationArgumentType
+*REMOVED*Runic.Translations.Compiler.TranslationArgumentType.Int = 1 -> Runic.Translations.Compiler.TranslationArgumentType
+*REMOVED*Runic.Translations.Compiler.TranslationArgumentType.Number = 2 -> Runic.Translations.Compiler.TranslationArgumentType
+*REMOVED*Runic.Translations.Compiler.TranslationArgumentType.String = 0 -> Runic.Translations.Compiler.TranslationArgumentType
+*REMOVED*Runic.Translations.Compiler.TranslationArgumentType.Time = 5 -> Runic.Translations.Compiler.TranslationArgumentType
+*REMOVED*Runic.Translations.Compiler.TranslationCompilerOptions.TranslationCompilerOptions(int maximumDocumentBytes = 8388608, int maximumDepth = 64, int maximumKeysPerCatalog = 50000, int maximumValueBytes = 65536, int maximumPlaceholdersPerValue = 32, int maximumLocalesPerCatalog = 256) -> void
+*REMOVED*Runic.Translations.Compiler.TranslationMissingKeyPolicy
+*REMOVED*Runic.Translations.Compiler.TranslationMissingKeyPolicy.ReturnKey = 1 -> Runic.Translations.Compiler.TranslationMissingKeyPolicy
+*REMOVED*Runic.Translations.Compiler.TranslationMissingKeyPolicy.ReturnMarker = 2 -> Runic.Translations.Compiler.TranslationMissingKeyPolicy
+*REMOVED*Runic.Translations.Compiler.TranslationMissingKeyPolicy.Throw = 0 -> Runic.Translations.Compiler.TranslationMissingKeyPolicy
+*REMOVED*Runic.Translations.Compiler.TranslationPolicy
+*REMOVED*Runic.Translations.Compiler.TranslationPolicy.Allow = 0 -> Runic.Translations.Compiler.TranslationPolicy
+*REMOVED*Runic.Translations.Compiler.TranslationPolicy.Error = 2 -> Runic.Translations.Compiler.TranslationPolicy
+*REMOVED*Runic.Translations.Compiler.TranslationPolicy.Warning = 1 -> Runic.Translations.Compiler.TranslationPolicy
+*REMOVED*Runic.Translations.Compiler.TranslationUnsupportedLocalePolicy
+*REMOVED*Runic.Translations.Compiler.TranslationUnsupportedLocalePolicy.Default = 2 -> Runic.Translations.Compiler.TranslationUnsupportedLocalePolicy
+*REMOVED*Runic.Translations.Compiler.TranslationUnsupportedLocalePolicy.Exact = 0 -> Runic.Translations.Compiler.TranslationUnsupportedLocalePolicy
+*REMOVED*Runic.Translations.Compiler.TranslationUnsupportedLocalePolicy.ParentsThenDefault = 1 -> Runic.Translations.Compiler.TranslationUnsupportedLocalePolicy
+*REMOVED*Runic.Translations.Compiler.TranslationVisibility
+*REMOVED*Runic.Translations.Compiler.TranslationVisibility.Internal = 1 -> Runic.Translations.Compiler.TranslationVisibility
+*REMOVED*Runic.Translations.Compiler.TranslationVisibility.Public = 0 -> Runic.Translations.Compiler.TranslationVisibility
+*REMOVED*const Runic.Translations.Compiler.Rmf2ProjectCompilationV5.ExecutionProfile = "rmf2-execution-v2" -> string!
+*REMOVED*const Runic.Translations.Compiler.Rmf2ProjectCompilationV5.MessageGrammarVersion = 5 -> int
+*REMOVED*const Runic.Translations.Compiler.Rmf2ProjectCompilationV5.RuntimeAbiVersion = 3 -> int
+*REMOVED*static Runic.Translations.Compiler.TranslationCompiler.CompileMf2Project(Runic.Translations.Compiler.TranslationSource! project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource!>! messages, Runic.Translations.Compiler.TranslationCompilerOptions? options = null) -> Runic.Translations.Compiler.Rmf2ProjectCompilationV5!
+*REMOVED*static Runic.Translations.Compiler.TranslationCompiler.CompileMf2Project(Runic.Translations.Compiler.TranslationSource! project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource!>! messages, Runic.Translations.Compiler.TranslationCompilerOptions? options, System.Threading.CancellationToken cancellationToken) -> Runic.Translations.Compiler.Rmf2ProjectCompilationV5!
+*REMOVED*static Runic.Translations.Compiler.TranslationCompiler.CompileProject(Runic.Translations.Compiler.TranslationSource! project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource!>! messages, Runic.Translations.Compiler.TranslationCompilerOptions? options = null) -> Runic.Translations.Compiler.Rmf2ProjectCompilationV5!
+*REMOVED*static Runic.Translations.Compiler.TranslationCompiler.CompileProject(Runic.Translations.Compiler.TranslationSource! project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource!>! messages, Runic.Translations.Compiler.TranslationCompilerOptions? options, System.Threading.CancellationToken cancellationToken) -> Runic.Translations.Compiler.Rmf2ProjectCompilationV5!
+static Runic.Translations.Compiler.TranslationCompiler.CompileMf2Project(Runic.Translations.Compiler.TranslationSource! project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource!>! messages, Runic.Translations.Compiler.TranslationCompilerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Runic.Translations.Compiler.Rmf2ProjectCompilation!
+static Runic.Translations.Compiler.TranslationCompiler.CompileProject(Runic.Translations.Compiler.TranslationSource! project, System.Collections.Generic.IEnumerable<Runic.Translations.Compiler.TranslationSource!>! messages, Runic.Translations.Compiler.TranslationCompilerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Runic.Translations.Compiler.Rmf2ProjectCompilation!

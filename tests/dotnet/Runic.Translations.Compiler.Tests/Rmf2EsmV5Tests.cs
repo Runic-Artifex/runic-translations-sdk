@@ -130,7 +130,7 @@ internal sealed class Rmf2EsmV5Tests
         string semantic = File.ReadAllText(RepositoryPaths.Resolve("specs", "translations", "corpus", "semantic-v5", "message.mf2"));
         string indented = string.Join('\n', semantic.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n').Select(line => "  " + line));
         string source = "sample =\n" + indented + "\nhuge =\n  .input {$n :number select=exact}\n  .match $n\n  9007199254740993 {{exact}}\n  * {{other}}\n";
-        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(
             Rmf2ProjectV5Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
         Assert.True(compilation.Success, string.Join("; ", compilation.Diagnostics.Select(item => item.Message)));
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(compilation.Project!));
@@ -175,7 +175,7 @@ internal sealed class Rmf2EsmV5Tests
             ]}
             """;
         const string source = "children = {#app:children @note}keep{/app:children @end=0}\nomit = before {#app:omit}{#app:explicit}hidden{/app:explicit}{/app:omit} after\nbreak = before{#app:break/}after\nexplicit = {#app:explicit}label{/app:explicit}\nalternate = {#app:alternate}alt{/app:alternate}\nvalidated = {#app:children}keep{/app:children} {#link ref=destination}link{/link}\n";
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(
             Rmf2ProjectV5Tests.Project(contracts), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!));
@@ -252,7 +252,7 @@ internal sealed class Rmf2EsmV5Tests
             ]}
             """;
         const string source = "fixed = {#app:step level=|3|}three{/app:step}\ndefaulted = {#app:step}one{/app:step}\ndynamic =\n  .input {$n :integer}\n  {{{#app:step level=$n}n{/app:step}}}\n";
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(
             Rmf2ProjectV5Tests.Project(contracts), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(source))]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!));
@@ -312,7 +312,7 @@ internal sealed class Rmf2EsmV5Tests
     public void HostileNames()
     {
         const string message = "__proto__ = Proto\nconstructor = Constructor\nx =\n  .input {$__proto__ :string}\n  .input {$constructor :string}\n  .input {$user-name :string}\n  .input {$用户 :string}\n  {{ {$__proto__} {$constructor} {$user-name} {$用户} }}";
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(
             Rmf2ProjectV5Tests.Project(), [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(message))]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
         IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!);
@@ -375,7 +375,7 @@ internal sealed class Rmf2EsmV5Tests
         }
         finally { Directory.Delete(invariantDirectory, true); }
 
-        Rmf2ProjectCompilationV5 exactCompilation = TranslationCompiler.CompileRmf2ProjectV5(
+        Rmf2ProjectCompilation exactCompilation = TranslationCompiler.CompileRmf2ProjectV5(
             new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(
                 "{\"schemaVersion\":1,\"catalog\":\"exact\",\"code\":{\"namespace\":\"Example\",\"className\":\"Text\"},\"baseLocale\":\"en\",\"locales\":[\"en\"],\"runtime\":{\"unsupportedLocale\":\"exact\"}}")),
             [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("hello = Hello"))]);
@@ -487,7 +487,7 @@ internal sealed class Rmf2EsmV5Tests
             greet = Hallo {$name}, willkommen in {$place}
             """;
         const string json = """{"schemaVersion":1,"catalog":"compact","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","de"],"validation":{"translationCompleteness":"allow"}}""";
-        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
             [new("translations/en.rmf2", Encoding.UTF8.GetBytes(english)), new("translations/de.rmf2", Encoding.UTF8.GetBytes(german))]);
         Assert.True(compilation.Success, string.Join("; ", compilation.Diagnostics.Select(item => item.Message)));
         Rmf2ProjectV5 project = compilation.Project!;
@@ -547,7 +547,7 @@ internal sealed class Rmf2EsmV5Tests
             locales,
             validation = allowExtras ? new { extraLocaleKeys = "allow" } : null,
         }, ProjectJsonOptions);
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(
             new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
             sources.Select(source => new TranslationSource("translations/" + source.Locale + ".rmf2", Encoding.UTF8.GetBytes(source.Source))).ToArray());
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
@@ -557,7 +557,7 @@ internal sealed class Rmf2EsmV5Tests
     private static Rmf2ProjectV5 Fixture()
     {
         string root = RepositoryPaths.Resolve("specs", "translations", "corpus", "v5-project");
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(
             new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(root, "runic.json"))),
             [new("translations/en.rmf2", File.ReadAllBytes(Path.Combine(root, "en.rmf2"))), new("translations/de.rmf2", File.ReadAllBytes(Path.Combine(root, "de.rmf2")))]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));

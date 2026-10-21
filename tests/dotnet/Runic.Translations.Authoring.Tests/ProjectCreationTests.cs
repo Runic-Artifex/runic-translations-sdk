@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -65,13 +67,29 @@ internal sealed class ProjectCreationTests
             "Fallback cycle");
     }
 
-    [Test, DisplayName("Creation commits the complete rendered project")]
-    public void CreationCommitsCompleteProject()
+    [Test, DisplayName("Cancelled creation commits nothing")]
+    public async Task CancelledCreationCommitsNothing()
     {
         using TemporaryDirectory temporary = new();
         string target = Path.Combine(temporary.Path, "Resources");
         TranslationProjectPlan plan = TranslationProjectScaffolder.Render(Request(target, "en"));
-        string result = TranslationProjectWriter.Create(plan);
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        bool cancelled = false;
+        try { await TranslationProjectWriter.CreateAsync(plan, cancellation.Token); }
+        catch (OperationCanceledException) { cancelled = true; }
+        Assert.True(cancelled, "A cancelled creation did not throw OperationCanceledException.");
+        Assert.True(!Directory.Exists(target) && Directory.GetFileSystemEntries(temporary.Path).Length == 0,
+            "A cancelled creation left files behind.");
+    }
+
+    [Test, DisplayName("Creation commits the complete rendered project")]
+    public async Task CreationCommitsCompleteProject()
+    {
+        using TemporaryDirectory temporary = new();
+        string target = Path.Combine(temporary.Path, "Resources");
+        TranslationProjectPlan plan = TranslationProjectScaffolder.Render(Request(target, "en"));
+        string result = await TranslationProjectWriter.CreateAsync(plan);
         Assert.Equal(Path.GetFullPath(target), result);
         Assert.Equal(
             string.Join('|', plan.Files.Select(file => file.RelativePath)),

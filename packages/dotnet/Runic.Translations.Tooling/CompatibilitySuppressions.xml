@@ -283,6 +283,13 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:Runic.Translations.Compiler.Rmf2ProjectCompilationV5</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:Runic.Translations.Compiler.Rmf2ResourceDocument</Target>
     <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
     <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
@@ -298,6 +305,41 @@
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:Runic.Translations.Compiler.Rmf2ResourceReader</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:Runic.Translations.Compiler.TranslationArgumentType</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:Runic.Translations.Compiler.TranslationMissingKeyPolicy</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:Runic.Translations.Compiler.TranslationPolicy</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:Runic.Translations.Compiler.TranslationUnsupportedLocalePolicy</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:Runic.Translations.Compiler.TranslationVisibility</Target>
     <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
     <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -354,6 +396,90 @@
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:Runic.Translations.Tooling.TranslationsToolFailurePresentation</Target>
+    <Left>lib/net10.0/Runic.Translations.Tooling.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Tooling.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Authoring.TranslationProjectWriter.Create(Runic.Translations.Authoring.TranslationProjectPlan)</Target>
+    <Left>lib/net10.0/Runic.Translations.Authoring.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Authoring.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Compiler.TranslationCompiler.CompileMf2Project(Runic.Translations.Compiler.TranslationSource,System.Collections.Generic.IEnumerable{Runic.Translations.Compiler.TranslationSource},Runic.Translations.Compiler.TranslationCompilerOptions,System.Threading.CancellationToken)</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Compiler.TranslationCompiler.CompileMf2Project(Runic.Translations.Compiler.TranslationSource,System.Collections.Generic.IEnumerable{Runic.Translations.Compiler.TranslationSource},Runic.Translations.Compiler.TranslationCompilerOptions)</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Compiler.TranslationCompiler.CompileProject(Runic.Translations.Compiler.TranslationSource,System.Collections.Generic.IEnumerable{Runic.Translations.Compiler.TranslationSource},Runic.Translations.Compiler.TranslationCompilerOptions,System.Threading.CancellationToken)</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Compiler.TranslationCompiler.CompileProject(Runic.Translations.Compiler.TranslationSource,System.Collections.Generic.IEnumerable{Runic.Translations.Compiler.TranslationSource},Runic.Translations.Compiler.TranslationCompilerOptions)</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Compiler.TranslationCompilerOptions.#ctor(System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32)</Target>
+    <Left>lib/net10.0/Runic.Translations.Compiler.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Compiler.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Tooling.ArtifactInspection.get_Kind</Target>
+    <Left>lib/net10.0/Runic.Translations.Tooling.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Tooling.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Tooling.TranslationInterchange.ExportXliff21(Runic.Translations.Compiler.Rmf2ProjectCompilationV5,Runic.Translations.Tooling.TranslationInterchangeReview)</Target>
+    <Left>lib/net10.0/Runic.Translations.Tooling.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Tooling.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Tooling.TranslationInterchangeReviewEntry.#ctor(System.String,System.String,System.String,System.String,System.String)</Target>
+    <Left>lib/net10.0/Runic.Translations.Tooling.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Tooling.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Tooling.TranslationInterchangeReviewEntry.get_State</Target>
+    <Left>lib/net10.0/Runic.Translations.Tooling.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Tooling.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Tooling.TranslationMf2Document.get_Bytes</Target>
+    <Left>lib/net10.0/Runic.Translations.Tooling.dll</Left>
+    <Right>lib/net10.0/Runic.Translations.Tooling.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:Runic.Translations.Tooling.TranslationXliffDocument.get_Bytes</Target>
     <Left>lib/net10.0/Runic.Translations.Tooling.dll</Left>
     <Right>lib/net10.0/Runic.Translations.Tooling.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>

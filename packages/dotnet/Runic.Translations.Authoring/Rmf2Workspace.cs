@@ -97,7 +97,7 @@ internal sealed class Rmf2Workspace
             .SelectMany(document => document.Nodes.Where(node => !node.IsGroup && LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal))).FirstOrDefault();
         return LanguageService.Complete(origin.MessageSyntax, byteOffset, baseMessage?.MessageSyntax);
     }
-    internal Rmf2ProjectCompilationV5 Validate() => TranslationCompiler.CompileRmf2ProjectV5(_project, _sources.Values, null, _cancellationToken);
+    internal Rmf2ProjectCompilation Validate() => TranslationCompiler.CompileRmf2ProjectV5(_project, _sources.Values, null, _cancellationToken);
 
     /// <summary>Finds locals in one message, or caller inputs across translations of the same logical resource.</summary>
     public IReadOnlyList<Rmf2VariableReference> VariableReferences(string path, string key, string name)
@@ -404,7 +404,7 @@ internal sealed class Rmf2Workspace
 
     private ProfileLocaleView ValidateLocaleView()
     {
-        Rmf2ProjectCompilationV5 compilation = Validate();
+        Rmf2ProjectCompilation compilation = Validate();
         if (compilation.Project is { } project)
             return new ProfileLocaleView(project.Id, project.DefaultLocale,
                 project.Locales.Select(locale => new ProfileLocale(locale.Tag, locale.FallbackTag)).ToArray(), compilation.Diagnostics);
@@ -465,7 +465,7 @@ internal sealed class Rmf2Workspace
             else if (change.Value is null) sources.Remove(change.Key);
             else if (change.Key.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) || change.Key.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) sources[change.Key] = new TranslationSource(change.Key, change.Value);
         }
-        Rmf2ProjectCompilationV5 compilation = TranslationCompiler.CompileRmf2ProjectV5(project, sources.Values, null, _cancellationToken);
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(project, sources.Values, null, _cancellationToken);
         if (!compilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
         string catalogId = compilation.Project!.Id;
         return new TranslationWorkspaceTransactionPlan(_root, catalogId, edits.AsReadOnly(), compilation);

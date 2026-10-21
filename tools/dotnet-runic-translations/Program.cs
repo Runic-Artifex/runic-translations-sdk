@@ -436,7 +436,7 @@ internal static class Program
 
     private static int RunSemanticV5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result, SourceUnitCache? units)
     {
-        Rmf2ProjectCompilationV5 compilation = units is null
+        Rmf2ProjectCompilation compilation = units is null
             ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages)
             : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options);
         compilation = TranslationManifestReader.WithManifestErrors(compilation, inputs.Project.Path, inputs.ManifestError);

@@ -63,7 +63,7 @@ public sealed class TranslationProjectPlan
         TranslationProjectCreationRequest request,
         IReadOnlyList<TranslationProjectLocale> locales,
         IReadOnlyList<TranslationProjectFile> files,
-        Rmf2ProjectCompilationV5 compilation)
+        Rmf2ProjectCompilation compilation)
     {
         Request = request;
         Locales = locales;

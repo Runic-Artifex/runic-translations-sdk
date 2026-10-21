@@ -12,34 +12,34 @@ public enum TranslationDiagnosticSeverity
     Error = 2,
 }
 
-public enum TranslationVisibility
+internal enum TranslationVisibility
 {
     Public,
     Internal,
 }
 
-public enum TranslationPolicy
+internal enum TranslationPolicy
 {
     Allow,
     Warning,
     Error,
 }
 
-public enum TranslationUnsupportedLocalePolicy
+internal enum TranslationUnsupportedLocalePolicy
 {
     Exact,
     ParentsThenDefault,
     Default,
 }
 
-public enum TranslationMissingKeyPolicy
+internal enum TranslationMissingKeyPolicy
 {
     Throw,
     ReturnKey,
     ReturnMarker,
 }
 
-public enum TranslationArgumentType
+internal enum TranslationArgumentType
 {
     String,
     Int,
@@ -65,6 +65,7 @@ public sealed class TranslationSource
 
     public string Path { get; }
 
+    /// <summary>Returns a copy of the UTF-8 source, a new array on every call.</summary>
     public byte[] GetUtf8Bytes() => (byte[])_utf8Bytes.Clone();
 
     internal byte[] Bytes => _utf8Bytes;
@@ -77,36 +78,27 @@ public sealed class TranslationSource
     }
 }
 
+/// <summary>Compiler limits. Every limit must be positive; a later release may add limits with their own defaults.</summary>
 public sealed class TranslationCompilerOptions
 {
-    public TranslationCompilerOptions(
-        int maximumDocumentBytes = 8 * 1024 * 1024,
-        int maximumDepth = 64,
-        int maximumKeysPerCatalog = 50_000,
-        int maximumValueBytes = 64 * 1024,
-        int maximumPlaceholdersPerValue = 32,
-        int maximumLocalesPerCatalog = 256)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumDocumentBytes);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumDepth);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumKeysPerCatalog);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumValueBytes);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumPlaceholdersPerValue);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumLocalesPerCatalog);
-        MaximumDocumentBytes = maximumDocumentBytes;
-        MaximumDepth = maximumDepth;
-        MaximumKeysPerCatalog = maximumKeysPerCatalog;
-        MaximumValueBytes = maximumValueBytes;
-        MaximumPlaceholdersPerValue = maximumPlaceholdersPerValue;
-        MaximumLocalesPerCatalog = maximumLocalesPerCatalog;
-    }
+    /// <summary>The largest accepted source document, in bytes. Defaults to 8 MiB.</summary>
+    public int MaximumDocumentBytes { get; init => field = Positive(value); } = 8 * 1024 * 1024;
+    /// <summary>The deepest accepted JSON or message nesting. Defaults to 64.</summary>
+    public int MaximumDepth { get; init => field = Positive(value); } = 64;
+    /// <summary>The most message keys in one catalog. Defaults to 50,000.</summary>
+    public int MaximumKeysPerCatalog { get; init => field = Positive(value); } = 50_000;
+    /// <summary>The largest accepted message value, in bytes. Defaults to 64 KiB.</summary>
+    public int MaximumValueBytes { get; init => field = Positive(value); } = 64 * 1024;
+    /// <summary>The most placeholders in one message value. Defaults to 32.</summary>
+    public int MaximumPlaceholdersPerValue { get; init => field = Positive(value); } = 32;
+    /// <summary>The most locales in one catalog. Defaults to 256.</summary>
+    public int MaximumLocalesPerCatalog { get; init => field = Positive(value); } = 256;
 
-    public int MaximumDocumentBytes { get; }
-    public int MaximumDepth { get; }
-    public int MaximumKeysPerCatalog { get; }
-    public int MaximumValueBytes { get; }
-    public int MaximumPlaceholdersPerValue { get; }
-    public int MaximumLocalesPerCatalog { get; }
+    private static int Positive(int value, [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(value))] string? name = null)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value, name);
+        return value;
+    }
 }
 
 public sealed class TextSourceLocation

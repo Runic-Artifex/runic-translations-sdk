@@ -27,7 +27,7 @@ through XLIFF; translate them in the `.rmf2` sources or the editor. This is not
 general XLIFF or MF2 conformance.
 
 Compile with `TranslationCompiler.CompileProject` (or the explicit
-`CompileMf2Project` entry point) and pass its `Rmf2ProjectCompilationV5` result
+`CompileMf2Project` entry point) and pass its `Rmf2ProjectCompilation` result
 directly to `TranslationInterchange.ExportXliff21`. The first-party editor uses
 the same typed boundary and never fabricates a retired catalog carrier. Approved review stamps use a dedicated
 closed-text-profile fingerprint, while workspace source freshness remains a
@@ -37,7 +37,7 @@ separate conflict check.
 using Runic.Translations.Compiler;
 using Runic.Translations.Tooling;
 
-Rmf2ProjectCompilationV5 compilation =
+Rmf2ProjectCompilation compilation =
     TranslationCompiler.CompileProject(projectSource, messageSources);
 if (!compilation.Success)
 {

@@ -277,3 +277,5 @@
 *REMOVED*static Runic.Translations.Authoring.TranslationWorkspaceTransaction.Commit(Runic.Translations.Authoring.TranslationWorkspaceTransactionPlan! plan) -> void
 *REMOVED*static Runic.Translations.Authoring.TranslationWorkspaceTransaction.GetPending(string! root) -> Runic.Translations.Authoring.TranslationPendingTransaction?
 *REMOVED*static Runic.Translations.Authoring.TranslationWorkspaceTransaction.Recover(string! root, Runic.Translations.Authoring.TranslationWorkspaceRecoveryMode mode) -> void
+static Runic.Translations.Authoring.TranslationProjectWriter.CreateAsync(Runic.Translations.Authoring.TranslationProjectPlan! plan, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<string!>!
+*REMOVED*static Runic.Translations.Authoring.TranslationProjectWriter.Create(Runic.Translations.Authoring.TranslationProjectPlan! plan) -> string!

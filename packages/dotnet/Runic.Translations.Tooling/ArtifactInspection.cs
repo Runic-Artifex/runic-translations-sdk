@@ -8,6 +8,18 @@ using System.Xml;
 
 namespace Runic.Translations.Tooling;
 
+/// <summary>The kind of an inspected artifact. The set is open: a later release may recognize more kinds, so
+/// handle values you do not know like <see cref="Unknown"/>.</summary>
+public enum ArtifactKind
+{
+    /// <summary><c>unknown</c>: not a recognized interchange artifact. The default.</summary>
+    Unknown = 0,
+    /// <summary><c>xliff</c>: an XLIFF document of another version, or one that is not well-formed.</summary>
+    Xliff = 1,
+    /// <summary><c>xliff-2.1</c>: an XLIFF 2.1 document.</summary>
+    Xliff21 = 2,
+}
+
 /// <summary>Read-only structural verdict for one translation interchange artifact.</summary>
 /// <remarks>
 /// Inspection never loads or executes message payloads; it reports identity,
@@ -16,7 +28,7 @@ namespace Runic.Translations.Tooling;
 public sealed class ArtifactInspection
 {
     internal ArtifactInspection(
-        string kind,
+        ArtifactKind kind,
         int? formatVersion,
         string? catalog,
         string? locale,
@@ -48,7 +60,7 @@ public sealed class ArtifactInspection
     }
 
     /// <summary>The detected artifact kind.</summary>
-    public string Kind { get; }
+    public ArtifactKind Kind { get; }
     /// <summary>The declared artifact or schema version when present.</summary>
     public int? FormatVersion { get; }
     /// <summary>The catalog identifier when present.</summary>
@@ -80,13 +92,13 @@ public sealed class ArtifactInspection
     public string ToReport()
     {
         var text = new StringBuilder();
-        text.Append("kind: ").Append(Kind).Append('\n');
+        text.Append("kind: ").Append(ArtifactInspector.KindName(Kind)).Append('\n');
         AppendIf(text, "formatVersion", FormatVersion is null ? null : FormatVersion.Value.ToString(CultureInfo.InvariantCulture));
         AppendIf(text, "catalog", Catalog);
         AppendIf(text, "locale", Locale);
         AppendIf(text, "layer", Layer);
         AppendIf(text, "contractFingerprint", ContractFingerprint);
-        if (Kind == "xliff-2.1" || Kind == "xliff")
+        if (Kind is ArtifactKind.Xliff21 or ArtifactKind.Xliff)
         {
             text.Append("resources: ").Append(ResourceCount).Append('\n');
             text.Append("structuredMessages: ").Append(StructuredMessageCount).Append('\n');
@@ -155,10 +167,10 @@ public static class ArtifactInspector
         }
         catch (XmlException)
         {
-            return Unknown(content.Length, "INSPECT-MALFORMED", "The XML document is malformed.", "xliff");
+            return Unknown(content.Length, "INSPECT-MALFORMED", "The XML document is malformed.", ArtifactKind.Xliff);
         }
 
-        string kind = version == "2.1" ? "xliff-2.1" : "xliff";
+        ArtifactKind kind = version == "2.1" ? ArtifactKind.Xliff21 : ArtifactKind.Xliff;
         try
         {
             TranslationXliffImportResult import = TranslationInterchange.ImportXliff21(content);
@@ -178,7 +190,15 @@ public static class ArtifactInspector
         }
     }
 
-    private static ArtifactInspection Unknown(long byteLength, string code, string message, string kind = "unknown") =>
+    /// <summary>The report spelling of a kind: <c>unknown</c>, <c>xliff</c> or <c>xliff-2.1</c>.</summary>
+    internal static string KindName(ArtifactKind kind) => kind switch
+    {
+        ArtifactKind.Xliff => "xliff",
+        ArtifactKind.Xliff21 => "xliff-2.1",
+        _ => "unknown",
+    };
+
+    private static ArtifactInspection Unknown(long byteLength, string code, string message, ArtifactKind kind = ArtifactKind.Unknown) =>
         new(kind, null, null, null, null, byteLength, false, null, 0, 0, 0, 0, 0,
             [new ArtifactInspectionFinding(code, message)]);
 

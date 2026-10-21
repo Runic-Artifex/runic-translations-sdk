@@ -461,7 +461,7 @@ internal sealed class EditorSession : IDisposable
         {
             ThrowIfDisposed();
             TranslationProjectPlan plan = TranslationProjectScaffolder.Render(ToAuthoringRequest(request));
-            string target = TranslationProjectWriter.Create(plan);
+            string target = await TranslationProjectWriter.CreateAsync(plan, cancellationToken).ConfigureAwait(false);
             var replacement = new EditorWorkspace(target);
             try
             {

@@ -16,7 +16,7 @@ internal sealed class Rmf2ProjectV5Tests
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     internal static TranslationSource Project(string extra = "") => Source("translations/runic.json",
         "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"" + extra + "}");
-    private static Rmf2ProjectCompilationV5 Compile(string english, string? german = null, string config = "")
+    private static Rmf2ProjectCompilation Compile(string english, string? german = null, string config = "")
         => TranslationCompiler.CompileRmf2ProjectV5(Project(config), german is null
             ? [Source("translations/en.rmf2", english)] : [Source("translations/en.rmf2", english), Source("translations/de.rmf2", german)]);
     private static Rmf2ProjectV5 Good(string english, string? german = null, string config = "")
@@ -24,7 +24,7 @@ internal sealed class Rmf2ProjectV5Tests
         var result = Compile(english, german, config);
         Assert.True(result.Success, Errors(result)); return result.Project!;
     }
-    private static string Errors(Rmf2ProjectCompilationV5 result) => string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message));
+    private static string Errors(Rmf2ProjectCompilation result) => string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message));
     private static void Bad(string english, string? german = null, string config = "", string? diagnostic = null)
     {
         var result = Compile(english, german, config);
@@ -155,7 +155,7 @@ internal sealed class Rmf2ProjectV5Tests
     {
         foreach (string locale in new[] { "en-a", "en-a-b", "en-a-foo-a-bar", "en-US-Latn", "de-1901-1901" })
         {
-            Rmf2ProjectCompilationV5 invalid = TranslationCompiler.CompileRmf2ProjectV5(
+            Rmf2ProjectCompilation invalid = TranslationCompiler.CompileRmf2ProjectV5(
                 Project(",\"locales\":[\"en\",\"" + locale + "\"]"),
                 [Source("translations/en.rmf2", "x = X")]);
             Assert.True(!invalid.Success && invalid.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0004"),
@@ -166,7 +166,7 @@ internal sealed class Rmf2ProjectV5Tests
         {
             TranslationSource project = Source("translations/runic.json",
                 "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"" + locale + "\"}");
-            Rmf2ProjectCompilationV5 valid = TranslationCompiler.CompileRmf2ProjectV5(
+            Rmf2ProjectCompilation valid = TranslationCompiler.CompileRmf2ProjectV5(
                 project, [Source("translations/" + locale + ".rmf2", "x = X")]);
             Assert.True(valid.Success, "Valid locale tag was rejected: " + locale + "\n" + Errors(valid));
             Assert.Equal(locale, valid.Project!.DefaultLocale);
@@ -454,7 +454,7 @@ internal sealed class Rmf2ProjectV5Tests
         Bad("@example {\"café\":\"Ada\",\"cafe\u0301\":\"A\"}\nx = {$café}", diagnostic: "RTR0051");
         var invalid = Compile("# heading\nx = Good\ny =\n  .local $a = {$n}\n  .input {$n :number}\n  {{{$a}}}");
         Assert.True(invalid.Diagnostics.Any(d => d.Id == "RTR0067" && d.Location.Path == "translations/en.rmf2" && d.Location.Line == 5), "Semantic diagnostics lost physical source mapping.");
-        var limit = TranslationCompiler.CompileRmf2ProjectV5(Project(), [Source("translations/en.rmf2", "a = A\nb = B")], new(maximumKeysPerCatalog: 1));
+        var limit = TranslationCompiler.CompileRmf2ProjectV5(Project(), [Source("translations/en.rmf2", "a = A\nb = B")], new() { MaximumKeysPerCatalog = 1 });
         Assert.True(!limit.Success && limit.Diagnostics.Any(d => d.Id == "RTR0022" || d.Id == "RTR0050"), "Project bypassed resource limits.");
         using var canceled = new CancellationTokenSource(); canceled.Cancel();
         try { TranslationCompiler.CompileRmf2ProjectV5(Project(), [], cancellationToken: canceled.Token); throw new InvalidOperationException("Canceled compilation proceeded."); }

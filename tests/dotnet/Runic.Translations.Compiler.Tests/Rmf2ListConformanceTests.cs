@@ -205,7 +205,7 @@ internal sealed class Rmf2ListConformanceTests
     public void UnsupportedLocale()
     {
         const string manifest = """{"schemaVersion":1,"catalog":"lists","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","pl"]}""";
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(manifest)),
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(manifest)),
         [
             new("translations/en.rmf2", Encoding.UTF8.GetBytes("names = {{{$names :runic:list}}}\n")),
             // Without an explicit function the list input still formats with list patterns.

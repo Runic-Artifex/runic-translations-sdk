@@ -18,7 +18,7 @@ internal sealed class Rmf2DocumentRuntimeTests
 
     private static Rmf2ProjectV5 Compile()
     {
-        Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(Config),
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(Config),
             [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(Source))]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Id + ": " + item.Message)));
         return result.Project!;

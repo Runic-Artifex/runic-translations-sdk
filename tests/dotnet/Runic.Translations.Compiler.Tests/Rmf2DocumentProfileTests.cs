@@ -13,7 +13,7 @@ internal sealed class Rmf2DocumentProfileTests
     private const string Example = "backup =\n    {#p}{#strong}Before continuing{/strong}, save a copy of {$fileName}.{/p}\n    {#ul}\n      {#li}Read the {#link ref=guide}guide{/link}.{/li}\n      {#li}{#action ref=check}Check{/action} the result.{/li}\n    {/ul}\n    {#p}You can continue when the check finishes.{/p}\n";
 
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
-    private static Rmf2ProjectCompilationV5 Compile(string english, string? german = null, string config = "") =>
+    private static Rmf2ProjectCompilation Compile(string english, string? german = null, string config = "") =>
         TranslationCompiler.CompileRmf2ProjectV5(Rmf2ProjectV5Tests.Project(config), german is null
             ? [Source("translations/en.rmf2", english)] : [Source("translations/en.rmf2", english), Source("translations/de.rmf2", german)]);
     private static Rmf2ProjectV5 Good(string english, string? german = null, string config = "")
@@ -22,8 +22,8 @@ internal sealed class Rmf2DocumentProfileTests
         Assert.True(result.Success, Errors(result));
         return result.Project!;
     }
-    private static string Errors(Rmf2ProjectCompilationV5 result) => string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message));
-    private static Rmf2ProjectCompilationV5 Bad(string english, string diagnostic, string? german = null, string config = "", string? contains = null)
+    private static string Errors(Rmf2ProjectCompilation result) => string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message));
+    private static Rmf2ProjectCompilation Bad(string english, string diagnostic, string? german = null, string config = "", string? contains = null)
     {
         var result = Compile(english, german, config);
         Assert.True(!result.Success && result.Diagnostics.Any(d => d.Id == diagnostic && d.Severity == TranslationDiagnosticSeverity.Error && (contains is null || d.Message.Contains(contains, StringComparison.Ordinal))),

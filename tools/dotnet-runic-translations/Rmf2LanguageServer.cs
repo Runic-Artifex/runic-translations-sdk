@@ -200,7 +200,7 @@ internal sealed class Rmf2LanguageServer
             if (command is "runic.preview" or "runic.renderPreview")
             {
                 string key = arguments[1]!.GetValue<string>(), locale = arguments[2]!.GetValue<string>();
-                Rmf2ProjectCompilationV5 compilation = workspace.Validate();
+                Rmf2ProjectCompilation compilation = workspace.Validate();
                 if (!compilation.Success) throw new TranslationAuthoringException(string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
                 Rmf2ProjectV5 project = compilation.Project!;
                 JsonNode message;
@@ -383,7 +383,7 @@ internal sealed class Rmf2LanguageServer
             string path = LocalPath(uri); var workspace = Workspace(path);
             string key = string.Join('_', workspace.LogicalPath(path, entry));
             string content = entry.MessageSyntax is { } messageSyntax ? workspace.LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte)) ?? key : key;
-            Rmf2ProjectCompilationV5 compiled = workspace.Validate();
+            Rmf2ProjectCompilation compiled = workspace.Validate();
             if (compiled.Success && !entry.IsGroup)
             {
                 string locale = workspace.Locale(path);

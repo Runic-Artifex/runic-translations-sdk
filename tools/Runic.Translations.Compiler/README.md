@@ -21,7 +21,7 @@ var title = new TranslationSource(
     "translations/en.rmf2",
     File.ReadAllBytes("translations/en.rmf2"));
 
-Rmf2ProjectCompilationV5 result = TranslationCompiler.CompileProject(project, [title]);
+Rmf2ProjectCompilation result = TranslationCompiler.CompileProject(project, [title]);
 
 foreach (TranslationDiagnostic diagnostic in result.Diagnostics)
 {
