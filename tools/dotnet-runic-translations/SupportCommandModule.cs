@@ -26,12 +26,9 @@ internal static class SupportCommandModule
 
     private const string EditorDiagnosticsDescription = "The Editor diagnostic ZIP to read. Required.";
 
-    /// <summary>The support commands, with their human output, for composition with the translations catalog.</summary>
+    /// <summary>The tool's generated catalog (translation and support commands), with the support commands' human output.</summary>
     internal static CommandCatalog CreateCatalog() =>
-        // CS0436: Runic.Translations.Tooling also exposes a generated catalog; this one is the tool's own.
-#pragma warning disable CS0436
         Runic.CommandLine.Generated.GeneratedCommandCatalog.Create(builder =>
-#pragma warning restore CS0436
         {
             foreach (string mode in Modes) builder.Present<SupportCommandResult>(Group + " " + mode, PresentAsync);
         });

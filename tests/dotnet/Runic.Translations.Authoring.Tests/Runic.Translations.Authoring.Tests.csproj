@@ -19,6 +19,8 @@
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
     <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />
+    <!-- The editor-state store belongs to the Translations Editor (an executable); its cases compile the source. -->
+    <Compile Include="..\..\..\apps\translations-editor\EditorState\*.cs" Link="EditorState\%(Filename)%(Extension)" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

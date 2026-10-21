@@ -7,7 +7,7 @@ using System.Text.Json;
 
 namespace Runic.Translations.Authoring;
 
-public static class TranslationWorkspaceTransaction
+internal static class TranslationWorkspaceTransaction
 {
     private const string JournalFileName = ".runic-translations.transaction.json";
     private const int JournalVersion = 1;

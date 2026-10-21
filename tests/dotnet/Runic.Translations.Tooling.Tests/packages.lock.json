@@ -78,20 +78,17 @@
         "resolved": "0.11.6",
         "contentHash": "f33RkDtZO8VlGXCtmQIviOtxgnUdym9xx/b1p9h91CRGOsJFxCFOFK1FDbVt1OCf1aWwYejUFa2MOQyFWTFjbA=="
       },
+      "runic.translations.authoring": {
+        "type": "Project",
+        "dependencies": {
+          "Runic.Translations.Compiler": "[0.7.0-preview.5, )"
+        }
+      },
       "runic.translations.compiler": {
         "type": "Project"
       },
       "runic.translations.tooling": {
-        "type": "Project",
-        "dependencies": {
-          "Runic.CommandLine": "[0.7.0-preview.1, )"
-        }
-      },
-      "Runic.CommandLine": {
-        "type": "CentralTransitive",
-        "requested": "[0.7.0-preview.1, )",
-        "resolved": "0.7.0-preview.1",
-        "contentHash": "YPfn8rOUIolbOqwBmsyPhggaH7kZ5hTVKDfnoKSE819WI6VxAPPUqTFHFFzg4HjYDFqQi90bXDXsCfGSWddZ/Q=="
+        "type": "Project"
       }
     }
   }

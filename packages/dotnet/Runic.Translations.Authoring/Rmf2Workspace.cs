@@ -12,10 +12,10 @@ using Runic.Translations.Compiler;
 namespace Runic.Translations.Authoring;
 
 /// <summary>A semantic variable occurrence with an extracted-message location and its physical resource map.</summary>
-public sealed record Rmf2VariableReference(Rmf2ResourceDocument Document, Rmf2ResourceNode Resource, TextSourceLocation Location, bool IsDeclaration);
+internal sealed record Rmf2VariableReference(Rmf2ResourceDocument Document, Rmf2ResourceNode Resource, TextSourceLocation Location, bool IsDeclaration);
 
 /// <summary>A revisioned catalog of disk snapshots or unsaved buffers. Only affected physical files are reparsed.</summary>
-public sealed class Rmf2Workspace
+internal sealed class Rmf2Workspace
 {
     private readonly CancellationToken _cancellationToken;
     private readonly string _root;

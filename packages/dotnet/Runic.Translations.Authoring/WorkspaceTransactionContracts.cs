@@ -4,14 +4,14 @@ using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Authoring;
 
-public enum TranslationWorkspaceEditKind
+internal enum TranslationWorkspaceEditKind
 {
     Create,
     Replace,
     Delete,
 }
 
-public sealed class TranslationWorkspaceEdit
+internal sealed class TranslationWorkspaceEdit
 {
     private readonly byte[]? _utf8Bytes;
 
@@ -34,7 +34,7 @@ public sealed class TranslationWorkspaceEdit
     internal byte[]? Bytes => _utf8Bytes;
 }
 
-public sealed class TranslationWorkspaceTransactionPlan
+internal sealed class TranslationWorkspaceTransactionPlan
 {
     private readonly ValidationReceipt _validation;
 
@@ -75,13 +75,13 @@ public sealed class TranslationWorkspaceTransactionPlan
     }
 }
 
-public enum TranslationWorkspaceRecoveryMode
+internal enum TranslationWorkspaceRecoveryMode
 {
     Complete,
     Rollback,
 }
 
-public sealed record TranslationPendingTransaction(
+internal sealed record TranslationPendingTransaction(
     string Root,
     string CatalogId,
     IReadOnlyList<string> Paths);

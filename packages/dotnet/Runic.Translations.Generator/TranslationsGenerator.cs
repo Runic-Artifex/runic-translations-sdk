@@ -374,9 +374,12 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             location = Location.Create(diagnostic.Location.Path, TextSpan.FromBounds(start, end), lineSpan);
         }
 
-        DiagnosticSeverity severity = diagnostic.Severity == TranslationDiagnosticSeverity.Warning
-            ? DiagnosticSeverity.Warning
-            : DiagnosticSeverity.Error;
+        DiagnosticSeverity severity = diagnostic.Severity switch
+        {
+            TranslationDiagnosticSeverity.Information => DiagnosticSeverity.Info,
+            TranslationDiagnosticSeverity.Warning => DiagnosticSeverity.Warning,
+            _ => DiagnosticSeverity.Error,
+        };
         return Diagnostic.Create(TranslationsDiagnostics.Get(diagnostic.Id), location, severity,
             additionalLocations: null, properties: null, diagnostic.Message);
     }

@@ -1,1 +1,273 @@
 #nullable enable
+Runic.Translations.Compiler.TranslationDiagnosticSeverity.Error = 2 -> Runic.Translations.Compiler.TranslationDiagnosticSeverity
+Runic.Translations.Compiler.TranslationDiagnosticSeverity.Information = 0 -> Runic.Translations.Compiler.TranslationDiagnosticSeverity
+Runic.Translations.Compiler.TranslationDiagnosticSeverity.Warning = 1 -> Runic.Translations.Compiler.TranslationDiagnosticSeverity
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.<Clone>$() -> Runic.Translations.Compiler.Mf2DeclarationSyntax!
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Deconstruct(out string! Kind, out string! Name, out Runic.Translations.Compiler.TextSourceLocation! NameLocation, out Runic.Translations.Compiler.Mf2ExpressionSyntax! Expression, out Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Equals(Runic.Translations.Compiler.Mf2DeclarationSyntax? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Expression.get -> Runic.Translations.Compiler.Mf2ExpressionSyntax!
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Expression.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Kind.get -> string!
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Kind.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Location.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Mf2DeclarationSyntax(string! Kind, string! Name, Runic.Translations.Compiler.TextSourceLocation! NameLocation, Runic.Translations.Compiler.Mf2ExpressionSyntax! Expression, Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Name.get -> string!
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.Name.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.NameLocation.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Mf2DeclarationSyntax.NameLocation.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.<Clone>$() -> Runic.Translations.Compiler.Mf2ExpressionSyntax!
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Attributes.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax!>!
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Attributes.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Deconstruct(out Runic.Translations.Compiler.Mf2OperandSyntax? Operand, out string? Function, out string? MarkupName, out Runic.Translations.Compiler.Mf2MarkupKind MarkupKind, out System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax!>! Options, out System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax!>! Attributes, out Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Equals(Runic.Translations.Compiler.Mf2ExpressionSyntax? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Function.get -> string?
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Function.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Location.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.MarkupKind.get -> Runic.Translations.Compiler.Mf2MarkupKind
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.MarkupKind.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.MarkupName.get -> string?
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.MarkupName.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Mf2ExpressionSyntax(Runic.Translations.Compiler.Mf2OperandSyntax? Operand, string? Function, string? MarkupName, Runic.Translations.Compiler.Mf2MarkupKind MarkupKind, System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax!>! Options, System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax!>! Attributes, Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Operand.get -> Runic.Translations.Compiler.Mf2OperandSyntax?
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Operand.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Options.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2PropertySyntax!>!
+*REMOVED*Runic.Translations.Compiler.Mf2ExpressionSyntax.Options.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2MarkupKind
+*REMOVED*Runic.Translations.Compiler.Mf2MarkupKind.Close = 2 -> Runic.Translations.Compiler.Mf2MarkupKind
+*REMOVED*Runic.Translations.Compiler.Mf2MarkupKind.None = 0 -> Runic.Translations.Compiler.Mf2MarkupKind
+*REMOVED*Runic.Translations.Compiler.Mf2MarkupKind.Open = 1 -> Runic.Translations.Compiler.Mf2MarkupKind
+*REMOVED*Runic.Translations.Compiler.Mf2MarkupKind.Standalone = 3 -> Runic.Translations.Compiler.Mf2MarkupKind
+*REMOVED*Runic.Translations.Compiler.Mf2MatchSyntax
+*REMOVED*Runic.Translations.Compiler.Mf2MatchSyntax.<Clone>$() -> Runic.Translations.Compiler.Mf2MatchSyntax!
+*REMOVED*Runic.Translations.Compiler.Mf2MatchSyntax.Deconstruct(out System.Collections.Generic.IReadOnlyList<string!>! Selectors, out Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2MatchSyntax.Equals(Runic.Translations.Compiler.Mf2MatchSyntax? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2MatchSyntax.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Mf2MatchSyntax.Location.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2MatchSyntax.Mf2MatchSyntax(System.Collections.Generic.IReadOnlyList<string!>! Selectors, Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2MatchSyntax.Selectors.get -> System.Collections.Generic.IReadOnlyList<string!>!
+*REMOVED*Runic.Translations.Compiler.Mf2MatchSyntax.Selectors.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2OperandKind
+*REMOVED*Runic.Translations.Compiler.Mf2OperandKind.Number = 1 -> Runic.Translations.Compiler.Mf2OperandKind
+*REMOVED*Runic.Translations.Compiler.Mf2OperandKind.String = 2 -> Runic.Translations.Compiler.Mf2OperandKind
+*REMOVED*Runic.Translations.Compiler.Mf2OperandKind.Variable = 0 -> Runic.Translations.Compiler.Mf2OperandKind
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.<Clone>$() -> Runic.Translations.Compiler.Mf2OperandSyntax!
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Deconstruct(out Runic.Translations.Compiler.Mf2OperandKind Kind, out string! Value, out bool Quoted, out Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Equals(Runic.Translations.Compiler.Mf2OperandSyntax? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Kind.get -> Runic.Translations.Compiler.Mf2OperandKind
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Kind.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Location.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Mf2OperandSyntax(Runic.Translations.Compiler.Mf2OperandKind Kind, string! Value, bool Quoted, Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Quoted.get -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Quoted.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Value.get -> string!
+*REMOVED*Runic.Translations.Compiler.Mf2OperandSyntax.Value.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.<Clone>$() -> Runic.Translations.Compiler.Mf2PropertySyntax!
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.Deconstruct(out string! Name, out Runic.Translations.Compiler.Mf2OperandSyntax? Value, out bool IsAttribute, out Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.Equals(Runic.Translations.Compiler.Mf2PropertySyntax? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.IsAttribute.get -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.IsAttribute.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.Location.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.Mf2PropertySyntax(string! Name, Runic.Translations.Compiler.Mf2OperandSyntax? Value, bool IsAttribute, Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.Name.get -> string!
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.Name.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.Value.get -> Runic.Translations.Compiler.Mf2OperandSyntax?
+*REMOVED*Runic.Translations.Compiler.Mf2PropertySyntax.Value.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument.Declarations.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2DeclarationSyntax!>!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic!>!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument.Expressions.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2ExpressionSyntax!>!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument.Match.get -> Runic.Translations.Compiler.Mf2MatchSyntax?
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument.Source.get -> Runic.Translations.Compiler.TranslationSource!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument.Success.get -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument.Tokens.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2SyntaxToken!>!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument.VariableReferences(string! name) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TextSourceLocation!>!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxDocument.Variants.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Mf2VariantSyntax!>!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxReader
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.<Clone>$() -> Runic.Translations.Compiler.Mf2SyntaxToken!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Deconstruct(out Runic.Translations.Compiler.Mf2SyntaxTokenKind Kind, out string! Raw, out string! Value, out Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Equals(Runic.Translations.Compiler.Mf2SyntaxToken? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Kind.get -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Kind.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Location.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Mf2SyntaxToken(Runic.Translations.Compiler.Mf2SyntaxTokenKind Kind, string! Raw, string! Value, Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Raw.get -> string!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Raw.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Value.get -> string!
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxToken.Value.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Attribute = 9 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Equals = 13 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.ExpressionEnd = 5 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.ExpressionStart = 4 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Function = 8 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Invalid = 15 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Literal = 7 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.MarkupClose = 11 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.MarkupOpen = 10 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Name = 14 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.PatternEnd = 3 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.PatternStart = 2 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Standalone = 12 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Text = 0 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Variable = 6 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2SyntaxTokenKind.Whitespace = 1 -> Runic.Translations.Compiler.Mf2SyntaxTokenKind
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.<Clone>$() -> Runic.Translations.Compiler.Mf2VariantSyntax!
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.Deconstruct(out System.Collections.Generic.IReadOnlyList<string!>! Keys, out Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.Equals(Runic.Translations.Compiler.Mf2VariantSyntax? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.KeyLocations.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TextSourceLocation!>!
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.KeyLocations.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.Keys.get -> System.Collections.Generic.IReadOnlyList<string!>!
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.Keys.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.Location.init -> void
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.Mf2VariantSyntax(System.Collections.Generic.IReadOnlyList<string!>! Keys, Runic.Translations.Compiler.TextSourceLocation! Location) -> void
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.PatternLocation.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Mf2VariantSyntax.PatternLocation.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2Completion
+*REMOVED*Runic.Translations.Compiler.Rmf2Completion.<Clone>$() -> Runic.Translations.Compiler.Rmf2Completion!
+*REMOVED*Runic.Translations.Compiler.Rmf2Completion.Deconstruct(out string! Label, out string! Detail) -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2Completion.Detail.get -> string!
+*REMOVED*Runic.Translations.Compiler.Rmf2Completion.Detail.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2Completion.Equals(Runic.Translations.Compiler.Rmf2Completion? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Rmf2Completion.Label.get -> string!
+*REMOVED*Runic.Translations.Compiler.Rmf2Completion.Label.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2Completion.Rmf2Completion(string! Label, string! Detail) -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2LanguageService
+*REMOVED*Runic.Translations.Compiler.Rmf2LanguageService.Complete(Runic.Translations.Compiler.Mf2SyntaxDocument? syntax, int byteOffset) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2Completion!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2LanguageService.Complete(Runic.Translations.Compiler.Mf2SyntaxDocument? syntax, int byteOffset, Runic.Translations.Compiler.Mf2SyntaxDocument? baseSyntax) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2Completion!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2LanguageService.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2LanguageService.Hover(Runic.Translations.Compiler.Mf2SyntaxDocument! syntax, int byteOffset) -> string?
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceDocument
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceDocument.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceDocument.Nodes.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2ResourceNode!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceDocument.Source.get -> Runic.Translations.Compiler.TranslationSource!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceDocument.Success.get -> bool
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.Comments.get -> System.Collections.Generic.IReadOnlyList<string!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.IsGroup.get -> bool
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.Key.get -> string!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.Message.get -> string?
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.MessageByteMap.get -> System.Collections.Generic.IReadOnlyList<int>!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.MessageSyntax.get -> Runic.Translations.Compiler.Mf2SyntaxDocument?
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.NameLocation.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.Path.get -> System.Collections.Generic.IReadOnlyList<string!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceNode.Properties.get -> System.Collections.Generic.IReadOnlyList<string!>!
+*REMOVED*Runic.Translations.Compiler.Rmf2ResourceReader
+*REMOVED*Runic.Translations.Compiler.TranslationDiagnosticSeverity.Error = 1 -> Runic.Translations.Compiler.TranslationDiagnosticSeverity
+*REMOVED*Runic.Translations.Compiler.TranslationDiagnosticSeverity.Warning = 0 -> Runic.Translations.Compiler.TranslationDiagnosticSeverity
+*REMOVED*override Runic.Translations.Compiler.Mf2DeclarationSyntax.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Mf2DeclarationSyntax.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Mf2DeclarationSyntax.ToString() -> string!
+*REMOVED*override Runic.Translations.Compiler.Mf2ExpressionSyntax.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Mf2ExpressionSyntax.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Mf2ExpressionSyntax.ToString() -> string!
+*REMOVED*override Runic.Translations.Compiler.Mf2MatchSyntax.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Mf2MatchSyntax.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Mf2MatchSyntax.ToString() -> string!
+*REMOVED*override Runic.Translations.Compiler.Mf2OperandSyntax.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Mf2OperandSyntax.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Mf2OperandSyntax.ToString() -> string!
+*REMOVED*override Runic.Translations.Compiler.Mf2PropertySyntax.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Mf2PropertySyntax.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Mf2PropertySyntax.ToString() -> string!
+*REMOVED*override Runic.Translations.Compiler.Mf2SyntaxToken.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Mf2SyntaxToken.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Mf2SyntaxToken.ToString() -> string!
+*REMOVED*override Runic.Translations.Compiler.Mf2VariantSyntax.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Mf2VariantSyntax.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Mf2VariantSyntax.ToString() -> string!
+*REMOVED*override Runic.Translations.Compiler.Rmf2Completion.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Rmf2Completion.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Rmf2Completion.ToString() -> string!
+*REMOVED*static Runic.Translations.Compiler.Mf2DeclarationSyntax.operator !=(Runic.Translations.Compiler.Mf2DeclarationSyntax? left, Runic.Translations.Compiler.Mf2DeclarationSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2DeclarationSyntax.operator ==(Runic.Translations.Compiler.Mf2DeclarationSyntax? left, Runic.Translations.Compiler.Mf2DeclarationSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2ExpressionSyntax.operator !=(Runic.Translations.Compiler.Mf2ExpressionSyntax? left, Runic.Translations.Compiler.Mf2ExpressionSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2ExpressionSyntax.operator ==(Runic.Translations.Compiler.Mf2ExpressionSyntax? left, Runic.Translations.Compiler.Mf2ExpressionSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2MatchSyntax.operator !=(Runic.Translations.Compiler.Mf2MatchSyntax? left, Runic.Translations.Compiler.Mf2MatchSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2MatchSyntax.operator ==(Runic.Translations.Compiler.Mf2MatchSyntax? left, Runic.Translations.Compiler.Mf2MatchSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2OperandSyntax.operator !=(Runic.Translations.Compiler.Mf2OperandSyntax? left, Runic.Translations.Compiler.Mf2OperandSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2OperandSyntax.operator ==(Runic.Translations.Compiler.Mf2OperandSyntax? left, Runic.Translations.Compiler.Mf2OperandSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2PropertySyntax.operator !=(Runic.Translations.Compiler.Mf2PropertySyntax? left, Runic.Translations.Compiler.Mf2PropertySyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2PropertySyntax.operator ==(Runic.Translations.Compiler.Mf2PropertySyntax? left, Runic.Translations.Compiler.Mf2PropertySyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2SyntaxReader.Read(Runic.Translations.Compiler.TranslationSource! source, Runic.Translations.Compiler.TranslationCompilerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Runic.Translations.Compiler.Mf2SyntaxDocument!
+*REMOVED*static Runic.Translations.Compiler.Mf2SyntaxReader.ValidateDataModel(Runic.Translations.Compiler.Mf2SyntaxDocument! syntax) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic!>!
+*REMOVED*static Runic.Translations.Compiler.Mf2SyntaxReader.ValidateInlineProfile(Runic.Translations.Compiler.Mf2SyntaxDocument! syntax) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.TranslationDiagnostic!>!
+*REMOVED*static Runic.Translations.Compiler.Mf2SyntaxToken.operator !=(Runic.Translations.Compiler.Mf2SyntaxToken? left, Runic.Translations.Compiler.Mf2SyntaxToken? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2SyntaxToken.operator ==(Runic.Translations.Compiler.Mf2SyntaxToken? left, Runic.Translations.Compiler.Mf2SyntaxToken? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2VariantSyntax.operator !=(Runic.Translations.Compiler.Mf2VariantSyntax? left, Runic.Translations.Compiler.Mf2VariantSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Mf2VariantSyntax.operator ==(Runic.Translations.Compiler.Mf2VariantSyntax? left, Runic.Translations.Compiler.Mf2VariantSyntax? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Rmf2Completion.operator !=(Runic.Translations.Compiler.Rmf2Completion? left, Runic.Translations.Compiler.Rmf2Completion? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Rmf2Completion.operator ==(Runic.Translations.Compiler.Rmf2Completion? left, Runic.Translations.Compiler.Rmf2Completion? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Rmf2LanguageService.Create(Runic.Translations.Compiler.TranslationSource! project, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Runic.Translations.Compiler.Rmf2LanguageService!
+*REMOVED*static Runic.Translations.Compiler.Rmf2ResourceReader.Analyze(Runic.Translations.Compiler.TranslationSource! source, Runic.Translations.Compiler.TranslationCompilerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Runic.Translations.Compiler.Rmf2ResourceDocument!
+*REMOVED*static Runic.Translations.Compiler.Rmf2ResourceReader.Read(Runic.Translations.Compiler.TranslationSource! source, Runic.Translations.Compiler.TranslationCompilerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> Runic.Translations.Compiler.Rmf2ResourceDocument!
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticActions
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.<Clone>$() -> Runic.Translations.Compiler.Rmf2DiagnosticQuickFix!
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Deconstruct(out string! Id, out string! Title, out string! DiagnosticId, out Runic.Translations.Compiler.TextSourceLocation! Location, out string! ExpectedRevision, out int StartByte, out int LengthBytes, out string! NewText) -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.DiagnosticId.get -> string!
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.DiagnosticId.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Equals(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.ExpectedRevision.get -> string!
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.ExpectedRevision.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Id.get -> string!
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Id.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.LengthBytes.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.LengthBytes.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Location.get -> Runic.Translations.Compiler.TextSourceLocation!
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Location.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.NewText.get -> string!
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.NewText.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Rmf2DiagnosticQuickFix(string! Id, string! Title, string! DiagnosticId, Runic.Translations.Compiler.TextSourceLocation! Location, string! ExpectedRevision, int StartByte, int LengthBytes, string! NewText) -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.StartByte.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.StartByte.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Title.get -> string!
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Title.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.<Clone>$() -> Runic.Translations.Compiler.Rmf2DiagnosticSpan!
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.Deconstruct(out int StartByte, out int LengthBytes, out int StartUtf16, out int LengthUtf16, out int StartLine, out int StartCharacter, out int EndLine, out int EndCharacter) -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.EndCharacter.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.EndCharacter.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.EndLine.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.EndLine.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.Equals(Runic.Translations.Compiler.Rmf2DiagnosticSpan? other) -> bool
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.LengthBytes.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.LengthBytes.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.LengthUtf16.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.LengthUtf16.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.Rmf2DiagnosticSpan(int StartByte, int LengthBytes, int StartUtf16, int LengthUtf16, int StartLine, int StartCharacter, int EndLine, int EndCharacter) -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartByte.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartByte.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartCharacter.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartCharacter.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartLine.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartLine.init -> void
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartUtf16.get -> int
+*REMOVED*Runic.Translations.Compiler.Rmf2DiagnosticSpan.StartUtf16.init -> void
+*REMOVED*override Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.ToString() -> string!
+*REMOVED*override Runic.Translations.Compiler.Rmf2DiagnosticSpan.Equals(object? obj) -> bool
+*REMOVED*override Runic.Translations.Compiler.Rmf2DiagnosticSpan.GetHashCode() -> int
+*REMOVED*override Runic.Translations.Compiler.Rmf2DiagnosticSpan.ToString() -> string!
+*REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticActions.ApplyQuickFix(Runic.Translations.Compiler.TranslationSource! source, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix! fix) -> Runic.Translations.Compiler.TranslationSource!
+*REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticActions.GetQuickFixes(Runic.Translations.Compiler.Rmf2ResourceDocument! document, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix!>!
+*REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticActions.GetQuickFixes(Runic.Translations.Compiler.TranslationSource! source, Runic.Translations.Compiler.TranslationDiagnostic! diagnostic) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix!>!
+*REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticActions.GetSpan(Runic.Translations.Compiler.TranslationSource! source, Runic.Translations.Compiler.TextSourceLocation! location) -> Runic.Translations.Compiler.Rmf2DiagnosticSpan!
+*REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticActions.Revision(Runic.Translations.Compiler.TranslationSource! source) -> string!
+*REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.operator !=(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? left, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticQuickFix.operator ==(Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? left, Runic.Translations.Compiler.Rmf2DiagnosticQuickFix? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticSpan.operator !=(Runic.Translations.Compiler.Rmf2DiagnosticSpan? left, Runic.Translations.Compiler.Rmf2DiagnosticSpan? right) -> bool
+*REMOVED*static Runic.Translations.Compiler.Rmf2DiagnosticSpan.operator ==(Runic.Translations.Compiler.Rmf2DiagnosticSpan? left, Runic.Translations.Compiler.Rmf2DiagnosticSpan? right) -> bool

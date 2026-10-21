@@ -11,7 +11,7 @@ using JsonValue = System.Text.Json.Nodes.JsonValue;
 
 namespace Runic.Translations.Authoring;
 
-public static class TranslationWorkspaceMutation
+internal static class TranslationWorkspaceMutation
 {
     private static readonly UTF8Encoding Utf8 = new(false, true);
 

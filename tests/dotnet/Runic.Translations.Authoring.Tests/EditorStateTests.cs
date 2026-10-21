@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using Runic.Translations.Authoring;
+using Runic.Translations.Editor;
 using TUnit.Core;
 
 namespace Runic.Translations.Authoring.Tests;

@@ -104,7 +104,7 @@ internal sealed class CliIntegrationTests
         Assert.Contains("unknown command", invalid.StandardError);
     }
 
-    // The command attributes in TranslationsToolCommandModule are the CLI contract: descriptions,
+    // The command attributes in the tool's TranslationsToolCommandModule are the CLI contract: descriptions,
     // required options and the payload type.
     [Test, DisplayName("CLI help lists the command descriptions and required options")]
     public void HelpListsCommandContract()
@@ -115,7 +115,8 @@ internal sealed class CliIntegrationTests
         AssertHelpEntry(help.StandardOutput, "generate", "Generate translation artifacts.");
         AssertHelpEntry(help.StandardOutput, "init", "Create an RMF2 translation project and starter resources.");
         AssertHelpEntry(help.StandardOutput, "import-text", "Import a text-keyed catalog into an RMF2 group.");
-        AssertHelpEntry(help.StandardOutput, "lsp", "Run the RMF2 language server over standard input/output.");
+        // lsp serves the IDE extensions and is outside the 1.0 compatibility rules: hidden from help, still callable.
+        Assert.True(!help.StandardOutput.Split('\n').Any(line => line.TrimStart().StartsWith("lsp ", StringComparison.Ordinal)), "Help lists the hidden lsp command:\n" + help.StandardOutput);
         AssertHelpEntry(help.StandardOutput, "serve", "Run a persistent compiler for development servers");
         // One aligned column: every command description starts at the same offset.
         Assert.True(help.StandardOutput.Split('\n').SkipWhile(line => line != "Commands:").Skip(1).TakeWhile(line => line.Length != 0).Where(line => !line.StartsWith("   ", StringComparison.Ordinal))
@@ -557,7 +558,7 @@ internal sealed class CliIntegrationTests
         ProcessResult result = TestFixture.RunTool(temporary, "schema", "--output", "schemas");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string source = RepositoryPaths.Resolve("specs", "translations", "schemas");
-        string[] expected = ["asset-manifest-v1.schema.json", "capabilities-v1.schema.json", "editor-state-v1.schema.json", "external-pack-v5.schema.json", "locale-artifact-v5.schema.json", "message-ast-v5.schema.json", "project-v1.schema.json", "web-module-manifest-v3.schema.json"];
+        string[] expected = ["asset-manifest-v1.schema.json", "capabilities-v1.schema.json", "external-pack-v5.schema.json", "locale-artifact-v5.schema.json", "message-ast-v5.schema.json", "project-v1.schema.json", "web-module-manifest-v3.schema.json"];
         Array.Sort(expected, StringComparer.Ordinal);
         Assert.Equal(string.Join('|', expected), string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("schemas"))));
         foreach (string schema in expected)

@@ -9,15 +9,15 @@ using System.Threading;
 namespace Runic.Translations.Compiler;
 
 /// <summary>Physical source selection. Line and character positions are zero-based UTF-16.</summary>
-public sealed record Rmf2DiagnosticSpan(int StartByte, int LengthBytes, int StartUtf16, int LengthUtf16,
+internal sealed record Rmf2DiagnosticSpan(int StartByte, int LengthBytes, int StartUtf16, int LengthUtf16,
     int StartLine, int StartCharacter, int EndLine, int EndCharacter);
 
 /// <summary>A compiler-authorized physical source edit tied to the complete source revision.</summary>
-public sealed record Rmf2DiagnosticQuickFix(string Id, string Title, string DiagnosticId,
+internal sealed record Rmf2DiagnosticQuickFix(string Id, string Title, string DiagnosticId,
     TextSourceLocation Location, string ExpectedRevision, int StartByte, int LengthBytes, string NewText);
 
 /// <summary>Shared source navigation and conservative diagnostic repairs for authoring transports.</summary>
-public static class Rmf2DiagnosticActions
+internal static class Rmf2DiagnosticActions
 {
     private const string EmptyAssignment = "An assignment without a body is incomplete; use {{}} for empty text.";
     private static readonly UTF8Encoding Utf8 = new(false, true);

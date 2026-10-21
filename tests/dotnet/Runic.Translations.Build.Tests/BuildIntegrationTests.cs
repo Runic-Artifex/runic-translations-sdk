@@ -40,7 +40,7 @@ internal sealed class BuildIntegrationTests
         Assert.Equal(0, result.ExitCode, result.Combined);
         string items = result.StandardOutput.Replace("\\\\", "/").Replace('\\', '/');
         foreach (string input in new[] { "tools/Runic.Translations.Compiler/Generation/Rmf2EsmRuntimeV5.js", "tools/Runic.Translations.Compiler/Generation/Rmf2EsmOutputRendererV5.cs",
-            "tools/dotnet-runic-translations/Program.cs", "packages/dotnet/Runic.Translations.Tooling/TranslationsToolCommandModule.cs" })
+            "tools/dotnet-runic-translations/Program.cs", "tools/dotnet-runic-translations/TranslationsToolCommandModule.cs", "packages/dotnet/Runic.Translations.Tooling/TranslationInterchange.cs" })
             Assert.Contains(RepositoryPaths.Resolve(input.Split('/')).Replace('\\', '/'), items);
         Assert.True(!items.Contains("/bin/", StringComparison.Ordinal) && !items.Contains("/obj/", StringComparison.Ordinal), "Build output is a tool input.");
     }

@@ -6,9 +6,9 @@ using System.Threading;
 namespace Runic.Translations.Compiler;
 
 /// <summary>A transport-independent completion with a plain-text contract description.</summary>
-public sealed record Rmf2Completion(string Label, string Detail);
+internal sealed record Rmf2Completion(string Label, string Detail);
 /// <summary>Project-owned markup and message-symbol information for authoring clients.</summary>
-public sealed class Rmf2LanguageService
+internal sealed class Rmf2LanguageService
 {
     private readonly Rmf2MarkupRegistry _registry;
     private Rmf2LanguageService(Rmf2MarkupRegistry registry, IReadOnlyList<TranslationDiagnostic> diagnostics)

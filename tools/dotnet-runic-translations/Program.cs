@@ -38,7 +38,7 @@ internal static class Program
 
     /// <summary>The translations commands and <c>support</c>.</summary>
     internal static CommandCatalog CreateCatalog() =>
-        CommandCatalog.Combine(TranslationsToolCommandModule.CreateCatalog(), SupportCommandModule.CreateCatalog());
+        SupportCommandModule.CreateCatalog();
 
     public static int Main(string[] arguments)
     {
@@ -504,7 +504,7 @@ internal static class Program
             TextSourceLocation location = diagnostic.Location;
             result.AddTranslationDiagnostic(new TranslationsToolDiagnostic(
                 diagnostic.Id,
-                diagnostic.Severity == TranslationDiagnosticSeverity.Error ? "error" : "warning",
+                diagnostic.Severity switch { TranslationDiagnosticSeverity.Error => "error", TranslationDiagnosticSeverity.Warning => "warning", _ => "info" },
                 diagnostic.Message,
                 location.Path.Replace('\\', '/'),
                 location.Line,

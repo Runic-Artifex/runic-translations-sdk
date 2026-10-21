@@ -17,6 +17,8 @@
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
     <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" />
     <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations.Tooling\Runic.Translations.Tooling.csproj" />
+    <!-- Bundled in the Tooling package; referenced so the public-surface case can load it. -->
+    <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

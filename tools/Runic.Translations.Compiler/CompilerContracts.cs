@@ -1,10 +1,15 @@
 using System;
 namespace Runic.Translations.Compiler;
 
+/// <summary>The severity of a <see cref="TranslationDiagnostic"/>. The set is open: a later release may add a level.</summary>
 public enum TranslationDiagnosticSeverity
 {
-    Warning,
-    Error,
+    /// <summary>Information only; never fails a build.</summary>
+    Information = 0,
+    /// <summary>A problem that does not stop compilation.</summary>
+    Warning = 1,
+    /// <summary>A problem that stops compilation.</summary>
+    Error = 2,
 }
 
 public enum TranslationVisibility

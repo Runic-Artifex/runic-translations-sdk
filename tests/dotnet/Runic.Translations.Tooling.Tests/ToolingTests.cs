@@ -194,29 +194,65 @@ internal sealed class ToolingTests
             throw new InvalidOperationException("Artifact inspection did not recognize the generated XLIFF document.");
     }
 
-    [Test]
-    public void ToolRequestHasCanonicalShape()
+    // The package's stable surface: compile, interchange, inspection and scaffolding. The tool's command plumbing,
+    // the workspace transactions, the editor state, the MF2 syntax tree and the language service are internal.
+    [Test, DisplayName("Tooling exports only the stable compile, interchange, inspection and scaffolding surface")]
+    public void ExportsOnlyTheStableSurface()
     {
-        var request = new TranslationsToolCommandRequest("init");
-        request.Deconstruct(out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _, out _);
-        if (typeof(TranslationsToolCommandRequest).GetConstructors().Single().GetParameters().Length != 17)
-            throw new InvalidOperationException("TranslationsToolCommandRequest changed its positional constructor shape.");
+        string[] expected =
+        [
+            "Runic.Translations.Authoring.TranslationAuthoringException",
+            "Runic.Translations.Authoring.TranslationProjectCreationRequest",
+            "Runic.Translations.Authoring.TranslationProjectFile",
+            "Runic.Translations.Authoring.TranslationProjectLocale",
+            "Runic.Translations.Authoring.TranslationProjectPlan",
+            "Runic.Translations.Authoring.TranslationProjectScaffolder",
+            "Runic.Translations.Authoring.TranslationProjectWriter",
+            "Runic.Translations.Compiler.Rmf2ProjectCompilationV5",
+            "Runic.Translations.Compiler.TextSourceLocation",
+            "Runic.Translations.Compiler.TranslationArgumentType",
+            "Runic.Translations.Compiler.TranslationCompiler",
+            "Runic.Translations.Compiler.TranslationCompilerOptions",
+            "Runic.Translations.Compiler.TranslationDiagnostic",
+            "Runic.Translations.Compiler.TranslationDiagnosticSeverity",
+            "Runic.Translations.Compiler.TranslationMissingKeyPolicy",
+            "Runic.Translations.Compiler.TranslationPolicy",
+            "Runic.Translations.Compiler.TranslationSource",
+            "Runic.Translations.Compiler.TranslationUnsupportedLocalePolicy",
+            "Runic.Translations.Compiler.TranslationVisibility",
+            "Runic.Translations.Tooling.ArtifactInspection",
+            "Runic.Translations.Tooling.ArtifactInspectionFinding",
+            "Runic.Translations.Tooling.ArtifactInspector",
+            "Runic.Translations.Tooling.TranslationInterchange",
+            "Runic.Translations.Tooling.TranslationInterchangeException",
+            "Runic.Translations.Tooling.TranslationInterchangeLoss",
+            "Runic.Translations.Tooling.TranslationInterchangeReport",
+            "Runic.Translations.Tooling.TranslationInterchangeReview",
+            "Runic.Translations.Tooling.TranslationInterchangeReviewEntry",
+            "Runic.Translations.Tooling.TranslationMf2Document",
+            "Runic.Translations.Tooling.TranslationXliffDocument",
+            "Runic.Translations.Tooling.TranslationXliffExportResult",
+            "Runic.Translations.Tooling.TranslationXliffImportResult",
+        ];
+        string[] exported = new[] { typeof(TranslationInterchange).Assembly, typeof(TranslationCompiler).Assembly, Assembly.Load("Runic.Translations.Authoring") }
+            .SelectMany(assembly => assembly.GetExportedTypes())
+            .Select(type => type.FullName!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (!exported.SequenceEqual(expected))
+            throw new InvalidOperationException("The Tooling package exports another surface: " + string.Join(", ", exported.Except(expected)) +
+                " added; " + string.Join(", ", expected.Except(exported)) + " missing.");
+        if (typeof(TranslationInterchange).Assembly.GetReferencedAssemblies().Any(name => name.Name!.StartsWith("Runic.CommandLine", StringComparison.Ordinal)))
+            throw new InvalidOperationException("Runic.Translations.Tooling must not reference Runic.CommandLine.");
     }
 
-    [Test]
-    public void ToolCommandHasCanonicalInitShape()
+    // The harmless level is zero, as in Runic SDK: an uninitialized severity never reads as an error.
+    [Test, DisplayName("diagnostic severity orders Information, Warning, Error from zero")]
+    public void SeverityIsOrderedFromInformation()
     {
-        Type[] expected =
-        [
-            typeof(ITranslationsToolCommandOperations), typeof(string), typeof(string), typeof(string),
-            typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(bool),
-        ];
-        MethodInfo[] initMethods = typeof(TranslationsToolCommandModule).GetMethods()
-            .Where(method => method.Name == "Init")
-            .ToArray();
-        MethodInfo? canonical = initMethods.SingleOrDefault(method => method.GetParameters().Length == expected.Length);
-        if (canonical is null || !canonical.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(expected) || initMethods.Length != 1)
-            throw new InvalidOperationException("TranslationsToolCommandModule.Init retained an obsolete layout overload.");
+        if (default(TranslationDiagnosticSeverity) != TranslationDiagnosticSeverity.Information ||
+            (int)TranslationDiagnosticSeverity.Warning != 1 || (int)TranslationDiagnosticSeverity.Error != 2)
+            throw new InvalidOperationException("TranslationDiagnosticSeverity must be Information = 0, Warning = 1, Error = 2.");
     }
 
     private static Rmf2ProjectCompilationV5 CompileSemantic(string english, string german, bool grouped)

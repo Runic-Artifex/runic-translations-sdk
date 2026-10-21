@@ -919,7 +919,7 @@ internal sealed class Rmf2LanguageServer
             var diagnostics = current.Syntax.Diagnostics.Concat(catalogDiagnostics.Where(d => PathComparer.Equals(Path.GetFullPath(d.Location.Path).Replace('\\', '/'), path)))
                 .DistinctBy(d => (d.Id, d.Location.StartByte, d.Location.LengthBytes, d.Message));
             Publish(uri, new JsonArray(diagnostics.Select(d => (JsonNode)new JsonObject {
-                ["range"] = Range(current, d.Location), ["severity"] = d.Severity == TranslationDiagnosticSeverity.Error ? 1 : 2,
+                ["range"] = Range(current, d.Location), ["severity"] = d.Severity switch { TranslationDiagnosticSeverity.Error => 1, TranslationDiagnosticSeverity.Warning => 2, _ => 3 },
                 ["code"] = d.Id, ["source"] = "runic-rmf2", ["message"] = d.Message,
             }).ToArray()));
         }

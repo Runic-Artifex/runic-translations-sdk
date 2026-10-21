@@ -8,9 +8,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace Runic.Translations.Authoring;
+namespace Runic.Translations.Editor;
 
-public static partial class TranslationEditorStateStore
+internal static partial class TranslationEditorStateStore
 {
     public const string Schema = "runic.translations.editor-state/1";
     public const int MaximumBytes = 8 * 1024 * 1024;
