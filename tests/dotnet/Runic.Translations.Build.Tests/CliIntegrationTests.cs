@@ -78,7 +78,8 @@ internal sealed class CliIntegrationTests
         string? project = commandHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith("--project <directory>", StringComparison.Ordinal));
         Assert.True(project is not null && project.Contains("Translations directory or its runic.json.", StringComparison.Ordinal) && !project.Contains("[required]", StringComparison.Ordinal), commandHelp.StandardOutput);
         Assert.Contains("Defaults to ./runic.json", System.Text.RegularExpressions.Regex.Replace(commandHelp.StandardOutput, "\\s+", " "));
-        // Emitters without a renderer fail with RTR0065, so help and usage list only working ones.
+        // The retired --emit-typescript, --emit-template-manifest and --emit-cpp options are gone: help does not list
+        // them, and passing one is a usage error (exit 2).
         foreach (string command in new[] { "generate", "verify" })
         {
             ProcessResult emitHelp = TestFixture.RunTool(temporary, "help", command);
@@ -90,6 +91,8 @@ internal sealed class CliIntegrationTests
                 foreach (string unsupported in new[] { "--emit-typescript", "--emit-template-manifest", "--emit-cpp" })
                     Assert.False(text.Contains(unsupported, StringComparison.Ordinal), command + " help advertises " + unsupported + ":\n" + text);
             }
+            foreach (string retired in new[] { "--emit-typescript", "--emit-template-manifest", "--emit-cpp" })
+                AssertUsageFailure(temporary, $"unknown option or positional argument '{retired}'.", command, "--output", "out", retired);
         }
         ProcessResult empty = TestFixture.RunTool(temporary);
         Assert.Equal(0, empty.ExitCode, empty.Combined);
@@ -124,7 +127,7 @@ internal sealed class CliIntegrationTests
 
         ProcessResult initHelp = TestFixture.RunTool(temporary, "help", "init");
         Assert.Equal(0, initHelp.ExitCode, initHelp.Combined);
-        foreach (string option in new[] { "--directory <directory>", "--catalog <catalog>", "--default-locale <locale>", "--namespace <namespace>", "--class <name>" })
+        foreach (string option in new[] { "--directory <directory>", "--catalog <catalog>", "--default-locale <locale>", "--namespace <namespace>", "--class-name <name>" })
         {
             string? line = initHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith(option, StringComparison.Ordinal));
             Assert.True(line?.Contains("[required]", StringComparison.Ordinal) == true, $"init help does not mark {option} as required.");
@@ -240,7 +243,7 @@ internal sealed class CliIntegrationTests
             "de",
             "--namespace",
             "Customer.Product",
-            "--class",
+            "--class-name",
             "ProductText");
 
         Assert.Equal(0, create.ExitCode, create.Combined);
@@ -290,7 +293,7 @@ internal sealed class CliIntegrationTests
             "fr:en-US",
             "--namespace",
             "Customer.Product",
-            "--class",
+            "--class-name",
             "ProductText");
 
         Assert.Equal(0, create.ExitCode, create.Combined);
@@ -319,7 +322,7 @@ internal sealed class CliIntegrationTests
             "de",
             "--namespace",
             "Customer.Product",
-            "--class",
+            "--class-name",
             "ProductText");
 
         Assert.Equal(2, create.ExitCode, create.Combined);
@@ -343,7 +346,7 @@ internal sealed class CliIntegrationTests
             "en",
             "--namespace",
             "Customer.Empty",
-            "--class",
+            "--class-name",
             "EmptyText",
             "--no-starter");
         Assert.Equal(0, create.ExitCode, create.Combined);

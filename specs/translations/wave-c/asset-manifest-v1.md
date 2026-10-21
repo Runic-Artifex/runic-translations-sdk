@@ -3,7 +3,7 @@
 > Historical/superseded direction: the Template Manifest v1 consumer/output
 > proposal recorded below is retained for compatibility history, not as a
 > current release target. Current tooling rejects `--emit-template-manifest`
-> and `TranslationsEmitTemplateManifest` with `RTR0065`; see the [current
+> as an unknown option and `TranslationsEmitTemplateManifest` with `RTR0086`; see the [current
 > v5 artifact contract](../wave-b/canonical-artifacts.md) and [build/CLI
 > contract](../wave-b/build-cli.md).
 

@@ -39,9 +39,8 @@ dotnet tool run runic-translations -- generate \
 When no emit option is present, projects default to typed C#, locale-v5 JSON plus
 its asset manifest, and the cohesive ESM-v5 package. When any option is present,
 only that group is rendered. V5 supports `--emit-csharp`, `--emit-json`, and
-`--emit-esm`. `--emit-typescript`, `--emit-template-manifest`, and `--emit-cpp`
-are not listed in help: they fail with `RTR0065` because no version-correct
-standalone v5 renderer exists.
+`--emit-esm`; the retired `--emit-typescript`, `--emit-template-manifest` and
+`--emit-cpp` options were removed and are rejected as unknown options.
 Validation permits an empty v5 project as a scaffold, but `generate` and `verify`
 fail with `RTR0009` until the effective default locale defines a canonical key.
 
@@ -186,7 +185,7 @@ equivalent tool command is `runic-translations validate --project <path>`.
 {"id":1,"ok":true,"exitCode":0,"output":"generated 12 artifact(s).","message":"","diagnostics":[],"elapsedMs":9}
 ```
 
-Methods are `generate` (`project`, `output`, optional `emit` with `csharp`, `json`, `typescript`, `template-manifest`, `esm` or `cpp`), `validate` (`project`) and `shutdown`. `exitCode` and `diagnostics` match the one-shot command, and a translation diagnostic (an `RTR` code) also carries `path`, `line`, `column`, `endLine`, `endColumn` and `helpUri`; `message` is the text it would print on failure. Paths resolve against the server's working directory. The server exits after `shutdown` or when standard input closes. A request line longer than 1 MiB is discarded without being buffered; its reply has `"id":null` and answers the oldest outstanding request, because requests are answered in order.
+Methods are `generate` (`project`, `output`, optional `emit` with `csharp`, `json` or `esm`; another name fails the request), `validate` (`project`) and `shutdown`. `exitCode` and `diagnostics` match the one-shot command, and a translation diagnostic (an `RTR` code) also carries `path`, `line`, `column`, `endLine`, `endColumn` and `helpUri`; `message` is the text it would print on failure. Paths resolve against the server's working directory. The server exits after `shutdown` or when standard input closes. A request line longer than 1 MiB is discarded without being buffered; its reply has `"id":null` and answers the oldest outstanding request, because requests are answered in order.
 
 Trust model: `serve` has the same authority as the one-shot commands run by the same user. It reads requests only from its standard input, so only the parent process that started it can send them; it opens no socket or port. A request may name any `project` and `output` the process can access, and `generate` writes there, exactly like `runic-translations generate --project ... --output ...`. Start it only from trusted tooling, and do not forward untrusted input into its standard input.
 

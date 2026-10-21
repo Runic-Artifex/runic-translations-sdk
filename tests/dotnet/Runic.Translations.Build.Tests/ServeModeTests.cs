@@ -74,6 +74,9 @@ internal sealed class ServeModeTests
         Assert.Contains("unknown method 'compile'", unknown.GetProperty("message").GetString() ?? string.Empty);
         Assert.Contains("requires project and output", server.Send("""{"id":2,"method":"generate","project":"translations"}""").GetProperty("message").GetString() ?? string.Empty);
         Assert.Contains("unknown output group", server.Send("""{"id":3,"method":"generate","project":"p","output":"o","emit":["wasm"]}""").GetProperty("message").GetString() ?? string.Empty);
+        // The retired output groups are unknown like any other name.
+        foreach (string retired in new[] { "typescript", "template-manifest", "cpp" })
+            Assert.Contains("unknown output group", server.Send("{\"id\":3,\"method\":\"generate\",\"project\":\"p\",\"output\":\"o\",\"emit\":[\"" + retired + "\"]}").GetProperty("message").GetString() ?? string.Empty);
 
         File.WriteAllText(Path.Combine(project, "en.rmf2"), "title = Fixed\ngreeting =\n  .input {$name :string}\n  {{Hello {$name}!}}\n", new UTF8Encoding(false));
         JsonElement validated = server.Send(JsonSerializer.Serialize(new { id = 4, method = "validate", project }));

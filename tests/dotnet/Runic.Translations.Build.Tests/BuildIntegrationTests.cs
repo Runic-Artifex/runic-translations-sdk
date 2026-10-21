@@ -26,7 +26,7 @@ internal sealed class BuildIntegrationTests
         File.WriteAllText(temporary.Resolve(".config", "dotnet-tools.json"), "{\"version\":1,\"isRoot\":true,\"tools\":{}}\n", new UTF8Encoding(false));
         string props = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.props"));
         File.WriteAllText(temporary.Resolve("src", "App", "Probe.proj"), $"""<Project><Import Project="{props}" /></Project>""", new UTF8Encoding(false));
-        ProcessResult result = Processes.DotNet(temporary.Resolve("src", "App"), "msbuild", "Probe.proj", "/nologo", "-getItem:TranslationsToolInput");
+        ProcessResult result = Processes.DotNet(temporary.Resolve("src", "App"), "msbuild", "Probe.proj", "/nologo", "-getItem:RunicTranslationsToolInput");
         Assert.Equal(0, result.ExitCode, result.Combined);
         Assert.Contains(temporary.Path.Replace('\\', '/') + "/.config/dotnet-tools.json", result.StandardOutput.Replace("\\\\", "/").Replace('\\', '/'));
     }
@@ -36,7 +36,7 @@ internal sealed class BuildIntegrationTests
     [Test, DisplayName("the editor regenerates its catalog when the source-built tool changes")]
     public void EditorTracksSourceToolInputs()
     {
-        ProcessResult result = Processes.DotNet(RepositoryPaths.Resolve("apps", "translations-editor"), "msbuild", "Runic.Translations.Editor.csproj", "/nologo", "-getItem:TranslationsToolInput");
+        ProcessResult result = Processes.DotNet(RepositoryPaths.Resolve("apps", "translations-editor"), "msbuild", "Runic.Translations.Editor.csproj", "/nologo", "-getItem:RunicTranslationsToolInput");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string items = result.StandardOutput.Replace("\\\\", "/").Replace('\\', '/');
         foreach (string input in new[] { "tools/Runic.Translations.Compiler/Generation/Rmf2EsmRuntimeV5.js", "tools/Runic.Translations.Compiler/Generation/Rmf2EsmOutputRendererV5.cs",
@@ -85,7 +85,7 @@ internal sealed class BuildIntegrationTests
     [Test, DisplayName("build emit properties select v5 groups and reject retired outputs")]
     public void EmitFlagsAreExact()
     {
-        foreach ((string property, string expected) in new[] { ("<TranslationsEmitJson>true</TranslationsEmitJson>", "minimal.en.locale-v5.json"), ("<TranslationsEmitEsm>true</TranslationsEmitEsm>", "web-module-manifest-v3.json") })
+        foreach ((string property, string expected) in new[] { ("<RunicTranslationsEmitJson>true</RunicTranslationsEmitJson>", "minimal.en.locale-v5.json"), ("<RunicTranslationsEmitEsm>true</RunicTranslationsEmitEsm>", "web-module-manifest-v3.json") })
         {
             using TemporaryDirectory temporary = CreateConsumer(false, extraProperties: property); ProcessResult result = Build(temporary); Assert.Equal(0, result.ExitCode, result.Combined);
             string output = FindGeneratedDirectory(temporary, expected); string[] files = GeneratedArtifacts(output);
@@ -94,11 +94,26 @@ internal sealed class BuildIntegrationTests
                 "ESM selection emitted another output group: " + string.Join('|', files));
             else Assert.Equal("minimal.asset-manifest-v1.json|minimal.en.locale-v5.json", string.Join('|', files));
         }
-        foreach ((string property, string flag) in new[] { ("<TranslationsEmitTypeScript>true</TranslationsEmitTypeScript>", "--emit-typescript"), ("<TranslationsEmitTemplateManifest>true</TranslationsEmitTemplateManifest>", "--emit-template-manifest"), ("<TranslationsEmitCpp>true</TranslationsEmitCpp>", "--emit-cpp") })
+        foreach (string property in new[] { "TranslationsEmitTypeScript", "TranslationsEmitTemplateManifest", "TranslationsEmitCpp" })
         {
-            using TemporaryDirectory temporary = CreateConsumer(false, extraProperties: property); ProcessResult result = Build(temporary);
-            Assert.True(result.ExitCode != 0, "Build accepted retired output selection " + flag); Assert.Contains("RTR0065", result.Combined); Assert.Contains(flag, result.Combined);
+            using TemporaryDirectory temporary = CreateConsumer(false, extraProperties: $"<{property}>true</{property}>"); ProcessResult result = Build(temporary);
+            Assert.True(result.ExitCode != 0, "Build accepted retired output selection " + property);
+            Assert.Contains("RTR0086", result.Combined); Assert.Contains($"The MSBuild property '{property}' was removed", result.Combined);
         }
+    }
+
+    // Permanent guard: a name from before the Runic prefix fails with RTR0086 naming its replacement, instead of being ignored.
+    [Test, DisplayName("build rejects the MSBuild names from before the Runic prefix with RTR0086")]
+    [Arguments("<TranslationsEmitEsm>true</TranslationsEmitEsm>", "", "property 'TranslationsEmitEsm' was renamed to 'RunicTranslationsEmitEsm'")]
+    [Arguments("<TranslationsOutputPath>obj/custom/</TranslationsOutputPath>", "", "property 'TranslationsOutputPath' was renamed to 'RunicTranslationsOutputPath'")]
+    [Arguments("<TranslationsToolCommand>dotnet tool run runic-translations --</TranslationsToolCommand>", "", "property 'TranslationsToolCommand' was renamed to 'RunicTranslationsToolCommand'")]
+    [Arguments("", "<TranslationProject Include=\"translations/runic.json\" />", "item 'TranslationProject' was renamed to 'RunicTranslationProject'")]
+    [Arguments("", "<TranslationsToolInput Include=\"translations/runic.json\" />", "item 'TranslationsToolInput' was renamed to 'RunicTranslationsToolInput'")]
+    public void RetiredNamesFailWithTheirReplacement(string property, string item, string message)
+    {
+        using TemporaryDirectory temporary = CreateConsumer(false, extraProperties: property, extraItems: item); ProcessResult result = Build(temporary);
+        Assert.True(result.ExitCode != 0, "Build accepted a retired MSBuild name: " + property + item);
+        Assert.Contains("error RTR0086", result.Combined); Assert.Contains(message, result.Combined);
     }
 
     [Test, DisplayName("build rejects an output path outside the intermediate root")]
@@ -154,7 +169,7 @@ internal sealed class BuildIntegrationTests
     {
         bool windows = OperatingSystem.IsWindows();
         string tool = windows ? "cmd /d /c &quot;$(MSBuildProjectDirectory)\\failing-tool.cmd&quot;" : "sh &quot;$(MSBuildProjectDirectory)/failing-tool.sh&quot;";
-        using TemporaryDirectory temporary = CreateConsumer(true, extraProperties: $"<TranslationsToolCommand>{tool}</TranslationsToolCommand>");
+        using TemporaryDirectory temporary = CreateConsumer(true, extraProperties: $"<RunicTranslationsToolCommand>{tool}</RunicTranslationsToolCommand>");
         File.WriteAllText(temporary.Resolve(windows ? "failing-tool.cmd" : "failing-tool.sh"), windows ? $"@exit /b {exitCode}\r\n" : $"exit {exitCode}\n", new UTF8Encoding(false));
         if (withGenerator) AddSourceGenerator(temporary);
         ProcessResult failed = Build(temporary);
@@ -173,13 +188,13 @@ internal sealed class BuildIntegrationTests
         File.WriteAllText(temporary.Resolve("Consumer.csproj"), project.Replace(import, items, StringComparison.Ordinal), new UTF8Encoding(false));
     }
 
-    private static TemporaryDirectory CreateConsumer(bool generationEnabled, string? outputPath = null, string? extraProperties = null)
+    private static TemporaryDirectory CreateConsumer(bool generationEnabled, string? outputPath = null, string? extraProperties = null, string? extraItems = null)
     {
         TemporaryDirectory temporary = new(); Directory.CreateDirectory(temporary.Resolve("translations", "en"));
         File.WriteAllText(temporary.Resolve("translations", "runic.json"), "{\"schemaVersion\":1,\"catalog\":\"minimal\",\"code\":{\"namespace\":\"Example\",\"className\":\"MinimalText\"},\"baseLocale\":\"en\"}\n", new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("translations", "en", "Hello.mf2"), "Hello {$name}\n", new UTF8Encoding(false)); File.WriteAllText(temporary.Resolve("Program.cs"), "internal static class Program { private static void Main() { } }\n", new UTF8Encoding(false));
-        string props = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.props")); string targets = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets")); string tool = $"dotnet &quot;{XmlPath(RepositoryPaths.ToolAssembly)}&quot;"; string output = outputPath is null ? string.Empty : $"<TranslationsOutputPath>{outputPath}</TranslationsOutputPath>";
-        string project = $$"""<Project Sdk="Microsoft.NET.Sdk"><Import Project="{{props}}" /><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><IntermediateOutputPath>artifacts/obj/$(Configuration)/</IntermediateOutputPath><BaseOutputPath>artifacts/bin/</BaseOutputPath><RestorePackagesPath>{{XmlPath(RepositoryPaths.Resolve(".packages"))}}</RestorePackagesPath><TranslationsGenerateOnBuild>{{generationEnabled.ToString().ToLowerInvariant()}}</TranslationsGenerateOnBuild><TranslationsToolCommand>{{tool}}</TranslationsToolCommand>{{output}}{{extraProperties}}</PropertyGroup><Import Project="{{targets}}" /><Target Name="DumpTranslationItems" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources"><WriteLinesToFile File="dump.txt" Overwrite="true" Lines="PropsImported=$(RunicTranslationsBuildPropsImported);TargetsImported=$(RunicTranslationsBuildTargetsImported);@(AdditionalFiles->'%(Filename)|%(RunicTranslationKind)')" /></Target></Project>""";
+        string props = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.props")); string targets = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.targets")); string tool = $"dotnet &quot;{XmlPath(RepositoryPaths.ToolAssembly)}&quot;"; string output = outputPath is null ? string.Empty : $"<RunicTranslationsOutputPath>{outputPath}</RunicTranslationsOutputPath>";
+        string project = $$"""<Project Sdk="Microsoft.NET.Sdk"><Import Project="{{props}}" /><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><IntermediateOutputPath>artifacts/obj/$(Configuration)/</IntermediateOutputPath><BaseOutputPath>artifacts/bin/</BaseOutputPath><RestorePackagesPath>{{XmlPath(RepositoryPaths.Resolve(".packages"))}}</RestorePackagesPath><RunicTranslationsGenerateOnBuild>{{generationEnabled.ToString().ToLowerInvariant()}}</RunicTranslationsGenerateOnBuild><RunicTranslationsToolCommand>{{tool}}</RunicTranslationsToolCommand>{{output}}{{extraProperties}}</PropertyGroup><ItemGroup>{{extraItems}}</ItemGroup><Import Project="{{targets}}" /><Target Name="DumpTranslationItems" DependsOnTargets="_RunicTranslationsDiscoverTranslationSources"><WriteLinesToFile File="dump.txt" Overwrite="true" Lines="PropsImported=$(_RunicTranslationsBuildPropsImported);TargetsImported=$(_RunicTranslationsBuildTargetsImported);@(AdditionalFiles->'%(Filename)|%(RunicTranslationKind)')" /></Target></Project>""";
         File.WriteAllText(temporary.Resolve("Consumer.csproj"), project, new UTF8Encoding(false)); return temporary;
     }
 

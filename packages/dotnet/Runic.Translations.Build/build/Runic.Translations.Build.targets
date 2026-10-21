@@ -8,20 +8,47 @@
     <_TranslationsBuildTargetsPath>$(MSBuildThisFileFullPath)</_TranslationsBuildTargetsPath>
 
     <_TranslationsEmitAny>false</_TranslationsEmitAny>
-    <_TranslationsEmitAny Condition="'$(TranslationsEmitJson)' == 'true' or '$(TranslationsEmitTypeScript)' == 'true' or '$(TranslationsEmitTemplateManifest)' == 'true' or '$(TranslationsEmitEsm)' == 'true' or '$(TranslationsEmitCpp)' == 'true'">true</_TranslationsEmitAny>
+    <_TranslationsEmitAny Condition="'$(RunicTranslationsEmitJson)' == 'true' or '$(RunicTranslationsEmitEsm)' == 'true'">true</_TranslationsEmitAny>
     <_TranslationsGenerationEnabled>false</_TranslationsGenerationEnabled>
-    <_TranslationsGenerationEnabled Condition="'$(TranslationsGenerateOnBuild)' == 'true' or '$(_TranslationsEmitAny)' == 'true'">true</_TranslationsGenerationEnabled>
-    <RunicTranslationsBuildTargetsImported>true</RunicTranslationsBuildTargetsImported>
+    <_TranslationsGenerationEnabled Condition="'$(RunicTranslationsGenerateOnBuild)' == 'true' or '$(_TranslationsEmitAny)' == 'true'">true</_TranslationsGenerationEnabled>
+    <_RunicTranslationsBuildTargetsImported>true</_RunicTranslationsBuildTargetsImported>
   </PropertyGroup>
 
+  <!-- Permanent guard (RTR0086): the names before the Runic prefix, and the retired emit selections,
+       fail with an error naming the replacement instead of being ignored. -->
+  <Target Name="_RunicTranslationsRejectRetiredNames"
+          BeforeTargets="_RunicTranslationsDiscoverTranslationSources;RunicTranslationsGetXamlCatalogSources;RunicTranslationsCleanTranslationArtifacts">
+    <Error Condition="'$(TranslationsGenerateOnBuild)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsGenerateOnBuild' was renamed to 'RunicTranslationsGenerateOnBuild'." />
+    <Error Condition="'$(TranslationsEmitJson)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsEmitJson' was renamed to 'RunicTranslationsEmitJson'." />
+    <Error Condition="'$(TranslationsEmitEsm)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsEmitEsm' was renamed to 'RunicTranslationsEmitEsm'." />
+    <Error Condition="'$(TranslationsOutputPath)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsOutputPath' was renamed to 'RunicTranslationsOutputPath'." />
+    <Error Condition="'$(TranslationsOutputStamp)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsOutputStamp' was renamed to 'RunicTranslationsOutputStamp'." />
+    <Error Condition="'$(TranslationsWebOutputPath)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsWebOutputPath' was renamed to 'RunicTranslationsWebOutputPath'." />
+    <Error Condition="'$(TranslationsToolCommand)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsToolCommand' was renamed to 'RunicTranslationsToolCommand'." />
+    <Error Condition="'$(TranslationsToolAdditionalArguments)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsToolAdditionalArguments' was renamed to 'RunicTranslationsToolAdditionalArguments'." />
+    <Error Condition="'$(TranslationsXamlCatalog)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsXamlCatalog' was renamed to 'RunicTranslationsXamlCatalog'." />
+    <Error Condition="'$(TranslationsXamlReferencedCatalogs)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsXamlReferencedCatalogs' was renamed to 'RunicTranslationsXamlReferencedCatalogs'." />
+    <Error Condition="'$(TranslationsValidateXaml)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsValidateXaml' was renamed to 'RunicTranslationsValidateXaml'." />
+    <Error Condition="'@(TranslationProject)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild item 'TranslationProject' was renamed to 'RunicTranslationProject'." />
+    <Error Condition="'@(TranslationMf2)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild item 'TranslationMf2' was renamed to 'RunicTranslationMf2'." />
+    <Error Condition="'@(TranslationXaml)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild item 'TranslationXaml' was renamed to 'RunicTranslationXaml'." />
+    <Error Condition="'@(TranslationsToolInput)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild item 'TranslationsToolInput' was renamed to 'RunicTranslationsToolInput'." />
+    <Error Condition="'@(Page->HasMetadata('TranslationsValidateXaml'))' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The Page metadata 'TranslationsValidateXaml' was renamed to 'RunicTranslationsValidateXaml'." />
+    <Error Condition="'@(ApplicationDefinition->HasMetadata('TranslationsValidateXaml'))' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The ApplicationDefinition metadata 'TranslationsValidateXaml' was renamed to 'RunicTranslationsValidateXaml'." />
+    <Error Condition="'@(RunicTranslationXaml->HasMetadata('TranslationsValidateXaml'))' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The RunicTranslationXaml metadata 'TranslationsValidateXaml' was renamed to 'RunicTranslationsValidateXaml'." />
+    <Error Condition="'$(TranslationsEmitTypeScript)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsEmitTypeScript' was removed: Runic Translations has no TypeScript emitter; RunicTranslationsEmitEsm writes the ESM package with its type declarations. Delete the property." />
+    <Error Condition="'$(TranslationsEmitTemplateManifest)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsEmitTemplateManifest' was removed: Runic Translations has no template manifest output. Delete the property." />
+    <Error Condition="'$(TranslationsEmitCpp)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsEmitCpp' was removed: Runic Translations does not generate C++ (C++ is planned for 2.0). Delete the property." />
+  </Target>
+
   <!-- A Runic project marker is the single declaration; its locale documents are discovered beside the declared marker. -->
-  <ItemGroup Condition="'@(TranslationProject)' == '' and Exists('$(MSBuildProjectDirectory)\translations\runic.json')">
-    <TranslationProject Include="$(MSBuildProjectDirectory)\translations\runic.json" />
+  <ItemGroup Condition="'@(RunicTranslationProject)' == '' and Exists('$(MSBuildProjectDirectory)\translations\runic.json')">
+    <RunicTranslationProject Include="$(MSBuildProjectDirectory)\translations\runic.json" />
   </ItemGroup>
   <ItemGroup>
     <!-- Full paths, as discovery reports the sources: a project outside this directory, such as
          ../Frontend/translations/runic.json, then contains its sources (RTR0052 otherwise). -->
-    <AdditionalFiles Include="@(TranslationProject->'%(FullPath)')" RunicTranslationKind="Project" />
+    <AdditionalFiles Include="@(RunicTranslationProject->'%(FullPath)')" RunicTranslationKind="Project" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationKind" />
   </ItemGroup>
 
@@ -31,35 +58,35 @@
   <Target Name="_RunicTranslationsDiscoverTranslationSources"
           BeforeTargets="PrepareForBuild;GenerateMSBuildEditorConfigFileShouldRun;CoreCompile">
     <PropertyGroup>
-      <_TranslationsSourceDiscoveryGlobs>@(TranslationProject->'%(RootDir)%(Directory)**/*')</_TranslationsSourceDiscoveryGlobs>
+      <_TranslationsSourceDiscoveryGlobs>@(RunicTranslationProject->'%(RootDir)%(Directory)**/*')</_TranslationsSourceDiscoveryGlobs>
     </PropertyGroup>
-    <Runic.Translations.Build.Rmf2SourceDiscovery Projects="@(TranslationProject)" Condition="'@(TranslationProject)' != '' and Exists('$(_Rmf2DiscoveryAssembly)')">
+    <Runic.Translations.Build.Rmf2SourceDiscovery Projects="@(RunicTranslationProject)" Condition="'@(RunicTranslationProject)' != '' and Exists('$(_Rmf2DiscoveryAssembly)')">
       <Output TaskParameter="Sources" ItemName="_TranslationsDiscoveredSource" />
     </Runic.Translations.Build.Rmf2SourceDiscovery>
-    <ItemGroup Condition="'@(TranslationProject)' != '' and !Exists('$(_Rmf2DiscoveryAssembly)')">
+    <ItemGroup Condition="'@(RunicTranslationProject)' != '' and !Exists('$(_Rmf2DiscoveryAssembly)')">
       <_TranslationsDiscoveredSource Include="$(_TranslationsSourceDiscoveryGlobs)" />
     </ItemGroup>
     <!-- XAML stays optional. Catalog is an explicit per-file assertion; the project
          default only applies where no statically declared source override applies (RTR0085).
-         TranslationsValidateXaml="false" on a Page, ApplicationDefinition or TranslationXaml
+         RunicTranslationsValidateXaml="false" on a Page, ApplicationDefinition or RunicTranslationXaml
          item skips that file, e.g. when its source is inherited from another file or code. -->
-    <ItemGroup Condition="'$(TranslationsValidateXaml)' != 'false'">
-      <TranslationXaml Include="@(Page);@(ApplicationDefinition)" Exclude="@(TranslationXaml)" Condition="'$(UseWPF)' == 'true'" />
-      <TranslationXaml Remove="@(TranslationXaml)" Condition="'%(TranslationXaml.TranslationsValidateXaml)' == 'false'" />
-      <AdditionalFiles Include="@(TranslationXaml)" RunicTranslationKind="Xaml"
-                       RunicTranslationCatalog="%(TranslationXaml.Catalog)"
-                       RunicTranslationDefaultCatalog="$(TranslationsXamlCatalog)" />
+    <ItemGroup Condition="'$(RunicTranslationsValidateXaml)' != 'false'">
+      <RunicTranslationXaml Include="@(Page);@(ApplicationDefinition)" Exclude="@(RunicTranslationXaml)" Condition="'$(UseWPF)' == 'true'" />
+      <RunicTranslationXaml Remove="@(RunicTranslationXaml)" Condition="'%(RunicTranslationXaml.RunicTranslationsValidateXaml)' == 'false'" />
+      <AdditionalFiles Include="@(RunicTranslationXaml)" RunicTranslationKind="Xaml"
+                       RunicTranslationCatalog="%(RunicTranslationXaml.Catalog)"
+                       RunicTranslationDefaultCatalog="$(RunicTranslationsXamlCatalog)" />
       <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationCatalog" />
       <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationDefaultCatalog" />
     </ItemGroup>
     <!-- MSBuild globs are case-sensitive on Linux. Match extensions after discovery
          with MSBuild's case-insensitive string comparison, matching the compiler contract. -->
-    <ItemGroup Condition="'@(TranslationMf2)' == ''">
-      <TranslationMf2 Include="@(_TranslationsDiscoveredSource)"
+    <ItemGroup Condition="'@(RunicTranslationMf2)' == ''">
+      <RunicTranslationMf2 Include="@(_TranslationsDiscoveredSource)"
                       Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.mf2' or '%(_TranslationsDiscoveredSource.Extension)' == '.rmf2'" />
     </ItemGroup>
     <ItemGroup>
-      <AdditionalFiles Include="@(TranslationMf2->'%(FullPath)')" RunicTranslationKind="Mf2" />
+      <AdditionalFiles Include="@(RunicTranslationMf2->'%(FullPath)')" RunicTranslationKind="Mf2" />
     </ItemGroup>
   </Target>
 
@@ -69,11 +96,11 @@
           DependsOnTargets="_RunicTranslationsDiscoverTranslationSources"
           Returns="@(_TranslationsXamlCatalogSource)">
     <PropertyGroup>
-      <_TranslationsXamlCatalogProject>@(TranslationProject->'%(FullPath)')</_TranslationsXamlCatalogProject>
+      <_TranslationsXamlCatalogProject>@(RunicTranslationProject->'%(FullPath)')</_TranslationsXamlCatalogProject>
     </PropertyGroup>
-    <ItemGroup Condition="'@(TranslationProject->Count())' == '1'">
+    <ItemGroup Condition="'@(RunicTranslationProject->Count())' == '1'">
       <_TranslationsXamlCatalogSource Include="$(_TranslationsXamlCatalogProject)" RunicTranslationKind="XamlCatalogProject" />
-      <_TranslationsXamlCatalogSource Include="@(TranslationMf2->'%(FullPath)')" RunicTranslationKind="XamlCatalogSource"
+      <_TranslationsXamlCatalogSource Include="@(RunicTranslationMf2->'%(FullPath)')" RunicTranslationKind="XamlCatalogSource"
                                       RunicTranslationProject="$(_TranslationsXamlCatalogProject)" />
     </ItemGroup>
   </Target>
@@ -84,10 +111,10 @@
   <Target Name="_RunicTranslationsCollectReferencedXamlCatalogs"
           DependsOnTargets="_RunicTranslationsDiscoverTranslationSources;PrepareProjectReferences"
           BeforeTargets="GenerateMSBuildEditorConfigFileShouldRun;CoreCompile"
-          Condition="'$(TranslationsValidateXaml)' != 'false' and '$(TranslationsXamlReferencedCatalogs)' != 'false'">
+          Condition="'$(RunicTranslationsValidateXaml)' != 'false' and '$(RunicTranslationsXamlReferencedCatalogs)' != 'false'">
     <PropertyGroup>
       <_TranslationsHasXaml>false</_TranslationsHasXaml>
-      <_TranslationsHasXaml Condition="'@(TranslationXaml)' != ''">true</_TranslationsHasXaml>
+      <_TranslationsHasXaml Condition="'@(RunicTranslationXaml)' != ''">true</_TranslationsHasXaml>
     </PropertyGroup>
     <MSBuild Projects="@(_MSBuildProjectReferenceExistent)"
              Targets="RunicTranslationsGetXamlCatalogSources"
@@ -108,36 +135,36 @@
           DependsOnTargets="_RunicTranslationsDiscoverTranslationSources"
           BeforeTargets="CoreCompile;RunicTranslationsGenerateTranslationArtifacts">
     <ItemGroup>
-      <_TranslationsCheckedSource Include="@(TranslationProject);@(TranslationMf2)" />
+      <_TranslationsCheckedSource Include="@(RunicTranslationProject);@(RunicTranslationMf2)" />
       <_TranslationsCheckedDirectory Include="@(_TranslationsCheckedSource->'%(RootDir)%(Directory)')" />
     </ItemGroup>
-    <Error Condition="Exists('%(_TranslationsCheckedSource.Identity)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('%(_TranslationsCheckedSource.Identity)')))), 1024)) != 0"
-           Text="RTR0020: Translation source '%(_TranslationsCheckedSource.Identity)' must not be a symbolic link or reparse point." />
-    <Error Condition="Exists('%(_TranslationsCheckedDirectory.Identity)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('%(_TranslationsCheckedDirectory.Identity)')))), 1024)) != 0"
-           Text="RTR0020: Translation source directory '%(_TranslationsCheckedDirectory.Identity)' must not be a symbolic link or reparse point." />
+    <Error Condition="Exists('%(_TranslationsCheckedSource.Identity)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('%(_TranslationsCheckedSource.Identity)')))), 1024)) != 0" Code="RTR0020" HelpKeyword="RTR0020"
+           Text="Translation source '%(_TranslationsCheckedSource.Identity)' must not be a symbolic link or reparse point." />
+    <Error Condition="Exists('%(_TranslationsCheckedDirectory.Identity)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('%(_TranslationsCheckedDirectory.Identity)')))), 1024)) != 0" Code="RTR0020" HelpKeyword="RTR0020"
+           Text="Translation source directory '%(_TranslationsCheckedDirectory.Identity)' must not be a symbolic link or reparse point." />
   </Target>
 
   <Target Name="_RunicTranslationsValidateTranslationsOutputPath">
     <!-- Defer defaults until target execution: some SDKs finalize IntermediateOutputPath late. -->
     <PropertyGroup>
-      <TranslationsOutputPath Condition="'$(TranslationsOutputPath)' == '' and '$(TranslationsWebOutputPath)' != ''">$(TranslationsWebOutputPath)</TranslationsOutputPath>
-      <TranslationsOutputPath Condition="'$(TranslationsOutputPath)' == ''">$(IntermediateOutputPath)translations</TranslationsOutputPath>
-      <TranslationsWebOutputPath Condition="'$(TranslationsWebOutputPath)' == ''">$(TranslationsOutputPath)</TranslationsWebOutputPath>
-      <TranslationsOutputStamp Condition="'$(TranslationsOutputStamp)' == ''">$(TranslationsOutputPath)\.generate.stamp</TranslationsOutputStamp>
+      <RunicTranslationsOutputPath Condition="'$(RunicTranslationsOutputPath)' == '' and '$(RunicTranslationsWebOutputPath)' != ''">$(RunicTranslationsWebOutputPath)</RunicTranslationsOutputPath>
+      <RunicTranslationsOutputPath Condition="'$(RunicTranslationsOutputPath)' == ''">$(IntermediateOutputPath)translations</RunicTranslationsOutputPath>
+      <RunicTranslationsWebOutputPath Condition="'$(RunicTranslationsWebOutputPath)' == ''">$(RunicTranslationsOutputPath)</RunicTranslationsWebOutputPath>
+      <RunicTranslationsOutputStamp Condition="'$(RunicTranslationsOutputStamp)' == ''">$(RunicTranslationsOutputPath)\.generate.stamp</RunicTranslationsOutputStamp>
     </PropertyGroup>
-    <Error Condition="'$(IntermediateOutputPath)' == ''"
-           Text="RTR0020: IntermediateOutputPath must be set before translation artifacts can be generated." />
-    <Error Condition="'$(TranslationsOutputPath)' == ''"
-           Text="RTR0020: TranslationsOutputPath must be set before translation artifacts can be generated." />
+    <Error Condition="'$(IntermediateOutputPath)' == ''" Code="RTR0020" HelpKeyword="RTR0020"
+           Text="IntermediateOutputPath must be set before translation artifacts can be generated." />
+    <Error Condition="'$(RunicTranslationsOutputPath)' == ''" Code="RTR0020" HelpKeyword="RTR0020"
+           Text="RunicTranslationsOutputPath must be set before translation artifacts can be generated." />
 
     <PropertyGroup>
       <_TranslationsProjectDirectory>$([MSBuild]::EnsureTrailingSlash('$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)'))'))</_TranslationsProjectDirectory>
       <_TranslationsIntermediateRoot>$([MSBuild]::EnsureTrailingSlash('$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)', '$(_TranslationsProjectDirectory)'))'))</_TranslationsIntermediateRoot>
-      <_TranslationsOutputDirectory>$([System.IO.Path]::TrimEndingDirectorySeparator('$([System.IO.Path]::GetFullPath('$(TranslationsOutputPath)', '$(_TranslationsProjectDirectory)'))'))</_TranslationsOutputDirectory>
+      <_TranslationsOutputDirectory>$([System.IO.Path]::TrimEndingDirectorySeparator('$([System.IO.Path]::GetFullPath('$(RunicTranslationsOutputPath)', '$(_TranslationsProjectDirectory)'))'))</_TranslationsOutputDirectory>
       <_TranslationsOutputRoot>$([MSBuild]::EnsureTrailingSlash('$(_TranslationsOutputDirectory)'))</_TranslationsOutputRoot>
       <_TranslationsRelativeOutput>$([System.IO.Path]::GetRelativePath('$(_TranslationsIntermediateRoot)', '$(_TranslationsOutputRoot)'))</_TranslationsRelativeOutput>
       <_TranslationsParentPrefix>..$([System.IO.Path]::DirectorySeparatorChar)</_TranslationsParentPrefix>
-      <_TranslationsOutputStampPath>$([System.IO.Path]::GetFullPath('$(TranslationsOutputStamp)', '$(_TranslationsProjectDirectory)'))</_TranslationsOutputStampPath>
+      <_TranslationsOutputStampPath>$([System.IO.Path]::GetFullPath('$(RunicTranslationsOutputStamp)', '$(_TranslationsProjectDirectory)'))</_TranslationsOutputStampPath>
       <_TranslationsRelativeStamp>$([System.IO.Path]::GetRelativePath('$(_TranslationsOutputRoot)', '$(_TranslationsOutputStampPath)'))</_TranslationsRelativeStamp>
       <_TranslationsGenerationStatePath>$(_TranslationsOutputRoot).generate.inputs</_TranslationsGenerationStatePath>
       <_TranslationsGenerationInventoryPath>$(_TranslationsOutputRoot).generate.outputs</_TranslationsGenerationInventoryPath>
@@ -146,14 +173,14 @@
       <_TranslationsStagingRoot>$([MSBuild]::EnsureTrailingSlash('$(_TranslationsStagingDirectory)'))</_TranslationsStagingRoot>
     </PropertyGroup>
 
-    <Error Condition="$([System.IO.Path]::IsPathRooted('$(_TranslationsRelativeOutput)')) or '$(_TranslationsRelativeOutput)' == '.' or '$(_TranslationsRelativeOutput)' == '..' or $([System.String]::Copy('$(_TranslationsRelativeOutput)').StartsWith('$(_TranslationsParentPrefix)'))"
-           Text="RTR0020: TranslationsOutputPath '$(_TranslationsOutputRoot)' must resolve beneath IntermediateOutputPath '$(_TranslationsIntermediateRoot)'." />
-    <Error Condition="$([System.IO.Path]::IsPathRooted('$(_TranslationsRelativeStamp)')) or '$(_TranslationsRelativeStamp)' == '.' or '$(_TranslationsRelativeStamp)' == '..' or $([System.String]::Copy('$(_TranslationsRelativeStamp)').StartsWith('$(_TranslationsParentPrefix)'))"
-           Text="RTR0020: TranslationsOutputStamp '$(_TranslationsOutputStampPath)' must resolve beneath TranslationsOutputPath '$(_TranslationsOutputRoot)'." />
-    <Error Condition="Exists('$(_TranslationsOutputDirectory)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('$(_TranslationsOutputDirectory)')))), 1024)) != 0"
-           Text="RTR0020: TranslationsOutputPath '$(_TranslationsOutputDirectory)' must not be a symbolic link, junction, or other reparse point." />
-    <Error Condition="Exists('$(_TranslationsStagingDirectory)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('$(_TranslationsStagingDirectory)')))), 1024)) != 0"
-           Text="RTR0020: The private translation staging directory must not be a symbolic link, junction, or other reparse point." />
+    <Error Condition="$([System.IO.Path]::IsPathRooted('$(_TranslationsRelativeOutput)')) or '$(_TranslationsRelativeOutput)' == '.' or '$(_TranslationsRelativeOutput)' == '..' or $([System.String]::Copy('$(_TranslationsRelativeOutput)').StartsWith('$(_TranslationsParentPrefix)'))" Code="RTR0020" HelpKeyword="RTR0020"
+           Text="RunicTranslationsOutputPath '$(_TranslationsOutputRoot)' must resolve beneath IntermediateOutputPath '$(_TranslationsIntermediateRoot)'." />
+    <Error Condition="$([System.IO.Path]::IsPathRooted('$(_TranslationsRelativeStamp)')) or '$(_TranslationsRelativeStamp)' == '.' or '$(_TranslationsRelativeStamp)' == '..' or $([System.String]::Copy('$(_TranslationsRelativeStamp)').StartsWith('$(_TranslationsParentPrefix)'))" Code="RTR0020" HelpKeyword="RTR0020"
+           Text="RunicTranslationsOutputStamp '$(_TranslationsOutputStampPath)' must resolve beneath RunicTranslationsOutputPath '$(_TranslationsOutputRoot)'." />
+    <Error Condition="Exists('$(_TranslationsOutputDirectory)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('$(_TranslationsOutputDirectory)')))), 1024)) != 0" Code="RTR0020" HelpKeyword="RTR0020"
+           Text="RunicTranslationsOutputPath '$(_TranslationsOutputDirectory)' must not be a symbolic link, junction, or other reparse point." />
+    <Error Condition="Exists('$(_TranslationsStagingDirectory)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('$(_TranslationsStagingDirectory)')))), 1024)) != 0" Code="RTR0020" HelpKeyword="RTR0020"
+           Text="The private translation staging directory must not be a symbolic link, junction, or other reparse point." />
   </Target>
 
   <Target Name="_RunicTranslationsReadAndValidateTranslationsInventory"
@@ -171,8 +198,8 @@
       <_TranslationsUnsafeInventoryEntry Include="@(_TranslationsOwnedInventoryEntry)"
                                           Condition="'%(_OwnedRelativePath)' == '.' or '%(_OwnedRelativePath)' == '..' or $([System.IO.Path]::IsPathRooted('%(_OwnedRelativePath)')) or $([System.String]::Copy('%(_OwnedRelativePath)').StartsWith('$(_TranslationsParentPrefix)'))" />
     </ItemGroup>
-    <Error Condition="'@(_TranslationsUnsafeInventoryEntry)' != ''"
-           Text="RTR0020: The translation output inventory contains a path that is not a direct child of TranslationsOutputPath; the operation stopped before deleting files." />
+    <Error Condition="'@(_TranslationsUnsafeInventoryEntry)' != ''" Code="RTR0020" HelpKeyword="RTR0020"
+           Text="The translation output inventory contains a path that is not a direct child of RunicTranslationsOutputPath; the operation stopped before deleting files." />
   </Target>
 
   <Target Name="_RunicTranslationsPrepareTranslationsGeneration"
@@ -186,20 +213,17 @@
     </ReadLinesFromFile>
     <PropertyGroup>
       <_TranslationsEmitArguments></_TranslationsEmitArguments>
-      <_TranslationsEmitArguments Condition="'$(TranslationsEmitJson)' == 'true'">$(_TranslationsEmitArguments) --emit-json</_TranslationsEmitArguments>
-      <_TranslationsEmitArguments Condition="'$(TranslationsEmitTypeScript)' == 'true'">$(_TranslationsEmitArguments) --emit-typescript</_TranslationsEmitArguments>
-      <_TranslationsEmitArguments Condition="'$(TranslationsEmitTemplateManifest)' == 'true'">$(_TranslationsEmitArguments) --emit-template-manifest</_TranslationsEmitArguments>
-      <_TranslationsEmitArguments Condition="'$(TranslationsEmitEsm)' == 'true'">$(_TranslationsEmitArguments) --emit-esm</_TranslationsEmitArguments>
-      <_TranslationsEmitArguments Condition="'$(TranslationsEmitCpp)' == 'true'">$(_TranslationsEmitArguments) --emit-cpp</_TranslationsEmitArguments>
-      <_TranslationsEmitArguments Condition="'$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true'"> --emit-json --emit-esm</_TranslationsEmitArguments>
+      <_TranslationsEmitArguments Condition="'$(RunicTranslationsEmitJson)' == 'true'">$(_TranslationsEmitArguments) --emit-json</_TranslationsEmitArguments>
+      <_TranslationsEmitArguments Condition="'$(RunicTranslationsEmitEsm)' == 'true'">$(_TranslationsEmitArguments) --emit-esm</_TranslationsEmitArguments>
+      <_TranslationsEmitArguments Condition="'$(RunicTranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true'"> --emit-json --emit-esm</_TranslationsEmitArguments>
     </PropertyGroup>
     <ItemGroup>
-      <_TranslationsDesiredStateLine Include="tool-command=$(TranslationsToolCommand)" />
+      <_TranslationsDesiredStateLine Include="tool-command=$(RunicTranslationsToolCommand)" />
       <_TranslationsDesiredStateLine Include="emit-arguments=$(_TranslationsEmitArguments)" />
-      <_TranslationsDesiredStateLine Include="additional-arguments=$(TranslationsToolAdditionalArguments)" />
+      <_TranslationsDesiredStateLine Include="additional-arguments=$(RunicTranslationsToolAdditionalArguments)" />
       <_TranslationsDesiredStateLine Include="output=$(_TranslationsOutputDirectory)" />
-      <_TranslationsDesiredStateLine Include="@(TranslationProject->'project=%(FullPath)')" />
-      <_TranslationsDesiredStateLine Include="@(TranslationMf2->'mf2=%(FullPath)')" />
+      <_TranslationsDesiredStateLine Include="@(RunicTranslationProject->'project=%(FullPath)')" />
+      <_TranslationsDesiredStateLine Include="@(RunicTranslationMf2->'mf2=%(FullPath)')" />
     </ItemGroup>
     <WriteLinesToFile File="$(_TranslationsGenerationStatePath)"
                       Lines="@(_TranslationsDesiredStateLine)"
@@ -213,15 +237,12 @@
     <ItemGroup>
       <_TranslationsDesiredResponseLine Include="generate" />
       <_TranslationsDesiredResponseLine Include="--project" />
-      <_TranslationsDesiredResponseLine Include="@(TranslationProject->'&quot;%(FullPath)&quot;')" />
+      <_TranslationsDesiredResponseLine Include="@(RunicTranslationProject->'&quot;%(FullPath)&quot;')" />
       <_TranslationsDesiredResponseLine Include="--output" />
       <_TranslationsDesiredResponseLine Include="&quot;$(_TranslationsStagingDirectory)&quot;" />
-      <_TranslationsDesiredResponseLine Include="--emit-json" Condition="'$(TranslationsEmitJson)' == 'true' or ('$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
-      <_TranslationsDesiredResponseLine Include="--emit-typescript" Condition="'$(TranslationsEmitTypeScript)' == 'true'" />
-      <_TranslationsDesiredResponseLine Include="--emit-template-manifest" Condition="'$(TranslationsEmitTemplateManifest)' == 'true'" />
-      <_TranslationsDesiredResponseLine Include="--emit-esm" Condition="'$(TranslationsEmitEsm)' == 'true' or ('$(TranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
-      <_TranslationsDesiredResponseLine Include="--emit-cpp" Condition="'$(TranslationsEmitCpp)' == 'true'" />
-      <_TranslationsDesiredResponseLine Include="$(TranslationsToolAdditionalArguments)" Condition="'$(TranslationsToolAdditionalArguments)' != ''" />
+      <_TranslationsDesiredResponseLine Include="--emit-json" Condition="'$(RunicTranslationsEmitJson)' == 'true' or ('$(RunicTranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
+      <_TranslationsDesiredResponseLine Include="--emit-esm" Condition="'$(RunicTranslationsEmitEsm)' == 'true' or ('$(RunicTranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
+      <_TranslationsDesiredResponseLine Include="$(RunicTranslationsToolAdditionalArguments)" Condition="'$(RunicTranslationsToolAdditionalArguments)' != ''" />
       <_TranslationsMissingArtifact Include="@(_TranslationsOwnedInventoryEntry)"
                                      Condition="!Exists('%(_OwnedFullPath)')" />
       <_TranslationsExistingArtifact Include="@(_TranslationsOwnedInventoryEntry)"
@@ -240,14 +261,14 @@
   <Target Name="RunicTranslationsGenerateTranslationArtifacts"
           BeforeTargets="BeforeCompile"
           DependsOnTargets="_RunicTranslationsPrepareTranslationsGeneration;_RunicTranslationsGenerateTranslationArtifactsCore"
-          Condition="'$(_TranslationsGenerationEnabled)' == 'true' and '@(TranslationProject)' != ''" />
+          Condition="'$(_TranslationsGenerationEnabled)' == 'true' and '@(RunicTranslationProject)' != ''" />
 
   <!-- This target is reached only after deferred path defaults and generation state exist. -->
   <Target Name="_RunicTranslationsGenerateTranslationArtifactsCore"
-          Inputs="@(TranslationProject);@(TranslationMf2);@(TranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
-          Outputs="$(TranslationsOutputStamp)">
-    <Error Condition="'@(TranslationProject->Count())' &gt; '1'"
-           Text="RTR0002: At most one TranslationProject item is supported." />
+          Inputs="@(RunicTranslationProject);@(RunicTranslationMf2);@(RunicTranslationsToolInput);@(_TranslationsExistingArtifact);$(MSBuildProjectFullPath);$(_TranslationsBuildTargetsPath);$(_TranslationsGenerationStatePath);$(_TranslationsResponseFilePath)"
+          Outputs="$(RunicTranslationsOutputStamp)">
+    <Error Condition="'@(RunicTranslationProject->Count())' &gt; '1'" Code="RTR0002" HelpKeyword="RTR0002"
+           Text="At most one RunicTranslationProject item is supported." />
 
     <!-- In a C# build the source generator reports the same compilation diagnostics, with their
          help links, during CoreCompile. The tool then omits them so each appears once, and a
@@ -259,7 +280,7 @@
       <_TranslationsToolExitCode>0</_TranslationsToolExitCode>
     </PropertyGroup>
     <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
-          Command="$(TranslationsToolCommand) &quot;@$(_TranslationsResponseFilePath)&quot;"
+          Command="$(RunicTranslationsToolCommand) &quot;@$(_TranslationsResponseFilePath)&quot;"
           EnvironmentVariables="$(_TranslationsToolEnvironment)"
           ConsoleToMSBuild="true"
           IgnoreExitCode="true">
@@ -303,7 +324,7 @@
   <Target Name="_RunicTranslationsVerifyDeferredFailure"
           AfterTargets="CoreCompile"
           Condition="'$(_TranslationsToolExitCode)' == '2' and '$(_TranslationsGeneratorReportsDiagnostics)' == 'true'">
-    <Error Text="The Runic Translations tool reported translation errors; run 'runic-translations validate --project @(TranslationProject->'%(RootDir)%(Directory)')' for details." />
+    <Error Text="The Runic Translations tool reported translation errors; run 'runic-translations validate --project @(RunicTranslationProject->'%(RootDir)%(Directory)')' for details." />
   </Target>
 
   <Target Name="RunicTranslationsCollectTranslationArtifacts"
@@ -314,7 +335,7 @@
                                      Condition="'@(_TranslationsGeneratedArtifact)' == '' and Exists('%(_TranslationsExistingArtifact.Identity)')" />
       <_TranslationsCurrentArtifact Include="@(_TranslationsGeneratedArtifact)"
                                      Condition="Exists('%(_TranslationsGeneratedArtifact.Identity)')" />
-      <TranslationsGeneratedFile Include="@(_TranslationsCurrentArtifact)" />
+      <RunicTranslationsGeneratedFile Include="@(_TranslationsCurrentArtifact)" />
     </ItemGroup>
   </Target>
 

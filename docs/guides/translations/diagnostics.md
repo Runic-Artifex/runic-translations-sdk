@@ -324,7 +324,7 @@ Generated output path is invalid. The `runic-translations` tool and MSBuild
 report it when a generated output path is invalid or escapes the output root,
 or when a translation source, the output directory or the staging directory is
 a symbolic link or reparse point. Keep generated paths inside the output root
-(for MSBuild, `TranslationsOutputPath` beneath `IntermediateOutputPath`) and
+(for MSBuild, `RunicTranslationsOutputPath` beneath `IntermediateOutputPath`) and
 replace links with real files or directories.
 
 ## RTR0023
@@ -343,11 +343,11 @@ element, or a leaf that starts or ends with whitespace) is
 
 ## RTR0080
 
-Translation XAML declaration is invalid. The optional XAML validator found malformed XML, an invalid Message declaration (missing/duplicate Key or properties), or a catalog assertion that names neither the local TranslationProject nor a directly referenced project's catalog. Fix the declaration. External catalogs are not checked: remove the assertion, or set `TranslationsValidateXaml="false"` on the file's `Page` or `TranslationXaml` item to skip the file. Runtime-valued keys and sources are allowed; they are not evaluated during the build.
+Translation XAML declaration is invalid. The optional XAML validator found malformed XML, an invalid Message declaration (missing/duplicate Key or properties), or a catalog assertion that names neither the local RunicTranslationProject nor a directly referenced project's catalog. Fix the declaration. External catalogs are not checked: remove the assertion, or set `RunicTranslationsValidateXaml="false"` on the file's `Page` or `RunicTranslationXaml` item to skip the file. Runtime-valued keys and sources are allowed; they are not evaluated during the build.
 
 ## RTR0081
 
-Translation XAML message key is unknown. A static key does not exist on the generated readable surface of the catalog the file is checked against. The message suggests the closest readable key when one differs only in case, in `.`/`-` separators or by a few characters. Use the flattened readable name (for example, `application_title`), including its exact case. Encoded-only reserved names are not available to Message. A file without its own catalog assertion is checked against `TranslationsXamlCatalog`; if its source is inherited at run time from another file, an `App.xaml` style or code-behind, skip it with `<Page Update="Views/OrderSummary.xaml" TranslationsValidateXaml="false" />`. Design-time (`mc:Ignorable`) and `mc:AlternateContent` content is not checked.
+Translation XAML message key is unknown. A static key does not exist on the generated readable surface of the catalog the file is checked against. The message suggests the closest readable key when one differs only in case, in `.`/`-` separators or by a few characters. Use the flattened readable name (for example, `application_title`), including its exact case. Encoded-only reserved names are not available to Message. A file without its own catalog assertion is checked against `RunicTranslationsXamlCatalog`; if its source is inherited at run time from another file, an `App.xaml` style or code-behind, skip it with `<Page Update="Views/OrderSummary.xaml" RunicTranslationsValidateXaml="false" />`. Design-time (`mc:Ignorable`) and `mc:AlternateContent` content is not checked.
 
 ## RTR0082
 
@@ -372,13 +372,33 @@ A message with a single input can keep `Arg0`. To keep positional bindings you h
 
 ## RTR0085
 
-Translation XAML keys under an explicit source are not checked. Static keys are checked against `TranslationsXamlCatalog` only where that catalog applies. An explicit source may select another catalog at run time, so keys under it are skipped, and this information is reported once at the source's declaration with the first skipped key. A `Source=` on a `Message` affects only that message. An attached `rt:TranslationProperties.Source` affects its element's content, and also the file's templates, styles and resources, which may be instantiated under it. A `Setter` for `TranslationProperties.Source` can apply to any element, so it affects the whole file. If the source provides the local catalog, assert it for the file to check every key, including those with an explicit source:
+Translation XAML keys under an explicit source are not checked. Static keys are checked against `RunicTranslationsXamlCatalog` only where that catalog applies. An explicit source may select another catalog at run time, so keys under it are skipped, and this information is reported once at the source's declaration with the first skipped key. A `Source=` on a `Message` affects only that message. An attached `rt:TranslationProperties.Source` affects its element's content, and also the file's templates, styles and resources, which may be instantiated under it. A `Setter` for `TranslationProperties.Source` can apply to any element, so it affects the whole file. If the source provides the local catalog, assert it for the file to check every key, including those with an explicit source:
 
 ```xml
 <Page Update="Views/Checkout.xaml" Catalog="app" />
 ```
 
 Keys of another catalog cannot be checked by the build; the WPF adapter still checks them when the XAML loads. Informational diagnostics appear in the IDE's error list but not in command-line build output; to see them there, raise the severity with `dotnet_diagnostic.RTR0085.severity = warning` in `.editorconfig` or a global analyzer config.
+
+## RTR0086
+
+An MSBuild name of `Runic.Translations.Build` was renamed or removed. The build
+fails instead of ignoring the setting. Since 0.8 every public property, item and
+metadata name starts with `Runic`:
+
+| Old name | New name |
+| --- | --- |
+| `TranslationsGenerateOnBuild`, `TranslationsEmitJson`, `TranslationsEmitEsm` | `RunicTranslationsGenerateOnBuild`, `RunicTranslationsEmitJson`, `RunicTranslationsEmitEsm` |
+| `TranslationsOutputPath`, `TranslationsOutputStamp`, `TranslationsWebOutputPath` | `RunicTranslationsOutputPath`, `RunicTranslationsOutputStamp`, `RunicTranslationsWebOutputPath` |
+| `TranslationsToolCommand`, `TranslationsToolAdditionalArguments` | `RunicTranslationsToolCommand`, `RunicTranslationsToolAdditionalArguments` |
+| `TranslationsXamlCatalog`, `TranslationsXamlReferencedCatalogs`, `TranslationsValidateXaml` (property and item metadata) | `RunicTranslationsXamlCatalog`, `RunicTranslationsXamlReferencedCatalogs`, `RunicTranslationsValidateXaml` |
+| items `TranslationProject`, `TranslationMf2`, `TranslationXaml`, `TranslationsToolInput` | `RunicTranslationProject`, `RunicTranslationMf2`, `RunicTranslationXaml`, `RunicTranslationsToolInput` |
+
+`TranslationsEmitTypeScript`, `TranslationsEmitTemplateManifest` and
+`TranslationsEmitCpp` were removed: they selected emitters that do not exist.
+
+**Fix:** rename the property, item or metadata as the message says, or delete a
+removed property.
 
 ## runic-translations tool codes
 

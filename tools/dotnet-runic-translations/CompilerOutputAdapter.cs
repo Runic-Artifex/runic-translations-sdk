@@ -12,11 +12,6 @@ internal static class CompilerOutputAdapter
     {
         ArgumentNullException.ThrowIfNull(project);
         if (emission == ToolEmission.None) emission = ToolEmission.CSharp | ToolEmission.Json | ToolEmission.Esm;
-        ToolEmission unsupported = emission & (ToolEmission.TypeScript | ToolEmission.TemplateManifest | ToolEmission.Cpp);
-        if (unsupported != ToolEmission.None)
-            throw new ToolDiagnosticException("RTR0065: the semantic translation contract does not support " +
-                UnsupportedSwitch(unsupported) + ". Use --emit-csharp, --emit-json, or --emit-esm.");
-
         var outputs = new List<TranslationGeneratedOutput>();
         if ((emission & ToolEmission.CSharp) != 0)
         {
@@ -40,12 +35,5 @@ internal static class CompilerOutputAdapter
         return ArtifactFiles.Normalize(outputs
             .Select(static output => new ToolArtifact(output.RelativePath, output.GetUtf8Bytes()))
             .ToArray());
-    }
-
-    private static string UnsupportedSwitch(ToolEmission emission)
-    {
-        if ((emission & ToolEmission.TypeScript) != 0) return "--emit-typescript";
-        if ((emission & ToolEmission.TemplateManifest) != 0) return "--emit-template-manifest";
-        return "--emit-cpp";
     }
 }

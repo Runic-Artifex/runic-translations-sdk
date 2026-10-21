@@ -15,7 +15,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The frontend's catalog: one set of translations for the page and this process. -->
-    <TranslationProject Include="../Frontend/translations/runic.json" />
+    <RunicTranslationProject Include="../Frontend/translations/runic.json" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" />

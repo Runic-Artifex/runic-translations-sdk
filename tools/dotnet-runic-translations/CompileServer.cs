@@ -165,10 +165,7 @@ internal sealed class CompileServer
     {
         "csharp" => ToolEmission.CSharp,
         "json" => ToolEmission.Json,
-        "typescript" => ToolEmission.TypeScript,
-        "template-manifest" => ToolEmission.TemplateManifest,
         "esm" => ToolEmission.Esm,
-        "cpp" => ToolEmission.Cpp,
         _ => throw new FormatException($"unknown output group '{name}'."),
     };
 

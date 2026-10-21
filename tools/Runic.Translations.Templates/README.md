@@ -72,9 +72,11 @@ plugin's manifest mode; the build then runs the pinned local tool. A web app tha
 owns its own translations uses the plugin's project mode instead and needs no
 build output from this project.
 
-The camelCase options of earlier previews (`--defaultLocale`, `--className`,
-`--packageVersion`) still work as hidden aliases; prefer the kebab-case names,
-which match the other Runic templates.
+The options use kebab-case, like the other Runic templates; the camelCase
+aliases of earlier releases (`--defaultLocale`, `--className`,
+`--packageVersion`) were removed. `--locales` takes a comma-separated list,
+unlike `runic-translations init --locale`, which is repeatable and accepts
+`tag:fallback`, because `dotnet new` cannot repeat an option.
 
 ## Add catalog files to an existing project
 

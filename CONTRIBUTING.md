@@ -20,7 +20,7 @@ When a `--check` command reports a stale file, run the same script without `--ch
 
 `bun run verify-editor-packed` packs the Translations packages under a local-only version (`<version>.editor-packed`), builds the editor against them with `-p:RunicEditorUsePackedTranslations=true`, and checks that NuGet resolved them from `artifacts/packages/nuget`. It removes that version from the NuGet package cache afterwards and leaves the editor restored in packed mode; the next `bun run build` restores project references again. CI also runs the hosted E2E against this packed build.
 
-Packed mode is driven only by this script: it installs `dotnet-runic-translations` from the local feed into `artifacts/editor-packed/tool` and passes it as `TranslationsToolCommand`, so there is no `.config/dotnet-tools.json` and a plain `dotnet build -p:RunicEditorUsePackedTranslations=true` is not supported. Only the NuGet packages are tested in packed form. The editor frontend keeps consuming the npm Translations packages through `workspace:*` links.
+Packed mode is driven only by this script: it installs `dotnet-runic-translations` from the local feed into `artifacts/editor-packed/tool` and passes it as `RunicTranslationsToolCommand`, so there is no `.config/dotnet-tools.json` and a plain `dotnet build -p:RunicEditorUsePackedTranslations=true` is not supported. Only the NuGet packages are tested in packed form. The editor frontend keeps consuming the npm Translations packages through `workspace:*` links.
 
 The XAML checks can be verified independently with `dotnet run --project
 tests/dotnet/Runic.Translations.Generator.Tests --configuration Release --

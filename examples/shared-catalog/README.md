@@ -8,7 +8,7 @@ notifications: its project names the same `runic.json`, and the build generates
 `DashboardText` for every message in it.
 
 ```xml
-<TranslationProject Include="../Frontend/translations/runic.json" />
+<RunicTranslationProject Include="../Frontend/translations/runic.json" />
 ```
 
 The project builds against this repository's sources. An application uses the

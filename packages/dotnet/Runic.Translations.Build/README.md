@@ -21,7 +21,7 @@ MSBuild items are required:
 
 ```xml
 <PropertyGroup>
-  <TranslationsEmitEsm>true</TranslationsEmitEsm>
+  <RunicTranslationsEmitEsm>true</RunicTranslationsEmitEsm>
 </PropertyGroup>
 ```
 
@@ -37,12 +37,12 @@ and `web-module-manifest-v3.json`; consume it with the Vite adapter.
 
 ## Check WPF XAML at build time
 
-For a WPF project with a local `TranslationProject`, declare the catalog used by
+For a WPF project with a local `RunicTranslationProject`, declare the catalog used by
 its default source (the `catalog` value from `runic.json`):
 
 ```xml
 <PropertyGroup>
-  <TranslationsXamlCatalog>app</TranslationsXamlCatalog>
+  <RunicTranslationsXamlCatalog>app</RunicTranslationsXamlCatalog>
 </PropertyGroup>
 ```
 
@@ -52,7 +52,7 @@ for example a class library that holds the ViewModels and the
 `AppText`, and the build checks the application's XAML against that catalog
 without generating it again. That project must import these build targets as
 well, as it does to generate the catalog. A local catalog takes precedence over a
-referenced catalog with the same ID. Set `TranslationsXamlReferencedCatalogs` to
+referenced catalog with the same ID. Set `RunicTranslationsXamlReferencedCatalogs` to
 `false` to skip the referenced catalogs.
 
 `Page` and `ApplicationDefinition` items in `UseWPF=true` projects are scanned
@@ -81,12 +81,12 @@ an explicitly selected file outside WPF, use:
 
 ```xml
 <ItemGroup>
-  <TranslationXaml Include="Views/Checkout.xaml" Catalog="app" />
+  <RunicTranslationXaml Include="Views/Checkout.xaml" Catalog="app" />
 </ItemGroup>
 ```
 
 A per-file `Catalog` assertion also covers explicit sources in that file. The
-catalog must be the local `TranslationProject` catalog or a directly referenced
+catalog must be the local `RunicTranslationProject` catalog or a directly referenced
 project's catalog; external catalogs are not loaded by this check. Without a catalog assertion, only declaration mistakes
 that do not require a catalog (missing Key, duplicate/mixed/gapped inputs) are
 checked. Keys and input names from bindings, resources or `x:Static`, and dynamic
@@ -95,7 +95,7 @@ values remain runtime checks or typed C# checks. This scan does not type-check
 Binding results or arbitrary XAML; WPF continues to compile and load it.
 
 The scan only sees one file at a time. A file without its own source
-declaration is checked against `TranslationsXamlCatalog`, even if at runtime it
+declaration is checked against `RunicTranslationsXamlCatalog`, even if at runtime it
 inherits `TranslationProperties.Source` from a parent in another file (for
 example a `UserControl` placed in a window that selects an external catalog), an
 `App.xaml` style, or code-behind. Skip such a file with item metadata on the
@@ -103,9 +103,9 @@ item that selects it:
 
 ```xml
 <ItemGroup>
-  <Page Update="Views/OrderSummary.xaml" TranslationsValidateXaml="false" />
+  <Page Update="Views/OrderSummary.xaml" RunicTranslationsValidateXaml="false" />
   <!-- or, for an explicitly selected file -->
-  <TranslationXaml Include="Views/Report.xaml" TranslationsValidateXaml="false" />
+  <RunicTranslationXaml Include="Views/Report.xaml" RunicTranslationsValidateXaml="false" />
 </ItemGroup>
 ```
 
@@ -122,12 +122,12 @@ defines with `XmlnsDefinition`, or through the
 `clr-namespace:Runic.Translations.Wpf` mapping, with or without
 `;assembly=Runic.Translations.Wpf`.
 
-Set `TranslationsValidateXaml=false` to disable the optional scan. It requires
+Set `RunicTranslationsValidateXaml=false` to disable the optional scan. It requires
 neither artifact emission nor the CLI tool. The translation sources and XAML
 must be in the same generating C# project; a precompiled catalog from a library
 is an unresolved external catalog. XAML is checked only after the catalog links:
 it is skipped while the translation sources have errors (those are reported
-instead), when the project does not supply exactly one `TranslationProject`, and
+instead), when the project does not supply exactly one `RunicTranslationProject`, and
 when the referenced runtime lacks the readable surface (`RTR0068`). XAML edits
 revalidate only the edited file; they do not regenerate C# sources.
 
@@ -137,27 +137,31 @@ Set one or more of these properties to `true`:
 
 | Property | Output |
 |---|---|
-| `TranslationsEmitJson` | `{catalog}.{locale}.locale-v5.json` plus `asset-manifest-v1` |
-| `TranslationsEmitEsm` | Cohesive ESM-v5 modules, declarations, and `web-module-manifest-v3.json` |
+| `RunicTranslationsEmitJson` | `{catalog}.{locale}.locale-v5.json` plus `asset-manifest-v1` |
+| `RunicTranslationsEmitEsm` | Cohesive ESM-v5 modules, declarations, and `web-module-manifest-v3.json` |
 
-`TranslationsGenerateOnBuild=true` with no individual selection emits the JSON
-and ESM groups; C# remains source-generator owned. The retired
-`TranslationsEmitTypeScript`, `TranslationsEmitTemplateManifest`, and
-`TranslationsEmitCpp` selections are unsupported and fail with `RTR0065`; they
-never activate an older renderer. Generated C# is never written
+`RunicTranslationsGenerateOnBuild=true` with no individual selection emits the JSON
+and ESM groups; C# remains source-generator owned. Generated C# is never written
 to disk by this package—it belongs to the source generator.
+
+Every public property, item and metadata name starts with `Runic`. The names
+from before 0.8 (`TranslationsOutputPath`, `TranslationProject`, …) and the
+retired `TranslationsEmitTypeScript`, `TranslationsEmitTemplateManifest` and
+`TranslationsEmitCpp` selections fail the build with
+[`RTR0086`](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md#rtr0086),
+which names the replacement.
 
 Choose this package for generated C# and whenever MSBuild owns input classification or non-C# artifact generation. Use the CLI directly when generation is owned by Vite, CI, or another host.
 
 ## Important build behavior
 
-- Discovery follows the declared `TranslationProject` directory, including nondefault paths. Explicit `TranslationMf2` items override corresponding discovery. File membership is recorded in generation state so additions and removals invalidate artifacts.
+- Discovery follows the declared `RunicTranslationProject` directory, including nondefault paths. Explicit `RunicTranslationMf2` items override corresponding discovery. File membership is recorded in generation state so additions and removals invalidate artifacts.
 - The current target accepts exactly one `runic.json` project and either direct `.mf2` messages or recursive grouped `.rmf2` sources. Mixed representations are rejected.
 - The default launcher is the project-local `dotnet tool run runic-translations --`; restore the committed tool manifest before building.
 - Output must resolve beneath `IntermediateOutputPath`. Unsafe paths fail with `RTR0020`.
 - Incremental generation tracks inputs, settings, the tool manifest, declared outputs, and an owned-output inventory.
 - Clean and changed-output reconciliation remove only validated files owned by the integration; unrelated files are preserved.
-- Generated files are exposed as `@(TranslationsGeneratedFile)` and default beneath `$(IntermediateOutputPath)translations`.
+- Generated files are exposed as `@(RunicTranslationsGeneratedFile)` and default beneath `$(IntermediateOutputPath)translations`.
 - Each translation diagnostic appears once, with its help link. In a C# project the source generator reports them during compilation, so the tool run that emits JSON or ESM omits them (it is started with `RUNIC_TRANSLATIONS_OMIT_SOURCE_DIAGNOSTICS=true`), writes no artifacts when they include errors, and leaves the failure to the compilation instead of adding `MSB3073`. In other projects the tool's own `file(line,col): error RTR....` lines are the diagnostics. Any other tool failure is reported as one error naming its exit code.
 
 ## Compatibility and status

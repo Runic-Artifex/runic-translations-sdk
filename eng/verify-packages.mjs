@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
@@ -115,13 +115,22 @@ export async function verifyPackages(version = workspace.version) {
     assert.equal(generatedRunic.code.namespace, "GeneratedTranslations", "Template namespace does not follow --name");
     assert.ok(existsSync(join(directory, "GeneratedTranslations", "obj", "Release", "net10.0", "translations", "app.esm-v5", "web-module-manifest-v3.json")),
       "Template --emit-esm did not emit ESM output");
-    // The camelCase options of earlier previews remain hidden aliases.
-    const legacyItem = join(directory, "legacy-item");
-    mkdirSync(legacyItem);
-    run("dotnet", ["new", "runic-translations", "--output", ".", "--defaultLocale", "de", "--className", "LegacyText", "--locales", "en"], legacyItem,
+    // The item template takes the kebab-case options; the camelCase aliases of earlier releases are gone.
+    const kebabItem = join(directory, "kebab-item");
+    mkdirSync(kebabItem);
+    run("dotnet", ["new", "runic-translations", "--output", ".", "--default-locale", "de", "--class-name", "KebabText", "--locales", "en"], kebabItem,
       { ...environment, DOTNET_CLI_HOME: templateHome });
-    const legacyRunic = JSON.parse(readFileSync(join(legacyItem, "translations", "runic.json"), "utf8"));
-    assert.deepEqual([legacyRunic.baseLocale, legacyRunic.code.className, legacyRunic.locales], ["de", "LegacyText", ["de", "en"]]);
+    const kebabRunic = JSON.parse(readFileSync(join(kebabItem, "translations", "runic.json"), "utf8"));
+    assert.deepEqual([kebabRunic.baseLocale, kebabRunic.code.className, kebabRunic.locales], ["de", "KebabText", ["de", "en"]]);
+    const generatedProjectFile = readFileSync(join(directory, "GeneratedTranslations", "GeneratedTranslations.csproj"), "utf8");
+    assert.ok(generatedProjectFile.includes("<RunicTranslationsEmitEsm>true</RunicTranslationsEmitEsm>") && !/<TranslationsEmitEsm>/.test(generatedProjectFile),
+      "The project template must write the renamed RunicTranslationsEmitEsm property");
+    for (const alias of ["--defaultLocale", "--className", "--packageVersion"]) {
+      const legacyItem = join(directory, `legacy-item${alias}`);
+      mkdirSync(legacyItem);
+      const legacy = spawnSync("dotnet", ["new", "runic-translations", "--output", ".", alias, "x"], { cwd: legacyItem, env: { ...process.env, ...environment, DOTNET_CLI_HOME: templateHome }, encoding: "utf8" });
+      assert.notEqual(legacy.status, 0, `dotnet new accepted the removed alias ${alias}`);
+    }
 
     // Exercise the documented typed API from an application's own library
     // reference. Runic dependencies must still come entirely from the feed.

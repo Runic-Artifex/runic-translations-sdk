@@ -23,11 +23,8 @@ internal enum ToolEmission
     None = 0,
     CSharp = 1,
     Json = 2,
-    TypeScript = 4,
-    TemplateManifest = 8,
-    Esm = 16,
-    Cpp = 32,
-    All = CSharp | Json | TypeScript | TemplateManifest | Esm,
+    Esm = 4,
+    All = CSharp | Json | Esm,
 }
 
 internal sealed record ToolInvocation(

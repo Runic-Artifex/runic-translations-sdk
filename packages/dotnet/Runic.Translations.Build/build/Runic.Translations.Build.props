@@ -1,18 +1,15 @@
 <Project>
   <PropertyGroup>
     <!-- Artifact generation is opt-in. Mapping declared inputs to AdditionalFiles is always enabled. -->
-    <TranslationsGenerateOnBuild Condition="'$(TranslationsGenerateOnBuild)' == ''">false</TranslationsGenerateOnBuild>
-    <TranslationsEmitJson Condition="'$(TranslationsEmitJson)' == ''">false</TranslationsEmitJson>
-    <TranslationsEmitTypeScript Condition="'$(TranslationsEmitTypeScript)' == ''">false</TranslationsEmitTypeScript>
-    <TranslationsEmitTemplateManifest Condition="'$(TranslationsEmitTemplateManifest)' == ''">false</TranslationsEmitTemplateManifest>
-    <TranslationsEmitEsm Condition="'$(TranslationsEmitEsm)' == ''">false</TranslationsEmitEsm>
-    <TranslationsEmitCpp Condition="'$(TranslationsEmitCpp)' == ''">false</TranslationsEmitCpp>
+    <RunicTranslationsGenerateOnBuild Condition="'$(RunicTranslationsGenerateOnBuild)' == ''">false</RunicTranslationsGenerateOnBuild>
+    <RunicTranslationsEmitJson Condition="'$(RunicTranslationsEmitJson)' == ''">false</RunicTranslationsEmitJson>
+    <RunicTranslationsEmitEsm Condition="'$(RunicTranslationsEmitEsm)' == ''">false</RunicTranslationsEmitEsm>
 
     <!-- Keep the launcher replaceable for local tools, pinned tool manifests, and package tests. -->
-    <TranslationsToolCommand Condition="'$(TranslationsToolCommand)' == ''">dotnet tool run runic-translations --</TranslationsToolCommand>
-    <TranslationsToolAdditionalArguments Condition="'$(TranslationsToolAdditionalArguments)' == ''"></TranslationsToolAdditionalArguments>
+    <RunicTranslationsToolCommand Condition="'$(RunicTranslationsToolCommand)' == ''">dotnet tool run runic-translations --</RunicTranslationsToolCommand>
+    <RunicTranslationsToolAdditionalArguments Condition="'$(RunicTranslationsToolAdditionalArguments)' == ''"></RunicTranslationsToolAdditionalArguments>
 
-    <RunicTranslationsBuildPropsImported>true</RunicTranslationsBuildPropsImported>
+    <_RunicTranslationsBuildPropsImported>true</_RunicTranslationsBuildPropsImported>
   </PropertyGroup>
 
   <!-- dotnet tool run resolves manifests from the project directory upward, usually at the repository root. -->
@@ -22,9 +19,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <TranslationsToolInput Include="$(_TranslationsToolManifestDirectory)\.config\dotnet-tools.json"
+    <RunicTranslationsToolInput Include="$(_TranslationsToolManifestDirectory)\.config\dotnet-tools.json"
                            Condition="'$(_TranslationsToolManifestDirectory)' != ''" />
-    <TranslationsToolInput Include="$(_TranslationsBareToolManifestDirectory)\dotnet-tools.json"
+    <RunicTranslationsToolInput Include="$(_TranslationsBareToolManifestDirectory)\dotnet-tools.json"
                            Condition="'$(_TranslationsBareToolManifestDirectory)' != ''" />
   </ItemGroup>
 
