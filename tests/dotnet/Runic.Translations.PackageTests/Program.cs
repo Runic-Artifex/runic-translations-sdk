@@ -158,10 +158,10 @@ internal static class Program
 
         AssertDependencies(runtime, Array.Empty<string>());
         AssertDependencies(commandLine, ["Runic.CommandLine", "Runic.Translations"]);
-        AssertDependencies(tooling, ["Runic.CommandLine"]);
-        // A project that adds only the adapter or the tooling must restore the fixed command-line runtime.
+        AssertDependencies(tooling, Array.Empty<string>());
+        // A project that adds only the adapter must restore the fixed command-line runtime; the tooling has no
+        // Runic.CommandLine dependency (the command plumbing is internal to the tool).
         AssertDependencyFloor(commandLine, "Runic.CommandLine", CommandLineVersion);
-        AssertDependencyFloor(tooling, "Runic.CommandLine", CommandLineVersion);
         AssertDependencies(build, Array.Empty<string>());
         AssertDependencies(wpf, ["Runic.Translations"]);
         AssertDependencies(tool, Array.Empty<string>());
