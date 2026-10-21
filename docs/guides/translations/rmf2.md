@@ -238,7 +238,7 @@ slots do not convert even when their shape matches.
 
 Plain-text conversion is explicit. `br` becomes LF, link labels are retained
 (with optional destination annotation), meaningful icons require a localized
-alternate label, and action labels require `allowActionLabels`. Custom web tags
+alternate label, and action labels require opting in (`AllowActionLabels` in .NET `Rmf2PlainTextOptions`, `allowActionLabels` in ESM). Custom web tags
 with `children`, `omit`, or `lineBreak` policies use those projections without a
 linked string renderer; explicit/alternate-text policies still require an
 adapter. .NET follows the same declared policies and rejects custom

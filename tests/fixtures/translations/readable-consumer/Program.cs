@@ -22,7 +22,7 @@ Require(text.Messages.greeting(name: "Ada") == "Hello Ada", "greeting");
 // `user-name` is not a C# identifier, so that parameter keeps its encoded name.
 Require(text.Messages.profile_badge(r_757365722d6e616d65: "ada") == "Signed in as ada", "badge");
 Require(renderer.ToPlainText(help, new Rmf2PlainTextOptions { AllowActionLabels = true }) == "Read the guide or try again.", "help");
-Require(renderer.ToPlainText(rating, annotateLinkDestinations: true) == "Rated 5 stars by our customers (https://example.test/reviews).", "rating");
+Require(renderer.ToPlainText(rating, new Rmf2PlainTextOptions { AnnotateLinkDestinations = true }) == "Rated 5 stars by our customers (https://example.test/reviews).", "rating");
 
 // The same bound values render the German content; its help text omits the
 // conditional retry slot (min: 0), which stays a required argument in C#.
