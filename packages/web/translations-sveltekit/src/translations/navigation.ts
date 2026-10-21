@@ -1,6 +1,6 @@
 import { afterNavigate, goto } from "$app/navigation";
 import { page } from "$app/state";
-import type { RunicLocaleRouting } from "./routing.js";
+import type { LocaleRouting } from "./routing.js";
 
 type GotoOptions = Parameters<typeof goto>[1];
 
@@ -12,7 +12,7 @@ export interface MutableLocaleSource<Locale extends string = string> {
 /** Call during root layout initialization to keep the component-tree source aligned with the URL. */
 export function synchronizeLocaleWithNavigation<Locale extends string>(
   source: MutableLocaleSource<Locale>,
-  routing: RunicLocaleRouting<Locale>,
+  routing: LocaleRouting<Locale>,
 ): void {
   afterNavigate(({ to }) => {
     if (!to) return;
@@ -26,7 +26,7 @@ export function synchronizeLocaleWithNavigation<Locale extends string>(
 
 /** Creates the async change callback accepted by `createSvelteLocale`/locale context. */
 export function createLocaleNavigation<Locale extends string>(
-  routing: RunicLocaleRouting<Locale>,
+  routing: LocaleRouting<Locale>,
   options: Readonly<{ goto?: typeof goto; getUrl?: () => URL }> = {},
 ): (locale: Locale) => Promise<void> {
   const navigate = options.goto ?? goto;
@@ -36,7 +36,7 @@ export function createLocaleNavigation<Locale extends string>(
 
 export function gotoLocale<Locale extends string>(
   locale: Locale,
-  routing: RunicLocaleRouting<Locale>,
+  routing: LocaleRouting<Locale>,
   options?: GotoOptions,
 ): Promise<void> {
   return goto(routing.canonicalUrl(new URL(page.url.href), locale), options);

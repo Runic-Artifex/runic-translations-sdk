@@ -1,4 +1,4 @@
-import { createRunicLocaleHandle } from "@runic-artifex/translations-sveltekit/translations";
+import { createLocaleHandle } from "@runic-artifex/translations-sveltekit";
 import { routing } from "./lib/i18n.js";
 
-export const handle = createRunicLocaleHandle(routing);
+export const handle = createLocaleHandle(routing);

@@ -1,4 +1,4 @@
-import { createRunicLocaleReroute } from "@runic-artifex/translations-sveltekit/translations";
+import { createLocaleReroute } from "@runic-artifex/translations-sveltekit";
 import { routing } from "./lib/i18n.js";
 
-export const reroute = createRunicLocaleReroute(routing);
+export const reroute = createLocaleReroute(routing);

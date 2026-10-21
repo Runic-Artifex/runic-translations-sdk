@@ -2,7 +2,7 @@
 	import {
 		createLocaleNavigation,
 		synchronizeLocaleWithNavigation
-	} from '@runic-artifex/translations-sveltekit/translations/navigation';
+	} from '@runic-artifex/translations-sveltekit/navigation';
 	import { createLocaleSource } from 'virtual:runic-translations/app/runtime';
 	import { routing } from '#lib/i18n.ts';
 	import { localeContext } from '#lib/locale.ts';

@@ -2,7 +2,7 @@ export type BaseLocalePath = "unprefixed" | "prefixed";
 export type LocaleResolutionStrategy = "url" | "cookie" | "application" | "browser";
 export type LocaleResolutionSource = LocaleResolutionStrategy | "default";
 
-export interface RunicLocaleRoutingOptions<Locale extends string> {
+export interface LocaleRoutingOptions<Locale extends string> {
   readonly locales: readonly Locale[];
   readonly baseLocale: Locale;
   readonly baseLocalePath?: BaseLocalePath;
@@ -30,7 +30,7 @@ export interface LocalizedUrl<Locale extends string> {
   readonly hadLocalePrefix: boolean;
 }
 
-export interface RunicLocaleRouting<Locale extends string> {
+export interface LocaleRouting<Locale extends string> {
   readonly locales: readonly Locale[];
   readonly baseLocale: Locale;
   readonly baseLocalePath: BaseLocalePath;
@@ -47,9 +47,9 @@ export interface RunicLocaleRouting<Locale extends string> {
 
 const defaultResolutionOrder = ["url", "cookie", "application", "browser"] as const;
 
-export function createRunicLocaleRouting<const Locale extends string>(
-  options: RunicLocaleRoutingOptions<Locale>,
-): RunicLocaleRouting<Locale> {
+export function createLocaleRouting<const Locale extends string>(
+  options: LocaleRoutingOptions<Locale>,
+): LocaleRouting<Locale> {
   const locales = [...new Set(options.locales)];
   if (locales.length === 0) throw new Error("At least one supported locale is required.");
   if (!locales.includes(options.baseLocale)) {

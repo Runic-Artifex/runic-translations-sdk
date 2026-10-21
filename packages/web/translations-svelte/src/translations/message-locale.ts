@@ -24,7 +24,7 @@ export type ConfigureLocaleResolver = (resolver: () => string) => () => void;
  * <script lang="ts">
  *   import { m } from "virtual:runic-translations/app";
  *   import { configureLocaleResolver } from "virtual:runic-translations/app/runtime";
- *   import { useMessageLocale } from "@runic-artifex/translations-svelte/translations";
+ *   import { useMessageLocale } from "@runic-artifex/translations-svelte";
  *
  *   const settings = useView(() => ({ connect: connectSettings }));
  *   useMessageLocale(configureLocaleResolver, () => settings.state?.locale ?? "en");

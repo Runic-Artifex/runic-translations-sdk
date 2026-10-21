@@ -74,6 +74,28 @@ jobs:
           name: runic-translations-test-results
           path: artifacts/test-results
           if-no-files-found: ignore
+  node-26:
+    # engines allows Node 24 and 26; the other jobs run Node 24.18.0, this one the npm package tests on Node 26.
+    name: npm packages / Node 26
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.12.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Test the Svelte and SvelteKit packages on Node 26
+        run: |
+          node --version
+          (cd packages/web/translations-svelte && bun run test)
+          bun install --frozen-lockfile
+          (cd packages/web/translations-sveltekit && bun run test)
   inline-browser:
     name: Svelte inline SSR and browser hydration
     runs-on: ubuntu-24.04
@@ -300,7 +322,7 @@ jobs:
   verify:
     name: verify
     if: always()
-    needs: [source-checks, build-and-test, inline-browser, rmf2-document-example, rmf2-native-aot, wpf, editor-e2e, editor-packed, ide-packaging, vsix]
+    needs: [source-checks, build-and-test, node-26, inline-browser, rmf2-document-example, rmf2-native-aot, wpf, editor-e2e, editor-packed, ide-packaging, vsix]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
