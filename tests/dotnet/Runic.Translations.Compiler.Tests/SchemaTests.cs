@@ -81,7 +81,7 @@ internal sealed class SchemaTests
         Array.Sort(paths, StringComparer.Ordinal);
         Assert.True(paths.Length != 0, "No published schemas were found.");
         Assert.Equal(
-            "asset-manifest-v1.schema.json,capabilities-v1.schema.json,external-pack-v5.schema.json,locale-artifact-v5.schema.json,message-ast-v5.schema.json,project-v1.schema.json,web-module-manifest-v3.schema.json",
+            "asset-manifest-v1.schema.json,capabilities-v1.schema.json,external-pack-v5.schema.json,locale-artifact-v5.schema.json,message-ast-v5.schema.json,project-v1.schema.json,translations-serve-v1.schema.json,translations-support-v1.schema.json,translations-tool-v1.schema.json,web-module-manifest-v3.schema.json",
             string.Join(',', Array.ConvertAll(paths, Path.GetFileName)),
             "The published schema set must match the selected translation contract");
         foreach (string path in paths)
