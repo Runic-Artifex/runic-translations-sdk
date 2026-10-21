@@ -1,6 +1,6 @@
-# Runic.Translations.Tooling (preview)
+# Runic.Translations.Tooling
 
-`Runic.Translations.Tooling` is the preview MF2 authoring facade. It owns compiler
+`Runic.Translations.Tooling` is the MF2 authoring facade. It owns compiler
 invocation and interchange, and bundles the
 transactional authoring assembly `Runic.Translations.Authoring` for MF2 project
 creation, mutation, transactions, and editor state. The compiler and
@@ -14,8 +14,9 @@ placeholder contracts, resource metadata, and review state/notes. The compact
 `runic.translations.interchange-review/1` JSON sidecar is the Git-friendly
 authoritative form for review data. Rich selector, formatter, or markup messages and source-layer
 provenance are never silently flattened: export records deterministic loss
-events and import rejects structured units. This is not general XLIFF or MF2
-conformance.
+events and import rejects structured units. Document messages are not exchanged
+through XLIFF; translate them in the `.rmf2` sources or the editor. This is not
+general XLIFF or MF2 conformance.
 
 Compile with `TranslationCompiler.CompileProject` (or the explicit
 `CompileMf2Project` entry point) and pass its `Rmf2ProjectCompilationV5` result

@@ -8,7 +8,7 @@ Run compiled translations in .NET applications with immutable locale snapshots, 
 dotnet add package Runic.Translations --version <VERSION>
 ```
 
-Replace `<VERSION>` with the current preview shown on NuGet. The package targets .NET 10. For generated catalogs, install `Runic.Translations.Build` at the same exact version; it owns the generator, catalog item mapping, and optional non-C# artifacts.
+Replace `<VERSION>` with the current version shown on NuGet. The package targets .NET 10. For generated catalogs, install `Runic.Translations.Build` at the same exact version; it owns the generator, catalog item mapping, and optional non-C# artifacts.
 
 ## Use a generated catalog
 
@@ -43,7 +43,7 @@ profile, and ABI versions fail explicitly.
 
 ## Compatibility and status
 
-This package is a public preview for .NET 10. Preview releases may contain documented breaking API changes. Keep the runtime and generated source on the same Runic Translations release; runtime ABI mismatches fail explicitly.
+This package targets .NET 10. Before 1.0 a minor release may contain breaking changes, each listed with upgrade steps in the release notes (see [Versions before 1.0](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#versions-before-10)). Keep the runtime and generated source on the same Runic Translations release; runtime ABI mismatches fail explicitly.
 
 Generated code and the retained pre-v5 message model use public runtime plumbing such as the `CompiledRmf2*` message model, `TranslationsCompatibility`, `CompiledTextMessage.Rmf2V5` and `TextArgumentFormat.Fixed0`–`Fixed6`/`Percent0`–`Percent4`. These are marked `[EditorBrowsable(Never)]`, so they stay out of completion lists; they are not application API.
 

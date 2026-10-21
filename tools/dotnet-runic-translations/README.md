@@ -9,7 +9,7 @@ dotnet new tool-manifest --output .config
 dotnet tool install dotnet-runic-translations --version <VERSION>
 ```
 
-Replace `<VERSION>` with the current preview shown on NuGet. The tool targets .NET 10. Commit `.config/dotnet-tools.json`, restore it with `dotnet tool restore`, and keep the tool on the same exact release as the runtime, build package, and Vite adapter.
+Replace `<VERSION>` with the current version shown on NuGet. The tool targets .NET 10. Commit `.config/dotnet-tools.json`, restore it with `dotnet tool restore`, and keep the tool on the same exact release as the runtime, build package, and Vite adapter.
 
 ## Validate an MF2 project
 
@@ -172,7 +172,7 @@ diagnostics, such as usage errors. See the
 [diagnostics reference](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md).
 
 The [Translations Editor](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/apps/translations-editor/README.md)
-is built from source; standalone Editor downloads are not part of this preview.
+is built from source; the editor is a separate product with its own releases.
 Its `validate <path>` takes the workspace as a positional argument; the
 equivalent tool command is `runic-translations validate --project <path>`.
 
@@ -191,7 +191,7 @@ Trust model: `serve` has the same authority as the one-shot commands run by the 
 
 ## Compatibility and status
 
-This tool is a public preview for .NET 10. Preview commands and generated output can change with documented migrations. Pin one exact version in the local manifest and coordinate upgrades with all consumers of its generated artifacts.
+This tool targets .NET 10. Before 1.0 a minor release may contain breaking changes, each listed with upgrade steps in the release notes (see [Versions before 1.0](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#versions-before-10)). Pin one exact version in the local manifest and coordinate upgrades with all consumers of its generated artifacts.
 
 - [Vite quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-vite.md)
 - [RMF2 project guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md)

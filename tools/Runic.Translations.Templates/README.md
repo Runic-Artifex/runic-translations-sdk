@@ -8,7 +8,7 @@ Start a compiler-valid Runic Translations RMF2 project or a complete .NET 10 loc
 dotnet new install Runic.Translations.Templates@<VERSION>
 ```
 
-Replace `<VERSION>` with the preview version shown on NuGet. The standalone project targets .NET 10 and pins the Runic Translations runtime, build package, and local tool to that exact release.
+Replace `<VERSION>` with the current version shown on NuGet. The standalone project targets .NET 10 and pins the Runic Translations runtime, build package, and local tool to that exact release.
 
 ## Create a complete project
 
@@ -100,7 +100,7 @@ you need a more customized source layout.
 
 ## Compatibility and status
 
-Template output uses the package version embedded at packing time. If you pass `--package-version`, it must identify one matching release of the runtime, build package, and tool. Preview upgrades may change generated project files or source schemas; review the [RMF2 guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md) before updating an existing project.
+Template output uses the package version embedded at packing time. If you pass `--package-version`, it must identify one matching release of the runtime, build package, and tool. A minor release before 1.0 may change generated project files or source schemas; review the [RMF2 guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md) before updating an existing project.
 
 - [Project template source](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tools/Runic.Translations.Templates/templates/project)
 - [Item template source](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tools/Runic.Translations.Templates/templates/item)

@@ -110,8 +110,8 @@ export function scan(directory, version, source, inventory = workspace) {
 }
 
 // Exactly the two IDE extensions, one per CI artifact directory, with their identities and the
-// version CI stamped for this release (see ide-versions.mjs); VS Code is a pre-release, with the
-// Marketplace "Preview" label, exactly for a preview.
+// version CI stamped for this release (see ide-versions.mjs); VS Code is a pre-release exactly for a
+// -preview.N or -rc.N release and always carries the Marketplace "Preview" label (preview until 2.0).
 export function scanVsix(directory, version) {
   const versions = ideVersions(version);
   assert.deepEqual(readdirSync(directory).sort(), VSIX.map(entry => entry.artifact).sort(), "VSIX directory must contain exactly the IDE extension artifacts");
@@ -126,8 +126,8 @@ export function scanVsix(directory, version) {
     if (format === "vscode") {
       assert.equal(packageVersion, versions.vscode, `${file} bundles package.json version ${packageVersion}, not ${versions.vscode}`);
       assert.equal(preRelease, versions.vscodePreRelease, `${file} ${preRelease ? "is" : "is not"} marked pre-release`);
-      assert.equal(preview, versions.vscodePreRelease, `${file} ${preview ? "has" : "lacks"} the Marketplace Preview flag`);
-      assert.equal(packagePreview, versions.vscodePreRelease, `${file} bundles package.json preview ${packagePreview}`);
+      assert.equal(preview, versions.vscodePreview, `${file} ${preview ? "has" : "lacks"} the Marketplace Preview flag`);
+      assert.equal(packagePreview, versions.vscodePreview, `${file} bundles package.json preview ${packagePreview}`);
     }
     return { name: artifact, file: `${artifact}/${file}`, sha256: sha256(readFileSync(path)), identity };
   });

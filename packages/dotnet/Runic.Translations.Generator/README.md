@@ -79,7 +79,7 @@ Choose `Runic.Translations.Build` for typed C# application APIs and generated we
 
 ## Compatibility and status
 
-The containing Build package is a public preview. It requires a .NET 10 compiler host and emits code against the matching runtime ABI; an incompatible runtime fails explicitly.
+The containing Build package follows the [release rules](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#versions-before-10). It requires a .NET 10 compiler host and emits code against the matching runtime ABI; an incompatible runtime fails explicitly.
 
 - [Generated package consumer](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/dotnet/Runic.Translations.PackageTests)
 - [Generator tests and examples](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/dotnet/Runic.Translations.Generator.Tests)

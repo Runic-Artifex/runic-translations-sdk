@@ -111,15 +111,18 @@ test("each VSIX must carry the version CI stamps for the release", () => {
     expect(check("0.6.0-preview.2", { vscode: { packageVersion: "0.0.1" } })).toThrow("bundles package.json version 0.0.1");
     expect(check("0.6.0-preview.2", { vscode: { preRelease: false } })).toThrow("is not marked pre-release");
     expect(check("0.6.0", { vscode: { preRelease: true } })).toThrow("is marked pre-release");
-    // A final release must not keep the Marketplace "Public Preview" label of a preview.
-    expect(check("0.6.0", { vscode: { preview: true } })).toThrow("has the Marketplace Preview flag");
+    // The extensions are a preview product until 2.0: every release, final or not, keeps the
+    // Marketplace "Public Preview" label, while only a -preview.N or -rc.N release is a pre-release.
+    expect(check("0.8.0")().map(p => p.identity.version)).toEqual(["0.8.1000", "0.8.0.1000"]);
+    expect(check("1.0.0-rc.2")().map(p => p.identity.version)).toEqual(["1.0.502", "1.0.0.502"]);
+    expect(check("1.0.0-rc.2", { vscode: { preRelease: false } })).toThrow("is not marked pre-release");
+    expect(check("0.8.0", { vscode: { preview: false } })).toThrow("lacks the Marketplace Preview flag");
     expect(check("0.6.0-preview.2", { vscode: { preview: false } })).toThrow("lacks the Marketplace Preview flag");
-    expect(check("0.6.0", { vscode: { packagePreview: true } })).toThrow("bundles package.json preview true");
-    expect(check("0.6.0-preview.2", { vscode: { packagePreview: false } })).toThrow("bundles package.json preview false");
+    expect(check("0.8.0", { vscode: { packagePreview: false } })).toThrow("bundles package.json preview false");
     expect(check("0.6.0-preview.2", { visualStudio: { id: "Other" } })).toThrow("declares extension Other");
     expect(check("0.6.0-preview.2", { vscode: { publisher: "someone" } })).toThrow("declares publisher someone");
     check("0.6.0-preview.2");
-    expect(() => scanVsix(vsix, "0.6.0-rc.1")).toThrow("cannot express");
+    expect(() => scanVsix(vsix, "0.6.0-beta.1")).toThrow("cannot express");
   } finally { rmSync(vsix, { recursive: true, force: true }); }
 });
 

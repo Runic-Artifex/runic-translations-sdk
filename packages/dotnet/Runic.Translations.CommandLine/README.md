@@ -1,4 +1,4 @@
-# Runic.Translations.CommandLine (preview)
+# Runic.Translations.CommandLine
 
 `Runic.Translations.CommandLine` translates the help, errors, prompts and
 faults of a [Runic.CommandLine](https://github.com/Runic-Artifex/runic-cli-sdk)

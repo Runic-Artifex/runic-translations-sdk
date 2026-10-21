@@ -12,7 +12,7 @@ dotnet new tool-manifest --output .config
 dotnet tool install dotnet-runic-translations --version <VERSION>
 ```
 
-Replace `<VERSION>` with the current preview shown on NuGet. The package targets .NET 10, bundles the incremental source generator, and takes no `Microsoft.Build` package dependency. The generator needs a Roslyn host on .NET 10, such as `dotnet build` with the .NET 10 SDK; see the [generator notes](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Generator/README.md#install). Keep it, `dotnet-runic-translations`, and `Runic.Translations` on the same exact version.
+Replace `<VERSION>` with the current version shown on NuGet. The package targets .NET 10, bundles the incremental source generator, and takes no `Microsoft.Build` package dependency. The generator needs a Roslyn host on .NET 10, such as `dotnet build` with the .NET 10 SDK; see the [generator notes](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Generator/README.md#install). Keep it, `dotnet-runic-translations`, and `Runic.Translations` on the same exact version.
 
 ## Configure a project
 
@@ -162,7 +162,7 @@ Choose this package for generated C# and whenever MSBuild owns input classificat
 
 ## Compatibility and status
 
-This package is a public preview for .NET 10. Preview targets and properties may change with documented migrations. Use the same release across the package family and regenerate outputs when upgrading.
+This package targets .NET 10. Before 1.0 a minor release may contain breaking changes, each listed with upgrade steps in the release notes (see [Versions before 1.0](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#versions-before-10)). Use the same release across the package family and regenerate outputs when upgrading.
 
 - [Complete project template](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tools/Runic.Translations.Templates/templates/project)
 - [Vite quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-vite.md)

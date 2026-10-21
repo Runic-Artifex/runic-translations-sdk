@@ -1,10 +1,11 @@
 ; Shipped analyzer releases
 ; https://github.com/dotnet/roslyn-analyzers/blob/main/src/Microsoft.CodeAnalysis.Analyzers/ReleaseTrackingAnalyzers.Help.md
 
-; Release headers must be System.Version values, so a preview release maps to a fourth component:
-; Release 0.6.0.1 is 0.6.0-preview.1, and 0.6.0-preview.N is 0.6.0.N. A stable release uses four
-; components ending in a number above every preview of that version, so the final 0.6.0 is
-; 0.6.0.1000 (and 0.6.1 is 0.6.1.1000). Headers then sort in release order.
+; Release headers must be System.Version values with four components, the same mapping as the IDE
+; extension versions (eng/release/ide-versions.mjs): a plain release x.y.z, which every release
+; before 1.0 is (0.8.0 is 0.8.0.1000), ends in 1000; x.y.z-preview.N is x.y.z.N and x.y.z-rc.N is
+; x.y.z.(500 + N). The older headers 0.6.0.N are the former 0.6.0-preview.N releases. Headers
+; then sort in release order.
 
 ## Release 0.6.0.1
 

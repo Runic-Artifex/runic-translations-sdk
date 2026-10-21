@@ -59,13 +59,7 @@ cross-locale contracts, fingerprint/freshness separation and generated names.
 
 ## Compatibility and status
 
-The containing Tooling package is a public preview for .NET 10. Source schemas, normalized message grammar, artifact schemas, and ESM ABI are versioned separately from package SemVer.
-
-The 0.4 preview intentionally replaces the former public
-`TranslationCompilation`/`CompiledTextCatalog` graph with
-`Rmf2ProjectCompilationV5`. That older graph, its analysis API, and its renderer
-hand-off cannot represent the selected semantic contract and are no longer a
-public compatibility surface.
+The containing Tooling package targets .NET 10. Before 1.0 a minor release may contain breaking changes, each listed with upgrade steps in the release notes (see [Versions before 1.0](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#versions-before-10)). Source schemas, normalized message grammar, artifact schemas, and ESM ABI are versioned separately from package SemVer.
 
 - [Compiler API example](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2ProjectV5Tests.cs)
 - [RMF2 project guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md)

@@ -48,7 +48,8 @@ int32 range, default the full int32 range) accept a quoted or unquoted literal
 only when its text matches `0|-?[1-9][0-9]*` and lies within the bounds, so
 `01`, `1.0`, `1e1`, `+1` and `-0` are rejected; non-literal-only integer options
 accept `:integer` inputs. `markup.structure` is reserved and rejected with
-RTR0060.
+RTR0060; it stays reserved in 1.0 for a future explicit per-locale structure
+override.
 Closing-event annotations remain intact. Functional refs are static slot IDs.
 Source slots default to exactly one occurrence per variant. Conditional source
 slots require explicit min/max constraints. Every direct locale must obey those

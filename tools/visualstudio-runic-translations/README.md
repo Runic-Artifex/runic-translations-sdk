@@ -1,6 +1,9 @@
 # Runic MF2 Translations for Visual Studio
 
-Development preview for Visual Studio 2026 (18.x), Windows x64. The manifest
+**Preview** for Visual Studio 2026 (18.x), Windows x64. The extension is a preview
+product until the production language server (2.0): its commands, environment
+variables and the `lsp` protocol it uses are outside the 1.0 compatibility rules and
+may change in a minor release. The manifest
 declares `[18.0,19.0)`. Visual Studio 2022 (17.x) is not supported. The
 in-process API is pinned to 17.14, which 18.x hosts provide. Native evidence
 covers Visual Studio Community 2026 18.8.2; the complete native journey passed
@@ -83,8 +86,9 @@ archive.
 
 The manifest's `Version` is the `|%CurrentProject%;GetRunicVsixVersion|` token. The
 VSSDK build replaces it with the release version of `eng/workspace.json`, mapped to
-`N.N.N.N` like the `AnalyzerReleases` headers: `0.6.0-preview.N` becomes `0.6.0.N`
-and the final `0.6.0` becomes `0.6.0.1000`. `package.py` fails unless the VSIX has
+`N.N.N.N` like the `AnalyzerReleases` headers: the plain `0.8.0` becomes `0.8.0.1000`,
+`1.0.0-preview.N` becomes `1.0.0.N`, `1.0.0-rc.N` becomes `1.0.0.(500 + N)` and the
+final `1.0.0` becomes `1.0.0.1000`. `package.py` fails unless the VSIX has
 that version (`--release-version` checks against another release). Pass
 `/p:RunicIdeReleaseVersion=<version>` to MSBuild to build another version. See
 [IDE extension versions](../../eng/release/README.md#ide-extension-versions). Each

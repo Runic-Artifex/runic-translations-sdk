@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Exact release version, x.y.z-preview.N (1-999) or x.y.z
+        description: Exact release version, a plain x.y.z (every release before 1.0), or x.y.z-preview.N / x.y.z-rc.N (1-499)
         required: true
         type: string
       dry-run:
@@ -56,8 +56,8 @@ jobs:
           version="$VERSION"
           # The IDE extension versions cannot express another prerelease label, so CI never packages one
           # (eng/release/ide-versions.mjs, the same pattern; README "IDE extension versions").
-          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-preview\.[1-9][0-9]{0,2})?$ ]]; then
-            echo "::error::Version '$version' is not x.y.z-preview.N (1 <= N <= 999) or a final x.y.z; IDE extension packaging rejects every other version, so CI cannot have built it."
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(preview|rc)\.([1-9][0-9]?|[1-4][0-9]{2}))?$ ]]; then
+            echo "::error::Version '$version' is not a plain x.y.z, x.y.z-preview.N or x.y.z-rc.N (1 <= N <= 499); IDE extension packaging rejects every other version, so CI cannot have built it."
             exit 1
           fi
           # Also enforces the 65534 component limit and prints the IDE versions this release maps to.

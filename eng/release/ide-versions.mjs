@@ -1,45 +1,50 @@
 // Maps the release version (eng/workspace.json) onto the IDE extension version formats.
 //   bun eng/release/ide-versions.mjs [version]   print the mapping as JSON (default: workspace version)
 //
-// Neither format takes a SemVer prerelease label, so a preview becomes a number that sorts
+// Neither format takes a SemVer prerelease label, so a prerelease becomes a number that sorts
 // below the final release of the same version and above every earlier release:
 //
-//   release           Visual Studio (N.N.N.N)   VS Code (x.y.z)   VS Code pre-release flag
-//   0.6.0-preview.N   0.6.0.N                   0.6.N             yes
-//   0.6.0             0.6.0.1000                0.6.1000          no
-//   0.6.1-preview.N   0.6.1.N                   0.6.(1000 + N)    yes
-//   0.6.1             0.6.1.1000                0.6.2000          no
+//   release           Visual Studio (N.N.N.N)   VS Code (x.y.z)        VS Code pre-release flag
+//   0.8.0             0.8.0.1000                0.8.1000               no
+//   1.0.0-preview.N   1.0.0.N                   1.0.N                  yes
+//   1.0.0-rc.N        1.0.0.(500 + N)           1.0.(500 + N)          yes
+//   1.0.0             1.0.0.1000                1.0.1000               no
+//   1.0.1-rc.N        1.0.1.(500 + N)           1.0.(1500 + N)         yes
 //
-// Visual Studio matches the AnalyzerReleases headers (packages/dotnet/Runic.Translations.Generator):
-// the fourth component is the preview number, or 1000 for the final release. VS Code folds that
-// fourth component into the patch: patch * 1000 + (N or 1000). A final x.y.z is therefore a
-// multiple of 1000 and a preview never is, so a preview can never take the number of a later
-// final release (0.6.N for preview N would collide with the final 0.6.N). Preview numbers run
-// from 1 to 999. Only -preview.N and final versions are supported.
+// Releases before 1.0 are plain x.y.z versions (D026); -preview.N and -rc.N are for previews of a
+// coming version from 1.0 on. Visual Studio matches the AnalyzerReleases headers
+// (packages/dotnet/Runic.Translations.Generator): the fourth component is the preview number, 500 plus
+// the release-candidate number, or 1000 for the final release. VS Code folds that fourth component into
+// the patch: patch * 1000 + revision. A final x.y.z is therefore a multiple of 1000 and a prerelease
+// never is, so a prerelease can never take the number of a later final release. Preview and
+// release-candidate numbers run from 1 to 499, so every preview sorts below every release candidate of
+// the same version. No other prerelease label is supported.
 //
 // Visual Studio reads each version component as a 16-bit System.Version part, so major, minor and
 // patch are limited to 65534 here, in package.py and in the Visual Studio project. The VS Code patch
 // is then at most 65534 * 1000 + 1000 = 65535000, well inside the 32-bit integer the Marketplace
-// keeps per component. The VS Code "preview" field (the Marketplace "Preview" label) follows
-// vscodePreRelease, so a final release is not labelled a preview; package.mjs stamps both.
+// keeps per component. The extensions are a preview product until 2.0 (outside the 1.0 compatibility
+// rules), so every release carries the VS Code "preview" field (the Marketplace "Preview" label),
+// independent of the pre-release flag; package.mjs stamps both.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const RELEASE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-preview\.([1-9]\d{0,2}))?$/;
+const RELEASE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(preview|rc)\.([1-9]\d?|[1-4]\d{2}))?$/;
+const UNSUPPORTED = "is not x.y.z, x.y.z-preview.N or x.y.z-rc.N (1 <= N <= 499); IDE extension versions cannot express it";
 export const VSCODE_PRE_RELEASE = "Microsoft.VisualStudio.Code.PreRelease";
 
 export function ideVersions(version) {
   const match = RELEASE.exec(version ?? "");
-  assert.ok(match, `${version} is not x.y.z or x.y.z-preview.N (1 <= N <= 999); IDE extension versions cannot express it`);
+  assert.ok(match, `${version} ${UNSUPPORTED}`);
   const [major, minor, patch] = match.slice(1, 4).map(Number);
   // Visual Studio parses each component as a 16-bit System.Version part.
   assert.ok([major, minor, patch].every(part => part <= 65534), `${version} has a component above 65534`);
-  const revision = match[4] ? Number(match[4]) : 1000;
+  const revision = !match[4] ? 1000 : Number(match[5]) + (match[4] === "rc" ? 500 : 0);
   const vscodePatch = patch * 1000 + revision;
   assert.ok(vscodePatch <= 2 ** 31 - 1, `${version} maps to VS Code patch ${vscodePatch}, above the 32-bit Marketplace limit`);
   return { release: version, visualStudio: `${major}.${minor}.${patch}.${revision}`,
-    vscode: `${major}.${minor}.${vscodePatch}`, vscodePreRelease: Boolean(match[4]) };
+    vscode: `${major}.${minor}.${vscodePatch}`, vscodePreRelease: Boolean(match[4]), vscodePreview: true };
 }
 
 export const workspaceVersion = () => JSON.parse(readFileSync(new URL("../workspace.json", import.meta.url), "utf8")).version;

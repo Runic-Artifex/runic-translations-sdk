@@ -3,7 +3,8 @@
 // The committed package.json keeps a placeholder version: the files vsce would package are
 // copied to a staging directory, package.json is stamped there and vsce packs the copy, so
 // packaging never modifies tracked files. The stamp also sets "preview" (the Marketplace "Preview"
-// label) from the release: true for x.y.z-preview.N, false for a final x.y.z.
+// label), which every release carries: the extension is a preview product until 2.0. Only a
+// x.y.z-preview.N or x.y.z-rc.N release is packaged with --pre-release.
 // See ide-versions.mjs for the version mapping.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -28,7 +29,7 @@ try {
   // .vscodeignore only keeps vsce from warning; the staging directory holds exactly the listed files.
   for (const file of [...files, '.vscodeignore']) cpSync(join(here, file), join(staging, file));
   const manifest = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'));
-  writeFileSync(join(staging, 'package.json'), `${JSON.stringify({ ...manifest, version: versions.vscode, preview: versions.vscodePreRelease }, null, 2)}\n`);
+  writeFileSync(join(staging, 'package.json'), `${JSON.stringify({ ...manifest, version: versions.vscode, preview: versions.vscodePreview }, null, 2)}\n`);
   rmSync(output, { force: true });
   run(['package', '--no-dependencies', ...(versions.vscodePreRelease ? ['--pre-release'] : []), '--out', output], staging);
 } finally {
@@ -37,7 +38,7 @@ try {
 
 const packed = vsixMetadata(output);
 assert.deepEqual(packed, { id: 'runic-translations', version: versions.vscode, publisher: 'runic-artifex',
-  preRelease: versions.vscodePreRelease, preview: versions.vscodePreRelease, packageVersion: versions.vscode,
-  packagePreview: versions.vscodePreRelease },
+  preRelease: versions.vscodePreRelease, preview: versions.vscodePreview, packageVersion: versions.vscode,
+  packagePreview: versions.vscodePreview },
   `${output} does not carry the ${versions.release} mapping ${JSON.stringify(versions)}`);
 console.log(`Packaged ${output}: version ${versions.vscode}${versions.vscodePreRelease ? ' (pre-release)' : ''} for release ${versions.release}`);

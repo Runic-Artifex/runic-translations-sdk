@@ -271,9 +271,16 @@ characters; leading and trailing whitespace is removed. Inline messages keep
 their whitespace exactly.
 
 The `p`, `h`, `ul`, `ol` and `li` names cannot be used as project aliases.
-Nested lists, tables, quotes and custom block elements are not part of this
-version. The normative rules are in the
+Nested lists, tables, quotes, code blocks, embeds and custom block elements are
+not supported; use a custom view for such content. The normative rules are in the
 [document profile](../../../specs/translations/rmf2-document-profile-v1.md).
+
+The block set is **open**: a later minor release may add blocks with a newer
+document profile. Code that renders `DocumentBlock` names itself (a custom
+`documentFactory`, `WpfMarkupFactory` or `createDocumentRenderer` block factory)
+must handle an unknown block name by failing or falling back; the built-in
+renderers fail closed. The inline binding kinds (`runic:link`, `runic:action`,
+`runic:icon`) are closed.
 
 ### Rendering documents
 
@@ -711,7 +718,29 @@ are delegated or refused, never implemented as blind text replacement.
 Terms, group-atomic fallback, C++ RMF2, rich XLIFF, application-language
 call-site rewriting, marketplace distribution, and migration from non-RMF2
 legacy formats are outside the frozen RMF2 v1 release boundary. They require a
-separately versioned contract and are not prerequisites for this preview.
+separately versioned contract.
+
+### Not supported in 1.0
+
+These features are not planned for 1.0. Each could be added later without
+breaking existing projects, through a new grammar, profile or contract version.
+
+- **Message references, terms and atomic fallback of related messages.** A
+  message cannot reference another message or a term, and related messages do
+  not fall back together. Compose related messages in application code.
+- **Document messages in XLIFF.** The closed XLIFF 2.1 text profile reports
+  document messages as `XLIFF21-STRUCTURED-MESSAGE` loss and does not import
+  them. Translate document messages in the `.rmf2` sources or the editor.
+- **Richer document blocks.** Only the blocks listed under
+  [Document messages](#document-messages) exist; nested lists, tables, quotes,
+  code and embeds do not. Use a custom view for such content. The block set is
+  open, so new blocks would be additive.
+- **Per-locale structure overrides.** Translations keep the source's block
+  structure (`RTR0074`). Split or merge content by changing the source message.
+  The `markup.structure` key stays reserved and rejected in 1.0 for a future
+  explicit override.
+- **A web-hosted editor.** The Translations Editor is a separate product with its
+  own planning.
 
 Retained ABI-1 constructors and compatibility constants are documented in the
 [compatibility-retention ledger](compatibility-retention.md). They are read-side
