@@ -18,7 +18,7 @@ export async function verifySvelteKitQuickStart({ directory, npmArchives, nugetC
     devDependencies: {
       ...Object.fromEntries(npmArchives.map(([name, archive]) => [name, `file:${archive}`])),
       "@sveltejs/adapter-node": "6.0.0", "@sveltejs/kit": "3.0.0", "@sveltejs/vite-plugin-svelte": "7.3.1",
-      "@types/node": "24.19.1", svelte: "5.57.1", "svelte-check": "4.7.6", typescript: "6.0.3", vite: "8.3.5",
+      "@types/node": "24.19.1", svelte: "5.57.1", "svelte-check": "4.7.6", typescript: "6.0.3", vite: "8.3.4",
     },
   }, null, 2));
   run("bun", ["install", "--ignore-scripts"], app);

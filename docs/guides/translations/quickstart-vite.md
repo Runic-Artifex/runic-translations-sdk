@@ -13,7 +13,7 @@ Start in an empty application directory:
 ```bash
 npm init -y
 npm pkg set type=module scripts.dev="vite" scripts.build="vite build"
-npm install --save-dev --save-exact vite@8.3.5
+npm install --save-dev --save-exact vite@8.3.4
 dotnet new tool-manifest --output .config
 dotnet tool install dotnet-runic-translations --version <VERSION>
 npm install --save-dev --save-exact @runic-artifex/vite-plugin-runic-translations@<VERSION>
