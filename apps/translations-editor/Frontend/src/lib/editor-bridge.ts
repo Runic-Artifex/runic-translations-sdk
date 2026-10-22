@@ -1,6 +1,6 @@
 import { mockExecute } from "./mock-bridge";
 import { BridgeError } from "@runic-artifex/views";
-import { connectEditor, type EditorClient } from "../generated/editor";
+import { connectEditor, type EditorClient, type EditorState } from "../generated/editor";
 import type { EditorDocumentPageReference, EditorDocumentState } from "../generated/editorDocument";
 import type {
   EditorAbout,
@@ -36,14 +36,47 @@ import type {
 let connection: Promise<EditorClient> | undefined;
 let tail: Promise<void> = Promise.resolve();
 const documentRefs = new Map<string, EditorDocumentPageReference>();
+let rememberedDocuments: readonly EditorDocument[] = [];
 
+// A result lists the documents in the order of the root snapshot's `documents` references. The root's snapshot frame
+// can arrive after the command's reply (the model context publishes property changes in later turns), so the paths
+// are mapped onto the references once the snapshot lists the same number of documents.
 function rememberDocuments(result: unknown, view: EditorClient): void {
   if (typeof result !== "object" || result === null) return;
   const value = result as { documents?: EditorDocument[]; snapshot?: WorkspaceSnapshot };
   const documents = value.documents ?? value.snapshot?.documents;
-  if (!documents || documents.length !== view.snapshot.documents.length) return;
+  if (!documents) return;
+  rememberedDocuments = documents;
   documentRefs.clear();
-  documents.forEach((document, index) => documentRefs.set(document.path, view.snapshot.documents[index]));
+  mapDocuments(view.snapshot);
+}
+
+function mapDocuments(state: EditorState): boolean {
+  if (rememberedDocuments.length !== state.documents.length) return false;
+  documentRefs.clear();
+  rememberedDocuments.forEach((document, index) => documentRefs.set(document.path, state.documents[index]));
+  return true;
+}
+
+async function documentReference(path: string): Promise<EditorDocumentPageReference | undefined> {
+  const known = documentRefs.get(path);
+  if (known || !rememberedDocuments.some(document => document.path === path)) return known;
+  const root = await rootView();
+  if (mapDocuments(root.snapshot)) return documentRefs.get(path);
+  return await new Promise(resolve => {
+    let settled = false;
+    let unsubscribe: (() => void) | undefined;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe?.();
+      resolve(documentRefs.get(path));
+    };
+    const timer = setTimeout(settle, 5000);
+    unsubscribe = root.subscribe(state => { if (mapDocuments(state)) settle(); });
+    if (settled) unsubscribe();
+  });
 }
 
 async function rootView(): Promise<EditorClient> {
@@ -65,10 +98,10 @@ async function serialized<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-// A lost Bridge (`disconnected`) or a View that .NET released (`released`, for example after a reconnect) leaves the
-// cached root and document references unusable; the next call connects again.
+// Only a lost Bridge (`disconnected`) invalidates the cached root and document references. A `released` routed View
+// (Views protocol 3) is reconnected by the next call through its retained page reference.
 function disconnectOnFailure(error: unknown, root?: EditorClient): void {
-  if (error instanceof BridgeError && (error.kind === "disconnected" || error.kind === "released")) {
+  if (error instanceof BridgeError && error.kind === "disconnected") {
     root?.dispose();
     connection = undefined;
     documentRefs.clear();
@@ -117,7 +150,7 @@ async function invokeDocument<T>(path: string, command: "validate" | "save", req
   if (import.meta.env.MODE === "mock")
     return await mockExecute(command === "validate" ? "ValidateDocument" : "SaveDocument", { path, ...request }) as T;
   return serialized(async () => {
-    const reference = documentRefs.get(path);
+    const reference = await documentReference(path);
     if (!reference) throw new Error("The selected document route is unavailable. Reload the workspace.");
     let root: EditorClient | undefined;
     let view: Awaited<ReturnType<EditorDocumentPageReference["connect"]>> | undefined;
@@ -216,8 +249,9 @@ export function createEditorBridge(): EditorBridge {
     previewReviewJsonImport: (path) => invokeRouted("PreviewReviewJsonImport", root => root.snapshot.interchange, (view, request) => view.previewReviewJsonImport(request), state => state.previewReviewJsonImportResultJson, { path }) as Promise<EditorReviewImportPreview>,
     applyReviewJsonImport: (confirmationToken) => invokeRouted("ApplyReviewJsonImport", root => root.snapshot.interchange, (view, request) => view.applyReviewJsonImport(request), state => state.applyReviewJsonImportResultJson, { confirmationToken }) as Promise<EditorReviewOperationResult>,
     openDocument: async (path) => {
-      const reference = documentRefs.get(path);
-      if (import.meta.env.MODE === "mock" || !reference) return undefined;
+      if (import.meta.env.MODE === "mock") return undefined;
+      const reference = await documentReference(path);
+      if (!reference) return undefined;
       const view = await reference.connect();
       try {
         if (view.snapshot.path !== path) throw new Error("The selected document route changed.");
