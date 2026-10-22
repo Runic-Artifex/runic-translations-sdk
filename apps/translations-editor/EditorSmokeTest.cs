@@ -8,7 +8,6 @@ using Runic.Translations.Internal;
 using Runic.Application.Views;
 using Runic.Application.Views.ReactiveUI;
 using Runic.Navigation;
-using Runic.Navigation.ReactiveUI;
 using System.Xml.Linq;
 
 namespace Runic.Translations.Editor;
@@ -197,7 +196,7 @@ internal static class EditorSmokeTest
             // Exercise each generated feature owner with a real compiler-backed
             // session. The hosted browser test covers routed document editing.
             await using var editorContext = new RunicModelContext();
-            var scheduler = new RunicReactiveSchedulerProvider().For(editorContext);
+            var scheduler = ReactiveSchedulers.For(editorContext);
             using (var editor = new EditorViewModel(new EditorSession(project), editorContext, scheduler))
             {
                 await ExecuteRouteAsync(editor.Workspace.LoadCommand, () => editor.Workspace.LoadResultJson, "{}");

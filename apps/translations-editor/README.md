@@ -80,8 +80,9 @@ also launches on Windows or macOS with the corresponding .NET, Node, and Bun
 toolchain available; native UI launch requires the platform's windowing runtime.
 The default `direnv` shell supplies the build and CLI toolchain. The optional
 `nix develop .#editor` shell adds Chromium, GTK 3/WebKitGTK 4.1, GIO/TLS modules,
-and GStreamer from this repository's locked nixpkgs; it sets `WEBUI_BROWSER_PATH`
-for hosted browser acceptance. It does not require another repository's shell.
+and GStreamer from this repository's locked nixpkgs; it sets `CSWEBUI_BROWSER_PATH`,
+so `edit` opens that Chromium, and `WEBUI_BROWSER_PATH` for hosted browser acceptance.
+It does not require another repository's shell.
 `edit` opens an installed browser in app mode; add `--webview` to request the
 embedded WebView instead. On Linux, interactive launch needs a running X11 or
 Wayland desktop session; native chooser services also need that session's D-Bus
@@ -89,7 +90,9 @@ and configured XDG portal backend. The shell supplies tools and libraries withou
 starting those services or selecting the session's backend.
 
 On Linux without Nix, provide a supported Chromium browser for normal `edit`,
-GTK 3 and WebKitGTK 4.1 for `--webview`, and the session services above. For the
+GTK 3 and WebKitGTK 4.1 for `--webview`, and the session services above. To choose
+the browser `edit` opens, set `CSWEBUI_BROWSER_PATH` to its executable; it is then
+used without fallback. For the
 hosted acceptance harness, explicitly set `WEBUI_BROWSER_PATH` to your browser's
 executable. The [hosted acceptance guide](tests/HostedBrowserE2E/README.md) explains
 the reproducible Nix workflow. Headless browser acceptance and editor smoke tests
@@ -100,11 +103,13 @@ The shell examples elsewhere on this page use the standalone launcher's name;
 when running from source, pass those arguments after the `--` above.
 
 Translations dependencies resolve from source in this repository. Runic Command
-Line, Application, Platform, and the editor's Application web adapters resolve
-from independently pinned published packages. No sibling SDK checkout is needed.
-The native transport is pinned to published `CsWebUi` and `CsWebUi.Native`
-`2.5.0-beta.4.6`, including the UTF-8 response fix and refreshed official native
-libraries. These resolve through the repository's ordinary NuGet.org configuration.
+Line and the Runic SDK packages (Views with its CS-WebUI host and ReactiveUI
+adapter, Navigation, Platform) and their npm counterparts resolve from
+independently pinned published packages; the editor is built on Runic SDK 0.10.0.
+No sibling SDK checkout is needed. The native transport is pinned to published
+`CsWebUi` and `CsWebUi.Native` `2.5.0-beta.4.7`, the lowest version
+`Runic.Application.Views.CsWebUi` accepts, which bundles WebUI's fix for
+concurrent Bridge calls. These resolve through the repository's ordinary NuGet.org configuration.
 `bun run test` checks the frontend, generated Views client, editor save/recovery smoke and example workspace.
 `bun run verify-packages` checks the SDK's isolated package consumers. See the
 [contributor guide](../../CONTRIBUTING.md) for the complete verification sequence.

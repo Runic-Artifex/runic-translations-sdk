@@ -7,9 +7,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <RunicBridgeCompositionType>Runic.Translations.Editor.RunicBridgeComposition</RunicBridgeCompositionType>
-    <RunicBridgeFrontendBuildCommand>bun run --bun build</RunicBridgeFrontendBuildCommand>
-    <RunicBridgeTypescriptDir>$(MSBuildProjectDirectory)/Frontend/src/generated</RunicBridgeTypescriptDir>
+    <RunicApplicationFrontendBuildCommand>bun run --bun build</RunicApplicationFrontendBuildCommand>
+    <!-- The SvelteKit adapter writes the static client to build/; the Views targets copy it to www/. -->
+    <RunicApplicationFrontendOutputDirectory>build</RunicApplicationFrontendOutputDirectory>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Runic.Translations.Editor</AssemblyName>
     <RootNamespace>Runic.Translations.Editor</RootNamespace>
@@ -23,8 +23,8 @@
     <RunicTranslationsToolCommand>dotnet tool run runic-translations --</RunicTranslationsToolCommand>
     <RunicTranslationsToolCommand Condition="'$(RunicEditorUsePackedTranslations)' != 'true'">dotnet run --project &quot;$(RunicTranslationsRoot)tools/dotnet-runic-translations/dotnet-runic-translations.csproj&quot; --configuration Release --</RunicTranslationsToolCommand>
     <TranslationsRuntimePath Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)/</TranslationsRuntimePath>
-    <RunicTranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' != 'true'">$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</RunicTranslationsOutputPath>
-    <RunicTranslationsOutputPath Condition="'$(RunicBridgeBootstrap)' == 'true'">obj/runic-bridge/bootstrap/obj/$(Configuration)/$(TargetFramework)/translations</RunicTranslationsOutputPath>
+    <RunicTranslationsOutputPath Condition="'$(RunicApplicationFrontendBootstrap)' != 'true'">$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(TranslationsRuntimePath)translations</RunicTranslationsOutputPath>
+    <RunicTranslationsOutputPath Condition="'$(RunicApplicationFrontendBootstrap)' == 'true'">obj/runic-bridge/bootstrap/obj/$(Configuration)/$(TargetFramework)/translations</RunicTranslationsOutputPath>
     <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
   </PropertyGroup>
 
@@ -51,8 +51,8 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Runic.Application.CsWebUi" GeneratePathProperty="true" />
-    <PackageReference Include="Runic.Application.ReactiveUI" />
+    <PackageReference Include="Runic.Application.Views.CsWebUi" />
+    <PackageReference Include="Runic.Application.Views.ReactiveUI" />
     <PackageReference Include="Runic.CommandLine" />
   </ItemGroup>
 
@@ -92,10 +92,10 @@
     <PackageReference Include="Runic.Translations.Build" VersionOverride="$(RunicEditorTranslationsPackageVersion)" PrivateAssets="all" />
   </ItemGroup>
 
-  <PropertyGroup Condition="'$(RunicBridgeBootstrap)' == 'true'">
+  <PropertyGroup Condition="'$(RunicApplicationFrontendBootstrap)' == 'true'">
     <OutputType>Library</OutputType>
   </PropertyGroup>
-  <ItemGroup Condition="'$(RunicBridgeBootstrap)' == 'true'">
+  <ItemGroup Condition="'$(RunicApplicationFrontendBootstrap)' == 'true'">
     <Compile Remove="Program.cs" />
   </ItemGroup>
 
@@ -129,36 +129,16 @@
   <Target Name="PrepareTranslationsEditorViewsFrontend"
           BeforeTargets="RunicViewsGenerateBridge"
           DependsOnTargets="RunicTranslationsGenerateTranslationArtifacts">
-    <Copy SourceFiles="$(PkgRunic_Application_CsWebUi)/www/runic-cswebui.js"
-          DestinationFiles="Frontend/static/runic-cswebui.js"
-          SkipUnchangedFiles="true" />
     <WriteLinesToFile File="Frontend/.runic-translations-manifest-path"
                       Lines="$(MSBuildProjectDirectory)/$(RunicTranslationsOutputPath)/editor.esm-v5/web-module-manifest-v3.json"
                       Overwrite="true" WriteOnlyWhenDifferent="true" />
     <!-- The frontend build also consumes generated translations and built
          workspace packages, which live outside Frontend. -->
     <ItemGroup>
-      <RunicBridgeFrontendInput Include="$(RunicTranslationsOutputPath)/editor.esm-v5/**/*" />
-      <RunicBridgeFrontendInput Include="../../packages/web/translations-svelte/dist/**/*;../../packages/web/translations-sveltekit/dist/**/*" />
-      <RunicBridgeFrontendInput Include="../../packages/web/vite-plugin-runic-translations/package.json;../../packages/web/vite-plugin-runic-translations/dist/**/*" />
+      <RunicApplicationFrontendInput Include="$(RunicTranslationsOutputPath)/editor.esm-v5/**/*" />
+      <RunicApplicationFrontendInput Include="../../packages/web/translations-svelte/dist/**/*;../../packages/web/translations-sveltekit/dist/**/*" />
+      <RunicApplicationFrontendInput Include="../../packages/web/vite-plugin-runic-translations/package.json;../../packages/web/vite-plugin-runic-translations/dist/**/*" />
     </ItemGroup>
-  </Target>
-
-  <Target Name="CopyTranslationsEditorFrontend" AfterTargets="Build"
-          Condition="'$(RunicBridgeBootstrap)' != 'true'">
-    <ItemGroup>
-      <EditorBuiltFile Include="Frontend/build/**/*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(EditorBuiltFile)"
-          DestinationFiles="@(EditorBuiltFile->'$(TargetDir)www/%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
-  </Target>
-  <Target Name="CopyTranslationsEditorFrontendForPublish" AfterTargets="Publish"
-          Condition="'$(RunicBridgeBootstrap)' != 'true'">
-    <ItemGroup><EditorPublishedFile Include="Frontend/build/**/*" /></ItemGroup>
-    <Copy SourceFiles="@(EditorPublishedFile)"
-          DestinationFiles="@(EditorPublishedFile->'$(PublishDir)www/%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
   </Target>
 
   <Import Project="../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets"

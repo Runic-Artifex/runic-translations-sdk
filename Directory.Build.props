@@ -6,6 +6,6 @@
     <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
     <!-- Diagnostic help links point at this catalog at the release tag; see eng/build/release-links.targets. -->
     <RunicDiagnosticsCatalog>docs/guides/translations/diagnostics.md</RunicDiagnosticsCatalog>
-    <RunicBridgeInstallFrontend>false</RunicBridgeInstallFrontend>
+    <RunicApplicationFrontendInstallEnabled>false</RunicApplicationFrontendInstallEnabled>
   </PropertyGroup>
 </Project>
