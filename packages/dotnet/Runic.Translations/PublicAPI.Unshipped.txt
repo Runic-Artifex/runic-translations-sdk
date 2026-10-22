@@ -69,6 +69,7 @@ Runic.Translations.ITranslationManager.SnapshotPublished -> System.EventHandler<
 Runic.Translations.LocalizedTextContentNode.Annotations.get -> System.ReadOnlyMemory<Runic.Translations.Generated.CompiledRmf2Annotation!>
 Runic.Translations.Rmf2InlineRenderer.ToPlainText(Runic.Translations.BoundLocalizedTextContent! content, Runic.Translations.Rmf2PlainTextOptions? options = null) -> string!
 Runic.Translations.Rmf2InlineRenderer.ToPlainText(string! key, Runic.Translations.LocalizedTextContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.InlineMarkupBinding!>? slots = null, Runic.Translations.Rmf2PlainTextOptions? options = null) -> string!
+Runic.Translations.Rmf2MarkupContract.DeclaresMarkup(string! name) -> bool
 Runic.Translations.TranslationOptions.MissingKey.init -> void
 Runic.Translations.TranslationOptions.UnsupportedLocale.init -> void
 Runic.Translations.TranslationPackException.Reason.get -> Runic.Translations.TranslationPackFailureReason

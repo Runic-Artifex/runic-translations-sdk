@@ -330,6 +330,18 @@ internal sealed class Rmf2RuntimeV5Tests
     }
     private static string MarkupContractJson(int version = 2, string contract = "\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":false,\"plainText\":\"children\",\"options\":{\"level\":{\"type\":\"integer\",\"values\":[],\"default\":\"1\",\"literalOnly\":true,\"minimum\":1,\"maximum\":6}}")
         => "{\"version\":" + version + ",\"contracts\":{\"app:step\":{" + contract + "}},\"messages\":{}}";
+    [Test, DisplayName("a linked markup contract reports its declared markup names")]
+    public void MarkupContractDeclaresMarkup()
+    {
+        Rmf2MarkupContract contract = Rmf2MarkupContract.Link(MarkupContractJson());
+        Assert.True(contract.DeclaresMarkup("app:step"), "A declared custom markup name was not reported.");
+        Assert.False(contract.DeclaresMarkup("app:missing"), "An undeclared markup name was reported.");
+        Assert.False(contract.DeclaresMarkup("APP:STEP"), "Markup names must compare ordinally.");
+        Assert.False(contract.DeclaresMarkup("runic:link"), "A built-in the contract does not list was reported.");
+        Assert.Throws<ArgumentException>(() => contract.DeclaresMarkup(null!));
+        Assert.Throws<ArgumentException>(() => contract.DeclaresMarkup(""));
+    }
+
     [Test, DisplayName("markup contract v2 links placement children and bounded integer options exactly")]
     public void MarkupContractV2()
     {
