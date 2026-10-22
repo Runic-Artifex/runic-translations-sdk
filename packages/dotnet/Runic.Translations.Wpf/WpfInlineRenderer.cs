@@ -19,12 +19,53 @@ public sealed class WpfInlineRenderer
     private readonly WpfInlineBuilder _inlines;
 
     /// <summary>Links immutable markup contracts and application-owned navigation, factories and themes.</summary>
+    /// <param name="contractJson">The compiler-exported RMF2 markup contract, linked by this constructor.</param>
+    /// <param name="navigate">Called when an active link is activated.</param>
+    /// <param name="custom">Factories for declared custom inline contracts.</param>
+    /// <param name="theme">Called with the canonical contract name for every rendered markup inline.</param>
     public WpfInlineRenderer(string contractJson, Action<Uri> navigate,
         IReadOnlyDictionary<string, WpfMarkupFactory>? custom = null, Action<string, Inline>? theme = null)
+        : this(Link(contractJson, navigate), navigate, custom, theme)
+    {
+    }
+
+    /// <summary>
+    /// Uses an already linked markup contract and application-owned navigation, so one
+    /// <see cref="Rmf2MarkupContract"/> can serve several renderers.
+    /// </summary>
+    /// <param name="contract">The contract from <see cref="Rmf2MarkupContract.Link(string)"/>.</param>
+    /// <param name="navigate">Called when an active link is activated.</param>
+    public WpfInlineRenderer(Rmf2MarkupContract contract, Action<Uri> navigate)
+        : this(contract, navigate, null, null)
+    {
+    }
+
+    /// <summary>
+    /// Uses an already linked markup contract with application-owned navigation, factories and theme, so one
+    /// <see cref="Rmf2MarkupContract"/> can serve several renderers.
+    /// </summary>
+    /// <param name="contract">The contract from <see cref="Rmf2MarkupContract.Link(string)"/>.</param>
+    /// <param name="navigate">Called when an active link is activated.</param>
+    /// <param name="options">Custom inline factories and the theme callback.</param>
+    public WpfInlineRenderer(Rmf2MarkupContract contract, Action<Uri> navigate, WpfInlineRendererOptions options)
+        : this(contract, navigate, (options ?? throw new ArgumentNullException(nameof(options))).Custom, options.Theme)
+    {
+    }
+
+    private WpfInlineRenderer(Rmf2MarkupContract contract, Action<Uri> navigate,
+        IReadOnlyDictionary<string, WpfMarkupFactory>? custom, Action<string, Inline>? theme)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+        ArgumentNullException.ThrowIfNull(navigate);
+        _semantic = new Rmf2InlineRenderer(contract);
+        _inlines = new WpfInlineBuilder(contract, navigate, custom, theme, slotAutomationIds: false);
+    }
+
+    // Keeps the string overload's order: a missing handler is reported before the contract is parsed.
+    internal static Rmf2MarkupContract Link(string contractJson, Action<Uri> navigate)
     {
         ArgumentNullException.ThrowIfNull(navigate);
-        _semantic = new Rmf2InlineRenderer(contractJson);
-        _inlines = new WpfInlineBuilder(contractJson, navigate, custom, theme, slotAutomationIds: false);
+        return Rmf2MarkupContract.Link(contractJson);
     }
 
     /// <summary>Validates and replaces content on the target control’s dispatcher thread.</summary>

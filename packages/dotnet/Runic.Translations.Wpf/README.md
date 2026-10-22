@@ -27,6 +27,22 @@ from another catalog is detected only at runtime, by an unknown key or
 mismatched slots, or not at all when that catalog has a compatible message
 with the same key.
 
+The constructors that take the contract JSON link it on every call. When an
+inline and a document renderer (or several renderers) share a catalog, link the
+contract once and pass the `Rmf2MarkupContract`; custom factories and the theme
+go in an options object:
+
+```csharp
+Rmf2MarkupContract contract = Rmf2MarkupContract.Link(AppTextCatalog.Rmf2MarkupContract);
+var renderer = new WpfInlineRenderer(contract, Navigate,
+    new WpfInlineRendererOptions { Custom = factories, Theme = ApplyTheme });
+var documents = new WpfDocumentRenderer(contract, Navigate) { HeadingBase = 2 };
+```
+
+`WpfDocumentRendererOptions` carries the document renderer's factories and
+`TextElement` theme. A linked contract is immutable and can be shared by any
+number of renderers.
+
 Icons use `InlineIconBinding` with a `Func<FrameworkElement>` that creates a fresh
 asset for every render. Meaningful icons require a localized accessible name;
 decorative icons are excluded from WPF's control/content accessibility views.

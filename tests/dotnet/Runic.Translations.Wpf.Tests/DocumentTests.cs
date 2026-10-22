@@ -92,6 +92,26 @@ internal sealed class DocumentTests
         Require(Shape(backup.Viewer.Document) == boundShape, "The dictionary overload rendered a different document.");
     }
 
+    [Test, DisplayName("document: a renderer from a linked contract renders the same document"), NotInParallel(WpfSuite.Key, Order = 219)]
+    public void LinkedContract()
+    {
+        var backup = new Backup();
+        var linked = new WpfDocumentRenderer(Rmf2MarkupContract.Link(DocumentFixture.MarkupContract), _ => { }) { HeadingBase = 2 };
+        var viewer = new FlowDocumentScrollViewer();
+        linked.SetContent(viewer, backup.Bound);
+        Require(Shape(viewer.Document) == Shape(backup.Document), "The linked contract rendered a different document.");
+        linked.SetContent(viewer, "backup", backup.Typed, backup.Bound.Slots);
+        Require(Shape(viewer.Document) == Shape(backup.Document), "The linked contract's dictionary overload rendered a different document.");
+        var fromJson = new List<string>();
+        var fromContract = new List<string>();
+        new WpfDocumentRenderer(DocumentFixture.MarkupContract, _ => { }, theme: (name, element) => fromJson.Add(name + ":" + element.GetType().Name))
+            .SetContent(new FlowDocumentScrollViewer(), backup.Bound);
+        new WpfDocumentRenderer(Rmf2MarkupContract.Link(DocumentFixture.MarkupContract), _ => { },
+                new WpfDocumentRendererOptions { Theme = (name, element) => fromContract.Add(name + ":" + element.GetType().Name) })
+            .SetContent(new FlowDocumentScrollViewer(), backup.Bound);
+        Require(fromContract.Count > 0 && fromContract.SequenceEqual(fromJson), "The linked contract's theme saw different elements: " + string.Join(",", fromContract));
+    }
+
     [Test, DisplayName("document: clearing removes the document and retires its callbacks"), NotInParallel(WpfSuite.Key, Order = 208)]
     public void Clear()
     {

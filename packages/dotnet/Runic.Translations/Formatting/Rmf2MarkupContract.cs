@@ -110,6 +110,20 @@ public sealed class Rmf2MarkupContract
         }
     }
 
+    /// <summary>
+    /// Reports whether the linked contract declares the markup with this canonical name, for example a custom
+    /// <c>shop:badge</c>. Adapters use it to check application-owned factories when they are linked. Built-in
+    /// <c>runic:</c> names are reported as declared when the contract lists them.
+    /// </summary>
+    /// <param name="name">The canonical markup contract name, compared ordinally.</param>
+    /// <returns><see langword="true"/> when the contract declares <paramref name="name"/>.</returns>
+    /// <exception cref="ArgumentException"><paramref name="name"/> is <see langword="null"/> or empty.</exception>
+    public bool DeclaresMarkup(string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        return Tags.ContainsKey(name);
+    }
+
     internal Message Get(string key) =>
         Messages.TryGetValue(key, out Message? message) ? message : throw new TranslationFormatException("Unknown RMF2 message contract '" + key + "'.");
 

@@ -427,7 +427,10 @@ canonical HTML in
 into a read-only `FlowDocumentScrollViewer`. Construct it once per catalog from
 the generated `Rmf2MarkupContract` constant, with the same navigation handler,
 custom inline factories and theme callback as `WpfInlineRenderer`, then call
-`SetContent` on the UI thread:
+`SetContent` on the UI thread. To link the contract once for both adapters, pass
+an `Rmf2MarkupContract` from `Rmf2MarkupContract.Link(...)` instead of the JSON,
+with `WpfInlineRendererOptions` / `WpfDocumentRendererOptions` for the factories
+and theme:
 
 ```csharp
 var documents = new WpfDocumentRenderer(AppTextCatalog.Rmf2MarkupContract, Navigate);
