@@ -18,6 +18,9 @@
     <InternalsVisibleTo Include="Runic.Translations.Runtime.Tests" />
     <!-- The transport conformance corpus still writes version 1 cases. -->
     <InternalsVisibleTo Include="Runic.Translations.Compiler.Tests" />
+    <!-- The WPF adapter checks custom factory names against a linked contract (Rmf2MarkupContract.DeclaresMarkup).
+         The packages release together; keep that member stable. -->
+    <InternalsVisibleTo Include="Runic.Translations.Wpf" />
   </ItemGroup>
 
   <ItemGroup>

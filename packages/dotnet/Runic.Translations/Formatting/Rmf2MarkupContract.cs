@@ -110,6 +110,10 @@ public sealed class Rmf2MarkupContract
         }
     }
 
+    // Used by Runic.Translations.Wpf through InternalsVisibleTo to check custom factory names without the JSON:
+    // keep the signature stable across minor releases.
+    internal bool DeclaresMarkup(string name) => Tags.ContainsKey(name);
+
     internal Message Get(string key) =>
         Messages.TryGetValue(key, out Message? message) ? message : throw new TranslationFormatException("Unknown RMF2 message contract '" + key + "'.");
 

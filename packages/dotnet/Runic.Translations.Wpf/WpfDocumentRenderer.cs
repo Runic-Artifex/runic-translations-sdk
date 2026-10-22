@@ -46,11 +46,41 @@ public sealed class WpfDocumentRenderer
     /// Plain text runs are not passed.</param>
     public WpfDocumentRenderer(string contractJson, Action<Uri> navigate,
         IReadOnlyDictionary<string, WpfMarkupFactory>? custom = null, Action<string, TextElement>? theme = null)
+        : this(WpfInlineRenderer.Link(contractJson, navigate), navigate, custom, theme)
     {
+    }
+
+    /// <summary>
+    /// Uses an already linked markup contract and application-owned navigation, so one
+    /// <see cref="Rmf2MarkupContract"/> can serve a <see cref="WpfInlineRenderer"/> and a document renderer.
+    /// </summary>
+    /// <param name="contract">The contract from <see cref="Rmf2MarkupContract.Link(string)"/>.</param>
+    /// <param name="navigate">Called when an active link is activated.</param>
+    public WpfDocumentRenderer(Rmf2MarkupContract contract, Action<Uri> navigate)
+        : this(contract, navigate, null, null)
+    {
+    }
+
+    /// <summary>
+    /// Uses an already linked markup contract with application-owned navigation, inline factories and theme, so one
+    /// <see cref="Rmf2MarkupContract"/> can serve a <see cref="WpfInlineRenderer"/> and a document renderer.
+    /// </summary>
+    /// <param name="contract">The contract from <see cref="Rmf2MarkupContract.Link(string)"/>.</param>
+    /// <param name="navigate">Called when an active link is activated.</param>
+    /// <param name="options">Custom inline factories and the theme callback.</param>
+    public WpfDocumentRenderer(Rmf2MarkupContract contract, Action<Uri> navigate, WpfDocumentRendererOptions options)
+        : this(contract, navigate, (options ?? throw new ArgumentNullException(nameof(options))).Custom, options.Theme)
+    {
+    }
+
+    private WpfDocumentRenderer(Rmf2MarkupContract contract, Action<Uri> navigate,
+        IReadOnlyDictionary<string, WpfMarkupFactory>? custom, Action<string, TextElement>? theme)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(navigate);
-        _semantic = new Rmf2DocumentRenderer(Rmf2MarkupContract.Link(contractJson));
+        _semantic = new Rmf2DocumentRenderer(contract);
         _theme = theme;
-        _inlines = new WpfInlineBuilder(contractJson, navigate, custom, theme is null ? null : (name, inline) => theme(name, inline), slotAutomationIds: true);
+        _inlines = new WpfInlineBuilder(contract, navigate, custom, theme is null ? null : (name, inline) => theme(name, inline), slotAutomationIds: true);
     }
 
     /// <summary>

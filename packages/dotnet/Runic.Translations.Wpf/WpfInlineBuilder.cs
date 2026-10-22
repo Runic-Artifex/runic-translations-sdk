@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Automation.Peers;
@@ -47,15 +46,15 @@ internal sealed class WpfInlineBuilder
     private readonly Action<string, Inline>? _theme;
     private readonly bool _slotAutomationIds;
 
-    internal WpfInlineBuilder(string contractJson, Action<Uri> navigate, IReadOnlyDictionary<string, WpfMarkupFactory>? custom,
+    internal WpfInlineBuilder(Rmf2MarkupContract contract, Action<Uri> navigate, IReadOnlyDictionary<string, WpfMarkupFactory>? custom,
         Action<string, Inline>? theme, bool slotAutomationIds)
     {
+        ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(navigate);
         _navigate = navigate; _theme = theme; _slotAutomationIds = slotAutomationIds;
         var factories = custom is null ? new Dictionary<string, WpfMarkupFactory>(StringComparer.Ordinal) : new Dictionary<string, WpfMarkupFactory>(custom, StringComparer.Ordinal);
-        using var contract = JsonDocument.Parse(contractJson);
         foreach (var factory in factories)
-            if (factory.Value is null || factory.Key.StartsWith("runic:", StringComparison.Ordinal) || !contract.RootElement.GetProperty("contracts").TryGetProperty(factory.Key, out _))
+            if (factory.Value is null || factory.Key.StartsWith("runic:", StringComparison.Ordinal) || !contract.DeclaresMarkup(factory.Key))
                 throw new ArgumentException("Custom WPF renderers must name a declared custom markup contract.", nameof(custom));
         _custom = new ReadOnlyDictionary<string, WpfMarkupFactory>(factories);
     }

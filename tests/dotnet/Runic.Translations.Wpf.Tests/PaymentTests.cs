@@ -123,6 +123,49 @@ internal sealed class PaymentTests
         WpfInlineRenderer.ClearContent(payment.Target); Require(payment.Target.Inlines.Count == 0, "Clear did not dispose content.");
     }
 
+    [Test, DisplayName("payment: a linked contract renders the same WPF tree and serves an inline and a document renderer"), NotInParallel(WpfSuite.Key, Order = 109)]
+    public void LinkedContract()
+    {
+        var payment = new Payment();
+        payment.Render();
+        string jsonShape = Shape(payment.Target);
+        Rmf2MarkupContract contract = Rmf2MarkupContract.Link(PaymentFixture.MarkupContract);
+        int badges = 0, themed = 0;
+        var linked = new WpfInlineRenderer(contract, _ => { }, new WpfInlineRendererOptions { Custom = new Dictionary<string, WpfMarkupFactory> {
+            ["shop:badge"] = (_, children) => { badges++; var span = new Span(); span.Inlines.AddRange(children); return span; } },
+            Theme = (_, _) => themed++ });
+        _ = new WpfDocumentRenderer(contract, _ => { });
+        var target = new TextBlock();
+        linked.SetContent(target, "payment", payment.Content, payment.Slots);
+        Require(Shape(target) == jsonShape && badges > 0 && themed > 0 && target.Language.IetfLanguageTag == "en", "The linked contract rendered a different WPF tree.");
+        linked.SetContent(target, payment.Bound());
+        Require(Shape(target) == jsonShape, "Typed bound content through the linked contract rendered a different WPF tree.");
+    }
+
+    [Test, DisplayName("payment: the linked-contract constructors reject null arguments, null options and undeclared or built-in factory names"), NotInParallel(WpfSuite.Key, Order = 110)]
+    public void LinkedContractArguments()
+    {
+        Rmf2MarkupContract contract = Rmf2MarkupContract.Link(PaymentFixture.MarkupContract);
+        WpfMarkupFactory factory = (_, _) => new Span();
+        Throws<ArgumentNullException>(() => new WpfInlineRenderer((Rmf2MarkupContract)null!, _ => { }), "A null inline contract was accepted.");
+        Throws<ArgumentNullException>(() => new WpfDocumentRenderer((Rmf2MarkupContract)null!, _ => { }), "A null document contract was accepted.");
+        Throws<ArgumentNullException>(() => new WpfInlineRenderer(contract, null!), "A null inline navigation handler was accepted.");
+        Throws<ArgumentNullException>(() => new WpfDocumentRenderer(contract, null!), "A null document navigation handler was accepted.");
+        Throws<ArgumentNullException>(() => new WpfInlineRenderer(contract, _ => { }, (WpfInlineRendererOptions)null!), "Null inline options were accepted.");
+        Throws<ArgumentNullException>(() => new WpfDocumentRenderer(contract, _ => { }, (WpfDocumentRendererOptions)null!), "Null document options were accepted.");
+        foreach (string name in new[] { "shop:missing", "runic:link" })
+        {
+            var custom = new Dictionary<string, WpfMarkupFactory> { [name] = factory };
+            Throws<ArgumentException>(() => new WpfInlineRenderer(contract, _ => { }, new WpfInlineRendererOptions { Custom = custom }), "The inline renderer accepted factory '" + name + "'.");
+            Throws<ArgumentException>(() => new WpfDocumentRenderer(contract, _ => { }, new WpfDocumentRendererOptions { Custom = custom }), "The document renderer accepted factory '" + name + "'.");
+            Throws<ArgumentException>(() => new WpfInlineRenderer(PaymentFixture.MarkupContract, _ => { }, custom), "The JSON inline renderer accepted factory '" + name + "'.");
+        }
+        // The JSON overloads still report a missing handler before they parse the contract.
+        Throws<ArgumentNullException>(() => new WpfInlineRenderer("not json", null!), "The JSON inline overload parsed before checking the handler.");
+        Throws<ArgumentNullException>(() => new WpfDocumentRenderer("not json", null!), "The JSON document overload parsed before checking the handler.");
+        Throws<ArgumentException>(() => new WpfInlineRenderer("not json", _ => { }), "The JSON inline overload accepted a malformed contract.");
+    }
+
     /// <summary>A fresh payment consumer: snapshot, content for one item, slots, a renderer with the custom badge and a target.</summary>
     private sealed class Payment
     {
@@ -161,6 +204,13 @@ internal sealed class PaymentTests
     }
 
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
+
+    private static void Throws<TException>(Func<object> action, string message) where TException : Exception
+    {
+        try { action(); }
+        catch (TException exception) when (typeof(TException) != typeof(ArgumentException) || exception is not ArgumentNullException) { return; }
+        throw new InvalidOperationException(message);
+    }
 
     private static string Shape(TextBlock target) => string.Join("|", target.Inlines.Select(Shape));
     private static string Shape(Inline inline) => inline switch
