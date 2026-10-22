@@ -1,5 +1,4 @@
 #nullable enable
-Runic.CommandLine.Generated.GeneratedCommandCatalog
 Runic.Translations.Tooling.ArtifactInspection
 Runic.Translations.Tooling.ArtifactInspection.ByteLength.get -> long
 Runic.Translations.Tooling.ArtifactInspection.Catalog.get -> string?
@@ -7,7 +6,7 @@ Runic.Translations.Tooling.ArtifactInspection.ContractFingerprint.get -> string?
 Runic.Translations.Tooling.ArtifactInspection.Findings.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.ArtifactInspectionFinding!>!
 Runic.Translations.Tooling.ArtifactInspection.FormatVersion.get -> int?
 Runic.Translations.Tooling.ArtifactInspection.HasIntegrityMetadata.get -> bool
-Runic.Translations.Tooling.ArtifactInspection.Kind.get -> string!
+Runic.Translations.Tooling.ArtifactInspection.Kind.get -> Runic.Translations.Tooling.ArtifactKind
 Runic.Translations.Tooling.ArtifactInspection.Layer.get -> string?
 Runic.Translations.Tooling.ArtifactInspection.Locale.get -> string?
 Runic.Translations.Tooling.ArtifactInspection.MessageCount.get -> int
@@ -20,8 +19,10 @@ Runic.Translations.Tooling.ArtifactInspectionFinding
 Runic.Translations.Tooling.ArtifactInspectionFinding.Code.get -> string!
 Runic.Translations.Tooling.ArtifactInspectionFinding.Message.get -> string!
 Runic.Translations.Tooling.ArtifactInspector
-Runic.Translations.Tooling.ITranslationsToolCommandOperations
-Runic.Translations.Tooling.ITranslationsToolCommandOperations.Execute(Runic.Translations.Tooling.TranslationsToolCommandRequest! request) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
+Runic.Translations.Tooling.ArtifactKind
+Runic.Translations.Tooling.ArtifactKind.Unknown = 0 -> Runic.Translations.Tooling.ArtifactKind
+Runic.Translations.Tooling.ArtifactKind.Xliff = 1 -> Runic.Translations.Tooling.ArtifactKind
+Runic.Translations.Tooling.ArtifactKind.Xliff21 = 2 -> Runic.Translations.Tooling.ArtifactKind
 Runic.Translations.Tooling.TranslationInterchange
 Runic.Translations.Tooling.TranslationInterchangeException
 Runic.Translations.Tooling.TranslationInterchangeException.Code.get -> string!
@@ -42,13 +43,18 @@ Runic.Translations.Tooling.TranslationInterchangeReviewEntry.Key.get -> string!
 Runic.Translations.Tooling.TranslationInterchangeReviewEntry.Locale.get -> string!
 Runic.Translations.Tooling.TranslationInterchangeReviewEntry.Note.get -> string?
 Runic.Translations.Tooling.TranslationInterchangeReviewEntry.SourceFingerprint.get -> string?
-Runic.Translations.Tooling.TranslationInterchangeReviewEntry.State.get -> string!
-Runic.Translations.Tooling.TranslationInterchangeReviewEntry.TranslationInterchangeReviewEntry(string! key, string! locale, string! state, string? note = null, string? sourceFingerprint = null) -> void
+Runic.Translations.Tooling.TranslationInterchangeReviewEntry.State.get -> Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationInterchangeReviewEntry.TranslationInterchangeReviewEntry(string! key, string! locale, Runic.Translations.Tooling.TranslationReviewState state, string? note = null, string? sourceFingerprint = null) -> void
 Runic.Translations.Tooling.TranslationMf2Document
-Runic.Translations.Tooling.TranslationMf2Document.Bytes.get -> byte[]!
+Runic.Translations.Tooling.TranslationMf2Document.Bytes.get -> System.ReadOnlyMemory<byte>
 Runic.Translations.Tooling.TranslationMf2Document.MessageId.get -> string!
+Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationReviewState.Approved = 3 -> Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationReviewState.Draft = 0 -> Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationReviewState.NeedsReview = 2 -> Runic.Translations.Tooling.TranslationReviewState
+Runic.Translations.Tooling.TranslationReviewState.Translated = 1 -> Runic.Translations.Tooling.TranslationReviewState
 Runic.Translations.Tooling.TranslationXliffDocument
-Runic.Translations.Tooling.TranslationXliffDocument.Bytes.get -> byte[]!
+Runic.Translations.Tooling.TranslationXliffDocument.Bytes.get -> System.ReadOnlyMemory<byte>
 Runic.Translations.Tooling.TranslationXliffDocument.CatalogId.get -> string!
 Runic.Translations.Tooling.TranslationXliffDocument.SourceLocale.get -> string!
 Runic.Translations.Tooling.TranslationXliffDocument.TargetLocale.get -> string!
@@ -62,132 +68,11 @@ Runic.Translations.Tooling.TranslationXliffImportResult.Report.get -> Runic.Tran
 Runic.Translations.Tooling.TranslationXliffImportResult.Review.get -> Runic.Translations.Tooling.TranslationInterchangeReview!
 Runic.Translations.Tooling.TranslationXliffImportResult.SourceLocale.get -> string!
 Runic.Translations.Tooling.TranslationXliffImportResult.TargetLocale.get -> string!
-Runic.Translations.Tooling.TranslationsToolCommandJsonContext
-Runic.Translations.Tooling.TranslationsToolCommandJsonContext.TranslationsToolCommandJsonContext() -> void
-Runic.Translations.Tooling.TranslationsToolCommandJsonContext.TranslationsToolCommandJsonContext(System.Text.Json.JsonSerializerOptions! options) -> void
-Runic.Translations.Tooling.TranslationsToolCommandModule
-Runic.Translations.Tooling.TranslationsToolCommandRequest
-Runic.Translations.Tooling.TranslationsToolCommandRequest.<Clone>$() -> Runic.Translations.Tooling.TranslationsToolCommandRequest!
-Runic.Translations.Tooling.TranslationsToolCommandRequest.BaseTexts.get -> string?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.BaseTexts.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Catalog.get -> string?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Catalog.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.ClassName.get -> string?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.ClassName.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Command.get -> string!
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Command.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Deconstruct(out string! Command, out string? Project, out string? Output, out string? Directory, out string? Catalog, out string? DefaultLocale, out string? Namespace, out string? ClassName, out System.Collections.Generic.IReadOnlyList<string!>? Locales, out bool NoStarter, out bool EmitCSharp, out bool EmitJson, out bool EmitTypeScript, out bool EmitTemplateManifest, out bool EmitEsm, out bool EmitCpp, out bool DryRun) -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.DefaultLocale.get -> string?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.DefaultLocale.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Directory.get -> string?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Directory.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.DryRun.get -> bool
-Runic.Translations.Tooling.TranslationsToolCommandRequest.DryRun.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitCSharp.get -> bool
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitCSharp.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitCpp.get -> bool
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitCpp.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitEsm.get -> bool
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitEsm.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitJson.get -> bool
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitJson.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitTemplateManifest.get -> bool
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitTemplateManifest.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitTypeScript.get -> bool
-Runic.Translations.Tooling.TranslationsToolCommandRequest.EmitTypeScript.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Equals(Runic.Translations.Tooling.TranslationsToolCommandRequest? other) -> bool
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Group.get -> string?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Group.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Locales.get -> System.Collections.Generic.IReadOnlyList<string!>?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Locales.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Namespace.get -> string?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Namespace.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.NoStarter.get -> bool
-Runic.Translations.Tooling.TranslationsToolCommandRequest.NoStarter.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Output.get -> string?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Output.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Project.get -> string?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Project.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Tables.get -> System.Collections.Generic.IReadOnlyList<string!>?
-Runic.Translations.Tooling.TranslationsToolCommandRequest.Tables.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandRequest.TranslationsToolCommandRequest(string! Command, string? Project = null, string? Output = null, string? Directory = null, string? Catalog = null, string? DefaultLocale = null, string? Namespace = null, string? ClassName = null, System.Collections.Generic.IReadOnlyList<string!>? Locales = null, bool NoStarter = false, bool EmitCSharp = false, bool EmitJson = false, bool EmitTypeScript = false, bool EmitTemplateManifest = false, bool EmitEsm = false, bool EmitCpp = false, bool DryRun = false) -> void
-Runic.Translations.Tooling.TranslationsToolCommandResult
-Runic.Translations.Tooling.TranslationsToolCommandResult.<Clone>$() -> Runic.Translations.Tooling.TranslationsToolCommandResult!
-Runic.Translations.Tooling.TranslationsToolCommandResult.Deconstruct(out string! Output, out string! Error) -> void
-Runic.Translations.Tooling.TranslationsToolCommandResult.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.TranslationsToolDiagnostic!>!
-Runic.Translations.Tooling.TranslationsToolCommandResult.Diagnostics.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandResult.Equals(Runic.Translations.Tooling.TranslationsToolCommandResult? other) -> bool
-Runic.Translations.Tooling.TranslationsToolCommandResult.Error.get -> string!
-Runic.Translations.Tooling.TranslationsToolCommandResult.Error.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandResult.Output.get -> string!
-Runic.Translations.Tooling.TranslationsToolCommandResult.Output.init -> void
-Runic.Translations.Tooling.TranslationsToolCommandResult.TranslationsToolCommandResult(string! Output, string! Error) -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic
-Runic.Translations.Tooling.TranslationsToolDiagnostic.<Clone>$() -> Runic.Translations.Tooling.TranslationsToolDiagnostic!
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Code.get -> string!
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Code.init -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Column.get -> int
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Column.init -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Deconstruct(out string! Code, out string! Severity, out string! Message, out string! Path, out int Line, out int Column, out int EndLine, out int EndColumn, out string! HelpUri) -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.EndColumn.get -> int
-Runic.Translations.Tooling.TranslationsToolDiagnostic.EndColumn.init -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.EndLine.get -> int
-Runic.Translations.Tooling.TranslationsToolDiagnostic.EndLine.init -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Equals(Runic.Translations.Tooling.TranslationsToolDiagnostic? other) -> bool
-Runic.Translations.Tooling.TranslationsToolDiagnostic.HelpUri.get -> string!
-Runic.Translations.Tooling.TranslationsToolDiagnostic.HelpUri.init -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Line.get -> int
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Line.init -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Message.get -> string!
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Message.init -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Path.get -> string!
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Path.init -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Severity.get -> string!
-Runic.Translations.Tooling.TranslationsToolDiagnostic.Severity.init -> void
-Runic.Translations.Tooling.TranslationsToolDiagnostic.TranslationsToolDiagnostic(string! Code, string! Severity, string! Message, string! Path, int Line, int Column, int EndLine, int EndColumn, string! HelpUri) -> void
-Runic.Translations.Tooling.TranslationsToolFailurePresentation
-Runic.Translations.Tooling.TranslationsToolFailurePresentation.DiagnosticsOnly = 3 -> Runic.Translations.Tooling.TranslationsToolFailurePresentation
-Runic.Translations.Tooling.TranslationsToolFailurePresentation.ErrorOnly = 1 -> Runic.Translations.Tooling.TranslationsToolFailurePresentation
-Runic.Translations.Tooling.TranslationsToolFailurePresentation.OutputOnly = 2 -> Runic.Translations.Tooling.TranslationsToolFailurePresentation
-Runic.Translations.Tooling.TranslationsToolFailurePresentation.Standard = 0 -> Runic.Translations.Tooling.TranslationsToolFailurePresentation
 const Runic.Translations.Tooling.ArtifactInspector.DefaultMaximumBytes = 8388608 -> int
 const Runic.Translations.Tooling.TranslationInterchange.XliffProfile = "runic.xliff21.closed-text" -> string!
 const Runic.Translations.Tooling.TranslationInterchange.XliffProfileVersion = 2 -> int
-override Runic.Translations.Tooling.TranslationsToolCommandJsonContext.GetTypeInfo(System.Type! type) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?
-override Runic.Translations.Tooling.TranslationsToolCommandRequest.Equals(object? obj) -> bool
-override Runic.Translations.Tooling.TranslationsToolCommandRequest.GetHashCode() -> int
-override Runic.Translations.Tooling.TranslationsToolCommandRequest.ToString() -> string!
-override Runic.Translations.Tooling.TranslationsToolCommandResult.Equals(object? obj) -> bool
-override Runic.Translations.Tooling.TranslationsToolCommandResult.GetHashCode() -> int
-override Runic.Translations.Tooling.TranslationsToolCommandResult.ToString() -> string!
-override Runic.Translations.Tooling.TranslationsToolDiagnostic.Equals(object? obj) -> bool
-override Runic.Translations.Tooling.TranslationsToolDiagnostic.GetHashCode() -> int
-override Runic.Translations.Tooling.TranslationsToolDiagnostic.ToString() -> string!
-static Runic.CommandLine.Generated.GeneratedCommandCatalog.Create(System.Action<Runic.CommandLine.CommandCatalogBuilder!>? configure = null) -> Runic.CommandLine.CommandCatalog!
 static Runic.Translations.Tooling.ArtifactInspector.Inspect(System.ReadOnlyMemory<byte> content, int maximumBytes = 8388608) -> Runic.Translations.Tooling.ArtifactInspection!
 static Runic.Translations.Tooling.TranslationInterchange.ExportReviewJson(Runic.Translations.Tooling.TranslationInterchangeReview! review) -> byte[]!
-static Runic.Translations.Tooling.TranslationInterchange.ExportXliff21(Runic.Translations.Compiler.Rmf2ProjectCompilationV5! compilation, Runic.Translations.Tooling.TranslationInterchangeReview? review = null) -> Runic.Translations.Tooling.TranslationXliffExportResult!
+static Runic.Translations.Tooling.TranslationInterchange.ExportXliff21(Runic.Translations.Compiler.Rmf2ProjectCompilation! compilation, Runic.Translations.Tooling.TranslationInterchangeReview? review = null) -> Runic.Translations.Tooling.TranslationXliffExportResult!
 static Runic.Translations.Tooling.TranslationInterchange.ImportReviewJson(System.ReadOnlyMemory<byte> source) -> Runic.Translations.Tooling.TranslationInterchangeReview!
 static Runic.Translations.Tooling.TranslationInterchange.ImportXliff21(System.ReadOnlyMemory<byte> source) -> Runic.Translations.Tooling.TranslationXliffImportResult!
-static Runic.Translations.Tooling.TranslationsToolCommandJsonContext.Default.get -> Runic.Translations.Tooling.TranslationsToolCommandJsonContext!
-static Runic.Translations.Tooling.TranslationsToolCommandModule.CreateCatalog() -> Runic.CommandLine.CommandCatalog!
-static Runic.Translations.Tooling.TranslationsToolCommandModule.Generate(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project, string! output, bool csharp, bool json, bool typescript, bool manifest, bool esm, bool cpp) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
-static Runic.Translations.Tooling.TranslationsToolCommandModule.ImportText(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project, string! group, System.Collections.Generic.IReadOnlyList<string!>! tables, string? baseTexts, bool dryRun) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
-static Runic.Translations.Tooling.TranslationsToolCommandModule.Init(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string! directory, string! catalog, string! defaultLocale, string! codeNamespace, string! className, System.Collections.Generic.IReadOnlyList<string!>! locales, bool noStarter) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
-static Runic.Translations.Tooling.TranslationsToolCommandModule.Lsp(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
-static Runic.Translations.Tooling.TranslationsToolCommandModule.PresentAsync(Runic.CommandLine.CommandOutputMode outputMode, Runic.CommandLine.ICommandConsole! console, System.Globalization.CultureInfo! culture, string! command, int exitCode, Runic.Translations.Tooling.TranslationsToolCommandResult? result, Runic.CommandLine.CommandFault? fault, System.Collections.Generic.IReadOnlyList<Runic.CommandLine.CommandDiagnostic!>! diagnostics, string? humanFailureOutput = null, Runic.Translations.Tooling.TranslationsToolFailurePresentation failurePresentation = Runic.Translations.Tooling.TranslationsToolFailurePresentation.Standard, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-static Runic.Translations.Tooling.TranslationsToolCommandModule.Schema(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string! output) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
-static Runic.Translations.Tooling.TranslationsToolCommandModule.Serve(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
-static Runic.Translations.Tooling.TranslationsToolCommandModule.Validate(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
-static Runic.Translations.Tooling.TranslationsToolCommandModule.Verify(Runic.Translations.Tooling.ITranslationsToolCommandOperations! operations, string? project, string! output, bool csharp, bool json, bool typescript, bool manifest, bool esm, bool cpp) -> Runic.CommandLine.CommandOutcome<Runic.Translations.Tooling.TranslationsToolCommandResult!>!
-static Runic.Translations.Tooling.TranslationsToolCommandRequest.operator !=(Runic.Translations.Tooling.TranslationsToolCommandRequest? left, Runic.Translations.Tooling.TranslationsToolCommandRequest? right) -> bool
-static Runic.Translations.Tooling.TranslationsToolCommandRequest.operator ==(Runic.Translations.Tooling.TranslationsToolCommandRequest? left, Runic.Translations.Tooling.TranslationsToolCommandRequest? right) -> bool
-static Runic.Translations.Tooling.TranslationsToolCommandResult.operator !=(Runic.Translations.Tooling.TranslationsToolCommandResult? left, Runic.Translations.Tooling.TranslationsToolCommandResult? right) -> bool
-static Runic.Translations.Tooling.TranslationsToolCommandResult.operator ==(Runic.Translations.Tooling.TranslationsToolCommandResult? left, Runic.Translations.Tooling.TranslationsToolCommandResult? right) -> bool
-static Runic.Translations.Tooling.TranslationsToolDiagnostic.operator !=(Runic.Translations.Tooling.TranslationsToolDiagnostic? left, Runic.Translations.Tooling.TranslationsToolDiagnostic? right) -> bool
-static Runic.Translations.Tooling.TranslationsToolDiagnostic.operator ==(Runic.Translations.Tooling.TranslationsToolDiagnostic? left, Runic.Translations.Tooling.TranslationsToolDiagnostic? right) -> bool
-~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.IReadOnlyListTranslationsToolDiagnostic.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Runic.Translations.Tooling.TranslationsToolDiagnostic>>
-~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.Int32.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<int>
-~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.String.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>
-~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.TranslationsToolCommandResult.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Runic.Translations.Tooling.TranslationsToolCommandResult>
-~Runic.Translations.Tooling.TranslationsToolCommandJsonContext.TranslationsToolDiagnostic.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Runic.Translations.Tooling.TranslationsToolDiagnostic>

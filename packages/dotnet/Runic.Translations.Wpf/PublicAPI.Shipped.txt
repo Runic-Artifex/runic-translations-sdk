@@ -26,11 +26,11 @@ Runic.Translations.Wpf.TranslationSource
 Runic.Translations.Wpf.TranslationSource.Dispose() -> void
 Runic.Translations.Wpf.TranslationSource.Invalidate() -> void
 Runic.Translations.Wpf.TranslationSource.Manager.get -> Runic.Translations.ITranslationManager!
-Runic.Translations.Wpf.TranslationSource.Messages.get -> object!
+Runic.Translations.Wpf.TranslationSource.Messages.get -> Runic.Translations.IReadableMessages!
 Runic.Translations.Wpf.TranslationSource.PropertyChanged -> System.ComponentModel.PropertyChangedEventHandler?
 Runic.Translations.Wpf.TranslationSource.RefreshAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Runic.Translations.Wpf.TranslationSource.Renderer.get -> Runic.Translations.Wpf.WpfInlineRenderer?
-Runic.Translations.Wpf.TranslationSource.TranslationSource(Runic.Translations.ITranslationManager! manager, object! messages, Runic.Translations.Wpf.WpfInlineRenderer? renderer = null, System.Windows.Threading.Dispatcher? dispatcher = null) -> void
+Runic.Translations.Wpf.TranslationSource.TranslationSource(Runic.Translations.ITranslationManager! manager, Runic.Translations.IReadableMessages! messages, Runic.Translations.Wpf.WpfInlineRenderer? renderer = null, System.Windows.Threading.Dispatcher? dispatcher = null) -> void
 Runic.Translations.Wpf.TranslationSource.Version.get -> int
 Runic.Translations.Wpf.TranslationSource.this[string! key].get -> string!
 Runic.Translations.Wpf.WpfDocumentRenderer
@@ -38,11 +38,27 @@ Runic.Translations.Wpf.WpfDocumentRenderer.HeadingBase.get -> int
 Runic.Translations.Wpf.WpfDocumentRenderer.HeadingBase.init -> void
 Runic.Translations.Wpf.WpfDocumentRenderer.SetContent(System.Windows.Controls.FlowDocumentScrollViewer! target, Runic.Translations.BoundLocalizedDocumentContent! content) -> void
 Runic.Translations.Wpf.WpfDocumentRenderer.SetContent(System.Windows.Controls.FlowDocumentScrollViewer! target, string! key, Runic.Translations.LocalizedDocumentContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.MarkupBinding!>! slots) -> void
+Runic.Translations.Wpf.WpfDocumentRenderer.WpfDocumentRenderer(Runic.Translations.Rmf2MarkupContract! contract, System.Action<System.Uri!>! navigate) -> void
+Runic.Translations.Wpf.WpfDocumentRenderer.WpfDocumentRenderer(Runic.Translations.Rmf2MarkupContract! contract, System.Action<System.Uri!>! navigate, Runic.Translations.Wpf.WpfDocumentRendererOptions! options) -> void
 Runic.Translations.Wpf.WpfDocumentRenderer.WpfDocumentRenderer(string! contractJson, System.Action<System.Uri!>! navigate, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.Wpf.WpfMarkupFactory!>? custom = null, System.Action<string!, System.Windows.Documents.TextElement!>? theme = null) -> void
+Runic.Translations.Wpf.WpfDocumentRendererOptions
+Runic.Translations.Wpf.WpfDocumentRendererOptions.Custom.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.Wpf.WpfMarkupFactory!>?
+Runic.Translations.Wpf.WpfDocumentRendererOptions.Custom.init -> void
+Runic.Translations.Wpf.WpfDocumentRendererOptions.Theme.get -> System.Action<string!, System.Windows.Documents.TextElement!>?
+Runic.Translations.Wpf.WpfDocumentRendererOptions.Theme.init -> void
+Runic.Translations.Wpf.WpfDocumentRendererOptions.WpfDocumentRendererOptions() -> void
 Runic.Translations.Wpf.WpfInlineRenderer
 Runic.Translations.Wpf.WpfInlineRenderer.SetContent(System.Windows.Controls.TextBlock! target, Runic.Translations.BoundLocalizedTextContent! content) -> void
 Runic.Translations.Wpf.WpfInlineRenderer.SetContent(System.Windows.Controls.TextBlock! target, string! key, Runic.Translations.LocalizedTextContent! content, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.InlineMarkupBinding!>! slots) -> void
+Runic.Translations.Wpf.WpfInlineRenderer.WpfInlineRenderer(Runic.Translations.Rmf2MarkupContract! contract, System.Action<System.Uri!>! navigate) -> void
+Runic.Translations.Wpf.WpfInlineRenderer.WpfInlineRenderer(Runic.Translations.Rmf2MarkupContract! contract, System.Action<System.Uri!>! navigate, Runic.Translations.Wpf.WpfInlineRendererOptions! options) -> void
 Runic.Translations.Wpf.WpfInlineRenderer.WpfInlineRenderer(string! contractJson, System.Action<System.Uri!>! navigate, System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.Wpf.WpfMarkupFactory!>? custom = null, System.Action<string!, System.Windows.Documents.Inline!>? theme = null) -> void
+Runic.Translations.Wpf.WpfInlineRendererOptions
+Runic.Translations.Wpf.WpfInlineRendererOptions.Custom.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Runic.Translations.Wpf.WpfMarkupFactory!>?
+Runic.Translations.Wpf.WpfInlineRendererOptions.Custom.init -> void
+Runic.Translations.Wpf.WpfInlineRendererOptions.Theme.get -> System.Action<string!, System.Windows.Documents.Inline!>?
+Runic.Translations.Wpf.WpfInlineRendererOptions.Theme.init -> void
+Runic.Translations.Wpf.WpfInlineRendererOptions.WpfInlineRendererOptions() -> void
 Runic.Translations.Wpf.WpfMarkupFactory
 override Runic.Translations.Wpf.MessageExtension.ProvideValue(System.IServiceProvider! serviceProvider) -> object!
 static Runic.Translations.Wpf.TranslationProperties.GetArguments(System.Windows.DependencyObject! element) -> object?
