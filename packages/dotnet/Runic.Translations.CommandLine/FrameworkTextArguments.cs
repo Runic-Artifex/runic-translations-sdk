@@ -13,6 +13,7 @@ internal static class FrameworkTextArguments
     private static readonly string[] Option = ["option"];
     private static readonly string[] Parameter = ["parameter"];
     private static readonly string[] Prompt = ["prompt"];
+    private static readonly string[] File = ["file"];
 
     internal static FrozenDictionary<string, string[]> ByKey { get; } = new Dictionary<string, string[]>(StringComparer.Ordinal)
     {
@@ -29,6 +30,7 @@ internal static class FrameworkTextArguments
         ["help.output-format"] = None,
         ["help.json-output-alias"] = Option,
         ["help.json-payload-output-alias"] = None,
+        ["help.response-files"] = None,
         ["help.examples"] = None,
         ["help.required"] = None,
         ["help.default"] = None,
@@ -72,6 +74,11 @@ internal static class FrameworkTextArguments
         ["diagnostics.transport-output-option-collision"] = None,
         ["diagnostics.missing-required-option"] = ["option", "command"],
         ["diagnostics.unexpected-root-help-argument"] = None,
+        ["diagnostics.response-file-unreadable"] = File,
+        ["diagnostics.response-file-invalid-utf8"] = File,
+        ["diagnostics.response-file-unterminated-quote"] = File,
+        ["diagnostics.response-file-too-deep"] = File,
+        ["diagnostics.response-file-cycle"] = File,
         ["diagnostics.invalid-environment-value"] = ["option", "variable"],
         ["diagnostics.invalid-choice"] = ["parameter", "choices"],
         ["diagnostics.invalid-choice-hidden"] = Parameter,

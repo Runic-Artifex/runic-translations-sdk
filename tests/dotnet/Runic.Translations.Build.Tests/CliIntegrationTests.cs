@@ -3,14 +3,18 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
 internal sealed class CliIntegrationTests
 {
+    // Runic.CommandLine's opt-in response files (D031.5) replaced the tool's own expander; these cases are the former
+    // expander's, run in process through the tool's catalog and application with a probe command that reports the
+    // arguments it received.
     [Test, DisplayName("CLI response files keep backslashes unless they precede a quote")]
-    public void ResponseFilesUseMsvcrtBackslashRules()
+    public async Task ResponseFilesUseMsvcrtBackslashRules()
     {
         using TemporaryDirectory temporary = new();
         string responseFile = temporary.Resolve("arguments.rsp");
@@ -23,8 +27,6 @@ internal sealed class CliIntegrationTests
             "plain\\\"quote",
             "\"two words\""), new UTF8Encoding(false));
 
-        var expanded = Runic.Translations.Tool.CommandLine.ExpandResponseFiles(["@" + responseFile]);
-
         string[] expected =
         [
             @"\\server\share\translations\runic.json",
@@ -34,7 +36,50 @@ internal sealed class CliIntegrationTests
             "plain\"quote",
             "two words",
         ];
-        Assert.Equal(string.Join('|', expected), string.Join('|', expanded));
+        Assert.Equal(string.Join('|', expected), string.Join('|', await ResponseFileProbe.ExpandAsync("@" + responseFile)));
+    }
+
+    [Test, DisplayName("CLI response files nest relative to their own directory and keep @@ as a literal @")]
+    public async Task ResponseFilesNestAndEscape()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("nested"));
+        File.WriteAllText(temporary.Resolve("outer.rsp"), "first\n@nested/inner.rsp\n@@scope\nlast\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("nested", "inner.rsp"), "\uFEFF\"inner value\"\n@leaf.rsp\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("nested", "leaf.rsp"), "grüße\n", new UTF8Encoding(false));
+
+        string[] expanded = await ResponseFileProbe.ExpandAsync("@" + temporary.Resolve("outer.rsp"), "@", "@@literal");
+        Assert.Equal("first|inner value|grüße|@scope|last|@|@literal", string.Join('|', expanded));
+    }
+
+    // A response file that cannot be used is a Runic.CommandLine usage error (exit 2) with its own RCLI1017–RCLI1021
+    // code. A missing file was an I/O failure (RCLI8205, exit 1) of the tool's own expander.
+    [Test, DisplayName("CLI response file errors are usage errors with their own codes")]
+    public void ResponseFileErrors()
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllBytes(temporary.Resolve("invalid.rsp"), [(byte)'a', 0xFF, (byte)'b']);
+        File.WriteAllText(temporary.Resolve("quote.rsp"), "validate \"open\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("self.rsp"), "@self.rsp\n", new UTF8Encoding(false));
+
+        AssertUsageFailure(temporary, "The response file 'missing.rsp' could not be read.", "@missing.rsp");
+        AssertUsageFailure(temporary, "The response file 'invalid.rsp' is not valid UTF-8.", "@invalid.rsp");
+        AssertUsageFailure(temporary, "The response file 'quote.rsp' has an unterminated quote.", "@quote.rsp");
+        AssertUsageFailure(temporary, "The response file 'self.rsp' includes itself.", "@self.rsp");
+
+        foreach ((string file, string code) in new[] { ("missing.rsp", "RCLI1017"), ("invalid.rsp", "RCLI1018"), ("quote.rsp", "RCLI1019"), ("self.rsp", "RCLI1021") })
+        {
+            ProcessResult json = TestFixture.RunTool(temporary, "--format", "json", "@" + file);
+            Assert.Equal(2, json.ExitCode, json.Combined);
+            using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
+            Assert.Equal(code, envelope.RootElement.GetProperty("fault").GetProperty("code").GetString());
+            JsonElement diagnostic = envelope.RootElement.GetProperty("diagnostics")[0];
+            Assert.Equal(code, diagnostic.GetProperty("code").GetString());
+            Assert.Equal(file, diagnostic.GetProperty("arguments")[0].GetString());
+        }
+
+        ProcessResult help = TestFixture.RunTool(temporary, "--help");
+        Assert.Contains("@<file>", help.StandardOutput);
     }
 
     [Test, DisplayName("CLI project mode validates and generates direct MF2")]
@@ -56,6 +101,13 @@ internal sealed class CliIntegrationTests
         ProcessResult generate = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "generated", "--emit-esm");
         Assert.Equal(0, generate.ExitCode, generate.Combined);
         Assert.True(File.Exists(temporary.Resolve("generated", "app.esm-v5", "server.js")), "Project mode did not generate the server entrypoint.");
+
+        // The whole invocation may come from a response file, including the command and the output selector.
+        File.WriteAllText(temporary.Resolve("verify.rsp"), "# verify the generated ESM\nverify --project translations\n--output generated --emit-esm\n--format json\n", new UTF8Encoding(false));
+        ProcessResult verify = TestFixture.RunTool(temporary, "@verify.rsp");
+        Assert.Equal(0, verify.ExitCode, verify.Combined);
+        using JsonDocument verified = JsonDocument.Parse(verify.StandardOutput);
+        Assert.Equal("verify", verified.RootElement.GetProperty("command").GetString());
     }
 
     [Test, DisplayName("CLI help and invalid invocation use stable exit codes")]

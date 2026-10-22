@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,7 +43,7 @@ internal sealed class ToolEnvironmentTests
                 .CreateHandlerWith(ProbeHandler.Factory)
                 .Produces(CommandResultCodecs.String)).Build());
         var console = new InteractiveConsole();
-        int exitCode = await Program.CreateApp(catalog, console, new ToolExecutionSink()).RunAsync(["probe-prompts"]);
+        int exitCode = await Program.CreateApp(catalog, console).RunAsync(["probe-prompts"]);
         Assert.Equal(0, exitCode, console.Text);
         return console.Text.Trim();
     }
@@ -77,6 +78,67 @@ internal sealed class ToolEnvironmentTests
         public bool IsInputRedirected => false;
         public bool IsOutputRedirected => false;
         public bool IsErrorRedirected => false;
+        public ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken) => ValueTask.FromResult<string?>(null);
+        public ValueTask WriteOutAsync(ReadOnlyMemory<char> value, CancellationToken cancellationToken) { _text.Append(value.Span); return ValueTask.CompletedTask; }
+        public ValueTask WriteOutBytesAsync(ReadOnlyMemory<byte> value, CancellationToken cancellationToken) { _text.Append(Encoding.UTF8.GetString(value.Span)); return ValueTask.CompletedTask; }
+        public ValueTask WriteErrorAsync(ReadOnlyMemory<char> value, CancellationToken cancellationToken) { _text.Append(value.Span); return ValueTask.CompletedTask; }
+    }
+}
+
+// Runs the tool's application in process with the tool's catalog and a probe-words command that returns the
+// arguments it received, so the response-file cases see the tool's own configuration of Runic.CommandLine.
+internal static class ResponseFileProbe
+{
+    internal static async Task<string[]> ExpandAsync(params string[] arguments)
+    {
+        string[]? received = null;
+        CommandCatalog catalog = CommandCatalog.Combine(
+            Program.CreateCatalog(),
+            new CommandCatalogBuilder().Command<WordsOptions, WordsHandler, string>("probe-words", command => command
+                .Argument("words", "words", CommandArity.ZeroOrMore)
+                .BindWith(new WordsBinder(words => received = words))
+                .CreateHandlerWith(WordsHandler.Factory)
+                .Produces(CommandResultCodecs.String)).Build());
+        var console = new CapturingConsole();
+        int exitCode = await Program.CreateApp(catalog, console).RunAsync(["probe-words", .. arguments]);
+        Assert.Equal(0, exitCode, console.Text);
+        return received ?? throw new InvalidOperationException("The probe command did not run:\n" + console.Text);
+    }
+
+    private sealed class WordsOptions;
+
+    private sealed class WordsBinder(Action<string[]> received) : ICommandOptionsBinder<WordsOptions>
+    {
+        public ValueTask<CommandOutcome<WordsOptions>> BindAsync(ParsedInvocation invocation, CancellationToken cancellationToken)
+        {
+            var words = new List<string>();
+            foreach (CommandValueBinding argument in invocation.Arguments) words.AddRange(argument.Values);
+            received(words.ToArray());
+            return ValueTask.FromResult(CommandOutcome.Success(new WordsOptions()));
+        }
+    }
+
+    private sealed class WordsHandler : ICommandHandler<WordsOptions, string>
+    {
+        internal static ICommandHandlerFactory<WordsHandler> Factory { get; } = new HandlerFactory();
+
+        public ValueTask<CommandOutcome<string>> ExecuteAsync(WordsOptions options, CommandExecutionContext context, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(CommandOutcome.Success(string.Empty));
+
+        private sealed class HandlerFactory : ICommandHandlerFactory<WordsHandler>
+        {
+            public WordsHandler Create(IServiceProvider services) => new();
+        }
+    }
+
+    private sealed class CapturingConsole : ICommandConsole
+    {
+        private readonly StringBuilder _text = new();
+        internal string Text => _text.ToString();
+        public bool IsInteractive => false;
+        public bool IsInputRedirected => true;
+        public bool IsOutputRedirected => true;
+        public bool IsErrorRedirected => true;
         public ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken) => ValueTask.FromResult<string?>(null);
         public ValueTask WriteOutAsync(ReadOnlyMemory<char> value, CancellationToken cancellationToken) { _text.Append(value.Span); return ValueTask.CompletedTask; }
         public ValueTask WriteOutBytesAsync(ReadOnlyMemory<byte> value, CancellationToken cancellationToken) { _text.Append(Encoding.UTF8.GetString(value.Span)); return ValueTask.CompletedTask; }

@@ -331,7 +331,7 @@ internal static class Program
             $"{Path.GetFileName(package)} has exactly the approved dependency set");
     }
 
-    // 0.8.0 becomes 0.9.0: a Runic Command Line minor may break its API until 1.0.
+    // 0.9.0 becomes 0.10.0: a Runic Command Line minor may break its API until 1.0.
     private static string NextMinor(string version)
     {
         string[] parts = version.Split('.');
