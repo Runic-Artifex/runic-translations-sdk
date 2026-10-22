@@ -10,10 +10,10 @@ const generatedTypes = await readFile(new URL("../src/generated/types.ts", impor
 const saveArgument = "editorDocumentSaveRequest: EditorDocumentSaveRequest";
 if (!/export interface EditorDocumentSaveRequest \{\s*readonly content: string;\s*readonly revision: string;\s*\}/.test(generatedTypes) ||
     !generatedDocument.includes(`save(${saveArgument}): Promise<EditorDocumentState>`) ||
-    !generatedDocument.includes(`startSave(${saveArgument}): Promise<EditorDocumentSaveOperation>`))
+    !generatedDocument.includes(`startSave(${saveArgument}, options?: BridgeOperationStartOptions): Promise<EditorDocumentSaveOperation>`))
   throw new Error("The generated document client is missing its revision-aware save command or result operation.");
 const index = await readFile(new URL("index.html", build), "utf8");
-for (const script of ['src="/webui.js"', 'src="/runic-cswebui.js"'])
+for (const script of ['src="/webui.js"', 'src="/runic-views.js"'])
   if (!index.includes(script)) throw new Error(`The production shell omitted ${script}.`);
 if (!index.includes("/_app/immutable/")) throw new Error("The SvelteKit client entry was not emitted.");
 

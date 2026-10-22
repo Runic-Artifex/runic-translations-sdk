@@ -28,6 +28,8 @@
             shellHook = baseShell.shellHook + ''
 
               export WEBUI_BROWSER_PATH="${pkgs.chromium}/bin/chromium"
+              # CS-WebUI selects the browser for `edit` from CSWEBUI_BROWSER_PATH (no fallback).
+              export CSWEBUI_BROWSER_PATH="$WEBUI_BROWSER_PATH"
               export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="$WEBUI_BROWSER_PATH"
               export LD_LIBRARY_PATH="${lib.makeLibraryPath editorRuntime}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
               export GIO_EXTRA_MODULES="${pkgs.glib-networking}/lib/gio/modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"

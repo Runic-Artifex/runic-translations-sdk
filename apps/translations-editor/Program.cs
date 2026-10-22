@@ -12,7 +12,6 @@ using Runic.Application.Views.CsWebUi;
 using Runic.Application.Views.ReactiveUI;
 using Runic.CommandLine;
 using Runic.Navigation;
-using Runic.Navigation.ReactiveUI;
 using Splat;
 
 namespace Runic.Translations.Editor;
@@ -217,8 +216,9 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         try
         {
             using var services = CreateEditorServices(workspacePath);
-            await using var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host));
-            window.SetRootFolder(EditorUiRoot());
+            // Opens the native window with its Bridge and content root, but shows nothing.
+            var host = new RunicCsWebUiHost(services, new RunicCsWebUiHostOptions { ShowWindow = static (_, _) => { } });
+            await using var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions()).ConfigureAwait(false);
             await Task.Yield();
             var evidence = new
             {
@@ -246,16 +246,18 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
                 new CommandFault("REDIT0004", "The packaged web UI is unavailable."));
         using var services = CreateEditorServices(workspacePath);
-        await using (var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host)))
+        // Run keeps this thread in WebUI's wait loop while the window is shown and cleans up WebUI afterwards.
+        int exitCode = RunicCsWebUiHost.Run(services, new RunicCsWebUiHostOptions { UseWebView = useWebView }, async host =>
         {
-            window.SetRootFolder(EditorUiRoot());
-            window.SetSize(1440, 900);
-            if (useWebView) window.ShowWebView("index.html");
-            else window.Show("index.html");
-            WebUiApplication.Wait();
-        }
-        WebUiApplication.Clean();
-        return CommandOutcome.Success(new EditorCommandResult(string.Empty));
+            await using var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions() with { Width = 1440, Height = 900 })
+                .ConfigureAwait(false);
+            await window.WaitForCloseAsync().ConfigureAwait(false);
+            return 0;
+        });
+        return exitCode == 0
+            ? CommandOutcome.Success(new EditorCommandResult(string.Empty))
+            : CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
+                new CommandFault("REDIT0009", "The editor window could not be shown."));
     }
 
     private static async Task<CommandOutcome<EditorCommandResult>> ServeHostedWebAsync(string workspacePath)
@@ -264,12 +266,18 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
                 new CommandFault("REDIT0004", "The packaged web UI is unavailable."));
         using var services = CreateEditorServices(workspacePath);
-        await using (var window = services.OpenWindow<EditorWindow, EditorViewModel>(host => new EditorWindow(host)))
+        // Starts the window's local server instead of opening a browser, and serves until the process ends.
+        var host = new RunicCsWebUiHost(services, new RunicCsWebUiHostOptions
         {
-            window.SetRootFolder(EditorUiRoot());
-            string url = window.StartServer("index.html");
-            Console.WriteLine($"Runic Translations Editor is serving '{Path.GetFullPath(workspacePath)}' at {url}");
-            Console.Out.Flush();
+            ShowWindow = (window, startPage) =>
+            {
+                string url = window.StartServer(startPage);
+                Console.WriteLine($"Runic Translations Editor is serving '{Path.GetFullPath(workspacePath)}' at {url}");
+                Console.Out.Flush();
+            },
+        });
+        await using (var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions()).ConfigureAwait(false))
+        {
             await Task.Delay(Timeout.InfiniteTimeSpan).ConfigureAwait(false);
         }
         WebUiApplication.Clean();
@@ -296,10 +304,11 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             .Map<EditorProjectViewModel>(() => new EditorProjectView())
             .Map<EditorDocumentViewModel>(() => new EditorDocumentView());
         services.AddScoped<IRunicViewLocator>(_ => new ReactiveRunicViewLocator(locator));
-        services.AddRunicBridges();
+        services.AddRunicViews();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
+    private static RunicWindowOptions EditorWindowOptions() => new() { ContentRoot = EditorUiRoot(), StartPage = "index.html" };
     private static string EditorUiRoot() => Path.Combine(AppContext.BaseDirectory, "www");
     private static bool EditorUiAvailable() => File.Exists(Path.Combine(EditorUiRoot(), "index.html"));
 

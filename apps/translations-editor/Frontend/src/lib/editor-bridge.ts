@@ -65,8 +65,10 @@ async function serialized<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
+// A lost Bridge (`disconnected`) or a View that .NET released (`released`, for example after a reconnect) leaves the
+// cached root and document references unusable; the next call connects again.
 function disconnectOnFailure(error: unknown, root?: EditorClient): void {
-  if (error instanceof BridgeError && error.kind === "disconnected") {
+  if (error instanceof BridgeError && (error.kind === "disconnected" || error.kind === "released")) {
     root?.dispose();
     connection = undefined;
     documentRefs.clear();
