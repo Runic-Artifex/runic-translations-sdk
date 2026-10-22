@@ -28,7 +28,7 @@ internal sealed partial class ResolverTests
         ["greet", "Ada", "--times", "1", "--times", "2"],
         ["greet", "Ada", "Bob"],
         ["frobnicate"],
-        ["greet", "Ada", "--json", "--output", "json"],
+        ["greet", "Ada", "--json", "--format", "json"],
         ["ask"],
         ["ask", "--json"],
     ];
@@ -44,9 +44,9 @@ internal sealed partial class ResolverTests
         Assert.Throws<ArgumentNullException>(() => TranslationCommandTextResolver.GetMessageName(null!));
     }
 
-    // CommandTextKeys is new in Runic.CommandLine 0.6.0-preview.4; the adapter package requires 0.7.0-preview.1, whose keys it lists.
+    // CommandTextKeys is new in Runic.CommandLine 0.6.0-preview.4; the adapter package requires 0.8.0, whose keys it lists.
     private static readonly Type TextKeys = typeof(CommandApp).Assembly.GetType("Runic.CommandLine.CommandTextKeys")
-        ?? throw new InvalidOperationException("Runic.CommandLine has no CommandTextKeys; the adapter requires 0.7.0-preview.1 or later.");
+        ?? throw new InvalidOperationException("Runic.CommandLine has no CommandTextKeys; the adapter requires 0.8.0 or later.");
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The test runs on the JIT and reads a public property.")]
     [Test, DisplayName("the argument table matches CommandTextKeys.All")]
@@ -150,9 +150,9 @@ internal sealed partial class ResolverTests
             help.Output.Contains("Hilfe anzeigen", StringComparison.Ordinal), help.Output);
         Result unknown = await Run(resolver, "de", "greet", "Ada", "--bogus");
         Assert.True(unknown.Error.Contains("Unbekannte Option. (--bogus)", StringComparison.Ordinal), unknown.Error);
-        Assert.True(help.Output.Contains("Entspricht --output json", StringComparison.Ordinal), help.Output);
-        Result conflict = await Run(resolver, "de", "greet", "Ada", "--json", "--output", "json");
-        Assert.True(conflict.Output.Contains("--output und --json wählen beide das Ausgabeformat.", StringComparison.Ordinal), conflict.Output);
+        Assert.True(help.Output.Contains("Entspricht --format json", StringComparison.Ordinal), help.Output);
+        Result conflict = await Run(resolver, "de", "greet", "Ada", "--json", "--format", "json");
+        Assert.True(conflict.Output.Contains("--format und --json wählen beide das Ausgabeformat.", StringComparison.Ordinal), conflict.Output);
         Result prompt = await Run(resolver, "de", "ask");
         Assert.Equal("RCLI4001: Name benötigt eine Antwort, aber der Befehl läuft nicht in einem interaktiven Terminal. Geben Sie den Wert in der Befehlszeile an.\n",
             prompt.Error, "ask error");

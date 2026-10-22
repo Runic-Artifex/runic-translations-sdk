@@ -135,16 +135,15 @@ internal sealed class SupportCommandTests
             (CommandExitCategory.Cancelled, 130),
         ];
         foreach ((CommandExitCategory category, int exitCode) in table)
-            Assert.Equal(exitCode, ToolExitCodePolicy.Instance.GetExitCode(category), category.ToString());
+            Assert.Equal(exitCode, Program.ExitCodeOf(category), category.ToString());
     }
 
-    [Test, DisplayName("--runic-output is a hidden alias of --format before --")]
+    [Test, DisplayName("--runic-output is a hidden alias of --format")]
     public void FormerOutputSelectorIsAnAlias()
     {
-        Assert.Equal(
-            "support|preview|--format|json|--format=json|--|--runic-output|json",
-            string.Join('|', Runic.Tools.Shared.OutputSelectorAlias.Rewrite(
-                ["support", "preview", "--runic-output", "json", "--runic-output=json", "--", "--runic-output", "json"], "--runic-output")));
+        CommandCatalog catalog = Program.CreateCatalog();
+        Assert.Equal("--format", catalog.OutputSelector);
+        Assert.Equal("--runic-output", string.Join('|', catalog.OutputSelectorAliases));
 
         using TemporaryDirectory temporary = new();
         WriteEditorZip(temporary, EditorSummary);

@@ -172,7 +172,7 @@ internal sealed class CompileServer
     private static ToolOperationResult Usage(string message)
     {
         var result = new ToolOperationResult { ExitCode = 2, ExitCategory = CommandExitCategory.Usage };
-        result.AddDiagnostic("RCLI9003", "tool-usage", message, CommandDiagnosticSeverity.Error);
+        result.AddDiagnostic(ToolCodes.Usage, "tool-usage", message, CommandDiagnosticSeverity.Error);
         return result;
     }
 

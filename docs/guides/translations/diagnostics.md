@@ -403,68 +403,77 @@ removed property.
 ## runic-translations tool codes
 
 The `runic-translations` tool (`dotnet-runic-translations`) reports these codes
-in the `runic.commandline/1` envelope. Exit code `1` means a command failure,
+in the `runic.commandline/1` envelope. The fault of a failed command is an `RTR`
+code; its diagnostics use the tool's block `RCLI8200`–`RCLI8299` of the
+Runic.CommandLine application range. Exit code `1` means a command failure,
 such as a `verify` difference or an inaccessible file; `2` an invalid
 invocation or translation diagnostics; `3` an internal failure; `130` a
 cancelled command.
 
-## RCLI9000
+Before 0.8 the tool reported these meanings with Runic.CommandLine's generator
+codes: `RCLI9000` is now `RTR0087`, `RCLI9014` is `RTR0088` with `RCLI8214`
+diagnostics, and `RCLI9001`–`RCLI9006`, `RCLI9011` and `RCLI9013` are `RCLI8201`–`RCLI8206`,
+`RCLI8211` and `RCLI8213`. `RCLI9012` is no longer reported: translation
+diagnostics keep their own `RTR` IDs.
+
+## RTR0087
 
 The translations command could not be completed. The fault of a failed command;
 its diagnostics name the cause.
 
-## RCLI9001
+## RTR0088
+
+`import-text` cannot import its input. The fault of a rejected import; one
+`RCLI8214` diagnostic names each problem. The command exits with 2 and writes
+nothing.
+
+## RCLI8201
 
 The requested output could not be written, for example because of an
 `RTR0020` path problem. Fix the reported path and run the command again.
 
-## RCLI9002
+## RCLI8202
 
 The translations operation reported diagnostics. Fix the `RTR` diagnostics it
 lists.
 
-## RCLI9003
+## RCLI8203
 
 The command arguments are invalid. The message names the argument, and human
 output prints the usage.
 
-## RCLI9004
+## RCLI8204
 
 A translations project could not be created, for example because the project
 already exists; no files were written. The message names the problem.
 
-## RCLI9005
+## RCLI8205
 
 A translations input or output could not be accessed. Check that the paths
 exist and that you can read and write them.
 
-## RCLI9006
+## RCLI8206
 
 The command failed internally. Report it with the command and project that
 trigger it.
 
-## RCLI9011
+## RCLI8211
 
 `verify` found a difference between the retained output and freshly generated
 output. Regenerate the output with `generate` and commit it.
 
-## RCLI9012
-
-A translation diagnostic, reported once per `RTR` diagnostic with the `RTR` ID
-in its message. Fix the `RTR` diagnostic.
-
-## RCLI9013
+## RCLI8213
 
 The project cannot produce the requested output, for example an emit switch
 the project's sources do not support. The message names the output.
 
-## RCLI9014
+## RCLI8214
 
-`import-text` cannot import its input: a table is not a JSON object of string
-values, `--base` is not a JSON array of strings, a translation uses a
-placeholder that its base text lacks, or the existing base-locale file of the
-group cannot be read back. The message names the file or the base text. The
-command exits with 2 and writes nothing.
+A problem that keeps `import-text` from importing its input: a table is not a
+JSON object of string values, `--base` is not a JSON array of strings, a
+translation uses a placeholder that its base text lacks, or the existing
+base-locale file of the group cannot be read back. The message names the file
+or the base text. The fault is `RTR0088`.
 
 ## runic-translations support codes
 

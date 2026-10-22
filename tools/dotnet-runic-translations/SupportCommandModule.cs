@@ -26,10 +26,14 @@ internal static class SupportCommandModule
 
     private const string EditorDiagnosticsDescription = "The Editor diagnostic ZIP to read. Required.";
 
-    /// <summary>The tool's generated catalog (translation and support commands), with the support commands' human output.</summary>
+    /// <summary>
+    /// The tool's generated catalog (translation and support commands), with the output selector <c>--format</c>, its
+    /// former spelling <c>--runic-output</c> as a hidden alias until 2.0, and the support commands' human output.
+    /// </summary>
     internal static CommandCatalog CreateCatalog() =>
         Runic.CommandLine.Generated.GeneratedCommandCatalog.Create(builder =>
         {
+            builder.OutputSelector(Program.FormatOptionName, Program.FormerFormatOptionName);
             foreach (string mode in Modes) builder.Present<SupportCommandResult>(Group + " " + mode, PresentAsync);
         });
 
@@ -117,5 +121,7 @@ internal sealed record SupportCommandResult(
     public string ToHumanOutput() => $"Support {Mode}: selected {string.Join(", ", Collectors.DefaultIfEmpty("none"))}; omitted {string.Join(", ", Omissions.DefaultIfEmpty("none"))}; outbound transport attempts: {OutboundTransportAttempts}; digest: {Digest}" + (Destination is null ? string.Empty : $"; path: {Destination}");
 }
 
+// The properties name themselves; the policy states the camelCase payload rule for any later property, as the command generator asks.
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(SupportCommandResult))]
 internal sealed partial class SupportCommandJsonContext : JsonSerializerContext;

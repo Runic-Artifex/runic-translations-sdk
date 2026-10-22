@@ -19,9 +19,8 @@ namespace Runic.Translations.Editor;
 
 internal static class Program
 {
-    private const int SuccessExitCode = 0;
-    private const int ValidationFailureExitCode = 1;
-    private const int UsageFailureExitCode = 2;
+    private const int SuccessExitCode = CommandExitCodes.Success;
+    private const int UsageFailureExitCode = CommandExitCodes.Usage;
 
     private const string HelpText = """
         Runic Translations Editor
@@ -30,10 +29,10 @@ internal static class Program
           runic-translations-editor [edit] [<workspace>] [--workspace <path>] [--webview] [--smoke-test] [--native-shell-canary]
           runic-translations-editor validate [<workspace>] [--workspace <path>]
           runic-translations-editor diagnostics [<workspace>] [--workspace <path>]
-          runic-translations-editor export [<workspace>] --format xliff --output <directory> [--workspace <path>]
-          runic-translations-editor export [<workspace>] --format review --output <path> [--workspace <path>]
-          runic-translations-editor report [<workspace>] --format xliff|review --source <path> [--workspace <path>]
-          runic-translations-editor import [<workspace>] --format xliff|review --source <path> --apply [--workspace <path>]
+          runic-translations-editor export [<workspace>] --interchange xliff --output <directory> [--workspace <path>]
+          runic-translations-editor export [<workspace>] --interchange review --output <path> [--workspace <path>]
+          runic-translations-editor report [<workspace>] --interchange xliff|review --source <path> [--workspace <path>]
+          runic-translations-editor import [<workspace>] --interchange xliff|review --source <path> --apply [--workspace <path>]
           runic-translations-editor serve [<workspace>] [--workspace <path>]
           runic-translations-editor help | --help | -h
           runic-translations-editor --version
@@ -42,8 +41,9 @@ internal static class Program
         Validation uses the same compiler path and diagnostics as editor load and save.
         `report` is the read-only, reviewable import preview. `import --apply` previews
         and then applies one import in the same process; it never accepts a reusable token.
-        Select machine output with --runic-output json.
-        Exit codes: 0 success; 1 validation failure; 2 usage failure.
+        Select machine output with --format json.
+        Exit codes: 0 success; 1 command failure, such as an unavailable editor UI; 2 usage or validation
+        failure, such as workspace diagnostics or a refused import; 3 internal failure; 130 cancelled.
         """ + "\n";
 
     public static int Main(string[] args)
@@ -67,8 +67,6 @@ internal static class Program
             Name = "runic-translations-editor",
             Version = VersionText(),
             Console = new Runic.CommandLine.Spectre.SpectreCommandConsole(),
-            ParseSettings = new ParseSettings(Environment.GetEnvironmentVariable(CommandOutputClassifier.EnvironmentVariableName), transportOutputOptionName: "--runic-output"),
-            ExitCodePolicy = EditorExitCodePolicy.Instance,
             OutcomeSink = new EditorOutcomeSink(),
             CreateScopeFactory = invocation => new EditorExecutionScopeFactory(new EditorCommandLineOperations(
                 opensPackagedExample: bareInvocation || (!catalog.TryGetCommand(args[0], out _) && invocation.Arguments.Count == 0))),
@@ -80,11 +78,11 @@ internal static class Program
                     return UsageFailureExitCode;
                 }
                 string text = parse.Kind == ParseOutcomeKind.Version ? VersionText() :
-                    parse.HelpRequest!.Path.Count == 0 ? HelpText : CommandHelpFormatter.Format(catalog, "runic-translations-editor", parse.HelpRequest.Path, "--runic-output");
+                    parse.HelpRequest!.Path.Count == 0 ? HelpText : CommandHelpFormatter.Format(catalog, "runic-translations-editor", parse.HelpRequest.Path);
                 if (parse.OutputClassification?.Mode == CommandOutputMode.Json)
                     await CommandOutputDispatcher.DispatchAsync(CommandOutputMode.Json, console, CultureInfo.InvariantCulture,
-                        CommandResponse.Succeeded("runic-translations-editor", parse.Kind == ParseOutcomeKind.Version ? "version" : "help", CommandResultCodecs.String.PayloadType, text),
-                        CommandResultCodecs.String, cancellationToken).ConfigureAwait(false);
+                        CommandResponse.Success("runic-translations-editor", parse.Kind == ParseOutcomeKind.Version ? "version" : "help", CommandResultCodecs.String.PayloadType, text),
+                        CommandResultCodecs.String, cancellationToken: cancellationToken).ConfigureAwait(false);
                 else await console.WriteOutAsync(text.AsMemory(), cancellationToken).ConfigureAwait(false);
                 return SuccessExitCode;
             },
@@ -123,22 +121,6 @@ internal static class Program
             result: null,
             fault: new CommandFault(diagnostic.Code, diagnostic.Message),
             diagnostics: parse.Diagnostics).ConfigureAwait(false);
-    }
-
-    internal sealed class EditorExitCodePolicy : IExitCodePolicy
-    {
-        internal static EditorExitCodePolicy Instance { get; } = new();
-
-        private EditorExitCodePolicy()
-        {
-        }
-
-        public int GetExitCode(CommandExitCategory category) => category switch
-        {
-            CommandExitCategory.Success => SuccessExitCode,
-            CommandExitCategory.Usage or CommandExitCategory.Unavailable or CommandExitCategory.HostFailure => UsageFailureExitCode,
-            _ => ValidationFailureExitCode,
-        };
     }
 
     private sealed class EditorExecutionScopeFactory(IEditorCommandOperations operations) : ICommandExecutionScopeFactory
@@ -184,7 +166,7 @@ internal static class Program
                     command.Name,
                     exitCode,
                     typedOutcome.ExitCategory,
-                    typedOutcome.IsSuccess ? typedOutcome.Value : null,
+                    typedOutcome.Succeeded ? typedOutcome.Value : null,
                     typedOutcome.Fault,
                     diagnostics,
                     typedOutcome.HumanOutput,
@@ -369,7 +351,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                 if (machineOutput)
                 {
                     if (commandDiagnostics.Count < 32) commandDiagnostics.Add(new CommandDiagnostic(
-                        "RCLI9050",
+                        "RCLI8050",
                         "workspace-diagnostic",
                         line,
                         CommandDiagnosticPhase.Execution,
@@ -442,7 +424,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         EditorCommandRequest request)
     {
         if (!TryInterchangeFormat(request.Format, out string format))
-            return Usage("REDIT0006", "Use --format xliff or --format review for interchange commands.");
+            return Usage("REDIT0006", "Use --interchange xliff or --interchange review for interchange commands.");
         if (string.IsNullOrWhiteSpace(request.Output))
             return Usage("REDIT0006", "Export requires --output <directory-or-path>.");
 
@@ -475,7 +457,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         EditorCommandRequest request)
     {
         if (!TryInterchangeFormat(request.Format, out string format))
-            return Usage("REDIT0006", "Use --format xliff or --format review for interchange commands.");
+            return Usage("REDIT0006", "Use --interchange xliff or --interchange review for interchange commands.");
         if (string.IsNullOrWhiteSpace(request.Source))
             return Usage("REDIT0006", "Report requires --source <path>.");
 
@@ -510,7 +492,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         if (!request.Apply)
             return Usage("REDIT0006", "Import is irreversible. Run report first, then pass --apply to import the reviewed source.");
         if (!TryInterchangeFormat(request.Format, out string format))
-            return Usage("REDIT0006", "Use --format xliff or --format review for interchange commands.");
+            return Usage("REDIT0006", "Use --interchange xliff or --interchange review for interchange commands.");
         if (string.IsNullOrWhiteSpace(request.Source))
             return Usage("REDIT0006", "Import requires --source <path>.");
 

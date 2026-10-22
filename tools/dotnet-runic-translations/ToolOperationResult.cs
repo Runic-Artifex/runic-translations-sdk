@@ -19,6 +19,8 @@ internal sealed class ToolOperationResult
     internal CommandExitCategory ExitCategory { get; set; } = CommandExitCategory.Success;
     internal string Output => _output.ToString().TrimEnd();
     internal string? HumanOutput { get; private set; }
+    /// <summary>The fault of a failure whose cause has its own code; otherwise the generic <see cref="ToolCodes.CommandFailed"/>.</summary>
+    internal CommandFault? Fault { get; set; }
     internal IReadOnlyList<CommandDiagnostic> Diagnostics => _diagnostics;
     internal IReadOnlyList<TranslationsToolDiagnostic> TranslationDiagnostics => _translationDiagnostics;
 

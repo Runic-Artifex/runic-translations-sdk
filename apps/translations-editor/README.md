@@ -19,23 +19,23 @@ Open the directory containing `translations/runic.json`, or the translations
 directory itself. The editor uses the same compiler path as MSBuild and Vite.
 After building from source, use the launch command below with
 `validate /path/to/workspace` for compiler-backed
-validation: exit codes are `0` for valid, `1` for diagnostics or a missing project,
-and `2` when validation cannot start.
+validation: exit codes are `0` for valid, `2` for diagnostics, a missing project
+or when validation cannot start, and `3` for an internal failure.
 
 ## Headless interchange
 
 Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an import's reviewable diff and refusals without changing the workspace. An XLIFF import updates only the target project's declared translation resources. An import is applied only when `--apply` is explicit; it previews and consumes the confirmation within one process, so no confirmation token is persisted or reusable.
 
 ```bash
-./runic-translations-editor export /path/to/workspace --format xliff --output .runic-translations/export
-./runic-translations-editor report /path/to/workspace --format xliff --source .runic-translations/export/catalog.en.xliff
-./runic-translations-editor import /path/to/workspace --format xliff --source .runic-translations/export/catalog.en.xliff --apply
+./runic-translations-editor export /path/to/workspace --interchange xliff --output .runic-translations/export
+./runic-translations-editor report /path/to/workspace --interchange xliff --source .runic-translations/export/catalog.en.xliff
+./runic-translations-editor import /path/to/workspace --interchange xliff --source .runic-translations/export/catalog.en.xliff --apply
 
-./runic-translations-editor export /path/to/workspace --format review --output .runic-translations/export/catalog.review.json
-./runic-translations-editor report /path/to/workspace --format review --source .runic-translations/export/catalog.review.json
+./runic-translations-editor export /path/to/workspace --interchange review --output .runic-translations/export/catalog.review.json
+./runic-translations-editor report /path/to/workspace --interchange review --source .runic-translations/export/catalog.review.json
 ```
 
-`--output` belongs to `export`; select the command response envelope with `--runic-output json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). An XLIFF import updates only the selected project's declared `.mf2` or `.rmf2` translation resources. A report or import that is refused returns exit code `1` and lists its refusal codes in both human output and the JSON fault details.
+`--output` belongs to `export`; select the command response envelope with `--format json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). `--runic-output`, the spelling before 0.8, is still accepted but not listed in help. `--interchange` was `--format` before 0.8. An XLIFF import updates only the selected project's declared `.mf2` or `.rmf2` translation resources. A report or import that is refused returns exit code `2` and lists its refusal codes in both human output and the JSON fault details.
 
 ## Local support diagnostics
 

@@ -159,9 +159,9 @@ internal static class Program
         AssertDependencies(runtime, Array.Empty<string>());
         AssertDependencies(commandLine, ["Runic.CommandLine", "Runic.Translations"]);
         AssertDependencies(tooling, Array.Empty<string>());
-        // A project that adds only the adapter must restore the fixed command-line runtime; the tooling has no
-        // Runic.CommandLine dependency (the command plumbing is internal to the tool).
-        AssertDependencyFloor(commandLine, "Runic.CommandLine", CommandLineVersion);
+        // A project that adds only the adapter must restore the fixed command-line runtime, within its tested minor
+        // (D031.3); the tooling has no Runic.CommandLine dependency (the command plumbing is internal to the tool).
+        AssertDependencyRange(commandLine, "Runic.CommandLine", $"[{CommandLineVersion}, {NextMinor(CommandLineVersion)})");
         AssertDependencies(build, Array.Empty<string>());
         AssertDependencies(wpf, ["Runic.Translations"]);
         AssertDependencies(tool, Array.Empty<string>());
@@ -331,7 +331,14 @@ internal static class Program
             $"{Path.GetFileName(package)} has exactly the approved dependency set");
     }
 
-    private static void AssertDependencyFloor(string package, string dependency, string version)
+    // 0.8.0 becomes 0.9.0: a Runic Command Line minor may break its API until 1.0.
+    private static string NextMinor(string version)
+    {
+        string[] parts = version.Split('.');
+        return $"{parts[0]}.{int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture) + 1}.0";
+    }
+
+    private static void AssertDependencyRange(string package, string dependency, string range)
     {
         using ZipArchive archive = ZipFile.OpenRead(package);
         ZipArchiveEntry nuspec = archive.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
@@ -341,13 +348,13 @@ internal static class Program
             document = XDocument.Load(stream, LoadOptions.None);
         }
 
-        // NuGet writes a minimum-inclusive range as the bare version.
+        // NuGet writes both bounds of a range in full, [0.8.0, 0.9.0).
         string[] ranges = document.Descendants()
             .Where(element => string.Equals(element.Name.LocalName, "dependency", StringComparison.Ordinal) && (string?)element.Attribute("id") == dependency)
             .Select(element => (string?)element.Attribute("version") ?? string.Empty)
             .ToArray();
-        Assert(ranges.SequenceEqual([version], StringComparer.Ordinal),
-            $"{Path.GetFileName(package)} requires {dependency} {version} or later (found {string.Join(", ", ranges)})");
+        Assert(ranges.SequenceEqual([range], StringComparer.Ordinal),
+            $"{Path.GetFileName(package)} requires {dependency} {range} (found {string.Join(", ", ranges)})");
     }
 
     private static void AssertToolingSchemaClosure(string package)
