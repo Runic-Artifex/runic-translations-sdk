@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { availableResponse, checkNugetPush, globMatches, needsLatest, nugetOwnership, nugetPolicy, publishCandidates, zipContent } from "./publish.mjs";
@@ -145,4 +145,17 @@ test("the mirrored policy covers every NuGet package of the workspace, and the d
   expect(jobs.publish.needs).toBe("candidate");
   const steps = jobs.publish.steps;
   expect(steps.findIndex(s => s.uses?.startsWith("NuGet/login@"))).toBeLessThan(steps.findIndex(s => s.run?.includes("publish.mjs publish \"$VERSION\"")));
+});
+
+test("every publishing workflow waits in one fixed concurrency group, so publications never overlap", () => {
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  const parse = name => Bun.YAML.parse(readFileSync(new URL(name, dir), "utf8"));
+  const writes = permissions => ["contents", "id-token", "attestations", "packages"].some(name => permissions?.[name] === "write");
+  const publishing = readdirSync(dir).filter(name => /\.ya?ml$/.test(name)).filter(name => {
+    const file = parse(name);
+    return writes(file.permissions) || Object.values(file.jobs).some(job => writes(job.permissions) || job.environment);
+  });
+  expect(publishing).toContain("publish-preview.yml");
+  // One group for every version: a per-version group would let two versions publish and move tags at once.
+  for (const name of publishing) expect(parse(name).concurrency).toEqual({ group: "publish-preview", "cancel-in-progress": false });
 });
