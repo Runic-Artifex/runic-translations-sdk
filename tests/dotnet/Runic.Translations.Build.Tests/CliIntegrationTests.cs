@@ -523,7 +523,9 @@ internal sealed class CliIntegrationTests
         Assert.Equal(2, json.ExitCode, json.Combined);
         using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
         JsonElement diagnostic = envelope.RootElement.GetProperty("diagnostics")[0];
-        Assert.Equal("RCLI9014", diagnostic.GetProperty("code").GetString());
+        // runic-translations' own codes: an RTR fault and RCLI82xx diagnostics, not Runic.CommandLine's RCLI9xxx.
+        Assert.Equal("RTR0088", envelope.RootElement.GetProperty("fault").GetProperty("code").GetString());
+        Assert.Equal("RCLI8214", diagnostic.GetProperty("code").GetString());
         Assert.Contains("tables/de.json: the value of \"Count\" is not a string.", diagnostic.GetProperty("message").GetString() ?? string.Empty);
         Assert.False(Directory.Exists(temporary.Resolve("translations", "stored")), "A rejected import wrote files.");
 

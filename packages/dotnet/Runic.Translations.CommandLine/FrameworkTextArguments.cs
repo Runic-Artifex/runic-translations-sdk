@@ -28,6 +28,7 @@ internal static class FrameworkTextArguments
         ["help.show-version"] = None,
         ["help.output-format"] = None,
         ["help.json-output-alias"] = Option,
+        ["help.json-payload-output-alias"] = None,
         ["help.examples"] = None,
         ["help.required"] = None,
         ["help.default"] = None,

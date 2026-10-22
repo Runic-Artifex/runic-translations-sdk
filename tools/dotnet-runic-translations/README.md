@@ -69,8 +69,8 @@ text is omitted) and `base-text.json`, then validates the project as `validate`
 does. `{name}` placeholders become `{$name}`; other `{`, `}` and `\` are escaped,
 and text that an unquoted pattern would change (outer whitespace, a leading `.`,
 a newline) is written as a quoted pattern. A translation that uses a placeholder
-its base text lacks, or a table value that is not a string, fails with `RCLI9014`
-and exit code 2, and nothing is written. `--dry-run` reports and validates the
+its base text lacks, or a table value that is not a string, fails with `RTR0088`
+(one `RCLI8214` diagnostic per problem) and exit code 2, and nothing is written. `--dry-run` reports and validates the
 files without writing them.
 
 Keys are the first seven ASCII words of the text without placeholders

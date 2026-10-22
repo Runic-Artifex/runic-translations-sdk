@@ -22,7 +22,6 @@ internal sealed record TextImportRequest(string Group, IReadOnlyList<string> Tab
 /// </summary>
 internal static class TextCatalogImport
 {
-    internal const string DiagnosticCode = "RCLI9014";
     internal const string IndexFileName = "base-text.json";
     private const string Header = "# Imported by `runic-translations import-text`. The next import rewrites this file; edit the source tables instead.";
     private const int MaximumInputBytes = 8 * 1024 * 1024;
@@ -94,7 +93,8 @@ internal static class TextCatalogImport
 
         if (errors.Count != 0)
         {
-            foreach (string error in errors) result.AddDiagnostic(DiagnosticCode, "import", error, CommandDiagnosticSeverity.Error);
+            foreach (string error in errors) result.AddDiagnostic(ToolCodes.Import, "import", error, CommandDiagnosticSeverity.Error);
+            result.Fault = new CommandFault(ToolCodes.ImportRejected, "The text catalog could not be imported; no files were written.");
             result.WriteOutputLine("No files were written.");
             result.ExitCategory = CommandExitCategory.Validation;
             return 1;

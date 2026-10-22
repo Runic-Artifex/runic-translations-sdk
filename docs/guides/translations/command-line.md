@@ -95,11 +95,13 @@ only the built-in text in the invocation culture.
 ## Packages and versions
 
 The adapter depends on `Runic.CommandLine` through `ICommandTextResolver`
-only, but `Runic.Translations.CommandLine` and `Runic.Translations.Tooling`
-require Runic.CommandLine 0.7.0-preview.1 or later, whose prompt, JSON output
-alias and output selector keys the built-in catalogs translate. A project that
-adds only the adapter therefore restores a Runic.CommandLine that names the
-cause of a command catalog error instead of aborting at startup. Releases
+only, but `Runic.Translations.CommandLine` requires Runic.CommandLine 0.8.0,
+within the tested minor `[0.8.0, 0.9)`, whose prompt, JSON output alias and
+output selector keys the built-in catalogs translate. A Runic.CommandLine minor
+may change its API until 1.0, so the range moves in a Translations release
+after testing. A project that adds only the adapter therefore restores a
+Runic.CommandLine that names the cause of a command catalog error instead of
+aborting at startup. Releases
 before 0.6.0-preview.4, the one that adds `CommandTextKeys`, report value
 errors as `faults.RCLI2xxx` without arguments; preview.4 and later ask for
 `diagnostics.invalid-integer`, `diagnostics.out-of-range` and the other keys,

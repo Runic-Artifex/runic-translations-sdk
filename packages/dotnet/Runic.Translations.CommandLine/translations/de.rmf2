@@ -13,6 +13,7 @@ help {
   jsonOutputAlias =
     .input {$option :string}
     {{Entspricht {$option} json}}
+  jsonPayloadOutputAlias = Ergebnis als JSON ausgeben
   examples = Beispiele
   required = erforderlich
   default = Standard

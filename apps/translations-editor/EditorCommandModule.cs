@@ -25,13 +25,17 @@ namespace Runic.Translations.Editor;
 /// usage error; repeated or unknown options fail fast with focused usage diagnostics
 /// instead of being silently ignored or resolved last-one-wins; and a build without
 /// the embedded packaged web UI fails gracefully as unavailable (fault <c>REDIT0004</c>,
-/// exit code 2) instead of crashing with an unhandled directory exception.
+/// exit code 1) instead of crashing with an unhandled directory exception.
 /// </para>
 /// </remarks>
 internal static class EditorCommandModule
 {
-    /// <summary>Creates the single parser-neutral editor command catalog.</summary>
-    public static CommandCatalog CreateCatalog() => GeneratedCommandCatalog.Create();
+    /// <summary>
+    /// Creates the single parser-neutral editor command catalog. <c>--format human|json</c> selects the output, as in
+    /// every Runic tool; <c>--runic-output</c>, its spelling before Runic.CommandLine 0.8, is a hidden alias.
+    /// </summary>
+    public static CommandCatalog CreateCatalog() =>
+        GeneratedCommandCatalog.Create(static builder => builder.OutputSelector("--format", "--runic-output"));
 
     /// <summary>Writes a completed editor command outcome through the standard command-line transport.</summary>
     public static ValueTask PresentAsync(
@@ -132,7 +136,7 @@ internal static class EditorCommandModule
         [FromServices] IEditorCommandOperations operations,
         [Argument(AllowMultipleValues = true)] IReadOnlyList<string> workspace,
         CommandExecutionContext context,
-        [Option("--format", Required = true)] string format,
+        [Option("--interchange", Required = true)] string format,
         [Option("--output", Required = true)] string output,
         [Option("--workspace")] string? workspacePath = null) =>
         operations.ExecuteAsync(new EditorCommandRequest(
@@ -146,7 +150,7 @@ internal static class EditorCommandModule
         [FromServices] IEditorCommandOperations operations,
         [Argument(AllowMultipleValues = true)] IReadOnlyList<string> workspace,
         CommandExecutionContext context,
-        [Option("--format", Required = true)] string format,
+        [Option("--interchange", Required = true)] string format,
         [Option("--source", Required = true)] string source,
         [Option("--workspace")] string? workspacePath = null) =>
         operations.ExecuteAsync(new EditorCommandRequest(
@@ -160,7 +164,7 @@ internal static class EditorCommandModule
         [FromServices] IEditorCommandOperations operations,
         [Argument(AllowMultipleValues = true)] IReadOnlyList<string> workspace,
         CommandExecutionContext context,
-        [Option("--format", Required = true)] string format,
+        [Option("--interchange", Required = true)] string format,
         [Option("--source", Required = true)] string source,
         [Option("--apply")] bool apply,
         [Option("--workspace")] string? workspacePath = null) =>
@@ -232,6 +236,7 @@ internal sealed record EditorCommandResult(
     public override string ToString() => Summary;
 }
 
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(EditorCommandResult))]
 [JsonSerializable(typeof(EditorXliffExportResult))]
 [JsonSerializable(typeof(EditorReviewFileResult))]
