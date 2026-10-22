@@ -83,7 +83,13 @@ function verifyEditorFrontend() {
 // Builds the editor against freshly packed Translations packages instead of project
 // references, then proves NuGet resolved them from the local feed. The suffixed
 // version never exists on nuget.org, so restore cannot pick a published package.
-function verifyEditorPacked(version = `${workspace.version}.editor-packed`) {
+// A plain release (0.8.0) gets the prerelease label -editor-packed; a prerelease
+// (1.0.0-rc.1) gets one more identifier, .editor-packed, so both stay SemVer.
+export function editorPackedVersion(release) {
+  return `${release}${release.includes("-") ? "." : "-"}editor-packed`;
+}
+
+function verifyEditorPacked(version = editorPackedVersion(workspace.version)) {
   ensureVersion(version);
   buildManaged();
   buildWeb();
