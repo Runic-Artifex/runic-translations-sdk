@@ -30,12 +30,38 @@ namespace Runic.Translations.Editor;
 /// </remarks>
 internal static class EditorCommandModule
 {
+    private static readonly string[] Commands = ["edit", "validate", "diagnostics", "export", "report", "import", "serve"];
+
     /// <summary>
     /// Creates the single parser-neutral editor command catalog. <c>--format human|json</c> selects the output, as in
-    /// every Runic tool; <c>--runic-output</c>, its spelling before Runic.CommandLine 0.8, is a hidden alias.
+    /// every Runic tool; <c>--runic-output</c>, its spelling before Runic.CommandLine 0.8, is a hidden alias. Each
+    /// command's human output is its result's summary or its failure, written by <see cref="PresentOutcomeAsync"/>;
+    /// JSON output is the default <c>runic.commandline/1</c> envelope.
     /// </summary>
     public static CommandCatalog CreateCatalog() =>
-        GeneratedCommandCatalog.Create(static builder => builder.OutputSelector("--format", "--runic-output"));
+        GeneratedCommandCatalog.Create(static builder =>
+        {
+            builder.OutputSelector("--format", "--runic-output");
+            foreach (string command in Commands) builder.PresentOutcome<EditorCommandResult>(command, PresentOutcomeAsync);
+        });
+
+    private static ValueTask PresentOutcomeAsync(CommandOutcomePresentation<EditorCommandResult> presentation, CancellationToken cancellationToken)
+    {
+        CommandOutcome<EditorCommandResult> outcome = presentation.Outcome;
+        CommandExecutionContext context = presentation.Context;
+        return PresentAsync(
+            context.OutputMode,
+            context.Console,
+            context.Culture,
+            presentation.Command.Name,
+            presentation.ExitCode,
+            outcome.ExitCategory,
+            outcome.Succeeded ? outcome.Value : null,
+            outcome.Fault,
+            presentation.Diagnostics,
+            outcome.HumanOutput,
+            cancellationToken);
+    }
 
     /// <summary>Writes a completed editor command outcome through the standard command-line transport.</summary>
     public static ValueTask PresentAsync(

@@ -14,6 +14,7 @@ help {
     .input {$option :string}
     {{Entspricht {$option} json}}
   jsonPayloadOutputAlias = Ergebnis als JSON ausgeben
+  responseFiles = Weitere Argumente aus einer Datei lesen
   examples = Beispiele
   required = erforderlich
   default = Standard
@@ -97,6 +98,21 @@ diagnostics {
     .input {$command :string}
     {{Eine erforderliche Option fehlt. ({$option})}}
   unexpectedRootHelpArgument = Die Hilfe auf oberster Ebene akzeptiert keine weiteren Argumente.
+  responseFileUnreadable =
+    .input {$file :string}
+    {{Die Antwortdatei '{$file}' konnte nicht gelesen werden.}}
+  responseFileInvalidUtf8 =
+    .input {$file :string}
+    {{Die Antwortdatei '{$file}' ist kein gültiges UTF-8.}}
+  responseFileUnterminatedQuote =
+    .input {$file :string}
+    {{Die Antwortdatei '{$file}' enthält ein nicht geschlossenes Anführungszeichen.}}
+  responseFileTooDeep =
+    .input {$file :string}
+    {{Die Antwortdatei '{$file}' ist mehr als 16 Ebenen tief verschachtelt.}}
+  responseFileCycle =
+    .input {$file :string}
+    {{Die Antwortdatei '{$file}' bindet sich selbst ein.}}
   invalidEnvironmentValue =
     .input {$option :string}
     .input {$variable :string}

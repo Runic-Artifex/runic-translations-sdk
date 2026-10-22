@@ -13,6 +13,9 @@ namespace Runic.Translations.Tool;
 /// <summary>The translation commands of <c>runic-translations</c>; the tool's generated catalog also holds <c>support</c>.</summary>
 internal static class TranslationsToolCommandModule
 {
+    /// <summary>The translation commands, whose human output <see cref="ToolOutcomePresenter"/> writes.</summary>
+    internal static readonly string[] Commands = ["init", "lsp", "serve", "validate", "generate", "verify", "import-text", "schema"];
+
     /// <summary>Writes a catalog-level response through the standard command-line transport.</summary>
     internal static ValueTask PresentAsync(
         CommandOutputMode outputMode,

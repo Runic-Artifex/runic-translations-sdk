@@ -44,9 +44,9 @@ internal sealed partial class ResolverTests
         Assert.Throws<ArgumentNullException>(() => TranslationCommandTextResolver.GetMessageName(null!));
     }
 
-    // CommandTextKeys is new in Runic.CommandLine 0.6.0-preview.4; the adapter package requires 0.8.0, whose keys it lists.
+    // CommandTextKeys is new in Runic.CommandLine 0.6.0-preview.4; the adapter package requires 0.9.0, whose keys it lists.
     private static readonly Type TextKeys = typeof(CommandApp).Assembly.GetType("Runic.CommandLine.CommandTextKeys")
-        ?? throw new InvalidOperationException("Runic.CommandLine has no CommandTextKeys; the adapter requires 0.8.0 or later.");
+        ?? throw new InvalidOperationException("Runic.CommandLine has no CommandTextKeys; the adapter requires 0.9.0 or later.");
 
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The test runs on the JIT and reads a public property.")]
     [Test, DisplayName("the argument table matches CommandTextKeys.All")]

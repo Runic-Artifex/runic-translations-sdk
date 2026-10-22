@@ -97,7 +97,15 @@ runic-translations serve
 
 `generate` leaves output files whose bytes are unchanged untouched, so file watchers only see artifacts that changed.
 
-Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`.
+Arguments can be placed in a UTF-8 response file and passed as `@arguments.rsp`;
+help lists it as `@<file>`. The tool uses Runic Command Line's response files: a
+line whose first non-blank character is `#` is a comment, arguments are quoted
+as on the Windows command line, `@file` inside a response file is relative to
+that file's directory, files nest at most 16 levels deep, and `@@` stands for a
+literal leading `@`. A response file that cannot be read, is not valid UTF-8,
+has an unterminated quote, is nested too deeply or includes itself is a usage
+error (exit code 2) with the code `RCLI1017`, `RCLI1018`, `RCLI1019`, `RCLI1020`
+or `RCLI1021`.
 
 ## Output and exit codes
 

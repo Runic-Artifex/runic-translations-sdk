@@ -67,7 +67,6 @@ internal static class Program
             Name = "runic-translations-editor",
             Version = VersionText(),
             Console = new Runic.CommandLine.Spectre.SpectreCommandConsole(),
-            OutcomeSink = new EditorOutcomeSink(),
             CreateScopeFactory = invocation => new EditorExecutionScopeFactory(new EditorCommandLineOperations(
                 opensPackagedExample: bareInvocation || (!catalog.TryGetCommand(args[0], out _) && invocation.Arguments.Count == 0))),
             PresentFrameworkRequest = async (parse, console, cancellationToken) =>
@@ -142,38 +141,6 @@ internal static class Program
         {
             public object? GetService(Type serviceType) =>
                 serviceType == typeof(IEditorCommandOperations) ? operations : null;
-        }
-    }
-
-    private sealed class EditorOutcomeSink : ICommandOutcomeSink
-    {
-        public ValueTask WriteAsync<T>(
-            CommandDescriptor command,
-            CommandExecutionContext context,
-            CommandOutcome<T> outcome,
-            ICommandResultCodec<T> codec,
-            int exitCode,
-            IReadOnlyList<CommandDiagnostic> diagnostics,
-            CancellationToken cancellationToken)
-        {
-            if (typeof(T) == typeof(EditorCommandResult))
-            {
-                var typedOutcome = (CommandOutcome<EditorCommandResult>)(object)outcome;
-                return EditorCommandModule.PresentAsync(
-                    context.OutputMode,
-                    context.Console,
-                    context.Culture,
-                    command.Name,
-                    exitCode,
-                    typedOutcome.ExitCategory,
-                    typedOutcome.Succeeded ? typedOutcome.Value : null,
-                    typedOutcome.Fault,
-                    diagnostics,
-                    typedOutcome.HumanOutput,
-                    cancellationToken);
-            }
-
-            return new CommandOutputDispatcher().WriteAsync(command, context, outcome, codec, exitCode, diagnostics, cancellationToken);
         }
     }
 }

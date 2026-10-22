@@ -19,6 +19,7 @@ help {
     .input {$option :string}
     {{Same as {$option} json}}
   jsonPayloadOutputAlias = Write the result as JSON
+  responseFiles = Read more arguments from a file
   examples = Examples
   required = required
   default = default
@@ -102,6 +103,21 @@ diagnostics {
     .input {$command :string}
     {{A required option was not supplied. ({$option})}}
   unexpectedRootHelpArgument = Root help does not accept additional arguments.
+  responseFileUnreadable =
+    .input {$file :string}
+    {{The response file '{$file}' could not be read.}}
+  responseFileInvalidUtf8 =
+    .input {$file :string}
+    {{The response file '{$file}' is not valid UTF-8.}}
+  responseFileUnterminatedQuote =
+    .input {$file :string}
+    {{The response file '{$file}' has an unterminated quote.}}
+  responseFileTooDeep =
+    .input {$file :string}
+    {{The response file '{$file}' is nested more than 16 levels deep.}}
+  responseFileCycle =
+    .input {$file :string}
+    {{The response file '{$file}' includes itself.}}
   invalidEnvironmentValue =
     .input {$option :string}
     .input {$variable :string}

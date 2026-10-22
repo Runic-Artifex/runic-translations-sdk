@@ -28,12 +28,16 @@ internal static class SupportCommandModule
 
     /// <summary>
     /// The tool's generated catalog (translation and support commands), with the output selector <c>--format</c>, its
-    /// former spelling <c>--runic-output</c> as a hidden alias until 2.0, and the support commands' human output.
+    /// former spelling <c>--runic-output</c> as a hidden alias until 2.0, response files (<c>@file</c>), the human
+    /// output of the translation commands' outcomes and the support commands' human output.
     /// </summary>
     internal static CommandCatalog CreateCatalog() =>
         Runic.CommandLine.Generated.GeneratedCommandCatalog.Create(builder =>
         {
             builder.OutputSelector(Program.FormatOptionName, Program.FormerFormatOptionName);
+            builder.ResponseFiles();
+            foreach (string command in TranslationsToolCommandModule.Commands)
+                builder.PresentOutcome<TranslationsToolCommandResult>(command, ToolOutcomePresenter.PresentAsync);
             foreach (string mode in Modes) builder.Present<SupportCommandResult>(Group + " " + mode, PresentAsync);
         });
 

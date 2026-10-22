@@ -44,9 +44,8 @@ internal static class Program
         {
             if (arguments.Length == 1 && arguments[0] == "lsp") return new Rmf2LanguageServer(Console.OpenStandardInput(), Console.OpenStandardOutput()).Run();
             if (arguments.Length == 1 && arguments[0] == "serve") return CompileServer.RunOnStandardStreams(ToolVersion);
-            // Response files stay the tool's own until Runic.CommandLine's opt-in @file (D031.5).
-            string[] expanded = CommandLine.ExpandResponseFiles(arguments).ToArray();
-            return CreateApp(CreateCatalog(), PresentationConsole, new ToolExecutionSink()).RunAsync(expanded).GetAwaiter().GetResult();
+            // The catalog declares response files, so CommandApp expands @file arguments before parsing.
+            return CreateApp(CreateCatalog(), PresentationConsole).RunAsync(arguments).GetAwaiter().GetResult();
         }
         catch (ToolOutputException exception)
         {
@@ -77,16 +76,16 @@ internal static class Program
     /// <summary>
     /// The tool's application. It sets no <see cref="ParseSettings"/>, so <see cref="CommandApp"/> captures the process
     /// environment: <c>RUNIC_COMMANDLINE_OUTPUT</c>, <c>RUNIC_COMMANDLINE_NO_INPUT</c> and option fallbacks. The
-    /// output selector and its hidden alias are declared on the catalog; the exit codes are the defaults.
+    /// output selector and its hidden alias, response files and the translation commands' human output are declared on
+    /// the catalog; the outcome sink and the exit codes are the defaults.
     /// </summary>
-    internal static CommandApp CreateApp(CommandCatalog catalog, ICommandConsole console, ICommandOutcomeSink outcomeSink) =>
+    internal static CommandApp CreateApp(CommandCatalog catalog, ICommandConsole console) =>
         new(catalog)
         {
             Name = "runic-translations",
             Version = ToolVersion,
             Console = console,
             ScopeFactory = ToolExecutionScopeFactory.Instance,
-            OutcomeSink = outcomeSink,
             PresentFrameworkRequest = static (parsed, _, _) => ValueTask.FromResult(PresentFramework(parsed)),
         };
 
@@ -196,6 +195,8 @@ internal static class Program
         "RCLI1007" => "an option may be specified only once.",
         "RCLI1012" when diagnostic.Arguments.Count >= 2 => $"{diagnostic.Arguments[1]} requires {diagnostic.Arguments[0]} {ExpectedValueShape(diagnostic.Arguments[0])}.",
         "RCLI1013" => "help does not accept additional arguments.",
+        // A response file that cannot be read or expanded keeps Runic.CommandLine's message, which names the file.
+        "RCLI1017" or "RCLI1018" or "RCLI1019" or "RCLI1020" or "RCLI1021" => diagnostic.Message,
         _ => "invalid command invocation.",
     };
 
@@ -517,22 +518,19 @@ internal static class Program
     }
 }
 
-internal sealed class ToolExecutionSink : ICommandOutcomeSink
+/// <summary>
+/// The human output of the translation commands' outcomes. Runic.CommandLine calls it only in human mode; JSON output
+/// stays the default, with the translation diagnostics in the payload or <c>fault.data</c> under their RTR codes.
+/// </summary>
+internal static class ToolOutcomePresenter
 {
-    internal int ExitCode { get; private set; } = 2;
-
-    public ValueTask WriteAsync<T>(CommandDescriptor command, CommandExecutionContext context, CommandOutcome<T> outcome, ICommandResultCodec<T> codec, int exitCode, IReadOnlyList<CommandDiagnostic> diagnostics, CancellationToken cancellationToken)
+    internal static async ValueTask PresentAsync(CommandOutcomePresentation<TranslationsToolCommandResult> presentation, CancellationToken cancellationToken)
     {
-        ExitCode = exitCode;
-        // JSON keeps the translation diagnostics in the payload or fault.data, under their RTR codes.
-        if (typeof(T) == typeof(TranslationsToolCommandResult) && context.OutputMode == CommandOutputMode.Human)
-            return PresentHumanAsync(command, context, (CommandOutcome<TranslationsToolCommandResult>)(object)outcome, exitCode, diagnostics, cancellationToken);
-
-        return new CommandOutputDispatcher().WriteAsync(command, context, outcome, codec, exitCode, diagnostics, cancellationToken);
-    }
-
-    private static async ValueTask PresentHumanAsync(CommandDescriptor command, CommandExecutionContext context, CommandOutcome<TranslationsToolCommandResult> outcome, int exitCode, IReadOnlyList<CommandDiagnostic> diagnostics, CancellationToken cancellationToken)
-    {
+        CommandDescriptor command = presentation.Command;
+        CommandExecutionContext context = presentation.Context;
+        CommandOutcome<TranslationsToolCommandResult> outcome = presentation.Outcome;
+        int exitCode = presentation.ExitCode;
+        IReadOnlyList<CommandDiagnostic> diagnostics = presentation.Diagnostics;
         IReadOnlyList<TranslationsToolDiagnostic> translation = ToolHostOperations.TranslationDiagnostics(outcome);
         if (translation.Count != 0)
             await context.Console.WriteErrorAsync(ToolOperationResult.FormatHuman(translation).AsMemory(), cancellationToken).ConfigureAwait(false);
