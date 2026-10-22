@@ -174,6 +174,10 @@ and no request tells whether a key may push a version that does not exist yet (t
 key would itself publish, and a step after `NuGet/login` could only try the real
 push. Keep the mirror honest when the policy changes.
 
+Publications run one at a time. Every workflow that publishes waits in the one
+`publish-preview` concurrency group, whatever the version, and never cancels a
+publication in progress; `publish.test.mjs` checks it.
+
 ## Verifying a release
 
 Every package, VSIX file and the SBOM of a release have a signed build-provenance
@@ -185,16 +189,28 @@ version=0.8.0
 gh release download "v$version" -R Runic-Artifex/runic-translations-sdk
 gh attestation verify "Runic.Translations.$version.nupkg" -R Runic-Artifex/runic-translations-sdk \
   --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
-gh attestation verify "runic-translations-sdk-$version.cdx.json" -R Runic-Artifex/runic-translations-sdk
-gh attestation verify runic-translations.vsix -R Runic-Artifex/runic-translations-sdk
-gh attestation verify runic-translations-visualstudio.vsix -R Runic-Artifex/runic-translations-sdk
+gh attestation verify "runic-translations-sdk-$version.cdx.json" -R Runic-Artifex/runic-translations-sdk \
+  --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
+gh attestation verify runic-translations.vsix -R Runic-Artifex/runic-translations-sdk \
+  --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
+gh attestation verify runic-translations-visualstudio.vsix -R Runic-Artifex/runic-translations-sdk \
+  --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
 # The SBOM attestation (CycloneDX); the release asset runic-translations-sdk-<version>.cdx.json is the same document.
 gh attestation verify "Runic.Translations.$version.nupkg" -R Runic-Artifex/runic-translations-sdk \
-  --predicate-type https://cyclonedx.org/bom
+  --predicate-type https://cyclonedx.org/bom \
+  --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
 # npm serves the published bytes unchanged, so a registry tarball verifies directly.
 npm pack "@runic-artifex/translations-svelte@$version"
-gh attestation verify "runic-artifex-translations-svelte-$version.tgz" -R Runic-Artifex/runic-translations-sdk
+gh attestation verify "runic-artifex-translations-svelte-$version.tgz" -R Runic-Artifex/runic-translations-sdk \
+  --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
 ```
+
+Pass `--signer-workflow` for every file. The provenance names `publish-preview.yml`,
+the workflow that attested and published the bytes, not the job that built them.
+The packages are built by a successful `ci.yml` run for the same commit, where the
+locked build and test dependencies also run. The publish workflow accepts only that
+run's artifact, by id, and checks the files against the candidate's hashes and
+inventory before it attests them.
 
 NuGet.org adds its repository signature (`.signature.p7s`) to every package it
 accepts, so a `.nupkg` downloaded from NuGet.org has different bytes from the

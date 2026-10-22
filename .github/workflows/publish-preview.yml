@@ -14,7 +14,7 @@ on:
         default: false
 
 concurrency:
-  group: publish-preview-${{ inputs.version }}
+  group: publish-preview
   cancel-in-progress: false
 
 permissions:
