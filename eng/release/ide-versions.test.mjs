@@ -103,6 +103,12 @@ test("Publish preview rejects a version the IDE formats cannot express before lo
   const tooLarge = validate("0.65535.0");
   expect(tooLarge.status).not.toBe(0);
   expect(tooLarge.stderr).toContain("above 65534");
+  // The 1.0 train: release candidates and the stable release pass the format checks.
+  for (const version of ["1.0.0-rc.1", "1.0.0-rc.2", "1.0.0", "1.0.1"]) {
+    const accepted = validate(version);
+    expect([version, accepted.status, accepted.stderr]).toEqual([version, 0, ""]);
+    expect(JSON.parse(accepted.stdout)).toEqual(ideVersions(version));
+  }
   const current = validate(workspaceVersion());
   expect(current.stderr).toBe("");
   expect(current.status).toBe(0);

@@ -4,10 +4,10 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { availableResponse, checkNugetPush, globMatches, needsLatest, nugetOwnership, nugetPolicy, publishCandidates, zipContent } from "./publish.mjs";
+import { availableResponse, checkNugetPush, globMatches, latestEligible, needsLatest, nugetOwnership, nugetPolicy, publishCandidates, zipContent } from "./publish.mjs";
 import { workspace } from "../run.mjs";
 
-test("npm latest follows the preview after its GitHub release, never backwards", () => {
+test("npm latest follows a 0.y.z release or a stable release after its GitHub release, never backwards or to an rc (D043.5)", () => {
   const steps = Bun.YAML.parse(readFileSync(new URL("../../.github/workflows/publish-preview.yml", import.meta.url), "utf8")).jobs.publish.steps;
   expect(steps.findIndex(s => s.run?.includes("ci-artifact.mjs release "))).toBeLessThan(steps.findIndex(s => s.run?.includes("publish.mjs tag-latest")));
   expect(needsLatest(undefined, "0.6.0-preview.1")).toBe(true);
@@ -15,6 +15,18 @@ test("npm latest follows the preview after its GitHub release, never backwards",
   expect(needsLatest("0.6.0-preview.1", "0.6.0-preview.2")).toBe(true);
   expect(needsLatest("0.6.0-preview.1", "0.6.0-preview.1")).toBe(false);
   expect(needsLatest("0.7.0-preview.1", "0.6.0-preview.2")).toBe(false);
+  expect(needsLatest("0.8.0", "0.9.0")).toBe(true);
+  // From 1.0 a prerelease stays on the preview dist-tag; latest moves only to stable versions.
+  expect(needsLatest("0.9.0", "1.0.0-rc.1")).toBe(false);
+  expect(needsLatest(undefined, "1.0.0-rc.1")).toBe(false);
+  expect(needsLatest("0.9.0", "1.0.0")).toBe(true);
+  expect(needsLatest("1.0.0-rc.2", "1.0.0")).toBe(true);
+  expect(needsLatest("1.0.0", "1.0.1-rc.1")).toBe(false);
+  expect(needsLatest("1.0.0", "1.1.0-preview.1")).toBe(false);
+  expect(needsLatest("1.0.0", "1.1.0")).toBe(true);
+  expect(needsLatest("1.1.0", "1.0.1")).toBe(false);
+  expect(["0.9.0", "0.6.0-preview.1", "1.0.0", "2.3.4"].every(latestEligible)).toBe(true);
+  expect(["1.0.0-rc.1", "1.0.0-preview.1", "2.0.0-rc.1+build.5"].some(latestEligible)).toBe(false);
 });
 
 test("tag-latest waits through npm 401 and 404 for a just-published name, within a bound", async () => {

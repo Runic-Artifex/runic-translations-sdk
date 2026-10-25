@@ -4,7 +4,7 @@
 //   verify <packages> <inventory> <version> <run> <vsix> check them against the inventory, version and CI run
 //   describe <packages> <vsix> <version> <out>           write the CycloneDX SBOM of the release (local, deterministic)
 //   release-check <version>                              tag and any release must be absent or at this commit (read-only)
-//   release <version> <packages> <vsix> <sbom>           create the prerelease, or finish one that exists for this commit
+//   release <version> <packages> <vsix> <sbom>           create the release (githubPrerelease), or finish one that exists for this commit
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -217,11 +217,15 @@ function existingRelease(version, source, spawn) {
   return found;
 }
 
+// GitHub marks every release before 1.0 as a prerelease, and from 1.0 every version with a
+// prerelease suffix (1.0.0-rc.1); a stable version from 1.0.0 is a full release.
+export const githubPrerelease = version => /^0\./.test(version) || version.split("+")[0].includes("-");
+
 export function releaseCheck(version, source, spawn = spawnSync) {
   const found = existingRelease(version, source, spawn);
   if (found?.isDraft) return `Would resume the draft release v${version} for ${source} (${found.url}).`;
   return found ? `GitHub release v${version} already exists for ${source} (${found.url}); a rerun keeps it.`
-    : `Would create the prerelease v${version} at ${source}.`;
+    : `Would create the ${githubPrerelease(version) ? "prerelease" : "release"} v${version} at ${source}.`;
 }
 
 // A rerun after a partial publication keeps a release of this exact tag and commit,
@@ -242,7 +246,8 @@ export function createRelease(version, source, files, spawn = spawnSync, notes =
   const gh = (args, what) => {
     if (spawn("gh", args, { stdio: "inherit" }).status !== 0) throw new Error(`Could not ${what} GitHub release ${tag}.`);
   };
-  if (!found) gh(["release", "create", tag, ...files, "--repo", REPOSITORY, "--target", source, "--prerelease", "--generate-notes",
+  const prerelease = githubPrerelease(version);
+  if (!found) gh(["release", "create", tag, ...files, "--repo", REPOSITORY, "--target", source, ...(prerelease ? ["--prerelease"] : []), "--generate-notes",
     ...(notes ? ["--notes-file", notes] : [])], "create");
   else {
     const present = new Set((found.assets ?? []).map(asset => asset.name));
@@ -254,7 +259,7 @@ export function createRelease(version, source, files, spawn = spawnSync, notes =
       return `GitHub release ${tag} already exists for ${source}; kept unchanged without ${names}.`;
     }
     if (missing.length) gh(["release", "upload", tag, ...missing, "--repo", REPOSITORY], "complete");
-    if (found.isDraft) gh(["release", "edit", tag, "--repo", REPOSITORY, "--draft=false", "--prerelease"], "publish");
+    if (found.isDraft) gh(["release", "edit", tag, "--repo", REPOSITORY, "--draft=false", `--prerelease=${prerelease}`], "publish");
   }
   return `${found ? "Completed" : "Created"} GitHub release ${tag} at ${source}.`;
 }
