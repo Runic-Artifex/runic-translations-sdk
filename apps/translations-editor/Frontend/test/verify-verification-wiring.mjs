@@ -23,7 +23,7 @@ const expandedCommand = expandScript("verify");
 
 assert.equal(typeof command, "string", "Frontend has no verify script.");
 assert.equal(frontend.packageManager, JSON.parse(rootPackageJson).packageManager, "Frontend must use the repository-pinned Bun release.");
-for (const test of ["verify-ui-catalog.mjs", "verify-keyboard-a11y.mjs", "verify-command-palette.mjs", "verify-w03-simulation.mjs", "verify-local-state.mjs"]) {
+for (const test of ["verify-ui-catalog.mjs", "verify-keyboard-a11y.mjs", "verify-command-palette.mjs", "verify-w03-simulation.mjs", "verify-local-state.mjs", "verify-editor-bridge.ts"]) {
   assert.match(expandedCommand, new RegExp(test.replace(".", "\\.")), `Frontend verification omits ${test}.`);
 }
 const verifyJob = Bun.YAML.parse(fullVerification).jobs["build-and-test"];

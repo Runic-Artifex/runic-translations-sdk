@@ -38,9 +38,10 @@ let tail: Promise<void> = Promise.resolve();
 const documentRefs = new Map<string, EditorDocumentPageReference>();
 let rememberedDocuments: readonly EditorDocument[] = [];
 
-// A result lists the documents in the order of the root snapshot's `documents` references. The root's snapshot frame
-// can arrive after the command's reply (the model context publishes property changes in later turns), so the paths
-// are mapped onto the references once the snapshot lists the same number of documents.
+// A result lists the documents in the order of the root snapshot's `documents` references. The editor updates the
+// root's documents in a model turn that runs before the command replies, and since Runic SDK 0.11 (read-your-writes,
+// runic-sdk #585) the reply reaches the page only after that turn's state frames on every View of the window. The
+// root snapshot is therefore current when the result arrives, and the paths are mapped onto its references at once.
 function rememberDocuments(result: unknown, view: EditorClient): void {
   if (typeof result !== "object" || result === null) return;
   const value = result as { documents?: EditorDocument[]; snapshot?: WorkspaceSnapshot };
@@ -58,25 +59,14 @@ function mapDocuments(state: EditorState): boolean {
   return true;
 }
 
+// Reads the mapping without waiting for state. It is retried against the current root snapshot only for the rare reply
+// that the host sent without its frames (a page that took no frames for 5 s); those frames arrive as ordinary updates
+// before a later call.
 async function documentReference(path: string): Promise<EditorDocumentPageReference | undefined> {
   const known = documentRefs.get(path);
   if (known || !rememberedDocuments.some(document => document.path === path)) return known;
-  const root = await rootView();
-  if (mapDocuments(root.snapshot)) return documentRefs.get(path);
-  return await new Promise(resolve => {
-    let settled = false;
-    let unsubscribe: (() => void) | undefined;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      unsubscribe?.();
-      resolve(documentRefs.get(path));
-    };
-    const timer = setTimeout(settle, 5000);
-    unsubscribe = root.subscribe(state => { if (mapDocuments(state)) settle(); });
-    if (settled) unsubscribe();
-  });
+  mapDocuments((await rootView()).snapshot);
+  return documentRefs.get(path);
 }
 
 async function rootView(): Promise<EditorClient> {
