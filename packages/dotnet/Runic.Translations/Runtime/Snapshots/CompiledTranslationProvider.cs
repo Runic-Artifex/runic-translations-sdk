@@ -6,6 +6,10 @@ using System.Threading.Tasks;
 namespace Runic.Translations;
 
 /// <summary>Creates a fully composed snapshot for one resolved declared locale.</summary>
+/// <remarks>
+/// Applications may implement this interface. A minor release adds members to it only with a default implementation, which
+/// may throw <see cref="NotSupportedException"/> or report that the feature is not supported.
+/// </remarks>
 public interface ITranslationSnapshotFactory
 {
     /// <summary>Creates and validates one immutable snapshot.</summary>

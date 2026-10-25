@@ -510,8 +510,13 @@ internal sealed class EditorWorkspace : IDisposable
     // export and stripped after validated import; later exports stamp them from
     // the current text profile. Non-approved entries never carry a stamp.
 
+    // allowRootedOutput is set only by the command line (`export --output`): a
+    // rooted path there is the caller's chosen destination. The UI bridge keeps
+    // every output inside the workspace, so a browser client cannot write
+    // elsewhere on disk.
     internal async Task<EditorXliffExportResult> ExportXliffAsync(
         string? directory,
+        bool allowRootedOutput = false,
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -524,7 +529,7 @@ internal sealed class EditorWorkspace : IDisposable
             TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
             TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog);
             TranslationXliffExportResult export = TranslationInterchange.ExportXliff21(state.Compilation, review);
-            string targetDirectory = ResolveInterchangeOutputDirectory(directory, Path.Combine(".runic-translations", "export"));
+            string targetDirectory = ResolveInterchangeOutputDirectory(directory, Path.Combine(".runic-translations", "export"), allowRootedOutput);
             Directory.CreateDirectory(targetDirectory);
             var documents = new List<EditorInterchangeFile>(export.Documents.Count);
             foreach (TranslationXliffDocument document in export.Documents)
@@ -532,7 +537,7 @@ internal sealed class EditorWorkspace : IDisposable
                 string fullPath = Path.Combine(targetDirectory, $"{catalog.CatalogId}.{document.TargetLocale}.xliff");
                 await WriteAtomicallyAsync(fullPath, document.Bytes.ToArray(), cancellationToken).ConfigureAwait(false);
                 documents.Add(new EditorInterchangeFile(
-                    Path.GetRelativePath(_root, fullPath).Replace('\\', '/'), document.TargetLocale, (long)document.Bytes.Length));
+                    ReportedOutputPath(fullPath), document.TargetLocale, (long)document.Bytes.Length));
             }
             return new EditorXliffExportResult(
                 true,
@@ -554,6 +559,7 @@ internal sealed class EditorWorkspace : IDisposable
 
     internal async Task<EditorReviewFileResult> ExportReviewJsonAsync(
         string? path,
+        bool allowRootedOutput = false,
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -567,14 +573,14 @@ internal sealed class EditorWorkspace : IDisposable
             TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog);
             byte[] bytes = TranslationInterchange.ExportReviewJson(review);
             string targetPath = Path.Combine(
-                ResolveInterchangeOutputDirectory(path is null ? null : Path.GetDirectoryName(path), Path.Combine(".runic-translations", "export")),
+                ResolveInterchangeOutputDirectory(path is null ? null : Path.GetDirectoryName(path), Path.Combine(".runic-translations", "export"), allowRootedOutput),
                 path is null ? $"{catalog.CatalogId}.review.json" : Path.GetFileName(path));
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
             await WriteAtomicallyAsync(targetPath, bytes, cancellationToken).ConfigureAwait(false);
             return new EditorReviewFileResult(
                 true,
                 null,
-                Path.GetRelativePath(_root, targetPath).Replace('\\', '/'),
+                ReportedOutputPath(targetPath),
                 review.Entries.Count);
         }
         catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
@@ -988,8 +994,17 @@ internal sealed class EditorWorkspace : IDisposable
         return Path.IsPathRooted(path) ? Path.GetFullPath(path) : ContainedPath(NormalizeRelativePath(path));
     }
 
-    private string ResolveInterchangeOutputDirectory(string? directory, string defaultRelative) =>
-        ContainedPath(directory is null or "" ? defaultRelative : NormalizeRelativePath(directory));
+    private string ResolveInterchangeOutputDirectory(string? directory, string defaultRelative, bool allowRootedOutput)
+    {
+        if (directory is null or "") return ContainedPath(defaultRelative);
+        if (allowRootedOutput && Path.IsPathRooted(directory)) return Path.GetFullPath(directory);
+        return ContainedPath(NormalizeRelativePath(directory));
+    }
+
+    // Exported files inside the workspace are reported relative to it, as
+    // before; a rooted command-line output outside it is reported as given.
+    private string ReportedOutputPath(string fullPath) =>
+        IsWithinSourceRoot(_root, fullPath) ? Path.GetRelativePath(_root, fullPath).Replace('\\', '/') : fullPath;
 
     private static TranslationInterchangeReview BuildExportReview(
         TranslationEditorStateLoadResult sidecar,

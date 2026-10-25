@@ -97,7 +97,7 @@ const lines = [
   "",
   `**Semantic:** ${matrix.equivalence.semantic}`,
   "",
-  "This preview deliberately claims only the locale families above.",
+  "This release deliberately claims only the locale families above.",
   "A platform may recognize other BCP 47 tags for scalar formatting, but they are",
   "not part of the cross-runtime support promise until they appear in the matrix",
   "and shared .NET/ESM conformance fixtures.",

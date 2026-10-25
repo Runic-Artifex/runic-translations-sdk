@@ -5,7 +5,11 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Runic.Translations;
 
-/// <summary>Closed primitive types accepted by the portable message formatter.</summary>
+/// <summary>Primitive types accepted by the portable message formatter.</summary>
+/// <remarks>
+/// The formatter accepts only these types. The set is open: a later minor release may add types, so keep a default case
+/// when you switch on it.
+/// </remarks>
 public enum TextArgumentType
 {
     /// <summary>Plain text.</summary>
@@ -28,7 +32,11 @@ public enum TextArgumentType
     List,
 }
 
-/// <summary>Portable, closed formatting choices for text arguments.</summary>
+/// <summary>Portable formatting choices for text arguments.</summary>
+/// <remarks>
+/// The formatter accepts only these choices. The set is open: a later minor release may add formats, so keep a default case
+/// when you switch on it.
+/// </remarks>
 public enum TextArgumentFormat
 {
     /// <summary>No explicit format.</summary>

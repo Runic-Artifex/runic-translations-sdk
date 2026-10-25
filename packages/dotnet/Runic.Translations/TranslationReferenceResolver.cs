@@ -7,6 +7,7 @@ using System.Text;
 namespace Runic.Translations;
 
 /// <summary>How a <see cref="TranslationReference"/> was displayed.</summary>
+/// <remarks>The set is closed: a reference is translated, shown in a fallback or failed, and no value will be added.</remarks>
 public enum TranslationReferenceOutcome
 {
     /// <summary>The message was translated by the receiver's catalog. Message arguments may still have used their fallback text.</summary>

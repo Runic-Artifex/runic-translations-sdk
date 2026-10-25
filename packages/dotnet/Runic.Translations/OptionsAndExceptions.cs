@@ -3,6 +3,7 @@ using System;
 namespace Runic.Translations;
 
 /// <summary>Behavior for an unsupported requested locale.</summary>
+/// <remarks>The set is closed: no value will be added in a minor release.</remarks>
 public enum UnsupportedLocalePolicy
 {
     /// <summary>Accept only a declared locale.</summary>
@@ -14,6 +15,7 @@ public enum UnsupportedLocalePolicy
 }
 
 /// <summary>Behavior when a key is absent after fallback.</summary>
+/// <remarks>The set is closed: no value will be added in a minor release.</remarks>
 public enum MissingTranslationPolicy
 {
     /// <summary>Throw <see cref="TranslationNotFoundException"/>.</summary>

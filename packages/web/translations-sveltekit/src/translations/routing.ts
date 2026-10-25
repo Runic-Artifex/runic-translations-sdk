@@ -1,5 +1,8 @@
+/** Whether the base locale's routes carry a locale prefix. Closed: no value will be added in a minor release. */
 export type BaseLocalePath = "unprefixed" | "prefixed";
+/** A source the locale is resolved from. Open: a later minor release may add strategies, so keep a default case when you switch on it. */
 export type LocaleResolutionStrategy = "url" | "cookie" | "application" | "browser";
+/** The source that resolved the locale: a strategy, or the default locale. Open like `LocaleResolutionStrategy`. */
 export type LocaleResolutionSource = LocaleResolutionStrategy | "default";
 
 export interface LocaleRoutingOptions<Locale extends string> {

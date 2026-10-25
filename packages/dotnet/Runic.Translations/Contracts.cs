@@ -5,6 +5,10 @@ using System.Threading.Tasks;
 namespace Runic.Translations;
 
 /// <summary>An immutable, thread-safe locale snapshot.</summary>
+/// <remarks>
+/// Applications may implement this interface. A minor release adds members to it only with a default implementation, which
+/// may throw <see cref="NotSupportedException"/> or report that the feature is not supported.
+/// </remarks>
 public interface ITranslationSnapshot
 {
     /// <summary>The stable catalog identifier.</summary>
@@ -42,6 +46,10 @@ public interface ITranslationSnapshot
 }
 
 /// <summary>Creates immutable snapshots for requested locales.</summary>
+/// <remarks>
+/// Applications may implement this interface. A minor release adds members to it only with a default implementation, which
+/// may throw <see cref="NotSupportedException"/> or report that the feature is not supported.
+/// </remarks>
 public interface ITranslationProvider
 {
     /// <summary>Gets a fully validated snapshot.</summary>
@@ -114,6 +122,10 @@ public interface ITextValueFormatter
 }
 
 /// <summary>Optionally supplies caller-owned external pack bytes.</summary>
+/// <remarks>
+/// Applications may implement this interface. A minor release adds members to it only with a default implementation, which
+/// may throw <see cref="NotSupportedException"/> or report that the feature is not supported.
+/// </remarks>
 public interface IExternalTranslationSource
 {
     /// <summary>Loads a pack, or returns <see langword="null"/> when none is available.</summary>

@@ -54,7 +54,7 @@ Cardinal and ordinal rules use all CLDR operands of the displayed number, after 
 
 **Semantic:** Backends preserve meaning but platform globalization can change punctuation, spacing, names, or representable decimal precision.
 
-This preview deliberately claims only the locale families above.
+This release deliberately claims only the locale families above.
 A platform may recognize other BCP 47 tags for scalar formatting, but they are
 not part of the cross-runtime support promise until they appear in the matrix
 and shared .NET/ESM conformance fixtures.

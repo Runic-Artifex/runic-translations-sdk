@@ -278,15 +278,18 @@ internal sealed class EditorSession : IDisposable
     // ---- Interchange operations (W03). Exposed as internal session methods so
     // bridge verbs (added later) and CLI lanes reuse one implementation. ----
 
+    // allowRootedOutput: see EditorWorkspace.ExportXliffAsync; only the command line sets it.
     public Task<EditorXliffExportResult> ExportXliffAsync(
         string? directory,
+        bool allowRootedOutput = false,
         CancellationToken cancellationToken = default) =>
-        WithWorkspaceAsync((workspace, token) => workspace.ExportXliffAsync(directory, token), cancellationToken);
+        WithWorkspaceAsync((workspace, token) => workspace.ExportXliffAsync(directory, allowRootedOutput, token), cancellationToken);
 
     public Task<EditorReviewFileResult> ExportReviewJsonAsync(
         string? path,
+        bool allowRootedOutput = false,
         CancellationToken cancellationToken = default) =>
-        WithWorkspaceAsync((workspace, token) => workspace.ExportReviewJsonAsync(path, token), cancellationToken);
+        WithWorkspaceAsync((workspace, token) => workspace.ExportReviewJsonAsync(path, allowRootedOutput, token), cancellationToken);
 
     public async Task<EditorXliffImportPlan> PreviewXliffImportAsync(
         string path,
