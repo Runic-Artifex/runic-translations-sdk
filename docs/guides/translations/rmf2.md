@@ -4,7 +4,7 @@ Runic projects use either direct `.mf2` messages or recursive grouped `.rmf2`
 resources with inline markup contracts. The representation is inferred from the
 source files; mixing them in one project is rejected. This implementation is a
 bounded execution profile of the supported contract, **not full Unicode MF2 conformance**.
-The `rmf2-execution-v2` release boundary is frozen for this preview; the
+The `rmf2-execution-v2` release boundary is frozen for this release; the
 exclusions near the end of this guide are deliberate contract boundaries, not
 unfinished work inside this release.
 

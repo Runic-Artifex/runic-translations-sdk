@@ -1,6 +1,6 @@
 # Runic Translations Editor availability and limits
 
-Standalone Editor distributions are outside the SDK preview. No public Editor
+Standalone Editor distributions are not part of the SDK packages. No public Editor
 archive, signing, notarization or automatic update capability is claimed.
 Build and run the editor from the SDK source as described in [README.md](README.md).
 

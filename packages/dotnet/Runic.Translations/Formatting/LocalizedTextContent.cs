@@ -6,6 +6,7 @@ using Runic.Translations.Generated;
 namespace Runic.Translations;
 
 /// <summary>Semantic output node kinds. Hosts decide how named elements render.</summary>
+/// <remarks>The set is open: a later minor release may add node kinds, so keep a default case when you switch on it.</remarks>
 public enum LocalizedTextContentNodeKind
 {
     /// <summary>Plain localized text.</summary>

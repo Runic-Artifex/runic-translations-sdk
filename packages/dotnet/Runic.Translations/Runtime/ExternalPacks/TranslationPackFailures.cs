@@ -3,6 +3,7 @@ using System;
 namespace Runic.Translations;
 
 /// <summary>A stable machine-readable reason for an external pack failure.</summary>
+/// <remarks>The set is open: a later minor release may add reasons, so treat a value you do not know like <see cref="Unknown"/>.</remarks>
 public enum TranslationPackFailureReason
 {
     /// <summary>No reason was given: the exception was not created by the pack loader or with a reason. The default.</summary>

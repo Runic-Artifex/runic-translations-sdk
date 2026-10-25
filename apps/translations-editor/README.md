@@ -11,7 +11,7 @@ archive guidance](docs/editor-distribution.md), and [usability-study protocol](d
 
 ## Availability and local commands
 
-Standalone Editor distributions are outside the SDK preview. Build the editor from
+Standalone Editor distributions are not part of the SDK packages. Build the editor from
 source using the commands below. The examples here use the executable produced by
 that build; SDK package publication does not imply an Editor download.
 
@@ -35,7 +35,7 @@ Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an 
 ./runic-translations-editor report /path/to/workspace --interchange review --source .runic-translations/export/catalog.review.json
 ```
 
-`--output` belongs to `export`; select the command response envelope with `--format json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). `--runic-output`, the spelling before 0.8, is still accepted but not listed in help. `--interchange` was `--format` before 0.8. An XLIFF import updates only the selected project's declared `.mf2` or `.rmf2` translation resources. A report or import that is refused returns exit code `2` and lists its refusal codes in both human output and the JSON fault details.
+`--output` belongs to `export`. A relative `--output` is resolved under the workspace; an absolute path is used as given. Select the command response envelope with `--format json` (or `RUNIC_COMMANDLINE_OUTPUT=json`). `--runic-output`, the spelling before 0.8, is still accepted but not listed in help. `--interchange` was `--format` before 0.8. An XLIFF import updates only the selected project's declared `.mf2` or `.rmf2` translation resources. A report or import that is refused returns exit code `2` and lists its refusal codes in both human output and the JSON fault details.
 
 ## Local support diagnostics
 

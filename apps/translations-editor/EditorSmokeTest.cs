@@ -7,6 +7,7 @@ using System.Text.Json;
 using Runic.Translations.Internal;
 using Runic.Application.Views;
 using Runic.Application.Views.ReactiveUI;
+using Runic.CommandLine;
 using Runic.Navigation;
 using System.Xml.Linq;
 
@@ -160,7 +161,49 @@ internal static class EditorSmokeTest
         Require(observed, $"The external-change scan never reported '{expectedPath}'.");
     }
 
-    public static async Task<int> RunAsync(string workspacePath)
+    // I-165: `export --output` on the command line writes a rooted path where
+    // it points and a relative path under the workspace, as before. The UI
+    // bridge keeps every export inside the workspace.
+    private static async Task InterchangeOutputJourneyAsync(string container, IEditorCommandOperations operations)
+    {
+        string project = Path.Combine(container, "workspace");
+        string outside = Path.Combine(container, "outside");
+        await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
+            new TranslationProjectCreationRequest(project, "output-smoke", "en", "Smoke.Translations", "SmokeText",
+                [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "application {\n  title = Title\n}\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "application {\n  title = Titel\n}\n").ConfigureAwait(false);
+        EditorCommandRequest Export(string format, string output) => new(
+            "export", [project], null, false, false, false, CommandOutputMode.Json, Format: format, Output: output);
+
+        string xliffDirectory = Path.Combine(outside, "xliff");
+        CommandOutcome<EditorCommandResult> xliff = await operations.ExecuteAsync(Export("xliff", xliffDirectory)).ConfigureAwait(false);
+        string xliffFile = Path.Combine(xliffDirectory, "output-smoke.de.xliff");
+        Require(xliff.Succeeded && File.Exists(xliffFile) &&
+            xliff.Value?.XliffExport?.Documents.Single().Path == xliffFile &&
+            !Directory.Exists(Path.Combine(project, xliffDirectory.TrimStart('/', '\\'))),
+            "export --interchange xliff did not write to the rooted --output directory.");
+
+        string reviewFile = Path.Combine(outside, "review", "catalog.review.json");
+        CommandOutcome<EditorCommandResult> review = await operations.ExecuteAsync(Export("review", reviewFile)).ConfigureAwait(false);
+        Require(review.Succeeded && File.Exists(reviewFile) && review.Value?.ReviewExport?.Path == reviewFile,
+            "export --interchange review did not write to the rooted --output path.");
+
+        CommandOutcome<EditorCommandResult> relative = await operations.ExecuteAsync(Export("xliff", "exports/xliff")).ConfigureAwait(false);
+        Require(relative.Succeeded && File.Exists(Path.Combine(project, "exports", "xliff", "output-smoke.de.xliff")) &&
+            relative.Value?.XliffExport?.Documents.Single().Path == "exports/xliff/output-smoke.de.xliff",
+            "export --output with a relative path did not resolve under the workspace.");
+
+        string bridgeTarget = Path.Combine(outside, "bridge");
+        using var session = new EditorSession(project);
+        EditorXliffExportResult bridge = await session.ExportXliffAsync(bridgeTarget).ConfigureAwait(false);
+        Require(!Directory.Exists(bridgeTarget) && (!bridge.Ok || bridge.Documents.All(document => !Path.IsPathRooted(document.Path))),
+            "The UI export wrote outside the workspace.");
+    }
+
+    // commandLine is the command-line operations (Program.cs), which a frontend
+    // bootstrap build does not compile.
+    public static async Task<int> RunAsync(string workspacePath, IEditorCommandOperations commandLine)
     {
         string container = Path.Combine(Path.GetTempPath(), $"runic-editor-smoke-{Guid.NewGuid():N}");
         try
@@ -168,6 +211,7 @@ internal static class EditorSmokeTest
             await AuthoringJourneyAsync(Path.Combine(container, "authoring")).ConfigureAwait(false);
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
+            await InterchangeOutputJourneyAsync(Path.Combine(container, "interchange-output"), commandLine).ConfigureAwait(false);
             string project = Path.Combine(container, "translations");
             // Smoke tests exercise an intentionally minimal workspace. They must
             // never mutate the packaged example or a caller-provided directory.

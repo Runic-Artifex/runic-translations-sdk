@@ -1,6 +1,6 @@
 # Translation compatibility-retention ledger
 
-This ledger records compatibility that remains readable in the current preview
+This ledger records compatibility that remains readable in the current release
 without being part of the current authoring or generation contract. It prevents
 retained names from being mistaken for supported new output.
 

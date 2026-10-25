@@ -2,10 +2,14 @@
 
 ## Supported versions
 
-Runic Translations is in preview. Only the latest published preview of the
-`Runic.Translations*` NuGet packages, the `@runic-artifex/*translations*` npm
-packages, the `dotnet-runic-translations` tool and the Translations Editor is
-supported. Fixes ship in a new preview; earlier previews are not patched.
+Only the latest minor release of the `Runic.Translations*` NuGet packages, the
+`@runic-artifex/*translations*` npm packages and the `dotnet-runic-translations`
+tool is supported. Fixes ship in a patch of that minor or in the next release;
+earlier minors are not patched. See
+[Versions before 1.0](eng/release/README.md#versions-before-10) and, from 1.0,
+[Versioning and support from 1.0](eng/release/README.md#versioning-and-support-from-10).
+The Translations Editor is a separate product with its own releases (see
+[its README](apps/translations-editor/README.md)).
 
 ## Reporting a vulnerability
 

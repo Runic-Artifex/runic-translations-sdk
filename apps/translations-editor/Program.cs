@@ -200,7 +200,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
 
     private static async Task<CommandOutcome<EditorCommandResult>> RunSmokeTestAsync(string workspacePath)
     {
-        int exitCode = await EditorSmokeTest.RunAsync(workspacePath).ConfigureAwait(false);
+        int exitCode = await EditorSmokeTest.RunAsync(workspacePath, new EditorCommandLineOperations(opensPackagedExample: false)).ConfigureAwait(false);
         return exitCode == 0
             ? CommandOutcome.Success(new EditorCommandResult(string.Empty))
             : CommandOutcome.Failure<EditorCommandResult>(
@@ -409,14 +409,14 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             using var session = new EditorSession(workspacePath);
             if (format == "xliff")
             {
-                EditorXliffExportResult export = await session.ExportXliffAsync(request.Output).ConfigureAwait(false);
+                EditorXliffExportResult export = await session.ExportXliffAsync(request.Output, allowRootedOutput: true).ConfigureAwait(false);
                 string summary = XliffExportSummary(export);
                 return export.Ok
                     ? CommandOutcome.Success(new EditorCommandResult(summary, XliffExport: export))
                     : ValidationFailure("REDIT0006", "The XLIFF export could not be completed.", summary);
             }
 
-            EditorReviewFileResult reviewExport = await session.ExportReviewJsonAsync(request.Output).ConfigureAwait(false);
+            EditorReviewFileResult reviewExport = await session.ExportReviewJsonAsync(request.Output, allowRootedOutput: true).ConfigureAwait(false);
             string reviewSummary = ReviewExportSummary(reviewExport);
             return reviewExport.Ok
                 ? CommandOutcome.Success(new EditorCommandResult(reviewSummary, ReviewExport: reviewExport))
