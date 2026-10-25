@@ -199,12 +199,14 @@ jobs:
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: bun eng/release/publish.mjs publish "$VERSION"
-      - name: Create GitHub prerelease
+      # A prerelease for 0.y.z and every x.y.z-rc.N / -preview.N; a stable version from 1.0.0 is a full release.
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           SBOM: ${{ needs.candidate.outputs.sbom }}
         run: bun eng/release/ci-artifact.mjs release "$VERSION" artifacts/packages artifacts/vsix "artifacts/release/$SBOM"
-      - name: Move npm latest to this preview
+      # Only a stable version or a 0.y.z release moves latest; 1.0.0-rc.N stays on the preview dist-tag.
+      - name: Move npm latest to this release
         run: bun eng/release/publish.mjs tag-latest "$VERSION"
       - name: Note the documentation catalog step
         run: echo "Published $VERSION. Update the docs catalog in runic-site (see eng/release/README.md)." >> "$GITHUB_STEP_SUMMARY"

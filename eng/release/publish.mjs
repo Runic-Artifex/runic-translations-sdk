@@ -162,10 +162,13 @@ async function publish(candidate, version) {
   }
 }
 
-// Until 1.0 every release is a preview, so npm latest follows the newest one.
+// npm latest moves to a stable version (no prerelease suffix) and, as every release
+// before 1.0 is a preview, to any 0.y.z version. From 1.0 a prerelease such as
+// 1.0.0-rc.1 stays on the preview dist-tag and leaves latest alone (D043.5).
+export const latestEligible = version => /^0\./.test(version) || !version.split("+")[0].includes("-");
 // Never move latest back to an older version, for example on a late rerun.
 export function needsLatest(current, version) {
-  return current === undefined || Bun.semver.order(current, version) < 0;
+  return latestEligible(version) && (current === undefined || Bun.semver.order(current, version) < 0);
 }
 
 // npm answers the dist-tags of an unpublished scoped name with 401, so a dry run,
@@ -184,6 +187,8 @@ async function npmLatest(name, dryRun) {
 
 async function tagLatest(version, dryRun) {
   if (!dryRun) assert.ok(process.env.ACTIONS_ID_TOKEN_REQUEST_URL, "OIDC unavailable");
+  // A prerelease from 1.0 (1.0.0-rc.1) stays on the preview dist-tag that publish gave it.
+  if (!latestEligible(version)) return console.log(`${version} is a prerelease: npm latest stays where it is; ${version} is on the preview dist-tag`);
   for (const entry of workspace.npm) {
     const current = await npmLatest(entry.name, dryRun);
     if (!needsLatest(current, version)) console.log(`Keeping ${entry.name} latest at ${current}`);

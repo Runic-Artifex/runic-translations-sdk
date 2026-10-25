@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ARTIFACT, CI_WORKFLOW, REPOSITORY, VSIX, createRelease, releaseNotes, findCiPackages, prepare, releaseCheck, scanVsix, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
+import { ARTIFACT, CI_WORKFLOW, REPOSITORY, VSIX, createRelease, githubPrerelease, releaseNotes, findCiPackages, prepare, releaseCheck, scanVsix, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
 import { writeVsixFixtures } from "./vsix-fixtures.mjs";
 
 const sha = "a".repeat(40);
@@ -203,6 +203,29 @@ test("a rerun keeps a release of this commit, never modifies a published one and
   ({ spawn, calls } = fakeGh({ release: true, tag: "b".repeat(40) }));
   expect(() => createRelease("1.2.3", sha, files, spawn)).toThrow("belongs to");
   expect(writes(calls)).toBe(false);
+});
+
+test("GitHub marks 0.y.z and prereleases as prereleases and a stable version from 1.0.0 as a release", () => {
+  for (const version of ["0.9.0", "0.7.0-preview.4", "1.0.0-rc.1", "1.0.1-rc.1", "1.1.0-preview.1"]) expect([version, githubPrerelease(version)]).toEqual([version, true]);
+  for (const version of ["1.0.0", "1.0.1", "1.1.0", "2.0.0"]) expect([version, githubPrerelease(version)]).toEqual([version, false]);
+  expect(releaseCheck("1.0.0-rc.1", sha, fakeGh().spawn)).toContain("Would create the prerelease v1.0.0-rc.1");
+  expect(releaseCheck("1.0.0", sha, fakeGh().spawn)).toContain("Would create the release v1.0.0");
+  for (const [version, flagged] of [["0.9.0", true], ["1.0.0-rc.1", true], ["1.0.0", false]]) {
+    let { spawn, calls } = fakeGh();
+    createRelease(version, sha, ["p/nuget/A.nupkg"], spawn, undefined);
+    expect([version, calls.at(-1).includes("--prerelease")]).toEqual([version, flagged]);
+    ({ spawn, calls } = fakeGh({ release: true, draft: true, assets: ["A.nupkg"] }));
+    createRelease(version, sha, ["p/nuget/A.nupkg"], spawn, undefined);
+    expect(calls.at(-1)).toContain(`--prerelease=${flagged}`);
+  }
+});
+
+test("from 1.0 the package validation baseline is a stable release, never a prerelease", () => {
+  const props = readFileSync(new URL("../Versions.props", import.meta.url), "utf8");
+  const version = /<RunicTranslationsVersion>([^<]+)</.exec(props)[1];
+  const baseline = /<RunicTranslationsPackageValidationBaselineVersion>([^<]+)</.exec(props)[1];
+  // Through 1.0.0-rc.N the baseline stays at the last 0.y.z release; after 1.0.0 it is 1.0.0 (eng/release/README.md).
+  if (!version.startsWith("0.")) expect(baseline).not.toContain("-");
 });
 
 test("publication reuses the CI artifacts and never reruns tests or packing", () => {

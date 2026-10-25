@@ -108,8 +108,9 @@ environment) runs `eng/release/ci-artifact.mjs`:
   `release-check` fails if the tag (looked
   up exactly, annotated tags followed) or an existing GitHub release points at
   another commit, or a lookup fails for any reason other than not found (a release
-  or draft of this exact commit is kept); `publish.mjs tag-latest
-  --dry-run` reports where npm `latest` would move.
+  or draft of this exact commit is kept) and reports whether it would create a
+  prerelease or a release; `publish.mjs tag-latest --dry-run` reports where npm
+  `latest` would move, or that a prerelease from 1.0 leaves it alone.
 
 A dry run ends there, without OIDC, an attestation, a registry write, a tag or a
 release. Apart from the NuGet push check, it cannot detect missing trusted-publisher
@@ -123,13 +124,22 @@ bytes: `actions/attest-build-provenance` covers every `.nupkg`, npm `.tgz`, both
 VSIX files and the SBOM, and `actions/attest` attaches the SBOM to the packages and
 VSIX files. It repeats every registry lookup and the NuGet push check before the
 first push, then publishes missing package versions (npm also with
-`--provenance`), creates the GitHub prerelease at the dispatched commit from those
+`--provenance`), creates the GitHub release at the dispatched commit from those
 same packages, the VSIX files and the SBOM (`ci-artifact.mjs release`; a rerun after a partial
 publication keeps a release of this tag and commit, and for a draft uploads only
-missing assets and publishes it), and then,
-because every release before 1.0 is still a preview (marked as a GitHub prerelease), moves npm `latest` to it, never to
-an older version, waiting while npm still answers 401 or 404 for a just-published
-name. A published release is never modified, since immutable releases reject new
+missing assets and publishes it), and then moves npm `latest` to it when the
+version may have it, never to an older version, waiting while npm still answers 401
+or 404 for a just-published name. The version decides both (`githubPrerelease` in
+`ci-artifact.mjs`, `latestEligible` in `publish.mjs`):
+
+| Version | Example | npm `preview` | npm `latest` | GitHub release |
+| --- | --- | --- | --- | --- |
+| `0.y.z` (any 0.x version) | `0.9.0` | yes | moves to it if higher | prerelease |
+| prerelease from 1.0 | `1.0.0-rc.1` | yes | unchanged | prerelease |
+| stable from 1.0 | `1.0.0`, `1.0.1` | yes | moves to it if higher | release (not a prerelease) |
+
+Every npm package is published with `--tag preview`; during the release
+candidates npm `latest` stays at the last `0.y.z` release until 1.0.0 (D043.5). A published release is never modified, since immutable releases reject new
 assets: if it lacks an asset (for example a release created before the SBOM
 existed), the release step keeps it unchanged and reports the missing files as a
 workflow warning instead of failing, so `latest` still moves. The attestations still
@@ -250,6 +260,24 @@ After publishing, move each library's `PublicAPI.Unshipped.txt` entries into
 in `eng/Versions.props` to the published version, and delete any
 `CompatibilitySuppressions.xml` files, which describe breaks from the old
 baseline. See [Public API](../../CONTRIBUTING.md#public-api).
+
+### Release candidates and 1.0.0
+
+Translations goes through `1.0.0-rc.N` to `1.0.0` in the release train, after
+Command Line and before Runic SDK. An rc is a routine release, except:
+
+- **Validate version** accepts `1.0.0-rc.N` and `1.0.0`; the IDE extensions map them
+  as [IDE extension versions](#ide-extension-versions) describes.
+- After an rc, move the PublicAPI entries as above, but leave
+  `RunicTranslationsPackageValidationBaselineVersion` at the last `0.y.z` release:
+  from 1.0 the baseline is never a prerelease (`ci-artifact.test.mjs` fails
+  otherwise). An rc takes no API or behaviour changes, so it needs no
+  `CompatibilitySuppressions.xml`.
+- After 1.0.0: set the baseline to `1.0.0`, every `PublicAPI.Unshipped.txt` is
+  empty, delete every `CompatibilitySuppressions.xml` (from then on one is allowed
+  only as the shared policy describes), and replace the pre-1.0 wording
+  ([Versions before 1.0](#versions-before-10) and "until 1.0" / "before 1.0" in the
+  guides and package READMEs; release notes and `AnalyzerReleases` stay as they are).
 
 Before the first standalone release, configure NuGet and npm trusted publishers
 for `Runic-Artifex/runic-translations-sdk`, `publish-preview.yml`, and the
