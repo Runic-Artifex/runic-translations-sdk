@@ -105,7 +105,7 @@ when running from source, pass those arguments after the `--` above.
 Translations dependencies resolve from source in this repository. Runic Command
 Line and the Runic SDK packages (Views with its CS-WebUI host and ReactiveUI
 adapter, Navigation, Platform) and their npm counterparts resolve from
-independently pinned published packages; the editor is built on Runic SDK 0.10.0.
+independently pinned published packages; the editor is built on Runic SDK 0.11.0.
 No sibling SDK checkout is needed. The native transport is pinned to published
 `CsWebUi` and `CsWebUi.Native` `2.5.0-beta.4.8`, which bundle WebUI nightly
 `2b35db13f`: it includes WebUI's fix for concurrent Bridge calls, and one
