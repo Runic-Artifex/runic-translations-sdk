@@ -94,8 +94,8 @@
       "dotnet-runic-translations": {
         "type": "Project",
         "dependencies": {
-          "Runic.CommandLine": "[0.9.0, 0.10.0)",
-          "Runic.CommandLine.Spectre": "[0.9.0, 0.10.0)",
+          "Runic.CommandLine": "[0.9.1, 0.10.0)",
+          "Runic.CommandLine.Spectre": "[0.9.1, 0.10.0)",
           "Runic.Translations": "[0.9.0, )",
           "Runic.Translations.Authoring": "[0.9.0, )",
           "Runic.Translations.Compiler": "[0.9.0, )",
@@ -119,17 +119,17 @@
       },
       "Runic.CommandLine": {
         "type": "CentralTransitive",
-        "requested": "[0.9.0, 0.10.0)",
-        "resolved": "0.9.0",
-        "contentHash": "PiGQLf19IGarknvVz3GZltFucK4Mh270xW1WvLLJuLbtY+v5Wxw+7ZP+TIiVgphML3I6NowvsV2YCqFaYCXIrg=="
+        "requested": "[0.9.1, 0.10.0)",
+        "resolved": "0.9.1",
+        "contentHash": "r794Nk1n2mYzwEtP7llW45wGqgsdtu4JJq937QR+ZkiiAeFQNLdKepPhDPBURTTRNnSsSg2fzkROC0S8EuXCmg=="
       },
       "Runic.CommandLine.Spectre": {
         "type": "CentralTransitive",
-        "requested": "[0.9.0, 0.10.0)",
-        "resolved": "0.9.0",
-        "contentHash": "12WdB9s0MENuayhIHf6m0UQbKcFfVpWxtpjw6DN9nEfZPNCTP4sx+Daf6Nv2RXACezuwi/wMQLViGUAD0sVspg==",
+        "requested": "[0.9.1, 0.10.0)",
+        "resolved": "0.9.1",
+        "contentHash": "6XGe9x4OhTQi2jVQH83fDOFsnc50JNcEndoDLGv6kiQII3Ox4Nxwynb8XmjiGfZyCb8ywb67o6pRaHDhqE++ng==",
         "dependencies": {
-          "Runic.CommandLine": "[0.9.0]",
+          "Runic.CommandLine": "[0.9.1]",
           "Spectre.Console": "[0.57.2, 0.58.0)"
         }
       }
