@@ -95,8 +95,8 @@ only the built-in text in the invocation culture.
 ## Packages and versions
 
 The adapter depends on `Runic.CommandLine` through `ICommandTextResolver`
-only, but `Runic.Translations.CommandLine` requires Runic.CommandLine 0.9.0,
-within the tested minor `[0.9.0, 0.10)`, whose prompt, JSON output alias,
+only, but `Runic.Translations.CommandLine` requires Runic.CommandLine 0.9.1,
+within the tested minor `[0.9.1, 0.10)`, whose prompt, JSON output alias,
 output selector and response-file keys the built-in catalogs translate. A Runic.CommandLine minor
 may change its API until 1.0, so the range moves in a Translations release
 after testing. A project that adds only the adapter therefore restores a

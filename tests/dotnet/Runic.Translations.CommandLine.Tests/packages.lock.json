@@ -36,9 +36,9 @@
       },
       "Runic.CommandLine": {
         "type": "Direct",
-        "requested": "[0.9.0, 0.10.0)",
-        "resolved": "0.9.0",
-        "contentHash": "PiGQLf19IGarknvVz3GZltFucK4Mh270xW1WvLLJuLbtY+v5Wxw+7ZP+TIiVgphML3I6NowvsV2YCqFaYCXIrg=="
+        "requested": "[0.9.1, 0.10.0)",
+        "resolved": "0.9.1",
+        "contentHash": "r794Nk1n2mYzwEtP7llW45wGqgsdtu4JJq937QR+ZkiiAeFQNLdKepPhDPBURTTRNnSsSg2fzkROC0S8EuXCmg=="
       },
       "TUnit.Core": {
         "type": "Direct",
@@ -113,7 +113,7 @@
       "runic.translations.commandline": {
         "type": "Project",
         "dependencies": {
-          "Runic.CommandLine": "[0.9.0, 0.10.0)",
+          "Runic.CommandLine": "[0.9.1, 0.10.0)",
           "Runic.Translations": "[0.9.0, )"
         }
       }
