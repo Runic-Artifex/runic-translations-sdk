@@ -30,8 +30,10 @@ describe("Svelte locale hydration", () => {
     const vite = await createServer({
       root: resolve("."),
       configFile: resolve("vite.config.ts"),
+      // Own cacheDir and no WebSocket server; see document.svelte.test.ts (I-219).
+      cacheDir: resolve("node_modules/.vite/test-locale-hydration"),
       appType: "custom",
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false, ws: false },
     });
     const serverModule = await vite.ssrLoadModule("/test/LocaleHydrationFixture.svelte");
     const { render } = await vite.ssrLoadModule("svelte/server");

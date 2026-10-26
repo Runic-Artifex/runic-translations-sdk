@@ -14,7 +14,15 @@ let vite: ViteDevServer;
 let ssr: (props: Record<string, unknown>) => string;
 
 beforeAll(async () => {
-  vite = await createServer({ root: resolve("."), configFile: resolve("vite.config.ts"), appType: "custom", server: { middlewareMode: true, hmr: false } });
+  // Own cacheDir and no WebSocket server: Vitest runs test files in parallel, and test-started Vite servers
+  // sharing node_modules/.vite force-re-optimise each other's pre-bundles mid-load (I-219).
+  vite = await createServer({
+    root: resolve("."),
+    configFile: resolve("vite.config.ts"),
+    cacheDir: resolve("node_modules/.vite/test-document"),
+    appType: "custom",
+    server: { middlewareMode: true, hmr: false, ws: false },
+  });
   const fixture = await vite.ssrLoadModule("/test/DocumentFixture.svelte");
   const { render } = await vite.ssrLoadModule("svelte/server");
   ssr = props => render(fixture.default, { props }).body;
