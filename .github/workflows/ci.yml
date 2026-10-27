@@ -19,7 +19,7 @@ jobs:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - name: Check generated CLDR selectors and capability matrix
         run: bun eng/generate-cldr.mjs --check
       - name: Check rendered capability documentation
@@ -49,10 +49,10 @@ jobs:
       # verify-packages serves the SvelteKit quick start with adapter-node.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bun test eng/release
       - run: bun eng/run.mjs test
@@ -75,7 +75,7 @@ jobs:
           path: artifacts/test-results
           if-no-files-found: ignore
   node-26:
-    # engines allows Node 24 and 26; the other jobs run Node 24.18.0, this one the npm package tests on Node 26.
+    # engines allows Node 24 and 26; the other jobs run Node 24.22.1, this one the npm package tests on Node 26.
     name: npm packages / Node 26
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -85,10 +85,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 26.12.0
+          node-version: 26.12.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - name: Test the Svelte and SvelteKit packages on Node 26
         run: |
@@ -106,10 +106,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - name: Install the locked Chromium browser
         working-directory: packages/web/translations-svelte
@@ -132,10 +132,10 @@ jobs:
           global-json-file: global.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - name: Install the locked Chromium browser
         working-directory: packages/web/translations-svelte
@@ -160,7 +160,7 @@ jobs:
         run: eng/ci/apt-install.sh clang zlib1g-dev
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - run: bun eng/run.mjs native-aot
   wpf:
     name: WPF / Windows
@@ -205,7 +205,7 @@ jobs:
           global-json-file: global.json
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - name: Build Translations and the editor
         run: bun eng/run.mjs build
@@ -241,7 +241,7 @@ jobs:
           global-json-file: global.json
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - name: Build the editor against freshly packed Translations packages
         run: bun eng/run.mjs verify-editor-packed
@@ -272,10 +272,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
       # Packaging stamps the eng/workspace.json release version (eng/release/ide-versions.mjs) and checks the VSIX.
       # The second package (not uploaded) checks that a plain release drops the pre-release flag and keeps the Preview label.
       - name: Build, test and package the VS Code extension

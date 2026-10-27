@@ -7,10 +7,45 @@
         let
           pkgs = import nixpkgs { inherit system; };
           inherit (pkgs) lib;
+          # global.json disables SDK roll-forward and CI installs `.node-version`; nix/toolchain provides exactly
+          # those versions (from the official binaries while nixpkgs is older) and fails evaluation otherwise.
+          toolchain = import ./nix/toolchain { inherit pkgs; };
+          dotnet = toolchain.dotnet-sdk;
+          inherit (toolchain) nodejs;
+          # Bun from the official release archive; the hashes match the release's SHASUMS256.txt.
+          bunArchive =
+            if system == "x86_64-linux" then
+              {
+                platform = "linux-x64";
+                hash = "sha256-SQxqWbkwuEx42tLBeD8BdpDH1bxUasS1yOkkDULCz3U=";
+              }
+            else
+              {
+                platform = "linux-aarch64";
+                hash = "sha256-NhWc7T3/G+CA3TE/q/vQR5oOPfBLPgZ6Exdqa1CjD5w=";
+              };
+          bunSource = pkgs.fetchzip {
+            url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-${bunArchive.platform}.zip";
+            inherit (bunArchive) hash;
+          };
+          bun_1_4_4 = pkgs.stdenvNoCC.mkDerivation {
+            pname = "bun";
+            version = "1.4.4";
+            src = bunSource;
+            nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+            buildInputs = [ pkgs.stdenv.cc.cc.lib ];
+            dontBuild = true;
+            installPhase = ''
+              mkdir -p "$out/bin"
+              cp bun "$out/bin/bun"
+              chmod +x "$out/bin/bun"
+            '';
+          };
           baseShell = {
-            packages = [ pkgs.git pkgs.dotnetCorePackages.sdk_10_0 pkgs.nodejs_24 pkgs.bun pkgs.python3 pkgs.clang pkgs.pkg-config pkgs.zlib ];
+            packages = [ pkgs.git dotnet nodejs bun_1_4_4 pkgs.python3 pkgs.clang pkgs.pkg-config pkgs.zlib ];
             DOTNET_CLI_TELEMETRY_OPTOUT = "1";
             DOTNET_NOLOGO = "1";
+            DOTNET_ROOT = "${dotnet}/share/dotnet";
             shellHook = ''export NUGET_PACKAGES="$PWD/.cache/nuget"'';
           };
           # Optional CS-WebUI browser/WebView runtime from this flake's lock.
