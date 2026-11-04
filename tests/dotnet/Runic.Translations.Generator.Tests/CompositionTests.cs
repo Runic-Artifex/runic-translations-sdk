@@ -1,0 +1,437 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.CodeAnalysis;
+using Runic.Translations.Compiler;
+using Runic.Translations.Compiler.Generation;
+using TUnit.Core;
+
+namespace Runic.Translations.Generator.Tests;
+
+// Catalog composition (T1a, T1b): generated libraries and an application catalog in one TranslationContext, with
+// application overlays checked key by key against the library release they are attached to.
+internal sealed class CompositionTests
+{
+    private const string GridId = "acme-grid";
+
+    // Release 1 of a component library: en (default) and de.
+    private static readonly Catalog GridV1 = Catalog.Compile(GridProject,
+        ("en", """
+            title = Grid
+            empty = No rows
+            rows =
+              .input {$count :integer}
+              {{{$count} rows}}
+            help = Read the {#link}guide{/link}.
+            """),
+        ("de", """
+            title = Raster
+            empty = Keine Zeilen
+            rows =
+              .input {$count :integer}
+              {{{$count} Zeilen}}
+            help = Lies die {#link}Anleitung{/link}.
+            """));
+
+    // Release 2 adds sort, removes help and gives empty an input.
+    private static readonly Catalog GridV2 = Catalog.Compile(GridProject,
+        ("en", """
+            title = Grid
+            empty =
+              .input {$filter :string}
+              {{No rows match {$filter}}}
+            rows =
+              .input {$count :integer}
+              {{{$count} rows}}
+            sort = Sort
+            """),
+        ("de", """
+            title = Raster
+            empty =
+              .input {$filter :string}
+              {{Keine Zeilen für {$filter}}}
+            rows =
+              .input {$count :integer}
+              {{{$count} Zeilen}}
+            sort = Sortieren
+            """));
+
+    private static readonly Catalog App = Catalog.Compile("""
+        {
+          "schemaVersion": 1,
+          "catalog": "app",
+          "code": { "namespace": "Example.App", "className": "AppText", "visibility": "public" },
+          "baseLocale": "en",
+          "locales": [ "en", "de", "fr" ]
+        }
+        """,
+        ("en", "greeting = Hello\n"),
+        ("de", "greeting = Hallo\n"),
+        ("fr", "greeting = Bonjour\n"));
+
+    private const string GridProject = """
+        {
+          "schemaVersion": 1,
+          "catalog": "acme-grid",
+          "code": { "namespace": "Acme.Grid", "className": "GridText", "visibility": "public" },
+          "baseLocale": "en",
+          "locales": [ "en", "de" ]
+        }
+        """;
+
+    // The application's overrides, written against release 1: an English title, a French translation and the help text.
+    private const string OverlayProject = """
+        {
+          "schemaVersion": 1,
+          "catalog": "acme-grid",
+          "code": { "namespace": "Example.Overrides", "className": "GridOverrides", "visibility": "internal" },
+          "baseLocale": "en",
+          "locales": [ "en", "fr" ],
+          "validation": { "translationCompleteness": "allow" }
+        }
+        """;
+
+    private static readonly Dictionary<string, byte[]> Overlay = Packs(OverlayProject,
+        ("en", """
+            title = Data grid
+            empty = Nothing here
+            rows =
+              .input {$count :integer}
+              {{{$count} rows}}
+            help = See the {#link}manual{/link}.
+            """),
+        ("fr", """
+            title = Grille
+            rows =
+              .input {$count :integer}
+              {{{$count} lignes}}
+            """));
+
+    [Test, DisplayName("a context switches every catalog to one requested locale and reports how each resolved it")]
+    public async Task SharedLocale()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(App.Registration)
+            .Add(GridV1.Registration)
+            .BuildAsync("de");
+        Assert.Equal("Hallo|Raster", Text(context, "app", "greeting") + "|" + Text(context, GridId, "title"), "German");
+        Assert.Equal("de", context.RequestedLocale, "requested");
+
+        await context.SetLocaleAsync("fr-CA");
+        Assert.Equal("Bonjour|Grid", Text(context, "app", "greeting") + "|" + Text(context, GridId, "title"), "French");
+        TranslationCatalogStatus app = context.Catalogs[0], grid = context.Catalogs[1];
+        Assert.Equal("app:fr-CA>fr:Parent", Describe(app), "app status");
+        Assert.Equal("acme-grid:fr-CA>en:Default", Describe(grid), "grid status");
+        Assert.Equal("de|en", string.Join("|", grid.SupportedLocales), "grid locales");
+        Assert.Equal("fr-CA|Default", context.GetManager(GridId).Current.RequestedLocale + "|" + context.GetManager(GridId).Current.LocaleResolution,
+            "snapshot request");
+
+        // A manager's switch switches the whole context.
+        await context.GetManager(GridId).SetLocaleAsync("de");
+        Assert.Equal("de|de|de", context.RequestedLocale + "|" + context.GetManager("app").CurrentLocale + "|" + context.GetManager(GridId).CurrentLocale,
+            "manager switch");
+        Assert.True(!context.TryGetManager("missing", out _), "unknown catalog");
+    }
+
+    [Test, DisplayName("a context publishes every catalog together and changes none when one fails")]
+    public async Task AtomicSwitch()
+    {
+        var packs = new MemoryPackSource(Overlay) { Failing = "de" };
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(App.Registration)
+            .Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, packs))
+            .BuildAsync("en");
+
+        var seen = new List<string>();
+        context.GetManager("app").LocaleChanged += (_, change) =>
+            seen.Add("app " + change.NewLocale + " sees grid " + context.GetManager(GridId).CurrentLocale);
+        context.GetManager(GridId).SnapshotPublished += (_, published) => seen.Add("grid " + published.Reason + " " + published.Snapshot.Locale);
+        context.LocaleChanged += (_, change) => seen.Add("context " + change.OldRequestedLocale + ">" + change.RequestedLocale + " " +
+            string.Join(",", change.Catalogs.Select(Describe)));
+
+        // The overlay source fails for de: neither catalog changes.
+        TranslationPackException failure = await Throws<TranslationPackException>(() => context.SetLocaleAsync("de").AsTask());
+        Assert.Equal(TranslationPackFailureReason.SourceFailure, failure.Reason, "failure reason");
+        Assert.Equal("en|en|en|Data grid", context.RequestedLocale + "|" + context.GetManager("app").CurrentLocale + "|" +
+            context.GetManager(GridId).CurrentLocale + "|" + Text(context, GridId, "title"), "unchanged after failure");
+        Assert.Equal(0, seen.Count, "no events after failure");
+
+        // A canceled switch changes nothing either.
+        using (var canceled = new CancellationTokenSource())
+        {
+            await canceled.CancelAsync();
+            await Throws<OperationCanceledException>(() => context.SetLocaleAsync("fr", canceled.Token).AsTask());
+        }
+        Assert.Equal("en", context.RequestedLocale, "unchanged after cancellation");
+
+        packs.Failing = null;
+        await context.SetLocaleAsync("de");
+        Assert.Equal(
+            "app de sees grid de|grid LocaleChanged de|context en>de app:de>de:Exact,acme-grid:de>de:Exact",
+            string.Join("|", seen), "events");
+    }
+
+    [Test, DisplayName("overlays resolve locale-first: the library's own locale beats an override in its fallback")]
+    public async Task LocaleFirstOverlay()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), [new TranslationOverlayLocale("fr")]))
+            .BuildAsync("en");
+        Assert.Equal("Data grid|Nothing here|3 rows", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty") + "|" +
+            Text(context, GridId, "rows", new TextArgument("count", 3L)), "English overrides");
+
+        // German: the library's German text beats the application's English override.
+        await context.SetLocaleAsync("de");
+        Assert.Equal("Raster|Keine Zeilen", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty"), "German");
+
+        // French: added by the overlay, falling back to the overlay's English, then the library's.
+        await context.SetLocaleAsync("fr-BE");
+        Assert.Equal("Grille|3 lignes|Nothing here", Text(context, GridId, "title") + "|" +
+            Text(context, GridId, "rows", new TextArgument("count", 3L)) + "|" + Text(context, GridId, "empty"), "French");
+        Assert.Equal("acme-grid:fr-BE>fr:Parent", Describe(context.Catalogs[0]), "added locale resolves");
+        Assert.Equal("de|en|fr", string.Join("|", context.Catalogs[0].SupportedLocales), "added locale reported");
+        Assert.Equal(0, context.Catalogs[0].OverlayDiagnostics.Count, "no diagnostics against the release the overlay was written for");
+    }
+
+    [Test, DisplayName("an overlay keeps working when a library release adds, removes and changes keys")]
+    public async Task OverlayAcrossLibraryReleases()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(GridV2.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), [new TranslationOverlayLocale("fr", "en")]))
+            .BuildAsync("fr");
+        Assert.True(!string.Equals(GridV1.Registration.ContractFingerprint, GridV2.Registration.ContractFingerprint, StringComparison.Ordinal),
+            "the releases have different contracts");
+        Assert.Equal("Grille|Sort|No rows match x", Text(context, GridId, "title") + "|" + Text(context, GridId, "sort") + "|" +
+            Text(context, GridId, "empty", new TextArgument("filter", "x")), "French on release 2");
+        Assert.Equal(
+            "en:empty:IncompatibleInputs|en:help:UnknownKey",
+            string.Join("|", context.Catalogs[0].OverlayDiagnostics.Select(item => item.Locale + ":" + item.Key + ":" + item.Reason).Order(StringComparer.Ordinal)),
+            "skipped keys");
+    }
+
+    [Test, DisplayName("overlay messages must keep the library's content kind and markup")]
+    public async Task OverlayMarkupChecks()
+    {
+        Dictionary<string, byte[]> packs = Packs(OverlayProject.Replace("[ \"en\", \"fr\" ]", "[ \"en\" ]", StringComparison.Ordinal),
+            ("en", """
+                title = {#strong}Data{/strong} grid
+                empty = No data
+                rows =
+                  .input {$count :integer}
+                  {{{$count} rows}}
+                help = See the {#strong}manual{/strong}.
+                """));
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs)))
+            .BuildAsync();
+        Assert.Equal("Grid|No data", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty"), "checked overrides");
+        Assert.Equal(
+            "en:help:IncompatibleMarkup|en:title:IncompatibleMarkup",
+            string.Join("|", context.Catalogs[0].OverlayDiagnostics.Select(item => item.Locale + ":" + item.Key + ":" + item.Reason).Order(StringComparer.Ordinal)),
+            "markup diagnostics");
+    }
+
+    [Test, DisplayName("an overlay pack for another locale or rejected by the integrity policy fails the switch")]
+    public async Task OverlayPackRejections()
+    {
+        var misplaced = new Dictionary<string, byte[]>(StringComparer.Ordinal) { ["de"] = Overlay["en"] };
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(misplaced)))
+            .BuildAsync("en");
+        TranslationPackException wrongLocale = await Throws<TranslationPackException>(() => context.SetLocaleAsync("de").AsTask());
+        Assert.Equal("RTR0023/locale-mismatch|en", wrongLocale.RejectionId + "|" + context.RequestedLocale, "pack for another locale");
+
+        TranslationPackException rejected = await Throws<TranslationPackException>(() => TranslationContext.CreateBuilder()
+            .Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), integrityVerifier: static (_, _) => ValueTask.FromResult(false)))
+            .BuildAsync("en").AsTask());
+        Assert.Equal(TranslationPackFailureReason.IntegrityRejected, rejected.Reason, "integrity policy");
+    }
+
+    [Test, DisplayName("refreshing a context reloads overlay packs")]
+    public async Task RefreshReloadsOverlays()
+    {
+        var packs = new MemoryPackSource(Overlay);
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(App.Registration)
+            .Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, packs))
+            .BuildAsync("en");
+        packs.Replace(Packs(OverlayProject, ("en", """
+            title = Table
+            empty = Nothing here
+            rows =
+              .input {$count :integer}
+              {{{$count} rows}}
+            help = See the {#link}manual{/link}.
+            """)));
+        Assert.Equal("Data grid", Text(context, GridId, "title"), "cached before refresh");
+        var reasons = new List<string>();
+        context.GetManager(GridId).SnapshotPublished += (_, published) => reasons.Add(published.Reason.ToString());
+        await context.GetManager(GridId).RefreshAsync();
+        Assert.Equal("Table|Refresh", Text(context, GridId, "title") + "|" + string.Join(",", reasons), "refreshed");
+    }
+
+    [Test, DisplayName("a context resolves references of every registered catalog")]
+    public async Task ResolvesReferences()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(App.Registration)
+            .Add(GridV1.Registration)
+            .BuildAsync("de");
+        var rows = new TranslationReference(GridId, GridV1.Registration.ContractFingerprint, "rows",
+            new Dictionary<string, TranslationReferenceArgument> { ["count"] = new TranslationReferenceArgument(TextArgumentType.Int, "2") }, "2 rows");
+        TranslationReferenceResolution grid = context.Resolve(rows);
+        Assert.Equal("Translated|2 Zeilen", grid.Outcome + "|" + grid.Text, "library reference");
+        TranslationReferenceResolution app = context.Resolve(new TranslationReference("app", App.Registration.ContractFingerprint, "greeting", null, "Hello"));
+        Assert.Equal("Translated|Hallo", app.Outcome + "|" + app.Text, "application reference");
+        TranslationReferenceResolution other = context.Resolve(new TranslationReference("other", App.Registration.ContractFingerprint, "x", null, "fallback"));
+        Assert.Equal("Fallback|fallback|CatalogMismatch", other.Outcome + "|" + other.Text + "|" + other.Diagnostics.Single().Reason, "unregistered catalog");
+    }
+
+    [Test, DisplayName("the builder ignores a repeated registration and rejects conflicts and orphan overlays")]
+    public async Task BuilderRules()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder().Add(GridV1.Registration).Add(GridV1.Registration).BuildAsync();
+        Assert.Equal(1, context.Catalogs.Count, "repeated registration");
+        Assert.Equal("en", context.RequestedLocale, "default locale of the first catalog");
+        await Throws<ArgumentException>(() => Task.FromResult(TranslationContext.CreateBuilder().Add(GridV1.Registration).Add(GridV2.Registration)));
+        await Throws<InvalidOperationException>(() => TranslationContext.CreateBuilder().Add(App.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay))).BuildAsync().AsTask());
+        await Throws<InvalidOperationException>(() => TranslationContext.CreateBuilder().BuildAsync().AsTask());
+        // An added locale must fall back to a locale the library declares.
+        await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), [new TranslationOverlayLocale("fr", "it")])).BuildAsync().AsTask());
+    }
+
+    [Test, DisplayName("generated text classes take a context and the catalog exposes its registration")]
+    public void GeneratedContextConstructor()
+    {
+        const string source = """
+            namespace Acme.Grid;
+            public static class ContextProbe
+            {
+                public static string Run()
+                {
+                    global::Runic.Translations.TranslationContext context = global::Runic.Translations.TranslationContext.CreateBuilder()
+                        .Add(GridTextCatalog.Registration)
+                        .Build("de");
+                    var text = new GridText(context);
+                    string german = text.Messages.title;
+                    context.SetLocaleAsync("en").AsTask().GetAwaiter().GetResult();
+                    return german + "|" + text.Messages.title + "|" + GridTextCatalog.Registration.CatalogId;
+                }
+            }
+            """;
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, GridV1.Inputs);
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Assert.Equal("Raster|Grid|acme-grid", Execute(run, "Acme.Grid.ContextProbe", "Run"), "generated context constructor");
+    }
+
+    [Test, DisplayName("a runtime without the composition surface gets no Registration or context constructor")]
+    public void CompositionNeedsRuntimeCapability()
+    {
+        GeneratorRun run = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3Typed, GridV1.Inputs);
+        string generated = string.Concat(run.SingleResult.GeneratedSources.Select(static item => item.SourceText.ToString()));
+        Assert.True(!generated.Contains("ITranslationContext", StringComparison.Ordinal) &&
+            !generated.Contains("TranslationCatalogRegistration", StringComparison.Ordinal), "composition surface emitted for an older runtime");
+        Assert.True(GeneratorTestHost.Run(GridV1.Inputs).SingleResult.GeneratedSources
+            .Any(static item => item.SourceText.ToString().Contains("TranslationCatalogRegistration Registration", StringComparison.Ordinal)), "Registration missing");
+    }
+
+    private static string Text(TranslationContext context, string catalog, string name, params TextArgument[] arguments)
+    {
+        ITranslationSnapshot snapshot = context.GetManager(catalog).Current;
+        Assert.True(snapshot.TryGetKey(name, out TranslationKey key), "unknown key " + name);
+        return snapshot.Format(key, arguments.Select(argument => Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(argument.Name!, argument)).ToArray());
+    }
+
+    private static string Describe(TranslationCatalogStatus status) =>
+        status.CatalogId + ":" + status.RequestedLocale + ">" + status.Locale + ":" + status.LocaleResolution;
+
+    private static async Task<T> Throws<T>(Func<Task> action) where T : Exception
+    {
+        try
+        {
+            await action();
+        }
+        catch (T exception)
+        {
+            return exception;
+        }
+
+        throw new InvalidOperationException("Expected " + typeof(T).Name + ".");
+    }
+
+    private static string Execute(GeneratorRun run, string typeName, string methodName)
+    {
+        using var stream = new MemoryStream();
+        Microsoft.CodeAnalysis.Emit.EmitResult emitted = run.Compilation.Emit(stream);
+        Assert.True(emitted.Success, string.Join("\n", emitted.Diagnostics));
+        Assembly assembly = Assembly.Load(stream.ToArray());
+        return (string)assembly.GetType(typeName, throwOnError: true)!.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static)!.Invoke(null, null)!;
+    }
+
+    private static Dictionary<string, byte[]> Packs(string project, params (string Locale, string Text)[] sources)
+    {
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(
+            new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(project)),
+            sources.Select(source => new TranslationSource("translations/" + source.Locale + ".rmf2", Encoding.UTF8.GetBytes(source.Text))).ToArray());
+        Assert.True(compilation.Success && compilation.Project is not null, string.Join("; ", compilation.Diagnostics.Select(item => item.Id + " " + item.Message)));
+        return compilation.Project!.Locales.ToDictionary(locale => locale.Tag,
+            locale => Rmf2LocaleArtifactV5.Render(compilation.Project!, locale.Tag).GetUtf8Bytes(), StringComparer.Ordinal);
+    }
+
+    // A generated catalog, compiled and loaded like a referenced library.
+    private sealed class Catalog
+    {
+        private Catalog(TestInput[] inputs, TranslationCatalogRegistration registration)
+        {
+            Inputs = inputs;
+            Registration = registration;
+        }
+
+        internal TestInput[] Inputs { get; }
+        internal TranslationCatalogRegistration Registration { get; }
+
+        internal static Catalog Compile(string project, params (string Locale, string Text)[] sources)
+        {
+            TestInput[] inputs = [new("C:/repo/translations/runic.json", "Project", project),
+                .. sources.Select(source => new TestInput("C:/repo/translations/" + source.Locale + ".rmf2", "Rmf2", source.Text))];
+            GeneratorRun run = GeneratorTestHost.Run(inputs);
+            Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+            using var stream = new MemoryStream();
+            Microsoft.CodeAnalysis.Emit.EmitResult emitted = run.Compilation.Emit(stream);
+            Assert.True(emitted.Success, string.Join("\n", emitted.Diagnostics));
+            Assembly assembly = Assembly.Load(stream.ToArray());
+            Type catalog = assembly.GetTypes().Single(static type => type.Name.EndsWith("TextCatalog", StringComparison.Ordinal));
+            return new Catalog(inputs, (TranslationCatalogRegistration)catalog.GetProperty("Registration")!.GetValue(null)!);
+        }
+    }
+
+    private sealed class MemoryPackSource(Dictionary<string, byte[]> packs) : IExternalTranslationSource
+    {
+        private volatile Dictionary<string, byte[]> _packs = packs;
+
+        internal string? Failing { get; set; }
+
+        internal void Replace(Dictionary<string, byte[]> packs) => _packs = packs;
+
+        public ValueTask<ExternalTranslationPack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken)
+        {
+            if (locale == Failing) throw new IOException("The pack store is unavailable.");
+            return ValueTask.FromResult(_packs.TryGetValue(locale, out byte[]? bytes) ? new ExternalTranslationPack(bytes) : null);
+        }
+    }
+}

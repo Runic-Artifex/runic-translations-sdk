@@ -15,6 +15,15 @@ public interface ITranslationSnapshot
     string Catalog { get; }
     /// <summary>The canonical locale tag.</summary>
     string Locale { get; }
+    /// <summary>The locale that was requested, canonicalized, such as <c>fr-CA</c> when <see cref="Locale"/> is <c>fr</c>.</summary>
+    /// <remarks>
+    /// Empty when the invariant culture's name was requested. Snapshots that do not record the request report
+    /// <see cref="Locale"/>, as do snapshots created directly for a declared locale.
+    /// </remarks>
+    string RequestedLocale => Locale;
+    /// <summary>How the catalog resolved <see cref="RequestedLocale"/> to <see cref="Locale"/>.</summary>
+    /// <remarks>Snapshots that do not record the request report <see cref="LocaleResolution.Exact"/>.</remarks>
+    LocaleResolution LocaleResolution => LocaleResolution.Exact;
     /// <summary>Attempts to resolve a resource pattern.</summary>
     bool TryGet(TranslationKey key, out string pattern);
     /// <summary>Resolves a resource pattern under the catalog missing-key policy.</summary>
@@ -150,6 +159,10 @@ public sealed class TranslationLocaleChangedEventArgs : EventArgs
     public string OldLocale => OldSnapshot.Locale;
     /// <summary>The new canonical locale.</summary>
     public string NewLocale => NewSnapshot.Locale;
+    /// <summary>The requested locale that the new snapshot resolved (<see cref="ITranslationSnapshot.RequestedLocale"/>).</summary>
+    public string RequestedLocale => NewSnapshot.RequestedLocale;
+    /// <summary>How the requested locale resolved to <see cref="NewLocale"/>.</summary>
+    public LocaleResolution LocaleResolution => NewSnapshot.LocaleResolution;
 }
 
 /// <summary>Opaque caller-owned bytes for an external locale pack.</summary>
@@ -189,6 +202,10 @@ public sealed class TranslationSnapshotPublishedEventArgs : EventArgs
     public ITranslationSnapshot Snapshot { get; }
     /// <summary>Why the snapshot was published.</summary>
     public TranslationSnapshotPublishReason Reason { get; }
+    /// <summary>The requested locale that the snapshot resolved (<see cref="ITranslationSnapshot.RequestedLocale"/>).</summary>
+    public string RequestedLocale => Snapshot.RequestedLocale;
+    /// <summary>How the requested locale resolved to the snapshot's locale.</summary>
+    public LocaleResolution LocaleResolution => Snapshot.LocaleResolution;
 }
 
 /// <summary>A generated readable message surface, such as <c>new AppText(manager).Messages</c>.</summary>

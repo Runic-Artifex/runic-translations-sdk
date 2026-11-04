@@ -53,13 +53,23 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
         _snapshotFactory = snapshotFactory ?? DefaultSnapshotFactory.Instance;
     }
 
+    /// <summary>The catalog data, with the options it was created with.</summary>
+    internal CompiledTranslationCatalog Catalog => _catalog;
+
+    /// <summary>The value formatter snapshots use.</summary>
+    internal ITextValueFormatter ValueFormatter => _valueFormatter;
+
+    /// <summary>Whether snapshots come from the default factory, which composes compiled data only.</summary>
+    internal bool UsesDefaultSnapshotFactory => ReferenceEquals(_snapshotFactory, DefaultSnapshotFactory.Instance);
+
     /// <inheritdoc />
     public ValueTask<ITranslationSnapshot> GetSnapshotAsync(
         string requestedLocale,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        string canonicalLocale = _catalog.ResolveRequestedLocale(requestedLocale);
+        LocaleRequest request = _catalog.ResolveRequest(requestedLocale);
+        string canonicalLocale = request.Locale;
 
         while (true)
         {
@@ -73,7 +83,7 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
             if (entry.TryAddWaiter())
             {
                 Task<ITranslationSnapshot> task = entry.Task;
-                return new ValueTask<ITranslationSnapshot>(WaitForCallerAsync(entry, task, cancellationToken));
+                return new ValueTask<ITranslationSnapshot>(WaitForCallerAsync(entry, task, request, cancellationToken));
             }
 
             RemoveIfCurrent(canonicalLocale, entry);
@@ -117,11 +127,14 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
     private static async Task<ITranslationSnapshot> WaitForCallerAsync(
         LoadEntry entry,
         Task<ITranslationSnapshot> task,
+        LocaleRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            ITranslationSnapshot snapshot = await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            // The cached snapshot serves every request that resolves to its locale; record this one.
+            return snapshot is CompiledTranslationSnapshot compiled ? compiled.ForRequest(request) : snapshot;
         }
         finally
         {

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Runic.Translations;
 
@@ -36,6 +38,46 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         _valueFormatter = valueFormatter ?? DefaultTextValueFormatter.Shared;
         Catalog = catalog.Catalog;
         Locale = canonicalLocale;
+        RequestedLocale = canonicalLocale;
+        OverlayDiagnostics = [];
+    }
+
+    // A composed snapshot (overlays): the values are already resolved and checked against the definitions, and the
+    // locale may be one that only an overlay adds.
+    internal CompiledTranslationSnapshot(
+        CompiledTranslationCatalog catalog,
+        string locale,
+        string?[] patterns,
+        CompiledTextMessage?[] messages,
+        ITextValueFormatter? valueFormatter,
+        TranslationOverlayDiagnostic[] overlayDiagnostics)
+    {
+        _catalog = catalog;
+        _definitions = catalog.DefinitionArray;
+        _patterns = patterns;
+        _messages = messages;
+        _noArgumentText = BuildNoArgumentText(messages, _definitions);
+        _valueFormatter = valueFormatter ?? DefaultTextValueFormatter.Shared;
+        Catalog = catalog.Catalog;
+        Locale = locale;
+        RequestedLocale = locale;
+        OverlayDiagnostics = overlayDiagnostics;
+    }
+
+    // The same values for another request that resolved to this locale.
+    private CompiledTranslationSnapshot(CompiledTranslationSnapshot source, string requestedLocale, LocaleResolution resolution)
+    {
+        _catalog = source._catalog;
+        _definitions = source._definitions;
+        _patterns = source._patterns;
+        _messages = source._messages;
+        _noArgumentText = source._noArgumentText;
+        _valueFormatter = source._valueFormatter;
+        Catalog = source.Catalog;
+        Locale = source.Locale;
+        RequestedLocale = requestedLocale;
+        LocaleResolution = resolution;
+        OverlayDiagnostics = source.OverlayDiagnostics;
     }
 
     /// <summary>
@@ -108,6 +150,33 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
 
     /// <inheritdoc />
     public string Locale { get; }
+
+    /// <inheritdoc />
+    public string RequestedLocale { get; }
+
+    /// <inheritdoc />
+    public LocaleResolution LocaleResolution { get; }
+
+    /// <summary>The overlay messages that were skipped while composing this snapshot.</summary>
+    internal TranslationOverlayDiagnostic[] OverlayDiagnostics { get; }
+
+    /// <summary>Returns this snapshot for another request, or itself when the request is the same.</summary>
+    /// <remarks>
+    /// The views of a cached snapshot are memoized, so repeated requests for the same tag get the same object. Requested
+    /// tags can come from untrusted input, so only the first <see cref="MaximumRequestViews"/> are kept.
+    /// </remarks>
+    internal CompiledTranslationSnapshot ForRequest(LocaleRequest request)
+    {
+        if (string.Equals(request.Requested, RequestedLocale, StringComparison.Ordinal) && request.Resolution == LocaleResolution) return this;
+        ConcurrentDictionary<string, CompiledTranslationSnapshot> views =
+            LazyInitializer.EnsureInitialized(ref _requestViews, static () => new ConcurrentDictionary<string, CompiledTranslationSnapshot>(StringComparer.Ordinal));
+        if (views.TryGetValue(request.Requested, out CompiledTranslationSnapshot? view) && view.LocaleResolution == request.Resolution) return view;
+        view = new CompiledTranslationSnapshot(this, request.Requested, request.Resolution);
+        return views.Count < MaximumRequestViews ? views.GetOrAdd(request.Requested, view) : view;
+    }
+
+    private const int MaximumRequestViews = 64;
+    private ConcurrentDictionary<string, CompiledTranslationSnapshot>? _requestViews;
 
     /// <inheritdoc />
     public bool TryGet(TranslationKey key, out string pattern)

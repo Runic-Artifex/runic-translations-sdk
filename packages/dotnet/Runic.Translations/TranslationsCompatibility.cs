@@ -22,6 +22,13 @@ public static class TranslationsCompatibility
     /// </summary>
     public const int TypedSlotBindingsVersion = 1;
 
+    /// <summary>
+    /// The additive catalog composition surface (<see cref="ITranslationContext"/>, <see cref="TranslationCatalogRegistration"/>).
+    /// The source generator emits <c>XCatalog.Registration</c> and the <c>XText(ITranslationContext)</c> constructor only when
+    /// the referenced runtime declares this constant. The value only grows additively.
+    /// </summary>
+    public const int CompositionVersion = 1;
+
     /// <summary>Checks an embedded RMF2 ABI requirement against the executing runtime, without const inlining.</summary>
     public static bool SupportsRmf2RuntimeAbi(int requiredVersion) => requiredVersion == Rmf2RuntimeAbiVersion;
 

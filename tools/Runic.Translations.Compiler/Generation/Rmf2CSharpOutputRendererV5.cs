@@ -25,7 +25,9 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpKeys, project.ClassName + ".Keys.g.cs", writer);
     }
 
-    internal static TranslationGeneratedOutput RenderAccessors(Rmf2ProjectV5 project, bool readableSurface = true)
+    // composition: the referenced runtime has the catalog composition surface (TranslationsCompatibility.CompositionVersion),
+    // so the accessors get a constructor over an ITranslationContext and the registration class a Registration.
+    internal static TranslationGeneratedOutput RenderAccessors(Rmf2ProjectV5 project, bool readableSurface = true, bool composition = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -38,6 +40,16 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("{"); writer.Indent();
         writer.Line("__translationManager = manager ?? throw new global::System.ArgumentNullException(nameof(manager));");
         writer.Unindent(); writer.Line("}");
+        if (composition)
+        {
+            writer.Blank();
+            writer.Line("/// <summary>Creates accessors over this catalog's manager in a translation context that registers it.</summary>");
+            writer.Line("/// <exception cref=\"global::System.Collections.Generic.KeyNotFoundException\">The context does not register the catalog.</exception>");
+            writer.Line("public " + className + "(global::Runic.Translations.ITranslationContext context)");
+            writer.Line("{"); writer.Indent();
+            writer.Line("__translationManager = (context ?? throw new global::System.ArgumentNullException(nameof(context))).GetManager(" + className + "Catalog.CatalogId);");
+            writer.Unindent(); writer.Line("}");
+        }
         foreach (Rmf2MessageContractV5 message in Canonical(project)) WriteAccessor(writer, project, message, readableSurface);
         writer.Unindent(); writer.Line("}");
         return Output(TranslationGeneratedOutputKind.CSharpAccessors, project.ClassName + ".Accessors.g.cs", writer);
@@ -69,7 +81,7 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpCatalogData, project.ClassName + ".CatalogData.g.cs", writer);
     }
 
-    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project)
+    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -87,6 +99,13 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public const int MessageGrammarVersion = 5;");
         writer.Line("public const int GeneratedNameVersion = 1;");
         writer.Line("public const int GeneratorVersion = 1;"); writer.Blank();
+        if (composition)
+        {
+            writer.Line("/// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>");
+            writer.Line("public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(");
+            writer.Indent(); writer.Line("CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);"); writer.Unindent();
+            writer.Blank();
+        }
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateProvider("); writer.Indent();
         writer.Line("global::Runic.Translations.ITextValueFormatter? valueFormatter = null,");
         writer.Line("global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,");

@@ -19,6 +19,10 @@ public static class SnapshotTextCatalog
     public const int GeneratedNameVersion = 1;
     public const int GeneratorVersion = 1;
 
+    /// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>
+    public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(
+        CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);
+
     public static global::Runic.Translations.ITranslationProvider CreateProvider(
         global::Runic.Translations.ITextValueFormatter? valueFormatter = null,
         global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,

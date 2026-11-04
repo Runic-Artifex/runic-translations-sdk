@@ -30,6 +30,27 @@ Console.WriteLine(text.Messages.application_title);
 
 Each successful locale change replaces the complete immutable snapshot. Reads through `manager.Current` do not observe a partially updated catalog.
 
+## Use catalogs from libraries
+
+A library with its own public catalog takes an `ITranslationContext`, and the application registers every catalog in
+one context. `SetLocaleAsync` prepares every catalog's snapshot and publishes them together:
+
+```csharp
+TranslationContext translations = await TranslationContext.CreateBuilder()
+    .Add(AppTextCatalog.Registration)
+    .Add(GridTextCatalog.Registration)          // a library's generated registration
+    .AddOverlay(TranslationOverlay.FromPacks("acme-grid", packSource,
+        addedLocales: [new TranslationOverlayLocale("fr")]))
+    .BuildAsync(initialLocale: "de");
+
+var text = new AppText(translations);           // generated constructor over a context
+await translations.SetLocaleAsync("fr");        // every catalog switches together
+```
+
+`translations.Catalogs` reports, per catalog, the requested locale, the locale used and whether it was resolved
+exactly, through a parent or to the default (`LocaleResolution`). Overlays are checked key by key, keep working when
+the library adds messages, and resolve locale-first. See [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md).
+
 ## When to choose this package
 
 Choose `Runic.Translations` for application runtime behavior: generated catalog data, locale resolution, formatting, structured content, translation references, and optional verified external packs. Choose `Runic.Translations.Tooling` when building an editor, compiler host, or workspace tool.

@@ -180,8 +180,11 @@ public sealed class TranslationManager : ITranslationManager
         }
     }
 
+    // A snapshot records the locale it was requested for (fr-CA resolving to fr), so a request for its resolved
+    // locale (fr) is still composed and records the new request. Snapshots that do not record requests report
+    // their locale, as before.
     private bool IsCurrentLocale(string requestedLocale) =>
-        string.Equals(Current.Locale, requestedLocale, StringComparison.OrdinalIgnoreCase);
+        string.Equals(Current.RequestedLocale, requestedLocale, StringComparison.OrdinalIgnoreCase);
 
     private async Task ActivateAsync(PendingSwitch pending)
     {
@@ -223,6 +226,13 @@ public sealed class TranslationManager : ITranslationManager
                             Interlocked.Exchange(ref _current, replacement);
                         notification = new TranslationLocaleChangedEventArgs(previous, replacement);
                         publishedSwitch = replacement;
+                    }
+                    else if (!string.Equals(current.RequestedLocale, replacement.RequestedLocale, StringComparison.Ordinal) ||
+                        current.LocaleResolution != replacement.LocaleResolution)
+                    {
+                        // The same locale for another request (fr after fr-CA): the text is unchanged, so no event is
+                        // raised, but Current reports the latest request.
+                        Interlocked.Exchange(ref _current, replacement);
                     }
                 }
             }

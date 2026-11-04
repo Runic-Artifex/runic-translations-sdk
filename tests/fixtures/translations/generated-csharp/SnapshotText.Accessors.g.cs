@@ -15,6 +15,13 @@ public sealed partial class SnapshotText
         __translationManager = manager ?? throw new global::System.ArgumentNullException(nameof(manager));
     }
 
+    /// <summary>Creates accessors over this catalog's manager in a translation context that registers it.</summary>
+    /// <exception cref="global::System.Collections.Generic.KeyNotFoundException">The context does not register the catalog.</exception>
+    public SnapshotText(global::Runic.Translations.ITranslationContext context)
+    {
+        __translationManager = (context ?? throw new global::System.ArgumentNullException(nameof(context))).GetManager(SnapshotTextCatalog.CatalogId);
+    }
+
     /// <summary>Formats <c>greeting</c>.</summary>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     public string r_6772656574696e67(string r_6e616d65)

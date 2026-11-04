@@ -472,7 +472,30 @@ internal sealed class RuntimeTests
         CompiledTranslationProvider provider = new(CreateCatalog());
         ITranslationSnapshot snapshot = await provider.GetSnapshotAsync("en-AU");
         Assert.Equal("en", snapshot.Locale);
+        Assert.Equal("en-AU", snapshot.RequestedLocale);
+        Assert.Equal(LocaleResolution.Parent, snapshot.LocaleResolution);
         Assert.Same(snapshot, await provider.GetSnapshotAsync("EN-au"));
+        ITranslationSnapshot exact = await provider.GetSnapshotAsync("en");
+        Assert.Equal("en|en|Exact", exact.Locale + "|" + exact.RequestedLocale + "|" + exact.LocaleResolution);
+    }
+
+    [Test, DisplayName("manager reports the requested locale and how it resolved")]
+    public async Task ManagerRequestedLocale()
+    {
+        CompiledTranslationProvider provider = new(CreateCatalog());
+        TranslationManager manager = new(provider, await provider.GetSnapshotAsync("de-AT"));
+        Assert.Equal("en|de-AT|Default", manager.CurrentLocale + "|" + manager.Current.RequestedLocale + "|" + manager.Current.LocaleResolution);
+        var events = new List<string>();
+        manager.LocaleChanged += (_, change) => events.Add("changed " + change.NewLocale + " " + change.RequestedLocale + " " + change.LocaleResolution);
+        manager.SnapshotPublished += (_, published) => events.Add("published " + published.RequestedLocale + " " + published.LocaleResolution);
+
+        // The same locale for another request: no event, but Current records the request.
+        await manager.SetLocaleAsync("en");
+        Assert.Equal("en|Exact|0", manager.Current.RequestedLocale + "|" + manager.Current.LocaleResolution + "|" + events.Count);
+        await manager.SetLocaleAsync("en-US-posix");
+        Assert.Equal("changed en-US en-US-posix Parent|published en-US-posix Parent", string.Join("|", events));
+        await manager.SetLocaleAsync("EN-us-POSIX");
+        Assert.Equal(2, events.Count);
     }
 
     [Test, DisplayName("provider applies exact unsupported policy")]
@@ -497,7 +520,9 @@ internal sealed class RuntimeTests
         CompiledTranslationProvider parents = new(CreateCatalog());
         ITranslationSnapshot snapshot = await parents.GetSnapshotAsync(CultureInfo.InvariantCulture.Name);
         Assert.Equal("en", snapshot.Locale);
-        Assert.Same(snapshot, await parents.GetSnapshotAsync("en"));
+        Assert.Equal("|Default", snapshot.RequestedLocale + "|" + snapshot.LocaleResolution);
+        Assert.Same(snapshot, await parents.GetSnapshotAsync(""));
+        Assert.Equal("en|Exact", (await parents.GetSnapshotAsync("en")).RequestedLocale + "|" + (await parents.GetSnapshotAsync("en")).LocaleResolution);
         Assert.Equal("en", (await new CompiledTranslationProvider(CreateCatalog(UnsupportedLocalePolicy.Default)).GetSnapshotAsync("")).Locale);
         await Assert.ThrowsAsync<TranslationNotFoundException>(
             () => new CompiledTranslationProvider(CreateCatalog(UnsupportedLocalePolicy.Exact)).GetSnapshotAsync("").AsTask(), "not declared");
@@ -532,8 +557,10 @@ internal sealed class RuntimeTests
         Assert.Equal(1, factory.CallCount);
         factory.Release();
         ITranslationSnapshot[] snapshots = await Task.WhenAll(a, b);
-        Assert.Same(snapshots[0], snapshots[1]);
-        Assert.Same(snapshots[0], await provider.GetSnapshotAsync("en"));
+        // One composition serves both requests; each snapshot records its own request.
+        Assert.Equal("en-AU|Parent", snapshots[0].RequestedLocale + "|" + snapshots[0].LocaleResolution);
+        Assert.Same(snapshots[1], await provider.GetSnapshotAsync("en"));
+        Assert.Same(snapshots[0], await provider.GetSnapshotAsync("en-AU"));
         Assert.Equal(1, factory.CallCount);
     }
 
