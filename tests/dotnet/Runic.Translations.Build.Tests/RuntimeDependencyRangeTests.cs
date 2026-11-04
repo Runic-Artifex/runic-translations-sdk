@@ -64,6 +64,26 @@ internal sealed class RuntimeDependencyRangeTests
         Assert.Equal("0.9.0", Ranges(File.ReadAllText(temporary.Resolve("Library.nuspec"), Encoding.UTF8)), "unchanged");
     }
 
+    [Test, DisplayName("a package the range cannot be written into fails the pack with RTR0089")]
+    public void UnwritablePackageFails()
+    {
+        using TemporaryDirectory temporary = new();
+        // Not a zip archive, so the package cannot be opened for update.
+        File.WriteAllText(temporary.Resolve("Library.1.0.0.nupkg"), "not a package", new UTF8Encoding(false));
+        string targets = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.Pack.targets"));
+        File.WriteAllText(temporary.Resolve("Probe.proj"), $$"""
+            <Project>
+              <Import Project="{{targets}}" />
+              <ItemGroup><NuGetPackOutput Include="Library.1.0.0.nupkg" /></ItemGroup>
+              <Target Name="GenerateNuspec" />
+            </Project>
+            """, new UTF8Encoding(false));
+        ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Probe.proj", "/nologo", "/t:GenerateNuspec", "/v:minimal",
+            "/p:_RunicTranslationsPackTaskAssembly=" + BuildTaskAssembly());
+        Assert.True(result.ExitCode != 0, "the pack fails: " + result.Combined);
+        Assert.Equal(1, Regex.Count(result.Combined, "error RTR0089"), "one RTR0089 error: " + result.Combined);
+    }
+
     private static string Nuspec(string[] versions)
     {
         var builder = new StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<package xmlns=\"http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd\"><metadata><id>Library</id><version>1.0.0</version><dependencies>");

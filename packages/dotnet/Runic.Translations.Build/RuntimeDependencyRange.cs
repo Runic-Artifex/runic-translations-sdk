@@ -62,7 +62,7 @@ public sealed class RuntimeDependencyRange : ITask
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or System.Xml.XmlException)
         {
-            BuildEngine.LogErrorEvent(new BuildErrorEventArgs("translations", "RTR0092", "", 0, 0, 0, 0,
+            BuildEngine.LogErrorEvent(new BuildErrorEventArgs("translations", "RTR0089", "", 0, 0, 0, 0,
                 "The Runic.Translations dependency range of the package could not be written: " + exception.Message, "", nameof(RuntimeDependencyRange)));
             return false;
         }
