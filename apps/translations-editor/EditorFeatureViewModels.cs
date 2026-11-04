@@ -56,6 +56,13 @@ public abstract class EditorFeatureViewModel : ReactiveObject, IDisposable
         return command;
     }
 
+    /// <summary>Disposes <paramref name="resource"/> with this feature.</summary>
+    private protected T Own<T>(T resource) where T : IDisposable
+    {
+        _errors.Add(resource);
+        return resource;
+    }
+
     protected static string Required(JsonElement value, string property) =>
         value.GetProperty(property).GetString() ?? throw new ArgumentException($"{property} is required.");
 
@@ -99,7 +106,8 @@ public sealed class EditorWorkspaceViewModel : EditorFeatureViewModel
     {
         LoadCommand = CreateCommand(async argument => await Session.LoadAsync(), (result, value) => { LastLoad = result; LoadResultJson = value; });
         CheckExternalChangesCommand = CreateCommand(async argument => await Session.CheckExternalChangesAsync(), (result, value) => { LastCheckExternalChanges = result; CheckExternalChangesResultJson = value; });
-        PickWorkspaceCommand = CreateCommand(async argument => await EditorWorkspacePicker.PickAsync(CancellationToken.None), (result, value) => { LastPickWorkspace = result; PickWorkspaceResultJson = value; });
+        EditorWorkspacePicker picker = Own(new EditorWorkspacePicker());
+        PickWorkspaceCommand = CreateCommand(async argument => await picker.PickAsync(CancellationToken.None), (result, value) => { LastPickWorkspace = result; PickWorkspaceResultJson = value; });
         PreviewMutationCommand = CreateCommand(argument => Task.FromResult(Session.PreviewMutation(Parse<EditorMutationRequest>(argument))), (result, value) => { LastPreviewMutation = result; PreviewMutationResultJson = value; });
         ApplyMutationCommand = CreateCommand(async argument => await Session.ApplyMutationAsync(Parse<EditorMutationRequest>(argument)), (result, value) => { LastApplyMutation = result; ApplyMutationResultJson = value; });
         RecoverTransactionCommand = CreateCommand(async argument => await Session.RecoverTransactionAsync(new EditorRecoveryRequest(Required(argument, "mode"))), (result, value) => { LastRecoverTransaction = result; RecoverTransactionResultJson = value; });

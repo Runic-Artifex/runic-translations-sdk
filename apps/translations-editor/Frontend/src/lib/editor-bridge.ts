@@ -205,10 +205,26 @@ export interface EditorBridge {
   openDocument(path: string): Promise<EditorDocumentState | undefined>;
   validate(path: string, content: string): Promise<ValidationResult>;
   save(path: string, content: string, revision: string): Promise<EditorDocumentSaveResult>;
+  /** Sets the window's locale (`IRunicWindowLocale`), which the window's pages and native surfaces follow. */
+  setUiLocale(locale: string): Promise<void>;
+}
+
+// The window's locale is set on the root View; the mock bridge has no window, so the page keeps its own locale there.
+async function setWindowLocale(locale: string): Promise<void> {
+  if (import.meta.env.MODE === "mock") return;
+  let root: EditorClient | undefined;
+  try {
+    root = await rootView();
+    await root.setUiLocale(locale);
+  } catch (error) {
+    disconnectOnFailure(error, root);
+    throw error;
+  }
 }
 
 export function createEditorBridge(): EditorBridge {
   return {
+    setUiLocale: setWindowLocale,
     load: () => invokeRouted("LoadWorkspace", root => root.snapshot.workspace, (view, request) => view.load(request), state => state.loadResultJson, {}) as Promise<WorkspaceSnapshot>,
     checkExternalChanges: () => invokeRouted("CheckExternalChanges", root => root.snapshot.workspace, (view, request) => view.checkExternalChanges(request), state => state.checkExternalChangesResultJson, {}) as Promise<EditorExternalChanges>,
     pickWorkspace: () => invokeRouted("PickWorkspace", root => root.snapshot.workspace, (view, request) => view.pickWorkspace(request), state => state.pickWorkspaceResultJson, {}) as Promise<EditorWorkspacePickerResult>,
