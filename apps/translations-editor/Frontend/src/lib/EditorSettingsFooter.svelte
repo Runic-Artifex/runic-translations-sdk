@@ -13,9 +13,11 @@
   import type { ThemeMode, ThemePalette } from "#lib/appearance.js";
   import type { UiDirection } from "#lib/simulation.js";
   import { getUiText } from "#lib/ui-text.js";
+  import { uiLocaleName } from "#lib/ui-locale.js";
 
   let {
     locale,
+    locales,
     themeMode,
     themePalette,
     pseudoLocalization,
@@ -28,6 +30,8 @@
     onabout,
   }: {
     locale: string;
+    /** The editor catalog's locales, listed by their own names. */
+    locales: readonly string[];
     themeMode: ThemeMode;
     themePalette: ThemePalette;
     pseudoLocalization: boolean;
@@ -44,7 +48,7 @@
 
   const modeNames: Record<ThemeMode, string> = $derived({ system: ui.text("ui_settings_system"), light: ui.text("ui_settings_light"), dark: ui.text("ui_settings_dark") });
   const paletteNames: Record<ThemePalette, string> = $derived({ runic: ui.text("ui_settings_runic_gold"), moss: ui.text("ui_settings_moss"), fjord: ui.text("ui_settings_fjord"), ember: ui.text("ui_settings_ember") });
-  let localeName = $derived(locale === "de" ? ui.text("ui_settings_german") : ui.text("ui_settings_english"));
+  let localeName = $derived(uiLocaleName(locale));
   let appearanceName = $derived(`${paletteNames[themePalette]} · ${modeNames[themeMode]}`);
 </script>
 
@@ -97,14 +101,12 @@
           <DropdownMenu.Separator />
           <DropdownMenu.Label>{ui.text("ui_settings_interface_language")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={locale} onValueChange={onlocalechange}>
-            <DropdownMenu.RadioItem value="en">
-              <LanguagesIcon />
-              {ui.text("ui_settings_english")}
-            </DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem value="de">
-              <LanguagesIcon />
-              {ui.text("ui_settings_german")}
-            </DropdownMenu.RadioItem>
+            {#each locales as option (option)}
+              <DropdownMenu.RadioItem value={option} lang={option}>
+                <LanguagesIcon />
+                {uiLocaleName(option)}
+              </DropdownMenu.RadioItem>
+            {/each}
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator />
           <DropdownMenu.Item onclick={onabout}>

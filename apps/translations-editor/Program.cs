@@ -292,7 +292,8 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         services.AddRunicReactiveModelContext();
         services.AddScoped(_ => new EditorSession(workspacePath));
         services.AddScoped(provider => new EditorViewModel(provider.GetRequiredService<EditorSession>(),
-            provider.GetRequiredService<IRunicModelContext>(), provider.GetRequiredService<ISequencer>()));
+            provider.GetRequiredService<IRunicModelContext>(), provider.GetRequiredService<ISequencer>(),
+            provider.GetRequiredService<IRunicWindowLocale>()));
         var locator = new DefaultViewLocator();
         locator.CreateMappingBuilder()
             .Map<EditorWorkspaceViewModel>(() => new EditorWorkspaceView())
@@ -304,6 +305,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             .Map<EditorProjectViewModel>(() => new EditorProjectView())
             .Map<EditorDocumentViewModel>(() => new EditorDocumentView());
         services.AddScoped<IRunicViewLocator>(_ => new ReactiveRunicViewLocator(locator));
+        services.AddRunicWindowService();
         services.AddRunicViews();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
