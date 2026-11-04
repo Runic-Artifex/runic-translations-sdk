@@ -53,6 +53,8 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <!-- The editor smoke test drives the editor's window through the SDK's window test host. -->
+    <PackageReference Include="Runic.Application.Testing" />
     <PackageReference Include="Runic.Application.Views.CsWebUi" />
     <PackageReference Include="Runic.Application.Views.ReactiveUI" />
     <PackageReference Include="Runic.CommandLine" />

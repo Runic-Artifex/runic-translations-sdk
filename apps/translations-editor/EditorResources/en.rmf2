@@ -377,6 +377,14 @@ ui {
 }
 ui {
   backend {
+    picker_failed =
+      .input {$reason :string}
+      {{The selected folder could not be opened ({$reason}).}}
+
+  }
+}
+ui {
+  backend {
     picker_start = The native folder picker could not be started.
   }
 }

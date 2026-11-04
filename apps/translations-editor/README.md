@@ -92,9 +92,12 @@ It does not require another repository's shell.
 `edit` opens an installed browser in app mode; add `--webview` to request the
 embedded WebView instead. On Linux, interactive launch needs a running X11 or
 Wayland desktop session; native chooser services also need that session's D-Bus
-and configured XDG portal backend. **Browse** chooses a workspace folder through the
-portal's FileChooser (version 3 or newer); Windows and macOS show their system folder
-dialog. The shell supplies tools and libraries without starting those services or
+and configured XDG portal backend. On Linux, **Browse** chooses a workspace folder
+through the first of these that is available: the portal's FileChooser (version 3 or
+newer, for example from `xdg-desktop-portal-gnome`, `-kde` or `-gtk`), then
+`/usr/bin/zenity` when the session has no such FileChooser or no session bus. Without
+either, enter the workspace directory instead. Windows and macOS show their system
+folder dialog. The shell supplies tools and libraries without starting those services or
 selecting the session's backend.
 
 On Linux without Nix, provide a supported Chromium browser for normal `edit`,

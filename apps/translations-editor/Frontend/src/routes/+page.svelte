@@ -3,8 +3,15 @@
   import { onMount, tick } from "svelte";
   import { m } from "virtual:runic-translations/editor";
   import { baseLocale as uiBaseLocale, locales as uiLocales } from "virtual:runic-translations/editor/runtime";
-  import { onWindowLocale, windowLocale } from "@runic-artifex/views";
-  import { matchUiLocale, negotiateUiLocale, preferredLanguages, uiLocaleName, uiLocaleStateKey } from "#lib/ui-locale.js";
+  import { onBridgeConnection, onWindowLocale, windowLocale } from "@runic-artifex/views";
+  import {
+    createWindowLocaleSync,
+    matchUiLocale,
+    negotiateUiLocale,
+    preferredLanguages,
+    uiLocaleName,
+    uiLocaleStateKey,
+  } from "#lib/ui-locale.js";
 
   import type {
     EditorAbout,
@@ -126,6 +133,7 @@
   type PreviewRequest = ReturnType<typeof createMessagePreviewRequest>;
 
   const bridge = createEditorBridge();
+  const windowLocaleSync = createWindowLocaleSync({ current: windowLocale, send: (locale) => bridge.setUiLocale(locale) });
   const previewOwnership = createMessagePreviewOwnership();
   const previewScheduler = createMessagePreviewScheduler(
     (callback, delay) => setTimeout(callback, delay),
@@ -458,38 +466,43 @@
         const loadedSimulation = readUiSimulation(getLocalEditorState);
         pseudoLocalization = loadedSimulation.pseudoLocalization;
         uiDirection = loadedSimulation.direction;
-        // The stored choice wins over the OS preference; either becomes the window's locale.
-        applyUiLocale(matchUiLocale(getLocalEditorState(uiLocaleStateKey), uiLocales) ?? uiLocale);
         recentProjects = readRecentProjects();
         if (nativeStateRecovered) {
           operationMessage = notice("ui_feedback_state_recovered");
         }
       } catch (error) {
         clientError = error instanceof UiNoticeError ? error.notice : notice("ui_feedback_state_load_failed", { error: errorMessage(error) });
+      } finally {
+        // The stored choice wins over the OS preference; either becomes the window's locale, also when the native
+        // state did not load.
+        if (!disposed) applyUiLocale(matchUiLocale(getLocalEditorState(uiLocaleStateKey), uiLocales) ?? uiLocale);
       }
       if (!disposed) await loadWorkspace(false);
     })();
     const interval = window.setInterval(() => void checkExternalChanges(), 2_000);
     // Another page of this window, or the application, can switch the window's locale.
     const stopWindowLocale = onWindowLocale((locale) => {
-      const match = matchUiLocale(locale, uiLocales);
+      const match = matchUiLocale(windowLocaleSync.windowChanged(locale), uiLocales);
       if (match !== undefined) uiLocale = match;
+    });
+    // A reconnected host keeps the locale it had; a switch made while it was unreachable is sent again.
+    const stopConnection = onBridgeConnection((state) => {
+      if (state === "connected") windowLocaleSync.connected();
     });
     return () => {
       disposed = true;
       stopWindowLocale();
+      stopConnection();
       colorScheme.removeEventListener("change", updateSystemTheme);
       window.clearInterval(interval);
     };
   });
 
-  // Shows `locale` and makes it the window's locale, so native surfaces and the window's other pages follow.
+  // Shows `locale` and makes it the window's locale, so native surfaces and the window's other pages follow. While the
+  // host is unreachable the page keeps showing it and sends it again when the connection returns.
   function applyUiLocale(locale: string): void {
     uiLocale = locale;
-    if (windowLocale() === locale) return;
-    void bridge.setUiLocale(locale).catch(() => {
-      // The page keeps the locale it shows; the next switch or connection sets the window's locale again.
-    });
+    windowLocaleSync.request(locale);
   }
 
   function changeUiLocale(locale: string): void {

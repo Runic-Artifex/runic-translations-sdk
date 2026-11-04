@@ -194,6 +194,23 @@ try {
   await diagnosticDialog.waitFor({ state: "hidden" });
   assert.ok((await readFile(diskPath, "utf8")).includes("cancel = {{}}"));
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "diagnostic-fixed-en.png"), fullPage: true });
+
+  // The interface language switch sets the window's locale through the ViewModel, the page follows it, and the
+  // choice survives a reload from the native editor state.
+  stage = "interface-language";
+  await page.evaluate(() => { window.__runicEditorDocumentCalls = []; });
+  await page.getByRole("button", { name: /^Editor settings, / }).click();
+  await page.getByRole("menuitemradio", { name: "Deutsch", exact: true }).click();
+  await waitFor(async () => (await page.evaluate(() => document.documentElement.lang)) === "de", "German interface language");
+  await waitFor(async () => (await page.evaluate(() => window.__runicEditorDocumentCalls))
+    .some(call => call.member === "setUiLocale" && call.error === undefined), "setUiLocale request to the editor ViewModel");
+  await page.getByRole("button", { name: /^Editoreinstellungen, .*Oberflächensprache Deutsch$/ }).waitFor();
+  await waitFor(async () => (await page.evaluate(() => window.__runicEditorDocumentCalls))
+    .some(call => call.member === "saveLocalState" && call.error === undefined), "native save of the interface language");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /^Editoreinstellungen, .*Oberflächensprache Deutsch$/ }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.lang), "de", "The interface language did not survive a reload.");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "interface-language-de.png"), fullPage: true });
   assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors.");
   console.log("hosted-rmf2-ui-ok (real packaged frontend + Views host + editor session)");
 } catch (error) {

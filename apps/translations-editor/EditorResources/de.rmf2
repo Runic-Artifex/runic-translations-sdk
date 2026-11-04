@@ -377,6 +377,14 @@ ui {
 }
 ui {
   backend {
+    picker_failed =
+      .input {$reason :string}
+      {{Der ausgewählte Ordner konnte nicht geöffnet werden ({$reason}).}}
+
+  }
+}
+ui {
+  backend {
     picker_start = Die native Ordnerauswahl konnte nicht gestartet werden.
   }
 }

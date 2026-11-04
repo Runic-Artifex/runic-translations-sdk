@@ -13,6 +13,7 @@
     <PackageVersion Include="Runic.CommandLine" Version="$(RunicCommandLineVersionRange)" />
     <PackageVersion Include="Runic.CommandLine.Spectre" Version="$(RunicCommandLineVersionRange)" />
     <PackageVersion Include="Runic.Application.Views.CsWebUi" Version="$(RunicSdkCsWebUiDependencyVersion)" />
+    <PackageVersion Include="Runic.Application.Testing" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Application.Views.ReactiveUI" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Platform.Linux" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Platform.Linux.Portal" Version="$(RunicSdkDependencyVersion)" />

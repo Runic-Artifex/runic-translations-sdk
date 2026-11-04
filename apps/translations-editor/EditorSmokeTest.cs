@@ -6,9 +6,13 @@ using ReactiveUI.Primitives.Signals;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Internal;
+using Microsoft.Extensions.DependencyInjection;
+using ReactiveUI.Primitives.Concurrency;
+using Runic.Application.Testing;
 using Runic.Application.Views;
 using Runic.Application.Views.ReactiveUI;
 using Runic.CommandLine;
+using Runic.Platform;
 using Runic.Navigation;
 using System.Xml.Linq;
 
@@ -299,6 +303,7 @@ internal static class EditorSmokeTest
         string container = Path.Combine(Path.GetTempPath(), $"runic-editor-smoke-{Guid.NewGuid():N}");
         try
         {
+            WorkspacePickerSelection();
             await AuthoringJourneyAsync(Path.Combine(container, "authoring")).ConfigureAwait(false);
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
@@ -332,16 +337,38 @@ internal static class EditorSmokeTest
 
             // Exercise each generated feature owner with a real compiler-backed
             // session. The hosted browser test covers routed document editing.
-            await using var editorContext = new RunicModelContext();
-            var scheduler = ReactiveSchedulers.For(editorContext);
-            var windowLocale = new SmokeWindowLocale();
-            using (var editor = new EditorViewModel(new EditorSession(project), editorContext, scheduler, windowLocale))
+            // The ViewModel runs in a window scope of the SDK's window test host, as OpenWindowAsync opens one.
+            var windowServices = new ServiceCollection();
+            windowServices.AddRunicReactiveModelContext();
+            windowServices.AddRunicWindowService();
+            windowServices.AddRunicViews();
+            await using var windowProvider = windowServices.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            await using var windowScope = windowProvider.CreateAsyncScope();
+            var windowLocale = windowScope.ServiceProvider.GetRequiredService<IRunicWindowLocale>();
+            using (var editor = new EditorViewModel(new EditorSession(project),
+                windowScope.ServiceProvider.GetRequiredService<IRunicModelContext>(),
+                windowScope.ServiceProvider.GetRequiredService<ISequencer>(), windowLocale))
+            using (var window = RunicWindowTestHost.Create(windowScope.ServiceProvider, editor))
             {
-                // The page's language switch sets the window's locale; a malformed tag leaves it unchanged.
+                // The page's language switch sets the window's locale, which reaches the page as a locale push; a
+                // malformed tag leaves it unchanged.
+                const string pageConnection = "editor-page";
+                HelloWithTranslatedText(window.Transport, pageConnection);
                 await Signal.ToTask(editor.SetUiLocaleCommand.Execute("de"), CancellationToken.None).ConfigureAwait(false);
-                Require(windowLocale.Locale == "de" && editor.UiLocale == "de", "The interface language did not set the window's locale.");
+                Require(windowLocale.Locale == "de" && editor.UiLocale == "de" && window.Content.Locale == "de",
+                    "The interface language did not set the window's locale.");
+                Require(await TakeLocalePushAsync(window.Transport, pageConnection).ConfigureAwait(false) == "de",
+                    "The window did not push the interface language to the page.");
                 await Signal.ToTask(editor.SetUiLocaleCommand.Execute("not a tag"), CancellationToken.None).ConfigureAwait(false);
-                Require(windowLocale.Locale == "de", "A malformed interface language changed the window's locale.");
+                Require(windowLocale.Locale == "de" && window.Content.Locale == "de",
+                    "A malformed interface language changed the window's locale.");
+                await Signal.ToTask(editor.SetUiLocaleCommand.Execute("en"), CancellationToken.None).ConfigureAwait(false);
+                Require(await TakeLocalePushAsync(window.Transport, pageConnection).ConfigureAwait(false) == "en",
+                    "A malformed interface language was pushed, or the next switch was not.");
+                // A reloaded page connects again and is told the window's locale after its hello.
+                HelloWithTranslatedText(window.Transport, pageConnection + "-reloaded");
+                Require(await TakeLocalePushAsync(window.Transport, pageConnection + "-reloaded").ConfigureAwait(false) == "en",
+                    "A reloaded page was not told the window's locale.");
                 await ExecuteRouteAsync(editor.Workspace.LoadCommand, () => editor.Workspace.LoadResultJson, "{}");
                 WorkspaceSnapshot loaded = editor.Workspace.LastLoad
                     ?? throw new InvalidOperationException("The workspace ViewModel did not publish a typed snapshot.");
@@ -484,24 +511,54 @@ internal static class EditorSmokeTest
             "The routed feature did not publish a result.");
     }
 
-    // The window locale of a ViewModel constructed outside a window: it validates tags as the window's does.
-    private sealed class SmokeWindowLocale : IRunicWindowLocale
+    // A page connection that, like @runic-artifex/views 0.16, follows the window's locale (translation-text/1).
+    private static void HelloWithTranslatedText(InMemoryBridgeTransport transport, string connection)
     {
-        private string? _locale;
+        string reply = transport.Request(
+            $$"""{"kind":"hello","protocol":4,"session":"session-{{connection}}","client":{"name":"editor-smoke","version":"1.0.0"},"features":["translation-text/1"]}""",
+            connection, $"client-{connection}");
+        Require(reply.StartsWith("{\"ok\":true", StringComparison.Ordinal), $"The window refused the page's hello: {reply}");
+    }
 
-        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
-
-        public string? Locale
+    // The locale of the next locale push to the connection; other pushes are dropped.
+    private static async Task<string?> TakeLocalePushAsync(InMemoryBridgeTransport transport, string connection)
+    {
+        DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTime.UtcNow < deadline)
         {
-            get => _locale;
-            set
+            foreach (RunicBridgeMessage message in transport.TakeMessages())
             {
-                if (value is not null && (value.Length is 0 or > 64 || !char.IsAsciiLetter(value[0]) ||
-                    !value.All(static character => char.IsAsciiLetterOrDigit(character) || character == '-')))
-                    throw new ArgumentException($"'{value}' is not a locale tag.", nameof(value));
-                _locale = value;
-                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Locale)));
+                if (message.ConnectionKey != connection || message.Kind != "locale") continue;
+                using var push = JsonDocument.Parse(message.Json);
+                return push.RootElement.GetProperty("locale").GetString();
             }
+            await Task.Delay(10).ConfigureAwait(false);
         }
+        throw new InvalidOperationException("The window did not push a locale to the page.");
+    }
+
+    // The Linux picker tries the portal first and falls back to zenity only when the portal showed no dialog. Checked
+    // without opening a dialog.
+    private static void WorkspacePickerSelection()
+    {
+        Require(EditorWorkspacePicker.PortalOutcome(
+                new PickerResult<IDirectoryLease>.Unavailable(PlatformUnavailableReason.BackendUnavailable)) is null,
+            "A missing FileChooser portal did not fall back to the system dialog.");
+        Require(EditorWorkspacePicker.PortalOutcome(new PickerResult<IDirectoryLease>.Dismissed()) is { Ok: false, Cancelled: true, Message: null },
+            "A dismissed portal dialog was not reported as cancelled.");
+        EditorWorkspacePickerResult? failed = EditorWorkspacePicker.PortalOutcome(new PickerResult<IDirectoryLease>.Failed(
+            PlatformFailureCode.PermissionDenied, PlatformDiagnostic.FromErrno(13)));
+        Require(failed is { Ok: false, Cancelled: false, Message: { Code: "ui_backend_picker_failed" } notice } &&
+            notice.Args.Single() is { Name: "reason", Value: "PermissionDenied" } && notice.Detail?.StartsWith("errno 13", StringComparison.Ordinal) == true,
+            $"A folder the picker could not open was not reported with its reason: {failed?.Message}");
+        Require(EditorWorkspacePicker.CreateZenityStartInfo(static _ => false) is null,
+            "The fallback offered zenity although it is not installed.");
+        var zenity = EditorWorkspacePicker.CreateZenityStartInfo(static path => path == "/usr/bin/zenity");
+        Require(zenity is { FileName: "/usr/bin/zenity" } && zenity.ArgumentList.SequenceEqual(["--file-selection", "--directory"]),
+            "The fallback does not open zenity's folder dialog.");
+        if (OperatingSystem.IsLinux())
+            Require(EditorWorkspacePicker.CreateStartInfo(static path => path == "/usr/bin/zenity")?.FileName == "/usr/bin/zenity" &&
+                EditorWorkspacePicker.CreateStartInfo(static _ => false) is null,
+                "The Linux system dialog is not the zenity fallback.");
     }
 }

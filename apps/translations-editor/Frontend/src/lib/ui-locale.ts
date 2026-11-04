@@ -52,3 +52,53 @@ export function uiLocaleName(locale: string): string {
     return locale;
   }
 }
+
+/** Keeps the window's locale (`IRunicWindowLocale`) on the locale the page chose, across failures and reconnects. */
+export interface WindowLocaleSync {
+  /** Asks the window for `locale`; a request that fails is kept and sent again by `connected`. */
+  request(locale: string): void;
+  /** The host connection opened (again): sends the page's locale when the window does not have it. */
+  connected(): void;
+  /**
+   * The window reported `locale`. Returns the locale the page should show, or `undefined` to keep its own while the
+   * window has not received the page's own request yet.
+   */
+  windowChanged(locale: string | null): string | undefined;
+}
+
+export interface WindowLocaleSyncOptions {
+  /** The window's locale as the page last heard it (`windowLocale()` of `@runic-artifex/views`). */
+  readonly current: () => string | null;
+  /** Sets the window's locale through the host; rejects while the host is unreachable. */
+  readonly send: (locale: string) => Promise<void>;
+}
+
+export function createWindowLocaleSync(options: WindowLocaleSyncOptions): WindowLocaleSync {
+  // The page's locale until the window confirms it, by its reply or its locale push.
+  let requested: string | undefined;
+  const send = (): void => {
+    const locale = requested;
+    if (locale === undefined) return;
+    if (options.current() === locale) {
+      requested = undefined;
+      return;
+    }
+    options.send(locale).then(
+      () => { if (requested === locale) requested = undefined; },
+      () => { /* Still requested: the next connection sends it again. */ },
+    );
+  };
+  return {
+    request(locale) {
+      requested = locale;
+      send();
+    },
+    connected: send,
+    windowChanged(locale) {
+      if (requested === undefined) return locale ?? undefined;
+      // A locale the window held before the page's request reached it does not replace the page's choice.
+      if (locale === requested) requested = undefined;
+      return undefined;
+    },
+  };
+}
