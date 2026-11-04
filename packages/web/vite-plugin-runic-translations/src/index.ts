@@ -37,6 +37,12 @@ export interface RunicTranslationsOptions {
    * the next change.
    */
   readonly persistentCompilerTimeout?: number;
+  /**
+   * Generate the development pseudo-locales that runic.json declares in `pseudoLocales` (`en-XA`, `ar-XB`) in project
+   * mode. Defaults to true when Vite's mode is `development` (the dev server's default) and false otherwise, so
+   * production builds leave them out.
+   */
+  readonly pseudoLocales?: boolean;
 }
 
 type EntryKind = "messages" | "runtime" | "server" | "transport" | "dynamic";
@@ -104,6 +110,8 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     throw new TypeError("runicTranslations options must be an object.");
   if (options.persistentCompiler !== undefined && typeof options.persistentCompiler !== "boolean")
     throw new TypeError("persistentCompiler must be a boolean.");
+  if (options.pseudoLocales !== undefined && typeof options.pseudoLocales !== "boolean")
+    throw new TypeError("pseudoLocales must be a boolean.");
   if (options.persistentCompilerTimeout !== undefined &&
       (typeof options.persistentCompilerTimeout !== "number" || !Number.isFinite(options.persistentCompilerTimeout) || options.persistentCompilerTimeout <= 0))
     throw new TypeError("persistentCompilerTimeout must be a positive number of milliseconds.");
@@ -130,18 +138,20 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   let generatedPaths: ReadonlySet<string> = new Set();
   let compilation: Promise<unknown> = Promise.resolve();
   let lastChange: { readonly key: string; readonly change: Promise<Change> } | undefined;
+  // Resolved from Vite's mode in configResolved unless the option sets it.
+  let pseudoLocales = options.pseudoLocales === true;
 
   async function generate(project: CompilerProject): Promise<void> {
     if (service && !service.disabledReason) {
       try {
-        await service.generate({ project: project.project, output: project.output, emit: ["esm"] });
+        await service.generate({ project: project.project, output: project.output, emit: ["esm"], ...(pseudoLocales ? { pseudoLocales: true } : {}) });
         return;
       } catch (error) {
         if (!(error instanceof CompilerUnavailable)) throw error;
       }
     }
     await execFileAsync(project.command,
-      [...project.commandArguments, "generate", "--project", project.project, "--output", project.output, "--emit-esm"],
+      [...project.commandArguments, "generate", "--project", project.project, "--output", project.output, "--emit-esm", ...(pseudoLocales ? ["--pseudo-locales"] : [])],
       { cwd: project.cwd, maxBuffer: 16 * 1024 * 1024 });
   }
 
@@ -312,6 +322,10 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   return {
     name: "runic-translations",
     enforce: "pre",
+
+    configResolved(config) {
+      if (options.pseudoLocales === undefined) pseudoLocales = config.mode === "development";
+    },
 
     configureServer(value) {
       server = value;

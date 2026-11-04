@@ -18,6 +18,10 @@ internal static class GeneratorTestHost
     internal static GeneratorRun RunWithConsumer(string source, params TestInput[] inputs) =>
         Run(new TranslationsGenerator(), RuntimeReferenceMode.Matching, source, ImmutableDictionary<string, ReportDiagnostic>.Empty, inputs);
 
+    // MSBuild properties that reach the generator as build_property.<name>, such as RunicTranslationsPseudoLocales.
+    internal static GeneratorRun RunWithConsumer(string source, IReadOnlyDictionary<string, string> buildProperties, params TestInput[] inputs) =>
+        Run(new TranslationsGenerator(), RuntimeReferenceMode.Matching, source, ImmutableDictionary<string, ReportDiagnostic>.Empty, inputs, buildProperties);
+
     internal static GeneratorRun RunWithConsumer(RuntimeReferenceMode runtimeReferenceMode, string source, params TestInput[] inputs) =>
         Run(new TranslationsGenerator(), runtimeReferenceMode, source, ImmutableDictionary<string, ReportDiagnostic>.Empty, inputs);
 
@@ -30,10 +34,11 @@ internal static class GeneratorTestHost
         Run(new TranslationsGenerator(), runtimeReferenceMode, source, specificDiagnosticOptions, inputs);
 
     private static GeneratorRun Run(TranslationsGenerator generator, RuntimeReferenceMode runtimeReferenceMode,
-        string? consumerSource, ImmutableDictionary<string, ReportDiagnostic> specificDiagnosticOptions, params TestInput[] inputs)
+        string? consumerSource, ImmutableDictionary<string, ReportDiagnostic> specificDiagnosticOptions, TestInput[] inputs,
+        IReadOnlyDictionary<string, string>? buildProperties = null)
     {
         var additionalTexts = inputs.Select(static input => (AdditionalText)new MemoryAdditionalText(input.Path, input.Text)).ToImmutableArray();
-        var optionsProvider = new TestOptionsProvider(inputs);
+        var optionsProvider = new TestOptionsProvider(inputs, buildProperties);
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         CSharpCompilation compilation = CSharpCompilation.Create(
             "GeneratorConsumer",
@@ -157,12 +162,14 @@ internal static class GeneratorTestHost
         private readonly Dictionary<string, AnalyzerConfigOptions> _fileOptions;
         private readonly AnalyzerConfigOptions _global;
 
-        internal TestOptionsProvider(IEnumerable<TestInput> inputs)
+        internal TestOptionsProvider(IEnumerable<TestInput> inputs, IReadOnlyDictionary<string, string>? buildProperties = null)
         {
-            _global = new DictionaryOptions(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            var global = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["build_property.ProjectDir"] = "C:/repo/",
-            });
+            };
+            foreach ((string name, string value) in buildProperties ?? new Dictionary<string, string>()) global["build_property." + name] = value;
+            _global = new DictionaryOptions(global);
             _fileOptions = new Dictionary<string, AnalyzerConfigOptions>(StringComparer.Ordinal);
             foreach (TestInput input in inputs)
             {

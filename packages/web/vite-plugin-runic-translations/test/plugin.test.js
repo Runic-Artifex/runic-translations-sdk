@@ -681,6 +681,30 @@ if (process.argv[2] === "serve") { process.stderr.write("runic-translations: unk
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("pseudoLocales follow Vite's mode unless the option sets them", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-pseudo-"));
+  try {
+    const project = join(root, "translations"), output = join(root, "generated"), calls = join(root, "calls.txt"), compiler = join(root, "compiler.mjs");
+    await mkdir(project);
+    await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app", pseudoLocales: ["en-XA"] }));
+    await writeFile(join(project, "en.rmf2"), "title = Shop\n");
+    await writeV3Fixture(join(output, "app.esm-v5"));
+    await writeFile(compiler, `import { appendFile } from "node:fs/promises"; await appendFile(${JSON.stringify(calls)}, process.argv.slice(2).join("|") + "\\n");`);
+    for (const [option, mode, expected] of [
+      [undefined, "development", true], [undefined, "production", false], [undefined, "staging", false],
+      [false, "development", false], [true, "production", true],
+    ]) {
+      await rm(calls, { force: true });
+      const plugin = runicTranslations({ project, output, command: process.execPath, commandArguments: [compiler], persistentCompiler: false, pseudoLocales: option });
+      plugin.configResolved({ mode });
+      await plugin.buildStart.call({ addWatchFile() {} });
+      const line = (await readFile(calls, "utf8")).trim();
+      assert.equal(line.split("|").includes("--pseudo-locales"), expected, `${option} ${mode}: ${line}`);
+    }
+    assert.throws(() => runicTranslations({ project, output, pseudoLocales: "yes" }), /pseudoLocales must be a boolean/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("published declarations type-check a Vite configuration", async () => {
   // Inside the package, so the import resolves through the package's own exports like a consumer's would.
   const root = await mkdtemp(join(new URL("..", import.meta.url).pathname, ".declarations-"));

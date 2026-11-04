@@ -7,7 +7,7 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup" };
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales" };
     private static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
     private static readonly string[] LocaleMembers = { "tag", "fallback" };
     private static readonly string[] ValidationMembers = { "translationCompleteness", "extraLocaleKeys", "emptyValues" };
@@ -104,11 +104,37 @@ public static partial class TranslationCompiler
                     diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "locales must include baseLocale.", parsed.Source, locales.Value.Span);
             }
         }
+        JsonProperty? pseudoLocales = root.Property("pseudoLocales");
+        if (pseudoLocales is not null) ReadPseudoLocales(pseudoLocales.Value, model, parsed.Source, diagnostics);
         JsonProperty? validation = root.Property("validation");
         if (validation is not null) ReadValidation(validation, model, parsed.Source, diagnostics);
         JsonProperty? runtime = root.Property("runtime");
         if (runtime is not null) ReadRuntime(runtime, model, parsed.Source, diagnostics);
         return model;
+    }
+
+    // pseudoLocales: en-XA and ar-XB, each at most once and not also a declared locale.
+    private static void ReadPseudoLocales(JsonValue value, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics)
+    {
+        if (value.Kind != JsonKind.Array)
+        {
+            diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "pseudoLocales must be an array of pseudo-locale tags.", source, value.Span);
+            return;
+        }
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (JsonValue item in value.Items)
+        {
+            string? tag = item.Kind == JsonKind.String
+                ? Array.Find(Rmf2PseudoLocalesV5.Supported, supported => string.Equals(supported, item.Text, StringComparison.OrdinalIgnoreCase))
+                : null;
+            if (tag is null)
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "pseudoLocales supports only 'en-XA' and 'ar-XB'.", source, item.Span);
+            else if (!seen.Add(tag))
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Duplicate pseudo-locale '" + tag + "'.", source, item.Span);
+            else if (model.Locales.Exists(locale => string.Equals(locale.Tag, tag, StringComparison.OrdinalIgnoreCase)))
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Pseudo-locale '" + tag + "' is generated; remove it from locales.", source, item.Span);
+            else model.PseudoLocales.Add(new LocaleModel(tag, null, item.Span, item.Span));
+        }
     }
 
     private static void ReadMf2Locale(JsonValue item, ManifestModel model, HashSet<string> seen, TranslationSource source, DiagnosticBag diagnostics)

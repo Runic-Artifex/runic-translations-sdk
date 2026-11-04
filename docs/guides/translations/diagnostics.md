@@ -39,7 +39,10 @@ the tool and packages together.
 Locale is invalid or not declared. A locale tag is not a valid BCP 47 tag, a
 locale appears twice, the base locale is not declared, or a source file uses a
 locale missing from `locales`. Declare every locale in `runic.json` and name
-files after canonical tags.
+files after canonical tags. For `pseudoLocales`: a tag other than `en-XA` or
+`ar-XB`, a duplicate, a tag that is also in `locales`, or source files of a
+pseudo-locale while pseudo-locales are generated
+([Pseudo-locales](rmf2.md#pseudo-locales)).
 
 ## RTR0006
 

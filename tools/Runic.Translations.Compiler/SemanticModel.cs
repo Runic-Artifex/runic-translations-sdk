@@ -13,6 +13,8 @@ internal sealed class ManifestModel
     internal bool ReferenceFallbackText { get; set; } = true;
     internal string DefaultLocale { get; set; } = string.Empty;
     internal List<LocaleModel> Locales { get; } = new();
+    /// <summary>The development pseudo-locales of <c>pseudoLocales</c>, generated only when a build asks for them.</summary>
+    internal List<LocaleModel> PseudoLocales { get; } = new();
     internal TranslationPolicy Completeness { get; set; } = TranslationPolicy.Error;
     internal TranslationPolicy ExtraKeys { get; set; } = TranslationPolicy.Error;
     internal TranslationPolicy EmptyValues { get; set; } = TranslationPolicy.Allow;

@@ -52,6 +52,12 @@ render them update in place. Values computed once on the server, such as data
 returned from a SvelteKit `load` function, are not re-run by HMR; they update
 when the page is reloaded.
 
+In project mode the plugin also generates the development pseudo-locales that
+`runic.json` declares in `pseudoLocales` (`en-XA`, `ar-XB`) when Vite's mode is
+`development`, so `vite dev` shows them and `vite build` leaves them out. Set
+`pseudoLocales: true` or `false` to override. See
+[Pseudo-locales](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#pseudo-locales).
+
 Manifest mode treats the supplied generated directory as externally owned.
 Changes to `sourceFiles` trigger a Vite refresh, but the plugin cannot recompile
 the project or recompute `sourceHash` without a compiler command. The owning

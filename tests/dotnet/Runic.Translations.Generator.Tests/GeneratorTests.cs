@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
@@ -326,6 +327,42 @@ internal sealed class GeneratorTests
         {
             int statements = method.Body?.Statements.Count ?? 1;
             Assert.True(statements <= 40, $"{method.Identifier.Text} has {statements} statements.");
+        }
+    }
+
+    [Test, DisplayName("generated C# includes the runic.json pseudo-locales only when RunicTranslationsPseudoLocales is true")]
+    public void PseudoLocalesFollowTheBuildProperty()
+    {
+        const string project = """
+            {
+              "schemaVersion": 1,
+              "catalog": "app",
+              "code": { "namespace": "Example.Localization", "className": "AppText", "visibility": "public" },
+              "baseLocale": "en",
+              "locales": [ "en" ],
+              "pseudoLocales": [ "en-XA", "ar-XB" ]
+            }
+            """;
+        string save = PathMember("save");
+        string source = $$"""
+            namespace Example.Localization;
+            public static class PseudoProbe
+            {
+                public static string Run() =>
+                    new AppText(AppTextCatalog.CreateManager("en-XA")).{{save}}("Ada") + "|" + new AppText(AppTextCatalog.CreateManager("ar-XB")).{{save}}("Ada");
+            }
+            """;
+        foreach ((string? value, string expected) in new[]
+        {
+            ("true", "[Śààṽéé Ada]|[\u202ESave \u202CAda]"),
+            ("false", "Save Ada|Save Ada"),
+            (null, "Save Ada|Save Ada"),
+        })
+        {
+            var properties = value is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["RunicTranslationsPseudoLocales"] = value };
+            GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, properties, ProjectInput(project), MessageInput("save = Save {$name}\n"));
+            Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+            Assert.Equal(expected, Execute(run, "Example.Localization.PseudoProbe", "Run"), $"RunicTranslationsPseudoLocales={value}");
         }
     }
 

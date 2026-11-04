@@ -44,6 +44,10 @@ only that group is rendered. V5 supports `--emit-csharp`, `--emit-json`, and
 Validation permits an empty v5 project as a scaffold, but `generate` and `verify`
 fail with `RTR0009` until the effective default locale defines a canonical key.
 
+`--pseudo-locales` on `validate`, `generate` and `verify` also generates the development pseudo-locales that
+`runic.json` declares in `pseudoLocales` (`en-XA`, `ar-XB`); without it they are left out, as release builds should.
+See [Pseudo-locales](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#pseudo-locales).
+
 Use `Runic.Translations.Build` for generated C# or when MSBuild should invoke this local tool. Use this CLI directly when Vite, CI, or a custom script owns artifact generation.
 
 ## Import a text-keyed catalog
