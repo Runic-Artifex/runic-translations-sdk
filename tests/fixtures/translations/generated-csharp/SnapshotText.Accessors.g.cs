@@ -10,6 +10,7 @@ public sealed partial class SnapshotText
     private readonly global::Runic.Translations.ITranslationManager __translationManager;
 
     /// <summary>Creates accessors over a locale manager.</summary>
+    [global::System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public SnapshotText(global::Runic.Translations.ITranslationManager manager)
     {
         __translationManager = manager ?? throw new global::System.ArgumentNullException(nameof(manager));

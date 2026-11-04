@@ -26,7 +26,14 @@ public sealed class GridHeader(ITranslationContext translations)
 
 `new GridText(context)` uses the manager of the `acme-grid` catalog in that context and throws
 `KeyNotFoundException` when the application did not register the catalog. The constructor over an
-`ITranslationManager` stays, for code that manages one catalog itself.
+`ITranslationManager` stays, for code that manages one catalog itself, and keeps priority for a `null` argument, so
+`new GridText(null)` still compiles.
+
+**Dependency injection.** The text class now has two one-parameter constructors. When a container can supply both an
+`ITranslationManager` and an `ITranslationContext`, Microsoft.Extensions.DependencyInjection cannot choose between them
+for a type registration such as `services.AddSingleton<GridText>()` and throws "ambiguous constructors". Register text
+classes with a factory instead, for example `AddCatalog<GridText>(..., context => new GridText(context))` from
+`Runic.Translations.Hosting`, or `services.AddSingleton(sp => new GridText(sp.GetRequiredService<ITranslationContext>()))`.
 
 ## The application
 
@@ -45,10 +52,21 @@ await translations.SetLocaleAsync("fr");   // every catalog switches together
 catalog in the new locale and another in the old one. When any catalog fails, or the call is canceled, nothing changes.
 `Build()` does the same without awaiting, for startup code that cannot await.
 
+**The latest switch wins.** A `SetLocaleAsync` call supersedes every earlier call that has not published yet: the earlier
+call's preparation is canceled through its token, its result is discarded and it completes without error. When the user
+picks German, whose overlay pack is still downloading, and then English again, the context stays on English, and a
+slow switch never delays a later one.
+
+**Contexts share their catalogs.** Contexts built from one builder share one provider per catalog: catalog data is read
+once, and overlay packs are loaded, checked and composed once per locale. A context per window or per request therefore
+costs a snapshot lookup per catalog. Keep the builder and call `BuildAsync` for each window or request; a new builder
+starts with empty caches.
+
 Each catalog keeps its own `ITranslationManager`, which `translations.GetManager("acme-grid")` returns, so adapters such
 as the WPF `TranslationSource` keep working. A manager's `SetLocaleAsync` switches the whole context; its `RefreshAsync`
 recomposes only its catalog. Managers raise `LocaleChanged` and `SnapshotPublished` as before, and the context then
-raises its own `LocaleChanged` once.
+raises its own `LocaleChanged` once. Events are raised in publication order; when switches overlap, only the latest
+state is raised, starting from what each subscriber last saw, so no subscriber ends on a superseded locale.
 
 `translations.Resolve(reference)` resolves a stored `TranslationReference` of any registered catalog, so validation
 text from a library ViewModel is translated like the application's own.
@@ -67,7 +85,16 @@ foreach (TranslationCatalogStatus catalog in translations.Catalogs)
 `Exact` means the catalog (or an overlay) declares the locale, `Parent` that it uses a parent such as `fr` for
 `fr-CA`, and `Default` that it falls back to its default locale. The same values are on every snapshot
 (`ITranslationSnapshot.RequestedLocale`, `LocaleResolution`) and on the managers' event data, also for a standalone
-`TranslationManager`.
+`TranslationManager` and for external packs. A snapshot from a custom `ITranslationSnapshotFactory` reports what it
+implements; the interface's defaults report its locale as `Exact`.
+
+`translations.SupportedLocales` lists the locales in which every catalog shows its own text (with the locales overlays
+add): offer these in a language picker to avoid mixed-language screens. Each catalog's own locales are in
+`Catalogs[i].SupportedLocales`.
+
+During development, a non-exact resolution is reported when a context publishes: at the verbose level of the
+`Runic-Translations` event source (for `dotnet-trace` or an `EventListener`), and in the output window of an attached
+debugger.
 
 ## Overriding library text
 
@@ -99,13 +126,28 @@ So an overlay written for one library release keeps working with the next.
 library, and only then the next locale. A German user therefore sees the library's German text even where the
 application overrides the English one.
 
-**Added locales.** `addedLocales` declares locales the library lacks. An added locale falls back to one library locale,
-its default unless `fallbackLocale` names another, and from there along the library's chain. Keys the overlay does not
-translate show the overlay's text for that fallback locale if it has one, else the library's. A locale that a later
-library release declares itself keeps the library's chain.
+**Added locales.** `addedLocales` declares locales the library lacks. An added locale falls back to `fallbackLocale`
+when it names one. Without it, it falls back to its nearest parent that the library declares or an overlay adds, so
+`de-CH` falls back to the library's `de`, and without such a parent to the library's default locale. From the first
+library locale on, the library's chain applies. Keys the overlay does not translate show the overlay's text for that
+fallback locale if it has one, else the library's. A locale that a later library release declares itself keeps the
+library's chain. Two overlays that add one locale with different fallbacks are an error.
+
+**Fallback copies.** A pack built with relaxed completeness (`"translationCompleteness": "allow"`) contains copies of
+base-locale text for the keys it does not translate. These copies are not application text for a locale the library
+declares: a French user sees the library's English (or the application's own `en` pack), exactly as an English user
+does. They apply only to locales that overlays add.
 
 A malformed pack, or one that names another catalog or locale, fails the switch with a `TranslationPackException`,
-like an external pack. `RefreshAsync` reloads overlay packs.
+like an external pack. `RefreshAsync` reloads overlay packs; other contexts of the same builder get the reloaded text on
+their next switch or refresh.
+
+## Registering a catalog more than once
+
+Independent libraries may register a catalog they share; a repeated registration with the same contract fingerprint is
+ignored. A catalog's `TranslationOptions` belong to one registration, normally the application's: a registration
+without options accepts another's, and two registrations with different options throw `ArgumentException`, as does a
+registration with another contract fingerprint.
 
 ## Versions
 

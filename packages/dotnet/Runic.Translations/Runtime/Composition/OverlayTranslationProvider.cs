@@ -16,6 +16,8 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
     private readonly Rmf2MarkupContract _markup;
     private readonly ITextValueFormatter _valueFormatter;
     private readonly TranslationOverlay[] _overlays;
+    // An added locale and the next locale of its chain: its explicit fallback, else its nearest declared or added parent,
+    // else the catalog's default locale.
     private readonly Dictionary<string, string> _addedLocales = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, CompiledTranslationSnapshot> _snapshots = new(StringComparer.Ordinal);
 
@@ -26,6 +28,8 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
         _markup = Rmf2MarkupContract.Link(markupContract);
         _valueFormatter = valueFormatter;
         _overlays = new TranslationOverlay[overlays.Count];
+        // Explicit fallbacks per added locale; null when no overlay names one.
+        var explicitFallbacks = new Dictionary<string, string?>(StringComparer.Ordinal);
         for (int index = 0; index < overlays.Count; index++)
         {
             TranslationOverlay overlay = overlays[index];
@@ -36,15 +40,28 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
                 // A locale the catalog declares keeps the catalog's chain, so a library release that adds the locale
                 // does not break the application's overlay.
                 if (catalog.DeclaresLocale(added.Locale)) continue;
-                string fallback = added.FallbackLocale ?? catalog.DefaultLocale;
-                if (!catalog.DeclaresLocale(fallback))
+                if (added.FallbackLocale is { } fallback && !catalog.DeclaresLocale(fallback))
                     throw new ArgumentException(
                         $"Overlay locale '{added.Locale}' of catalog '{catalog.Catalog}' falls back to '{fallback}', which the catalog does not declare.",
                         nameof(overlays));
-                _addedLocales.TryAdd(added.Locale, fallback);
+                if (!explicitFallbacks.TryGetValue(added.Locale, out string? existing) || existing is null)
+                    explicitFallbacks[added.Locale] = added.FallbackLocale;
+                else if (added.FallbackLocale is not null && !string.Equals(existing, added.FallbackLocale, StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        $"Two overlays of catalog '{catalog.Catalog}' add locale '{added.Locale}' with different fallbacks ('{existing}' and '{added.FallbackLocale}').",
+                        nameof(overlays));
             }
 
             _overlays[index] = overlay;
+        }
+
+        // Without an explicit fallback, an added locale falls back along its parents into the library first (de-CH to the
+        // library's de), then to the library's default locale.
+        foreach ((string locale, string? fallback) in explicitFallbacks)
+        {
+            _addedLocales.Add(locale, fallback ??
+                LocaleRequestResolver.NearestParent(locale, candidate => catalog.DeclaresLocale(candidate) || explicitFallbacks.ContainsKey(candidate)) ??
+                catalog.DefaultLocale);
         }
 
         var supported = new List<string>(catalog.LocaleTags());
@@ -74,15 +91,16 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
 
     private bool Declares(string locale) => _catalog.DeclaresLocale(locale) || _addedLocales.ContainsKey(locale);
 
-    // The requested locale, then (for an added locale) the one library locale it falls back to, then the library chain.
+    // The requested locale, then (for an added locale) its added parents and the library locale they fall back to, then the
+    // library chain. Every added step is shorter than the previous one or a library locale, so the chain is finite.
     private List<string> Chain(string locale)
     {
         var chain = new List<string>();
         string? current = locale;
-        if (_addedLocales.TryGetValue(locale, out string? fallback))
+        while (_addedLocales.TryGetValue(current, out string? next))
         {
-            chain.Add(locale);
-            current = fallback;
+            chain.Add(current);
+            current = next;
         }
 
         for (; current is not null; current = _catalog.GetFallbackLocale(current)) chain.Add(current);
@@ -110,7 +128,11 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
             }
 
             var values = overlayValues[overlay] = new CompiledTextMessage?[chain.Count][];
-            // A locale's own pack wins over a fallback copy of its messages in a more specific locale's pack.
+            // A locale's own pack wins over a fallback copy of its messages in a more specific locale's pack. A fallback copy
+            // (a message whose content locale is not the pack's locale, written by a build with relaxed completeness) is
+            // not application text for a locale the library declares: the library's own text for that locale, or the
+            // application's own pack for it, is used, exactly as for a user who requests that locale. Copies apply only to
+            // locales the overlays add.
             for (int pass = 0; pass < 2; pass++)
             {
                 foreach (OverlayPack pack in packs)
@@ -119,6 +141,7 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
                     {
                         bool own = string.Equals(message.ContentLocale, pack.Locale, StringComparison.Ordinal);
                         if (own != (pass == 0) || !step.TryGetValue(message.ContentLocale, out int at)) continue;
+                        if (!own && _catalog.DeclaresLocale(message.ContentLocale)) continue;
                         if (!TryCheck(message, out int id, out CompiledTextMessage? checkedMessage, out TranslationOverlayDiagnosticReason reason))
                         {
                             var diagnostic = new TranslationOverlayDiagnostic(_catalog.Catalog, message.ContentLocale, message.Key, reason);
