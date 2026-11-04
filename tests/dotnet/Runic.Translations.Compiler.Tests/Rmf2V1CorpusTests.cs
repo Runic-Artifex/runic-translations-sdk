@@ -218,8 +218,13 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging TC with TE: message modules call the runtime with the requested locale, and runtime.js
     // reads getMessageLocale's content locales from its own table (messageLocaleTable) rather than the contract tables
     // that moved to dynamic.js, in both digests.
-    private const string EncodedOutputDigest = "cf82dd07bcab87cfb982a063153dbd085ef1f9e344eb61e981179c507120a578";
-    private const string HiddenEncodedOutputDigest = "bca94d9be3771a1601e32766f69215d938b69f982445779c79d7b6184e8b3eb7";
+    // Re-pinned for T1a/T1b (0.9): generated C# adds the XText(ITranslationContext) constructor and
+    // XCatalog.Registration, and gives the XText(ITranslationManager) constructor OverloadResolutionPriority(1) so
+    // new XText(null) still compiles, in both digests. Every other output is unchanged.
+    // Re-pinned for merging T1a/T1b with main (TE, TC, TD): the context constructor sits before the base-text
+    // accessor summaries and the References factories, in both digests.
+    private const string EncodedOutputDigest = "372d7326b2b60f9f319151c5882641b79003c28aa10b785b1aed050bd79b793a";
+    private const string HiddenEncodedOutputDigest = "aff73a1b1dc97c8eeaaf1fad451f73e5d48fa2dc4f1d049a8b29e78591986876";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

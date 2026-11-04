@@ -126,7 +126,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 !reader.StringComparer.Equals(type.Namespace, CompatibilityNamespace) ||
                 !type.GetDeclaringType().IsNil)
                 continue;
-            int version = -1, rmf2Version = -1, typedSlotsVersion = -1;
+            int version = -1, rmf2Version = -1, typedSlotsVersion = -1, compositionVersion = -1;
             foreach (FieldDefinitionHandle fieldHandle in type.GetFields())
             {
                 FieldDefinition field = reader.GetFieldDefinition(fieldHandle);
@@ -138,8 +138,9 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 if (reader.StringComparer.Equals(field.Name, "RuntimeAbiVersion")) version = value;
                 else if (reader.StringComparer.Equals(field.Name, "Rmf2RuntimeAbiVersion")) rmf2Version = value;
                 else if (reader.StringComparer.Equals(field.Name, "TypedSlotBindingsVersion")) typedSlotsVersion = value;
+                else if (reader.StringComparer.Equals(field.Name, "CompositionVersion")) compositionVersion = value;
             }
-            return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version, typedSlotsVersion));
+            return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version, typedSlotsVersion, compositionVersion));
         }
         return new RuntimeReference(true, RuntimeAbiState.Missing);
     }
@@ -151,8 +152,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         INamedTypeSymbol? compatibility = compilation.Assembly.GetTypeByMetadataName(CompatibilityNamespace + "." + CompatibilityType);
         if (compatibility is null) return new RuntimeReference(true, RuntimeAbiState.Missing);
         int version = Constant(compatibility, "RuntimeAbiVersion"), rmf2Version = Constant(compatibility, "Rmf2RuntimeAbiVersion"),
-            typedSlotsVersion = Constant(compatibility, "TypedSlotBindingsVersion");
-        return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version, typedSlotsVersion));
+            typedSlotsVersion = Constant(compatibility, "TypedSlotBindingsVersion"), compositionVersion = Constant(compatibility, "CompositionVersion");
+        return new RuntimeReference(true, version < 0 ? RuntimeAbiState.Missing : new RuntimeAbiState(version, rmf2Version, typedSlotsVersion, compositionVersion));
 
         static int Constant(INamedTypeSymbol type, string name)
         {
@@ -289,7 +290,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 Rmf2ProjectV5EmissionEligibility.Message));
             return new LinkResult(diagnostics.ToImmutable(), null, false);
         }
-        return new LinkResult(diagnostics.ToImmutable(), linked, runtimeAbi.SupportsReadableSurface);
+        return new LinkResult(diagnostics.ToImmutable(), linked, runtimeAbi.SupportsReadableSurface, runtimeAbi.SupportsComposition);
     }
 
     // Links each referenced project's catalog for XAML checks only. The referenced project's own
@@ -320,14 +321,14 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     {
         foreach (Diagnostic diagnostic in result.Diagnostics) context.ReportDiagnostic(diagnostic);
         if (result.Project is not { } linked) return;
-        bool readableSurface = result.ReadableSurface;
+        bool readableSurface = result.ReadableSurface, composition = result.Composition;
 
         var outputs = new List<TranslationGeneratedOutput>(5)
         {
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked, readableSurface),
-            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked, readableSurface),
+            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked, readableSurface, composition),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(linked),
-            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked, composition),
         };
         // The readable surface needs the typed slot types of a runtime that declares
         // TypedSlotBindingsVersion. Without it, keep the encoded files and explain the gap.
@@ -448,11 +449,12 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     // link (a translation source, project or runtime ABI change) reaches both outputs.
     internal sealed class LinkResult
     {
-        internal LinkResult(ImmutableArray<Diagnostic> diagnostics, Rmf2ProjectV5? project, bool readableSurface)
+        internal LinkResult(ImmutableArray<Diagnostic> diagnostics, Rmf2ProjectV5? project, bool readableSurface, bool composition = false)
         {
             Diagnostics = diagnostics;
             Project = project;
             ReadableSurface = readableSurface;
+            Composition = composition;
             // XAML keys name readable members. Without the readable surface (an old runtime or a
             // reserved class name, both reported once already) there is nothing to check XAML against.
             XamlCatalog = project is not null && readableSurface && Rmf2ReadableNamesV1.SupportsClassName(project.ClassName)
@@ -465,6 +467,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         /// <summary>The linked, emittable project; null when linking failed or was not possible.</summary>
         internal Rmf2ProjectV5? Project { get; }
         internal bool ReadableSurface { get; }
+        /// <summary>Whether the referenced runtime has the catalog composition surface.</summary>
+        internal bool Composition { get; }
         internal XamlCatalog? XamlCatalog { get; }
     }
 
@@ -520,24 +524,28 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     {
         internal static readonly RuntimeAbiState Missing = new RuntimeAbiState(-1);
 
-        internal RuntimeAbiState(int version, int rmf2Version = -1, int typedSlotBindingsVersion = -1)
+        internal RuntimeAbiState(int version, int rmf2Version = -1, int typedSlotBindingsVersion = -1, int compositionVersion = -1)
         {
             Version = version;
             Rmf2Version = rmf2Version;
             TypedSlotBindingsVersion = typedSlotBindingsVersion;
+            CompositionVersion = compositionVersion;
         }
         internal int Rmf2Version { get; }
 
         internal int Version { get; }
         // Additive capability, not part of the ABI gate: a runtime without it still gets the encoded surface.
         internal int TypedSlotBindingsVersion { get; }
+        // Additive capability: a runtime without it gets no Registration and no context constructor.
+        internal int CompositionVersion { get; }
         internal bool IsMissing => Version < 0;
         internal bool IsCompatible => Version == 1 && Rmf2Version == RequiredRmf2Version;
         internal bool SupportsReadableSurface => TypedSlotBindingsVersion >= 1;
+        internal bool SupportsComposition => CompositionVersion >= 1;
 
         public bool Equals(RuntimeAbiState other) => Version == other.Version && Rmf2Version == other.Rmf2Version &&
-            TypedSlotBindingsVersion == other.TypedSlotBindingsVersion;
+            TypedSlotBindingsVersion == other.TypedSlotBindingsVersion && CompositionVersion == other.CompositionVersion;
         public override bool Equals(object? obj) => obj is RuntimeAbiState other && Equals(other);
-        public override int GetHashCode() => HashCode.Combine(Version, Rmf2Version, TypedSlotBindingsVersion);
+        public override int GetHashCode() => HashCode.Combine(Version, Rmf2Version, TypedSlotBindingsVersion, CompositionVersion);
     }
 }

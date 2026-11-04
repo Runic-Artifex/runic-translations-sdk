@@ -103,6 +103,7 @@ internal static class GeneratorTestHost
             RuntimeReferenceMode.Rmf2V1 => "public const int Rmf2RuntimeAbiVersion = 1;",
             RuntimeReferenceMode.Rmf2V3 => "public const int Rmf2RuntimeAbiVersion = 3;",
             RuntimeReferenceMode.Rmf2V3Typed => "public const int Rmf2RuntimeAbiVersion = 3; public const int TypedSlotBindingsVersion = 1;",
+            RuntimeReferenceMode.Rmf2V3Composition => "public const int Rmf2RuntimeAbiVersion = 3; public const int CompositionVersion = 1;",
             RuntimeReferenceMode.ProjectReferenceRmf2V3 => "public const int Rmf2RuntimeAbiVersion = 3;",
             RuntimeReferenceMode.ProjectReferenceRmf2V3Typed => "public const int Rmf2RuntimeAbiVersion = 3; public const int TypedSlotBindingsVersion = 1;",
             RuntimeReferenceMode.Rmf2Zero => "public const int Rmf2RuntimeAbiVersion = 0;",
@@ -208,6 +209,8 @@ internal enum RuntimeReferenceMode
     // Synthetic runtimes passed as a CompilationReference, as an IDE passes a project reference.
     ProjectReferenceRmf2V3,
     ProjectReferenceRmf2V3Typed,
+    // Synthetic metadata runtime with CompositionVersion but without the readable surface.
+    Rmf2V3Composition,
 }
 
 internal sealed record GeneratorRun(
