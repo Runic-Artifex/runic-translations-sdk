@@ -12,6 +12,9 @@ internal enum ToolCommand
     Verify,
     Schema,
     ImportText,
+    XliffExport,
+    XliffImport,
+    ReviewMark,
 }
 
 [Flags]

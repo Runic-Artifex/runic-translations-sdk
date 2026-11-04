@@ -59,7 +59,7 @@
         "digits": { "type": "int64", "value": "2" },
         "style": { "type": "string", "value": "percent" }
       },
-      "expected": { "kind": "text", "value": "12,50%", "contentLocale": "de" }
+      "expected": { "kind": "text", "value": "12,50\u00a0%", "contentLocale": "de" }
     },
     {
       "id": "regional-fallback",
@@ -70,7 +70,7 @@
         "digits": { "type": "int64", "value": "2" },
         "style": { "type": "string", "value": "percent" }
       },
-      "expected": { "kind": "text", "value": "12,50%", "contentLocale": "de" }
+      "expected": { "kind": "text", "value": "12,50\u00a0%", "contentLocale": "de" }
     },
     {
       "id": "direct-regional-chain",

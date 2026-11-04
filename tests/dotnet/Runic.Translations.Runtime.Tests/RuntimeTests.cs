@@ -489,13 +489,15 @@ internal sealed class RuntimeTests
         manager.LocaleChanged += (_, change) => events.Add("changed " + change.NewLocale + " " + change.RequestedLocale + " " + change.LocaleResolution);
         manager.SnapshotPublished += (_, published) => events.Add("published " + published.RequestedLocale + " " + published.LocaleResolution);
 
-        // The same locale for another request: no event, but Current records the request.
+        // The same locale for another request: the text is unchanged, but numbers and dates format for the new
+        // request, so the switch is published and raises LocaleChanged.
         await manager.SetLocaleAsync("en");
-        Assert.Equal("en|Exact|0", manager.Current.RequestedLocale + "|" + manager.Current.LocaleResolution + "|" + events.Count);
+        Assert.Equal("en|Exact", manager.Current.RequestedLocale + "|" + manager.Current.LocaleResolution);
+        Assert.Equal("changed en en Exact|published en Exact", string.Join("|", events));
         await manager.SetLocaleAsync("en-US-posix");
-        Assert.Equal("changed en-US en-US-posix Parent|published en-US-posix Parent", string.Join("|", events));
+        Assert.Equal("changed en en Exact|published en Exact|changed en-US en-US-posix Parent|published en-US-posix Parent", string.Join("|", events));
         await manager.SetLocaleAsync("EN-us-POSIX");
-        Assert.Equal(2, events.Count);
+        Assert.Equal(4, events.Count);
     }
 
     [Test, DisplayName("provider applies exact unsupported policy")]
@@ -557,10 +559,12 @@ internal sealed class RuntimeTests
         Assert.Equal(1, factory.CallCount);
         factory.Release();
         ITranslationSnapshot[] snapshots = await Task.WhenAll(a, b);
-        // One composition serves both requests; each snapshot records its own request.
-        Assert.Equal("en-AU|Parent", snapshots[0].RequestedLocale + "|" + snapshots[0].LocaleResolution);
+        // One composition serves both requests; en-AU is a view of the one en snapshot that records its request and
+        // formats numbers and dates for en-AU.
+        Assert.Equal("en|en-AU|Parent", snapshots[0].Locale + "|" + snapshots[0].RequestedLocale + "|" + snapshots[0].LocaleResolution);
+        Assert.Equal(("en", "en"), (snapshots[1].Locale, snapshots[1].RequestedLocale));
         Assert.Same(snapshots[1], await provider.GetSnapshotAsync("en"));
-        Assert.Same(snapshots[0], await provider.GetSnapshotAsync("en-AU"));
+        Assert.Same(snapshots[0], await provider.GetSnapshotAsync("en-au"));
         Assert.Equal(1, factory.CallCount);
     }
 

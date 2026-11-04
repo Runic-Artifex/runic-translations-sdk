@@ -326,6 +326,7 @@ internal sealed class Rmf2SemanticV5Tests
                 Assert.Equal(string.Join(',', option.Values), string.Join(',', json.GetProperty("values").EnumerateArray().Select(item => item.GetString())));
                 Assert.Equal(option.Minimum, json.TryGetProperty("minimum", out var min) ? min.GetInt32() : null);
                 Assert.Equal(option.Maximum, json.TryGetProperty("maximum", out var max) ? max.GetInt32() : null);
+                Assert.Equal(option.Pattern, json.TryGetProperty("pattern", out var pattern) ? pattern.GetString() : null);
             }
         }
     }

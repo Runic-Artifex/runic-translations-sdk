@@ -389,8 +389,8 @@ internal sealed class Rmf2DocumentCorpusTests
     private const string EsmExecutionScript = """
         import { readFile } from "node:fs/promises";
         import { m } from "./documents.esm-v5/messages.js";
-        import { actionBinding, bindMarkup, createDocumentRenderer, createInlineRenderer, defineMarkup, iconBinding, linkBinding, rmf2Contract, toPlainText } from "./documents.esm-v5/runtime.js";
-        import { decodeLocalePack, formatDynamicMessage } from "./documents.esm-v5/dynamic.js";
+        import { actionBinding, bindMarkup, createDocumentRenderer, createInlineRenderer, defineMarkup, iconBinding, linkBinding, toPlainText } from "./documents.esm-v5/runtime.js";
+        import { decodeLocalePack, formatDynamicMessage, rmf2Contract } from "./documents.esm-v5/dynamic.js";
         const index=JSON.parse(await readFile(new URL("./index.json",import.meta.url),"utf8"));
         const artifacts=Object.create(null);
         for(const locale of ["en","de","fr"]){const decoded=await decodeLocalePack(new Uint8Array(await readFile(new URL("./"+locale+".json",import.meta.url))),locale);if(!decoded.ok)throw new Error(locale+": "+decoded.reason);artifacts[locale]=decoded.value;}
@@ -419,8 +419,8 @@ internal sealed class Rmf2DocumentCorpusTests
     private const string EsmDomScript = """
         import { readFile } from "node:fs/promises";
         import { m } from "./documents.esm-v5/messages.js";
-        import { actionBinding, bindMarkup, createDomDocumentRenderer, defineMarkup, iconBinding, linkBinding, rmf2Contract } from "./documents.esm-v5/runtime.js";
-        import { decodeLocalePack, formatDynamicMessage } from "./documents.esm-v5/dynamic.js";
+        import { actionBinding, bindMarkup, createDomDocumentRenderer, defineMarkup, iconBinding, linkBinding } from "./documents.esm-v5/runtime.js";
+        import { decodeLocalePack, formatDynamicMessage, rmf2Contract } from "./documents.esm-v5/dynamic.js";
         const index=JSON.parse(await readFile(new URL("./index.json",import.meta.url),"utf8"));
         const oracle=JSON.parse(await readFile(new URL("./html.json",import.meta.url),"utf8"));
         // A minimal DOM: the adapter only creates elements and text nodes, sets attributes, appends and listens for clicks.

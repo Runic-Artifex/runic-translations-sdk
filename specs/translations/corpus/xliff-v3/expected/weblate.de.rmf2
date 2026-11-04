@@ -1,0 +1,8 @@
+# German translations of the shop.
+greeting = Hallo {$name}!
+farewell = Auf Wiedersehen
+cart {
+  empty = Der Warenkorb ist leer
+}
+checkout_note = Die Zahlung ist sicher. Der Versand ist kostenlos.
+search_placeholder = Produkte durchsuchen

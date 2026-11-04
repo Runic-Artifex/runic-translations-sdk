@@ -26,7 +26,8 @@ namespace Runic.Translations;
 /// <para>
 /// A manager's <see cref="ITranslationManager.SetLocaleAsync"/> switches the whole context, and its
 /// <see cref="ITranslationManager.RefreshAsync"/> recomposes only its own catalog. Managers raise their events as a
-/// standalone manager does: <see cref="ITranslationManager.LocaleChanged"/> when their catalog's locale changed, then
+/// standalone manager does: <see cref="ITranslationManager.LocaleChanged"/> when their catalog's locale or the requested tag
+/// changed (<c>de</c> to <c>de-CH</c> keeps the text but changes how numbers and dates format), then
 /// <see cref="ITranslationManager.SnapshotPublished"/>. After every manager, the context raises <see cref="LocaleChanged"/>.
 /// Events are raised in publication order and never while the context holds a lock. When publications overlap, only the
 /// latest state is raised, and its event data starts from the state subscribers last saw, so a subscriber never ends on a
@@ -464,8 +465,10 @@ public sealed class TranslationContext : ITranslationContext
             bool refreshed = generation != _raisedGeneration;
             _raisedSnapshot = next;
             _raisedGeneration = generation;
-            // As a standalone manager: a request that resolves to the same locale changes no text and raises nothing.
-            if (!string.Equals(previous.Locale, next.Locale, StringComparison.Ordinal))
+            // As a standalone manager: the requested tag is part of the locale, since de-CH over a de snapshot keeps the
+            // text but formats numbers and dates for Switzerland.
+            if (!string.Equals(previous.Locale, next.Locale, StringComparison.Ordinal) ||
+                !string.Equals(previous.RequestedLocale, next.RequestedLocale, StringComparison.Ordinal))
             {
                 Notify(LocaleChanged, new TranslationLocaleChangedEventArgs(previous, next), this);
                 Notify(SnapshotPublished, new TranslationSnapshotPublishedEventArgs(next, TranslationSnapshotPublishReason.LocaleChanged), this);

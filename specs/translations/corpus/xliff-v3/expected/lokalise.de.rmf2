@@ -1,0 +1,8 @@
+# German translations of the shop.
+greeting = Servus {$name}!
+farewell = Auf Wiedersehen
+cart {
+  empty = Dein Warenkorb ist leer
+  items = {$count :integer} Artikel
+}
+search_placeholder = Suche

@@ -189,7 +189,7 @@
     {"id":"en-number-rounds-into-group","locale":"en","message":"{{{$n :number maximumFractionDigits=0}}}","arguments":{"n":{"type":"decimal","value":"999.5"}},"expected":"1,000"},
     {"id":"es-number-rounds-into-group","locale":"es","message":"{{{$n :number maximumFractionDigits=0}}}","arguments":{"n":{"type":"decimal","value":"9999.5"}},"expected":"10.000"},
     {"id":"en-number-percent","locale":"en","message":"{{{$n :number style=percent}}}","arguments":{"n":{"type":"decimal","value":"123.45"}},"expected":"12,345%"},
-    {"id":"de-number-percent-never","locale":"de","message":"{{{$n :number style=percent useGrouping=never}}}","arguments":{"n":{"type":"decimal","value":"123.45"}},"expected":"12345%"},
+    {"id":"de-number-percent-never","locale":"de","message":"{{{$n :number style=percent useGrouping=never}}}","arguments":{"n":{"type":"decimal","value":"123.45"}},"expected":"12345\u00a0%"},
     {"id":"en-integer-dynamic","locale":"en","message":".input {$g :string}\n{{{$n :integer useGrouping=$g} {$n :number useGrouping=$g}}}","arguments":{"g":{"type":"string","value":"never"},"n":{"type":"int64","value":"12345"}},"expected":"12345 12345"},
     {"id":"en-integer-local","locale":"en","message":".local $grouped = {$n :integer useGrouping=always}\n{{{$grouped} {$grouped :integer useGrouping=never}}}","arguments":{"n":{"type":"int64","value":"1234"}},"expected":"1,234 1234"}
   ]

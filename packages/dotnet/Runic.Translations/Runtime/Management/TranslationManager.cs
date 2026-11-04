@@ -136,8 +136,9 @@ public sealed class TranslationManager : ITranslationManager
                     invalidatable.InvalidateSnapshot(refreshedLocale);
                 }
 
+                // The refreshed snapshot keeps the requested locale (de-CH over a de snapshot) that numbers and dates format in.
                 ITranslationSnapshot? replacement = await _provider
-                    .GetSnapshotAsync(refreshedLocale, pending.CancellationToken)
+                    .GetSnapshotAsync(Current.RequestedLocale, pending.CancellationToken)
                     .ConfigureAwait(false);
 
                 pending.CancellationToken.ThrowIfCancellationRequested();
@@ -180,9 +181,9 @@ public sealed class TranslationManager : ITranslationManager
         }
     }
 
-    // A snapshot records the locale it was requested for (fr-CA resolving to fr), so a request for its resolved
-    // locale (fr) is still composed and records the new request. Snapshots that do not record requests report
-    // their locale, as before.
+    // The requested tag, not only the resolved locale, is current: a snapshot records the request it serves (de-CH
+    // resolving to de), and switching from de to de-CH changes how numbers and dates format. Snapshots that do not
+    // record requests report their locale, as before.
     private bool IsCurrentLocale(string requestedLocale) =>
         string.Equals(Current.RequestedLocale, requestedLocale, StringComparison.OrdinalIgnoreCase);
 
@@ -217,21 +218,18 @@ public sealed class TranslationManager : ITranslationManager
                     }
 
                     ITranslationSnapshot current = Current;
-                    if (!string.Equals(
-                        current.Locale,
-                        replacement.Locale,
-                        StringComparison.Ordinal))
+                    if (!string.Equals(current.Locale, replacement.Locale, StringComparison.Ordinal) ||
+                        !string.Equals(current.RequestedLocale, replacement.RequestedLocale, StringComparison.Ordinal))
                     {
                         ITranslationSnapshot previous =
                             Interlocked.Exchange(ref _current, replacement);
                         notification = new TranslationLocaleChangedEventArgs(previous, replacement);
                         publishedSwitch = replacement;
                     }
-                    else if (!string.Equals(current.RequestedLocale, replacement.RequestedLocale, StringComparison.Ordinal) ||
-                        current.LocaleResolution != replacement.LocaleResolution)
+                    else if (current.LocaleResolution != replacement.LocaleResolution)
                     {
-                        // The same locale for another request (fr after fr-CA): the text is unchanged, so no event is
-                        // raised, but Current reports the latest request.
+                        // The same request and locale, resolved another way: the text and formatting are unchanged, so
+                        // no event is raised, but Current reports the latest resolution.
                         Interlocked.Exchange(ref _current, replacement);
                     }
                 }

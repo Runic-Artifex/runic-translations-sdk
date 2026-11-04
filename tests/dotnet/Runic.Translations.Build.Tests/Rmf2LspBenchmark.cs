@@ -342,7 +342,8 @@ internal sealed class Rmf2LspBenchmark
         }
     }
 
-    private sealed class BlockingByteStream : Stream
+    // An in-process LSP transport; also used by Rmf2DiagnosticLspTests.
+    internal sealed class BlockingByteStream : Stream
     {
         private readonly BlockingCollection<byte[]> _chunks = new();
         private byte[]? _current;

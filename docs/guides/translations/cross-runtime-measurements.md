@@ -6,9 +6,10 @@ pre-v5 experimental C++ fixture; that backend is no longer a shipping output.
 
 The checked values below were collected on 8 August 2026 in the Linux x64 Nix
 development shell. They are engineering baselines, not cross-machine performance
-claims. Production tree-shaking is separately asserted by the Vite test, which
-imports one aggregate named export and verifies that an unrelated message marker
-is absent from the resulting bundle.
+claims. Production tree-shaking is separately asserted by the Compiler suite,
+which builds compiler output for a 400-message catalog with Vite through the
+shipping plugin, calls one message through `m`, and checks that the bundle holds
+no other message and is no larger than importing that message's module directly.
 
 <!-- measurement-results -->
 
