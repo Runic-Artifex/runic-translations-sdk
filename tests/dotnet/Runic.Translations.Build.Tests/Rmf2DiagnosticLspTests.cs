@@ -6,8 +6,10 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using Runic.Translations.Compiler;
+using Runic.Translations.Tool;
 using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
@@ -354,6 +356,172 @@ internal sealed class Rmf2DiagnosticLspTests
         Assert.Contains("Shown on the toolbar.", baseHover);
     }
 
+    [Test, DisplayName("LSP keeps an opened file's diagnostics when the client encodes its URI differently")]
+    public void EncodedClientUris()
+    {
+        // VS Code writes `file:///c%3A/...` for Windows drives and percent-encodes `+`, spaces and
+        // `:` in every path segment; .NET writes `C:/` and `c++%20app`. Off Windows a directory named
+        // `c:` produces the same `c%3A` spelling.
+        using TemporaryDirectory temporary = new();
+        string project = OperatingSystem.IsWindows() ? temporary.Resolve("c++ app") : temporary.Resolve("c:", "c++ app");
+        Directory.CreateDirectory(project);
+        File.WriteAllText(Path.Combine(project, "runic.json"), PlainProject);
+        File.WriteAllText(Path.Combine(project, "en.rmf2"), "title = Hello {$name}\n");
+        const string brokenGerman = "title = Hallo {$name} {$extra}\n";
+        File.WriteAllText(Path.Combine(project, "de.rmf2"), brokenGerman);
+        string root = VsCodeUri(project), enUri = VsCodeUri(Path.Combine(project, "en.rmf2")), deUri = VsCodeUri(Path.Combine(project, "de.rmf2"));
+        string configUri = VsCodeUri(Path.Combine(project, "runic.json")), dePath = Path.Combine(project, "de.rmf2");
+        Assert.Contains("c%3A", deUri);
+        Assert.Contains("c%2B%2B%20app", deUri);
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = root, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri, ["version"] = 1, ["text"] = "title = Hello {$name}\n" } });
+        Flush(session, enUri);
+        Assert.True(ResourceDiagnostics(session, dePath).Count > 0, "The closed translation's catalog diagnostic was not published.");
+
+        // Opening the closed file (from the Problems view) keeps its diagnostics: no clear under
+        // another spelling of its URI follows the buffer's publication.
+        int before = session.Publications.Count;
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri, ["version"] = 1, ["text"] = brokenGerman } });
+        Flush(session, enUri);
+        JsonNode last = session.Publications.Skip(before).Last(frame => IsPublicationFor(frame, dePath));
+        Assert.Equal(deUri, last["params"]!["uri"]!.GetValue<string>(), "The open file was not published under the client's URI.");
+        Assert.True(last["params"]!["diagnostics"]!.AsArray().Count > 0, "Opening the file erased its diagnostics: " + last.ToJsonString());
+        // Another keystroke in the project leaves it alone too.
+        session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri, ["version"] = 2 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "title = Hello, {$name}\n" }) });
+        Flush(session, enUri);
+        Assert.True(ResourceDiagnostics(session, dePath).Count > 0, "A keystroke erased the open file's diagnostics.");
+
+        // The unsaved runic.json is found under the client's spelling of its URI.
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = configUri, ["version"] = 1, ["text"] = PlainProject.Replace("\"app\"", "\"shop\"", StringComparison.Ordinal) } });
+        JsonNode info = session.Request("runic/documentInfo", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri } })["result"]!;
+        Assert.Equal("shop", info["catalog"]?.GetValue<string>(), info.ToJsonString());
+        Assert.Equal("de", info["locale"]?.GetValue<string>(), info.ToJsonString());
+        Assert.Equal(configUri, info["project"]?.GetValue<string>(), info.ToJsonString());
+
+        // Closing the buffer returns the diagnostics to the saved file.
+        session.Notify("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri } });
+        Flush(session, enUri);
+        Assert.True(ResourceDiagnostics(session, dePath).Count > 0, "Closing the file did not restore the saved file's diagnostics.");
+    }
+
+    [Test, DisplayName("LSP publishes the union of every project's diagnostics for a shared closed file")]
+    public void SharedProjectFileDiagnostics()
+    {
+        // Two catalogs mount one source root. Each reports the shared German file; closing the last
+        // buffer of one project must not erase what the other still reports.
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("shared"));
+        File.WriteAllText(temporary.Resolve("shared", "en.rmf2"), "title = Hello {$name}\n");
+        File.WriteAllText(temporary.Resolve("shared", "de.rmf2"), "title = Hallo {$name} {$extra}\n");
+        foreach (string name in new[] { "one", "two" })
+        {
+            Directory.CreateDirectory(temporary.Resolve(name, "own"));
+            File.WriteAllText(temporary.Resolve(name, "runic.json"), "{\"schemaVersion\":1,\"catalog\":\"" + name + "\",\"code\":{\"namespace\":\"Example\",\"className\":\"Text\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"de\"]," +
+                "\"sourceRoots\":[{\"path\":\"../shared\",\"namespace\":[\"shop\"]},{\"path\":\"own\",\"namespace\":[\"" + name + "\"]}]}");
+            File.WriteAllText(temporary.Resolve(name, "own", "en.rmf2"), "label = " + name + "\n");
+            File.WriteAllText(temporary.Resolve(name, "own", "de.rmf2"), "label = " + name + "\n");
+        }
+        string oneUri = new Uri(temporary.Resolve("one", "own", "en.rmf2")).AbsoluteUri, twoUri = new Uri(temporary.Resolve("two", "own", "en.rmf2")).AbsoluteUri;
+        string sharedPath = temporary.Resolve("shared", "de.rmf2");
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri, ["version"] = 1, ["text"] = "label = one\n" } });
+        Flush(session, oneUri);
+        JsonArray fromOne = ResourceDiagnostics(session, sharedPath);
+        Assert.True(fromOne.Count > 0, "Project one's diagnostic for the shared file was not published.");
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri, ["version"] = 1, ["text"] = "label = two\n" } });
+        Flush(session, twoUri);
+        // Both projects report the same diagnostic; the union shows it once.
+        Assert.Equal(fromOne.ToJsonString(), ResourceDiagnostics(session, sharedPath).ToJsonString());
+
+        session.Notify("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = oneUri } });
+        Flush(session, twoUri);
+        Assert.True(ResourceDiagnostics(session, sharedPath).Count > 0, "Closing project one's last buffer erased project two's diagnostics.");
+        // Project two's next validation (an unrelated keystroke) keeps them.
+        session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri, ["version"] = 2 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "label = Two\n" }) });
+        Flush(session, twoUri);
+        Assert.True(ResourceDiagnostics(session, sharedPath).Count > 0, "Project two's update lost its diagnostics for the shared file.");
+        session.Notify("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri } });
+        // A request is answered after the close is processed (this one fails: the file is closed).
+        session.Request("textDocument/hover", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = twoUri }, ["position"] = Position(0, 0) });
+        Assert.Equal(0, ResourceDiagnostics(session, sharedPath).Count, "The shared file kept diagnostics after both projects closed.");
+    }
+
+    [Test, DisplayName("LSP sends clears made while a newer revision was queued")]
+    public void SupersededRevisionClears()
+    {
+        // Project A's last buffer closes while a keystroke in project B is already queued. The
+        // revision gate holds A's clears back while B is newer; they must still reach the client.
+        using TemporaryDirectory temporary = new();
+        foreach (string name in new[] { "a", "b" })
+        {
+            Directory.CreateDirectory(temporary.Resolve(name));
+            File.WriteAllText(temporary.Resolve(name, "runic.json"), PlainProject);
+            File.WriteAllText(temporary.Resolve(name, "en.rmf2"), "title = Hello {$name}\n");
+            File.WriteAllText(temporary.Resolve(name, "de.rmf2"), name == "a" ? "title = Hallo {$name} {$extra}\n" : "title = Hallo {$name}\n");
+        }
+        string aUri = new Uri(temporary.Resolve("a", "en.rmf2")).AbsoluteUri, bUri = new Uri(temporary.Resolve("b", "en.rmf2")).AbsoluteUri;
+        string aGermanUri = new Uri(temporary.Resolve("a", "de.rmf2")).AbsoluteUri;
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        using var cancelled = new ManualResetEventSlim(false);
+        int hold = 0;
+        void BeforeRequest(string method)
+        {
+            if (method != "textDocument/didClose" || Volatile.Read(ref hold) == 0) return;
+            entered.Set();
+            if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("The didClose barrier was not released.");
+        }
+        using Session session = new(BeforeRequest, _ => cancelled.Set());
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        // A's closed German file has a catalog error.
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = aUri, ["version"] = 1, ["text"] = "title = Hello {$name}\n" } });
+        Flush(session, aUri);
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = bUri, ["version"] = 1, ["text"] = "title = Hello {$name}\n" } });
+        Flush(session, bUri);
+        Assert.True(LastDiagnostics(session, aGermanUri).Count > 0, "A's closed-file diagnostic was not published.");
+
+        Volatile.Write(ref hold, 1);
+        session.Notify("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = aUri } });
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)), "The didClose barrier was not reached.");
+        session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = bUri, ["version"] = 2 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "title = Hello, {$name}\n" }) });
+        // The reader reads in order: once it has seen this cancellation, the keystroke is queued.
+        int marker = session.Start("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = bUri } });
+        session.Notify("$/cancelRequest", new JsonObject { ["id"] = marker });
+        Assert.True(cancelled.Wait(TimeSpan.FromSeconds(10)), "The reader did not reach the queued keystroke.");
+        release.Set();
+        session.Wait(marker);
+        Flush(session, bUri);
+        Assert.Equal(0, LastDiagnostics(session, aGermanUri).Count, "The closed project's file diagnostics were not cleared.");
+    }
+
+    // A file URI spelled as VS Code (vscode-uri) spells it: lower-case drive letter, and every
+    // character other than unreserved ones and `/` percent-encoded, `:` included.
+    private static string VsCodeUri(string path)
+    {
+        string full = Path.GetFullPath(path).Replace('\\', '/');
+        if (full.Length > 1 && full[1] == ':') full = "/" + char.ToLowerInvariant(full[0]) + full[1..];
+        var builder = new StringBuilder("file://");
+        foreach (byte value in Encoding.UTF8.GetBytes(full))
+            builder.Append(value is >= (byte)'a' and <= (byte)'z' or >= (byte)'A' and <= (byte)'Z' or >= (byte)'0' and <= (byte)'9' or (byte)'-' or (byte)'.' or (byte)'_' or (byte)'~' or (byte)'/'
+                ? ((char)value).ToString() : "%" + value.ToString("X2", CultureInfo.InvariantCulture));
+        return builder.ToString();
+    }
+
+    // Whether a publication is for a file, whatever spelling of its URI it uses (clients map
+    // every spelling of one file to one resource).
+    private static bool IsPublicationFor(JsonNode frame, string path) =>
+        frame["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" && frame["params"]?["uri"]?.GetValue<string>() is { } uri &&
+        string.Equals(Path.GetFullPath(new Uri(uri).LocalPath), Path.GetFullPath(path), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    // The diagnostics a client that normalizes URIs shows for a file.
+    private static JsonArray ResourceDiagnostics(Session session, string path) =>
+        session.Publications.Last(frame => IsPublicationFor(frame, path))["params"]!["diagnostics"]!.AsArray();
+
     // Requests are answered in order, so every notification sent before is processed once this returns.
     private static void Flush(Session session, string uri) =>
         session.Request("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } });
@@ -366,8 +534,12 @@ internal sealed class Rmf2DiagnosticLspTests
 
     internal sealed class Session : IDisposable
     {
-        private readonly Process _process;
+        private readonly Process? _process;
         private readonly Task<string> _errors;
+        // In-process mode: the server runs on this test's streams with request hooks.
+        private readonly Rmf2LspBenchmark.BlockingByteStream? _serverInput;
+        private readonly Rmf2LspBenchmark.BlockingByteStream? _serverOutput;
+        private readonly Task<int>? _server;
         private int _nextId;
         private bool _disposed;
         internal List<JsonNode> Publications { get; } = new();
@@ -381,11 +553,28 @@ internal sealed class Rmf2DiagnosticLspTests
             _process = Process.Start(start) ?? throw new InvalidOperationException("Could not start LSP.");
             _errors = _process.StandardError.ReadToEndAsync();
         }
+        internal Session(Action<string> beforeRequest, Action<string> requestCancelled)
+        {
+            _serverInput = new Rmf2LspBenchmark.BlockingByteStream();
+            Rmf2LspBenchmark.BlockingByteStream output = _serverOutput = new Rmf2LspBenchmark.BlockingByteStream();
+            var server = new Rmf2LanguageServer(_serverInput, output, beforeRequest, requestCancelled);
+            _server = Task.Run(() => {
+                try { return server.Run(); }
+                finally { output.CompleteWriting(); }
+            });
+            _errors = Task.FromResult("");
+        }
         internal void Notify(string method, JsonObject args) => Send(method, args, null);
-        internal JsonNode Request(string method, JsonObject args)
+        internal JsonNode Request(string method, JsonObject args) => Wait(Start(method, args));
+        // Sends a request without waiting for its response.
+        internal int Start(string method, JsonObject args)
         {
             int id = ++_nextId;
             Send(method, args, id);
+            return id;
+        }
+        internal JsonNode Wait(int id)
+        {
             while (true)
             {
                 JsonNode frame = Task.Run(ReadFrame).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
@@ -398,12 +587,12 @@ internal sealed class Rmf2DiagnosticLspTests
             var request = new JsonObject { ["jsonrpc"] = "2.0", ["method"] = method, ["params"] = args.DeepClone() };
             if (id is not null) request["id"] = id.Value;
             byte[] bytes = Encoding.UTF8.GetBytes(request.ToJsonString());
-            Stream input = _process.StandardInput.BaseStream;
+            Stream input = _serverInput ?? _process!.StandardInput.BaseStream;
             input.Write(Encoding.ASCII.GetBytes("Content-Length: " + bytes.Length + "\r\n\r\n")); input.Write(bytes); input.Flush();
         }
         private JsonNode ReadFrame()
         {
-            Stream output = _process.StandardOutput.BaseStream;
+            Stream output = _serverOutput ?? _process!.StandardOutput.BaseStream;
             var header = new List<byte>();
             while (header.Count < 8192)
             {
@@ -421,6 +610,16 @@ internal sealed class Rmf2DiagnosticLspTests
             // Tests may dispose explicitly to inspect stderr before `using` ends.
             if (_disposed) return;
             _disposed = true;
+            if (_process is null)
+            {
+                try
+                {
+                    Request("shutdown", new JsonObject()); Notify("exit", new JsonObject());
+                    Assert.Equal(0, _server!.WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult(), "In-process LSP exit code.");
+                }
+                finally { _serverInput!.CompleteWriting(); }
+                return;
+            }
             try
             {
                 Request("shutdown", new JsonObject()); Notify("exit", new JsonObject()); _process.StandardInput.Close();
