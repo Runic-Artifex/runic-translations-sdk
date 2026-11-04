@@ -13,3 +13,9 @@ Runic.Translations.Hosting.RunicTranslationsOptions.ValueFormatter.get -> Runic.
 Runic.Translations.Hosting.RunicTranslationsOptions.ValueFormatter.set -> void
 static Microsoft.Extensions.DependencyInjection.RunicTranslationsServiceCollectionExtensions.AddRunicTranslations(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Runic.Translations.Hosting.RunicTranslationsOptions!>? configure = null) -> Runic.Translations.Hosting.IRunicTranslationsBuilder!
 static Runic.Translations.Hosting.RunicTranslationsBuilderExtensions.AddCatalog<TText>(this Runic.Translations.Hosting.IRunicTranslationsBuilder! builder, Runic.Translations.TranslationCatalogRegistration! registration, System.Func<Runic.Translations.ITranslationContext!, TText!>! textFactory, Runic.Translations.TranslationOptions? options = null) -> Runic.Translations.Hosting.IRunicTranslationsBuilder!
+Runic.Translations.Hosting.ITranslationContextFactory
+Runic.Translations.Hosting.ITranslationContextFactory.CreateAsync(string? initialLocale = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Runic.Translations.TranslationContext!>
+Runic.Translations.Hosting.RunicTranslationsOptions.Lifetime.get -> Microsoft.Extensions.DependencyInjection.ServiceLifetime
+Runic.Translations.Hosting.RunicTranslationsOptions.Lifetime.set -> void
+Microsoft.Extensions.DependencyInjection.RunicTranslationsServiceProviderExtensions
+static Microsoft.Extensions.DependencyInjection.RunicTranslationsServiceProviderExtensions.InitializeRunicTranslationsAsync(this System.IServiceProvider! services, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask

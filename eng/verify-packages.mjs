@@ -93,7 +93,7 @@ export async function verifyPackages(version = workspace.version) {
       "var catalog = new CompiledTranslationCatalog(\"app\", \"en\", [new CompiledTranslationDefinition(\"title\", [])], [new CompiledTranslationLocale(\"de\", \"en\", [new(0, \"Titel\")]), new CompiledTranslationLocale(\"en\", null, [new(0, \"Title\")])]); " +
       "var registration = new TranslationCatalogRegistration(\"app\", \"en\", \"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\", \"{}\", (formatter, factory, options) => new CompiledTranslationProvider(catalog.WithOptions(options), formatter, factory)); " +
       "var services = new ServiceCollection(); services.AddRunicTranslations(o => o.InitialLocale = \"de\").AddCatalog(registration); " +
-      "var context = services.BuildServiceProvider().GetRequiredService<ITranslationContext>(); " +
+      "var provider = services.BuildServiceProvider(); await provider.InitializeRunicTranslationsAsync(); var context = provider.GetRequiredService<ITranslationContext>(); " +
       "var snapshot = context.GetManager(\"app\").Current; snapshot.TryGetKey(\"title\", out TranslationKey key); var text = snapshot.Get(key); " +
       "if (text != \"Titel\") throw new InvalidOperationException(text); Console.WriteLine(text);", environment);
     dotnetConsumer(directory, "Runic.Translations.Build", version, { build: true },

@@ -77,6 +77,11 @@ services.AddRunicTranslations(options => options.InitialLocale = settings.Langua
 services.AddRunicTranslations().AddCatalog(GridTextCatalog.Registration, context => new GridText(context));   // in the library
 ```
 
+Only the application passes options; libraries call `AddRunicTranslations()` without them. The context is a singleton by
+default, for desktop applications; a web application sets `options.Lifetime = ServiceLifetime.Scoped` so that each
+request switches its own context. With overlays, call `await services.InitializeRunicTranslationsAsync()` once after
+building the service provider. See the [Hosting README](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Hosting/README.md).
+
 `translations.Resolve(reference)` resolves a stored `TranslationReference` of any registered catalog, so validation
 text from a library ViewModel is translated like the application's own.
 
