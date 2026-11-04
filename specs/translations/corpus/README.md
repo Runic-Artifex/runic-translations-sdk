@@ -35,6 +35,10 @@ The current release contract is exercised by seven complementary fixtures:
   case as raw text (duplicate members, a `2.0` version); `$text`, `$items` and
   `$arguments` macros spell the large limit cases (see the .NET runner).
 
+[`xliff-v3`](xliff-v3/README.md) holds XLIFF profile v3 interchange cases: modeled TMS
+files, partial and stale files, placeholders, nested groups and the expected `.rmf2` sources after
+`xliff import`.
+
 The name `rmf2-v1` denotes the resource-file syntax. It does not select a retired
 runtime, artifact, or emitter. Current runners compile every fixture through the
 typed v5 project model.

@@ -53,9 +53,13 @@ retired catalog carrier. Previews are formatted by the verified .NET artifact/pa
 path; the browser receives validated inert semantic runs and never approximates
 AST 5 in JavaScript. Editor refactors and XLIFF imports are resource-only: they
 do not rewrite application call sites.
-The closed XLIFF 2.1 profile deterministically round-trips direct plain-text
-RMF2 resources, reports structured messages as semantic loss, and refuses
-structured imports instead of flattening them.
+The closed XLIFF 2.1 profile (version 3, shared with `runic-translations xliff`)
+deterministically round-trips plain RMF2 messages, with placeholders as `<ph>`,
+reports structured messages as semantic loss and skips them on import instead of
+flattening them. Untranslated units are skipped; a refused unit or a unit whose
+source changed since export (`EDITOR-SOURCE-MISMATCH`) blocks the import preview.
+Export stamps review state with per-unit source fingerprints: an approval made
+before its source changed is exported as needs-review.
 
 Machine-translation providers and signed stable distribution are not available yet.
 

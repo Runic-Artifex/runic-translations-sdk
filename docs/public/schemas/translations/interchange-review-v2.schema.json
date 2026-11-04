@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/interchange-review-v2.schema.json",
+  "title": "runic.translations.interchange-review/2",
+  "description": "Review state of translations: the optional <catalog>.review.json beside runic.json that runic-translations review mark and xliff import write, the review export of the Translations Editor, and the review data of TranslationInterchange.ExportReviewJson. Each entry records the per-unit source fingerprint of the source its translation was made or approved for; validate warns (RTR0089) when the current source differs. Readers also accept runic.translations.interchange-review/1, whose approval fingerprints covered the whole catalog.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "catalog",
+    "entries"
+  ],
+  "properties": {
+    "$schema": {
+      "enum": [
+        "runic.translations.interchange-review/2",
+        "runic.translations.interchange-review/1"
+      ]
+    },
+    "catalog": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The catalog identifier of runic.json."
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 50000,
+      "description": "Sorted by key, then locale; at most one entry per key and locale.",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "locale",
+        "state"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The message key."
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A translated locale of the catalog."
+        },
+        "state": {
+          "enum": [
+            "draft",
+            "translated",
+            "needs-review",
+            "approved"
+          ],
+          "description": "XLIFF initial, translated, translated with subState runic:needs-review, and final."
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 16384,
+          "description": "A review note."
+        },
+        "sourceFingerprint": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "sha256: and the per-unit fingerprint of the key, the source text and the caller contract the translation was made or approved for."
+        }
+      }
+    }
+  }
+}

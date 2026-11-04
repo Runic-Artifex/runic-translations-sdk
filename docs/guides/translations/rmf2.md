@@ -586,12 +586,16 @@ on the editor host and return inert semantic runs. The frontend never coerces
 AST 5 into a JavaScript executor.
 
 Editor changes are resource-only and do not rewrite application call sites.
-Its closed XLIFF 2.1 text profile losslessly round-trips direct plain resources
-for the supported execution contract. Structured declarations, expressions, selectors,
-or markup produce the existing semantic-loss report, and the corresponding
-text-profile import is refused rather than approximated. The loss entry of a
+Its closed XLIFF 2.1 profile (version 3) losslessly round-trips plain messages,
+text with placeholders, for the supported execution contract: each placeholder is
+an XLIFF `<ph>` carrying its MF2 expression. Declarations, selectors and markup
+produce the semantic-loss report, are exported as `translate="no"`, and are
+skipped per unit on import rather than approximated. The loss entry of a
 document message (`XLIFF21-STRUCTURED-MESSAGE`) names the document profile;
-segment-level XLIFF for documents is not part of this version.
+segment-level XLIFF for documents is not part of this version. The same profile
+is available without the editor through `runic-translations xliff export` and
+`xliff import`; see the
+[tool README](../../../tools/dotnet-runic-translations/README.md#exchange-xliff-with-translators-and-tms-tools).
 
 The version-explicit [RMF2 v1 corpus](../../../specs/translations/corpus/rmf2-v1/README.md)
 is the shared release oracle for the execution-v2 boundary. The compiler,
@@ -736,9 +740,9 @@ breaking existing projects, through a new grammar, profile or contract version.
 - **Message references, terms and atomic fallback of related messages.** A
   message cannot reference another message or a term, and related messages do
   not fall back together. Compose related messages in application code.
-- **Document messages in XLIFF.** The closed XLIFF 2.1 text profile reports
-  document messages as `XLIFF21-STRUCTURED-MESSAGE` loss and does not import
-  them. Translate document messages in the `.rmf2` sources or the editor.
+- **Document messages in XLIFF.** The closed XLIFF 2.1 profile reports
+  document messages as `XLIFF21-STRUCTURED-MESSAGE` loss and skips them on
+  import. Translate document messages in the `.rmf2` sources or the editor.
 - **Richer document blocks.** Only the blocks listed under
   [Document messages](#document-messages) exist; nested lists, tables, quotes,
   code and embeds do not. Use a custom view for such content. The block set is

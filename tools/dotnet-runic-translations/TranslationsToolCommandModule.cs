@@ -293,7 +293,7 @@ internal sealed record TranslationsToolInterchange(string Operation, string Cata
     /// <summary>Per-unit counts.</summary>
     public TranslationsToolInterchangeCounts Units { get; init; } = new();
 
-    /// <summary>One entry per unit that was not applied unchanged, at most 1000.</summary>
+    /// <summary>One entry per unit that was added, changed, skipped, refused, marked or demoted, or whose source changed, at most 1000.</summary>
     public IReadOnlyList<TranslationsToolInterchangeEntry> Entries { get; init; } = [];
 
     /// <summary>Whether more entries exist than <see cref="Entries"/> lists.</summary>
@@ -332,7 +332,7 @@ internal sealed record TranslationsToolInterchangeCounts
 }
 
 /// <param name="Key">The message key.</param>
-/// <param name="Outcome"><c>added</c>, <c>changed</c>, <c>skipped</c>, <c>refused</c>, <c>marked</c> or <c>demoted</c>.</param>
+/// <param name="Outcome"><c>added</c>, <c>changed</c>, <c>unchanged</c> (only when its source changed), <c>skipped</c>, <c>refused</c>, <c>marked</c> or <c>demoted</c>.</param>
 /// <param name="Code">The reason, such as <c>XLIFF21-UNTRANSLATED</c>; absent for an applied unit.</param>
 /// <param name="Message">The reason as text.</param>
 internal sealed record TranslationsToolInterchangeEntry(string Key, string Outcome,

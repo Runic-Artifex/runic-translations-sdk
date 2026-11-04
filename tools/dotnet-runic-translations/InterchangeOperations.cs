@@ -128,7 +128,7 @@ internal static class InterchangeOperations
 
         string currentDirectory = Path.GetFullPath(Environment.CurrentDirectory);
         var documents = selected.Select(document => new TranslationsToolInterchangeDocument(document.TargetLocale,
-            InputFiles.DisplayPath(Path.Combine(Path.GetFullPath(output, currentDirectory), catalog + "." + document.TargetLocale + ".xliff"), currentDirectory),
+            Display(Path.Combine(Path.GetFullPath(output, currentDirectory), catalog + "." + document.TargetLocale + ".xliff")),
             project.compilation.Project!.CanonicalMessages.Count)).ToArray();
         IReadOnlyList<TranslationInterchangeLoss> notices = export.Report.Losses;
         int demoted = notices.Count(static loss => loss.Code == "REVIEW-STALE");
@@ -143,9 +143,16 @@ internal static class InterchangeOperations
             Units = new TranslationsToolInterchangeCounts { Total = project.compilation.Project!.CanonicalMessages.Count, Demoted = demoted, Skipped = structured },
             Entries = notices.Where(static loss => loss.Code == "REVIEW-STALE").Select(static loss => new TranslationsToolInterchangeEntry(loss.Location.TrimStart('/'), "demoted", loss.Code, loss.Message) { State = "needs-review" }).Take(MaximumEntries).ToArray(),
             Notices = Notices(notices),
-            ReviewFile = review is null ? null : InputFiles.DisplayPath(path, currentDirectory),
+            ReviewFile = review is null ? null : Display(path),
         };
         return 0;
+    }
+
+    // A path below the working directory is shown relative to it, any other one in full.
+    internal static string Display(string fullPath)
+    {
+        string relative = InputFiles.DisplayPath(fullPath, Path.GetFullPath(Environment.CurrentDirectory));
+        return relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) ? fullPath.Replace('\\', '/') : relative;
     }
 
     internal static int Import(string projectPath, string source, string? policyName, bool writeReview, bool dryRun, ToolOperationResult result)
@@ -201,7 +208,11 @@ internal static class InterchangeOperations
             string state = ReviewFile.TranslationReviewStatesText(unit.State ?? TranslationReviewState.Translated);
             if (!existingTargets.TryGetValue(unit.Key, out string? before)) { added++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "added", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
             else if (TranslationInterchangePattern.Canonical(before) != TranslationInterchangePattern.Canonical(pattern)) { changed++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "changed", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
-            else unchanged++;
+            else
+            {
+                unchanged++;
+                if (unit.SourceChanged) entries.Add(new(unit.Key, "unchanged", "XLIFF21-SOURCE-CHANGED", null) { State = state });
+            }
         }
 
         IReadOnlyList<TranslationSourceEdit> edits = TranslationInterchangeSourceWriter.Plan(currentDirectory, project.inputs.Project, project.inputs.Messages, project.compilation, import.TargetLocale, values);
@@ -233,8 +244,11 @@ internal static class InterchangeOperations
                 string identity = unit.Key + "\0" + import.TargetLocale;
                 merged.TryGetValue(identity, out TranslationInterchangeReviewEntry? current);
                 if (!explicitState && !values.ContainsKey(unit.Key) && current is not null) continue;
-                var entry = new TranslationInterchangeReviewEntry(unit.Key, import.TargetLocale, unit.State ?? TranslationReviewState.Translated,
-                    stated?.Note ?? current?.Note, unit.SourceFingerprint);
+                // An approval is made for the source the file showed; unchanged text otherwise keeps the source it was made for.
+                TranslationReviewState state = unit.State ?? TranslationReviewState.Translated;
+                string? fingerprint = state != TranslationReviewState.Approved && !values.ContainsKey(unit.Key) && current?.SourceFingerprint is { } kept
+                    ? kept : unit.SourceFingerprint;
+                var entry = new TranslationInterchangeReviewEntry(unit.Key, import.TargetLocale, state, stated?.Note ?? current?.Note, fingerprint);
                 if (current is null || current.State != entry.State || current.Note != entry.Note || current.SourceFingerprint != entry.SourceFingerprint) reviewChanged = true;
                 merged[identity] = entry;
             }
@@ -254,7 +268,7 @@ internal static class InterchangeOperations
         foreach (TranslationsToolInterchangeEntry entry in entries.Where(static entry => entry.Outcome == "refused").Take(MaximumUnitWarnings))
             result.WriteOutputLine($"refused {entry.Key}: {entry.Code}: {entry.Message}");
         if (review is not null && (reviewChanged || !File.Exists(reviewPath)))
-            result.WriteOutputLine($"{verb} {InputFiles.DisplayPath(reviewPath, currentDirectory)}.");
+            result.WriteOutputLine($"{verb} {Display(reviewPath)}.");
         result.Interchange = new TranslationsToolInterchange("import", catalog)
         {
             Locale = import.TargetLocale,
@@ -268,7 +282,7 @@ internal static class InterchangeOperations
             EntriesTruncated = entries.Count > MaximumEntries,
             Notices = Notices(import.Report.Losses),
             Files = edits.Select(static edit => new TranslationsToolInterchangeFile(edit.Path, edit.OriginalBytes is null ? "added" : "changed")).ToArray(),
-            ReviewFile = review is null ? null : InputFiles.DisplayPath(reviewPath, currentDirectory),
+            ReviewFile = review is null ? null : Display(reviewPath),
         };
         return 0;
     }
@@ -297,7 +311,7 @@ internal static class InterchangeOperations
             merged[key + "\0" + locale] = new TranslationInterchangeReviewEntry(key, locale, state, note ?? current?.Note, fingerprints[key]);
         }
         ReviewFile.Write(path, new TranslationInterchangeReview(catalog, merged.Values));
-        string display = InputFiles.DisplayPath(path, Path.GetFullPath(Environment.CurrentDirectory));
+        string display = Display(path);
         result.WriteOutputLine($"marked {keys.Distinct(StringComparer.Ordinal).Count()} translation(s) in {locale} as {stateName}; wrote {display}.");
         result.Interchange = new TranslationsToolInterchange("review-mark", catalog)
         {

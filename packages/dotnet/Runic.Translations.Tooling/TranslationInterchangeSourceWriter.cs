@@ -155,7 +155,7 @@ internal static class TranslationInterchangeSourceWriter
 
         byte[] existing = sources.GetValueOrDefault(targetPath, []);
         string[] localPath = workspace.LocalPath(targetPath, resolvedLogicalPath).ToArray();
-        sources[targetPath] = Rmf2ResourceWriter.AddMessage(
+        sources[targetPath] = Rmf2ResourceWriter.InsertMessage(
             new TranslationSource(targetPath, existing), localPath, value);
     }
 }

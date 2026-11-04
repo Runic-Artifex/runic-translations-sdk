@@ -24,6 +24,10 @@
         "$ref": "#/$defs/diagnostic"
       },
       "description": "Translation diagnostics under their RTR codes, with source locations."
+    },
+    "interchange": {
+      "$ref": "#/$defs/interchange",
+      "description": "The outcome of xliff export, xliff import and review mark; absent for the other commands."
     }
   },
   "$defs": {
@@ -80,6 +84,229 @@
         "helpUri": {
           "type": "string",
           "format": "uri"
+        }
+      }
+    },
+    "interchange": {
+      "type": "object",
+      "required": [
+        "operation",
+        "catalog",
+        "dryRun",
+        "documents",
+        "units",
+        "entries",
+        "entriesTruncated",
+        "notices",
+        "files"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "export",
+            "import",
+            "review-mark"
+          ]
+        },
+        "catalog": {
+          "type": "string",
+          "description": "The catalog identifier."
+        },
+        "locale": {
+          "type": "string",
+          "description": "The target locale of an import or a review mark."
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "Whether the import wrote nothing (--dry-run)."
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interchangeDocument"
+          },
+          "description": "The XLIFF documents that export wrote."
+        },
+        "units": {
+          "$ref": "#/$defs/interchangeCounts"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interchangeEntry"
+          },
+          "description": "One entry per unit that was added, changed, skipped, refused, marked or demoted, or whose source changed (unchanged), at most 1000."
+        },
+        "entriesTruncated": {
+          "type": "boolean",
+          "description": "Whether more entries exist than entries lists."
+        },
+        "notices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interchangeNotice"
+          },
+          "description": "Notices that changed nothing, such as an ignored translator note (XLIFF21-NOTE-IGNORED) or a demoted approval (REVIEW-STALE)."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interchangeFile"
+          },
+          "description": "The source files that were, or with --dry-run would be, written."
+        },
+        "reviewFile": {
+          "type": "string",
+          "description": "The review file that was read or written."
+        }
+      }
+    },
+    "interchangeDocument": {
+      "type": "object",
+      "required": [
+        "locale",
+        "path",
+        "units"
+      ],
+      "properties": {
+        "locale": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "units": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "interchangeCounts": {
+      "type": "object",
+      "description": "Per-unit counts. An applied unit is also added, changed or unchanged.",
+      "required": [
+        "total",
+        "applied",
+        "added",
+        "changed",
+        "unchanged",
+        "skipped",
+        "refused",
+        "sourceChanged",
+        "demoted"
+      ],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "applied": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "added": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "changed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unchanged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "refused": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sourceChanged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "demoted": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "interchangeEntry": {
+      "type": "object",
+      "required": [
+        "key",
+        "outcome"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "added",
+            "changed",
+            "unchanged",
+            "skipped",
+            "refused",
+            "marked",
+            "demoted"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "description": "The reason, such as XLIFF21-UNTRANSLATED or XLIFF21-SOURCE-CHANGED."
+        },
+        "message": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "draft",
+            "translated",
+            "needs-review",
+            "approved"
+          ],
+          "description": "The review state of an applied, marked or demoted unit afterwards."
+        }
+      }
+    },
+    "interchangeNotice": {
+      "type": "object",
+      "required": [
+        "code",
+        "location",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "interchangeFile": {
+      "type": "object",
+      "required": [
+        "path",
+        "change"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "change": {
+          "enum": [
+            "added",
+            "changed"
+          ]
         }
       }
     }

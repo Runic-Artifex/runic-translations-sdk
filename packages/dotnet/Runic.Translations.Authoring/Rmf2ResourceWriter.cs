@@ -52,6 +52,38 @@ internal static class Rmf2ResourceWriter
         byte[] result = Utf8.GetBytes(output.ToString()); Require(new TranslationSource(source.Path, result)); return result;
     }
 
+    /// <summary>
+    /// Adds a message inside the last existing group that holds the longest prefix of its path, before that group's
+    /// closing brace, creating only the missing inner groups. Without such a group it appends like <see cref="AddMessage"/>.
+    /// </summary>
+    public static byte[] InsertMessage(TranslationSource source, IReadOnlyList<string> path, string message)
+    {
+        ArgumentNullException.ThrowIfNull(path); ArgumentNullException.ThrowIfNull(message);
+        if (path.Count == 0 || path.Any(segment => !Identifier.IsMatch(segment))) throw new TranslationAuthoringException("A message path requires identifier segments.");
+        if (IsDirect(source)) throw new TranslationAuthoringException("A direct MF2 file contains exactly one filename-addressed message.");
+        byte[] raw = source.GetUtf8Bytes();
+        if (raw.Length == 0) return AddMessage(source, path, message);
+        var document = Require(source);
+        if (document.Nodes.Any(node => node.Path.SequenceEqual(path, StringComparer.Ordinal))) throw new TranslationAuthoringException("The resource path already exists.");
+        Rmf2ResourceNode? group = document.Nodes
+            .Where(node => node.IsGroup && node.Path.Count < path.Count && node.Path.SequenceEqual(path.Take(node.Path.Count), StringComparer.Ordinal))
+            .OrderByDescending(static node => node.Path.Count).ThenByDescending(static node => node.Location.StartByte)
+            .FirstOrDefault();
+        if (group is null) return AddMessage(source, path, message);
+        int end = Math.Min(group.Location.StartByte + group.Location.LengthBytes, raw.Length);
+        int brace = Array.LastIndexOf(raw, (byte)'}', Math.Max(end - 1, 0));
+        if (brace < 0) return AddMessage(source, path, message);
+        int lineStart = brace == 0 ? 0 : Array.LastIndexOf(raw, (byte)'\n', brace - 1) + 1;
+        string newline = Utf8.GetString(raw).Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        int depth = group.NameLocation.Column - 1 + 2;
+        var output = new StringBuilder();
+        for (int i = group.Path.Count; i < path.Count - 1; i++) { output.Append(' ', depth).Append(path[i]).Append(" {").Append(newline); depth += 2; }
+        output.Append(Entry(path[^1], message, depth, newline));
+        for (int i = path.Count - 2; i >= group.Path.Count; i--) { depth -= 2; output.Append(' ', depth).Append('}').Append(newline); }
+        byte[] result = Replace(raw, [(lineStart, 0, Utf8.GetBytes(output.ToString()))]);
+        Require(new TranslationSource(source.Path, result)); return result;
+    }
+
     /// <summary>Renames a local using parsed symbol locations, preserving literal text and other messages.</summary>
     public static byte[] RenameLocal(TranslationSource source, string key, string name, string newName)
     {

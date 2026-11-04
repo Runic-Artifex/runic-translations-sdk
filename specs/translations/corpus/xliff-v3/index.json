@@ -1,0 +1,221 @@
+{
+  "formatVersion": 1,
+  "profile": "runic.xliff21.closed-text",
+  "profileVersion": 3,
+  "project": "project",
+  "locale": "de",
+  "unitExpectation": "applied:<review state> | skipped:<code> | refused:<code>, for every unit of the file",
+  "noticeExpectation": "<code> <location>, exactly the import report notices",
+  "cases": [
+    {
+      "id": "crowdin",
+      "file": "files/crowdin.de.xliff",
+      "modeledOn": "Crowdin",
+      "description": "XLIFF 2.0 returned from the uploaded file: Runic notes kept, an approved string in state final, an untranslated string with the source copied into its target in state initial, and a translator comment as a note.",
+      "units": {
+        "cart_checkout_title": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_checkout_total": "applied:translated",
+        "cart_empty": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_items": "applied:approved",
+        "checkout_note": "skipped:XLIFF21-UNTRANSLATED",
+        "farewell": "applied:translated",
+        "greeting": "applied:translated",
+        "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "order_status": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "search_placeholder": "applied:translated"
+      },
+      "notices": [
+        "XLIFF21-NOTE-IGNORED /farewell"
+      ],
+      "result": "expected/crowdin.de.rmf2"
+    },
+    {
+      "id": "weblate",
+      "file": "files/weblate.de.xliff",
+      "modeledOn": "Weblate (translate-toolkit)",
+      "description": "The file edited in place: a string that needs editing keeps its target in state initial, an untranslated one has an empty target without state, an approved one is final.",
+      "units": {
+        "cart_checkout_title": "skipped:XLIFF21-EMPTY-TARGET",
+        "cart_checkout_total": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_empty": "applied:translated",
+        "cart_items": "skipped:XLIFF21-UNTRANSLATED",
+        "checkout_note": "applied:translated",
+        "farewell": "skipped:XLIFF21-UNTRANSLATED",
+        "greeting": "applied:approved",
+        "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "order_status": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "search_placeholder": "applied:translated"
+      },
+      "notices": [],
+      "result": "expected/weblate.de.rmf2"
+    },
+    {
+      "id": "phrase",
+      "file": "files/phrase.de.xliff",
+      "modeledOn": "Phrase",
+      "description": "The bilingual file with the TMS's own segmentation (two segments joined by an ignorable space), a prefixed subState, a <mrk> term annotation and a placeholder moved within the target.",
+      "units": {
+        "cart_checkout_title": "applied:translated",
+        "cart_checkout_total": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_empty": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_items": "applied:translated",
+        "checkout_note": "applied:translated",
+        "farewell": "skipped:XLIFF21-UNTRANSLATED",
+        "greeting": "skipped:XLIFF21-UNTRANSLATED",
+        "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "order_status": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "search_placeholder": "skipped:XLIFF21-UNTRANSLATED"
+      },
+      "notices": [
+        "XLIFF21-MARKER-IGNORED /checkout_note",
+        "XLIFF21-SUBSTATE-IGNORED /checkout_note"
+      ],
+      "result": "expected/phrase.de.rmf2"
+    },
+    {
+      "id": "lokalise",
+      "file": "files/lokalise.de.xliff",
+      "modeledOn": "Lokalise",
+      "description": "Generated from the TMS data instead of the uploaded file: no Runic notes, descriptions as notes without category, <ph> without equiv (resolved by the live export numbering), translated units without state and empty targets for untranslated ones.",
+      "units": {
+        "cart_checkout_title": "skipped:XLIFF21-EMPTY-TARGET",
+        "cart_checkout_total": "skipped:XLIFF21-EMPTY-TARGET",
+        "cart_empty": "skipped:XLIFF21-EMPTY-TARGET",
+        "cart_items": "applied:translated",
+        "checkout_note": "skipped:XLIFF21-EMPTY-TARGET",
+        "farewell": "skipped:XLIFF21-EMPTY-TARGET",
+        "greeting": "applied:translated",
+        "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "order_status": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "search_placeholder": "applied:translated"
+      },
+      "notices": [
+        "XLIFF21-NOTE-IGNORED /cart_items",
+        "XLIFF21-NOTE-IGNORED /greeting",
+        "XLIFF21-STATE-MISSING /cart_items",
+        "XLIFF21-STATE-MISSING /greeting",
+        "XLIFF21-STATE-MISSING /search_placeholder"
+      ],
+      "result": "expected/lokalise.de.rmf2"
+    },
+    {
+      "id": "partial",
+      "file": "files/partial.de.xliff",
+      "modeledOn": "Runic export edited in a text editor",
+      "description": "Some targets added or changed; braces typed as text stay text; a <ph> for a placeholder the message does not have is refused and the rest applied.",
+      "units": {
+        "cart_checkout_title": "applied:translated",
+        "cart_checkout_total": "refused:XLIFF21-PLACEHOLDER",
+        "cart_empty": "applied:translated",
+        "cart_items": "skipped:XLIFF21-UNTRANSLATED",
+        "checkout_note": "skipped:XLIFF21-UNTRANSLATED",
+        "farewell": "applied:translated",
+        "greeting": "applied:translated",
+        "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "order_status": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "search_placeholder": "applied:translated"
+      },
+      "notices": [],
+      "result": "expected/partial.de.rmf2"
+    },
+    {
+      "id": "stale-approval",
+      "file": "files/stale-approval.de.xliff",
+      "modeledOn": "Runic export",
+      "description": "Exported while farewell read \"Goodbye\", with both approvals current; the source changed to \"See you soon\" before the file came back. farewell is applied as needs-review with the fingerprint of the source the translator saw; greeting stays approved.",
+      "units": {
+        "cart_checkout_title": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_checkout_total": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_empty": "applied:translated",
+        "cart_items": "skipped:XLIFF21-UNTRANSLATED",
+        "checkout_note": "skipped:XLIFF21-UNTRANSLATED",
+        "farewell": "applied:needs-review",
+        "greeting": "applied:approved",
+        "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "order_status": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "search_placeholder": "skipped:XLIFF21-UNTRANSLATED"
+      },
+      "notices": [
+        "XLIFF21-SOURCE-CHANGED /farewell"
+      ],
+      "result": "expected/stale-approval.de.rmf2",
+      "sourceChanged": [
+        "farewell"
+      ]
+    },
+    {
+      "id": "stale-approval-refuse",
+      "file": "files/stale-approval.de.xliff",
+      "modeledOn": "Runic export",
+      "sourceChangePolicy": "refuse",
+      "description": "The same file with the refuse policy: farewell is refused, the rest applied.",
+      "units": {
+        "cart_checkout_title": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_checkout_total": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_empty": "applied:translated",
+        "cart_items": "skipped:XLIFF21-UNTRANSLATED",
+        "checkout_note": "skipped:XLIFF21-UNTRANSLATED",
+        "farewell": "refused:XLIFF21-SOURCE-CHANGED",
+        "greeting": "applied:approved",
+        "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "order_status": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "search_placeholder": "skipped:XLIFF21-UNTRANSLATED"
+      },
+      "notices": [],
+      "result": "expected/stale-approval.de.rmf2"
+    },
+    {
+      "id": "nested-groups",
+      "file": "files/nested-groups.de.xliff",
+      "modeledOn": "a TMS that groups units by key path",
+      "description": "Nested <group> elements around the cart keys, which de.rmf2 lacks; they are added inside its existing cart group.",
+      "units": {
+        "cart_checkout_title": "applied:translated",
+        "cart_checkout_total": "applied:translated",
+        "cart_items": "applied:translated",
+        "greeting": "applied:translated"
+      },
+      "notices": [],
+      "result": "expected/nested-groups.de.rmf2"
+    },
+    {
+      "id": "profile-v2",
+      "file": "files/profile-v2.de.xliff",
+      "modeledOn": "Runic 0.8 export (profile 2)",
+      "description": "Text is MF2 syntax, a message with a placeholder was structured, and needs-review was written as reviewed with its review note.",
+      "units": {
+        "farewell": "applied:translated",
+        "greeting": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "search_placeholder": "applied:needs-review"
+      },
+      "notices": [],
+      "result": "expected/profile-v2.de.rmf2",
+      "profileVersion": 2
+    },
+    {
+      "id": "export",
+      "file": "files/export.de.xliff",
+      "modeledOn": "Runic export",
+      "description": "The export of project/ with its review file (golden: export must write these bytes). The stale farewell approval is exported as needs-review. Importing it back changes no source.",
+      "units": {
+        "cart_checkout_title": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_checkout_total": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_empty": "applied:translated",
+        "cart_items": "skipped:XLIFF21-UNTRANSLATED",
+        "checkout_note": "skipped:XLIFF21-UNTRANSLATED",
+        "farewell": "applied:needs-review",
+        "greeting": "applied:approved",
+        "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "order_status": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "search_placeholder": "skipped:XLIFF21-UNTRANSLATED"
+      },
+      "notices": [],
+      "result": null,
+      "exportNotices": [
+        "REVIEW-STALE /farewell",
+        "XLIFF21-STRUCTURED-MESSAGE /help_hint",
+        "XLIFF21-STRUCTURED-MESSAGE /order_status"
+      ]
+    }
+  ]
+}
